@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput } from "../src/lib/oss-settings";
+import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput, validateOSSConnectionDraft } from "../src/lib/oss-settings";
 
 describe("OSS settings helpers", () => {
     test("provides editable S3 endpoint hints for known presets", () => {
@@ -16,6 +16,11 @@ describe("OSS settings helpers", () => {
 
     test("uses the product path prefix by default", () => {
         expect(DEFAULT_OSS_PATH_PREFIX).toBe("open-ai-canvas");
+    });
+
+    test("rejects a connection test draft without a bucket", () => {
+        expect(validateOSSConnectionDraft({ provider: "aliyun", bucket: "  " })).toBe("请填写对象存储 Bucket");
+        expect(validateOSSConnectionDraft({ provider: "aliyun", bucket: "canvas-assets" })).toBe("");
     });
 
     test("normalizes a Tencent COS test draft when S3-only fields are not mounted", () => {

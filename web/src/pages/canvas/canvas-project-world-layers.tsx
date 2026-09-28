@@ -245,6 +245,7 @@ function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale:
         <button
             type="button"
             data-canvas-no-zoom
+            data-icon-only
             className="pointer-events-auto absolute grid -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border shadow-md transition hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={buttonStyle}
             title={`批量连接 ${count} 个节点`}

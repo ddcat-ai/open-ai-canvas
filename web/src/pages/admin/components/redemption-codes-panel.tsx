@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space } from "antd";
+import { App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Ban, Copy, Eye, KeyRound, RefreshCw, Search, TicketCheck } from "lucide-react";
 
@@ -9,6 +9,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
 import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; expiresAt?: string };
 type PendingRedeemBatch = {

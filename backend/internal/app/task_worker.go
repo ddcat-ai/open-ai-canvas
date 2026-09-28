@@ -34,6 +34,18 @@ func (s *Service) taskWorker() *taskWorkerCoordinator {
 	return newTaskWorkerCoordinator(s)
 }
 
+// wakeTaskDispatcher lets newly persisted work enter execution immediately;
+// the periodic scan remains the cross-process and missed-notification recovery path.
+func (s *Service) wakeTaskDispatcher() {
+	if s == nil || s.taskDispatcherWake == nil {
+		return
+	}
+	select {
+	case s.taskDispatcherWake <- struct{}{}:
+	default:
+	}
+}
+
 func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s := w.service
 	s.startTextReplayCleanup(ctx)
@@ -53,6 +65,8 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
+			case <-s.agentSchedulerWake:
+				continue
 			case <-ticker.C:
 			}
 		}
@@ -90,7 +104,11 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 				}
 				slots <- struct{}{}
 				started := s.runWorkerTask(func() {
-					defer func() { <-slots; globalSlot.Release() }()
+					defer func() {
+						<-slots
+						globalSlot.Release()
+						s.wakeTaskDispatcher()
+					}()
 					if err := w.processClaimedTask(task, globalSlot); err != nil {
 						_ = s.log(task.UserID, task.ID, "error", "后台任务处理失败", err.Error())
 					}
@@ -111,6 +129,8 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
+			case <-s.taskDispatcherWake:
+				dispatch()
 			case <-ticker.C:
 				dispatch()
 			}
@@ -129,6 +149,9 @@ func (w *taskWorkerCoordinator) processNextTask() error {
 
 func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot *platform.SlotLease) error {
 	s := w.service
+	if task != nil && task.Operation == cloudAgentStepOperation {
+		defer s.wakeCloudAgentScheduler()
+	}
 	terminal := s.terminalCoordinator()
 	policyCtx, cancelPolicy := context.WithTimeout(context.Background(), 3*time.Second)
 	reader := &Service{repo: s.repo.WithContext(policyCtx)}

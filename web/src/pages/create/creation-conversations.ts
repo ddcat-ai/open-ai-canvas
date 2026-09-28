@@ -6,7 +6,7 @@ import { creationAttachmentKind, type CreationAttachment } from "./creation-asse
 import type { CreationConversation, CreationMessage, CreationShotRailEntry } from "./creation-types";
 
 type CreationRuntime = typeof import("./creation-runtime");
-type PersistedCreationTask = GenerationTask & { creationResultUrls?: string[]; creationError?: string };
+type PersistedCreationTask = GenerationTask & { creationResultUrls?: string[]; creationResultStorageKeys?: string[]; creationError?: string };
 
 export function newConversation(): CreationConversation {
     return { id: createClientId(), title: "新创作", updatedAt: new Date().toISOString(), messages: [] };
@@ -76,7 +76,8 @@ export async function materializeCreationTaskResults(runtime: CreationRuntime, t
         try {
             const materialized = await runtime.runGenerationConsumer(signal, (managedSignal: AbortSignal) => runtime.materializeGenerationTaskAssets(task, managedSignal));
             const creationResultUrls = runtime.generationTaskMaterializedUrls(materialized);
-            return creationResultUrls.length ? { ...materialized, creationResultUrls } : materialized;
+            const creationResultStorageKeys = runtime.generationTaskMaterializedStorageKeys(materialized);
+            return creationResultUrls.length || creationResultStorageKeys.length ? { ...materialized, ...(creationResultUrls.length ? { creationResultUrls } : {}), ...(creationResultStorageKeys.length ? { creationResultStorageKeys } : {}) } : materialized;
         } catch (error) {
             return { ...task, creationError: error instanceof Error ? error.message : "生成结果资源化失败" };
         }
@@ -105,16 +106,18 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
             const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
             if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
 
-            const resultUrls = Array.from(new Set(matches.filter((task) => task.status === "succeeded").flatMap(creationTaskResultUrls)));
+            const succeeded = matches.filter((task) => task.status === "succeeded");
+            const resultUrls = Array.from(new Set(succeeded.flatMap(creationTaskResultUrls)));
+            const resultStorageKeys = Array.from(new Set(succeeded.flatMap(creationTaskResultStorageKeys)));
             const failedCount = matches.filter((task) => task.status !== "succeeded" || Boolean(task.creationError)).length;
             const nextTaskIds = Array.from(new Set([...(message.taskIds || []), ...matches.map((task) => task.id)]));
             completedAt = matches.reduce((latest, task) => conversationTimestamp(task.updatedAt) > conversationTimestamp(latest) ? task.updatedAt : latest, completedAt);
             conversationChanged = true;
             changed = true;
 
-            if (resultUrls.length) {
-                const content = message.mode === "video" ? "视频已生成" : failedCount ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成";
-                return { ...message, status: "done" as const, content, resultUrls, error: undefined, taskIds: nextTaskIds };
+            if (resultUrls.length || resultStorageKeys.length) {
+                const content = message.mode === "video" ? "视频已生成" : failedCount ? `${resultStorageKeys.length || resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成";
+                return { ...message, status: "done" as const, content, ...(resultUrls.length ? { resultUrls } : {}), ...(resultStorageKeys.length ? { resultStorageKeys } : {}), error: undefined, taskIds: nextTaskIds };
             }
             if (matches.every((task) => task.status === "cancelled")) {
                 return { ...message, status: "cancelled" as const, content: "已停止", error: undefined, taskIds: nextTaskIds };
@@ -129,6 +132,11 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
 
 function creationTaskResultUrls(task: PersistedCreationTask) {
     if (task.creationResultUrls?.length) return task.creationResultUrls;
+    return [];
+}
+
+function creationTaskResultStorageKeys(task: PersistedCreationTask) {
+    if (task.creationResultStorageKeys?.length) return task.creationResultStorageKeys;
     return [];
 }
 

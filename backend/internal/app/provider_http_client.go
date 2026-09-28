@@ -39,6 +39,28 @@ func postGeminiJSON(ctx context.Context, config providerConfig, path string, bod
 	return doJSON(req, target)
 }
 
+func deleteGeminiCachedContent(ctx context.Context, config providerConfig, resourceName string) error {
+	if err := validateGeminiCachedContentName(resourceName); err != nil {
+		return err
+	}
+	suffix := strings.TrimPrefix(strings.TrimSpace(resourceName), "cachedContents/")
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, geminiVeoURL(config.BaseURL, "/cachedContents/"+suffix), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("x-goog-api-key", config.APIKey)
+	ApplyOutboundHeaders(req, config.Headers)
+	_, _, err = doBinary(req)
+	if err == nil {
+		return nil
+	}
+	var httpErr providerHTTPError
+	if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	return err
+}
+
 func getGeminiJSON(ctx context.Context, config providerConfig, path string, target interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, geminiVeoURL(config.BaseURL, path), nil)
 	if err != nil {
@@ -231,6 +253,8 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 	var release func()
 	var coordinator *platform.Coordinator
 	var runtimeService *Service
+	requestKind := providerRequestKindFromContext(req.Context())
+	cacheManagementRequest := requestKind == "cache-create" || requestKind == "cache-delete"
 	responseLimit := maxProviderResponseBytes
 	channelID := ""
 	if metadata, ok := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext); ok && metadata.Service != nil {
@@ -242,26 +266,30 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			return nil, "", fmt.Errorf("读取生成资源限制失败：%w", err)
 		}
 		responseLimit = megabytes(policy.Resource.GeneratedFileMB)
-		open, err := coordinator.CircuitOpen(req.Context(), channelID)
-		if err != nil {
-			return nil, "", fmt.Errorf("读取渠道熔断状态失败：%w", err)
+		if !cacheManagementRequest {
+			open, err := coordinator.CircuitOpen(req.Context(), channelID)
+			if err != nil {
+				return nil, "", fmt.Errorf("读取渠道熔断状态失败：%w", err)
+			}
+			if open {
+				return nil, "", providerCircuitOpenError{}
+			}
+			slotID := channelID
+			if slotID == "" {
+				slotID = "custom:" + strings.ToLower(req.URL.Host)
+			}
+			var concurrencyLimit int
+			release, concurrencyLimit, err = metadata.Service.AcquireChannelSlot(req.Context(), channelID, slotID, requestTimeout+time.Minute)
+			metadata.ConcurrencyLimit = concurrencyLimit
+			req = req.WithContext(context.WithValue(req.Context(), providerAnalyticsKey{}, metadata))
+			if err != nil {
+				recordProviderRequest(req, startedAt, 0, nil, err)
+				return nil, "", err
+			}
 		}
-		if open {
-			return nil, "", providerCircuitOpenError{}
+		if release != nil {
+			defer release()
 		}
-		slotID := channelID
-		if slotID == "" {
-			slotID = "custom:" + strings.ToLower(req.URL.Host)
-		}
-		var concurrencyLimit int
-		release, concurrencyLimit, err = metadata.Service.AcquireChannelSlot(req.Context(), channelID, slotID, requestTimeout+time.Minute)
-		metadata.ConcurrencyLimit = concurrencyLimit
-		req = req.WithContext(context.WithValue(req.Context(), providerAnalyticsKey{}, metadata))
-		if err != nil {
-			recordProviderRequest(req, startedAt, 0, nil, err)
-			return nil, "", err
-		}
-		defer release()
 	}
 	if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
 		recordProviderRequest(req, startedAt, 0, nil, err)
@@ -272,7 +300,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 	resp, err := client.Do(req)
 	if err != nil {
 		err = providerConnectionError(err)
-		if runtimeService != nil {
+		if runtimeService != nil && !cacheManagementRequest {
 			_ = runtimeService.RecordChannelResult(req.Context(), channelID, !errors.Is(err, context.Canceled))
 		}
 		recordProviderRequest(req, startedAt, 0, nil, err)
@@ -317,7 +345,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		return nil, "", err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if runtimeService != nil {
+		if runtimeService != nil && !cacheManagementRequest {
 			_ = runtimeService.RecordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)
 		}
 		httpErr := providerHTTPError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(data), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
@@ -325,10 +353,15 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		return nil, "", httpErr
 	}
 	recordProviderRequest(req, startedAt, resp.StatusCode, data, nil)
-	if runtimeService != nil {
+	if runtimeService != nil && !cacheManagementRequest {
 		_ = runtimeService.RecordChannelResult(req.Context(), channelID, false)
 	}
 	return data, mimeType, nil
+}
+
+func providerRequestKindFromContext(ctx context.Context) string {
+	metadata, _ := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+	return strings.TrimSpace(metadata.RequestKind)
 }
 
 func providerConnectionError(err error) error {
@@ -389,7 +422,7 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 	callLog := model.ApiCallLog{
 		UserID: metadata.UserID, TraceID: metadata.TraceID, RequestID: metadata.RequestID, ChannelID: metadata.ChannelID, TaskID: metadata.TaskID, BillingOrderID: metadata.BillingOrderID,
 		Source: "backend-task", Capability: metadata.Capability, Operation: metadata.Operation,
-		RequestKind: requestKind, Billable: req.Method == http.MethodPost && requestKind != "cancel",
+		RequestKind: requestKind, Billable: providerRequestIsBillable(req.Method, requestKind),
 		APIFormat: apiFormat, Method: req.Method, Path: req.URL.Path, Model: metadata.Model,
 		Status: status, StatusCode: statusCode, DurationMs: time.Since(startedAt).Milliseconds(),
 		ErrorCode: errorCode, Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
@@ -419,6 +452,18 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 				log.Printf("provider billing uncertainty update failed: task_id=%s billing_order_id=%s error=%v", metadata.TaskID, metadata.BillingOrderID, uncertainErr)
 			}
 		}
+	}
+}
+
+func providerRequestIsBillable(method, requestKind string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	switch requestKind {
+	case "cancel", "cache-create", "cache-delete":
+		return false
+	default:
+		return true
 	}
 }
 

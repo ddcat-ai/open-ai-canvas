@@ -1,4 +1,4 @@
-import { App, Button, Input, Select } from "antd";
+import { App, Button, Input } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { ZHIFUFM_LOGO_SRC } from "@/components/payment-brand-icons";
@@ -18,6 +18,7 @@ import { UploadPluginModal } from "@/pages/plugins/plugin-documentation-modals";
 
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 type AdminPluginItem = {
     manifest: PluginManifest | PluginManifestV2;

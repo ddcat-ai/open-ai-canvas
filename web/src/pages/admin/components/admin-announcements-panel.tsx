@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { App, Button, Form, Input, Modal, Select } from "antd";
+import { App, Button, Form, Input, Modal } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
 import type { InputRef } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -24,6 +24,7 @@ import {
 import { resourceFileUrl } from "@/services/api/resources";
 import { clearAnnouncementPendingReview, readAnnouncementPendingReview, writeAnnouncementPendingReview, type AnnouncementPendingReview } from "./admin-announcement-safety";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 type AnnouncementFormValues = {
     title: string;

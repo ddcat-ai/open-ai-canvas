@@ -46,6 +46,7 @@ type PublicChannelModel struct {
 	Capability       string                        `json:"capability"`
 	Protocol         model.ChannelInterfaceType    `json:"protocol"`
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
+	DefaultOptions   map[string]any                `json:"defaultOptions,omitempty"`
 	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
 	PricingMode      string                        `json:"pricingMode"`
 	DisplayPrice     *int64                        `json:"displayPrice,omitempty"`
@@ -181,6 +182,17 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			return PublicChannelModel{}, fmt.Errorf("投影渠道模型能力配置失败：%w", err)
 		}
 	}
+	var defaultOptions map[string]any
+	if normalized != nil {
+		spec, specErr := CapabilitySpecFromModelCapabilityConfig(normalized, cm.Capability)
+		if specErr != nil {
+			return PublicChannelModel{}, fmt.Errorf("投影渠道模型默认参数失败：%w", specErr)
+		}
+		defaultOptions, err = channelModelDefaultOptions(*cm, spec)
+		if err != nil {
+			return PublicChannelModel{}, err
+		}
+	}
 
 	return PublicChannelModel{
 		ID:               cm.ID,
@@ -194,6 +206,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		Capability:       cm.Capability,
 		Protocol:         cm.Protocol,
 		CapabilityConfig: capabilityConfig,
+		DefaultOptions:   defaultOptions,
 		PriceTiers:       publicTiers,
 		PricingMode:      pricingMode,
 		DisplayPrice:     displayPrice,

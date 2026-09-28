@@ -95,7 +95,6 @@ test("Create refresh subscriptions share one durable scheduler observation witho
     });
 });
 
-
 test("task subscription can reconnect after an observation failure", async () => {
     let queryCalls = 0;
     const terminal: GenerationTask = {
@@ -138,10 +137,7 @@ test("task subscription can reconnect after an observation failure", async () =>
 });
 
 test("Create durably correlates failures that happen before the first Runtime response", async () => {
-    const source = [
-        await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(),
-        await Bun.file(new URL("../src/pages/create/creation-types.ts", import.meta.url)).text(),
-    ].join("\n");
+    const source = [await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(), await Bun.file(new URL("../src/pages/create/creation-types.ts", import.meta.url)).text()].join("\n");
     expect(source).toContain("generationErrorCode?: string");
     expect(source).toContain("generationOperation?: string");
     expect(source).toContain("generationOperation: task.operation");
@@ -363,7 +359,7 @@ test("Create forwards owned result assets through one new canvas and the project
 
     expect(workspace).toContain("onContinueCanvas(resultAssetIds)");
     expect(createPage).toContain("continueCreationConversationOnCanvas(source)");
-    expect(createPage).toContain("if (ids.length !== item.resultUrls.length) throw new Error");
+    expect(createPage).toContain("if (ids.length !== Math.max(resultStorageKeys.length, resultUrls.length)) throw new Error");
     expect(createPage).toContain("await saveCreationConversations(next)");
     expect(createPage.indexOf("await saveCreationConversations(next)")).toBeLessThan(createPage.indexOf("navigate(`/canvas/${result.id}?${params.toString()}`)"));
     expect(canvasIndex).toContain('const handoffMode = mode === "handoff"');

@@ -23,6 +23,7 @@ let remote = new Map<string, CanvasProject>();
 let requests: Array<{ method: string; id: string; project?: CanvasProject }> = [];
 let beforePut: (() => Promise<void>) | undefined;
 let deleteFailureId: string | undefined;
+let temporaryPutFailures = 0;
 
 function canvas(id = "canvas"): CanvasProject {
     return {
@@ -54,6 +55,7 @@ beforeEach(async () => {
     autoSave = undefined;
     beforePut = undefined;
     deleteFailureId = undefined;
+    temporaryPutFailures = 0;
     remote = new Map([
         ["canvas", canvas()],
         ["other", canvas("other")],
@@ -108,7 +110,10 @@ beforeEach(async () => {
             await beforePut?.();
             const project = body.project as CanvasProject;
             const current = remote.get(id);
-            if (project.revision !== (current?.revision ?? 0)) status = 409;
+            if (temporaryPutFailures > 0) {
+                temporaryPutFailures -= 1;
+                status = 503;
+            } else if (project.revision !== (current?.revision ?? 0)) status = 409;
             else {
                 const saved = { ...structuredClone(project), revision: project.revision! + 1 };
                 remote.set(id, saved);
@@ -122,6 +127,14 @@ beforeEach(async () => {
     installRemoteUserDataAutoSync();
     await syncRemoteUserData(scope);
 });
+
+async function waitForSyncState(predicate: () => boolean) {
+    const deadline = Date.now() + 1_000;
+    while (!predicate()) {
+        if (Date.now() >= deadline) throw new Error("同步测试状态等待超时");
+        await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0));
+    }
+}
 
 afterEach(async () => {
     resetRemoteUserDataSync();
@@ -243,6 +256,22 @@ test("a conflict preserves drafts, stops retries and does not block another canv
     await useCanvasStore.persist.rehydrate();
     await syncRemoteUserData(scope);
     expect(useSyncProgressStore.getState().syncingProjects.canvas.draftCount).toBe(2);
+});
+
+test("transient cloud failures schedule a bounded automatic retry", async () => {
+    temporaryPutFailures = 1;
+    useCanvasStore.getState().renameProject("canvas", "retry me");
+    expect(autoSave).toBeDefined();
+
+    autoSave?.();
+    await waitForSyncState(() => requests.filter((request) => request.method === "put" && request.id === "canvas").length === 1);
+    expect(autoSave).toBeDefined();
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.message).toContain("自动重试");
+
+    autoSave?.();
+    await waitForSyncState(() => remote.get("canvas")?.title === "retry me");
+    expect(requests.filter((request) => request.method === "put" && request.id === "canvas")).toHaveLength(2);
+    expect(useSyncProgressStore.getState().syncingProjects.canvas.phase).toBe("done");
 });
 
 test("edits during a save retain the right ancestor revision and are saved next", async () => {

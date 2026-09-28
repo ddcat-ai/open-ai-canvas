@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, Popconfirm, Select, Tabs } from "antd";
+import { App, Button, Form, Input, Popconfirm, Tabs } from "antd";
 import { Callout } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import { Braces, Copy, FileJson, FileText, Plus, Power, Search, ShieldCheck, Trash2 } from "lucide-react";
@@ -17,6 +17,7 @@ import {
 } from "@/services/api/auth";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, PaginationBar } from "../components/admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 type PromptFormValues = { name: string; enabled?: boolean };
 type DraftBaseline = { operation: string; name: string; enabled: boolean; content: string };

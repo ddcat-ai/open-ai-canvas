@@ -4,6 +4,7 @@ import "infinite-canvas/backend/internal/app"
 
 var (
 	ErrPlaybackNotReady                        = app.ErrPlaybackNotReady
+	ErrNotBuiltinSkill                         = app.ErrNotBuiltinSkill
 	AllowedPrivateUpstreamHost                 = app.AllowedPrivateUpstreamHost
 	AppearanceAssetMaxBytes                    = app.AppearanceAssetMaxBytes
 	ApplyDefaultOutboundHeaders                = app.ApplyDefaultOutboundHeaders

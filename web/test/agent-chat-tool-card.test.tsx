@@ -33,14 +33,35 @@ test("empty read and operation events stay flat instead of rendering empty cards
 });
 
 test("canvas reads show one node by default and expose the collapsed count", () => {
-    const html = renderToStaticMarkup(<AgentToolCard title="canvas_get_state" text="已读取当前画布" detail={{ eventType: "tool_completed", result: { nodes: [
+    const html = renderToStaticMarkup(<AgentToolCard title="canvas_get_state" text="工具执行成功" detail={{ eventType: "tool_completed", result: { nodes: [
         { id: "node-1", title: "第一个节点", type: "image" },
         { id: "node-2", title: "第二个节点", type: "text" },
         { id: "node-3", title: "第三个节点", type: "video" },
     ] } }} theme={canvasThemes.dark} onFocusNode={() => {}} />);
-    expect(html).toContain("读取了图片节点《第一个节点》");
-    expect(html).not.toContain("读取了文本节点《第二个节点》");
-    expect(html).toContain("已折叠 2 个节点，展开查看");
+    // 清单档的 chip 必须是"存在式"：它只说明画布上有这个节点，没看过它的画面
+    expect(html).toContain("画布上有图片节点《第一个节点》");
+    expect(html).not.toContain("读取了图片节点《第一个节点》");
+    expect(html).not.toContain("画布上有文本节点《第二个节点》");
+    expect(html).toContain("另有 2 个节点只是清单（未查看画面），展开查看");
+    expect(html).toContain("已读取画布清单（未查看画面）");
+});
+
+test("the vision card points at the image it actually sent", () => {
+    const html = renderToStaticMarkup(<AgentToolCard title="canvas_inspect_image" text="工具执行成功" detail={{ eventType: "tool_completed", result: { nodeId: "node-9", title: "封面.png", batchImages: [{ nodeId: "node-8", title: "剧照.png" }, { nodeId: "node-9", title: "封面.png" }] } }} theme={canvasThemes.dark} onFocusNode={() => {}} />);
+    expect(html).toContain("查看画面");
+    expect(html).toContain("agent-tool-row--vision");
+    expect(html).toContain("已附上 2 张画面");
+    expect(html).toContain("查看了图片节点《封面.png》");
+    expect(html).toContain("查看了图片节点《剧照.png》");
+    expect(html).not.toContain("操作画布");
+    expect(html).not.toContain("操作已完成");
+});
+
+test("a reused observation is not reported as a fresh look at the picture", () => {
+    const html = renderToStaticMarkup(<AgentToolCard title="canvas_inspect_image" text="工具执行成功" detail={{ eventType: "tool_completed", result: { nodeId: "node-9", title: "封面.png", repeat: true, reuseObservation: true } }} theme={canvasThemes.dark} onFocusNode={() => {}} />);
+    expect(html).toContain("复用已记录的观察，未重复看图");
+    expect(html).toContain("复用观察：图片节点《封面.png》");
+    expect(html).not.toContain("查看了");
 });
 
 test("failed tools retain a visible failure label", () => {

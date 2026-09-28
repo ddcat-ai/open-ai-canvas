@@ -14,7 +14,7 @@ import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
 import { WorkingDots, WorkingGlow } from "@/components/ai/working-indicator";
 import { MessageReasoning } from "@/components/ai/message-reasoning";
-import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
+import { creationResultAssetIds, creationResultStorageKeys } from "@/lib/canvas/canvas-asset-handoff";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { formatVideoResolutionLabel as videoResolutionLabel } from "@/lib/video-generation-options";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -36,7 +36,9 @@ import { mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
 import type { Skill } from "@/services/api/skills";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
-import { resolveResourceUrl } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resolveResourceUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { resolveMediaUrl } from "@/services/file-storage";
+import { resolveImageUrl } from "@/services/image-storage";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -253,16 +255,76 @@ function MediaResult({ item, onRetryFailure, onCreateVariant, onContinueCanvas, 
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const assets = useAssetStore((state) => state.assets);
-    const resultUrls = item.resultUrls || [];
-    const resultAssetIds = resultUrls.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls }) : [];
-    const canContinueWithResults = resultUrls.length > 0 && resultAssetIds.length === resultUrls.length;
+    const storedResultUrls = item.resultUrls || [];
+    const resultStorageKeys = item.resultStorageKeys?.length
+        ? item.resultStorageKeys
+        : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
+    const [resolvedResultUrls, setResolvedResultUrls] = useState(storedResultUrls);
+
+    useEffect(() => {
+        let active = true;
+        const timers: ReturnType<typeof setTimeout>[] = [];
+        const updateResultUrl = (index: number, url: string) => {
+            if (!active) return;
+            setResolvedResultUrls((current) => {
+                const next = [...current];
+                next[index] = url;
+                return next;
+            });
+        };
+        const refreshRemote = async (index: number, storageKey: string): Promise<void> => {
+            try {
+                const access = await getResourceAccess(storageKey, "display");
+                if (!active) return;
+                updateResultUrl(index, resolveResourceAccessURL(access.url));
+                const refreshAt = access.refreshAt ? new Date(access.refreshAt).getTime() : Number.NaN;
+                const expiresAt = access.expiresAt ? new Date(access.expiresAt).getTime() : Number.NaN;
+                const nextRefreshAt = Number.isFinite(refreshAt) ? refreshAt : expiresAt;
+                const delay = Number.isFinite(nextRefreshAt) ? Math.max(10_000, nextRefreshAt - Date.now()) : 4 * 60_000;
+                timers.push(setTimeout(() => void refreshRemote(index, storageKey), delay));
+            } catch {
+                if (active) timers.push(setTimeout(() => void refreshRemote(index, storageKey), 60_000));
+            }
+        };
+        if (!resultStorageKeys.length) {
+            setResolvedResultUrls(storedResultUrls);
+            return () => {
+                active = false;
+            };
+        }
+        // 历史记录只把 URL 当作短期 hint；真正恢复依赖稳定 storageKey，展示 URL 由访问缓存按需续签。
+        setResolvedResultUrls(storedResultUrls);
+        const resolver = item.mode === "video" ? resolveMediaUrl : resolveImageUrl;
+        void Promise.all(
+            resultStorageKeys.map(async (storageKey, index) => {
+                if (resourceIdFromStorageKey(storageKey)) {
+                    await refreshRemote(index, storageKey);
+                    return;
+                }
+                const url = await resolver(storageKey, storedResultUrls[index] || "");
+                updateResultUrl(index, url);
+            }),
+        ).catch(() => {
+            // 保留当前页面已有的 URL hint；若已过期，页面会走明确的媒体空态而不是回退到平台正文代理。
+        });
+        return () => {
+            active = false;
+            timers.forEach((timer) => clearTimeout(timer));
+        };
+    }, [item.id, item.mode, resultStorageKeys.join("|"), storedResultUrls.join("|")]);
+
+    const alignedResultUrls = resultStorageKeys.length ? resolvedResultUrls : storedResultUrls;
+    const displayResultUrls = alignedResultUrls.filter(Boolean);
+    const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
+    const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;
+    const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
     if (item.status === "pending") return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} />;
-    if ((item.status === "error" || item.status === "cancelled") && !resultUrls.length) return <div className="creation-media-error"><span>{item.status === "cancelled" ? item.content || "已停止" : generationErrorMessage(item.error || "生成失败")}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
-    if (!resultUrls.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
+    if ((item.status === "error" || item.status === "cancelled") && !expectedResultCount) return <div className="creation-media-error"><span>{item.status === "cancelled" ? item.content || "已停止" : generationErrorMessage(item.error || "生成失败")}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div>;
+    if (!expectedResultCount || !displayResultUrls.length) return <div className="creation-media-empty">没有返回可预览结果 <button type="button" onClick={onRetryFailure}>重试</button></div>;
     const isVideo = item.mode === "video";
     return <div className="creation-media-result">
-        {isVideo ? <button type="button" className="creation-video-result" onClick={() => { setPreviewType("video"); setPreviewUrl(resultUrls[0]); }} aria-label="预览生成视频"><video muted preload="metadata" src={resultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{resultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => { setPreviewType("image"); setPreviewUrl(url); }} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}
-        <div className="creation-media-actions"><span>{isVideo ? "视频结果" : `${resultUrls.length} 张图片`}</span><Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>添加到画布</Button>{resultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{resultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div>
+        {isVideo ? <button type="button" className="creation-video-result" onClick={() => { setPreviewType("video"); setPreviewUrl(displayResultUrls[0]); }} aria-label="预览生成视频"><video muted preload="metadata" src={displayResultUrls[0]} /><span><Maximize2 />预览视频</span></button> : <div className="creation-image-result-grid">{displayResultUrls.map((url) => <button key={url} type="button" className="creation-image-result" onClick={() => { setPreviewType("image"); setPreviewUrl(url); }} aria-label="预览生成图片"><img src={url} alt="生成结果" /><span><Maximize2 /></span></button>)}</div>}
+        <div className="creation-media-actions"><span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片`}</span><Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>添加到画布</Button>{displayResultUrls.map((url, index) => <a key={`${url}-download`} href={url} download>{displayResultUrls.length > 1 ? `下载 ${index + 1}` : <><Download />下载</>}</a>)}</div>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
     </div>;
 }

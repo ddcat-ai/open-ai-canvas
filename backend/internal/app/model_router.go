@@ -133,6 +133,13 @@ func normalizeModelRequestOption(name string, value any) any {
 	case "4k", "2160", "2160p":
 		return "2160p"
 	default:
+		// Providers expose additional resolutions such as 768P and 960P.
+		// Canonicalize numeric P values generically so billing selectors match
+		// regardless of whether the client sends "960" or "960P".
+		pixels := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(resolution)), "p")
+		if numeric, err := strconv.Atoi(pixels); err == nil && numeric > 0 {
+			return strconv.Itoa(numeric) + "p"
+		}
 		return value
 	}
 }

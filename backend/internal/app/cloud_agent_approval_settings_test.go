@@ -24,7 +24,7 @@ func TestCloudAgentMediaReadHashSurvivesMoveBeforeDraft(t *testing.T) {
 	if err := db.Model(canvas).Update("payload_json", string(raw)).Error; err != nil {
 		t.Fatal(err)
 	}
-	run, _ := agentMediaRun(t, s, args, "auto")
+	run, _ := agentMediaRun(t, s, args, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 	for _, change := range []string{"move", "presentation", "prompt", "resource", "connection", "locked", "task", "unknown_metadata"} {
 		t.Run(change, func(t *testing.T) {
 			s, db, a := agentMediaFixture(t)
-			run, _ := agentMediaRun(t, s, a, "auto")
+			run, _ := agentMediaRun(t, s, a, "request_approval")
 			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -112,7 +112,7 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 
 func TestCloudAgentMediaApprovalReusesPreparedInputsAfterModelRetry(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
-	run, _ := agentMediaRun(t, s, a, "auto")
+	run, _ := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 	a.Mode, a.ChannelModelKey, a.Duration, a.VideoGenerateAudio = "image", "grok-image", 0, nil
 	a.Size, a.Quality, a.NodeID = "1:1", "2k", "image-shot-1"
 	a.ReferenceNodeIDs = []string{"cat"}
-	run, _ := agentMediaRun(t, s, a, "auto")
+	run, _ := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}

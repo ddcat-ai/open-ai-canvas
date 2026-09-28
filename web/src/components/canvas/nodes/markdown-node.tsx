@@ -34,7 +34,6 @@ export function MarkdownNodeContent({ node, theme }: MarkdownNodeContentProps) {
     }
 
     return (
-        // 滚动区要吞掉 wheel 并标 data-canvas-no-zoom，否则滚动会被画布缩放拦走。
         <div
             className="h-full w-full overflow-y-auto overflow-x-hidden px-4 py-3"
             data-canvas-no-zoom

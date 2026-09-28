@@ -136,10 +136,23 @@ type SkillFile struct {
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
+// SkillLibraryCategory separates a user's library taxonomy from Skill.Tag,
+// which remains the shared marketplace category.
+type SkillLibraryCategory struct {
+	ID             string    `json:"id" gorm:"primaryKey;size:36"`
+	Name           string    `json:"name" gorm:"size:64;not null"`
+	NormalizedName string    `json:"-" gorm:"size:96;not null;uniqueIndex:idx_skill_library_category_scope_owner_name,priority:3"`
+	Scope          string    `json:"scope" gorm:"size:16;not null;uniqueIndex:idx_skill_library_category_scope_owner_name,priority:1;index"`
+	OwnerID        string    `json:"-" gorm:"size:36;not null;uniqueIndex:idx_skill_library_category_scope_owner_name,priority:2;index"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
 type UserSkillState struct {
 	ID                 string    `json:"id" gorm:"primaryKey;size:36"`
 	UserID             string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_skill,priority:1"`
 	SkillID            string    `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_user_skill_state_user_skill,priority:2"`
+	LibraryCategoryID  string    `json:"libraryCategoryId" gorm:"size:36;index"`
 	InstalledVersionID string    `json:"installedVersionId" gorm:"size:36;index"`
 	AutoUpdate         bool      `json:"autoUpdate"`
 	Added              bool      `json:"added" gorm:"index"`

@@ -19,7 +19,7 @@ func skillFeedbackCall(id, path string) cloudAgentCall {
 func TestCloudAgentSkillEmptyDirectoryAndRepeatedRead(t *testing.T) {
 	state := cloudAgentRuntime{Skills: []cloudAgentSkill{{ID: "script", Name: "剧本撰写", Instruction: "# 剧本撰写", Files: map[string]string{}}}}
 	call := skillFeedbackCall("script", "")
-	result, err := cloudAgentReadTool(nil, "user", &state, call)
+	result, err := cloudAgentReadToolCached(nil, "user", &state, call)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,16 +31,22 @@ func TestCloudAgentSkillEmptyDirectoryAndRepeatedRead(t *testing.T) {
 	if event := state.Events[0]; event.Type != "tool_completed" || event.Payload["skillName"] != "剧本撰写" || event.Payload["path"] != "" {
 		t.Fatalf("missing tool context: %+v", event)
 	}
-	run := &model.CloudAgentExecution{}
-	if err := cloudAgentSave(run, &state); err != nil {
-		t.Fatal(err)
-	}
-	restored, err := cloudAgentDecode(run)
+	second, err := cloudAgentReadToolCached(nil, "user", &state, call)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("repeated skill read must use the cached result: %v", err)
 	}
-	if _, err := cloudAgentReadTool(nil, "user", &restored, call); err == nil || !strings.Contains(err.Error(), "不要重复读取") {
-		t.Fatalf("repeated request after reload was not rejected: %v", err)
+	secondMap, ok := second.(map[string]any)
+	if !ok || secondMap["cacheReplay"] != true || secondMap["replayCount"] != 1 {
+		t.Fatalf("repeated skill read did not return a replay receipt: %#v", second)
+	}
+	if state.ReadToolCalls != 1 {
+		t.Fatalf("cache replay consumed a real-read budget: %d", state.ReadToolCalls)
+	}
+
+	// A model can repeat the same call more than once while recovering a long
+	// context. Replays stay harmless and never terminate the run.
+	if _, err := cloudAgentReadToolCached(nil, "user", &state, call); err != nil {
+		t.Fatalf("second repeated skill read must remain harmless: %v", err)
 	}
 }
 
@@ -87,8 +93,8 @@ func TestCloudAgentSkillMissingAndDistinctPaths(t *testing.T) {
 	if state.Events[0].Type != "tool_failed" || state.Events[0].Payload["path"] != "references/missing.md" {
 		t.Fatalf("missing failure context: %+v", state.Events[0])
 	}
-	if _, err := cloudAgentReadTool(nil, "user", &state, call); err == nil || !strings.Contains(err.Error(), "不要重复读取") {
-		t.Fatalf("missing path was retried: %v", err)
+	if _, err := cloudAgentReadTool(nil, "user", &state, call); err == nil || !strings.Contains(err.Error(), "参考文件未包含") {
+		t.Fatalf("missing path validation changed unexpectedly: %v", err)
 	}
 	if _, err := cloudAgentReadTool(nil, "user", &state, skillFeedbackCall("disabled", "")); err == nil {
 		t.Fatal("unselected skill accepted")

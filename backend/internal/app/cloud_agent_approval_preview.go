@@ -331,7 +331,7 @@ func cloudAgentApprovalCallHash(call cloudAgentCall) string {
 	// server revalidates the prepared dependency hash below, which deliberately
 	// ignores layout-only edits such as moving a node.
 	arguments := call.Function.Arguments
-	if call.Function.Name == "generate_media" {
+	if call.Function.Name == "generate_media" || call.Function.Name == "image_layer_split" {
 		var object map[string]any
 		if err := json.Unmarshal([]byte(arguments), &object); err == nil {
 			delete(object, "snapshotHash")

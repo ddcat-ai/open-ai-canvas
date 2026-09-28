@@ -363,7 +363,17 @@ async function stopExact(child, name) {
     console.log(`      stopped ${name} (pid=${child.pid}, exit=${child.exitCode}, signal=${child.signalCode})`);
 }
 
-/** 场景 A：复现台 + 工作台基础集成链路（AutoKey 默认、新增、Undo）。 */
+/**
+ * P0 场景需要覆盖完整对象 / 动画 / 保存路径；导演台默认是快速镜头模式，
+ * 进入工作台后显式切换到高级工作台，避免测试把默认工作流误当成高级工作台。
+ */
+async function openAdvancedWorkbench(cdp, label) {
+    const advanced = await cdp.click('button[title="打开完整的摆场、姿态、动画和摄影机工具"]');
+    if (!advanced) throw new Error(`${label}: 高级工作台 button not clickable`);
+    const ready = await cdp.poll(`document.querySelector('button[data-mode="layout"]')?.getAttribute('aria-pressed') === 'true'`, `${label} advanced workbench`, 20000);
+    if (!ready) throw new Error(`${label}: 高级工作台未进入摆场模式`);
+}
+
 async function smokeWorkbench(cdp, baseUrl) {
     console.log("\n=== A. workbench smoke ===");
     await cdp.navigateFresh(`${baseUrl}/dev/director-repro`);
@@ -387,13 +397,16 @@ async function smokeWorkbench(cdp, baseUrl) {
     if (!opened) throw new Error("A: toggle-workbench not clickable");
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.director-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "A5 real canvas present in viewport shell");
+    const defaultQuickMode = await cdp.evaluate(`document.querySelector('button[title="用镜头优先的最短路径完成摆位、姿态和预演"]')?.getAttribute('aria-pressed')`);
+    assert(defaultQuickMode === "true", "A5a 默认进入快速镜头模式", `got ${JSON.stringify(defaultQuickMode)}`);
+    await openAdvancedWorkbench(cdp, "A");
 
     // 使用真实产品 dock 验证 Tooltip 的 hover 与键盘触发，不能只验证包装 span 存在。
     const tooltipButton = 'button[aria-label="移动对象"]';
     const hoverPoint = await cdp.evaluate(`(() => { const r = document.querySelector(${JSON.stringify(tooltipButton)}).getBoundingClientRect(); return {x:r.x+r.width/2, y:r.y+r.height/2}; })()`);
     await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...hoverPoint });
     const describedTooltip = `(() => { const b = document.querySelector(${JSON.stringify(tooltipButton)}); const ids = (b?.getAttribute('aria-describedby') || '').split(/\\s+/); return ids.some(id => document.getElementById(id)?.textContent.includes('移动对象')); })()`;
-    assert(await cdp.poll(describedTooltip, "tooltip on hover", 5000), "A5a Tooltip hover describes the actual control");
+    assert(await cdp.poll(describedTooltip, "tooltip on hover", 5000), "A5b Tooltip hover describes the actual control");
     await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
     await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
     await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
@@ -461,6 +474,7 @@ async function localModel(cdp, baseUrl) {
 
     const opened = await cdp.click('[data-testid="toggle-workbench"]');
     if (!opened) throw new Error("B: toggle-workbench not clickable");
+    await openAdvancedWorkbench(cdp, "B");
 
     const rowReady = await cdp.poll(`!!document.querySelector('[aria-label="删除本地模型 repro triangle"]')`, "model row", 30000);
     assert(rowReady, "B2 local model row present in object list");
@@ -504,6 +518,7 @@ async function missingRetry(cdp, baseUrl) {
 
     const opened = await cdp.click('[data-testid="toggle-workbench"]');
     if (!opened) throw new Error("C: toggle-workbench not clickable");
+    await openAdvancedWorkbench(cdp, "C");
 
     const failed = await cdp.poll(`/个 3D 模型加载失败/.test(document.body.innerText || "")`, "load-failed notice", 40000);
     assert(failed, "C2 model-load-failed notice appears");
@@ -557,6 +572,7 @@ async function deleteWhileLoading(cdp, baseUrl) {
         if (!injected) throw new Error("D: inject-local-model not clickable");
         const opened = await cdp.click('[data-testid="toggle-workbench"]');
         if (!opened) throw new Error("D: toggle-workbench not clickable");
+        await openAdvancedWorkbench(cdp, "D");
 
         const rowReady = await cdp.poll(`!!document.querySelector('[aria-label="删除本地模型 repro triangle"]')`, "model row", 30000);
         assert(rowReady, "D1 model row present while load still in flight");
@@ -681,6 +697,7 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
 
     const opened = await cdp.click('[data-testid="toggle-workbench"]');
     if (!opened) throw new Error("F: toggle-workbench not clickable");
+    await openAdvancedWorkbench(cdp, "F");
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.director-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "F2 workbench open with real canvas");
 

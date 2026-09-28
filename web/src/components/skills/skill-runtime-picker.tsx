@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Select } from "antd";
+
 
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { SKILL_RUNTIME_PROFILES, type SkillRuntimeProfile } from "@/services/skill-runtime";
+import { Select } from "@/components/ui/base/select";
 
 export function useSkillRuntimeCatalog() {
     const [skills, setSkills] = useState<Skill[]>([]);

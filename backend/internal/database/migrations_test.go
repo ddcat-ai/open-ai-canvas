@@ -78,6 +78,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 		!db.Migrator().HasColumn(&model.EmailVerificationCode{}, "attempts") {
 		t.Fatal("schema migration v35 did not add authentication verification fields")
 	}
+	if !db.Migrator().HasTable(&model.CloudAgentGeminiCache{}) {
+		t.Fatal("schema migration v36 did not create Gemini cache table")
+	}
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("migration should be idempotent: %v", err)
 	}

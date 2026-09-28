@@ -80,7 +80,9 @@ function unwrapTransportError(error: unknown): never {
             code,
             reason: error.response?.data?.reason,
             details: error.response?.data?.details,
-            retryable: isRetryableStatus(status) || isRetryableStatus(code),
+            // 没有 response 的 AxiosError 代表请求没有拿到 HTTP 响应（断网、连接重置、DNS、超时等）。
+            // 这类错误不能靠 status 判断，但对保存来说通常是暂时性的，应交给上层有限退避重试。
+            retryable: status === undefined || isRetryableStatus(status) || isRetryableStatus(code),
             retryAfterMs: retryAfterMilliseconds(error.response?.headers),
             cause: error,
         });

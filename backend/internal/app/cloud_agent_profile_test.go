@@ -324,8 +324,12 @@ func TestCloudAgentReadToolCacheReplaysReadResultsAndErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cached read failed: %v", err)
 	}
-	if first.(map[string]any)["content"] != second.(map[string]any)["content"] {
-		t.Fatalf("cached read changed the result: %#v vs %#v", first, second)
+	if first.(map[string]any)["content"] == "" || second.(map[string]any)["cacheReplay"] != true || second.(map[string]any)["replayCount"] != 1 {
+		t.Fatalf("cached read did not return a replay receipt: first=%#v second=%#v", first, second)
+	}
+	var cached map[string]any
+	if err := json.Unmarshal(state.ToolReadResults[cloudAgentReadCacheKey(call)].Result, &cached); err != nil || cached["content"] != "固定偏好" {
+		t.Fatalf("full cached result was not retained: %#v err=%v", state.ToolReadResults, err)
 	}
 
 	bad := call
@@ -340,7 +344,7 @@ func TestCloudAgentReadToolCacheReplaysReadResultsAndErrors(t *testing.T) {
 	}
 }
 
-func TestCloudAgentReadToolCacheStopsRepeatedIdenticalReads(t *testing.T) {
+func TestCloudAgentReadToolCacheReplaysRepeatedIdenticalReads(t *testing.T) {
 	state := &cloudAgentRuntime{Profile: cloudAgentProfileSnapshot{Layers: []AgentProfileLayer{{Scope: model.AgentProfileScopeUser, Content: "固定偏好"}}}}
 	call := cloudAgentCall{ID: "profile-read"}
 	call.Function.Name, call.Function.Arguments = "agent_profile_read", `{"scope":"user"}`
@@ -351,13 +355,51 @@ func TestCloudAgentReadToolCacheStopsRepeatedIdenticalReads(t *testing.T) {
 	if _, err := cloudAgentReadToolCached(nil, "user", state, call); err != nil {
 		t.Fatalf("the first cached replay should still be allowed: %v", err)
 	}
-	_, err := cloudAgentReadToolCached(nil, "user", state, call)
-	var loopErr *cloudAgentReadLoopError
-	if !errors.As(err, &loopErr) {
-		t.Fatalf("expected repeated-read guard, got %v", err)
+	third, err := cloudAgentReadToolCached(nil, "user", state, call)
+	if err != nil {
+		t.Fatalf("repeated cached read must remain usable: %v", err)
 	}
-	if loopErr.Count != cloudAgentMaxCachedReadReplays+1 {
-		t.Fatalf("unexpected repeat count: %d", loopErr.Count)
+	if replay, ok := third.(map[string]any); !ok || replay["cacheReplay"] != true || replay["replayCount"] != 2 {
+		t.Fatalf("third identical read did not return a replay receipt: %#v", third)
+	}
+	if state.ReadToolCalls != 1 {
+		t.Fatalf("cached replays consumed read budget: %d", state.ReadToolCalls)
+	}
+}
+
+func TestCloudAgentCanvasWriteInvalidatesOnlyCanvasReadResults(t *testing.T) {
+	state := &cloudAgentRuntime{
+		ToolReadResults: map[string]cloudAgentCachedToolResult{
+			`canvas_get_state:{}`:       {Result: json.RawMessage(`{"nodes":[]}`)},
+			`canvas_read_storyboard:{}`: {Result: json.RawMessage(`{"shots":[]}`)},
+			`skill_read_file:{}`:        {Result: json.RawMessage(`{"content":"skill"}`)},
+			`model_list:{}`:             {Result: json.RawMessage(`{"models":[]}`)},
+		},
+		ToolReadReplays: map[string]int{
+			`canvas_get_state:{}`:       2,
+			`canvas_read_storyboard:{}`: 1,
+			`skill_read_file:{}`:        3,
+			`model_list:{}`:             4,
+		},
+	}
+
+	cloudAgentInvalidateReadCache(state)
+	if _, exists := state.ToolReadResults[`canvas_get_state:{}`]; exists {
+		t.Fatal("canvas state cache survived a canvas write")
+	}
+	if _, exists := state.ToolReadResults[`canvas_read_storyboard:{}`]; exists {
+		t.Fatal("storyboard cache survived a canvas write")
+	}
+	for _, key := range []string{`skill_read_file:{}`, `model_list:{}`} {
+		if _, exists := state.ToolReadResults[key]; !exists {
+			t.Fatalf("unrelated read cache %q was invalidated", key)
+		}
+	}
+	if _, exists := state.ToolReadReplays[`canvas_get_state:{}`]; exists {
+		t.Fatal("canvas replay count survived invalidation")
+	}
+	if state.ToolReadReplays[`skill_read_file:{}`] != 3 || state.ToolReadReplays[`model_list:{}`] != 4 {
+		t.Fatalf("unrelated replay counts changed: %#v", state.ToolReadReplays)
 	}
 }
 

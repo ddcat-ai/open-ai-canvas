@@ -54,16 +54,16 @@ func TestCloudAgentMixedCanvasReadsUnsupportedNodesWithoutGrantingCapabilities(t
 	}
 }
 
-func TestCloudAgentCanvasSummaryTruncatesInsteadOfRejecting(t *testing.T) {
-	nodes := make([]map[string]any, 0, 50)
-	content := strings.Repeat("镜", 600)
-	for index := 0; index < 50; index++ {
+func TestCloudAgentCanvasSummaryIsACatalogNotNodeBodies(t *testing.T) {
+	body := strings.Repeat("镜", 4000)
+	nodes := make([]map[string]any, 0, 200)
+	for index := 0; index < 200; index++ {
 		nodes = append(nodes, map[string]any{
 			"id":    fmt.Sprintf("node-%d", index),
 			"type":  "text",
 			"title": fmt.Sprintf("镜头 %d %s", index, strings.Repeat("标题", 40)),
 			"metadata": map[string]any{
-				"content": content,
+				"content": body, "prompt": "PRIVATE_PROMPT", "apiKey": "PRIVATE_SENTINEL",
 			},
 		})
 	}
@@ -73,22 +73,59 @@ func TestCloudAgentCanvasSummaryTruncatesInsteadOfRejecting(t *testing.T) {
 	}
 	summary, err := cloudAgentCanvasSummary(&model.CanvasProject{Title: "大画布", PayloadJSON: string(raw)})
 	if err != nil {
-		t.Fatalf("large canvas summary rejected: %v", err)
+		t.Fatalf("large canvas catalog rejected: %v", err)
+	}
+	if strings.Contains(summary, body[:40]) || strings.Contains(summary, "PRIVATE_PROMPT") || strings.Contains(summary, "PRIVATE_SENTINEL") || strings.Contains(summary, `"content"`) {
+		t.Fatal("catalog leaked node bodies or metadata")
 	}
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(summary), &parsed); err != nil {
 		t.Fatal(err)
 	}
-	if parsed["totalNodes"] != float64(50) {
-		t.Fatalf("totalNodes=%v", parsed["totalNodes"])
+	if parsed["kind"] != "node_catalog" || parsed["totalNodes"] != float64(200) {
+		t.Fatalf("catalog identity = %+v", parsed)
 	}
 	included, _ := parsed["includedNodes"].(float64)
 	omitted, _ := parsed["omittedNodes"].(float64)
-	if included <= 0 || omitted <= 0 || int(included+omitted) != 50 {
-		t.Fatalf("expected truncation, included=%v omitted=%v", included, omitted)
+	if included <= 0 || omitted <= 0 || int(included+omitted) != 200 || included > float64(cloudAgentCanvasSummaryMaxNodes) {
+		t.Fatalf("expected a bounded catalog, included=%v omitted=%v", included, omitted)
 	}
-	if len(summary) > 64000+4096 {
-		t.Fatalf("truncated summary still huge: %d", len(summary))
+	if len(summary) > cloudAgentCanvasSummaryBudgetBytes+4096 {
+		t.Fatalf("catalog still carries canvas-sized payload: %d", len(summary))
+	}
+}
+
+func TestCloudAgentCanvasSummaryUsesSelectedNodeNeighborhood(t *testing.T) {
+	doc := map[string]any{
+		"nodes": []map[string]any{
+			{"id": "focus", "type": "text", "title": "主体"},
+			{"id": "neighbor", "type": "image", "title": "关联素材"},
+			{"id": "unrelated", "type": "text", "title": "无关内容"},
+		},
+		"connections": []map[string]any{{"fromNodeId": "focus", "toNodeId": "neighbor"}},
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := cloudAgentCanvasSummary(&model.CanvasProject{PayloadJSON: string(raw)}, "focus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(summary), &result); err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(result["nodes"])
+	if strings.Contains(string(encoded), "unrelated") || !strings.Contains(string(encoded), "focus") || !strings.Contains(string(encoded), "neighbor") {
+		t.Fatalf("focused catalog did not include exactly the local graph neighborhood: %s", encoded)
+	}
+	selection := result["selection"].(map[string]any)
+	if selection["includedNeighbors"] != float64(1) || selection["nextReadDepth"] != float64(1) {
+		t.Fatalf("focused catalog metadata is incorrect: %+v", selection)
+	}
+	if _, err := cloudAgentCanvasSummary(&model.CanvasProject{PayloadJSON: string(raw)}, "deleted"); err == nil {
+		t.Fatal("stale selected node was accepted")
 	}
 }
 
@@ -364,5 +401,62 @@ func TestCloudAgentDurablePolicySnapshotRejectsMissingOrUnsupportedContracts(t *
 				t.Fatal("corrupted durable policy snapshot was accepted")
 			}
 		})
+	}
+}
+
+func TestCloudAgentCanvasStateIncludesBoundedRelatedComponent(t *testing.T) {
+	doc := map[string]any{
+		"nodes": []map[string]any{
+			{"id": "upstream", "type": "text", "title": "上游"},
+			{"id": "focus", "type": "text", "title": "焦点"},
+			{"id": "downstream", "type": "text", "title": "下游"},
+			{"id": "unrelated", "type": "text", "title": "无关"},
+		},
+		"connections": []map[string]any{
+			{"id": "e1", "fromNodeId": "upstream", "toNodeId": "focus"},
+			{"id": "e2", "fromNodeId": "focus", "toNodeId": "downstream"},
+		},
+	}
+	view, err := cloudAgentCanvasStateWithRelated(nil, "user", "canvas", doc, 0, []string{"focus"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := view.(map[string]any)
+	selection := result["selection"].(map[string]any)
+	if selection["relationMode"] != "all" || selection["truncated"] != false || selection["selectedNodes"] != 3.0 && selection["selectedNodes"] != 3 {
+		t.Fatalf("unexpected related selection: %#v", selection)
+	}
+	ids := map[string]bool{}
+	for _, raw := range result["nodes"].([]any) {
+		ids[raw.(map[string]any)["id"].(string)] = true
+	}
+	if ids["focus"] == false || ids["upstream"] == false || ids["downstream"] == false || ids["unrelated"] {
+		t.Fatalf("related component selected wrong nodes: %#v", ids)
+	}
+	if len(result["connections"].([]any)) != 2 {
+		t.Fatalf("related component lost edges: %#v", result["connections"])
+	}
+}
+
+func TestCloudAgentCanvasStateRelatedComponentIsBounded(t *testing.T) {
+	nodes := make([]map[string]any, 0, cloudAgentRelatedNodeLimit+32)
+	edges := make([]map[string]any, 0, cloudAgentRelatedNodeLimit+32)
+	nodes = append(nodes, map[string]any{"id": "focus", "type": "text", "title": "焦点"})
+	for index := 0; index < cloudAgentRelatedNodeLimit+32; index++ {
+		id := fmt.Sprintf("child-%d", index)
+		nodes = append(nodes, map[string]any{"id": id, "type": "text", "title": id})
+		edges = append(edges, map[string]any{"id": fmt.Sprintf("edge-%d", index), "fromNodeId": "focus", "toNodeId": id})
+	}
+	view, err := cloudAgentCanvasStateWithRelated(nil, "user", "canvas", map[string]any{"nodes": nodes, "connections": edges}, 0, []string{"focus"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := view.(map[string]any)
+	selection := result["selection"].(map[string]any)
+	if selection["truncated"] != true || selection["selectedNodes"] != float64(cloudAgentRelatedNodeLimit) && selection["selectedNodes"] != cloudAgentRelatedNodeLimit {
+		t.Fatalf("related component should be truncated at %d: %#v", cloudAgentRelatedNodeLimit, selection)
+	}
+	if len(result["nodes"].([]any)) != cloudAgentRelatedNodeLimit {
+		t.Fatalf("related component returned too many nodes: %d", len(result["nodes"].([]any)))
 	}
 }

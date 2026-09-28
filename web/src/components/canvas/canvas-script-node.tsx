@@ -1,4 +1,4 @@
-import { Button, Dropdown, Input, InputNumber, Modal, Segmented, Select, Table } from "antd";
+import { Button, Dropdown, Input, InputNumber, Modal, Segmented, Table } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
@@ -34,6 +34,7 @@ import type {
     StoryboardVideoInputMode,
 } from "@/types/canvas";
 import type { TaskStatus } from "@/services/api/task-center";
+import { Select } from "@/components/ui/base/select";
 
 const STORYBOARD_PROMPT_MIN_HEIGHT = 40;
 const STORYBOARD_PROMPT_MAX_HEIGHT = 116;

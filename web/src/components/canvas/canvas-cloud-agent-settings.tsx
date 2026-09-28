@@ -58,7 +58,7 @@ const permissionOptions: Array<{ value: AgentPermissionMode; label: string; desc
 ];
 
 const contextOptions: Array<{ value: AgentContextKey; label: string; description: string }> = [
-    { value: "canvas", label: "已保存画布摘要", description: "最多 80 个节点的标题与文本片段，不含媒体正文或未同步修改" },
+    { value: "canvas", label: "画布节点目录", description: "每次请求只带节点 id、类型和标题；正文按页读取，不含媒体或未同步修改" },
 ];
 
 const reasoningOptions: Array<{ value: AgentReasoningMode; label: string; description: string }> = [

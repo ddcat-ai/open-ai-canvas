@@ -4,7 +4,7 @@ import { DeleteButton } from "@/components/ui/base/buttons/delete-button";
 import { AlertTriangle, AudioLines, Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, FolderOpen, FolderPlus, Image as ImageIcon, Images, LayoutGrid, Link2, Maximize2, MoreHorizontal, PencilLine, Play, Plus, RotateCcw, Search, Trash2, Upload, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Button, Drawer, Dropdown, Form, Input, Modal, Popconfirm, Progress, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Drawer, Dropdown, Form, Input, Modal, Popconfirm, Progress, Space, Tag, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { useNavigate } from "react-router";
 
@@ -26,11 +26,12 @@ import { downloadBrowserMedia } from "@/services/browser-download";
 import { flushAssetStorePersistence, useAssetStore, type Asset, type AssetCategory, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
-import { deleteAssetWithRemoteSync, deleteAssetsWithRemoteSync, loadAssetLibraryPage, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { deleteAssetWithRemoteSync, deleteAssetsWithRemoteSync, loadAssetLibraryPage, loadAssetsForUse, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useUserStore } from "@/stores/use-user-store";
 import { createAssetFolder, deleteAssetFolder, listAssetFolders, listRemoteAssetsPage, moveRemoteAssetsToFolder, updateAssetFolder, type AssetFolder } from "@/services/api/user-data";
 import { AssetBatchUploadModal } from "./asset-batch-upload-modal";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { Select } from "@/components/ui/base/select";
 
 type LibraryAsset = Exclude<Asset, { kind: "entity" }>;
 
@@ -268,27 +269,47 @@ export default function AssetsPage() {
         setIsAssetOpen(true);
     };
 
-    const openEdit = (asset: LibraryAsset) => {
-        setEditingAsset(asset);
+    const openEdit = async (asset: LibraryAsset) => {
+        let editableAsset = useAssetStore.getState().assets.find((item): item is LibraryAsset => item.id === asset.id && item.kind !== "entity");
+        if (!editableAsset) {
+            try {
+                // 分页卡片是轻量 DTO，编辑前补齐完整记录，避免保存时覆盖远端 metadata。
+                await loadAssetsForUse([asset.id]);
+                editableAsset = useAssetStore.getState().assets.find((item): item is LibraryAsset => item.id === asset.id && item.kind !== "entity");
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "素材详情读取失败，请重试");
+                return;
+            }
+        }
+        if (!editableAsset) {
+            message.error("素材详情读取失败，请重试");
+            return;
+        }
+        setEditingAsset(editableAsset);
         setImageFile(null);
         setImageUploading(false);
         setImageUploadProgress(null);
-        setFormKind(asset.kind);
-        setImageDraft(asset.kind === "image" ? asset.data : null);
+        setFormKind(editableAsset.kind);
+        setImageDraft(editableAsset.kind === "image" ? editableAsset.data : null);
         form.setFieldsValue({
-            kind: asset.kind,
-            category: asset.category || "other",
-            folderId: asset.folderId || "",
-            title: asset.title,
-            coverUrl: asset.coverUrl,
-            tags: asset.tags || [],
-            source: asset.source,
-            note: asset.note,
-            content: asset.kind === "text" ? asset.data.content : "",
-            arkAssetId: asset.arkAssetId || "",
-            portraitCertified: asset.portraitCertified === true,
+            kind: editableAsset.kind,
+            category: editableAsset.category || "other",
+            folderId: editableAsset.folderId || "",
+            title: editableAsset.title,
+            coverUrl: editableAsset.coverUrl,
+            tags: editableAsset.tags || [],
+            source: editableAsset.source,
+            note: editableAsset.note,
+            content: editableAsset.kind === "text" ? editableAsset.data.content : "",
+            arkAssetId: editableAsset.arkAssetId || "",
+            portraitCertified: editableAsset.portraitCertified === true,
         });
         setIsAssetOpen(true);
+    };
+
+    const ensureAssetsInStore = async (assetIds: string[]) => {
+        const missingIds = assetIds.filter((id) => !useAssetStore.getState().assets.some((asset) => asset.id === id));
+        if (missingIds.length) await loadAssetsForUse(missingIds);
     };
 
     const saveAsset = async () => {
@@ -434,9 +455,10 @@ export default function AssetsPage() {
     };
 
     const restoreAsset = async (asset: LibraryAsset) => {
-        updateAsset(asset.id, { status: "confirmed" });
-        await flushAssetStorePersistence();
         try {
+            await ensureAssetsInStore([asset.id]);
+            updateAsset(asset.id, { status: "confirmed" });
+            await flushAssetStorePersistence();
             await saveRemoteUserDataNow();
             message.success(`已还原素材「${asset.title}」`);
         } catch (error) {
@@ -446,13 +468,12 @@ export default function AssetsPage() {
 
     const batchRestore = async () => {
         if (!selectedIds.length) return;
-        for (const id of selectedIds) {
-            updateAsset(id, { status: "confirmed" });
-        }
-        const count = selectedIds.length;
-        setSelectedIds([]);
-        await flushAssetStorePersistence();
         try {
+            await ensureAssetsInStore(selectedIds);
+            for (const id of selectedIds) updateAsset(id, { status: "confirmed" });
+            const count = selectedIds.length;
+            setSelectedIds([]);
+            await flushAssetStorePersistence();
             await saveRemoteUserDataNow();
             message.success(`已还原 ${count} 个素材`);
         } catch (error) {
@@ -461,9 +482,10 @@ export default function AssetsPage() {
     };
 
     const archiveAsset = async (asset: LibraryAsset) => {
-        updateAsset(asset.id, { status: "archived" });
-        await flushAssetStorePersistence();
         try {
+            await ensureAssetsInStore([asset.id]);
+            updateAsset(asset.id, { status: "archived" });
+            await flushAssetStorePersistence();
             await saveRemoteUserDataNow();
             message.success(`已将「${asset.title}」移入回收站`);
         } catch (error) {
@@ -473,13 +495,12 @@ export default function AssetsPage() {
 
     const batchArchive = async () => {
         if (!selectedIds.length) return;
-        for (const id of selectedIds) {
-            updateAsset(id, { status: "archived" });
-        }
-        const count = selectedIds.length;
-        setSelectedIds([]);
-        await flushAssetStorePersistence();
         try {
+            await ensureAssetsInStore(selectedIds);
+            for (const id of selectedIds) updateAsset(id, { status: "archived" });
+            const count = selectedIds.length;
+            setSelectedIds([]);
+            await flushAssetStorePersistence();
             await saveRemoteUserDataNow();
             message.success(`已将 ${count} 个素材移入回收站`);
         } catch (error) {
@@ -737,7 +758,7 @@ export default function AssetsPage() {
                                                     retentionDays={retentionDays}
                                                     onSelect={(selected) => setSelectedIds((current) => (selected ? [...new Set([...current, asset.id])] : current.filter((id) => id !== asset.id)))}
                                                     onOpen={() => setPreviewAsset(asset)}
-                                                    onEdit={() => openEdit(asset)}
+                                                    onEdit={() => void openEdit(asset)}
                                                     onCopy={copyAssetText}
                                                     onDownload={downloadImage}
                                                     onRestore={() => void restoreAsset(asset)}

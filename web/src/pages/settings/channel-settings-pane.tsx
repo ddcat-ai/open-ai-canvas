@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, Popconfirm, Segmented, Select, Tooltip } from "antd";
+import { App, Button, Form, Input, Popconfirm, Segmented, Tooltip } from "antd";
 import { Pencil, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -17,6 +17,7 @@ import {
     type ModelChannel,
 } from "@/stores/use-config-store";
 import { ChannelModelSettings } from "./channel-video-pricing";
+import { Select } from "@/components/ui/base/select";
 
 type UserChannelConnection = "openai" | "gemini";
 type ChannelSettingsPaneProps = {

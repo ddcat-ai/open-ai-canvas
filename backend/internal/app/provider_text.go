@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"sort"
@@ -179,7 +180,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 			return parseAgentToolPayload(payload, wire)
 		}
 	}
-	body, err := executeProtocolRequest(ctx, input.Config, spec)
+	body, err := executeDeclarativeAgentWithGeminiCache(ctx, input, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +209,49 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		return nil, errors.New("声明式 Agent 接口没有返回内容")
 	}
 	return result, nil
+}
+
+// executeDeclarativeAgentWithGeminiCache keeps explicit Prompt Cache entirely
+// optional: cache creation, cleanup, and a single stale-cache rebuild can never
+// turn a valid uncached Agent request into a failed run.
+func executeDeclarativeAgentWithGeminiCache(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, error) {
+	baseSpec, err := cloneProtocolRequestSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+	executeSpec := baseSpec
+	cacheUsed := false
+	if input.Config.InterfaceType == officialGeminiAgentInterface {
+		prepared, used, prepareErr := prepareOfficialGeminiAgentCache(ctx, input, baseSpec)
+		if prepareErr != nil {
+			log.Printf("gemini agent prompt cache unavailable: model=%s reason=%s", safeProviderModel(input.Config.Model), safeProviderLogError(prepareErr))
+		} else {
+			executeSpec, cacheUsed = prepared, used
+		}
+	}
+	body, err := executeProtocolRequest(ctx, input.Config, executeSpec)
+	if err == nil || input.Config.InterfaceType != officialGeminiAgentInterface || !cacheUsed || !geminiRequestUsesCachedContent(executeSpec) || !isGeminiCachedContentNotFound(err, stringValue(protocolBodyObject(executeSpec.Body)["cachedContent"])) {
+		return body, err
+	}
+
+	resourceName := ""
+	if body := protocolBodyObject(executeSpec.Body); body != nil {
+		resourceName, _ = body["cachedContent"].(string)
+	}
+	if invalidateErr := invalidateOfficialGeminiAgentCache(ctx, input, baseSpec, resourceName); invalidateErr != nil {
+		// The local identity is still removed whenever possible. Do not replace a
+		// provider 404 with a cache bookkeeping error or skip the one rebuild.
+		log.Printf("gemini agent prompt cache invalidation failed: model=%s reason=%s", safeProviderModel(input.Config.Model), safeProviderLogError(invalidateErr))
+	}
+	rebuilt, _, prepareErr := prepareOfficialGeminiAgentCacheMode(ctx, input, baseSpec, true)
+	if prepareErr != nil {
+		log.Printf("gemini agent prompt cache rebuild unavailable: model=%s reason=%s", safeProviderModel(input.Config.Model), safeProviderLogError(prepareErr))
+		rebuilt = baseSpec
+	}
+	// The rebuilt request is intentionally executed only once. If it receives
+	// another CachedContent 404, the first stale-cache recovery already happened;
+	// preserve the provider error instead of recursively rebuilding forever.
+	return executeProtocolRequest(ctx, input.Config, rebuilt)
 }
 
 func claudeAgentBody(request map[string]interface{}) map[string]interface{} {

@@ -25,17 +25,45 @@ describe("注册服务协议", () => {
 
         expect(page).toContain("acceptedTerms: agreementAccepted");
         expect(page).toContain("agreementAccepted ? linuxDOLoginURL(next, true) : undefined");
-        expect(page).toContain("请先同意影策服务协议");
+        expect(page).toContain("message.warning(`请先同意${agreementTitle}`)");
         expect(login).toContain("linuxDOLoginURL(next)");
         expect(api).toContain("acceptedTerms: boolean");
         expect(api).toContain("acceptedTerms?: boolean");
     });
 
-    test("协议使用影策标题并提供正文承载区域", () => {
+    test("协议标题与条款来自后台配置而不是硬编码常量", () => {
         const page = readFileSync(resolve(import.meta.dir, "../src/pages/auth/register.tsx"), "utf8");
 
-        expect(page).toContain('title="影策服务协议"');
-        expect(page).toContain("SERVICE_AGREEMENT.map");
-        expect(page).toContain("服务协议内容待补充。");
+        expect(page).not.toContain("SERVICE_AGREEMENT");
+        expect(page).toContain("settings?.agreementTitle");
+        expect(page).toContain("settings?.agreementContent");
+        expect(page).toContain("title={agreementTitle}");
+        expect(page).toContain("agreementParagraphs.map");
+        // 条款留空时的占位提示；断言关键词而非整句，允许后续补充指引文案。
+        expect(page).toContain("服务协议内容待补充");
+    });
+
+    test("读取设置失败时不猜协议标题，改为提示并允许重新读取", () => {
+        const page = readFileSync(resolve(import.meta.dir, "../src/pages/auth/register.tsx"), "utf8");
+
+        // 失败必须留下状态位，不能静默降级成品牌名拼接的协议名。
+        expect(page).toContain("[settingsFailed, setSettingsFailed] = useState(false)");
+        expect(page).toContain("setSettingsFailed(true)");
+        expect(page).toContain("读取注册设置失败，暂时无法确认服务协议名称与条款。");
+        expect(page).toContain("setSettingsReloadKey((value) => value + 1)");
+        // 协议入口只在拿到设置后渲染，读不到配置就不展示协议名。
+        expect(page).toContain("{settings ? (");
+    });
+
+    test("公开认证设置暴露协议字段，管理接口可回传协议正文", () => {
+        const auth = readFileSync(resolve(import.meta.dir, "../src/services/api/auth.ts"), "utf8");
+        const wallet = readFileSync(resolve(import.meta.dir, "../src/services/api/wallet.ts"), "utf8");
+        const panel = readFileSync(resolve(import.meta.dir, "../src/pages/admin/components/access-settings-panel.tsx"), "utf8");
+
+        expect(auth).toContain("agreementTitle?: string; agreementContent?: string");
+        expect(wallet).toContain("agreementTitle?: string");
+        expect(wallet).toContain("agreementContent?: string");
+        expect(panel).toContain("服务协议名称与条款");
+        expect(panel).toContain("saveAgreement");
     });
 });

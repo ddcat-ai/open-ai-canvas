@@ -1,10 +1,11 @@
-import { App, Button, Dropdown, Select, Table } from "antd";
+import { App, Button, Dropdown, Table } from "antd";
 import type { ButtonProps, MenuProps, TableProps } from "antd";
 import { saveAs } from "file-saver";
 import { CheckSquare2, ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter, RotateCcw, SearchX, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/base/select";
 
 export const configuredSecretText = "已配置 · 留空不改";
 

@@ -1,6 +1,6 @@
 import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
-import { Input, InputNumber, Select } from "antd";
+import { Input, InputNumber } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol } from "@/lib/model-protocols";
 import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
+import { Select } from "@/components/ui/base/select";
 
 const ratioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
 const operationOptions = [

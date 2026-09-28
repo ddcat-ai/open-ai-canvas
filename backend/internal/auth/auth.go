@@ -47,13 +47,15 @@ type LoginRequest struct {
 
 type PublicAuthSettings struct {
 	VerificationPolicy
-	SMSBindingAvailable   bool `json:"smsBindingAvailable"`
-	EmailBindingAvailable bool `json:"emailBindingAvailable"`
-	FirstUser             bool `json:"firstUser"`
-	RegistrationEnabled   bool `json:"registrationEnabled"`
-	LinuxDOEnabled        bool `json:"linuxdoEnabled"`
-	EmailEnabled          bool `json:"emailEnabled"`
-	EmailCodeRequired     bool `json:"emailCodeRequired"`
+	SMSBindingAvailable   bool   `json:"smsBindingAvailable"`
+	EmailBindingAvailable bool   `json:"emailBindingAvailable"`
+	FirstUser             bool   `json:"firstUser"`
+	RegistrationEnabled   bool   `json:"registrationEnabled"`
+	LinuxDOEnabled        bool   `json:"linuxdoEnabled"`
+	EmailEnabled          bool   `json:"emailEnabled"`
+	EmailCodeRequired     bool   `json:"emailCodeRequired"`
+	AgreementTitle        string `json:"agreementTitle,omitempty"`
+	AgreementContent      string `json:"agreementContent,omitempty"`
 }
 
 type AuthSessionResult struct {
@@ -76,7 +78,9 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		return nil, err
 	}
 	if count == 0 {
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false}, nil
+		// 首个管理员同样要看到服务协议，不能因为跳过注册校验就丢失协议字段。
+		agreementTitle, agreementContent := s.RegistrationAgreement()
+		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent}, nil
 	}
 	registrationEnabled, err := s.RegistrationEnabled()
 	if err != nil {
@@ -107,12 +111,24 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	p.SMSRegistration = p.SMSRegistration && smsRegister
 	p.EmailRegistration = p.EmailRegistration && emailEnabled
 	p.SMSAndEmailRegistration = p.SMSAndEmailRegistration && smsRegister && emailEnabled
-	return &PublicAuthSettings{VerificationPolicy: p, SMSBindingAvailable: smsBind, EmailBindingAvailable: emailEnabled, FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: p.EmailRegistration || p.SMSAndEmailRegistration}, nil
+	agreementTitle, agreementContent := s.RegistrationAgreement()
+	return &PublicAuthSettings{
+		VerificationPolicy:    p,
+		SMSBindingAvailable:   smsBind,
+		EmailBindingAvailable: emailEnabled,
+		FirstUser:             false,
+		RegistrationEnabled:   registrationEnabled,
+		LinuxDOEnabled:        s.LinuxDOEnabled(),
+		EmailEnabled:          emailEnabled,
+		EmailCodeRequired:     p.EmailRegistration || p.SMSAndEmailRegistration,
+		AgreementTitle:        agreementTitle,
+		AgreementContent:      agreementContent,
+	}, nil
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	if !req.AcceptedTerms {
-		return nil, kernel.BadAuthRequest("请先同意影策服务协议")
+		return nil, kernel.BadAuthRequest("请先同意" + s.AgreementTitleForMessage())
 	}
 	username := NormalizeUsername(req.Username)
 	email := NormalizeEmail(req.Email)

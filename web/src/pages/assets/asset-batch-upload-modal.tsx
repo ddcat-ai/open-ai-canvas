@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { App, Button, Modal, Progress, Select } from "antd";
+import { App, Button, Modal, Progress } from "antd";
 import { StatusBadge } from "@/components/ui/base/badges";
 import { FileImage, UploadCloud, X } from "lucide-react";
 
@@ -9,6 +9,7 @@ import { uploadImage } from "@/services/image-storage";
 import { localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import type { AssetFolder } from "@/services/api/user-data";
+import { Select } from "@/components/ui/base/select";
 
 type BatchItem = { id: string; file: File; status: "queued" | "uploading" | "done" | "error"; error?: string; percent?: number };
 

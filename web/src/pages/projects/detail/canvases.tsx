@@ -1,4 +1,4 @@
-import { App, Button, Popconfirm, Select } from "antd";
+import { App, Button, Popconfirm } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { linkCanvasUnit, listProjectCanvases, unlinkCanvasProject, unlinkCanvasU
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 
 import { type ProjectDetailViewProps } from "./shared";
+import { Select } from "@/components/ui/base/select";
 
 export default function ProjectCanvasesView({ detail, refreshProject }: ProjectDetailViewProps) {
     const { message } = App.useApp();

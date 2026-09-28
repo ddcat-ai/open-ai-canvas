@@ -1,7 +1,7 @@
-import { App, Button, ColorPicker, Dropdown, Input, InputNumber, Select, Slider } from "antd";
+import { App, Button, ColorPicker, Dropdown, Input, InputNumber, Slider } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import type { MenuProps } from "antd";
-import { Box, BoxSelect, Camera, Circle, Cuboid, FileUp, Focus, Image as ImageIcon, LampDesk, Lightbulb, Plus, Redo2, RotateCcw, Save, Trash2, Undo2, UserRound, Video, X } from "lucide-react";
+import { Box, BoxSelect, Camera, Circle, Cuboid, FileUp, Focus, Image as ImageIcon, LampDesk, Lightbulb, MousePointer2, Plus, Redo2, RotateCcw, Save, Trash2, Undo2, UserRound, Video, WandSparkles, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { nanoid } from "nanoid";
 import { Euler, Quaternion } from "three";
@@ -17,7 +17,7 @@ import { advanceDirectorPlayhead, resolveDirectorCameraAlignment, resolveDirecto
 import { createDirectorTransaction, installDirectorTerminalListeners, type DirectorTransaction } from "@/lib/canvas/director/director-gesture-transaction";
 import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
 import { DIRECTOR_MODES, directorModeCapabilities, type DirectorModeCapabilities } from "@/lib/canvas/director/director-modes";
-import { resolveDirectorPlacement, resolveDirectorPlacementAnchor } from "@/lib/canvas/director/director-placement";
+import { resolveDirectorPlacement, resolveDirectorPlacementAnchor, type DirectorGroundPoint } from "@/lib/canvas/director/director-placement";
 import { isDirectorOutputSnapshotCurrent, shouldReinitializeDirectorSession } from "@/lib/canvas/director/director-session";
 import { blocksDirectorShortcut, releaseDirectorFocusAfterPointer, resolveDirectorShortcut, type DirectorShortcutAction } from "@/lib/canvas/director/director-shortcuts";
 import { createDirectorActor, createDirectorBillboard, createDirectorCamera, createDirectorLight, createDirectorModel, createDirectorObject, DIRECTOR_ACTOR_COLORS, directorBoneLabel, directorFocalLengthToFov, directorPoseLabel, interpolateDirectorTransform, removeDirectorSceneKeyframe, setDirectorSceneKeyframeEasing, touchDirectorScene, upsertDirectorBoneKeyframe } from "@/lib/canvas/director/director-scene";
@@ -30,6 +30,7 @@ import { useDirectorWorkbenchStore } from "@/stores/canvas/use-director-workbenc
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { DirectorCamera, DirectorCameraMove, DirectorHumanoidBone, DirectorKeyframeDeleteTarget, DirectorKeyframeEasing, DirectorLight, DirectorObject, DirectorPose, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorSceneOutput, DirectorShot, DirectorShotSize, DirectorTransform, DirectorVec3 } from "@/types/director";
+import { Select } from "@/components/ui/base/select";
 
 export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingScope, onClose, onChange, onApply, onDeleteImageNode, onFlush }: { open: boolean; scene: DirectorScene | null; imageNodes: CanvasNodeData[]; onboardingScope: string; onClose: () => void; onChange: (scene: DirectorScene) => void; onApply: (output: DirectorSceneOutput) => Promise<void>; onDeleteImageNode: (nodeId: string) => void; onFlush?: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();
@@ -41,6 +42,8 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
     const [future, setFuture] = useState<DirectorScene[]>([]);
     const [saving, setSaving] = useState(false);
     const [recording, setRecording] = useState(false);
+    // 默认进入镜头优先的快速工作流，完整的摆场/姿态/动画能力仍保留在高级模式。
+    const [quickMode, setQuickMode] = useState(true);
     const [onboardingRestartSignal, setOnboardingRestartSignal] = useState(0);
     const mode = useDirectorWorkbenchStore((state) => state.mode);
     const viewMode = useDirectorWorkbenchStore((state) => state.viewMode);
@@ -691,10 +694,75 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
         }
     };
 
+    const quickActors = draft?.objects.filter((item) => item.kind === "actor" || item.primitive === "character") || [];
+    const quickSelectedActor = quickActors.find((item) => item.id === selectedObjectId) || quickActors[0] || null;
+    const handleQuickGroundClick = useCallback((point: DirectorGroundPoint) => {
+        if (!quickSelectedActor) {
+            message.info("先添加或选择一个演员");
+            return;
+        }
+        setSelectedObjectId(quickSelectedActor.id);
+        handleObjectTransform(quickSelectedActor.id, quickSelectedActor.transform, {
+            ...quickSelectedActor.transform,
+            position: [point.x, quickSelectedActor.transform.position[1], point.z],
+        });
+        message.success("演员已落位");
+    }, [handleObjectTransform, message, quickSelectedActor]);
+    const quickPoseOptions: Array<{ value: DirectorPose; label: string }> = [
+        { value: "stand", label: "站立" },
+        { value: "sit", label: "坐下" },
+        { value: "walk", label: "走动" },
+        { value: "wave", label: "挥手" },
+        { value: "think", label: "思考" },
+        { value: "fight", label: "对抗" },
+    ];
+    const applyQuickPose = (pose: DirectorPose) => {
+        if (!quickSelectedActor) {
+            message.info("先添加或选择一个演员");
+            return;
+        }
+        setSelectedObjectId(quickSelectedActor.id);
+        updateObject(quickSelectedActor.id, { pose, activeMotionClipId: undefined, boneOverrides: {} });
+    };
+    const placeQuickActor = () => {
+        if (!quickSelectedActor) {
+            message.info("先添加或选择一个演员");
+            return;
+        }
+        const intent = viewportRef.current?.readPlacementIntent();
+        const point = intent?.pointer || intent?.orbitTarget;
+        if (!point) {
+            message.info("先在视口里移动鼠标到地面，或旋转视图后再落位");
+            return;
+        }
+        setSelectedObjectId(quickSelectedActor.id);
+        handleObjectTransform(quickSelectedActor.id, quickSelectedActor.transform, { ...quickSelectedActor.transform, position: [point.x, quickSelectedActor.transform.position[1], point.z] });
+    };
+    const addQuickActor = () => {
+        addActor();
+        message.success("演员已加入；直接点击视口地面即可落位");
+    };
+    const selectQuickShotSize = (shotSize: DirectorShotSize) => {
+        if (activeShot) updateShot(activeShot.id, { shotSize });
+    };
+    const selectQuickCameraMove = (move: DirectorCameraMove) => {
+        if (activeShot) updateShot(activeShot.id, { cameraMove: move });
+    };
+
+    useEffect(() => {
+        const onPreviewRequested = (event: Event) => {
+            const detail = (event as CustomEvent<{ sceneId?: string; shotId?: string; duration?: number; fps?: number }>).detail;
+            if (!detail || detail.sceneId !== draft?.id || (detail.shotId && detail.shotId !== activeShot?.id)) return;
+            void exportClayVideo();
+        };
+        window.addEventListener("director:preview-requested", onPreviewRequested);
+        return () => window.removeEventListener("director:preview-requested", onPreviewRequested);
+    }, [activeShot?.id, draft?.id, exportClayVideo]);
+
     if (!open || !draft || !activeShot) return null;
 
     return (
-        <div data-canvas-no-zoom className="fixed inset-0 z-[var(--z-toast)] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+        <div data-canvas-director-workbench data-canvas-no-zoom className="fixed inset-0 z-[var(--z-toast)] flex min-h-0 flex-col overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             <header className="thin-scrollbar flex h-12 shrink-0 items-center gap-2 overflow-x-auto overflow-y-hidden border-b px-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
                 <IconButton label="关闭导演台" onClick={closeWorkbench}><X className="size-4" /></IconButton>
                 <Input variant="borderless" value={draft.title} className="max-w-56 font-medium" onChange={(event) => replaceWithoutHistory((current) => ({ ...current, title: event.target.value }))} />
@@ -703,7 +771,25 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
                 <IconButton label="重做" disabled={!future.length} onClick={redo}><Redo2 className="size-4" /></IconButton>
                 <span className="h-5 w-px" style={{ background: theme.toolbar.border }} />
                 {/* 一级模式切换：小屏也必须可达，因此不加 max-lg:hidden。 */}
-                <nav className="director-mode-switch" aria-label="导演台模式">
+                <button
+                    type="button"
+                    className={`director-mode-switch-button ${quickMode ? "is-active" : ""}`}
+                    aria-pressed={quickMode}
+                    title="用镜头优先的最短路径完成摆位、姿态和预演"
+                    onClick={() => setQuickMode(true)}
+                >
+                    快速镜头
+                </button>
+                <button
+                    type="button"
+                    className={`director-mode-switch-button ${!quickMode ? "is-active" : ""}`}
+                    aria-pressed={!quickMode}
+                    title="打开完整的摆场、姿态、动画和摄影机工具"
+                    onClick={() => setQuickMode(false)}
+                >
+                    高级工作台
+                </button>
+                {!quickMode ? <nav className="director-mode-switch" aria-label="导演台模式">
                     {DIRECTOR_MODES.map((item) => (
                         <button
                             key={item.mode}
@@ -721,7 +807,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
                             {item.label}
                         </button>
                     ))}
-                </nav>
+                </nav> : null}
                 <div className="ml-auto flex items-center gap-2">
                     <span
                         aria-live="polite"
@@ -740,6 +826,48 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
                 </div>
             </header>
 
+            {quickMode ? <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)] max-lg:grid-cols-[180px_minmax(0,1fr)]">
+                <aside className="thin-scrollbar min-h-0 overflow-y-auto border-r p-3" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
+                    <div className="mb-3 flex items-center justify-between">
+                        <div>
+                            <div className="text-sm font-semibold">镜头对象</div>
+                            <div className="text-[var(--fs-tiny)] opacity-55">先解决站位和关系，不先建复杂模型</div>
+                        </div>
+                        <Button size="small" type="primary" icon={<Plus className="size-3.5" />} onClick={addQuickActor}>演员</Button>
+                    </div>
+                    <div className="space-y-1">
+                        {quickActors.map((actor) => <button key={actor.id} type="button" className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors ${quickSelectedActor?.id === actor.id ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10" : "border-transparent hover:bg-black/5 dark:hover:bg-white/5"}`} onClick={() => setSelectedObjectId(actor.id)}>
+                            <span className="flex size-7 items-center justify-center rounded-full text-white" style={{ background: actor.color }}><UserRound className="size-3.5" /></span>
+                            <span className="min-w-0 flex-1 truncate">{actor.name}</span>
+                            <span className="text-[var(--fs-tiny)] opacity-45">{actor.pose ? directorPoseLabel(actor.pose) : "站立"}</span>
+                        </button>)}
+                    </div>
+                    {!quickActors.length ? <div className="rounded-lg border border-dashed p-4 text-center text-xs opacity-60">还没有演员<br />先加一个人偶，再用镜头完成预演</div> : null}
+                    <div className="mt-5 rounded-lg border p-3" style={{ borderColor: theme.toolbar.border }}>
+                        <div className="mb-2 flex items-center gap-2 text-sm font-medium"><MousePointer2 className="size-4" />快速落位</div>
+                        <p className="mb-3 text-xs leading-5 opacity-60">直接点击视口地面即可落位；也可以先移动鼠标，再用按钮落到当前指针位置。无需输入 XYZ。</p>
+                        <Button block size="small" disabled={!quickSelectedActor} onClick={placeQuickActor}>按当前指针落位</Button>
+                    </div>
+                </aside>
+                <main className="relative min-h-0 overflow-hidden bg-neutral-900">
+                    <DirectorViewport ref={viewportRef} scene={draft} selectedObjectId={quickSelectedActor?.id || null} selectedBone={null} transformMode="translate" renderMode="clay" playhead={0} playing={false} showMotionPaths={false} viewMode={viewMode} onViewModeChange={setViewMode} onSelectObject={setSelectedObjectId} onSelectBone={setSelectedBone} onGroundClick={handleQuickGroundClick} onObjectTransform={handleObjectTransform} onBoneTransform={handleBoneTransform} onActorRigReady={handleActorRigReady} />
+                    <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md bg-black/35 px-2.5 py-1.5 text-xs font-medium text-white/80"><WandSparkles className="size-3.5" />{activeShot.name} · {activeCamera?.name || "无摄影机"}</div>
+                    <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-white/10 bg-black/55 p-1.5 text-white shadow-lg">
+                        <span className="px-2 text-xs text-white/65">白模预演</span>
+                        <Button size="small" ghost icon={<Video className="size-3.5" />} loading={recording} onClick={() => void exportClayVideo()}>生成预演</Button>
+                        <Button size="small" type="primary" icon={<Save className="size-3.5" />} loading={saving} onClick={() => void applyToCanvas()}>应用镜头</Button>
+                    </div>
+                </main>
+                <aside className="thin-scrollbar min-h-0 overflow-y-auto border-l p-3" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
+                    <div className="mb-4 flex items-center justify-between"><div><div className="text-sm font-semibold">镜头卡</div><div className="text-[var(--fs-tiny)] opacity-55">用语义参数替代工程参数</div></div><Camera className="size-4 opacity-45" /></div>
+                    <div className="mb-4 grid grid-cols-3 gap-1.5">{(["wide", "full", "medium", "close_up", "extreme_close_up"] as DirectorShotSize[]).map((size) => <button key={size} type="button" className={`rounded-md border px-2 py-2 text-xs ${activeShot.shotSize === size ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10" : "border-transparent bg-black/5 dark:bg-white/5"}`} onClick={() => selectQuickShotSize(size)}>{({ wide: "全景", full: "全身", medium: "中景", close_up: "近景", extreme_close_up: "特写" } as Record<string, string>)[size]}</button>)}</div>
+                    <div className="mb-4"><div className="mb-2 text-xs font-medium opacity-65">姿态</div><div className="grid grid-cols-3 gap-1.5">{quickPoseOptions.map((option) => <button key={option.value} type="button" disabled={!quickSelectedActor} className={`rounded-md border px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-35 ${quickSelectedActor?.pose === option.value ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10" : "border-transparent bg-black/5 dark:bg-white/5"}`} onClick={() => applyQuickPose(option.value)}>{option.label}</button>)}</div></div>
+                    <div className="mb-4"><div className="mb-2 text-xs font-medium opacity-65">运镜</div><Select className="w-full" size="small" value={activeShot.cameraMove} options={[{ value: "static", label: "固定" }, { value: "push_in", label: "推进" }, { value: "pull_out", label: "拉远" }, { value: "pan_left", label: "左摇" }, { value: "pan_right", label: "右摇" }, { value: "handheld", label: "手持" }]} onChange={selectQuickCameraMove} /></div>
+                    <div className="space-y-2"><Button block size="small" icon={<Focus className="size-3.5" />} onClick={alignCameraToView}>用当前视图设机位</Button><Button block size="small" onClick={applyCameraMove}>生成运镜</Button></div>
+                    <div className="mt-5 rounded-lg border p-3 text-xs leading-5 opacity-70" style={{ borderColor: theme.toolbar.border }}><div className="mb-1 font-medium opacity-100">给视频模型的参考</div>白模只负责镜头、动作和空间关系；生成真实人体比例，不沿用白模轮廓。</div>
+                </aside>
+            </div> : null}
+            {!quickMode ? <>
             <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_292px] max-lg:grid-cols-[180px_minmax(0,1fr)]">
                 <aside className="thin-scrollbar min-h-0 overflow-y-auto border-r" style={{ background: theme.node.panel, borderColor: theme.toolbar.border }}>
                     <PanelTitle title="场景对象" action={<AddMenuButton label="添加场景对象" items={addObjectMenuItems} />} />
@@ -779,6 +907,7 @@ export function CanvasDirectorWorkbench({ open, scene, imageNodes, onboardingSco
 
             {/* 时间轴只属于动画模式：其他模式下它不渲染，Auto Key 与录制入口一并消失。 */}
             {capabilities.timeline ? <DirectorSequencer scene={draft} shot={activeShot} camera={activeCamera} objects={draft.objects} selectedObjectId={selectedObjectId} selectedBone={selectedBone} playhead={playhead} playing={playing} autoKey={autoKey} height={sequencerHeight} visible={sequencerVisible} onPlayToggle={() => setPlaying(!playing)} onPlayheadChange={setPlayhead} onAutoKeyChange={setAutoKey} onHeightChange={setSequencerHeight} onVisibilityChange={setSequencerVisible} onSelectObject={setSelectedObjectId} onSelectBone={setSelectedBone} onRecordKeyframe={recordSelectedKeyframe} onAddShot={addShot} onDeleteKeyframe={deleteKeyframe} onSetKeyframeEasing={setKeyframeEasing} onSelectShot={(id) => { commit((current) => ({ ...current, activeShotId: id })); setPlayhead(0); }} /> : null}
+            </> : null}
         </div>
     );
 }

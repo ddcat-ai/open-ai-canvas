@@ -3275,6 +3275,80 @@
     line-height: 1.5;
 }
 
+/* --- 服务协议条款编辑区 -------------------------------------------------------
+   模板入口与字数提示紧贴正文编辑框：它们是「填写条款」这一步的辅助操作，
+   放回表单内部后与保存行（页脚）在视觉上分离，避免被读成两个并列的主操作。
+
+   内边距：同页其他区块（注册策略、Linux.do）的表单都包在带边框和内边距的
+   子卡片里，本区块的 Form.Item 是裸的，不加 padding 会左右贴死卡片边缘，
+   与区块头（20px）和页脚（14px 20px）对不齐。窄屏 16px，≥1024px 与
+   summary 的 20px 对齐。 */
+.admin-access-agreement-section > .admin-settings-section-content > .ant-form {
+    padding: 14px 16px 8px;
+}
+
+@media (min-width: 1024px) {
+    .admin-access-agreement-section > .admin-settings-section-content > .ant-form {
+        padding: 18px 20px 10px;
+    }
+}
+
+/* 协议名称是短文本，占满 1400px 宽的卡片视觉重心失衡；限宽到表单常用档位。 */
+.admin-access-agreement-title-field {
+    max-width: 480px;
+}
+
+.admin-access-agreement-content-field.ant-form-item {
+    margin-bottom: 10px;
+}
+
+.admin-access-agreement-toolbar {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 14px;
+    margin-bottom: 4px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--admin-layer-2) 48%, var(--admin-layer-1));
+    padding: 8px 10px;
+}
+
+.admin-access-agreement-template-note {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.admin-access-agreement-template-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-access-agreement-metric {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+/* 内容为空时字数提示没有信息量，窄屏优先让位给操作按钮。 */
+@media (max-width: 640px) {
+    .admin-access-agreement-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
 .admin-access-load-error,
 .admin-access-loading-card {
     min-height: 220px;
@@ -6230,6 +6304,7 @@
 .admin-email-delivery-section,
 .admin-access-registration-section,
 .admin-access-linuxdo-section,
+.admin-access-agreement-section,
 .admin-intercept-policy-section,
 .admin-third-party-credential-section {
     border-color: color-mix(in srgb, var(--foreground) 22%, var(--admin-card-border)) !important;
@@ -6239,17 +6314,18 @@
 .admin-email-delivery-section > .admin-settings-section-summary,
 .admin-access-registration-section > .admin-settings-section-summary,
 .admin-access-linuxdo-section > .admin-settings-section-summary,
+.admin-access-agreement-section > .admin-settings-section-summary,
 .admin-intercept-policy-section > .admin-settings-section-summary,
 .admin-third-party-credential-section > .admin-settings-section-summary {
     background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary h2 {
+:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary h2 {
     font-size: 16px;
     letter-spacing: -0.01em;
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary p {
+:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary p {
     max-width: 760px;
     margin-top: 5px;
     font-size: 12px;

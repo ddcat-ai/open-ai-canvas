@@ -259,6 +259,7 @@ function DockCommandButton({ command, mouseX, metrics, motionEnabled, compact, s
                 type="button"
                 aria-label={command.label}
                 title={nativeTitle}
+                data-icon-only
                 aria-expanded={command.expands ? command.active || undefined : undefined}
                 aria-pressed={command.expands ? undefined : command.active || undefined}
                 disabled={command.disabled}

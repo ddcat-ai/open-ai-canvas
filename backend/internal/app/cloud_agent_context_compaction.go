@@ -68,7 +68,7 @@ func cloudAgentCompactionReadingFor(budget cloudAgentContextBudget, projectedTok
 	if budget.InputBudgetTokens > 0 {
 		reading.PressureRatio = math.Round(float64(projectedTokens)/float64(budget.InputBudgetTokens)*10000) / 10000
 	}
-	if budget.Source == "" || budget.Source == "default" {
+	if !budget.Configured || budget.Source == "" || budget.Source == "default" {
 		return reading, false
 	}
 	return reading, true
@@ -470,7 +470,7 @@ func (s *Service) writeCloudAgentContextCheckpoint(run *model.CloudAgentExecutio
 	recent := cloudAgentCompleteTurnTail(state.Canonical.Messages, cloudAgentContextKeepPairs)
 	history, err := cloudAgentCheckpointHistory(checkpoint, recent)
 	if err != nil {
-		return fmt.Errorf("%w: %v", errCloudAgentCheckpoint, err)
+		return cloudAgentCheckpointFailure("compaction checkpoint history", err)
 	}
 	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 		state.ContextCheckpoint = &checkpoint
@@ -487,9 +487,9 @@ func (s *Service) writeCloudAgentContextCheckpoint(run *model.CloudAgentExecutio
 		}
 		// 消息整体被替换：写路径按 kind 逐条 upsert 并删除 sequence 超出新条数的尾部行，
 		// 因此"条数变少/全变"都能正确落库。
-		// 历史被换成检查点，早期读取回执也一起没了：不清"已读过去重"标记，模型再要技能正文
-		// 会被回一句"本轮已请求过该技能路径，请使用历史工具结果"，而那份历史已经不存在。
-		state.SkillReads, state.ProfileReads = nil, nil
+		// 只读结果由 ToolReadResults 统一缓存；压缩后模型再次请求时，缓存层会恢复完整正文。
+		// 只有 profile 的旧版读取标记需要清掉，因为它不属于统一结果缓存。
+		state.ProfileReads = nil
 		state.ActiveTaskID, state.ActiveTextDraft = "", ""
 		// 中途暂停压缩（Resume）：压完继续本轮的步进，并记一次次数上限。
 		// 收尾压缩（resume=false）本来就要结束本轮；keepTerminal=true 表示本轮已是终态

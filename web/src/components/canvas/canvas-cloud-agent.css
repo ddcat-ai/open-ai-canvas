@@ -50,22 +50,473 @@
     font-size: var(--fs-label);
 }
 
+.agent-context-ring {
+    --agent-context-ring-color: var(--agent-accent, currentColor);
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    min-width: 64px;
+    height: 30px;
+    padding: 2px 7px 2px 3px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-ink) 5%, transparent);
+    color: var(--agent-caption);
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease;
+}
+
+.agent-context-ring:hover,
+.agent-context-ring[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--agent-ink) 9%, transparent);
+    color: var(--agent-ink);
+}
+
+.agent-context-ring:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.agent-context-ring-visual {
+    position: relative;
+    display: block;
+    width: 26px;
+    height: 26px;
+    flex: none;
+    overflow: hidden;
+    border-radius: 50%;
+    background: conic-gradient(from -90deg, var(--agent-context-ring-color) 0 var(--agent-context-progress), color-mix(in srgb, var(--agent-ink) 11%, transparent) var(--agent-context-progress) 100%);
+}
+
+.agent-context-ring-visual::after {
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--agent-surface-raised) 92%, transparent);
+    content: "";
+}
+
+.agent-context-ring-marker {
+    position: absolute;
+    inset: 2px;
+    z-index: 1;
+    border-radius: 50%;
+    transform: rotate(var(--agent-context-marker-angle));
+}
+
+.agent-context-ring-marker::after {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--agent-context-ring-color);
+    content: "";
+    transform: translateX(-50%);
+}
+
+.agent-context-ring.is-watch {
+    --agent-context-ring-color: #d9973b;
+}
+
+.agent-context-ring.is-compress,
+.agent-context-ring.is-compacting {
+    --agent-context-ring-color: #d4534e;
+}
+
+.agent-context-ring.is-compacting .agent-context-ring-visual {
+    animation: agent-context-spin 1.4s linear infinite;
+}
+.agent-context-ring.is-unknown .agent-context-ring-visual,
+.agent-context-ring.is-stale .agent-context-ring-visual {
+    opacity: 0.72;
+}
+
+.agent-context-meter-copy {
+    display: grid;
+    min-width: 0;
+    line-height: 1;
+    text-align: left;
+}
+
+.agent-context-meter-copy strong {
+    color: var(--agent-ink);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.agent-context-meter-copy small {
+    margin-top: 2px;
+    color: var(--agent-caption);
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+@keyframes agent-context-spin {
+    to {
+        transform: rotate(270deg);
+    }
+}
+
+.agent-context-popover.ant-popover,
+.agent-context-popover .ant-popover-content,
+.agent-context-popover .ant-popover-inner {
+    box-shadow: none;
+}
+
+.agent-context-popover .ant-popover-inner {
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 12%, transparent);
+    border-radius: 16px;
+    background: var(--agent-surface-raised, var(--background));
+}
+
+.agent-context-popover .ant-popover-inner-content {
+    padding: 0;
+}
+
+.agent-context-panel {
+    width: min(348px, calc(100vw - 32px));
+    padding: 14px 15px 12px;
+    color: var(--agent-ink, inherit);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.agent-context-eyebrow {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--agent-caption);
+    font-size: 10px;
+    letter-spacing: 0.02em;
+}
+
+.agent-context-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.agent-context-panel-head strong {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-context-phase {
+    flex: none;
+    border-radius: 999px;
+    padding: 3px 8px;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.agent-context-phase.is-watch {
+    color: #9a6416;
+}
+.agent-context-phase.is-compress,
+.agent-context-phase.is-compacting {
+    color: #a33b36;
+}
+
+.agent-context-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 12px;
+    color: var(--agent-caption);
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-context-summary strong {
+    color: var(--agent-ink);
+    font-size: 23px;
+    letter-spacing: -0.04em;
+}
+
+.agent-context-summary span {
+    font-size: 13px;
+}
+
+.agent-context-summary em {
+    margin-left: auto;
+    color: var(--agent-caption);
+    font-size: 12px;
+    font-style: normal;
+}
+
+.agent-context-progress-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 13px;
+    color: var(--agent-caption);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.agent-context-progress-head strong {
+    color: var(--agent-ink);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-context-progress {
+    position: relative;
+    height: 12px;
+    margin-top: 5px;
+    overflow: visible;
+    border: 0;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 14%);
+    background: color-mix(in srgb, var(--agent-ink, #fff) 24%, var(--agent-surface-raised, #252525));
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 10%);
+}
+
+.agent-context-progress > span {
+    display: block;
+    height: 100%;
+    min-width: 6px;
+    border-radius: inherit;
+    background: #8b93ff;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--agent-accent, #8b93ff) 58%, white), var(--agent-accent, #8b93ff));
+    transition: width 240ms ease;
+}
+
+.agent-context-progress > i {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 1px;
+    background: color-mix(in srgb, var(--agent-ink) 64%, transparent);
+}
+
+.agent-context-detail {
+    margin: 10px 0 0;
+    color: var(--agent-caption);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+.agent-context-breakdown {
+    display: grid;
+    gap: 8px;
+    margin: 13px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.agent-context-breakdown li {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-context-breakdown-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--agent-accent) 62%, var(--agent-ink));
+}
+
+.agent-context-breakdown-label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--agent-ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-context-breakdown-value {
+    min-width: 58px;
+    color: var(--agent-ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.agent-context-breakdown li.is-secondary .agent-context-breakdown-dot {
+    background: color-mix(in srgb, var(--agent-ink) 42%, transparent);
+}
+
+.agent-context-breakdown li.is-secondary .agent-context-breakdown-label,
+.agent-context-breakdown li.is-secondary .agent-context-breakdown-value {
+    color: var(--agent-caption);
+}
+
+.agent-context-breakdown li.is-muted .agent-context-breakdown-dot {
+    background: color-mix(in srgb, var(--agent-ink) 24%, transparent);
+}
+
+.agent-context-breakdown li.is-muted .agent-context-breakdown-label,
+.agent-context-breakdown li.is-muted .agent-context-breakdown-value {
+    color: var(--agent-caption);
+}
+
+.agent-context-panel-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 13px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--agent-ink) 9%, transparent);
+    color: var(--agent-caption);
+    font-size: 10px;
+}
+
+.agent-context-note {
+    margin: 6px 0 0;
+    color: var(--agent-caption);
+    font-size: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-context-ring.is-compacting .agent-context-ring-visual {
+        animation: none;
+    }
+    .agent-context-ring-visual,
+    .agent-context-progress > span {
+        transition: none;
+    }
+}
+
 .agent-header-actions .ant-btn {
     color: inherit;
 }
 
 .agent-conversation {
-    padding: var(--space-3) var(--space-5) var(--space-5);
-    scroll-padding-block: var(--space-5);
+    padding: 10px var(--space-4) var(--space-4);
+    scroll-padding-block: var(--space-4);
+}
+
+.agent-conversation-messages {
+    min-width: 0;
 }
 
 .agent-conversation-messages > * + * {
-    margin-top: var(--space-4);
+    margin-top: 9px;
+}
+
+/* 状态行的图标只是语义标记，不应把正文向右推成另一条内容轴。 */
+.agent-status-message {
+    min-width: 0;
+    line-height: 1.45;
+}
+
+.agent-status-message--system {
+    opacity: 0.78;
+}
+
+.agent-status-message--warning {
+    margin-inline: -4px;
+    border: 1px solid color-mix(in srgb, #f59e0b 26%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, #fef3c7 72%, transparent);
+    padding: 8px 10px;
+}
+
+.agent-status-message--error {
+    margin-inline: -4px;
+    border: 1px solid color-mix(in srgb, #ef4444 16%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, #ef4444 5%, transparent);
+    padding: 8px 10px;
+}
+
+.agent-status-message--warning .agent-timeline-marker,
+.agent-status-message--error .agent-timeline-marker {
+    align-self: flex-start;
+    padding-top: 1px;
+}
+
+.agent-error-title {
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.agent-error-detail {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 17px;
+}
+
+.agent-error-meta {
+    margin-top: 3px;
+    opacity: 0.72;
+    line-height: 16px;
 }
 
 .agent-message-user {
     border-radius: var(--agent-radius-surface) var(--agent-radius-surface) var(--space-2) var(--agent-radius-surface);
     background: var(--agent-surface-hover, color-mix(in srgb, var(--foreground) 7%, transparent));
+}
+
+.agent-form-answer-card {
+    display: grid;
+    max-width: min(100%, 360px);
+    gap: 6px;
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 10%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--agent-ink) 5%, transparent);
+    text-align: left;
+}
+
+.agent-form-answer-heading {
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 16px;
+}
+
+.agent-form-answer-note {
+    color: var(--agent-caption);
+    font-size: 10px;
+    line-height: 15px;
+}
+
+.agent-form-answer-list {
+    display: grid;
+    gap: 3px;
+}
+
+.agent-form-answer-row {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 8px;
+    font-size: 11px;
+    line-height: 17px;
+}
+
+.agent-form-answer-label {
+    overflow: hidden;
+    color: var(--agent-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-form-answer-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.agent-message-body .ai-message-markdown-paragraph {
+    margin: 0.32em 0;
+}
+
+.agent-message-body .ai-message-markdown-list {
+    margin-top: 0.35em;
+    margin-bottom: 0.35em;
 }
 
 .agent-welcome {
@@ -90,10 +541,11 @@
     margin-bottom: var(--space-5);
     border-radius: 50%;
     background:
-        radial-gradient(circle at 32% 24%, var(--color-neutral-0), transparent 36%),
-        radial-gradient(circle at 70% 80%, var(--palette-node-audio), transparent 64%),
+        radial-gradient(circle at 32% 24%, var(--color-neutral-0), transparent 36%), radial-gradient(circle at 70% 80%, var(--palette-node-audio), transparent 64%),
         radial-gradient(circle at 35% 65%, color-mix(in srgb, var(--agent-accent) 65%, var(--color-neutral-0)), var(--agent-accent));
-    box-shadow: inset -4px -6px 14px color-mix(in srgb, var(--agent-accent) 28%, transparent), 0 8px 32px color-mix(in srgb, var(--agent-accent) 14%, transparent);
+    box-shadow:
+        inset -4px -6px 14px color-mix(in srgb, var(--agent-accent) 28%, transparent),
+        0 8px 32px color-mix(in srgb, var(--agent-accent) 14%, transparent);
 }
 
 .agent-welcome-intro h2 {
@@ -133,7 +585,9 @@
     color: var(--agent-caption);
     text-align: left;
     cursor: pointer;
-    transition: background-color 160ms ease, color 160ms ease;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease;
 }
 
 .agent-welcome-actions button:hover:not(:disabled) {
@@ -216,6 +670,128 @@
     background: var(--agent-surface-raised, var(--background));
 }
 
+.agent-question-form {
+    max-height: min(340px, 42vh);
+    overflow-y: auto;
+}
+
+.agent-question-fields {
+    display: grid;
+    gap: 7px;
+}
+
+.agent-question-field {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+}
+
+.agent-question-field-label {
+    width: 58px;
+    flex: 0 0 58px;
+    color: var(--agent-caption);
+    font-size: 11px;
+    line-height: 28px;
+}
+
+.agent-question-options {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.agent-question-chip,
+.agent-question-input {
+    min-height: 28px;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 10%, transparent);
+    border-radius: 7px;
+    font-size: 11px;
+    transition:
+        border-color 140ms ease,
+        background-color 140ms ease,
+        color 140ms ease;
+}
+
+.agent-question-chip {
+    padding: 4px 9px;
+    cursor: pointer;
+}
+
+.agent-question-chip:hover,
+.agent-question-chip.is-selected {
+    border-color: color-mix(in srgb, var(--agent-accent) 50%, transparent);
+}
+
+.agent-question-input {
+    width: 100%;
+    padding: 5px 8px;
+    outline: none;
+    background: color-mix(in srgb, var(--agent-ink) 5%, transparent);
+    color: var(--agent-ink);
+}
+
+.agent-question-input:focus {
+    border-color: var(--agent-focus-ring);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent-accent) 15%, transparent);
+}
+
+.agent-question-textarea {
+    min-height: 48px;
+    resize: vertical;
+}
+
+.agent-question-validation {
+    color: #e06b6b;
+}
+
+.agent-question-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+.agent-question-default,
+.agent-question-submit {
+    min-height: 28px;
+    border: 0;
+    border-radius: 7px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.agent-question-default {
+    background: color-mix(in srgb, var(--agent-ink) 7%, transparent);
+    color: var(--agent-ink);
+}
+
+.agent-question-default:hover {
+    background: color-mix(in srgb, var(--agent-ink) 12%, transparent);
+}
+
+.agent-question-submit:disabled,
+.agent-question-default:disabled,
+.agent-question-chip:disabled,
+.agent-question-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+@media (max-width: 520px) {
+    .agent-question-field {
+        display: block;
+    }
+
+    .agent-question-field-label {
+        display: block;
+        width: auto;
+        line-height: 20px;
+    }
+}
+
 /* 场景起步标签：透明底、彩色细描边，不叠加卡片表面。 */
 .agent-scene-capsules-heading {
     display: flex;
@@ -249,15 +825,30 @@
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
-    transition: border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+    transition:
+        border-color 160ms ease,
+        color 160ms ease,
+        opacity 160ms ease;
 }
 
-.agent-scene-capsule[data-scene="frequent"] { --scene-color: var(--palette-node-skill); }
-.agent-scene-capsule[data-scene="drama"] { --scene-color: var(--palette-node-script); }
-.agent-scene-capsule[data-scene="ecommerce"] { --scene-color: var(--palette-node-image); }
-.agent-scene-capsule[data-scene="creative"] { --scene-color: var(--palette-node-frame); }
-.agent-scene-capsule[data-scene="social"] { --scene-color: var(--palette-node-audio); }
-.agent-scene-capsule[data-scene="back"] { --scene-color: var(--agent-ink); }
+.agent-scene-capsule[data-scene="frequent"] {
+    --scene-color: var(--palette-node-skill);
+}
+.agent-scene-capsule[data-scene="drama"] {
+    --scene-color: var(--palette-node-script);
+}
+.agent-scene-capsule[data-scene="ecommerce"] {
+    --scene-color: var(--palette-node-image);
+}
+.agent-scene-capsule[data-scene="creative"] {
+    --scene-color: var(--palette-node-frame);
+}
+.agent-scene-capsule[data-scene="social"] {
+    --scene-color: var(--palette-node-audio);
+}
+.agent-scene-capsule[data-scene="back"] {
+    --scene-color: var(--agent-ink);
+}
 
 .agent-scene-capsule svg {
     width: var(--space-4);
@@ -333,22 +924,51 @@
         gap: var(--space-2);
         padding-inline: var(--space-4);
     }
-    .agent-panel-status { white-space: nowrap; }
-    .agent-conversation { padding-inline: var(--space-4); }
-    .agent-welcome-actions button { padding-inline: var(--space-2); }
+    .agent-panel-status {
+        white-space: nowrap;
+    }
+    .agent-conversation {
+        padding-inline: var(--space-4);
+    }
+    .agent-context-ring {
+        min-width: 32px;
+        padding-right: 4px;
+        gap: 0;
+    }
+    .agent-context-meter-copy {
+        display: none;
+    }
+    .agent-context-panel-foot {
+        display: grid;
+    }
+
+    .agent-welcome-actions button {
+        padding-inline: var(--space-2);
+    }
 }
 
 @media (max-width: 639px) {
-    .canvas-agent-panel { border-end-start-radius: 0; border-end-end-radius: 0; }
-    .agent-composer-wrap { padding-bottom: max(var(--space-4), env(safe-area-inset-bottom)); }
+    .canvas-agent-panel {
+        border-end-start-radius: 0;
+        border-end-end-radius: 0;
+    }
+    .agent-composer-wrap {
+        padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-    .canvas-agent-panel { background: var(--agent-material-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .canvas-agent-panel {
+        background: var(--agent-material-solid);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .agent-welcome-actions button { transition: none; }
+    .agent-welcome-actions button {
+        transition: none;
+    }
 }
 
 /* Agent 浮窗高于普通画布层，模型菜单必须叠在对话窗之上；菜单本身与全站二级选择器同一套。 */
@@ -443,24 +1063,140 @@
     line-height: 1;
 }
 
+.agent-message-node-link {
+    display: inline-flex;
+    max-width: min(100%, 300px);
+    align-items: center;
+    gap: 7px;
+    margin: 1px 3px;
+    border: 1px solid color-mix(in srgb, var(--workspace-accent) 28%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--workspace-accent) 9%, transparent);
+    padding: 3px 9px 3px 4px;
+    color: var(--foreground);
+    line-height: 1.15;
+    text-align: left;
+    text-decoration: none;
+    vertical-align: middle;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        transform 160ms ease;
+}
+
+.agent-message-node-link:hover {
+    border-color: color-mix(in srgb, var(--workspace-accent) 50%, transparent);
+    background: color-mix(in srgb, var(--workspace-accent) 16%, transparent);
+    color: var(--foreground);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.agent-message-node-link:focus-visible {
+    outline: 2px solid var(--agent-focus-ring, var(--workspace-accent));
+    outline-offset: 2px;
+}
+
+.agent-message-node-link-preview,
+.agent-message-node-link-icon {
+    display: grid;
+    width: 25px;
+    height: 25px;
+    flex: 0 0 auto;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--workspace-accent) 16%, transparent);
+    color: var(--workspace-accent);
+}
+
+.agent-message-node-link-preview {
+    object-fit: cover;
+}
+
+.agent-message-node-link-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.agent-message-node-link-kind,
+.agent-message-node-link-title {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-message-node-link-kind {
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.agent-message-node-link-title {
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-message-node-link {
+        transition: none;
+    }
+}
+
 .agent-tool-row {
     /* 日志是事件流，不是连续卡片；只用间距和状态图标建立层次。 */
     --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
-    min-height: 36px;
+    min-height: 28px;
     border: 0;
     border-radius: 8px;
     background: transparent;
-    padding: 5px 2px;
+    padding: 2px 0;
     transition: transform 160ms ease;
+}
+
+/* Tool calls are secondary activity, not chat content. Keep the receipt row
+   scannable and reveal node links / diagnostics only on demand. */
+.agent-tool-details {
+    min-width: 0;
+}
+
+.agent-tool-summary-toggle {
+    display: flex;
+    align-items: flex-start;
+}
+
+.agent-tool-summary-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.agent-tool-chevron {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, currentColor 48%, transparent);
+    transition: transform 160ms ease;
+}
+
+.agent-tool-details[open] .agent-tool-chevron {
+    transform: rotate(180deg);
+}
+
+.agent-tool-detail-body {
+    margin: -1px 0 4px 31px;
+    padding: 0 2px 4px;
 }
 
 /* 没有节点明细的“读取信息 / 操作画布”只保留时间线语义，不再撑成一张空卡片。 */
 .agent-tool-row--plain {
-    min-height: 28px;
+    min-height: 24px;
     border-color: transparent;
     border-radius: 9px;
     background: transparent;
-    padding: 3px 2px;
+    padding: 1px 0;
 }
 
 .agent-tool-row--read {
@@ -475,13 +1211,21 @@
     --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
 }
 
+/*
+ * 看图（canvas_inspect_image）：唯一会把图片字节真交给模型的档位，用主题强调色把它与
+ * "读清单 / 写画布"分开。取色走面板注入的 --agent-accent，不写字面值。
+ */
+.agent-tool-row--vision {
+    --agent-tool-accent: var(--agent-accent, var(--foreground));
+}
+
 .agent-tool-header {
     display: flex;
     min-width: 0;
-    align-items: center;
+    align-items: baseline;
     flex-wrap: wrap;
-    gap: 7px;
-    line-height: 18px;
+    gap: 4px 6px;
+    line-height: 17px;
 }
 
 .agent-tool-category {
@@ -498,6 +1242,14 @@
     font-weight: 700;
     letter-spacing: 0.01em;
     line-height: 15px;
+}
+
+.agent-tool-label {
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 15px;
+    white-space: nowrap;
 }
 
 .agent-tool-summary {
@@ -529,7 +1281,9 @@
     line-height: 17px;
     overflow-wrap: anywhere;
     text-align: left;
-    transition: background-color 140ms ease, color 140ms ease;
+    transition:
+        background-color 140ms ease,
+        color 140ms ease;
 }
 
 .agent-tool-action-link:not(:disabled) {
@@ -566,7 +1320,210 @@
 
 @media (prefers-reduced-motion: reduce) {
     .agent-tool-row,
-    .agent-tool-action-link { transition: none; }
+    .agent-tool-chevron,
+    .agent-tool-action-link {
+        transition: none;
+    }
+}
+
+/*
+ * 操作记录折叠行：一轮运行动辄十几条工具记录，逐条铺开会把正文挤出可视区。
+ * 默认只报最新一步，点击展开完整记录；失败时整行转红并默认展开（见 AgentOperationFeed）。
+ * 类别徽标复用工具卡的 chip（.agent-tool-category），所以这里要给出 accent 默认值。
+ */
+.agent-operation-feed {
+    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
+    /* 操作流与正文共用同一左对齐轴。不要用竖线把每条工具记录切成
+       独立的日志栏：用户首先要看到的是 Agent 的输出和当前动作。 */
+    min-width: 0;
+}
+
+/* 看图是唯一的"画面"档，给它主题强调色，和清单/写画布区分开（不写字面颜色）。 */
+.agent-operation-feed[data-agent-category="vision"] {
+    --agent-tool-accent: var(--agent-accent, var(--foreground));
+}
+
+.agent-operation-feed[data-agent-category="read"] {
+    --agent-tool-accent: #2563eb;
+}
+
+.agent-operation-feed[data-agent-category="create"] {
+    --agent-tool-accent: #d97706;
+}
+
+.agent-operation-feed[data-agent-category="operate"] {
+    --agent-tool-accent: #0f766e;
+}
+
+.agent-operation-feed[data-agent-category="other"] {
+    --agent-tool-accent: #64748b;
+}
+
+.agent-operation-toggle {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 3px 0;
+    color: color-mix(in srgb, var(--agent-ink, currentColor) 72%, transparent);
+    font-size: var(--fs-caption);
+    line-height: 17px;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 140ms ease,
+        color 140ms ease;
+}
+
+/* The folded receipt is a single sentence, not another pill-shaped card. */
+.agent-operation-list .agent-tool-category {
+    background: transparent;
+    padding-inline: 0;
+}
+
+.agent-operation-icon {
+    display: inline-flex;
+    width: 16px;
+    height: 18px;
+    flex: 0 0 16px;
+    align-items: center;
+    justify-content: center;
+    color: var(--agent-tool-accent);
+}
+
+.agent-operation-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.agent-operation-feed.is-failed .agent-operation-icon {
+    color: #dc2626;
+}
+
+.agent-operation-kind {
+    flex: 0 0 auto;
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.agent-operation-toggle:hover {
+    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
+    color: var(--agent-ink, var(--foreground));
+}
+
+.agent-operation-toggle:focus-visible {
+    outline: 2px solid var(--agent-focus-ring, var(--foreground));
+    outline-offset: 1px;
+}
+
+.agent-operation-latest {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * 流光：把文字本身当渐变蒙版，让一道高光扫过。底色与高光都从 --agent-ink 派生——不能用
+ * currentColor，因为开启 background-clip 后 color 是 transparent，会自指成空。
+ * 动画只挂在 .is-live 上：面板按"末尾段 + 还在跑"下发，任务完成流光立即停。
+ */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    .agent-operation-latest {
+        background-image: linear-gradient(
+            100deg,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 0%,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 42%,
+            var(--agent-operation-ink, var(--agent-ink, currentColor)) 50%,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 58%,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 100%
+        );
+        background-position: 100% 0;
+        background-size: 240% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .agent-operation-feed.is-live .agent-operation-latest {
+        animation: agent-operation-sheen 3.6s linear infinite;
+    }
+}
+
+/* 失败/被拒的一步：折叠行跟工具卡同一套红，不用主题色盖掉语义。 */
+.agent-operation-feed.is-failed .agent-operation-latest {
+    --agent-operation-ink: #dc2626;
+}
+
+.agent-operation-count {
+    flex: 0 0 auto;
+    padding: 0 2px;
+    color: color-mix(in srgb, var(--agent-ink, currentColor) 62%, transparent);
+    font-size: var(--fs-tiny);
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-operation-chevron {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    opacity: 0.55;
+    transition: transform 180ms ease;
+}
+
+.agent-operation-feed.is-open .agent-operation-chevron {
+    transform: rotate(180deg);
+}
+
+.agent-operation-list {
+    margin-top: 2px;
+}
+
+.agent-operation-list > * + * {
+    margin-top: 3px;
+}
+
+.agent-operation-feed.is-failed .agent-operation-toggle {
+    border-radius: 8px;
+    background: color-mix(in srgb, #dc2626 5%, transparent);
+    padding-inline: 6px;
+}
+
+/*
+ * 展开后的每一步不再重复状态图标（勾/叉）：状态与错误已经由卡片文字与折叠行颜色表达，
+ * 一列彩色勾只会把"记录"读成"成绩单"。失败那一步的文字仍是红的（AgentToolCard 内联色）。
+ */
+.agent-operation-list .agent-tool-status {
+    display: none;
+}
+
+@keyframes agent-operation-sheen {
+    from {
+        background-position: 130% 0;
+    }
+    to {
+        background-position: -30% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* 与 .is-live 规则同特异性，否则关不掉动画。 */
+    .agent-operation-feed.is-live .agent-operation-latest {
+        animation: none;
+        background-position: 0% 0;
+    }
+    .agent-operation-toggle,
+    .agent-operation-chevron {
+        transition: none;
+    }
 }
 
 .agent-composer-prompt-scroll {
@@ -598,7 +1555,9 @@
     height: 3px;
     border-radius: 999px;
     background: color-mix(in srgb, currentColor 20%, transparent);
-    transition: background-color 140ms ease, width 140ms ease;
+    transition:
+        background-color 140ms ease,
+        width 140ms ease;
 }
 
 .agent-composer-resize-handle:hover > span,
@@ -613,15 +1572,47 @@
 }
 
 .agent-composer-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    display: flex;
+    min-width: 0;
+    align-items: center;
     gap: 8px;
 }
 
-.agent-composer-submit {
+.agent-composer-controls {
     min-width: 0;
-    justify-self: end;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+
+.agent-composer-selection {
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+
+.agent-composer-selection > .w-full {
+    min-width: 0;
+    max-width: 13rem;
+    flex: 1 1 13rem;
+}
+
+.agent-composer-selection .agent-composer-model-trigger,
+.agent-composer-selection .canvas-model-picker-label {
+    min-width: 0;
+}
+
+.agent-composer-selection > button {
+    flex: 0 0 auto;
+}
+
+.agent-composer-submit {
+    display: flex;
+    min-width: max-content;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
 }
 
 .canvas-agent-launcher {
@@ -632,7 +1623,7 @@
     border: 0;
     border-radius: 999px;
     background: transparent;
-    padding: 7px;
+    padding: 0;
     box-shadow: 0 16px 38px color-mix(in srgb, var(--canvas-agent-launcher-shadow) 64%, transparent);
     cursor: grab;
     touch-action: none;
@@ -642,6 +1633,15 @@
 
 .canvas-agent-launcher.is-dragging {
     cursor: grabbing;
+}
+
+.canvas-agent-launcher > .fluid-orb {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 1;
+    margin: 0;
+    transform: translate(-50%, -50%);
 }
 
 .canvas-agent-launcher::before {
@@ -692,7 +1692,7 @@
     border: 2px solid var(--background);
     border-radius: 50%;
     background: #57b786;
-    box-shadow: 0 2px 7px rgba(23, 90, 61, .28);
+    box-shadow: 0 2px 7px rgba(23, 90, 61, 0.28);
 }
 
 .canvas-agent-launcher-status.is-pending {
@@ -717,28 +1717,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .canvas-agent-launcher { transition: none !important; }
-}
-
-.agent-composer-send-hint {
-    color: color-mix(in srgb, currentColor 52%, transparent);
-    font-size: var(--fs-tiny);
-    line-height: 16px;
-    white-space: nowrap;
-}
-
-/* 面板宽度包含内边距；默认 448px 面板放不下完整快捷键说明，窄态降级为短文案而不是隐藏提示本身。 */
-.agent-composer-send-hint .agent-composer-send-hint-compact {
-    display: none;
-}
-
-@container (max-width: 520px) {
-    .agent-composer-send-hint .agent-composer-send-hint-full {
-        display: none;
-    }
-
-    .agent-composer-send-hint .agent-composer-send-hint-compact {
-        display: inline;
+    .canvas-agent-launcher {
+        transition: none !important;
     }
 }
 
@@ -759,16 +1739,26 @@
  * 比工具日志更安静、比正文更有层次。使用当前画布主题的 accent，避免
  * 固定紫色的 AI 默认样式，同时把实时状态、摘要内容和展开动作分开。
  */
+/* 信息层级：正文 / 工具调用 / 模型思考三段只靠位置、字号和对比度分层。 */
 .agent-reasoning {
     min-width: 0;
-    color: color-mix(in srgb, var(--foreground) 64%, transparent);
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+}
+
+/* 系统行、错误行和审批卡保留一个窄图标列，但不再向左挂出一条公共竖轨。 */
+.agent-timeline-marker {
+    display: flex;
+    width: 20px;
+    flex: 0 0 20px;
+    align-self: stretch;
+    justify-content: center;
 }
 
 .agent-reasoning-card {
     min-width: 0;
     overflow: hidden;
     border: 0;
-    border-radius: 10px;
+    border-radius: 0;
     background: transparent;
     box-shadow: none;
     transition: background-color 160ms ease;
@@ -782,11 +1772,11 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 9px;
+    gap: 0;
     cursor: pointer;
     list-style: none;
-    padding: 6px 4px;
-    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    padding: 6px 0;
+    color: color-mix(in srgb, var(--foreground) 66%, transparent);
     user-select: none;
 }
 
@@ -796,18 +1786,6 @@
 
 .agent-reasoning-summary:hover {
     background: color-mix(in srgb, var(--agent-reasoning-accent) 4%, transparent);
-}
-
-.agent-reasoning-icon {
-    display: grid;
-    width: 25px;
-    height: 25px;
-    flex: 0 0 25px;
-    place-items: center;
-    border: 0;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--agent-reasoning-accent) 10%, transparent);
-    color: var(--agent-reasoning-accent);
 }
 
 .agent-reasoning-copy {
@@ -821,9 +1799,9 @@
 .agent-reasoning-title {
     min-width: 0;
     overflow: hidden;
-    color: color-mix(in srgb, var(--foreground) 78%, transparent);
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 600;
     line-height: 17px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -832,7 +1810,7 @@
 .agent-reasoning-subtitle {
     min-width: 0;
     overflow: hidden;
-    color: color-mix(in srgb, var(--foreground) 43%, transparent);
+    color: color-mix(in srgb, var(--foreground) 38%, transparent);
     font-size: 11px;
     line-height: 16px;
     text-overflow: ellipsis;
@@ -878,7 +1856,9 @@
     font-size: 17px;
     line-height: 12px;
     transform: translateY(-1px);
-    transition: color 160ms ease, transform 160ms ease;
+    transition:
+        color 160ms ease,
+        transform 160ms ease;
 }
 
 .agent-reasoning-card[open] .agent-reasoning-chevron {
@@ -889,17 +1869,17 @@
 .agent-reasoning-content {
     position: relative;
     display: flex;
-    max-height: min(232px, 30vh);
+    max-height: min(180px, 24vh);
     gap: 0;
     overflow: auto;
     border-top: 0;
-    padding: 4px 10px 10px 38px;
+    padding: 2px 0 7px;
     scrollbar-gutter: stable;
 }
 
 .agent-reasoning-text {
     min-width: 0;
-    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    color: color-mix(in srgb, var(--foreground) 54%, transparent);
     font-size: 12px;
     line-height: 1.75;
     white-space: pre-wrap;
@@ -907,15 +1887,26 @@
 }
 
 @keyframes agent-reasoning-pulse {
-    0%, 100% { opacity: .55; transform: scale(.82); }
-    50% { opacity: 1; transform: scale(1); }
+    0%,
+    100% {
+        opacity: 0.55;
+        transform: scale(0.82);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .agent-reasoning-card,
-    .agent-reasoning-chevron { transition: none; }
+    .agent-reasoning-chevron {
+        transition: none;
+    }
 
-    .agent-reasoning-status-dot { animation: none; }
+    .agent-reasoning-status-dot {
+        animation: none;
+    }
 }
 
 .agent-working-indicator {
@@ -953,26 +1944,27 @@
 .canvas-agent-approval-card {
     --agent-approval-blue: #2563eb;
     --agent-approval-blue-hover: #1d4ed8;
-    border: 0;
-    border-radius: var(--agent-radius-surface, var(--radius-xl));
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-radius: 18px;
     background: var(--agent-surface-raised, color-mix(in srgb, var(--foreground) 4%, var(--background)));
-    padding: var(--space-5);
+    padding: 14px 16px 16px;
+    box-shadow: 0 10px 28px color-mix(in srgb, #000 12%, transparent);
 }
 
 .canvas-agent-approval-header {
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .canvas-agent-approval-icon {
     display: grid;
-    width: 30px;
-    height: 30px;
-    flex: 0 0 30px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
     place-items: center;
-    border-radius: 9px;
+    border-radius: 8px;
     background: color-mix(in srgb, var(--agent-approval-blue) 12%, transparent);
     color: var(--agent-approval-blue);
 }
@@ -981,45 +1973,45 @@
     min-width: 0;
     flex: 1;
     margin: 0;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 650;
-    line-height: 20px;
+    line-height: 18px;
 }
 
 .canvas-agent-approval-badge {
     flex: 0 0 auto;
     border-radius: 999px;
     background: color-mix(in srgb, var(--agent-approval-blue) 10%, transparent);
-    padding: 4px 8px;
+    padding: 3px 7px;
     color: var(--agent-approval-blue);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    line-height: 16px;
+    line-height: 15px;
 }
 
 .canvas-agent-approval-description {
-    margin: 12px 0 0;
-    font-size: 13px;
-    line-height: 20px;
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 18px;
 }
 
 .canvas-agent-approval-items {
     display: grid;
-    gap: 8px;
-    max-height: min(360px, 42vh);
-    margin-top: 12px;
+    gap: 6px;
+    max-height: min(280px, 30vh);
+    margin-top: 10px;
     overflow-y: auto;
     padding-right: 2px;
 }
 
 .canvas-agent-approval-item {
     display: grid;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
     border: 0;
-    border-radius: 10px;
+    border-radius: 9px;
     background: color-mix(in srgb, var(--foreground) 3%, transparent);
-    padding: 9px 10px;
+    padding: 8px 10px;
 }
 
 .canvas-agent-approval-item-main,
@@ -1028,40 +2020,102 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
 }
 
 .canvas-agent-approval-operation {
     flex: 0 0 auto;
     border-radius: 5px;
-    padding: 2px 6px;
+    padding: 1px 5px;
     font-size: 10px;
     font-weight: 700;
-    line-height: 16px;
+    line-height: 15px;
 }
 
-.canvas-agent-approval-operation-add_node { background: #dcfce7; color: #166534; }
-.canvas-agent-approval-operation-update_node { background: #dbeafe; color: #1d4ed8; }
-.canvas-agent-approval-operation-connect_nodes { background: #fef3c7; color: #92400e; }
-.canvas-agent-approval-operation-arrange_nodes { background: #ccfbf1; color: #115e59; }
-.canvas-agent-approval-operation-generate_media { background: #f3e8ff; color: #7e22ce; }
+.canvas-agent-approval-operation-add_node {
+    background: #dcfce7;
+    color: #166534;
+}
+
+/* 创建节点的卡片突出“新增对象 + 初始内容”，不再重复展示同一条摘要。 */
+.canvas-agent-approval-item-add_node {
+    border: 1px solid color-mix(in srgb, #22c55e 18%, transparent);
+    background: color-mix(in srgb, #22c55e 5%, transparent);
+}
+
+.canvas-agent-approval-item-add_node .canvas-agent-approval-item-main {
+    gap: 8px;
+}
+
+.canvas-agent-approval-item-add_node .canvas-agent-approval-node-summary {
+    gap: 6px;
+}
+
+.canvas-agent-approval-item-add_node .canvas-agent-approval-node-title {
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.canvas-agent-approval-item-add_node.canvas-agent-approval-item-has-fields .canvas-agent-approval-summary {
+    display: none;
+}
+.canvas-agent-approval-operation-update_node {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+.canvas-agent-approval-operation-connect_nodes {
+    background: #fef3c7;
+    color: #92400e;
+}
+.canvas-agent-approval-operation-arrange_nodes {
+    background: #ccfbf1;
+    color: #115e59;
+}
+.canvas-agent-approval-operation-generate_media {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+.canvas-agent-approval-operation-plan_step {
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+}
+
+/* 计划步骤是确认卡里的高频信息，压成一行，避免重复标签占满对话区。 */
+.canvas-agent-approval-item-plan_step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.canvas-agent-approval-item-plan_step .canvas-agent-approval-item-main {
+    flex: 0 0 auto;
+}
+
+.canvas-agent-approval-item-plan_step .canvas-agent-approval-node-summary {
+    display: none;
+}
+
+.canvas-agent-approval-item-plan_step .canvas-agent-approval-summary {
+    min-width: 0;
+    flex: 1;
+}
 
 .canvas-agent-approval-node,
 .canvas-agent-approval-node-button {
     display: inline-flex;
     min-width: 0;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     border-radius: 6px;
     color: var(--foreground);
-    font-size: 12px;
-    line-height: 18px;
+    font-size: 11px;
+    line-height: 17px;
     text-align: left;
 }
 
 .canvas-agent-approval-node-button {
     cursor: pointer;
-    padding: 2px 5px;
+    padding: 1px 4px;
 }
 
 .canvas-agent-approval-node-button:hover {
@@ -1082,10 +2136,10 @@
     flex: 0 0 auto;
     border-radius: 4px;
     background: color-mix(in srgb, var(--foreground) 8%, transparent);
-    padding: 1px 5px;
+    padding: 1px 4px;
     color: color-mix(in srgb, var(--foreground) 58%, transparent);
-    font-size: 10px;
-    line-height: 15px;
+    font-size: 9px;
+    line-height: 13px;
 }
 
 .canvas-agent-approval-arrow,
@@ -1105,22 +2159,22 @@
 .canvas-agent-approval-summary,
 .canvas-agent-approval-empty {
     color: color-mix(in srgb, var(--foreground) 62%, transparent);
-    font-size: 11px;
-    line-height: 17px;
+    font-size: 10px;
+    line-height: 15px;
 }
 
 .canvas-agent-approval-field-list,
 .canvas-agent-approval-detail-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
 }
 
 .canvas-agent-approval-field-list span,
 .canvas-agent-approval-detail-list span {
     border-radius: 4px;
     background: color-mix(in srgb, var(--foreground) 7%, transparent);
-    padding: 2px 5px;
+    padding: 1px 4px;
 }
 
 .canvas-agent-approval-summary {
@@ -1138,11 +2192,11 @@
 
 .canvas-agent-approval-reason-toggle {
     display: inline-flex;
-    margin-top: 10px;
+    margin-top: 8px;
     border-radius: 5px;
-    padding: 3px 1px;
+    padding: 2px 1px;
     color: var(--agent-approval-blue);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .canvas-agent-approval-reason-toggle:hover {
@@ -1157,20 +2211,23 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
 .canvas-agent-approval-actions button {
     display: inline-flex;
-    min-height: 36px;
+    min-height: 32px;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    border-radius: 9px;
-    padding: 0 14px;
-    font-size: 13px;
+    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 12px;
     font-weight: 600;
-    transition: background-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+    transition:
+        background-color 140ms ease,
+        box-shadow 140ms ease,
+        opacity 140ms ease;
 }
 
 .canvas-agent-approval-actions button:focus-visible,
@@ -1209,13 +2266,24 @@
 }
 
 @media (max-width: 420px) {
-    .canvas-agent-approval-badge { display: none; }
-    .canvas-agent-approval-actions button { flex: 1; }
+    .canvas-agent-approval-badge {
+        display: none;
+    }
+    .canvas-agent-approval-actions button {
+        flex: 1;
+    }
 }
 
 @keyframes agent-working-pulse {
-    0%, 100% { transform: scale(0.65); opacity: 0.45; }
-    50% { transform: scale(1); opacity: 1; }
+    0%,
+    100% {
+        transform: scale(0.65);
+        opacity: 0.45;
+    }
+    50% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1317,6 +2385,25 @@
     overscroll-behavior: contain;
 }
 
+.canvas-agent-skill-library-category-group {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.canvas-agent-skill-library-category-group + .canvas-agent-skill-library-category-group {
+    margin-top: var(--space-4);
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-4);
+}
+
+.canvas-agent-skill-library-category-heading {
+    padding: 0 var(--space-3) var(--space-1);
+    color: var(--muted-foreground);
+    font-size: var(--fs-caption);
+    font-weight: 650;
+    letter-spacing: 0.04em;
+}
+
 .canvas-agent-skill-library-tab {
     display: flex;
     min-height: var(--space-12);
@@ -1330,7 +2417,9 @@
     font-size: var(--fs-body-lg);
     text-align: left;
     overflow-wrap: anywhere;
-    transition: background-color var(--motion-dur-fast) ease, color var(--motion-dur-fast) ease;
+    transition:
+        background-color var(--motion-dur-fast) ease,
+        color var(--motion-dur-fast) ease;
 }
 
 .canvas-agent-skill-library-tab::before {
@@ -1437,7 +2526,9 @@
     min-width: 0;
     border: 0;
     border-radius: var(--r-2xl);
-    transition: transform var(--motion-state) var(--motion-ease-out), background-color var(--motion-state) ease;
+    transition:
+        transform var(--motion-state) var(--motion-ease-out),
+        background-color var(--motion-state) ease;
 }
 
 .canvas-agent-skill-card:hover,
@@ -1518,7 +2609,25 @@
     min-width: 0;
     flex-direction: column;
     gap: var(--space-2);
-    padding-top: var(--space-3);
+    padding: var(--space-4) var(--space-2) var(--space-2);
+}
+
+.canvas-agent-skill-card-body.is-text-only {
+    min-height: 204px;
+    border-radius: var(--r-2xl);
+    background: var(--library-surface);
+    padding: var(--space-5);
+}
+
+.canvas-agent-skill-card-category.is-inline {
+    position: static;
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    align-self: flex-start;
+    background: var(--library-surface-hover);
+    color: var(--muted-foreground);
+    backdrop-filter: none;
 }
 
 .canvas-agent-skill-card-title-row {
@@ -1530,6 +2639,7 @@
 }
 
 .canvas-agent-skill-card-title-row h3 {
+    display: -webkit-box;
     min-width: 0;
     overflow: hidden;
     margin: 0;
@@ -1538,7 +2648,9 @@
     font-weight: 650;
     line-height: 1.5;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
 }
 
 .canvas-agent-skill-card-body > p {
@@ -1550,8 +2662,12 @@
     font-size: var(--fs-body);
     line-height: 1.65;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     overflow-wrap: anywhere;
+}
+
+.canvas-agent-skill-card-body.is-text-only > p {
+    -webkit-line-clamp: 5;
 }
 
 .canvas-agent-skill-card-meta {
@@ -1669,9 +2785,30 @@
 
     .canvas-agent-skill-library-categories {
         flex-direction: row;
-        gap: var(--space-1);
+        gap: var(--space-3);
         overflow-x: auto;
         overscroll-behavior-x: contain;
+    }
+
+    .canvas-agent-skill-library-category-group {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: var(--space-1);
+    }
+
+    .canvas-agent-skill-library-category-group + .canvas-agent-skill-library-category-group {
+        margin-top: 0;
+        border-top: 0;
+        border-left: 1px solid var(--border);
+        padding-top: 0;
+        padding-left: var(--space-3);
+    }
+
+    .canvas-agent-skill-library-category-heading {
+        flex: 0 0 auto;
+        padding: 0 var(--space-2);
+        font-size: var(--fs-caption);
     }
 
     .canvas-agent-skill-library-tab {

@@ -107,25 +107,3 @@ func (s *Service) SkillPresets() ([]SkillPreset, error) {
 	}
 	return file.Presets, nil
 }
-
-// builtinSeedSkillIDs 从内置种子清单提取全部 skillId，供预设引用对账。
-func builtinSeedSkillIDs() ([]string, error) {
-	var definitions []builtinSkillDefinition
-	if err := json.Unmarshal(builtinSkillsJSON, &definitions); err != nil {
-		return nil, fmt.Errorf("解析内置技能失败: %w", err)
-	}
-	definitions = append(definitions, builtinImageEditingSkillDefinitions()...)
-	ids := make([]string, 0, len(definitions))
-	for _, definition := range definitions {
-		if definition.Status != skillStatusEnabled || definition.IsPrivate {
-			continue
-		}
-		if id := strings.TrimSpace(definition.SkillID); id != "" {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("内置种子技能不能为空")
-	}
-	return ids, nil
-}

@@ -7,7 +7,9 @@ const source = (path: string) => readFileSync(new URL(`../src/${path}`, import.m
 
 describe("authentication follows the application theme", () => {
     test("classic login surfaces have distinct light and dark palettes", () => {
-        const css = source("styles/globals.css");
+        // globals.css 在不同平台上可能是 LF 或 CRLF；先归一化再分段，
+        // 否则按字面换行查找 .dark 段会返回 -1，把断言变成永远失败。
+        const css = source("styles/globals.css").replace(/\r\n/g, "\n");
         const dark = css.slice(css.indexOf(".dark {\n    --background:"));
         for (const [mode, background, panel, card] of [
             ["light", "#ffffff", "#f7f7f7", "#ffffff"],

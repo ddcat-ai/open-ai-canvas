@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, GripVertical, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video, WandSparkles } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video, WandSparkles } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
@@ -307,7 +307,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                 draft={titleDraft}
                 theme={theme}
                 onDraftChange={setTitleDraft}
-                onDragStart={readOnly ? undefined : (event) => onMouseDown(event, data.id)}
                 onEdit={() => setIsEditingTitle(true)}
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
@@ -350,6 +349,11 @@ export const CanvasNode = React.memo(function CanvasNode({
                         return;
                     }
                     if (!readOnly && data.type === CanvasNodeType.Text && data.metadata?.workflowKind === "character" && data.metadata.characterAssetId) {
+                        event.stopPropagation();
+                        onOpenTextEditor?.(data);
+                        return;
+                    }
+                    if (!readOnly && data.type === CanvasNodeType.Markdown) {
                         event.stopPropagation();
                         onOpenTextEditor?.(data);
                         return;
@@ -647,7 +651,7 @@ function formatMediaDimensionLabel(node: CanvasNodeData, hasVisualMediaContent: 
     return `${Math.round(width)}*${Math.round(height)}`;
 }
 
-function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, editing, draft, theme, onDragStart, onDraftChange, onEdit, onCommit, onCancel }: {
+function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, editing, draft, theme, onDraftChange, onEdit, onCommit, onCancel }: {
     node: CanvasNodeData;
     scale: number;
     dimensionLabel: string | null;
@@ -657,7 +661,6 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
     draft: string;
     theme: CanvasTheme;
     onDraftChange: (value: string) => void;
-    onDragStart?: (event: React.MouseEvent) => void;
     onEdit: () => void;
     onCommit: () => void;
     onCancel: () => void;
@@ -677,7 +680,7 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
                 "--canvas-node-width": `${node.width}px`,
                 borderRadius: "var(--r-sm)",
                 background: "transparent",
-                paddingInline: "var(--space-1-half)",
+                paddingInline: "0",
                 color: active ? theme.node.text : theme.node.label,
                 transform: `scale(var(--canvas-live-inverse-scale, ${inverseScale}))`,
                 transformOrigin: "left bottom",
@@ -686,23 +689,6 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
             onPointerDown={(event) => event.stopPropagation()}
         >
             <div className="flex min-w-0 items-center gap-1" style={{ maxWidth: maxHeaderWidth }}>
-                <button
-                    type="button"
-                    className="flex size-6 shrink-0 touch-none items-center justify-center rounded cursor-grab active:cursor-grabbing disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1"
-                    aria-label={node.metadata?.locked ? "节点已锁定" : `拖动节点：${node.title}`}
-                    title={node.metadata?.locked ? "节点已锁定，请先解锁" : "拖动此处移动节点；点击名称可重命名"}
-                    disabled={!onDragStart || Boolean(node.metadata?.locked)}
-                    onPointerDown={(event) => {
-                        if (event.button !== 0) return;
-                        // HTML / SVG 正文在跨源沙箱中；捕获指针，避免经过 iframe 后丢失 move / up。
-                        event.preventDefault();
-                        event.stopPropagation();
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                        onDragStart?.(event);
-                    }}
-                >
-                    {node.metadata?.locked ? <Lock className="size-3" /> : <GripVertical className="size-3" strokeWidth={1.8} />}
-                </button>
                 <Icon className="size-3 shrink-0" strokeWidth={1.8} />
                 {editing ? (
                     <input

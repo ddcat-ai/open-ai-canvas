@@ -45,6 +45,8 @@ type DirectorViewportProps = {
     onViewModeChange?: (mode: DirectorViewMode) => void;
     onSelectObject: (id: string | null) => void;
     onSelectBone: (bone: string | null) => void;
+    /** 快速镜头模式下，点击地面直接落位；不提供则保持高级工作台原有行为。 */
+    onGroundClick?: (point: DirectorGroundPoint) => void;
     onObjectTransform: (id: string, from: DirectorTransform, to: DirectorTransform) => void;
     onBoneTransform: (id: string, bone: string, rotation: DirectorQuat) => void;
     onActorRigReady: (id: string, rig: DirectorRig, animations: AnimationClip[]) => void;
@@ -288,7 +290,7 @@ function DirectorViewportNotice({ title, description, actionLabel, onAction, var
     );
 }
 
-function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, playing, showMotionPaths = false, viewMode = DIRECTOR_DEFAULT_VIEW_MODE, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorCanvasSurfaceProps) {
+function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, playing, showMotionPaths = false, viewMode = DIRECTOR_DEFAULT_VIEW_MODE, onSelectObject, onSelectBone, onGroundClick, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorCanvasSurfaceProps) {
     const { gl, camera, scene: threeScene, invalidate, set, size } = useThree();
     const orbitRef = useRef<DirectorOrbitControls>(null);
     const [transforming, setTransforming] = useState(false);
@@ -355,25 +357,51 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
         const groundPlane = new Plane(new Vector3(0, 1, 0), 0);
         const hit = new Vector3();
         const ndc = new Vector2();
+        let pointerDown: { id: number; x: number; y: number; button: number } | null = null;
 
-        const onPointerMove = (event: PointerEvent) => {
+        const resolveGroundPoint = (event: PointerEvent) => {
             const bounds = canvasElement.getBoundingClientRect();
-            if (bounds.width <= 0 || bounds.height <= 0) return;
+            if (bounds.width <= 0 || bounds.height <= 0) return null;
             ndc.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
             raycaster.setFromCamera(ndc, camera);
-            // 射线与地面平行或背离时 intersectPlane 返回 null：保留上一个合法点，不写非法值。
-            if (!raycaster.ray.intersectPlane(groundPlane, hit)) return;
-            const point = finiteDirectorGroundPoint(hit.x, hit.z);
+            if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
+            return finiteDirectorGroundPoint(hit.x, hit.z);
+        };
+
+        const onPointerMove = (event: PointerEvent) => {
+            const point = resolveGroundPoint(event);
+            // 射线与地面平行或背离时保留上一个合法点，不写非法值。
             if (point) onGroundPoint(canvasElement, point);
         };
 
+        const onPointerDown = (event: PointerEvent) => {
+            if (!onGroundClick || event.button !== 0 || event.isPrimary === false) return;
+            pointerDown = { id: event.pointerId, x: event.clientX, y: event.clientY, button: event.button };
+        };
+
+        const onPointerUp = (event: PointerEvent) => {
+            const start = pointerDown;
+            pointerDown = null;
+            if (!start || start.id !== event.pointerId || start.button !== 0 || event.button !== 0) return;
+            // OrbitControls 旋转、平移或缩放结束时也会收到 pointerup，移动阈值避免误落位。
+            const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+            if (distance > 5) return;
+            const point = resolveGroundPoint(event);
+            if (point) onGroundClick?.(point);
+        };
+
         canvasElement.addEventListener("pointermove", onPointerMove, { passive: true });
+        canvasElement.addEventListener("pointerdown", onPointerDown, { passive: true });
+        canvasElement.addEventListener("pointerup", onPointerUp, { passive: true });
         return () => {
             canvasElement.removeEventListener("pointermove", onPointerMove);
+            canvasElement.removeEventListener("pointerdown", onPointerDown);
+            canvasElement.removeEventListener("pointerup", onPointerUp);
+            pointerDown = null;
             // 这个 renderer 的 canvas 卸载后，它记录的地面点不得再被读到。
             onGroundPoint(canvasElement, null);
         };
-    }, [camera, gl, onGroundPoint]);
+    }, [camera, gl, onGroundClick, onGroundPoint]);
 
     // OrbitControls 的真实 target 只能从实例读；activeCamera.target 只是初始 prop。
     // 挂载期登记一次即可：drei 重建实例会连带重跑本 effect。

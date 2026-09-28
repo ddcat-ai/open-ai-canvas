@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Button, Select } from "antd";
+import { App, Button } from "antd";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { FileText, Images, Plus, RefreshCw } from "lucide-react";
 import { CachedResourceImage } from "@/components/cached-resource-image";
@@ -10,6 +10,7 @@ import { loadAssetLibraryPage } from "@/services/user-data-sync";
 import { useUserStore } from "@/stores/use-user-store";
 import type { Asset } from "@/stores/use-asset-store";
 import { assetPickerItemsToInsertPayloads, type InsertAssetPayload } from "./asset-picker-modal";
+import { Select } from "@/components/ui/base/select";
 
 const categories: AssetCategory[] = ["material", "character", "environment", "prop", "other"];
 export function CanvasWorkspaceAssetPanel({ onInsert, onManage, onProjectAssets }: { onInsert: (payloads: InsertAssetPayload[]) => Promise<unknown>; onManage: () => void; onProjectAssets?: () => void }) {

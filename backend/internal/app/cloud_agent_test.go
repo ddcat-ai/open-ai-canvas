@@ -201,6 +201,9 @@ func TestCloudAgentTerminalRunWithOlderCapabilityCanContinueOnCurrentContract(t 
 	if childState.ParentID != parent.ID || len(childState.TextHistory) != 2 || childState.TextHistory[1].Content != "旧合同下的可信回复" {
 		t.Fatalf("historical conversation context was not preserved: %+v", childState)
 	}
+	if childState.ConfirmationRounds != 0 || len(childState.ConfirmationFingerprints) != 0 {
+		t.Fatalf("normal completed parent incorrectly inherited confirmation budget: rounds=%d fingerprints=%v", childState.ConfirmationRounds, childState.ConfirmationFingerprints)
+	}
 	var storedParent model.CloudAgentExecution
 	if err = db.First(&storedParent, "id = ?", parent.ID).Error; err != nil {
 		t.Fatal(err)
@@ -263,6 +266,23 @@ func TestCloudAgentValidation(t *testing.T) {
 		if validateCloudAgentRequest(&req) == nil {
 			t.Fatal("unsupported request accepted")
 		}
+	}
+}
+
+func TestCloudAgentValidationNormalizesFocusNodeIDs(t *testing.T) {
+	req := agentTestRequest()
+	req.FocusNodeIDs = []string{" node-1 ", "node-2"}
+	if err := validateCloudAgentRequest(&req); err != nil {
+		t.Fatalf("trimmed focus node IDs should be normalized consistently: %v", err)
+	}
+	if req.FocusNodeIDs[0] != "node-1" {
+		t.Fatalf("focus node ID was validated but not normalized: %#v", req.FocusNodeIDs)
+	}
+
+	req = agentTestRequest()
+	req.FocusNodeIDs = []string{"node-1", " node-1 "}
+	if err := validateCloudAgentRequest(&req); err == nil {
+		t.Fatal("focus node IDs that normalize to the same node must be rejected")
 	}
 }
 
@@ -362,8 +382,12 @@ func TestCloudAgentAdmissionAcceptsTokenPricingWithQuotedChargeLimit(t *testing.
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-
-	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
+	if err := db.Model(&model.CreditAccount{}).Where("user_id = ?", "user").Update("available_microcredits", int64(1_000_000_000)).Error; err != nil {
+		t.Fatal(err)
+	}
+	request := agentTestRequest()
+	request.Budget.MaxCredits = 100_000
+	run, err := s.CreateCloudAgentRun("user", request, "")
 	if err != nil {
 		t.Fatalf("token-priced Agent request was rejected: %v", err)
 	}

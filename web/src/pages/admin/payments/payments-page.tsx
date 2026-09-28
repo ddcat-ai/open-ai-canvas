@@ -1,6 +1,6 @@
 import { PaymentBrandIcon } from "@/components/payment-brand-icons";
 import { Callout } from "@/pages/admin/ui/controls";
-import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Select, Tabs, Typography } from "antd";
+import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Tabs, Typography } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { Switch } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
@@ -39,6 +39,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import "./payments-page.css";
+import { Select } from "@/components/ui/base/select";
 
 type ProviderFormValues = {
     enabled: boolean;

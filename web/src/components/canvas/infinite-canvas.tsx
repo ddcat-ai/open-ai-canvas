@@ -493,7 +493,7 @@ function isCanvasInternalDragEvent(event: React.DragEvent<HTMLDivElement>) {
     return Boolean(target?.closest(CANVAS_INTERNAL_DRAG_SELECTOR));
 }
 
-function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {
+export function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {
     const colorTheme = useActiveTheme();
     const gridColor = resolveCanvasGridColor(appearance, colorTheme, mode);
     const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} 0.8px, transparent 1px)` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;

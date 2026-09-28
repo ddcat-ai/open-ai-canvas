@@ -35,6 +35,7 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings:
                     <Tooltip key={binding.nodeId} title={`${node?.title || "资产已失效"} · ${ROLE_LABELS[binding.role]}`}>
                         <button
                             type="button"
+                            data-icon-only
                             disabled={!node}
                             className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-md border border-foreground/10 bg-foreground/[0.035] text-foreground/45 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground/70 focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
                             aria-label={`预览${node?.title || "失效资产"}`}

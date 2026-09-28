@@ -1,4 +1,4 @@
-import { Button, Input, InputNumber, Segmented, Select, Slider } from "antd";
+import { Button, Input, InputNumber, Segmented, Slider } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, Dice5, Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Sparkles, Video, Workflow as WorkflowIcon } from "lucide-react";
@@ -17,6 +17,7 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { workflowProviderPluginEnabled } from "@/lib/plugins/builtin/workflows";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata, CanvasVideoEditOperation, CanvasWorkspaceMode } from "@/types/canvas";
+import { Select } from "@/components/ui/base/select";
 
 type CanvasConfigNodePanelProps = {
     node: CanvasNodeData;

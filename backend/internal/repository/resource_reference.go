@@ -297,16 +297,17 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	}
 
 	type joinedRepresentation struct {
-		ID         string
-		Title      string
-		ResourceID string
+		ID           string
+		Title        string
+		ResourceID   string
+		MetadataJSON string
 	}
 	var representations []joinedRepresentation
 	representationQuery := r.db.Table("asset_representations").
-		Select("asset_representations.id, assets.title, asset_representations.resource_id").
+		Select("asset_representations.id, assets.title, asset_representations.resource_id, asset_representations.metadata_json").
 		Joins("JOIN asset_versions ON asset_versions.id = asset_representations.asset_version_id").
 		Joins("JOIN assets ON assets.id = asset_versions.asset_id").
-		Where("assets.user_id = ? AND asset_representations.resource_id IN ?", userID, resourceIDs)
+		Where("assets.user_id = ?", userID)
 	if len(excludingAssetIDs) > 0 {
 		representationQuery = representationQuery.Where("assets.id NOT IN ?", excludingAssetIDs)
 	}
@@ -315,6 +316,7 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	}
 	for _, representation := range representations {
 		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "素材", ID: representation.ID, Title: representation.Title, ResourceID: representation.ResourceID})
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "素材", ID: representation.ID, Title: representation.Title, PrimaryJSON: representation.MetadataJSON})
 	}
 
 	var voices []model.VoiceProfile

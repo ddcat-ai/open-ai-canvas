@@ -176,7 +176,13 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 			"maxGenerationTasks": req.Budget.MaxGenerationTasks, "maxVideoSeconds": req.Budget.MaxVideoSeconds,
 		},
 		"maxToolCalls": cloudAgentMaxToolCalls, "maxOutputBytes": cloudAgentMaxOutputBytes,
-		"canvasSummary": canvasSummary,
+	}
+	if strings.TrimSpace(canvasSummary) != "" {
+		// Callers may provide a catalog for policy-contract tests or other
+		// isolated compilation paths. The production run path deliberately
+		// passes an empty value and places the catalog in canonical messages so
+		// the stable system prefix remains cacheable.
+		context["canvasSummary"] = canvasSummary
 	}
 	if len(anchors) > 0 {
 		// User intent remains in user messages, never frozen into system context.

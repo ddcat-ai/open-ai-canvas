@@ -348,3 +348,33 @@ func (r *Repository) MarkCloudAgentCancelled(userID, id string, revision int64) 
 	}
 	return nil
 }
+
+// GeminiCacheByKey returns an official Gemini CachedContent owned by the user.
+func (r *Repository) GeminiCacheByKey(userID, cacheKey string) (*model.CloudAgentGeminiCache, error) {
+	var cache model.CloudAgentGeminiCache
+	if err := r.db.Where("user_id = ? AND cache_key = ?", userID, cacheKey).First(&cache).Error; err != nil {
+		return nil, err
+	}
+	return &cache, nil
+}
+
+// UpsertGeminiCache persists the resource name and expiry returned by Gemini.
+func (r *Repository) UpsertGeminiCache(cache *model.CloudAgentGeminiCache) error {
+	return r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "user_id"}, {Name: "cache_key"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"user_id", "base_url", "model", "credential_hash", "resource_name", "expire_time", "updated_at",
+		}),
+	}).Create(cache).Error
+}
+
+func (r *Repository) DeleteGeminiCache(userID, cacheKey string) error {
+	return r.db.Where("user_id = ? AND cache_key = ?", userID, cacheKey).Delete(&model.CloudAgentGeminiCache{}).Error
+}
+
+// DeleteGeminiCacheIfResourceMatches prevents a late request using an old
+// CachedContent resource from deleting a newer cache for the same identity.
+func (r *Repository) DeleteGeminiCacheIfResourceMatches(userID, cacheKey, resourceName string) (bool, error) {
+	result := r.db.Where("user_id = ? AND cache_key = ? AND resource_name = ?", userID, cacheKey, resourceName).Delete(&model.CloudAgentGeminiCache{})
+	return result.RowsAffected == 1, result.Error
+}

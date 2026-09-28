@@ -62,6 +62,21 @@ func TestModelRequestIntentNormalizesVideoResolution(t *testing.T) {
 	}
 }
 
+func TestModelRequestIntentNormalizesNumericVideoResolution(t *testing.T) {
+	for value, want := range map[string]string{
+		"768": "768p", "768p": "768p", "768P": "768p",
+		"960": "960p", "960P": "960p",
+	} {
+		intent := ModelRequestIntentFromTaskInput(map[string]any{
+			"mode":   "video",
+			"config": map[string]any{"vquality": value},
+		}, "canvas_video", "image_to_video")
+		if got := intent.Options["vquality"]; got != want {
+			t.Errorf("vquality %q normalized to %#v, want %s", value, got, want)
+		}
+	}
+}
+
 func TestModelRequestIntentNormalizesImageSpecificationValues(t *testing.T) {
 	input := map[string]any{
 		"mode":   "image",

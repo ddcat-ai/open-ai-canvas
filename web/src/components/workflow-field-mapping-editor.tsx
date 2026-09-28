@@ -1,4 +1,4 @@
-import { Button, Collapse, Input, InputNumber, Select, Tag } from "antd";
+import { Button, Collapse, Input, InputNumber, Tag } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useMemo, useState } from "react";
 
@@ -9,6 +9,7 @@ import { ListFilter, ListPlus, Power, PowerOff } from "lucide-react";
 import type { WorkflowFieldMapping } from "@/stores/use-config-store";
 import { workflowFieldChoiceValues, workflowFieldConfigurationError, workflowFieldNumberBounds, workflowFieldPresetOptions } from "@/lib/model-capabilities";
 import { EmptyState } from "@/components/ui/product/empty-state";
+import { Select } from "@/components/ui/base/select";
 
 const sourceOptions = [
     { label: "保留工作流默认值", value: "" },

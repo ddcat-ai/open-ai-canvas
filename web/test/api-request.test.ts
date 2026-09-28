@@ -43,6 +43,19 @@ describe("backend API request error semantics", () => {
         expect(thrown).toMatchObject({ status: 502, message: "后端服务暂时不可用，请稍后重试", retryable: true });
     });
 
+    test("marks transport failures without an HTTP response as retryable", async () => {
+        const axiosError = {
+            isAxiosError: true,
+            code: "ERR_NETWORK",
+            message: "Network Error",
+        };
+        const thrown = await request(Promise.reject(axiosError)).catch((error) => error);
+
+        expect(thrown).toBeInstanceOf(ApiError);
+        expect(thrown).toMatchObject({ message: "Network Error", retryable: true });
+        expect(thrown.cause).toBe(axiosError);
+    });
+
     test("http.get unwraps the same backend envelope", async () => {
         const original = apiClient.request;
         apiClient.request = (async () => ({

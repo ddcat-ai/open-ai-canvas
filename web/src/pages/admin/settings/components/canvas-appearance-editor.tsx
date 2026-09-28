@@ -127,7 +127,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             width={Math.round(value.avatarHeight * 0.75)}
                             height={value.avatarHeight}
                             reducedMotion={reducedMotion}
-                            fallback={<FluidOrb size={62} color="#7164f6" />}
+                            fallback={<FluidOrb size={60} color="#7164f6" />}
                             onReady={() => {
                                 setReadyURL(url);
                                 setError("");
@@ -138,7 +138,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             }}
                         />
                     ) : (
-                        <FluidOrb size={62} color="#7164f6" />
+                        <FluidOrb size={60} color="#7164f6" />
                     )}
                     <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
                     <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>

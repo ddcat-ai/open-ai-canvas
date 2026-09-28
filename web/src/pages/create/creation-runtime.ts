@@ -3,7 +3,7 @@ export { isGenerationTaskCancelled, runBackendGenerationTask, runBackendGenerati
 export { subscribeGenerationTasks } from "@/services/api/task-center";
 export { uploadMediaFile } from "@/services/file-storage";
 export { uploadImage } from "@/services/image-storage";
-export { consumeGenerationTaskMessage, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
+export { consumeGenerationTaskMessage, generationTaskMaterializedStorageKeys, generationTaskMaterializedUrls, materializeGenerationTaskAssets, projectGenerationTaskResult } from "@/services/project-asset-sync";
 export { applyGenerationConsumerEffect } from "@/services/generation-consumer-dedupe";
 export { beginGenerationConsumer, runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 export { recoverCreationTextTask } from "@/services/creation-text-task-recovery";

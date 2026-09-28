@@ -10,9 +10,20 @@ import (
 
 var projectUnitHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
+const ProjectUnitTitleMaxRunes = 240
+
 func ProjectUnitWordCount(sourceText string) int {
 	plainText := projectUnitHTMLTagPattern.ReplaceAllString(sourceText, "")
 	return utf8.RuneCountInString(strings.TrimSpace(html.UnescapeString(plainText)))
+}
+
+func NormalizeProjectUnitTitle(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func ValidProjectUnitTitle(value string) bool {
+	title := NormalizeProjectUnitTitle(value)
+	return title != "" && utf8.RuneCountInString(title) <= ProjectUnitTitleMaxRunes
 }
 
 const AssetIDMaxLength = 80
@@ -40,6 +51,12 @@ type Resource struct {
 	PlaybackStatus    string `json:"playbackStatus" gorm:"index;size:24"`
 	PlaybackObjectKey string `json:"playbackObjectKey"`
 	PlaybackError     string `json:"playbackError" gorm:"type:text"`
+	// 单档画布展示缩略图；对象键固定由 ObjectKey 派生，不单独持久化。
+	ThumbnailStatus   string `json:"thumbnailStatus" gorm:"size:24"`
+	ThumbnailMimeType string `json:"thumbnailMimeType" gorm:"size:120"`
+	ThumbnailSize     int64  `json:"thumbnailSize"`
+	ThumbnailWidth    int    `json:"thumbnailWidth"`
+	ThumbnailHeight   int    `json:"thumbnailHeight"`
 	// UploadKey 是客户端逻辑上传身份的摘要；NULL 表示不参与幂等约束。
 	UploadKey *string   `json:"-" gorm:"size:64;uniqueIndex:idx_resources_user_upload_key,priority:2"`
 	Error     string    `json:"error"`

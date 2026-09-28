@@ -4,7 +4,7 @@ type FeedTab = ToolScope;
 import { memo, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, Loader2, MoreHorizontal, Plus, Star, Trash2, Upload, Wrench, X } from "lucide-react";
-import { App, Button, Dropdown, Form, Input, Radio, Select, Space, type MenuProps } from "antd";
+import { App, Button, Dropdown, Form, Input, Radio, Space, type MenuProps } from "antd";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -13,6 +13,7 @@ import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspa
 import { uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { createTool, deleteTool, listTools, setToolFavorite, type ToolScope, type ToolSummary, type ToolType, type ToolVisibility } from "@/services/api/tools";
+import { Select } from "@/components/ui/base/select";
 
 type ToolSubTab = "style" | "effect" | "motion" | "nine_grid";
 

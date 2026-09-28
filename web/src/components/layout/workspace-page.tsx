@@ -1,9 +1,10 @@
-import { Button, Select } from "antd";
+import { Button } from "antd";
 import { ChevronLeft, ChevronRight, ListFilter, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/base/select";
 
 export function WorkspacePage({ children, className, grid = false, fluid = false, scroll = true }: { children: ReactNode; className?: string; grid?: boolean; fluid?: boolean; scroll?: boolean }) {
     return (

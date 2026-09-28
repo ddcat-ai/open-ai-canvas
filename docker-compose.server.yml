@@ -36,7 +36,8 @@ services:
       dockerfile: backend/Dockerfile
       args:
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
-    command: ["migrate-schema", "up"]
+    entrypoint: ["migrate-schema"]
+    command: ["up"]
     environment:
       CANVAS_BACKEND_DATA_DIR: /data
       CANVAS_DATABASE_DRIVER: postgres

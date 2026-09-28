@@ -1,7 +1,7 @@
 {
   "version": 1,
   "updated": "2026-09-22",
-  "note": "场景预设内容层（平台层 RFC 见 项目/场景预设平台层-RFC-2026-09-22.md）。v1 只引用已进种子市场的技能（33 官方 + 35 judian 域包），未上架的 56 个 singles 不引用——避免用户一键挂载时遇到装不上的技能。skillIds 与上游 backend/internal/skills/seed/skills.json 对齐，变更前必须跑 presets_check.py 对账。",
+  "note": "技能目录来自 backend/builtin/ 下的 Markdown 技能包；此文件只保存场景组合，不保存技能正文。",
   "presets": [
     {
       "presetId": "short-drama-starter",
@@ -77,7 +77,7 @@
       "presetId": "brand-positioning",
       "name": "品牌定位与策略",
       "scene": "ecommerce",
-      "skillIds": ["16000000000102", "16000000000104", "16000000000099", "16000000000106"],
+      "skillIds": ["16000000000102", "16000000000104", "16000000000099"],
       "rationale": "不写片不拍片的日子用这组：定位策略找心智空格，故事营销把目的讲成故事，决策模型格森做判断，STEPPS 设计传播。纯思考层，无生产技能。",
       "source": "hand-curated",
       "evidence": "E4",

@@ -1,7 +1,8 @@
 import { App, Button, ColorPicker, Dropdown, Input, Popover } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { Editor, JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -33,7 +34,7 @@ import {
 import { canvasThemes } from "@/lib/canvas-theme";
 import { createCanvasRichTextExtensions, isSafeCanvasRichTextLink } from "@/lib/canvas/canvas-rich-text";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
-import type { CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 type CanvasTextEditorModalProps = {
     node: CanvasNodeData | null;
@@ -46,8 +47,11 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
     const { message, modal } = App.useApp();
     const theme = canvasThemes[useActiveTheme()];
     const [title, setTitle] = useState("");
+    const [markdownContent, setMarkdownContent] = useState("");
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const markdownEditorRef = useRef<TextAreaRef | null>(null);
+    const isMarkdown = node?.type === CanvasNodeType.Markdown;
     const editor = useEditor({
         immediatelyRender: false,
         extensions: createCanvasRichTextExtensions("输入文本内容…"),
@@ -62,22 +66,32 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
     });
 
     useEffect(() => {
-        if (!open || !node || !editor) return;
-        editor.commands.setContent((node.metadata?.richText as JSONContent | undefined) || plainTextDocument(node.metadata?.content || ""), { emitUpdate: false });
-        setTitle(node.title || "文本");
+        if (!open || !node) return;
+        setTitle(node.title || (node.type === CanvasNodeType.Markdown ? "Markdown" : "文本"));
+        setMarkdownContent(node.metadata?.content || "");
         setDirty(false);
         setSaving(false);
+        if (node.type === CanvasNodeType.Markdown) {
+            window.setTimeout(() => markdownEditorRef.current?.focus(), 0);
+            return;
+        }
+        if (!editor) return;
+        editor.commands.setContent((node.metadata?.richText as JSONContent | undefined) || plainTextDocument(node.metadata?.content || ""), { emitUpdate: false });
         window.setTimeout(() => editor.commands.focus("start"), 0);
-    }, [editor, node?.id, open]);
+    }, [editor, node?.id, node?.type, open]);
 
-    const characterCount = editor?.storage.characterCount?.characters?.() || 0;
-    const wordCount = useMemo(() => countWords(editor?.getText() || ""), [characterCount, editor]);
+    const characterCount = isMarkdown ? markdownContent.length : editor?.storage.characterCount?.characters?.() || 0;
+    const wordCount = useMemo(() => countWords(isMarkdown ? markdownContent : editor?.getText() || ""), [characterCount, editor, isMarkdown, markdownContent]);
 
     const save = async () => {
-        if (!node || !editor || saving) return;
+        if (!node || saving || (!isMarkdown && !editor)) return;
         setSaving(true);
         try {
-            await onSave(node.id, title.trim() || "文本", editor.getText({ blockSeparator: "\n" }).trimEnd(), editor.getJSON() as Record<string, unknown>);
+            if (isMarkdown) {
+                await onSave(node.id, title.trim() || "Markdown", markdownContent, (node.metadata?.richText as Record<string, unknown> | undefined) || {});
+            } else {
+                await onSave(node.id, title.trim() || "文本", editor!.getText({ blockSeparator: "\n" }).trimEnd(), editor!.getJSON() as Record<string, unknown>);
+            }
             setDirty(false);
             message.success("文本节点已保存");
         } catch (error) {
@@ -91,7 +105,7 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
         if (!dirty || saving) return onClose();
         modal.confirm({
             title: "放弃未保存的修改？",
-            content: "关闭后，本次富文本编辑不会写回画布节点。",
+            content: `关闭后，本次${isMarkdown ? "Markdown" : "富文本"}编辑不会写回画布节点。`,
             okText: "放弃修改",
             cancelText: "继续编辑",
             onOk: onClose,
@@ -107,7 +121,7 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [dirty, editor, node?.id, open, saving, title]);
+    }, [dirty, editor, isMarkdown, markdownContent, node?.id, open, saving, title]);
 
     return (
         <AppModal
@@ -140,18 +154,39 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                     </Tooltip>
                 </header>
 
-                <TextEditorToolbar editor={editor} />
+                {isMarkdown ? (
+                    <div className="flex h-10 shrink-0 items-center border-b px-4 text-xs font-medium" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
+                        Markdown 源码
+                    </div>
+                ) : (
+                    <TextEditorToolbar editor={editor} />
+                )}
 
                 <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto" style={{ background: theme.canvas.background }}>
                     <div
                         className="mx-auto min-h-full w-full max-w-[920px] [&_.ProseMirror]:min-h-[calc(min(88dvh,840px)-126px)] [&_.ProseMirror_a]:text-blue-600 [&_.ProseMirror_a]:underline [&_.ProseMirror_blockquote]:my-4 [&_.ProseMirror_blockquote]:border-l-2 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:opacity-70 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:bg-black/6 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:py-0.5 dark:[&_.ProseMirror_code]:bg-white/8 [&_.ProseMirror_h1]:mb-4 [&_.ProseMirror_h1]:mt-6 [&_.ProseMirror_h1]:text-3xl [&_.ProseMirror_h1]:font-semibold [&_.ProseMirror_h2]:mb-3 [&_.ProseMirror_h2]:mt-5 [&_.ProseMirror_h2]:text-2xl [&_.ProseMirror_h2]:font-semibold [&_.ProseMirror_h3]:mb-2 [&_.ProseMirror_h3]:mt-4 [&_.ProseMirror_h3]:text-xl [&_.ProseMirror_h3]:font-semibold [&_.ProseMirror_hr]:my-6 [&_.ProseMirror_li]:my-1 [&_.ProseMirror_ol]:my-3 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_p]:my-2 [&_.ProseMirror_pre]:my-4 [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-md [&_.ProseMirror_pre]:bg-black/90 [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:text-white [&_.ProseMirror_ul]:my-3 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.is-editor-empty:first-child]:before:pointer-events-none [&_.is-editor-empty:first-child]:before:float-left [&_.is-editor-empty:first-child]:before:h-0 [&_.is-editor-empty:first-child]:before:text-foreground/35 [&_.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]"
                     >
-                        <EditorContent editor={editor} />
+                        {isMarkdown ? (
+                            <Input.TextArea
+                                ref={markdownEditorRef}
+                                value={markdownContent}
+                                onChange={(event) => {
+                                    setMarkdownContent(event.target.value);
+                                    setDirty(true);
+                                }}
+                                placeholder="输入 Markdown 内容…"
+                                autoSize={false}
+                                className="!min-h-[calc(min(88dvh,840px)-126px)] !h-full !resize-none !border-0 !bg-transparent !px-8 !py-7 !text-sm !leading-7 !shadow-none focus:!border-0 focus:!shadow-none sm:!px-12 lg:!px-16"
+                                aria-label="Markdown 源码编辑区"
+                            />
+                        ) : (
+                            <EditorContent editor={editor} />
+                        )}
                     </div>
                 </div>
 
                 <footer className="flex h-8 shrink-0 items-center gap-3 border-t px-3 text-[var(--fs-tiny)]" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
-                    <span className="hidden sm:inline">支持标题、列表、引用、链接、代码和颜色格式</span>
+                    <span className="hidden sm:inline">{isMarkdown ? "直接编辑 Markdown 源码，保存后画布会按 Markdown 渲染" : "支持标题、列表、引用、链接、代码和颜色格式"}</span>
                     <span className="ml-auto">Ctrl/⌘S 保存</span>
                 </footer>
             </section>

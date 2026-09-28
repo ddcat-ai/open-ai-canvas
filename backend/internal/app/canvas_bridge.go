@@ -266,6 +266,10 @@ func clientAssetPayload(asset model.Asset) json.RawMessage {
 	return canvas.ClientAssetPayload(asset)
 }
 
+func clientAssetListPayload(asset model.Asset) json.RawMessage {
+	return canvas.ClientAssetListPayload(asset)
+}
+
 func validateSyncedPayload(raw json.RawMessage, label string) error {
 	return canvas.ValidateSyncedPayload(raw, label)
 }

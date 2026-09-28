@@ -22,6 +22,9 @@ import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import type { GenerationTask } from "@/services/api/task-center";
 import { resolveMediaUrl } from "@/services/file-storage";
+import { prepareCanvasImage } from "@/services/canvas-image-loader";
+import { getResourceAccess, resolveResourceAccessURL } from "@/services/api/resources";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
@@ -71,9 +74,13 @@ export type CanvasNodeContentProps = {
 };
 
 export function CanvasNodeContent(props: CanvasNodeContentProps) {
+    if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.reduceMediaEffects} />;
+    // Keep the image renderer mounted while node LOD changes. Visibility still gates first load.
+    if (props.node.type === CanvasNodeType.Image && props.renderLOD !== "full" && (props.node.metadata?.content || props.node.metadata?.storageKey)) {
+        return <ImageNodeContent {...props} />;
+    }
     if (props.renderLOD === "shell") return <CanvasNodeShellContent node={props.node} theme={props.theme} />;
     if (props.renderLOD === "preview") return <CanvasNodePreviewContent node={props.node} theme={props.theme} />;
-    if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.reduceMediaEffects} />;
     const hasCustomContent =
         props.node.type === CanvasNodeType.Config ||
         props.node.type === CanvasNodeType.Script ||
@@ -489,7 +496,8 @@ function skillOutputModeLabel(mode?: string) {
 }
 
 function ImageNodeContent(props: CanvasNodeContentProps) {
-    if (!props.node.metadata?.content && props.isBatchRoot) {
+    const hasImage = Boolean(props.node.metadata?.content || props.node.metadata?.storageKey);
+    if (!hasImage && props.isBatchRoot) {
         const content =
             props.node.metadata?.status === "loading" ? (
                 <LoadingContent node={props.node} theme={props.theme} />
@@ -512,7 +520,7 @@ function ImageNodeContent(props: CanvasNodeContentProps) {
             </BatchFrame>
         );
     }
-    if (!props.node.metadata?.content) return <EmptyImageContent {...props} />;
+    if (!hasImage) return <EmptyImageContent {...props} />;
     return (
         <ImageContent
             batchPreviewNodes={props.batchPreviewNodes}
@@ -851,7 +859,7 @@ function ImageContent({
 }: Pick<CanvasNodeContentProps, "node" | "theme" | "isBatchRoot" | "batchCount" | "batchPreviewNodes" | "batchExpanded" | "batchOpening" | "batchRecovering" | "onToggleBatch">) {
     const imageContainerRef = useRef<HTMLDivElement>(null);
     const nearViewport = useNearViewport(imageContainerRef);
-    const { url, loading } = useNodeResourceUrl(node, nearViewport);
+    const { url, loading, originalWidth, originalHeight } = useNodeResourceUrl(node, nearViewport, "thumbnail");
     const importedFromLibTV = node.metadata?.importSource?.provider === "libtv";
     const { updateMediaNode } = useCanvasNodeActions();
     const measuredSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -866,11 +874,11 @@ function ImageContent({
      * 存过 naturalWidth 的旧节点永远得不到修正（第一版就是这么写的，所以没生效）。
      * 手动拉过（manualSize）或自由比例（freeResize）的节点只补记尺寸、不动宽高。
      */
-    const fitToImage = (element: HTMLImageElement) => {
+    const fitToImage = (element: HTMLImageElement, sourceSize?: { width?: number; height?: number }) => {
         // LibTV 已提供原图尺寸和节点尺寸；960px 缩略图不能反向覆盖这些数据。
         if (importedFromLibTV) return;
-        const naturalWidth = element.naturalWidth;
-        const naturalHeight = element.naturalHeight;
+        const naturalWidth = sourceSize?.width || element.naturalWidth;
+        const naturalHeight = sourceSize?.height || element.naturalHeight;
         if (!naturalWidth || !naturalHeight) return;
         if (measuredSizeRef.current?.width === naturalWidth && measuredSizeRef.current.height === naturalHeight) return;
         measuredSizeRef.current = { width: naturalWidth, height: naturalHeight };
@@ -893,29 +901,108 @@ function ImageContent({
 
     return (
         <BatchFrame batchPreviewNodes={batchPreviewNodes} batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} theme={theme} onToggleBatch={onToggleBatch}>
-            <div ref={imageContainerRef} className="h-full w-full overflow-hidden rounded-[var(--node-radius)]">
-                {url ? (
-                    <img
-                        src={url}
-                        alt={node.title}
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
-                        onDragStart={(event) => event.preventDefault()}
-                        onLoad={(event) => fitToImage(event.currentTarget)}
-                        className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
-                    />
-                ) : (
-                    <div className="grid size-full place-items-center" style={{ color: theme.node.muted }}>
-                        {loading ? <LoaderCircle className="size-5 animate-spin" /> : <ImageIcon className="size-5 opacity-45" />}
-                    </div>
-                )}
+            <div ref={imageContainerRef} className="relative h-full w-full overflow-hidden rounded-[var(--node-radius)]">
+                <RetainedCanvasImage
+                    identity={`${getActiveUserScope()}:${node.id}:${node.metadata?.storageKey || node.metadata?.content || "empty"}`}
+                    src={url}
+                    storageKey={node.metadata?.storageKey}
+                    fallbackSrc={node.metadata?.content || ""}
+                    originalSize={{ width: originalWidth, height: originalHeight }}
+                    alt={node.title}
+                    fitToImage={fitToImage}
+                    className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
+                    loading={loading}
+                    theme={theme}
+                />
             </div>
         </BatchFrame>
     );
 }
 
-function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
+/** A stable visible img is updated only after a queued candidate has loaded and decoded. */
+function RetainedCanvasImage({ identity, src, storageKey, fallbackSrc, originalSize, alt, fitToImage, className, loading, theme }: {
+    identity: string;
+    src: string;
+    storageKey?: string;
+    fallbackSrc: string;
+    originalSize: { width?: number; height?: number };
+    alt?: string;
+    fitToImage: (image: HTMLImageElement, size?: { width?: number; height?: number }) => void;
+    className: string;
+    loading: boolean;
+    theme: CanvasTheme;
+}) {
+    const [displayed, setDisplayed] = useState<{ identity: string; src: string } | null>(null);
+    const [preparing, setPreparing] = useState(false);
+    const displayedRef = useRef(displayed);
+    displayedRef.current = displayed;
+    const originalWidth = originalSize.width;
+    const originalHeight = originalSize.height;
+    const currentRef = useRef({ identity, src, storageKey, fallbackSrc, originalSize, fitToImage });
+    currentRef.current = { identity, src, storageKey, fallbackSrc, originalSize, fitToImage };
+    const currentDisplayedSrc = displayed?.identity === identity ? displayed.src : "";
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const target = currentRef.current;
+        if (!target.src || (displayedRef.current?.identity === identity && displayedRef.current.src === target.src)) {
+            setPreparing(false);
+            return () => controller.abort();
+        }
+        setPreparing(true);
+        const isCurrent = () => !controller.signal.aborted && currentRef.current.identity === identity && currentRef.current.src === target.src;
+        const prepare = async () => {
+            try {
+                const candidate = await prepareCanvasImage(target.src, controller.signal);
+                if (!isCurrent()) return;
+                currentRef.current.fitToImage(candidate, target.originalSize);
+                setDisplayed({ identity, src: target.src });
+            } catch (error) {
+                if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+                const resourceId = target.storageKey?.startsWith("resource:") ? target.storageKey.slice("resource:".length) : "";
+                if (!resourceId) return;
+                try {
+                    const access = await getResourceAccess(target.storageKey, "display", "original");
+                    const originalURL = resolveResourceAccessURL(access.url);
+                    if (!isCurrent() || !originalURL || originalURL === target.src) return;
+                    const original = await prepareCanvasImage(originalURL, controller.signal);
+                    if (!isCurrent()) return;
+                    currentRef.current.fitToImage(original, { width: access.originalWidth, height: access.originalHeight });
+                    setDisplayed({ identity, src: originalURL });
+                } catch (fallbackError) {
+                    if (!controller.signal.aborted && !(fallbackError instanceof DOMException && fallbackError.name === "AbortError")) {
+                        // Keep the already visible same-resource image; a first-load failure remains an explicit placeholder.
+                    }
+                }
+            } finally {
+                if (isCurrent()) setPreparing(false);
+            }
+        };
+        void prepare();
+        return () => controller.abort();
+    }, [identity, originalHeight, originalWidth, src, storageKey]);
+
+    return (
+        <>
+            <img
+                src={currentDisplayedSrc || undefined}
+                alt={alt || ""}
+                decoding="async"
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                className={`absolute inset-0 ${className}`}
+                style={{ visibility: currentDisplayedSrc ? "visible" : "hidden" }}
+            />
+            {!currentDisplayedSrc ? (
+                <div className="absolute inset-0 grid place-items-center" style={{ color: theme.node.muted }}>
+                    {loading || preparing ? <LoaderCircle className="size-5 animate-spin" /> : <ImageIcon className="size-5 opacity-45" />}
+                </div>
+            ) : null}
+        </>
+    );
+}
+
+function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant: "original" | "thumbnail" = "original") {
     const storageKey = node.metadata?.storageKey || "";
     const rawContent = node.metadata?.content || "";
     const content = node.type === CanvasNodeType.Video && node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(rawContent) : rawContent;
@@ -933,39 +1020,36 @@ function useNodeResourceUrl(node: CanvasNodeData, eager: boolean) {
     const isLazyVisual = node.type === CanvasNodeType.Image;
     const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
     const initialUrl = eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLazyVisual ? "" : fallback;
-    const [url, setUrl] = useState(() => initialUrl);
-    const [loading, setLoading] = useState(() => !initialUrl && isRemoteResource && eager);
+    const scope = getActiveUserScope();
+    const identity = `${scope}:${node.id}:${storageKey || fallback}`;
+    const [resolved, setResolved] = useState<{ identity: string; url: string; loading: boolean; originalWidth?: number; originalHeight?: number }>(() => ({ identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager }));
+    const current = resolved.identity === identity ? resolved : { identity, url: initialUrl, loading: isRemoteResource && eager };
 
     useEffect(() => {
         if (!isRemoteResource) {
-            setUrl(isLazyVisual && !eager ? "" : fallback);
-            setLoading(false);
+            setResolved({ identity, url: isLazyVisual && !eager ? "" : fallback, loading: false });
             return;
         }
         if (!eager) {
-            setUrl("");
-            setLoading(false);
+            setResolved({ identity, url: "", loading: false });
             return;
         }
         let cancelled = false;
-        setUrl("");
-        setLoading(true);
-        void resolveMediaUrl(storageKey, fallback)
-            .then((resolved) => {
-                if (!cancelled) setUrl(resolved);
+        setResolved({ identity, url: "", loading: true });
+        void getResourceAccess(storageKey, "display", variant)
+            .then((access) => {
+                if (!cancelled) setResolved({ identity, url: resolveResourceAccessURL(access.url), loading: false, originalWidth: access.originalWidth, originalHeight: access.originalHeight });
             })
             .catch(() => {
-                if (!cancelled) setUrl(fallback);
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) setResolved({ identity, url: fallback, loading: false });
             });
         return () => {
             cancelled = true;
         };
-    }, [eager, fallback, isLazyVisual, isRemoteResource, storageKey]);
+    }, [eager, fallback, identity, isLazyVisual, isRemoteResource, storageKey, variant]);
 
-    return { url, loading };
+    const isThumbnail = variant === "thumbnail";
+    return { url: current.url, loading: current.loading, originalWidth: isThumbnail ? current.originalWidth : undefined, originalHeight: isThumbnail ? current.originalHeight : undefined };
 }
 
 function useNearViewport(ref: RefObject<Element | null>) {

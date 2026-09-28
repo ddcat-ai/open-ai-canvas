@@ -14,10 +14,18 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 	}
 	options := contract.Options{}
 	if a.Mode == "image" || a.Mode == "video" {
-		options.Size = &a.Size
+		// A blank option means "use the selected model's declared default". Do
+		// not turn absence into an explicit empty value: task admission is where
+		// the model capability contract resolves defaults and validates support.
+		if strings.TrimSpace(a.Size) != "" {
+			options.Size = &a.Size
+		}
 	}
 	if a.Mode == "video" {
-		options.DurationSeconds, options.GenerateAudio = &a.Duration, a.VideoGenerateAudio
+		if a.Duration > 0 {
+			options.DurationSeconds = &a.Duration
+		}
+		options.GenerateAudio = a.VideoGenerateAudio
 		if a.Quality != "" {
 			options.Resolution = &a.Quality
 		}

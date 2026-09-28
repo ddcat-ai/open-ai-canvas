@@ -1,4 +1,4 @@
-import { Alert, App, Button, Input, Modal, Segmented, Select } from "antd";
+import { Alert, App, Button, Input, Modal, Segmented } from "antd";
 import { IconButton } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Play, Search } from "lucide-react";
@@ -17,6 +17,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 import { logBillingLabel, logStatus, normalizeLogView } from "./log-view";
 import "./logs-page.css";
+import { Select } from "@/components/ui/base/select";
 
 export default function LogsPage() {
     const { message } = App.useApp();

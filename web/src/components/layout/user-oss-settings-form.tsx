@@ -1,12 +1,13 @@
-import { App, Button, Form, Input, Select, Tag } from "antd";
+import { App, Button, Form, Input, Tag } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { Cloud, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type OSSProvider, type S3Preset } from "@/lib/oss-settings";
+import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, validateOSSConnectionDraft, type OSSConnectionTestResult, type OSSProvider, type S3Preset } from "@/lib/oss-settings";
 import { getUserOSSSetting, testUserOSSConnection, updateUserOSSSetting, type UserOSSSetting } from "@/services/api/resources";
 import { useUserStore } from "@/stores/use-user-store";
 import { StatusBadge } from "@/components/ui/base/badges";
+import { Select } from "@/components/ui/base/select";
 
 type OSSFormValues = {
     enabled?: boolean;
@@ -104,6 +105,11 @@ export function UserOSSSettingsForm() {
 
     const testConnection = async () => {
         const values = await form.validateFields();
+        const validationError = validateOSSConnectionDraft(values);
+        if (validationError) {
+            message.error(validationError);
+            return;
+        }
         setTesting(true);
         try {
             const result = await testUserOSSConnection(connectionInput(values));

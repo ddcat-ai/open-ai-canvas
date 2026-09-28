@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -117,6 +118,43 @@ func TestCloudAgentCompactionRequestsWhenTokenLineReached(t *testing.T) {
 	}
 	if ratio, ok := payload["pressureRatio"].(float64); !ok || ratio < 0.84 {
 		t.Fatalf("压力读数 = %+v", payload["pressureRatio"])
+	}
+}
+
+// Read results are replay caches, not the source of truth. A few large canvas
+// snapshots must not make the requested compaction checkpoint impossible to
+// persist, otherwise the outer error is misreported as a context overflow and
+// the compression task is never even enqueued.
+func TestCloudAgentCompactionCanCheckpointAfterPruningOversizedReadCache(t *testing.T) {
+	s, _, run, state := func() (*Service, *gorm.DB, *model.CloudAgentExecution, cloudAgentRuntime) {
+		s, db, root := reliableAgentRoot(t)
+		current, decoded := decodeCloudAgentCompactionState(t, s, root.ID)
+		return s, db, current, decoded
+	}()
+
+	state.ToolReadResults = make(map[string]cloudAgentCachedToolResult)
+	state.ToolReadReplays = make(map[string]int)
+	for index := 0; index < 8; index++ {
+		key := fmt.Sprintf("canvas_get_state:{\"offset\":%d}", index)
+		state.ToolReadResults[key] = cloudAgentCachedToolResult{Result: json.RawMessage(`{"content":"` + strings.Repeat("x", 100000) + `"}`)}
+		state.ToolReadReplays[key] = index + 1
+	}
+	state.ActiveTaskID = ""
+	budget := cloudAgentContextBudgetFor(8_000, 2_000, "test")
+	requested, err := s.cloudAgentRequestCompaction(run, &state, budget, budget.CompactAtTokens)
+	if err != nil || !requested {
+		t.Fatalf("大只读缓存不应阻塞压缩请求: requested=%v err=%v", requested, err)
+	}
+
+	persisted, decoded := decodeCloudAgentCompactionState(t, s, run.ID)
+	if decoded.ContextCompaction == nil || decoded.ContextCompaction.Status != "requested" {
+		t.Fatalf("压缩请求没有落库: %+v", decoded.ContextCompaction)
+	}
+	if len(decoded.ToolReadResults) >= 8 || len(decoded.ToolReadResults) != len(decoded.ToolReadReplays) {
+		t.Fatalf("超大只读缓存没有按需清理: results=%d replays=%d", len(decoded.ToolReadResults), len(decoded.ToolReadReplays))
+	}
+	if len(persisted.StateJSON) >= cloudAgentStateJSONLimit {
+		t.Fatalf("裁剪缓存后 StateJSON 仍超过上限: %d", len(persisted.StateJSON))
 	}
 }
 

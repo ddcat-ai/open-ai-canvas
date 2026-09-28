@@ -36,7 +36,7 @@ export function CanvasWorkspaceNodeListPanel({
                 <span className="tabular-nums text-foreground/32">{nodes.length.toLocaleString("zh-CN")}</span>
             </header>
             <div className="shrink-0 border-b border-border/70 p-2">
-                <label className="flex h-8 items-center gap-1.5 rounded-md border border-border/75 bg-foreground/[.025] px-2 focus-within:border-[var(--workspace-accent)] focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
+                <label className="flex h-8 items-center gap-1.5 rounded-[var(--r-md)] bg-foreground/[.045] px-2 focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
                     <Search className="size-3.5 shrink-0 text-foreground/32" />
                     <input
                         value={query}

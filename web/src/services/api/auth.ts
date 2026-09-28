@@ -378,7 +378,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<VerificationPolicy & { firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsBindingAvailable: boolean; emailBindingAvailable: boolean }>("/auth/settings");
+    return http.get<VerificationPolicy & { firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsBindingAvailable: boolean; emailBindingAvailable: boolean; agreementTitle?: string; agreementContent?: string }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {

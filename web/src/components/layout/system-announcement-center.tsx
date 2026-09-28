@@ -90,6 +90,7 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
                 onClick={() => void openAnnouncements()}
                 aria-label={unreadCount ? `系统公告，${unreadCount} 条未读` : "系统公告"}
                 title="系统公告"
+                data-icon-only={showLabel ? undefined : true}
             >
                 <span className="relative shrink-0">
                     <Bell className="size-4" />

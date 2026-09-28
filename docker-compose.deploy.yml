@@ -28,7 +28,8 @@ services:
 
   migrate:
     image: ${CANVAS_BACKEND_IMAGE:?请先配置 CANVAS_BACKEND_IMAGE（必须包含镜像 digest）}
-    command: ["migrate-schema", "up"]
+    entrypoint: ["migrate-schema"]
+    command: ["up"]
     environment:
       CANVAS_BACKEND_DATA_DIR: /data
       CANVAS_DATABASE_DRIVER: postgres

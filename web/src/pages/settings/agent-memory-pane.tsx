@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, Select, Space } from "antd";
+import { App, Button, Form, Input, Space } from "antd";
 import { Check, Download, Pencil, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -30,6 +30,7 @@ import {
     type AgentMemoryStep,
 } from "@/services/api/agent-memories";
 import { encodeChannelModel, logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { Select } from "@/components/ui/base/select";
 
 const COMPACT_INTERVALS: Array<{ value: AgentMemoryCompactInterval; label: string }> = [
     { value: "off", label: "手动" },

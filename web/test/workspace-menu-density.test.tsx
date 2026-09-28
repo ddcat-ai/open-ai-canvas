@@ -88,5 +88,16 @@ test("menu surfaces are explicitly scoped and old account inner overrides are re
     expect(css).toContain("box-shadow: none !important");
     expect(css).not.toContain(".ant-modal");
     expect(globals).not.toContain(".workspace-account-popover .ant-popover-inner");
-    expect(globals).toContain(".ant-select:has(input:focus-visible)");
+    expect(globals).toContain('.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open)');
+    expect(globals).toMatch(/:where\(\.ant-select-dropdown, \.ant-dropdown-menu,[^)]*\)\s*\{\s*border: 0 !important;/);
+    expect(globals).toContain("body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-cascader-menus, .ant-mentions-dropdown) {\n        border: 0 !important;");
+});
+
+test("shared single-select popup uses a borderless surface instead of a bright focus frame", () => {
+    const select = readFileSync(new URL("../src/components/ui/base/select/select.tsx", import.meta.url), "utf8");
+    expect(select).toContain("<AntSelect");
+    expect(select).toContain('variant={variant ?? "filled"}');
+    expect(select).toContain("data-input-modality={inputModality}");
+    expect(select).toContain('setInputModality("keyboard")');
+    expect(select).not.toContain("setPopoverWidth(width + 2)");
 });

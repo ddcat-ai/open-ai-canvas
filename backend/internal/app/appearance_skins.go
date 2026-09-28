@@ -262,11 +262,20 @@ func normalizeAppearanceSkinThemes(themes []AppearanceSkinTheme) []AppearanceSki
 	result := make([]AppearanceSkinTheme, len(themes))
 	copy(result, themes)
 	builtins := defaultAppearanceSkinThemes()
+	classic := defaultClassicAppearanceSkin()
+	replacedClassic := false
 	for index := range result {
 		result[index].ID = strings.ToLower(strings.TrimSpace(result[index].ID))
+		if result[index].ID == defaultAppearanceSkinID {
+			// The system default is not editable. Whatever was submitted is
+			// discarded so a drifted client copy cannot reject the whole save.
+			result[index] = classic
+			replacedClassic = true
+			continue
+		}
 		result[index].Name = strings.TrimSpace(result[index].Name)
 		result[index].Description = strings.TrimSpace(result[index].Description)
-		result[index].Locked = result[index].ID == defaultAppearanceSkinID
+		result[index].Locked = false
 		// Only a wholly absent legacy button block is upgraded. Partial or
 		// malformed submitted parameters remain invalid on the write path.
 		if result[index].Tokens.Buttons == (AppearanceSkinButtons{}) {
@@ -284,6 +293,12 @@ func normalizeAppearanceSkinThemes(themes []AppearanceSkinTheme) []AppearanceSki
 		normalizeAppearanceSkinModeColors(&result[index].Tokens.Light)
 		normalizeAppearanceSkinModeColors(&result[index].Tokens.Dark)
 		result[index].Tokens.Components.ShadowStyle = strings.ToLower(strings.TrimSpace(result[index].Tokens.Components.ShadowStyle))
+	}
+	if !replacedClassic {
+		if len(result) >= maxAppearanceSkinThemes {
+			result = result[:maxAppearanceSkinThemes-1]
+		}
+		result = append([]AppearanceSkinTheme{classic}, result...)
 	}
 	return result
 }
@@ -329,8 +344,6 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 	}
 	seen := make(map[string]struct{}, len(themes))
 	foundSelected := false
-	foundClassic := false
-	classic := defaultClassicAppearanceSkin()
 	for _, skin := range themes {
 		if !appearanceSkinIDPattern.MatchString(skin.ID) {
 			return BadAuthRequest("皮肤主题 ID 无效")
@@ -341,12 +354,6 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 		seen[skin.ID] = struct{}{}
 		if skin.ID == selectedID {
 			foundSelected = true
-		}
-		if skin.ID == defaultAppearanceSkinID {
-			foundClassic = true
-			if skin.Name != classic.Name || skin.Description != classic.Description || !reflect.DeepEqual(skin.Tokens, classic.Tokens) {
-				return BadAuthRequest("经典黑白为系统默认主题，不能修改或删除")
-			}
 		}
 		if err := validateAppearanceSkinText(skin.Name, "皮肤主题名称", 40, true); err != nil {
 			return err
@@ -368,9 +375,6 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 				return err
 			}
 		}
-	}
-	if !foundClassic {
-		return BadAuthRequest("经典黑白为系统默认主题，不能修改或删除")
 	}
 	if !foundSelected {
 		return BadAuthRequest("当前启用的皮肤主题不存在")

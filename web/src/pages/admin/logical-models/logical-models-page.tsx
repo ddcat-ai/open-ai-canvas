@@ -1,4 +1,4 @@
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Segmented, Select, Switch, Table, Tag } from "antd";
+import { Alert, App, Button, Form, Input, InputNumber, Modal, Segmented, Switch, Table, Tag } from "antd";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
@@ -12,6 +12,7 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminDataTable, AdminFilterChip, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "@/pages/admin/components/admin-ui";
 import { listAdminChannels } from "@/services/api/auth";
 import { listAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
+import { Select } from "@/components/ui/base/select";
 import {
     createAdminLogicalModel,
     deleteAdminLogicalModel,

@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { Button, ColorPicker, Select, Tooltip } from "antd";
+import { Button, ColorPicker, Tooltip } from "antd";
 import { Eraser, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -11,6 +11,7 @@ import {
 } from "@/components/layout/banner-announcement-content";
 import { readBannerNoticeSurface, bannerNoticeTypeLabel } from "@/lib/announcements/banner-notice";
 import { BannerNoticeEmojiPopover } from "./banner-notice-emoji-picker";
+import { Select } from "@/components/ui/base/select";
 import {
     BANNER_TITLE_DEFAULT_FONT_SIZE,
     BANNER_TITLE_DEFAULT_FONT_WEIGHT,

@@ -1,4 +1,4 @@
-import { App, Button, Dropdown, Input, Select } from "antd";
+import { App, Button, Dropdown, Input } from "antd";
 import { Checkbox } from "@/pages/admin/ui/controls";
 import { Ban, Search, Settings2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +12,7 @@ import { useTableUrlState } from "../lib/use-table-url-state";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
 import { AdminUserCreateDrawer, AdminUserEditDrawer } from "./users-drawer";
+import { Select } from "@/components/ui/base/select";
 
 const columnStorageKey = "admin-users-visible-columns";
 const allColumnKeys = userColumnOptions.map((item) => item.key);

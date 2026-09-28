@@ -63,7 +63,19 @@ export async function loadCreationConversations<T extends StoredCreationConversa
     return parsed as T[];
 }
 
+function persistableCreationConversations<T extends StoredCreationConversation>(conversations: T[]) {
+    return conversations.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) => {
+            const candidate = message as PendingCreationMessage & { resultUrls?: unknown; resultStorageKeys?: unknown };
+            if (!Array.isArray(candidate.resultStorageKeys) || candidate.resultStorageKeys.length === 0) return message;
+            const { resultUrls: _transientResultUrls, ...persistedMessage } = candidate;
+            return persistedMessage as typeof message;
+        }),
+    })) as T[];
+}
+
 export async function saveCreationConversations<T extends StoredCreationConversation>(conversations: T[]) {
     const storage = localForageStorageForScope(getActiveUserScope());
-    await storage.setItem(CREATION_CONVERSATIONS_KEY, JSON.stringify(conversations));
+    await storage.setItem(CREATION_CONVERSATIONS_KEY, JSON.stringify(persistableCreationConversations(conversations)));
 }
