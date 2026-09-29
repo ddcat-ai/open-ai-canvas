@@ -1,0 +1,432 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "km-kemei-video",
+  "name": "KM 可美视频",
+  "version": "1.0.0",
+  "author": "KM 可美 / 影策",
+  "description": "KM 可美视频 OpenAI 兼容异步视频生成协议插件。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "km-kemei-video",
+        "label": "KM 可美视频",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://token.xinhankr.com",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "视频生成模型名称。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "描述视频 motion 与画面的提示词。"
+          },
+          {
+            "name": "negative_prompt",
+            "type": "string",
+            "required": false,
+            "mapping": "providerOptions.km-kemei-video.negative_prompt",
+            "description": "负向提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "images",
+            "description": "首帧、尾帧或参考图片，支持 URL 与 Base64。"
+          },
+          {
+            "name": "image_urls",
+            "type": "media[]",
+            "required": false,
+            "mapping": "images",
+            "description": "images 的别名。"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "required": false,
+            "mapping": "videos",
+            "description": "参考视频链接数组。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "audios",
+            "description": "参考音频链接数组。"
+          },
+          {
+            "name": "files",
+            "type": "string[]",
+            "required": false,
+            "mapping": "providerOptions.km-kemei-video.files",
+            "description": "参考文件 URL 数组。"
+          },
+          {
+            "name": "links",
+            "type": "string[]",
+            "required": false,
+            "mapping": "providerOptions.km-kemei-video.links",
+            "description": "参考网页 URL 数组。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "resolution",
+            "description": "目标分辨率，如 1080p、720p、480p。"
+          },
+          {
+            "name": "ratio",
+            "type": "string",
+            "required": false,
+            "mapping": "providerOptions.km-kemei-video.ratio/aspectRatio",
+            "description": "宽高比，如 16:9、9:16、adaptive。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": false,
+            "mapping": "duration",
+            "description": "视频时长，单位为秒。"
+          },
+          {
+            "name": "generate_audio",
+            "type": "boolean",
+            "required": false,
+            "mapping": "generateAudio",
+            "description": "是否同步生成匹配音频。"
+          },
+          {
+            "name": "watermark",
+            "type": "boolean",
+            "required": false,
+            "mapping": "watermark",
+            "description": "是否添加水印。"
+          },
+          {
+            "name": "web_search",
+            "type": "boolean",
+            "required": false,
+            "mapping": "providerOptions.km-kemei-video.web_search",
+            "description": "是否启用联网搜索。"
+          },
+          {
+            "name": "seed",
+            "type": "integer",
+            "required": false,
+            "mapping": "providerOptions.km-kemei-video.seed",
+            "description": "随机数种子。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "KM 可美协议扩展字段。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/video/generations",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "negative_prompt": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.km-kemei-video.negative_prompt"
+              }
+            },
+            "images": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.images"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "$if": {
+                      "condition": {
+                        "$ne": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          ""
+                        ]
+                      },
+                      "then": {
+                        "url": {
+                          "$ref": "media.value"
+                        },
+                        "role": {
+                          "$ref": "media.role"
+                        }
+                      },
+                      "else": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "videos": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.videos"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "audios": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.audios"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "files": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.km-kemei-video.files"
+              }
+            },
+            "links": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.km-kemei-video.links"
+              }
+            },
+            "resolution": {
+              "$omitEmpty": {
+                "$ref": "request.resolution"
+              }
+            },
+            "ratio": {
+              "$omitEmpty": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.km-kemei-video.ratio"
+                  },
+                  {
+                    "$ref": "request.aspectRatio"
+                  }
+                ]
+              }
+            },
+            "duration": {
+              "$omitEmpty": {
+                "$ref": "request.duration"
+              }
+            },
+            "generate_audio": {
+              "$ref": "request.generateAudio"
+            },
+            "watermark": {
+              "$ref": "request.watermark"
+            },
+            "web_search": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.km-kemei-video.web_search"
+              }
+            },
+            "seed": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.km-kemei-video.seed"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/video/generations/{{taskId}}",
+          "contentType": "application/json"
+        },
+        "cancel": {
+          "method": "DELETE",
+          "path": "/v1/video/generations/{{taskId}}",
+          "contentType": "application/json"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.data.task_id"
+              },
+              {
+                "$ref": "response.data.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.data.error.message"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.detail"
+              }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$map": {
+                  "from": {
+                    "$ref": "response.data"
+                  },
+                  "as": "item",
+                  "in": {
+                    "$coalesce": [
+                      {
+                        "$ref": "item.url"
+                      },
+                      {
+                        "$ref": "item.video_url"
+                      },
+                      {
+                        "$ref": "item.videoUrl"
+                      },
+                      {
+                        "$ref": "item.output_url"
+                      },
+                      {
+                        "$ref": "item.outputUrl"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$ref": "response.data.url"
+              },
+              {
+                "$ref": "response.data.video_url"
+              },
+              {
+                "$ref": "response.data.videoUrl"
+              },
+              {
+                "$ref": "response.data.output_url"
+              },
+              {
+                "$ref": "response.data.result_url"
+              },
+              {
+                "$ref": "response.url"
+              },
+              {
+                "$ref": "response.video_url"
+              },
+              {
+                "$ref": "response.videoUrl"
+              },
+              {
+                "$ref": "response.output_url"
+              },
+              {
+                "$ref": "response.result_url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code",
+            "data.error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# KM 可美视频\n\n该目录是 KM 可美视频 OpenAI 兼容异步视频协议插件源码。后端从生成的 `km-kemei-video.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# KM 可美视频接口字段\n\n## 协议身份\n\n- 插件 ID：`km-kemei-video`。\n- Provider ID：`km-kemei-video`。\n- 能力：`video`。\n- 默认 Base URL：`https://token.xinhankr.com`。\n- 鉴权：`Authorization: Bearer <apiKey>`。\n- 创建：`POST /v1/video/generations`。\n- 查询：`GET /v1/video/generations/{task_id}`，也兼容上游文档中的 `/v1/tasks/{task_id}`。\n- 取消：`DELETE /v1/video/generations/{task_id}`。\n\n## 提交任务\n\n请求体使用 JSON。`model` 与 `prompt` 为必填字段；其它统一字段按上游 snake_case 名称发送。`images` 支持 URL、Base64 字符串和带 `role` 的对象，图片按输入顺序保留；单图、双图和三图以上的首帧/尾帧/多图参考推断由 KM 网关执行。\n\n| 字段 | 类型 | 必填 | 说明 |\n| --- | --- | --- | --- |\n| `model` | string | 是 | 如 `doubao-seedance-2-5`、`kling-v3-omni`、`wan3.0-video`。 |\n| `prompt` | string | 是 | 描述 motion 与画面的提示词。 |\n| `negative_prompt` | string | 否 | 负向提示词，通过 `providerOptions.km-kemei-video.negative_prompt` 透传。 |\n| `images` / `image_urls` | array | 否 | 图片 URL、Base64 或带 `role` 的图片对象。插件使用 `images` 字段。 |\n| `videos` | array | 否 | 参考视频 URL。 |\n| `audios` | array | 否 | 参考音频 URL。 |\n| `files` | array | 否 | 参考文件 URL，通过 provider options 透传。 |\n| `links` | array | 否 | 参考网页 URL，通过 provider options 透传。 |\n| `resolution` | string | 否 | `1080p`、`720p`、`480p` 等。 |\n| `ratio` | string | 否 | `16:9`、`9:16`、`adaptive`；未设置时回退统一 `aspectRatio`。 |\n| `duration` | integer | 否 | 时长秒数。 |\n| `generate_audio` | boolean | 否 | 是否生成背景音效或配音。 |\n| `watermark` | boolean | 否 | 是否添加水印。 |\n| `web_search` | boolean | 否 | 是否启用联网搜索。 |\n| `seed` | integer | 否 | 随机数种子。 |\n\n扩展字段命名空间为 `providerOptions.km-kemei-video`，支持 `negative_prompt`、`ratio`、`files`、`links`、`web_search`、`seed` 及其它网关扩展字段。该命名空间可通过自定义渠道元数据传入。\n\n## 图片角色\n\n显式图片角色支持 `first_frame` / `first`、`last_frame` / `end_frame` / `last` / `tail`、`reference_image`。插件会把统一媒体的 `role` 字段编码为对象形式；没有角色时保留为纯 URL 或 Base64 字符串，让网关执行数量推断。\n\n## 异步生命周期\n\n创建响应的 `id`、`task_id` 或对应 `data` 字段映射为统一任务 ID。任务状态从 `pending`、`processing`、`completed`、`succeeded`、`failed`、`cancelled` 等值归一化。成功结果从 `data[].url` 以及常见的 `video_url`、`output_url`、`result_url` 和顶层等价字段提取；临时 URL 标记为 ephemeral，由宿主下载并持久化。\n\n取消只对未完成任务生效。KM 网关返回的 HTTP 错误、`error.code` 和错误消息保持失败语义，不包装成成功。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"km-kemei-video\",\n  \"name\": \"KM 可美视频\",\n  \"version\": \"1.0.0\",\n  \"author\": \"KM 可美 / 影策\",\n  \"description\": \"KM 可美视频 OpenAI 兼容异步视频生成协议插件。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"km-kemei-video\",\n        \"label\": \"KM 可美视频\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://token.xinhankr.com\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"视频生成模型名称。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"描述视频 motion 与画面的提示词。\"\n          },\n          {\n            \"name\": \"negative_prompt\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.km-kemei-video.negative_prompt\",\n            \"description\": \"负向提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"images\",\n            \"description\": \"首帧、尾帧或参考图片，支持 URL 与 Base64。\"\n          },\n          {\n            \"name\": \"image_urls\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"images\",\n            \"description\": \"images 的别名。\"\n          },\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"videos\",\n            \"description\": \"参考视频链接数组。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"audios\",\n            \"description\": \"参考音频链接数组。\"\n          },\n          {\n            \"name\": \"files\",\n            \"type\": \"string[]\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.km-kemei-video.files\",\n            \"description\": \"参考文件 URL 数组。\"\n          },\n          {\n            \"name\": \"links\",\n            \"type\": \"string[]\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.km-kemei-video.links\",\n            \"description\": \"参考网页 URL 数组。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution\",\n            \"description\": \"目标分辨率，如 1080p、720p、480p。\"\n          },\n          {\n            \"name\": \"ratio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.km-kemei-video.ratio/aspectRatio\",\n            \"description\": \"宽高比，如 16:9、9:16、adaptive。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"duration\",\n            \"description\": \"视频时长，单位为秒。\"\n          },\n          {\n            \"name\": \"generate_audio\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"generateAudio\",\n            \"description\": \"是否同步生成匹配音频。\"\n          },\n          {\n            \"name\": \"watermark\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"watermark\",\n            \"description\": \"是否添加水印。\"\n          },\n          {\n            \"name\": \"web_search\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.km-kemei-video.web_search\",\n            \"description\": \"是否启用联网搜索。\"\n          },\n          {\n            \"name\": \"seed\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.km-kemei-video.seed\",\n            \"description\": \"随机数种子。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"KM 可美协议扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/video/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"negative_prompt\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.km-kemei-video.negative_prompt\"\n              }\n            },\n            \"images\": {\n              \"$omitEmpty\": {\n                \"$map\": {\n                  \"from\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.images\"\n                    }\n                  },\n                  \"as\": \"media\",\n                  \"in\": {\n                    \"$if\": {\n                      \"condition\": {\n                        \"$ne\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"\"\n                        ]\n                      },\n                      \"then\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        },\n                        \"role\": {\n                          \"$ref\": \"media.role\"\n                        }\n                      },\n                      \"else\": {\n                        \"$ref\": \"media.value\"\n                      }\n                    }\n                  }\n                }\n              }\n            },\n            \"videos\": {\n              \"$omitEmpty\": {\n                \"$map\": {\n                  \"from\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.videos\"\n                    }\n                  },\n                  \"as\": \"media\",\n                  \"in\": {\n                    \"$ref\": \"media.value\"\n                  }\n                }\n              }\n            },\n            \"audios\": {\n              \"$omitEmpty\": {\n                \"$map\": {\n                  \"from\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.audios\"\n                    }\n                  },\n                  \"as\": \"media\",\n                  \"in\": {\n                    \"$ref\": \"media.value\"\n                  }\n                }\n              }\n            },\n            \"files\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.km-kemei-video.files\"\n              }\n            },\n            \"links\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.km-kemei-video.links\"\n              }\n            },\n            \"resolution\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.resolution\"\n              }\n            },\n            \"ratio\": {\n              \"$omitEmpty\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.km-kemei-video.ratio\"\n                  },\n                  {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                ]\n              }\n            },\n            \"duration\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.duration\"\n              }\n            },\n            \"generate_audio\": {\n              \"$ref\": \"request.generateAudio\"\n            },\n            \"watermark\": {\n              \"$ref\": \"request.watermark\"\n            },\n            \"web_search\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.km-kemei-video.web_search\"\n              }\n            },\n            \"seed\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.km-kemei-video.seed\"\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/video/generations/{{taskId}}\",\n          \"contentType\": \"application/json\"\n        },\n        \"cancel\": {\n          \"method\": \"DELETE\",\n          \"path\": \"/v1/video/generations/{{taskId}}\",\n          \"contentType\": \"application/json\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.taskId\"\n              },\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.data.task_id\"\n              },\n              {\n                \"$ref\": \"response.data.taskId\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.state\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.data.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.detail\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$map\": {\n                  \"from\": {\n                    \"$ref\": \"response.data\"\n                  },\n                  \"as\": \"item\",\n                  \"in\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"item.url\"\n                      },\n                      {\n                        \"$ref\": \"item.video_url\"\n                      },\n                      {\n                        \"$ref\": \"item.videoUrl\"\n                      },\n                      {\n                        \"$ref\": \"item.output_url\"\n                      },\n                      {\n                        \"$ref\": \"item.outputUrl\"\n                      }\n                    ]\n                  }\n                }\n              },\n              {\n                \"$ref\": \"response.data.url\"\n              },\n              {\n                \"$ref\": \"response.data.video_url\"\n              },\n              {\n                \"$ref\": \"response.data.videoUrl\"\n              },\n              {\n                \"$ref\": \"response.data.output_url\"\n              },\n              {\n                \"$ref\": \"response.data.result_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              },\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.videoUrl\"\n              },\n              {\n                \"$ref\": \"response.output_url\"\n              },\n              {\n                \"$ref\": \"response.result_url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error.code\",\n            \"data.error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

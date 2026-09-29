@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"gorm.io/gorm"
@@ -52,7 +53,13 @@ func (s *Service) startCloudAgentPi(userID, runID string) {
 		defer func() {
 			s.piRunnerMu.Lock()
 			delete(s.piRunners, runID)
+			_, restart := s.piRunnerRestarts[runID]
+			delete(s.piRunnerRestarts, runID)
 			s.piRunnerMu.Unlock()
+			// 先登记新会话再 Done，关闭流程等待时不会漏掉刚恢复的会话。
+			if restart {
+				s.startCloudAgentPi(userID, runID)
+			}
 			s.piRunnerWg.Done()
 		}()
 
@@ -61,6 +68,26 @@ func (s *Service) startCloudAgentPi(userID, runID string) {
 			s.failPiRunner(runID, userID, errors.New(cloudAgentUserFailureMessage(runID, err)))
 		}
 	}()
+}
+
+// resumeCloudAgentPi 用于审批后恢复运行。审批暂停的会话在中止后仍要刷新事件和
+// 会话快照，用户很快批准时它可能还没退出；这时不能像普通重复启动那样丢弃，
+// 而是登记一次重启，等旧会话退出后用已保存的恢复提示词继续。
+func (s *Service) resumeCloudAgentPi(userID, runID string) {
+	if s == nil || s.disablePiRuntime || runID == "" {
+		return
+	}
+	s.piRunnerMu.Lock()
+	if _, exists := s.piRunners[runID]; exists && !s.piRunnersClosed {
+		if s.piRunnerRestarts == nil {
+			s.piRunnerRestarts = make(map[string]struct{})
+		}
+		s.piRunnerRestarts[runID] = struct{}{}
+		s.piRunnerMu.Unlock()
+		return
+	}
+	s.piRunnerMu.Unlock()
+	s.startCloudAgentPi(userID, runID)
 }
 
 // closeCloudAgentPiRunners cancels and joins every Pi session before the
@@ -308,12 +335,17 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	}
 
 	// 7. 运行 Pi 会话
+	var pausedForApproval atomic.Bool
 	err = runCloudAgentPi(ctx, request, cloudAgentPiBridge{
 		Model: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
 			return s.cloudAgentPiModel(callCtx, userID, runID, payload)
 		},
 		Tool: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
-			return s.cloudAgentPiTool(callCtx, userID, runID, payload)
+			result, err := s.cloudAgentPiTool(callCtx, userID, runID, payload)
+			if paused, ok := result.(map[string]any); ok && paused["pause"] == true {
+				pausedForApproval.Store(true)
+			}
+			return result, err
 		},
 		Event: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
 			return s.cloudAgentPiEvent(callCtx, userID, runID, payload)
@@ -321,6 +353,12 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	})
 	if err != nil {
 		return err
+	}
+
+	// 本轮因审批暂停：运行由审批决定接管，不能在这里完成。用户可能在会话退出前
+	// 就已批准，此时状态已回到 running，若继续会把未恢复的运行误标为完成。
+	if pausedForApproval.Load() {
+		return nil
 	}
 
 	// 8. 清理恢复提示词

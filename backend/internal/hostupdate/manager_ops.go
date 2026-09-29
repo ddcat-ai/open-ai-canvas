@@ -264,16 +264,22 @@ func (m *Manager) compose(composePath, imageTag string, timeout time.Duration, s
 func (m *Manager) composeWithImages(composePath, imageTag string, images deploymentImages, timeout time.Duration, stdout io.Writer, arguments ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	args := []string{"compose", "--env-file", m.envPath(), "-f", composePath}
+	envFile := m.envPath()
+	if images.backend != "" {
+		var err error
+		envFile, err = m.writeComposeEnvOverride(images)
+		if err != nil {
+			return fmt.Errorf("准备目标 Compose 环境：%w", err)
+		}
+		defer os.Remove(envFile)
+	}
+	args := []string{"compose", "--project-name", composeProjectName(m.config.InstallDir), "--env-file", envFile, "-f", composePath}
 	args = append(args, arguments...)
 	var stderr bytes.Buffer
 	if stdout == nil {
 		stdout = io.Discard
 	}
 	environment := []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(imageTag, "v")}
-	if images.backend != "" {
-		environment = append(environment, "CANVAS_BACKEND_IMAGE="+images.backend, "CANVAS_WEB_IMAGE="+images.web)
-	}
 	err := m.runner.Run(ctx, "docker", args, environment, stdout, &stderr)
 	if err != nil {
 		message := strings.TrimSpace(stderr.String())
@@ -286,6 +292,44 @@ func (m *Manager) composeWithImages(composePath, imageTag string, images deploym
 		return fmt.Errorf("docker compose %s：%w", strings.Join(arguments, " "), err)
 	}
 	return nil
+}
+
+func composeProjectName(installDir string) string {
+	name := filepath.Base(filepath.Clean(installDir))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "open-ai-canvas"
+	}
+	var builder strings.Builder
+	for _, char := range strings.ToLower(name) {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '_' {
+			builder.WriteRune(char)
+		}
+	}
+	if result := strings.Trim(builder.String(), "-_ "); result != "" {
+		return result
+	}
+	return "open-ai-canvas"
+}
+
+func (m *Manager) writeComposeEnvOverride(images deploymentImages) (string, error) {
+	data, err := os.ReadFile(m.envPath())
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(m.config.StateDir, ".compose-env-override-"+randomID())
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return "", err
+	}
+	cleanup := func() { _ = os.Remove(path) }
+	if err := setEnvValue(path, "CANVAS_BACKEND_IMAGE", images.backend); err != nil {
+		cleanup()
+		return "", err
+	}
+	if err := setEnvValue(path, "CANVAS_WEB_IMAGE", images.web); err != nil {
+		cleanup()
+		return "", err
+	}
+	return path, nil
 }
 
 func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {

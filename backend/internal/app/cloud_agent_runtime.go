@@ -2454,80 +2454,119 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 		return creationConflict("审批不存在或已过期")
 	}
 	// 只在记录审批决定的这次写入期间持锁：随后的工具执行（advanceCloudAgentTool）
-	// 会自己获取 storageMu，持锁到函数返回会造成自锁。
-	s.storageMu.Lock()
-	err = s.repo.MutateCloudAgent(userID, id, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
-		if settings != nil {
-			if err := s.updateCloudAgentMediaApproval(repo, run, &state, *settings); err != nil {
+	// 会自己获取 storageMu，持锁到函数返回会造成自锁。旧 Pi 会话退出前仍可能
+	// 写入最后一个事件，因此审批决定采用重读后 CAS 重试。
+	for attempt := 0; attempt < 8; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 20 * time.Millisecond)
+			run, err = s.repo.CloudAgent(userID, id)
+			if err != nil {
 				return err
 			}
-		}
-		state.Approval.Decision = decision
-		state.Approval.Reason = reason
-		state.Decisions[approvalID] = decision
-		if settings != nil {
-			if state.DecisionSettings == nil {
-				state.DecisionSettings = map[string]string{}
-			}
-			state.DecisionSettings[approvalID] = creationHash(settings)
-		}
-		if decision == "approve" && state.Approval.Prepared != nil {
-			if state.DecisionPreparedHashes == nil {
-				state.DecisionPreparedHashes = map[string]string{}
-			}
-			state.DecisionPreparedHashes[approvalID] = state.Approval.Prepared.Hash
-		}
-		if decision == "reject" {
-			// Rejection is a user control-plane decision, not a failed tool
-			// invocation. Make it terminal before the scheduler can advance the
-			// pending call; no tool result, canvas mutation, generation task or
-			// follow-up model request may be produced from this decision.
-			current.Status = "rejected"
-			current.FailureMessage = ""
-			state.Approval = nil
-			state.event(id, "approval_decided", map[string]any{
-				"approvalId": approvalID,
-				"decision":   decision,
-				"reason":     reason,
-				"text":       "已拒绝本次生成，草稿节点仍保留在画布中；未提交任务、未产生扣费。你可以继续编辑后重新申请。",
-			})
-			if err := repo.ReleaseCloudAgentResourceLeases(userID, approvalID); err != nil {
+			state, err = cloudAgentDecodeForExecution(run)
+			if err != nil {
 				return err
 			}
+			if previous, ok := state.Decisions[approvalID]; ok {
+				if previous == decision && (settings == nil || state.DecisionSettings[approvalID] == creationHash(settings)) {
+					return nil
+				}
+				return creationConflict("该审批已有不同决定")
+			}
+			if run.Status != "waiting_approval" || state.Approval == nil || state.Approval.ID != approvalID {
+				return creationConflict("审批不存在或已过期")
+			}
+		}
+		s.storageMu.Lock()
+		err = s.repo.MutateCloudAgent(userID, id, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+			if settings != nil {
+				if err := s.updateCloudAgentMediaApproval(repo, run, &state, *settings); err != nil {
+					return err
+				}
+			}
+			state.Approval.Decision = decision
+			state.Approval.Reason = reason
+			state.Decisions[approvalID] = decision
+			if settings != nil {
+				if state.DecisionSettings == nil {
+					state.DecisionSettings = map[string]string{}
+				}
+				state.DecisionSettings[approvalID] = creationHash(settings)
+			}
+			if decision == "approve" && state.Approval.Prepared != nil {
+				if state.DecisionPreparedHashes == nil {
+					state.DecisionPreparedHashes = map[string]string{}
+				}
+				state.DecisionPreparedHashes[approvalID] = state.Approval.Prepared.Hash
+			}
+			if decision == "reject" {
+				// Rejection is a user control-plane decision, not a failed tool
+				// invocation. Make it terminal before the scheduler can advance the
+				// pending call; no tool result, canvas mutation, generation task or
+				// follow-up model request may be produced from this decision.
+				current.Status = "rejected"
+				current.FailureMessage = ""
+				state.Approval = nil
+				state.event(id, "approval_decided", map[string]any{
+					"approvalId": approvalID,
+					"decision":   decision,
+					"reason":     reason,
+					"text":       "已拒绝本次生成，草稿节点仍保留在画布中；未提交任务、未产生扣费。你可以继续编辑后重新申请。",
+				})
+				if err := repo.ReleaseCloudAgentResourceLeases(userID, approvalID); err != nil {
+					return err
+				}
+				return cloudAgentSave(current, &state)
+			}
+			current.Status = "running"
+			payload := map[string]any{"approvalId": approvalID, "decision": decision, "arguments": json.RawMessage(state.Approval.Call.Function.Arguments), "preview": state.Approval.Preview, "modelName": state.Approval.ModelName}
+			if state.Approval.Prepared != nil {
+				payload["preparedHash"] = state.Approval.Prepared.Hash
+				payload["generationId"] = state.Approval.Prepared.GenerationID
+			}
+			state.event(id, "approval_decided", payload)
 			return cloudAgentSave(current, &state)
+		})
+		s.storageMu.Unlock()
+		if !errors.Is(err, repository.ErrCreationConflict) {
+			break
 		}
-		current.Status = "running"
-		payload := map[string]any{"approvalId": approvalID, "decision": decision, "arguments": json.RawMessage(state.Approval.Call.Function.Arguments), "preview": state.Approval.Preview, "modelName": state.Approval.ModelName}
-		if state.Approval.Prepared != nil {
-			payload["preparedHash"] = state.Approval.Prepared.Hash
-			payload["generationId"] = state.Approval.Prepared.GenerationID
-		}
-		state.event(id, "approval_decided", payload)
-		return cloudAgentSave(current, &state)
-	})
-	s.storageMu.Unlock()
+	}
 	if err != nil || decision != "approve" {
 		return err
 	}
 	// Approval only releases the paused tool. Execute it once in the Go business
 	// executor, then give the durable result back to Pi; Go never asks a model
 	// what to do next.
-	latest, err := s.repo.CloudAgent(userID, id)
-	if err != nil {
-		return err
+	var mediaTaskID string
+	for attempt := 0; attempt < 8; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 20 * time.Millisecond)
+		}
+		latest, err := s.repo.CloudAgent(userID, id)
+		if err != nil {
+			return err
+		}
+		state, err = cloudAgentDecode(latest)
+		if err != nil {
+			return err
+		}
+		err = s.advanceCloudAgentTool(latest, &state)
+		if !errors.Is(err, repository.ErrCreationConflict) {
+			if err != nil {
+				return err
+			}
+			mediaTaskID = state.MediaTaskID
+			break
+		}
+		if attempt == 7 {
+			return err
+		}
 	}
-	state, err = cloudAgentDecode(latest)
-	if err != nil {
-		return err
-	}
-	if err = s.advanceCloudAgentTool(latest, &state); err != nil {
-		return err
-	}
-	if state.MediaTaskID == "" {
+	if mediaTaskID == "" {
 		return s.resumeCloudAgentAfterApproval(userID, id, &state)
 	}
 	// 媒体生成可能要几分钟：审批请求立即返回，等待与回写在后台完成后再恢复运行。
-	mediaTaskID := state.MediaTaskID
 	s.startApprovedCloudAgentMediaWaiter(userID, id, mediaTaskID)
 	return nil
 }
@@ -2564,7 +2603,7 @@ func (s *Service) resumeCloudAgentAfterApproval(userID, id string, state *cloudA
 	if err := s.saveCloudAgentPiResumePrompt(userID, id, state.PiResumePrompt); err != nil {
 		return err
 	}
-	s.startCloudAgentPi(userID, id)
+	s.resumeCloudAgentPi(userID, id)
 	return nil
 }
 

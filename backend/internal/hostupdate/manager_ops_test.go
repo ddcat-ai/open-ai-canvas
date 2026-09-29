@@ -146,3 +146,43 @@ func TestCheckWritableDirectory(t *testing.T) {
 		t.Fatal("missing directory was accepted")
 	}
 }
+
+func TestComposeProjectNameUsesInstallDirectory(t *testing.T) {
+	cases := map[string]string{
+		"/opt/yingce":           "yingce",
+		"/srv/Open AI Canvas_2": "openaicanvas_2",
+		"/":                     "open-ai-canvas",
+		"/srv/!!!":              "open-ai-canvas",
+	}
+	for installDir, want := range cases {
+		if got := composeProjectName(installDir); got != want {
+			t.Errorf("composeProjectName(%q) = %q, want %q", installDir, got, want)
+		}
+	}
+}
+
+func TestWriteComposeEnvOverrideReplacesImageRefs(t *testing.T) {
+	installDir := t.TempDir()
+	stateDir := filepath.Join(installDir, "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(installDir, ".env")
+	if err := os.WriteFile(envPath, []byte("CANVAS_BACKEND_IMAGE=old-backend\nCANVAS_WEB_IMAGE=old-web\nPOSTGRES_DB=canvas\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{config: Config{InstallDir: installDir, EnvFile: ".env", StateDir: stateDir}}
+	path, err := manager.writeComposeEnvOverride(deploymentImages{backend: "new-backend", web: "new-web"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := string(data)
+	if !strings.Contains(value, "CANVAS_BACKEND_IMAGE=new-backend\n") || !strings.Contains(value, "CANVAS_WEB_IMAGE=new-web\n") || !strings.Contains(value, "POSTGRES_DB=canvas\n") {
+		t.Fatalf("unexpected override env: %q", value)
+	}
+}

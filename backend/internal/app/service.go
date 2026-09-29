@@ -81,8 +81,10 @@ type Service struct {
 	piRunnerMu               sync.Mutex
 	piRunnerWg               sync.WaitGroup
 	piRunners                map[string]context.CancelFunc
-	piRunnersClosed          bool
-	disablePiRuntime         bool
+	// piRunnerRestarts 记录审批恢复时旧会话仍在收尾的运行，旧会话退出后再启动一次。
+	piRunnerRestarts map[string]struct{}
+	piRunnersClosed  bool
+	disablePiRuntime bool
 	// legacyCloudAgentRootTask is enabled only by tests that exercise the pre-Pi
 	// model-worker path. Runtime availability must not change root task semantics.
 	legacyCloudAgentRootTask bool

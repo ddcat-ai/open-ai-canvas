@@ -12,6 +12,8 @@ export type PaymentProvider = {
     closeAfterMinutes: number;
 };
 
+export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
+
 export type TopupProduct = {
     id: string;
     name: string;
@@ -20,6 +22,15 @@ export type TopupProduct = {
     creditsMicrocredits: number;
     enabled: boolean;
     sortOrder: number;
+    saleStrategy: TopupSaleStrategy;
+    periodDays?: number;
+    periodPurchaseLimit?: number;
+    stockTotal?: number;
+    stockRemaining?: number;
+    saleStartAt?: string;
+    saleEndAt?: string;
+    saleStatus?: "disabled" | "on_sale" | "upcoming" | "ended" | "sold_out" | string;
+    canPurchase: boolean;
     createdBy: string;
     updatedBy: string;
     createdAt: string;
@@ -115,7 +126,14 @@ export function listAdminTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/admin/payments/products");
 }
 
-export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder"> & { description?: string };
+export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder" | "saleStrategy"> & {
+    description?: string;
+    periodDays?: number;
+    periodPurchaseLimit?: number;
+    stockTotal?: number;
+    saleStartAt?: string;
+    saleEndAt?: string;
+};
 
 export function createAdminTopupProduct(input: TopupProductInput) {
     return http.post<{ product: TopupProduct }>("/admin/payments/products", input);
