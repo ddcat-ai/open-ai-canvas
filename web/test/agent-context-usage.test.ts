@@ -8,6 +8,7 @@ describe("Agent context usage events", () => {
         const state = reduceAgentContextUsage(emptyAgentContextUsage("run-1"), event("run-1", "context_pressure", {
             modelLimitConfigured: true,
             usableInputTokens: 80_000,
+            contextWindowTokens: 128_000,
             pressureTokens: 40_000,
             projectedNextInputTokens: 48_000,
             projectedPressureRatio: 0.6,
@@ -27,19 +28,19 @@ describe("Agent context usage events", () => {
     });
 
     it("marks pre-compaction readings stale until a fresh pressure event arrives", () => {
-        let state = reduceAgentContextUsage(emptyAgentContextUsage("run-1"), event("run-1", "context_pressure", { pressureRatio: 0.8, modelLimitConfigured: true, usableInputTokens: 100 }, 2));
+        let state = reduceAgentContextUsage(emptyAgentContextUsage("run-1"), event("run-1", "context_pressure", { pressureRatio: 0.8, modelLimitConfigured: true, usableInputTokens: 100, contextWindowTokens: 100 }, 2));
         state = reduceAgentContextUsage(state, event("run-1", "context_compaction_requested", { basis: "tokens" }, 3));
         expect(state.compactionPending).toEqual({ basis: "tokens" });
         state = reduceAgentContextUsage(state, event("run-1", "context_compacted", { mode: "checkpoint", resume: true }, 4));
         expect(state.readingStale).toBe(true);
         expect(state.compactionPending).toBeNull();
         expect(state.lastCompaction).toEqual({ mode: "checkpoint", resume: true });
-        state = reduceAgentContextUsage(state, event("run-1", "context_pressure", { pressureRatio: 0.25, modelLimitConfigured: true, usableInputTokens: 100 }, 5));
+        state = reduceAgentContextUsage(state, event("run-1", "context_pressure", { pressureRatio: 0.25, modelLimitConfigured: true, usableInputTokens: 100, contextWindowTokens: 100 }, 5));
         expect(state.readingStale).toBe(false);
         expect(contextPressureRatio(state.reading)).toBe(0.25);
     });
 
-    it("fills the ring against the compaction line, not the raw window", () => {
+    it("fills the ring against the model context window and keeps the compaction line as a marker", () => {
         const state = reduceAgentContextUsage(emptyAgentContextUsage("run-1"), event("run-1", "context_pressure", {
             modelLimitConfigured: true,
             tokenSource: "provider",
@@ -56,10 +57,10 @@ describe("Agent context usage events", () => {
         }));
         const view = presentAgentContextUsage(state);
         expect(view.phase).toBe("ok");
-        expect(view.ring).toBeCloseTo(0.5, 5);
+        expect(view.ring).toBeCloseTo(0.425, 5);
         expect(view.label).toBe("43%");
         expect(view.inputTokens).toBe(42_500);
-        expect(view.remainingTokens).toBe(57_500);
+        expect(view.remainingTokens).toBe(85_500);
         expect(view.protocolBytes).toBe(558);
         expect(view.breakdown.map((item) => item.label)).toEqual(["系统提示（含画布摘要）", "工具 schema", "会话消息（含工具结果）"]);
         expect(view.breakdown[0]?.tokens).toBe(9_000);
@@ -70,12 +71,13 @@ describe("Agent context usage events", () => {
         let state = reduceAgentContextUsage(emptyAgentContextUsage("run-1"), event("run-1", "context_pressure", {
             modelLimitConfigured: true,
             usableInputTokens: 100,
+            contextWindowTokens: 100,
             compactAtTokens: 85,
             estimatedInputTokens: 90,
             pressureRatio: 0.9,
         }));
         expect(presentAgentContextUsage(state).phase).toBe("compress");
-        expect(presentAgentContextUsage(state).ring).toBe(1);
+        expect(presentAgentContextUsage(state).ring).toBe(0.9);
         state = reduceAgentContextUsage(state, event("run-1", "context_compaction_requested", { basis: "tokens" }, 2));
         expect(presentAgentContextUsage(state).phase).toBe("compacting");
         state = reduceAgentContextUsage(state, event("run-1", "context_compacted", { mode: "fallback", resume: true }, 3));

@@ -232,6 +232,20 @@ test("load latest, save and reload stay synced when Agent history replays an unv
     expect(requests.filter((request) => request.method === "put")).toHaveLength(1);
 });
 
+test("a stale save auto-reconciles when the cloud already contains the identical local content", async () => {
+    useCanvasStore.getState().renameProject("canvas", "same content saved elsewhere");
+    beforePut = async () => {
+        const current = useCanvasStore.getState().openProject("canvas")!;
+        remote.set("canvas", { ...structuredClone(current), revision: current.revision! + 1 });
+    };
+
+    await expect(saveRemoteUserDataNow("canvas")).resolves.toBeUndefined();
+
+    expect(useCanvasStore.getState().openProject("canvas")).toMatchObject({ title: "same content saved elsewhere", revision: 2 });
+    expect(useSyncProgressStore.getState().syncingProjects.canvas).toMatchObject({ phase: "done", message: "云端内容一致，已自动校准版本" });
+    expect(await readCanvasSyncDrafts("canvas")).toHaveLength(0);
+});
+
 test("a conflict preserves drafts, stops retries and does not block another canvas", async () => {
     remote.set("canvas", { ...addNode(canvas(), "remote-video"), revision: 2 });
     useCanvasStore.getState().updateProject("canvas", { nodes: addNode(canvas(), "local-video").nodes });

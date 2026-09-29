@@ -691,7 +691,6 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             const result = submission.parentRunId ? await sendAgentMessage(submission.parentRunId, request) : await createAgentRun(request);
             accepted = true;
             if (currentScope.current === scope) {
-                setContextUsage(emptyAgentContextUsage(result.run.id));
                 setRun(result.run);
             }
             await clearCloudAgentPendingSubmission(canvasId, activeConversationId);
@@ -1248,7 +1247,7 @@ function AgentContextRing({ view }: { view: AgentContextUsageView }) {
             getPopupContainer={(trigger) => trigger.closest<HTMLElement>(".canvas-agent-panel") ?? document.body}
             content={
                 <div className="agent-context-panel" data-phase={view.phase}>
-                    <span className="agent-context-eyebrow">下一次请求</span>
+                    <span className="agent-context-eyebrow">下一次请求 · 上下文窗口占用</span>
                     <div className="agent-context-panel-head">
                         <strong>{usageHeading}</strong>
                         {view.phase !== "ok" ? <span className={`agent-context-phase is-${view.phase}`}>{phaseLabel}</span> : null}
@@ -1268,7 +1267,7 @@ function AgentContextRing({ view }: { view: AgentContextUsageView }) {
                         )}
                     </div>
                     <div className="agent-context-progress-head">
-                        <span>输入预算占用</span>
+                        <span>上下文窗口占用</span>
                         <strong>{percent}</strong>
                     </div>
                     <div className="agent-context-progress" role="progressbar" aria-label={`上下文已用 ${percent}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.ratio === undefined ? undefined : Math.round(view.ratio * 100)}>

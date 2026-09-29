@@ -26,6 +26,30 @@ import (
 	"time"
 )
 
+func transferTimeout(setting Settings) time.Duration {
+	setting = NormalizeSettings(setting)
+	return setting.Runtime.TransferTimeout
+}
+
+func accessURLTTL(setting Settings) time.Duration {
+	setting = NormalizeSettings(setting)
+	return setting.Runtime.AccessURLTTL
+}
+
+func providerAccessURLTTL(setting Settings) time.Duration {
+	setting = NormalizeSettings(setting)
+	return setting.Runtime.ProviderAccessURLTTL
+}
+
+func maxBufferedUploadSize(setting Settings) int64 {
+	setting = NormalizeSettings(setting)
+	return setting.Runtime.MaxBufferedUploadSize
+}
+
+func errorBodyLimit(setting Settings) int64 {
+	setting = NormalizeSettings(setting)
+	return setting.Runtime.ErrorBodyLimit
+}
 func PutOSSObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
 	setting = NormalizeSettings(setting)
 	if setting.Provider == tencentCOSProvider {
@@ -52,13 +76,13 @@ func PutAliyunOSSObject(setting Settings, objectKey string, mimeType string, siz
 	if size > 0 {
 		req.ContentLength = size
 	}
-	resp, err := outbound.OutboundHTTPClient(2 * time.Minute).Do(req)
+	resp, err := outbound.OutboundHTTPClient(transferTimeout(setting)).Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return "", fmt.Errorf("OSS 上传失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
@@ -106,7 +130,7 @@ func getCDNObjectRange(setting Settings, objectKey string, rangeHeader string) (
 	if setting.Delivery.CDNAuthMode == "" {
 		urlValue, err = OssCDNObjectURL(setting.CDNBaseURL, objectKey)
 	} else {
-		urlValue, err = SignCDNURL(setting, objectKey, time.Now().Add(resourceAccessURLTTL))
+		urlValue, err = SignCDNURL(setting, objectKey, time.Now().Add(accessURLTTL(setting)))
 	}
 	if err != nil {
 		return nil, err
@@ -119,19 +143,20 @@ func getCDNObjectRange(setting Settings, objectKey string, rangeHeader string) (
 		req.Header.Set("Range", rangeHeader)
 	}
 	outbound.ApplyDefaultOutboundHeaders(req)
-	resp, err := outbound.OutboundHTTPClient(2 * time.Minute).Do(req)
+	resp, err := outbound.OutboundHTTPClient(transferTimeout(setting)).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("CDN 读取失败：%w", err)
 	}
 	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return nil, fmt.Errorf("CDN 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
 
 func GetAliyunOSSObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	setting = NormalizeSettings(setting)
 	req, err := NewOSSRequest(http.MethodGet, setting, objectKey, "", nil)
 	if err != nil {
 		return nil, err
@@ -139,13 +164,13 @@ func GetAliyunOSSObjectRange(setting Settings, objectKey string, rangeHeader str
 	if rangeHeader != "" {
 		req.Header.Set("Range", rangeHeader)
 	}
-	resp, err := outbound.OutboundHTTPClient(2 * time.Minute).Do(req)
+	resp, err := outbound.OutboundHTTPClient(transferTimeout(setting)).Do(req)
 	if err != nil {
 		return nil, err
 	}
 	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return nil, fmt.Errorf("OSS 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
@@ -260,7 +285,8 @@ func signedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time
 }
 
 func PutCOSObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	client, err := NewCOSClient(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
 		return "", err
 	}
@@ -276,6 +302,7 @@ func PutCOSObject(setting Settings, objectKey string, mimeType string, size int6
 }
 
 func PutQiniuObject(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
+	setting = NormalizeSettings(setting)
 	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return "", errors.New("七牛云 Kodo 访问密钥不可用")
 	}
@@ -300,7 +327,8 @@ func PutQiniuObject(setting Settings, objectKey string, mimeType string, size in
 }
 
 func GetCOSObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
-	client, err := NewCOSClient(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +344,8 @@ func GetCOSObjectRange(setting Settings, objectKey string, rangeHeader string) (
 }
 
 func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
-	signedURL, err := SignedQiniuS3ObjectURL(setting, objectKey, time.Now().Add(resourceAccessURLTTL))
+	setting = NormalizeSettings(setting)
+	signedURL, err := SignedQiniuS3ObjectURL(setting, objectKey, time.Now().Add(accessURLTTL(setting)))
 	if err != nil {
 		return nil, err
 	}
@@ -328,13 +357,13 @@ func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string)
 		req.Header.Set("Range", rangeHeader)
 	}
 	outbound.ApplyDefaultOutboundHeaders(req)
-	resp, err := outbound.OutboundHTTPClient(2 * time.Minute).Do(req)
+	resp, err := outbound.OutboundHTTPClient(transferTimeout(setting)).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%w", err)
 	}
 	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
@@ -349,6 +378,7 @@ func SignedCOSObjectDownloadURL(setting Settings, objectKey string, expiresAt ti
 }
 
 func signedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+	setting = NormalizeSettings(setting)
 	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
 		return "", errors.New("COS 访问密钥不可用")
 	}
@@ -360,7 +390,7 @@ func signedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time,
 	if expires <= 0 {
 		return "", errors.New("COS 签名有效期必须晚于当前时间")
 	}
-	client, err := NewCOSClient(setting, 2*time.Minute)
+	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
 		return "", err
 	}
@@ -405,6 +435,7 @@ func SignedQiniuS3ObjectDownloadURL(setting Settings, objectKey string, expiresA
 }
 
 func signedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+	setting = NormalizeSettings(setting)
 	region := QiniuS3Region(setting)
 	if region == "" {
 		return "", errors.New("七牛云 Kodo S3 Region 不可用")
@@ -612,24 +643,26 @@ func EscapeObjectKey(key string) string {
 }
 
 func DeleteAliyunOSSObject(setting Settings, objectKey string) error {
+	setting = NormalizeSettings(setting)
 	req, err := NewOSSRequest(http.MethodDelete, setting, objectKey, "", nil)
 	if err != nil {
 		return err
 	}
-	resp, err := outbound.OutboundHTTPClient(2 * time.Minute).Do(req)
+	resp, err := outbound.OutboundHTTPClient(transferTimeout(setting)).Do(req)
 	if err != nil {
 		return fmt.Errorf("删除阿里云 OSS 对象失败：%w", err)
 	}
 	defer resp.Body.Close()
 	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusNotFound {
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return fmt.Errorf("删除阿里云 OSS 对象失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
 	return nil
 }
 
 func DeleteTencentCOSObject(setting Settings, objectKey string) error {
-	client, err := NewCOSClient(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
 		return err
 	}
@@ -647,6 +680,7 @@ func DeleteTencentCOSObject(setting Settings, objectKey string) error {
 }
 
 func DeleteQiniuObject(setting Settings, objectKey string) error {
+	setting = NormalizeSettings(setting)
 	if setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return errors.New("七牛云 Kodo 访问密钥不可用")
 	}

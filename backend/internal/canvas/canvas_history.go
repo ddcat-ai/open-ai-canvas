@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -169,19 +170,99 @@ func buildCanvasSnapshot(before *model.CanvasProject, after model.CanvasProject,
 
 // Row metadata is authoritative, including changes made by project association operations.
 func canvasProjectPayload(project model.CanvasProject) (json.RawMessage, error) {
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(project.PayloadJSON), &payload); err != nil {
-		return nil, err
+	metadata := []struct {
+		key   string
+		value any
+	}{
+		{key: "id", value: project.ID},
+		{key: "title", value: project.Title},
+		{key: "projectId", value: project.ProjectID},
+		{key: "revision", value: project.Revision},
+		{key: "createdAt", value: project.CreatedAt},
+		{key: "updatedAt", value: project.UpdatedAt},
 	}
-	if payload == nil {
-		return nil, kernel.BadAuthRequest("画布数据格式错误")
-	}
-	for key, value := range map[string]any{"id": project.ID, "title": project.Title, "projectId": project.ProjectID, "revision": project.Revision, "createdAt": project.CreatedAt, "updatedAt": project.UpdatedAt} {
-		encoded, err := json.Marshal(value)
+	replacements := make(map[string]json.RawMessage, len(metadata))
+	for _, item := range metadata {
+		encoded, err := json.Marshal(item.value)
 		if err != nil {
 			return nil, err
 		}
-		payload[key] = encoded
+		replacements[item.key] = encoded
 	}
-	return json.Marshal(payload)
+
+	decoder := json.NewDecoder(strings.NewReader(project.PayloadJSON))
+	opening, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	if opening != json.Delim('{') {
+		return nil, kernel.BadAuthRequest("画布数据格式错误")
+	}
+
+	result := make([]byte, 0, len(project.PayloadJSON)+128)
+	result = append(result, '{')
+	written := make(map[string]struct{}, len(replacements))
+	first := true
+	appendField := func(key string, value json.RawMessage) error {
+		if !first {
+			result = append(result, ',')
+		}
+		first = false
+		encodedKey, err := json.Marshal(key)
+		if err != nil {
+			return err
+		}
+		result = append(result, encodedKey...)
+		result = append(result, ':')
+		result = append(result, value...)
+		return nil
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, ok := token.(string)
+		if !ok {
+			return nil, kernel.BadAuthRequest("画布数据格式错误")
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		if replacement, exists := replacements[key]; exists {
+			if _, duplicate := written[key]; duplicate {
+				continue
+			}
+			value = replacement
+			written[key] = struct{}{}
+		}
+		if err := appendField(key, value); err != nil {
+			return nil, err
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	if closing != json.Delim('}') {
+		return nil, kernel.BadAuthRequest("画布数据格式错误")
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, kernel.BadAuthRequest("画布数据格式错误")
+		}
+		return nil, err
+	}
+	for _, item := range metadata {
+		if _, exists := written[item.key]; exists {
+			continue
+		}
+		if err := appendField(item.key, replacements[item.key]); err != nil {
+			return nil, err
+		}
+	}
+	result = append(result, '}')
+	return json.RawMessage(result), nil
 }

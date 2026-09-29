@@ -210,6 +210,10 @@ func (s *Service) UserCanvasProjectSummaries(userID string) ([]UserDataSummary, 
 	return s.canvasDomain().UserCanvasProjectSummaries(userID)
 }
 
+func (s *Service) UserCanvasProjectMetadata(userID string, id string) (*model.CanvasProject, error) {
+	return s.canvasDomain().UserCanvasProjectMetadata(userID, id)
+}
+
 func (s *Service) UserCanvasProject(userID string, id string) (json.RawMessage, error) {
 	return s.canvasDomain().UserCanvasProject(userID, id)
 }

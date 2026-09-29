@@ -312,16 +312,20 @@ func TestCloudAgentMediaRejectAndInvalidModelDoNotCreateTasks(t *testing.T) {
 			if scenario == "reject" {
 				decision = "reject"
 			}
-			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
-				t.Fatal(err)
-			}
 			if scenario == "stale-after-approval" {
+				// Approval now executes its prepared tool synchronously before
+				// returning; make the canvas stale before that execution boundary.
 				if err := db.Model(&model.CanvasProject{}).Where("id = ?", "agent-canvas").Update("payload_json", `{"nodes":[],"connections":[]}`).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
 				t.Fatal(err)
+			}
+			if decision == "reject" {
+				if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+					t.Fatal(err)
+				}
 			}
 			run, _ = s.repo.CloudAgent("user", run.ID)
 			state, _ = cloudAgentDecode(run)

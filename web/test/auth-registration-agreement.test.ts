@@ -60,7 +60,8 @@ describe("注册服务协议", () => {
         const wallet = readFileSync(resolve(import.meta.dir, "../src/services/api/wallet.ts"), "utf8");
         const panel = readFileSync(resolve(import.meta.dir, "../src/pages/admin/components/access-settings-panel.tsx"), "utf8");
 
-        expect(auth).toContain("agreementTitle?: string; agreementContent?: string");
+        expect(auth).toContain("agreementTitle?: string;");
+        expect(auth).toContain("agreementContent?: string;");
         expect(wallet).toContain("agreementTitle?: string");
         expect(wallet).toContain("agreementContent?: string");
         expect(panel).toContain("服务协议名称与条款");

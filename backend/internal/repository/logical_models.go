@@ -17,8 +17,8 @@ type LogicalModelGraph struct {
 	ChannelModels []model.ChannelModel
 }
 
-var ErrLogicalModelInUse = errors.New("logical model is in use")
-var ErrLogicalModelUnavailable = errors.New("logical model is unavailable")
+var ErrLogicalModelInUse = errors.New("该模型正在被使用，无法删除或停用")
+var ErrLogicalModelUnavailable = errors.New("所选模型已停用或不可用，请重新选择")
 
 func (r *Repository) LogicalModels(includeDisabled bool) ([]model.LogicalModel, error) {
 	var items []model.LogicalModel

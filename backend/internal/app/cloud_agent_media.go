@@ -854,7 +854,7 @@ func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID, 
 		}
 		meta["taskStatus"] = string(task.Status)
 		meta["status"] = "error"
-		meta["errorDetails"] = "媒体任务" + string(task.Status) + "：" + cloudAgentSafeMediaTaskError(task)
+		meta["errorDetails"] = cloudAgentSafeMediaTaskError(task)
 		if task.Status == model.TaskStatusSucceeded {
 			id, _ := taskOutputResource(task.ResultJSON, task.Type)
 			resource, e := repo.ResourceForUser(userID, id)

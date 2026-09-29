@@ -116,8 +116,9 @@ func TestCloudAgentCompactionRequestsWhenTokenLineReached(t *testing.T) {
 	if payload["basis"] != "tokens" || payload["compactAtTokens"] != float64(budget.CompactAtTokens) {
 		t.Fatalf("触发读数 = %+v", payload)
 	}
-	if ratio, ok := payload["pressureRatio"].(float64); !ok || ratio < 0.84 {
-		t.Fatalf("压力读数 = %+v", payload["pressureRatio"])
+	wantPressureRatio := float64(budget.CompactAtTokens) / float64(budget.ContextWindowTokens)
+	if ratio, ok := payload["pressureRatio"].(float64); !ok || ratio < wantPressureRatio-0.001 || ratio > wantPressureRatio+0.001 {
+		t.Fatalf("压力读数 = %+v, want approximately %.3f", payload["pressureRatio"], wantPressureRatio)
 	}
 }
 

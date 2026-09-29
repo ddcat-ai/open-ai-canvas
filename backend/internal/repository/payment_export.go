@@ -20,7 +20,7 @@ type PaymentReconciliationFilter struct {
 	ProviderID, Status, From, To string
 }
 
-var ErrPaymentReconciliationRunning = errors.New("payment reconciliation is running")
+var ErrPaymentReconciliationRunning = errors.New("正在对账，请稍后再试")
 
 func (r *Repository) paymentReconciliationItemsQuery(runID, result string) *gorm.DB {
 	query := r.db.Model(&model.PaymentReconciliationItem{}).Where("run_id = ?", strings.TrimSpace(runID))

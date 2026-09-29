@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-var ErrNotificationLimit = errors.New("notification limit reached")
-var ErrVerificationInvalid = errors.New("verification expired, changed or consumed")
-var ErrChannelConflict = errors.New("sms channel changed")
+var ErrNotificationLimit = errors.New("通知发送次数已达上限，请稍后再试")
+var ErrVerificationInvalid = errors.New("验证码已过期或已使用，请重新获取")
+var ErrChannelConflict = errors.New("短信通道配置已变化，请重新获取验证码")
 
 func (r *Repository) AttemptLegacyEmailVerification(id string) error {
 	result := r.db.Model(&model.EmailVerificationCode{}).Where("id = ? AND attempts < 5 AND used_at IS NULL AND expires_at > ?", id, time.Now()).Update("attempts", gorm.Expr("attempts + 1"))

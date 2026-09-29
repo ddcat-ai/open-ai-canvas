@@ -218,6 +218,10 @@ func (s *Service) UserCanvasProjectSummaries(userID string) ([]UserDataSummary, 
 	return result, nil
 }
 
+func (s *Service) UserCanvasProjectMetadata(userID string, id string) (*model.CanvasProject, error) {
+	return s.repo.CanvasProjectMetadataForUser(userID, id)
+}
+
 func (s *Service) UserCanvasProject(userID string, id string) (json.RawMessage, error) {
 	project, err := s.repo.CanvasProjectForUser(userID, id)
 	if err != nil {

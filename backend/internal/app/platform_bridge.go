@@ -12,6 +12,7 @@ import (
 
 type (
 	RuntimeResourcePolicy      = platform.RuntimeResourcePolicy
+	RuntimeStoragePolicy       = platform.RuntimeStoragePolicy
 	RuntimeTaskPolicy          = platform.RuntimeTaskPolicy
 	RuntimeRequestPolicy       = platform.RuntimeRequestPolicy
 	RuntimePolicySetting       = platform.RuntimePolicySetting
@@ -148,7 +149,12 @@ func (s *Service) RecordChannelResult(ctx context.Context, channelID string, fai
 }
 
 func (s *Service) Close() error {
-	if s == nil || s.coordinator == nil {
+	if s == nil {
+		return nil
+	}
+	s.closeCloudAgentPiRunners()
+	s.closeApprovedCloudAgentMediaWaiters()
+	if s.coordinator == nil {
 		return nil
 	}
 	if !s.coordinator.HasRedis() {

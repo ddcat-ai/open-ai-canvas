@@ -9,9 +9,9 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var ErrAdminResourceDeleteChanged = errors.New("admin resource delete set changed")
-var ErrAdminResourceStillReferenced = errors.New("admin resource is still directly referenced")
-var ErrAdminResourceAuditMismatch = errors.New("admin resource delete audit mismatch")
+var ErrAdminResourceDeleteChanged = errors.New("待删除的资源已变化，请刷新后重试")
+var ErrAdminResourceStillReferenced = errors.New("资源仍被引用，无法删除")
+var ErrAdminResourceAuditMismatch = errors.New("资源删除记录不一致，请刷新后重试")
 
 func (r *Repository) AdminResourcesByIDs(ids []string) ([]model.Resource, error) {
 	if len(ids) == 0 {

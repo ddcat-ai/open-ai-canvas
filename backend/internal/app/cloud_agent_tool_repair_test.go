@@ -170,8 +170,15 @@ func TestCloudAgentEmptyCanvasRepairAcrossCheckpoints(t *testing.T) {
 				if run.Status == "failed" || len(state.ToolRepairs) != 0 {
 					t.Fatal("successful correction did not resolve retry state")
 				}
-				last := state.Events[len(state.Events)-1]
-				if last.Type != "tool_completed" || last.Payload["retry"].(map[string]any)["status"] != "recovered" {
+				recovered := false
+				for _, event := range state.Events {
+					retry, _ := event.Payload["retry"].(map[string]any)
+					if event.Type == "tool_completed" && retry["status"] == "recovered" {
+						recovered = true
+						break
+					}
+				}
+				if !recovered {
 					t.Fatal("missing recovery receipt")
 				}
 				stored, _ := s.repo.CanvasProjectForUser("user", canvas.ID)

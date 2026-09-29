@@ -17,6 +17,33 @@ func agentTestRequest() CloudAgentRequest {
 	return req
 }
 
+func TestCloudAgentPiCarrierCheckpointKeepsTaskHistoryAnchor(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	s.legacyCloudAgentRootTask = false
+	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
+	if err != nil {
+		t.Fatalf("new Pi Agent run must checkpoint successfully: %v", err)
+	}
+	execution, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ActiveTaskID != "" {
+		t.Fatalf("Pi carrier must not be an active model task: %q", state.ActiveTaskID)
+	}
+	if len(state.TaskIDs) != 1 || state.TaskIDs[0] != run.ID {
+		t.Fatalf("Pi carrier lost its durable task-history anchor: %#v", state.TaskIDs)
+	}
+}
+
 func TestCloudAgentRunSurvivesTaskInputCompaction(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
@@ -334,6 +361,9 @@ func TestCloudAgentAdmissionAndContinuation(t *testing.T) {
 	if err := db.Model(&model.Task{}).Where("id = ?", run.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"可信回复"}`}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", run.ID).Update("status", "completed").Error; err != nil {
+		t.Fatal(err)
+	}
 	continued, err := s.CreateCloudAgentRun("user", next, run.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -418,6 +448,8 @@ func TestCloudAgentWorkerPersistsRealResponse(t *testing.T) {
 	defer upstream.Close()
 	s, db, _, _ := creationTestService(t)
 	s = New(s.repo, s.dataDir)
+	s.disablePiRuntime = true
+	s.legacyCloudAgentRootTask = true
 	t.Cleanup(func() { _ = s.Close() })
 	if err := db.Model(&model.ModelChannel{}).Where("id = ?", "channel").Updates(map[string]any{"base_url": upstream.URL, "api_key": "test-only"}).Error; err != nil {
 		t.Fatal(err)

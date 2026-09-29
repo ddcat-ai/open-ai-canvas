@@ -18,9 +18,8 @@ import (
 const cloudAgentContextCompactionOperation = "cloud_agent_context_compaction"
 
 const (
-	// cloudAgentMaxCompactionsPerRun 限制同一轮最多压几次：压完仍然超阈值时不能无限暂停
-	// （检查点已经只剩少量历史，再压也不会更小），用完次数就回到上游的原有判死路径。
-	cloudAgentMaxCompactionsPerRun = 4
+	// 压缩次数是异常循环护栏，不应成为正常长会话的闸门。
+	cloudAgentMaxCompactionsPerRun = 64
 	// cloudAgentContextKeepPairs 是压缩后原样保留的最近对话对数：检查点负责事实，最近两对
 	// 负责"用户最后说了什么、模型最后答了什么"的语感与指代。
 	cloudAgentContextKeepPairs = 2
@@ -48,7 +47,7 @@ type cloudAgentCompactionReading struct {
 
 // cloudAgentCompactionReadingFor 把"下一步预计输入 token"接到上游已有的预算算式上。
 //
-// 阈值不在这里另定：上游 cloudAgentContextBudgetFor 已经把压缩线算成输入预算的 85%
+// 阈值不在这里另定：上游 cloudAgentContextBudgetFor 已经把压缩线算成模型窗口的 80%
 // （CompactAtTokens），就地正文卸载用的就是它；语义压缩必须共用同一条线，否则会出现
 // "显示还没到线、后台已经开始压"。
 //
@@ -66,7 +65,7 @@ func cloudAgentCompactionReadingFor(budget cloudAgentContextBudget, projectedTok
 		BudgetSource:      budget.Source,
 	}
 	if budget.InputBudgetTokens > 0 {
-		reading.PressureRatio = math.Round(float64(projectedTokens)/float64(budget.InputBudgetTokens)*10000) / 10000
+		reading.PressureRatio = math.Round(float64(projectedTokens)/float64(budget.ContextWindowTokens)*10000) / 10000
 	}
 	if !budget.Configured || budget.Source == "" || budget.Source == "default" {
 		return reading, false

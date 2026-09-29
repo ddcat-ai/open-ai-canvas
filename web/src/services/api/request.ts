@@ -46,9 +46,10 @@ export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: tr
  * 取消请求必须继续抛出 AbortError，不能被包装成普通失败，否则页面切换会被误报为错误。
  */
 
-export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; status?: number; headers?: unknown }>) {
+export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; status?: number; headers?: unknown }>, options: { allowNotModified?: boolean } = {}) {
     try {
         const response = await promise;
+        if (response.status === 304 && options.allowNotModified) return { notModified: true } as T;
         if (response.data.code !== 0) {
             throw new ApiError(response.data.msg || "请求失败", {
                 status: response.status,
@@ -122,10 +123,13 @@ function retryAfterMilliseconds(headers: unknown) {
     return Math.max(0, retryAt - Date.now());
 }
 
-export type HttpRequestConfig = Omit<AxiosRequestConfig, "method" | "url" | "data" | "baseURL">;
+export type HttpRequestConfig = Omit<AxiosRequestConfig, "method" | "url" | "data" | "baseURL"> & {
+    allowNotModified?: boolean;
+};
 
 async function send<T>(method: string, url: string, data?: unknown, config?: HttpRequestConfig) {
-    return request<T>(apiClient.request<BackendEnvelope<T>>({ method, url, data, ...config }));
+    const { allowNotModified, ...axiosConfig } = config || {};
+    return request<T>(apiClient.request<BackendEnvelope<T>>({ method, url, data, ...axiosConfig }), { allowNotModified });
 }
 
 /**

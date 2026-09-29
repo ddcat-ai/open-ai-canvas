@@ -11,6 +11,35 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
+func (r *Repository) CloudAgentPiSession(userID, runID string) (*model.CloudAgentPiSession, error) {
+	var session model.CloudAgentPiSession
+	err := r.db.First(&session, "run_id = ? AND user_id = ?", runID, userID).Error
+	return &session, err
+}
+
+// SaveCloudAgentPiSession uses a revision predicate so a stale/recovered Pi
+// process cannot overwrite a newer native session snapshot.
+func (r *Repository) SaveCloudAgentPiSession(session *model.CloudAgentPiSession, expectedRevision int64) error {
+	if session == nil || session.RunID == "" || session.UserID == "" {
+		return fmt.Errorf("invalid Agent session identity")
+	}
+	if expectedRevision == 0 {
+		session.Revision = 1
+		return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(session).Error
+	}
+	result := r.db.Model(&model.CloudAgentPiSession{}).
+		Where("run_id = ? AND user_id = ? AND revision = ?", session.RunID, session.UserID, expectedRevision).
+		Updates(map[string]any{"session_jsonl": session.SessionJSONL, "revision": expectedRevision + 1, "updated_at": time.Now()})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	session.Revision = expectedRevision + 1
+	return nil
+}
+
 func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 	if run.ConversationID == "" {
 		run.ConversationID = run.ID
@@ -29,12 +58,18 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 	}
 	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(run).Error
 }
+
+// CloudAgent 在同一个只读事务里读取执行行和它的事件/消息行。分开读的话，并发写入
+// （运行时事件、工具结果）可能落在两次查询之间：读到旧的计数配新的行，解码时会被
+// 当成"记录不完整"而把一次正常运行判死。
 func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
-	err := r.db.First(&run, "id = ? AND user_id = ?", id, userID).Error
-	if err == nil {
-		err = r.hydrateCloudAgent(&run)
-	}
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&run, "id = ? AND user_id = ?", id, userID).Error; err != nil {
+			return err
+		}
+		return New(tx).hydrateCloudAgent(&run)
+	})
 	return &run, err
 }
 
@@ -106,10 +141,12 @@ func (r *Repository) CloudAgentEventRecordCount(userID, runID string) (int64, er
 
 func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
-	err := r.db.Where("user_id = ? AND active_task_id = ? AND status IN ?", userID, taskID, []string{"running", "queued"}).First(&run).Error
-	if err == nil {
-		err = r.hydrateCloudAgent(&run)
-	}
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ? AND active_task_id = ? AND status IN ?", userID, taskID, []string{"running", "queued"}).First(&run).Error; err != nil {
+			return err
+		}
+		return New(tx).hydrateCloudAgent(&run)
+	})
 	return &run, err
 }
 func (r *Repository) CloudAgentRoots() ([]model.Task, error) {
@@ -124,14 +161,18 @@ func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.Cl
 	if limit < 1 || limit > 50 {
 		limit = 50
 	}
-	err := r.db.Where("(status IN ? OR cleanup_pending = ?) AND id > ?", []string{"running", "queued"}, true, after).Order("id").Limit(limit).Find(&runs).Error
-	if err == nil {
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("(status IN ? OR cleanup_pending = ?) AND id > ?", []string{"running", "queued"}, true, after).Order("id").Limit(limit).Find(&runs).Error; err != nil {
+			return err
+		}
+		scoped := New(tx)
 		for i := range runs {
-			if err = r.hydrateCloudAgent(&runs[i]); err != nil {
-				break
+			if err := scoped.hydrateCloudAgent(&runs[i]); err != nil {
+				return err
 			}
 		}
-	}
+		return nil
+	})
 	return runs, err
 }
 

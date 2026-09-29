@@ -1,14 +1,33 @@
 package app
 
-import "infinite-canvas/backend/internal/storage"
+import (
+	"time"
+
+	"infinite-canvas/backend/internal/storage"
+)
 
 type ossSettingValue = storage.Settings
 type ossProviderCredentials = storage.Credentials
 type ossObjectStream = storage.ObjectStream
 
+func (s *Service) storageSettingWithRuntimePolicy(setting ossSettingValue) ossSettingValue {
+	setting = normalizeOSSSetting(setting)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return setting
+	}
+	setting.Runtime = storage.RuntimePolicy{
+		TransferTimeout:       time.Duration(policy.Storage.TransferTimeoutSeconds) * time.Second,
+		AccessURLTTL:          time.Duration(policy.Storage.AccessURLTTLSeconds) * time.Second,
+		ProviderAccessURLTTL:  time.Duration(policy.Storage.ProviderAccessURLTTLSeconds) * time.Second,
+		MaxBufferedUploadSize: policy.Storage.NonSeekableBufferMB * 1024 * 1024,
+		ErrorBodyLimit:        policy.Storage.ErrorBodyKB * 1024,
+	}
+	return normalizeOSSSetting(setting)
+}
+
 var (
 	putOSSObject                = storage.PutOSSObject
-	putAliyunOSSObject          = storage.PutAliyunOSSObject
 	getOSSObjectRange           = storage.GetOSSObjectRange
 	getAliyunOSSObjectRange     = storage.GetAliyunOSSObjectRange
 	signedOSSObjectURL          = storage.SignedOSSObjectURL

@@ -25,7 +25,7 @@ type cloudAgentContextPressure struct {
 	OverheadTokens    int    `json:"overheadTokens,omitempty"`
 	InputBudgetTokens int    `json:"inputBudgetTokens,omitempty"`
 	BudgetSource      string `json:"budgetSource,omitempty"`
-	// CompactAtTokens 是上游既有的"可重读正文就地裁剪"触发线（输入预算的 85%，见
+	// CompactAtTokens 是统一的上下文压缩线（模型窗口的 80%，且不超过输入准入预算，见
 	// compactCloudAgentContext）。它只是给读数一个参照刻度，不是本读数触发的动作。
 	CompactAtTokens int `json:"compactAtTokens,omitempty"`
 }
@@ -117,8 +117,8 @@ func cloudAgentContextPressurePayload(pressure cloudAgentContextPressure, state 
 		payload["normalizedInputTokens"] = state.TokenAnchor.InputTokens
 	}
 	payload["projectedNextInputTokens"] = projectedTokens
-	if pressure.UsableInputTokens > 0 && tokenSource == "provider" {
-		payload["projectedPressureRatio"] = math.Min(9.99, float64(projectedTokens)/float64(pressure.UsableInputTokens))
+	if pressure.ContextWindowTokens > 0 && tokenSource == "provider" {
+		payload["projectedPressureRatio"] = math.Min(9.99, float64(projectedTokens)/float64(pressure.ContextWindowTokens))
 	}
 	payload["breakdown"] = cloudAgentContextBreakdownPayload(state, actual...)
 	return payload
@@ -249,8 +249,8 @@ func (s *Service) cloudAgentContextPressure(canonical canonicalAgentRequest, pro
 	pressure.BudgetSource = budget.Source
 	// 展示口径与请求准入判据共用同一份输入预算：否则会出现"界面 79%、后台按 82% 拒绝"。
 	pressure.UsableInputTokens = budget.InputBudgetTokens
-	if pressure.UsableInputTokens > 0 {
-		pressure.PressureRatio = math.Min(9.99, float64(pressure.EstimatedInputTokens)/float64(pressure.UsableInputTokens))
+	if pressure.ContextWindowTokens > 0 {
+		pressure.PressureRatio = math.Min(9.99, float64(pressure.EstimatedInputTokens)/float64(pressure.ContextWindowTokens))
 	}
 	return pressure
 }

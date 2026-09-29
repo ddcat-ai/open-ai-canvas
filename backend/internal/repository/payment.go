@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	ErrPaymentOrderStateConflict = errors.New("payment order state conflict")
-	ErrPaymentEvidenceMismatch   = errors.New("payment evidence does not match order")
-	ErrPaymentTradeNoConflict    = errors.New("payment provider trade number is already used")
-	ErrPaymentCreditOverflow     = errors.New("payment credit balance would overflow")
+	ErrPaymentOrderStateConflict = errors.New("订单状态已变化，请刷新后重试")
+	ErrPaymentEvidenceMismatch   = errors.New("支付凭证与订单不一致")
+	ErrPaymentTradeNoConflict    = errors.New("该支付流水号已被使用")
+	ErrPaymentCreditOverflow     = errors.New("积分余额超出上限，无法入账")
 )
 
 // Credit balances are serialized to JavaScript clients as JSON numbers.

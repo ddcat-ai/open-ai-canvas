@@ -281,7 +281,7 @@ func (s *Service) storeTaskMediaObject(resource *model.Resource, _ string, body 
 	if err != nil {
 		return "", err
 	}
-	return putOSSObject(setting, resource.ObjectKey, resource.MimeType, resource.Size, body)
+	return putOSSObject(s.storageSettingWithRuntimePolicy(setting), resource.ObjectKey, resource.MimeType, resource.Size, body)
 }
 
 // Cleanup is best effort only after durable completion. Expired leftovers are

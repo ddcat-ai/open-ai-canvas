@@ -606,7 +606,7 @@ func (p *streamingAgentParser) consumeChatCompletionEvent(payload map[string]int
 		choice, _ := value.(map[string]interface{})
 		delta, _ := choice["delta"].(map[string]interface{})
 		p.appendText(streamContentText(delta["content"]))
-		p.appendReasoning(firstNonEmptyString(stringField(delta, "reasoning_content"), stringField(delta, "reasoning"), stringField(delta, "reasoning_text")))
+		p.appendReasoning(firstRawString(stringField(delta, "reasoning_content"), stringField(delta, "reasoning"), stringField(delta, "reasoning_text")))
 		for fallbackIndex, toolValue := range interfaceSlice(delta["tool_calls"]) {
 			tool, _ := toolValue.(map[string]interface{})
 			index := intField(tool, "index", fallbackIndex)
@@ -633,7 +633,7 @@ func (p *streamingAgentParser) consumeClaudeEvent(payload map[string]interface{}
 		case "text":
 			p.appendText(stringField(block, "text"))
 		case "thinking":
-			p.appendReasoning(firstNonEmptyString(stringField(block, "thinking"), stringField(block, "text")))
+			p.appendReasoning(firstRawString(stringField(block, "thinking"), stringField(block, "text")))
 		case "tool_use":
 			arguments := ""
 			if input := block["input"]; input != nil {
@@ -650,7 +650,7 @@ func (p *streamingAgentParser) consumeClaudeEvent(payload map[string]interface{}
 			p.appendText(stringField(delta, "text"))
 		}
 		if stringField(delta, "type") == "thinking_delta" {
-			p.appendReasoning(firstNonEmptyString(stringField(delta, "thinking"), stringField(delta, "text")))
+			p.appendReasoning(firstRawString(stringField(delta, "thinking"), stringField(delta, "text")))
 		}
 		if stringField(delta, "type") == "input_json_delta" {
 			p.toolCall(index).arguments += stringField(delta, "partial_json")
@@ -1403,4 +1403,15 @@ func extractChatCompletionText(payload map[string]interface{}) string {
 		}
 	}
 	return strings.Join(chunks, "")
+}
+
+// firstRawString 返回第一个非空字符串，并原样保留首尾空白。流式增量逐 token 到达，
+// 空格常常就在 token 开头（" user"）；用会 TrimSpace 的 firstNonEmptyString 会把词粘在一起。
+func firstRawString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

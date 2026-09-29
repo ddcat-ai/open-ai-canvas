@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -535,12 +537,25 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		metadata, err := svc.UserCanvasProjectMetadata(user.ID, c.Param("id"))
+		if err != nil {
+			fail(c, http.StatusNotFound, err)
+			return
+		}
+		etag := canvasProjectResponseETag(metadata)
+		c.Header("ETag", etag)
+		c.Header("Cache-Control", "private, no-cache")
+		addVaryHeader(c, "Accept-Encoding")
+		if ifNoneMatch(c.GetHeader("If-None-Match"), etag) {
+			c.Status(http.StatusNotModified)
+			return
+		}
 		project, err := svc.UserCanvasProject(user.ID, c.Param("id"))
 		if err != nil {
 			fail(c, http.StatusNotFound, err)
 			return
 		}
-		ok(c, gin.H{"project": project})
+		okCanvasProject(c, project)
 	})
 	r.GET("/canvas-projects/:id/history", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -673,6 +688,75 @@ func hasUserAssetPageFilters(c *gin.Context) bool {
 	return false
 }
 
+func okCanvasProject(c *gin.Context, project json.RawMessage) {
+	payload, err := json.Marshal(gin.H{
+		"code": service.CodeOK,
+		"data": gin.H{"project": project},
+		"msg":  "ok",
+	})
+	if err != nil {
+		failInternal(c, http.StatusInternalServerError, err)
+		return
+	}
+	if len(payload) >= 1024 && acceptsGzip(c.GetHeader("Accept-Encoding")) {
+		var compressed bytes.Buffer
+		writer, err := gzip.NewWriterLevel(&compressed, gzip.BestSpeed)
+		if err != nil {
+			failInternal(c, http.StatusInternalServerError, err)
+			return
+		}
+		_, writeErr := writer.Write(payload)
+		closeErr := writer.Close()
+		if writeErr != nil || closeErr != nil {
+			failInternal(c, http.StatusInternalServerError, errors.Join(writeErr, closeErr))
+			return
+		}
+		c.Header("Content-Encoding", "gzip")
+		c.Header("Content-Length", strconv.Itoa(compressed.Len()))
+		c.Data(http.StatusOK, "application/json; charset=utf-8", compressed.Bytes())
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
+}
+
+func acceptsGzip(header string) bool {
+	wildcardAccepted := false
+	for _, item := range strings.Split(header, ",") {
+		parts := strings.Split(item, ";")
+		encoding := strings.TrimSpace(strings.ToLower(parts[0]))
+		accepted := true
+		for _, parameter := range parts[1:] {
+			name, value, found := strings.Cut(strings.TrimSpace(parameter), "=")
+			if found && strings.EqualFold(strings.TrimSpace(name), "q") {
+				quality, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+				accepted = err == nil && quality > 0
+			}
+		}
+		if encoding == "gzip" {
+			return accepted
+		}
+		if encoding == "*" {
+			wildcardAccepted = accepted
+		}
+	}
+	return wildcardAccepted
+}
+
+func addVaryHeader(c *gin.Context, value string) {
+	for _, existing := range c.Writer.Header().Values("Vary") {
+		for _, token := range strings.Split(existing, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), value) {
+				return
+			}
+		}
+	}
+	c.Header("Vary", strings.Join(append(c.Writer.Header().Values("Vary"), value), ", "))
+}
+
+func canvasProjectResponseETag(project *model.CanvasProject) string {
+	return `W/` + strconv.Quote(fmt.Sprintf("canvas-%d", project.Revision))
+}
+
 func resourceResponseETag(resource *model.Resource) string {
 	value := strings.Trim(strings.TrimSpace(resource.ETag), `"`)
 	if value == "" {
@@ -682,8 +766,16 @@ func resourceResponseETag(resource *model.Resource) string {
 }
 
 func ifNoneMatch(header string, etag string) bool {
+	normalize := func(value string) string {
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && strings.EqualFold(value[:2], "W/") {
+			return strings.TrimSpace(value[2:])
+		}
+		return value
+	}
+	etag = normalize(etag)
 	for _, candidate := range strings.Split(header, ",") {
-		candidate = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(candidate), "W/"))
+		candidate = normalize(candidate)
 		if candidate == "*" || candidate == etag {
 			return true
 		}

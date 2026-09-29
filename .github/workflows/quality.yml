@@ -39,6 +39,14 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+          cache-dependency-path: backend/agent-runtime/pi/package-lock.json
+      - name: Install Pi Agent runtime dependencies
+        working-directory: backend/agent-runtime/pi
+        run: npm ci --omit=dev --ignore-scripts
       - name: Install redis-server for integration tests
         # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
         run: |
@@ -51,7 +59,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+          # The app package takes roughly nine minutes on a local full run;
+          # leave margin for slower runners and dependency-backed integration tests.
+          go test -json -timeout=20m ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
       - name: Ensure dependency-backed tests were not skipped
         shell: bash
         run: |

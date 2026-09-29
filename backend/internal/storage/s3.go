@@ -76,7 +76,8 @@ func NewS3Client(setting Settings, timeout time.Duration) (*awss3.S3, error) {
 }
 
 func PutS3Object(setting Settings, objectKey string, mimeType string, size int64, body io.Reader) (string, error) {
-	client, err := NewS3Client(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
 		return "", err
 	}
@@ -84,9 +85,9 @@ func PutS3Object(setting Settings, objectKey string, mimeType string, size int64
 	if reader, ok := body.(io.ReadSeeker); ok {
 		seekable = reader
 	} else {
-		limit := size + 1
-		if limit <= 0 {
-			limit = 64 << 20
+		limit := maxBufferedUploadSize(setting) + 1
+		if size >= 0 && size < limit {
+			limit = size + 1
 		}
 		data, readErr := io.ReadAll(io.LimitReader(body, limit))
 		if readErr != nil {
@@ -112,7 +113,8 @@ func PutS3Object(setting Settings, objectKey string, mimeType string, size int64
 }
 
 func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
-	client, err := NewS3Client(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +145,8 @@ func SignedS3ObjectDownloadURL(setting Settings, objectKey string, expiresAt tim
 }
 
 func signedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
-	client, err := NewS3Client(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
 		return "", err
 	}
@@ -164,7 +167,8 @@ func signedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time, 
 }
 
 func DeleteS3Object(setting Settings, objectKey string) error {
-	client, err := NewS3Client(setting, 2*time.Minute)
+	setting = NormalizeSettings(setting)
+	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
 		return err
 	}

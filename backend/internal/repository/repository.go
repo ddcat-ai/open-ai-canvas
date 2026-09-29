@@ -17,27 +17,27 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var ErrDailyUploadLimitExceeded = errors.New("daily upload limit exceeded")
+var ErrDailyUploadLimitExceeded = errors.New("今日上传额度已用完，请明天再试")
 
-var ErrTaskProviderRecoveryConflict = errors.New("task provider recovery is already running")
+var ErrTaskProviderRecoveryConflict = errors.New("任务正在恢复中，请稍后查看")
 
-var ErrTaskProviderCancellationConflict = errors.New("task provider cancellation is already claimed")
+var ErrTaskProviderCancellationConflict = errors.New("任务正在取消中，请稍后查看")
 
-var ErrTaskStateConflict = errors.New("task state changed concurrently")
+var ErrTaskStateConflict = errors.New("任务状态已变化，请刷新后重试")
 
-var ErrTextReplayQuotaExceeded = errors.New("text replay quota exceeded")
+var ErrTextReplayQuotaExceeded = errors.New("文本回放额度已用完")
 
-var ErrTextReplayClosed = errors.New("text replay task is closed")
+var ErrTextReplayClosed = errors.New("该文本任务已结束")
 
-var ErrEmailVerificationCodeInvalid = errors.New("email verification code is no longer valid")
+var ErrEmailVerificationCodeInvalid = errors.New("邮箱验证码已失效，请重新获取")
 
-var ErrProjectAssetFolderNotEmpty = errors.New("project asset folder is not empty")
+var ErrProjectAssetFolderNotEmpty = errors.New("资产文件夹不为空，无法删除")
 
-var ErrProjectHasActiveTasks = errors.New("project has active tasks")
+var ErrProjectHasActiveTasks = errors.New("项目中还有进行中的任务，请等待完成后再操作")
 
-var ErrProjectUnitShotsChanged = errors.New("project unit shots changed")
+var ErrProjectUnitShotsChanged = errors.New("镜头已被修改，请刷新后重试")
 
-var ErrCanvasRevisionConflict = errors.New("canvas revision changed")
+var ErrCanvasRevisionConflict = errors.New("画布已被更新，请刷新后重试")
 
 type Repository struct {
 	db *gorm.DB
@@ -282,7 +282,7 @@ func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificat
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return errors.New("email verification code is no longer valid")
+			return errors.New("邮箱验证码已失效，请重新获取")
 		}
 		return tx.Create(user).Error
 	})

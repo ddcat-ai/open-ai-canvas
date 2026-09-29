@@ -28,6 +28,31 @@ var cloudAgentStructuredProjectors = map[string]cloudAgentStructuredProjector{
 	},
 }
 
+// cloudAgentNodeHash 是单个节点内容的版本号。分镜/批量表的读写只作用在一个节点上，
+// 用它做并发校验：用户删改其它节点不会让 Agent 对这个节点的修改失效；
+// 这个节点本身被改过（或被删掉）时才拒绝写入。
+func cloudAgentNodeHash(doc map[string]any, nodeID string) string {
+	for _, node := range creationMaps(doc["nodes"]) {
+		if stringValue(node["id"]) == nodeID {
+			return creationHash(node)
+		}
+	}
+	return ""
+}
+
+// cloudAgentNodeSnapshotMatches 接受两种版本号：旧的整画布哈希（画布完全未变）或
+// 目标节点哈希（只有目标节点未变）。前者兼容已经发出、带整画布哈希的调用。
+func cloudAgentNodeSnapshotMatches(doc map[string]any, nodeID, snapshotHash string) bool {
+	if snapshotHash == "" {
+		return false
+	}
+	if snapshotHash == cloudAgentCanvasHash(doc) {
+		return true
+	}
+	node := cloudAgentNodeHash(doc, nodeID)
+	return node != "" && node == snapshotHash
+}
+
 // Viewport autosaves must not invalidate approved content; node edits still do.
 func cloudAgentCanvasHash(doc map[string]any) string {
 	content := make(map[string]any, len(doc))

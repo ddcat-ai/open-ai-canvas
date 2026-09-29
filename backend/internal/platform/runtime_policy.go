@@ -15,13 +15,15 @@ import (
 const runtimePolicySettingKey = "runtime_policy"
 
 const (
-	maxRuntimeUploadMB       int64 = 999
-	maxRuntimeStorageGB      int64 = 999
-	maxRuntimeDataMB         int64 = 999_999
-	maxRuntimeCount          int64 = 999_999_999
-	maxRuntimeRate                 = 999_999
-	maxRuntimeConcurrency          = 999
-	maxRuntimeTimeoutMinutes       = 9_999
+	maxRuntimeUploadMB        int64 = 999
+	maxRuntimeStorageGB       int64 = 999
+	maxRuntimeDataMB          int64 = 999_999
+	maxRuntimeCount           int64 = 999_999_999
+	maxRuntimeRate                  = 999_999
+	maxRuntimeConcurrency           = 999
+	maxRuntimeTimeoutMinutes        = 9_999
+	defaultWorkerConcurrency        = 8
+	defaultChannelConcurrency       = 8
 )
 
 // 画布 Agent 单步的输出上限与执行时限。上限是"每次模型调用"的边界（思考 + 正文 + 工具参数），
@@ -65,6 +67,14 @@ type RuntimeResourcePolicy struct {
 	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
 }
 
+type RuntimeStoragePolicy struct {
+	TransferTimeoutSeconds      int   `json:"transferTimeoutSeconds"`
+	AccessURLTTLSeconds         int   `json:"accessURLTTLSeconds"`
+	ProviderAccessURLTTLSeconds int   `json:"providerAccessURLTTLSeconds"`
+	NonSeekableBufferMB         int64 `json:"nonSeekableBufferMB"`
+	ErrorBodyKB                 int64 `json:"errorBodyKB"`
+}
+
 type RuntimeTaskPolicy struct {
 	WorkerConcurrency        int `json:"workerConcurrency"`
 	ChannelConcurrency       int `json:"channelConcurrency"`
@@ -106,6 +116,7 @@ type RuntimeRequestPolicy struct {
 
 type RuntimePolicySetting struct {
 	Resource RuntimeResourcePolicy `json:"resource"`
+	Storage  RuntimeStoragePolicy  `json:"storage"`
 	Task     RuntimeTaskPolicy     `json:"task"`
 	Request  RuntimeRequestPolicy  `json:"request"`
 }
@@ -143,8 +154,15 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			APICallLogCount:         100_000,
 			RecycleBinRetentionDays: 30,
 		},
+		Storage: RuntimeStoragePolicy{
+			TransferTimeoutSeconds:      120,
+			AccessURLTTLSeconds:         300,
+			ProviderAccessURLTTLSeconds: 14_400,
+			NonSeekableBufferMB:         64,
+			ErrorBodyKB:                 1,
+		},
 		Task: RuntimeTaskPolicy{
-			WorkerConcurrency:        effectiveChannelConcurrencyLimit(envInt("CANVAS_WORKER_CONCURRENCY", TaskWorkerConcurrency)),
+			WorkerConcurrency:        defaultWorkerConcurrencyLimit(),
 			ChannelConcurrency:       defaultChannelConcurrencyLimit(),
 			ActiveTaskLimit:          5,
 			ImageTimeoutMinutes:      8,
@@ -379,6 +397,22 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	}
 	if resource.RecycleBinRetentionDays < 0 || resource.RecycleBinRetentionDays > 365 {
 		return kernel.BadAuthRequest("回收站保留天数必须是 0-365 的整数 (0 表示不自动清理)")
+	}
+	storage := value.Storage
+	if storage.TransferTimeoutSeconds < 10 || storage.TransferTimeoutSeconds > 3_600 {
+		return kernel.BadAuthRequest("对象存储传输超时必须是 10-3600 秒的整数")
+	}
+	if storage.AccessURLTTLSeconds < 60 || storage.AccessURLTTLSeconds > 86_400 {
+		return kernel.BadAuthRequest("对象存储访问地址有效期必须是 60-86400 秒的整数")
+	}
+	if storage.ProviderAccessURLTTLSeconds < 300 || storage.ProviderAccessURLTTLSeconds > 86_400 {
+		return kernel.BadAuthRequest("模型输入资源地址有效期必须是 300-86400 秒的整数")
+	}
+	if storage.NonSeekableBufferMB < 1 || storage.NonSeekableBufferMB > maxRuntimeUploadMB {
+		return kernel.BadAuthRequest(fmt.Sprintf("对象存储非可寻址上传缓冲必须是 1-%d MB 的整数", maxRuntimeUploadMB))
+	}
+	if storage.ErrorBodyKB < 1 || storage.ErrorBodyKB > 1024 {
+		return kernel.BadAuthRequest("对象存储错误响应保留必须是 1-1024 KB 的整数")
 	}
 	task := value.Task
 	for label, item := range map[string]int{

@@ -9,8 +9,8 @@ import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatTile, AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 
-type PolicyGroup = "resource" | "task" | "request";
-type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "task" | "request">;
+type PolicyGroup = "resource" | "storage" | "task" | "request";
+type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "storage" | "task" | "request">;
 type PolicyField = { group: PolicyGroup; name: string; label: string; extra: string; unit: string; min?: number; max: number };
 type PolicySectionDefinition = {
     id: string;
@@ -36,6 +36,13 @@ const resourceFields: PolicyField[] = [
     { group: "resource", name: "recycleBinRetentionDays", label: "回收站自动清理时间", extra: "素材移入回收站后自动彻底删除的天数，0 表示不自动清理。", unit: "天", min: 0, max: 365 },
 ];
 
+const storageFields: PolicyField[] = [
+    { group: "storage", name: "transferTimeoutSeconds", label: "对象存储传输超时", extra: "对象存储上传、下载、删除与连接测试的最长等待时间。", unit: "秒", min: 10, max: 3_600 },
+    { group: "storage", name: "accessURLTTLSeconds", label: "访问地址有效期", extra: "浏览器访问对象资源时使用的签名地址有效期。", unit: "秒", min: 60, max: 86_400 },
+    { group: "storage", name: "providerAccessURLTTLSeconds", label: "厂商访问地址有效期", extra: "模型或其他外部厂商读取对象资源时使用的地址有效期。", unit: "秒", min: 300, max: 86_400 },
+    { group: "storage", name: "nonSeekableBufferMB", label: "非可寻址上传缓冲", extra: "S3 兼容存储接收不可重复读取请求体时的最大内存缓冲。", unit: "MB", max: 999 },
+    { group: "storage", name: "errorBodyKB", label: "错误响应保留", extra: "对象存储错误响应中最多保留的诊断内容。", unit: "KB", max: 1_024 },
+];
 const concurrencyFields: PolicyField[] = [
     { group: "task", name: "workerConcurrency", label: "Worker 并发", extra: "集群同时执行的后台任务数。", unit: "个", max: 999 },
     { group: "task", name: "channelConcurrency", label: "全局渠道并发", extra: "渠道选择跟随系统时采用的并发上限。", unit: "个", max: 999 },
@@ -99,6 +106,15 @@ const relayFields: PolicyField[] = [
 
 const policySections: PolicySectionDefinition[] = [
     { id: "policy-resource", icon: <Database className="size-4" aria-hidden="true" />, title: "资源与账号配额", shortTitle: "资源配额", description: "上传、文件容量、结构化数据和历史记录上限。", fields: resourceFields },
+    {
+        id: "policy-storage",
+        icon: <Database className="size-4" aria-hidden="true" />,
+        title: "对象存储运行时",
+        shortTitle: "对象存储",
+        description: "对象存储传输、签名地址和上传缓冲策略。",
+        fields: storageFields,
+        status: <AdminStatusBadge label="保存后热更新" tone="info" />,
+    },
     {
         id: "policy-concurrency",
         icon: <Gauge className="size-4" aria-hidden="true" />,
@@ -526,7 +542,7 @@ function PolicySection({ icon, title, description, fields, status }: PolicySecti
 }
 
 function toPolicyDraft(value: RuntimePolicyDraft): RuntimePolicyDraft {
-    return { resource: { ...value.resource }, task: { ...value.task }, request: { ...value.request } };
+    return { resource: { ...value.resource }, storage: { ...value.storage }, task: { ...value.task }, request: { ...value.request } };
 }
 
 function readPolicyValue(value: RuntimePolicyDraft, field: PolicyField) {

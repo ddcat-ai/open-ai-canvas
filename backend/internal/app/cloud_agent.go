@@ -371,7 +371,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if state.Fingerprint == "" || state.Fingerprint != fingerprint {
 			return nil, kernel.NewAppError(409, "幂等键已用于不同请求，请使用新的幂等键")
 		}
-		return s.CloudAgentRun(userID, existing.ID)
+		run, runErr := s.CloudAgentRun(userID, existing.ID)
+		if runErr == nil && !cloudAgentRunTerminal(run.Status) {
+			s.startCloudAgentPi(userID, existing.ID)
+		}
+		return run, runErr
 	} else {
 		var appErr *AppError
 		if !errors.As(lookupErr, &appErr) || appErr.Status != 404 {
@@ -391,13 +395,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if parent.ProjectID != req.CanvasID {
 			return nil, kernel.Forbidden("不能跨画布追加 Agent 消息")
 		}
-		if parent.Status == model.TaskStatusQueued || parent.Status == model.TaskStatusRunning {
-			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
-		}
 		superseded := s.cloudAgentParentCanBeSuperseded(userID, parentID)
-		if err := s.advanceCloudAgentByID(userID, parentID); err != nil {
-			return nil, err
-		}
 		// 续轮收束要读上一轮**全部**事件（运行详情默认只返回尾部一窗）：长会话一旦被截断，
 		// 新轮就看不到上一轮改过哪些节点、提交过哪些任务，表现为"忘了自己做过什么"。
 		parentRun, err := s.CloudAgentRun(userID, parentID, CloudAgentRunViewOptions{EventLimit: cloudAgentContinuationEventLimit})
@@ -412,6 +410,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		parentExecution, err := s.repo.CloudAgent(userID, parentID)
 		if err != nil {
 			return nil, err
+		}
+		if !cloudAgentRunTerminal(parentExecution.Status) || parentExecution.CleanupPending {
+			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
 		}
 		parentState, err := cloudAgentDecode(parentExecution)
 		if err != nil {
@@ -502,8 +503,14 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
 		"agentRequests": map[string]any{"canonical": canonical},
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
+	input["piSessionJSONL"] = ""
+	if parentID != "" {
+		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
+			input["piSessionJSONL"] = session.SessionJSONL
+		}
+	}
 	task, err := s.CreateTask(userID, CreateTaskRequest{ProjectID: req.CanvasID, Type: "canvas_text", Operation: cloudAgentOperation, Prompt: req.Prompt, Model: req.Model, LogicalModelID: req.LogicalModelID, Input: input,
-		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale)))}})
+		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale))), NonBillable: true}})
 	if err != nil {
 		// A concurrent identical request may have won the transaction. Never
 		// replace its result or reserve credits a second time.
@@ -511,11 +518,20 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			if stored.Fingerprint == "" || stored.Fingerprint != fingerprint {
 				return nil, kernel.NewAppError(409, "幂等键已用于不同请求")
 			}
-			return s.CloudAgentRun(userID, existing.ID)
+			run, runErr := s.CloudAgentRun(userID, existing.ID)
+			if runErr == nil && !cloudAgentRunTerminal(run.Status) {
+				s.startCloudAgentPi(userID, existing.ID)
+			}
+			return run, runErr
 		}
 		return nil, err
 	}
-	return s.CloudAgentRun(userID, task.ID)
+	run, err := s.CloudAgentRun(userID, task.ID)
+	if err != nil {
+		return nil, err
+	}
+	s.startCloudAgentPi(userID, task.ID)
+	return run, nil
 }
 
 // 旧运行记录没有单独保存历史；只从模型请求中当前用户消息之前的严格交替前缀恢复。

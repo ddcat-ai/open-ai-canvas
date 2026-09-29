@@ -27,11 +27,11 @@ export type AgentContextBreakdownItem = {
 
 export type AgentContextUsageView = {
     phase: AgentContextPhase;
-    /** Share of the input budget, 0–1 when the model window is known. */
+    /** Share of the model context window, 0–1 when the window is known. */
     ratio?: number;
-    /** Where semantic compaction starts, as a share of the same input budget. */
+    /** Compaction threshold as a share of the model context window. */
     compactRatio?: number;
-    /** Ring fill. 1 means "at or past the compaction line", not "window is full". */
+    /** Ring fill against the full context window. */
     ring: number;
     label: string;
     detail: string;
@@ -74,8 +74,8 @@ export function finiteContextNumber(value: unknown): number | undefined {
 /** Returns a ratio only when the backend has a trustworthy configured model budget. */
 export function contextPressureRatio(reading: Record<string, unknown> | null): number | undefined {
     if (!reading || reading.modelLimitConfigured !== true) return undefined;
-    const usable = finiteContextNumber(reading.usableInputTokens);
-    if (!usable || usable <= 0) return undefined;
+    const contextWindow = finiteContextNumber(reading.contextWindowTokens);
+    if (!contextWindow || contextWindow <= 0) return undefined;
     const ratio = reading.tokenSource === "provider"
         ? finiteContextNumber(reading.projectedPressureRatio)
         : finiteContextNumber(reading.pressureRatio);
@@ -128,15 +128,14 @@ function formatContextTokens(tokens: number | undefined): string {
 
 /**
  * One view of the compaction mechanism.
- * The ring fills against compactAtTokens (85% of the input budget): full means
- * the next model call is about to pause and compact, not that the window is 100% used.
+ * All visual scales use the model context window; the marker shows the shared 80% compaction line.
  */
 export function presentAgentContextUsage(usage: AgentContextUsage): AgentContextUsageView {
     const reading = usage.reading;
     const inputTokens = contextInputTokens(reading);
-    const usableTokens = finiteContextNumber(reading?.usableInputTokens);
-    const compactAtTokens = finiteContextNumber(reading?.compactAtTokens);
     const contextWindowTokens = finiteContextNumber(reading?.contextWindowTokens);
+    const usableTokens = contextWindowTokens;
+    const compactAtTokens = finiteContextNumber(reading?.compactAtTokens);
     const ratio = contextPressureRatio(reading);
     const compactRatio = usableTokens && compactAtTokens ? Math.min(1, compactAtTokens / usableTokens) : undefined;
     const tokenSource = reading?.tokenSource === "provider" ? "provider" : reading ? "estimate" : undefined;
@@ -168,21 +167,21 @@ export function presentAgentContextUsage(usage: AgentContextUsage): AgentContext
     }
     if (!reading) return base;
     if (usage.readingStale) {
-        return { ...base, phase: "stale", ring: ratio === undefined ? 0 : Math.min(1, ratio / (compactRatio || 0.85)), label: "刚压缩", detail: "上一份读数是压缩前的；下一次模型调用会给出压缩后的占用。" };
+        return { ...base, phase: "stale", ring: ratio === undefined ? 0 : Math.min(1, ratio), label: "刚压缩", detail: "上一份读数是压缩前的；下一次模型调用会给出压缩后的占用。" };
     }
     if (ratio === undefined || usableTokens === undefined || usableTokens <= 0) {
         const measured = inputTokens === undefined ? "窗口未知" : `约 ${formatContextTokens(inputTokens)} Token`;
         return { ...base, phase: "unknown", label: measured, detail: "这个模型没有配置可确认的上下文窗口，不能给出占用百分比；对话过长时仍会按条数和体积压缩。" };
     }
-    const line = compactRatio && compactRatio > 0 ? compactRatio : 0.85;
-    const ring = Math.max(0, Math.min(1, ratio / line));
+    const line = compactRatio && compactRatio > 0 ? compactRatio : 0.8;
+    const ring = Math.max(0, Math.min(1, ratio));
     const percent = Math.round(ratio * 100);
     const source = estimate ? "本地估算" : "模型实测校准";
     if (ratio >= line) {
-        return { ...base, phase: "compress", ring: 1, label: `${percent}%`, detail: `已到压缩线（输入预算的 ${Math.round(line * 100)}%）。下一次调用前会暂停，把历史收成检查点后再继续。当前 ${formatContextTokens(inputTokens)} / ${formatContextTokens(usableTokens)}（${source}）。` };
+        return { ...base, phase: "compress", ring, label: `${percent}%`, detail: `已到压缩线（模型窗口的 ${Math.round(line * 100)}%）。下一次调用前会暂停，把历史收成检查点后再继续。当前 ${formatContextTokens(inputTokens)} / ${formatContextTokens(usableTokens)}（${source}）。` };
     }
     if (ring >= 0.72) {
         return { ...base, phase: "watch", ring, label: `${percent}%`, detail: `接近压缩。当前 ${formatContextTokens(inputTokens)} / ${formatContextTokens(usableTokens)}（${source}），到 ${formatContextTokens(compactAtTokens)} 时开始压缩。` };
     }
-    return { ...base, phase: "ok", ring, label: `${percent}%`, detail: `当前 ${formatContextTokens(inputTokens)} / ${formatContextTokens(usableTokens)}（${source}）。满格表示到达压缩线，不是窗口已经 100% 用完。` };
+    return { ...base, phase: "ok", ring, label: `${percent}%`, detail: `当前 ${formatContextTokens(inputTokens)} / ${formatContextTokens(usableTokens)}（${source}）。标记线为自动压缩阈值。` };
 }

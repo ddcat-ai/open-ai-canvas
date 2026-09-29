@@ -53,25 +53,6 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s.startBillingReviewAudit(ctx)
 	s.startAgentMemoryCompactScheduler()
 	s.runWorkerLoop(func(ctx context.Context) {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			if !s.IsDraining() {
-				s.advanceCloudAgents()
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-s.agentSchedulerWake:
-				continue
-			case <-ticker.C:
-			}
-		}
-	})
-	s.runWorkerLoop(func(ctx context.Context) {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
 			if ctx.Err() != nil || s.IsDraining() {
@@ -149,9 +130,6 @@ func (w *taskWorkerCoordinator) processNextTask() error {
 
 func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot *platform.SlotLease) error {
 	s := w.service
-	if task != nil && task.Operation == cloudAgentStepOperation {
-		defer s.wakeCloudAgentScheduler()
-	}
 	terminal := s.terminalCoordinator()
 	policyCtx, cancelPolicy := context.WithTimeout(context.Background(), 3*time.Second)
 	reader := &Service{repo: s.repo.WithContext(policyCtx)}

@@ -17,14 +17,14 @@ import (
 )
 
 var (
-	ErrInsufficientCredits     = errors.New("insufficient credits")
-	ErrRedeemCodeInvalid       = errors.New("redeem code invalid")
-	ErrActiveTaskLimit         = errors.New("active task limit reached")
-	ErrTaskNotRetryable        = errors.New("task is not retryable")
-	ErrBillingStateConflict    = errors.New("billing state conflict")
-	ErrBillingUsageUnavailable = errors.New("billing usage unavailable")
-	ErrBillingChargeLimit      = errors.New("billing amount exceeds authorized charge limit")
-	ErrChannelModelInUse       = errors.New("channel model is in use")
+	ErrInsufficientCredits     = errors.New("积分不足，请先充值")
+	ErrRedeemCodeInvalid       = errors.New("兑换码无效或已使用")
+	ErrActiveTaskLimit         = errors.New("同时进行的任务数已达上限，请等待已有任务完成")
+	ErrTaskNotRetryable        = errors.New("该任务当前状态不支持重试")
+	ErrBillingStateConflict    = errors.New("计费状态已变化，请刷新后重试")
+	ErrBillingUsageUnavailable = errors.New("暂时无法获取用量，计费未完成")
+	ErrBillingChargeLimit      = errors.New("本次费用超过授权上限，已拒绝扣费")
+	ErrChannelModelInUse       = errors.New("该渠道模型正在被使用，无法删除或停用")
 )
 
 // 先抢占唯一业务键再更新账户，确保注册和签到奖励在多实例并发下只入账一次。

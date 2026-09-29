@@ -219,6 +219,9 @@ func TestCloudAgentContinuationReadsLatestProfileWithoutChangingParent(t *testin
 	if err := db.Model(&model.Task{}).Where("id = ?", parent.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"已完成"}`}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", parent.ID).Update("status", "completed").Error; err != nil {
+		t.Fatal(err)
+	}
 	secondProfile := saveAgentProfileForTest(t, s, "user", AgentProfileRequest{Scope: model.AgentProfileScopeUser, Content: "第二版专属口吻", Revision: firstProfile.Layers[0].Revision})
 	childRequest := agentTestRequest()
 	childRequest.CanvasID = canvasID

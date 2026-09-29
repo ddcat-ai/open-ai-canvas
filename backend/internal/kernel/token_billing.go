@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	ErrInvalidTokenBilling  = errors.New("invalid token billing parameters")
-	ErrTokenBillingOverflow = errors.New("token billing amount overflows int64")
+	ErrInvalidTokenBilling  = errors.New("按量计费参数无效")
+	ErrTokenBillingOverflow = errors.New("按量计费金额超出上限")
 )
 
 type TokenBillingTerm struct {

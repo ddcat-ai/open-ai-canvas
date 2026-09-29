@@ -18,6 +18,7 @@ type taskAdmission struct {
 	AgentRunID   string
 	GenerationID string
 	ApprovalID   string
+	NonBillable  bool
 }
 
 // CreateTask 收敛任务进入系统前的 admission 流程：输入标准化、逻辑模型路由、
@@ -135,6 +136,26 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 	if err := s.ensureTaskProjectActive(userID, req.ProjectID); err != nil {
 		return nil, err
+	}
+	// Agent roots are durable control-plane carriers, not model calls. They
+	// must not reserve credits or enter the worker queue; Pi creates the
+	// billable cloud_agent_step task for each actual model request instead.
+	if req.admission != nil && req.admission.NonBillable && !s.legacyCloudAgentRootTask {
+		if err := s.protectTaskSecrets(normalizedInput); err != nil {
+			return nil, err
+		}
+		inputJSON, err := json.Marshal(normalizedInput)
+		if err != nil {
+			return nil, fmt.Errorf("序列化任务输入失败：%w", err)
+		}
+		task.Status = model.TaskStatusTextReplay
+		task.Stage = "Agent 控制面载体"
+		task.Progress = 0
+		task.InputJSON = string(inputJSON)
+		if err := s.createTaskWithinStorageQuota(&task, nil, policy); err != nil {
+			return nil, err
+		}
+		return taskForOutput(task), nil
 	}
 	billingOrder, err := s.taskBillingOrder(userID, &task, normalizedInput)
 	if err != nil {

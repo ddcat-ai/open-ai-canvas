@@ -272,7 +272,7 @@ func TestCloudAgentStoryboardRejectsUnsafeOrStaleMutations(t *testing.T) {
 		"snapshotHash": "stale", "nodeId": "storyboard-1", "action": "update", "rowId": rowID,
 		"patch": map[string]any{"dialogue": "不应写入"},
 	})
-	if _, err := prepareCloudAgentStoryboardEdit(s.repo, "user", canvas.ID, stale); err == nil || !strings.Contains(err.Error(), "画布已变化") {
+	if _, err := prepareCloudAgentStoryboardEdit(s.repo, "user", canvas.ID, stale); err == nil || !strings.Contains(err.Error(), "被修改过") {
 		t.Fatalf("stale snapshot was not rejected: %v", err)
 	}
 
