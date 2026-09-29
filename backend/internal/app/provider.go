@@ -915,7 +915,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 			modelKey = models[0]
 		}
 	}
-	if _, err := ValidateOutboundURL(channel.BaseURL); err != nil {
+	if _, err := s.ValidateChannelOutboundURL(channel.BaseURL); err != nil {
 		return providerConfig{}, err
 	}
 	config.ChannelID = channel.ID

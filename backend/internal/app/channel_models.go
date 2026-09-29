@@ -155,6 +155,9 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 	if err != nil {
 		return nil, err
 	}
+	if _, err := s.ValidateChannelOutboundURL(channel.BaseURL); err != nil {
+		return nil, err
+	}
 	// 使用服务端保存的渠道密钥和请求头访问上游，避免敏感配置再次经过浏览器。
 	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
 	if err != nil {
@@ -287,6 +290,9 @@ func (s *Service) fetchAdminChannelModelCatalog(ctx context.Context, actor *mode
 	}
 	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := s.ValidateChannelOutboundURL(channel.BaseURL); err != nil {
 		return nil, err
 	}
 	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
@@ -690,7 +696,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")
 	}
-	if _, err := ValidateOutboundURL(channel.BaseURL); err != nil {
+	if _, err := s.ValidateChannelOutboundURL(channel.BaseURL); err != nil {
 		return nil, err
 	}
 	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
