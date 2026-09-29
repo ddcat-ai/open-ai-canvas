@@ -1377,6 +1377,34 @@ func manifestError(payload map[string]any, paths ...string) bool {
 	return false
 }
 
+// BusinessFailure reports a declarative business failure from plugin errorPaths /
+// messagePaths. Used by the host call log so it stays aligned with ParseCreate/ParsePoll.
+func BusinessFailure(adapter Adapter, body []byte) (code, message string, ok bool) {
+	errorPaths, messagePaths := manifestResponsePaths(adapter)
+	if len(errorPaths) == 0 || len(body) == 0 {
+		return "", "", false
+	}
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil || !manifestError(payload, errorPaths...) {
+		return "", "", false
+	}
+	return firstPathValue(payload, errorPaths...), firstPathValue(payload, messagePaths...), true
+}
+
+func manifestResponsePaths(adapter Adapter) (errorPaths, messagePaths []string) {
+	for adapter != nil {
+		switch typed := adapter.(type) {
+		case metadataAdapter:
+			adapter = typed.delegate
+		case manifestAdapter:
+			return typed.manifest.Response.ErrorPaths, typed.manifest.Response.MessagePaths
+		default:
+			return nil, nil
+		}
+	}
+	return nil, nil
+}
+
 func reflectValueIsZero(value any) bool {
 	switch typed := value.(type) {
 	case int:

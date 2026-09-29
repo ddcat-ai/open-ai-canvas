@@ -10,14 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"infinite-canvas/backend/internal/kernel"
+	"infinite-canvas/backend/internal/model"
 	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -192,6 +191,7 @@ type providerAnalyticsContext struct {
 	RequestKind       string
 	ProviderRequestID string
 	ConcurrencyLimit  int
+	InterfaceType     string
 }
 
 func withProviderAnalytics(ctx context.Context, service *Service, task model.Task) context.Context {
@@ -212,6 +212,7 @@ func withProviderAnalytics(ctx context.Context, service *Service, task model.Tas
 	if json.Unmarshal([]byte(task.InputJSON), &input) == nil {
 		metadata.ChannelID = firstNonEmpty(input.Config.ChannelID, systemChannelIDFromBaseURL(input.Config.BaseURL))
 		metadata.Model = firstNonEmpty(input.Config.ChannelModelKey, input.Config.Model, metadata.Model)
+		metadata.InterfaceType = strings.TrimSpace(input.Config.InterfaceType)
 		metadata.VideoSeconds, _ = strconv.Atoi(input.Config.VideoSeconds)
 		if normalized := normalizeCapability(input.Mode); normalized != "" {
 			metadata.Capability = normalized
