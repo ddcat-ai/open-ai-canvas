@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 function compactSource(source: string) {
     return source.replace(/\s+/g, " ").trim();
@@ -14,7 +15,7 @@ function sourceSection(source: string, startMarker: string, endMarker: string) {
 
 test("announcement editor preserves image and pinned fields through edit and save", async () => {
     const [panelSource, safetySource] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/components/admin-announcements-panel.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/components/admin-announcements-panel.tsx")),
         Bun.file(new URL("../src/pages/admin/components/admin-announcement-safety.ts", import.meta.url)).text(),
     ]);
     const panel = compactSource(panelSource);
@@ -132,7 +133,7 @@ test("analytics keeps range presets and uses order finances without a separate p
 });
 
 test("storage settings keep generic S3 controls and connection validation", async () => {
-    const source = await Bun.file(new URL("../src/pages/admin/settings/storage-settings-page.tsx", import.meta.url)).text();
+    const source = await Promise.resolve(moduleGroupSource("pages/admin/settings/storage-settings-page.tsx"));
     const compacted = compactSource(source);
 
     expect(compacted).toContain('{ mode: "s3", label: "S3 兼容存储"');
@@ -178,11 +179,11 @@ test("admin settings use full-width summaries without selected-card side stripes
 
 test("task-first settings reveal dependent configuration only after the primary choice", async () => {
     const [storageSource, emailSource, accessSource, featureSource, appearanceSource, welcomeSource, drawingSource, arkSource, interceptionSource, thirdPartySource, cssSource] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/settings/storage-settings-page.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/settings/storage-settings-page.tsx")),
         Bun.file(new URL("../src/pages/admin/components/email-settings-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/access-settings-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/feature-availability-panel.tsx", import.meta.url)).text(),
-        Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/settings/appearance-settings-page.tsx")),
         Bun.file(new URL("../src/pages/admin/settings/components/welcome-setting.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/drawing-engine-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/ark-private-assets-settings-page.tsx", import.meta.url)).text(),

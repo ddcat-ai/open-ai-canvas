@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 
 test("Agent 对话和设置复用创作页模型选择器，并且只展示文本模型", async () => {
-    const panel = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent-panel.tsx", import.meta.url)).text();
+    // 面板拆分为主组件、展示组件与事件归约三个模块，源码约束覆盖整个模块组。
+    const panel = (await Promise.all(["canvas-cloud-agent-panel.tsx", "canvas-cloud-agent-panel-parts.tsx", "canvas-cloud-agent-events.ts"].map((file) => Bun.file(new URL(`../src/components/canvas/${file}`, import.meta.url)).text()))).join("\n");
     const settings = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent-settings.tsx", import.meta.url)).text();
     const css = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent.css", import.meta.url)).text();
     const pickerCss = await Bun.file(new URL("../src/styles/workspace-product.css", import.meta.url)).text();

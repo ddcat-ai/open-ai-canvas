@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildNodeGenerationContext } from "../src/components/canvas/canvas-node-generation";
-import { buildCanvasResourceReferences, getGenerationResourceNodes } from "../src/lib/canvas/canvas-resource-references";
+import { buildCanvasResourceReferences, getGenerationResourceNodes, normalizeCanvasNodeMentionTokens } from "../src/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
 function node(id: string, type: CanvasNodeType, content: string): CanvasNodeData {
@@ -33,6 +33,36 @@ function connection(fromNodeId: string): CanvasConnection {
 }
 
 describe("canvas node generation position mentions", () => {
+    test("角色卡三视图可解析图片别名，编辑器与生成统一显示角色引用", () => {
+        const target = targetNode();
+        const character = node("character", CanvasNodeType.Text, "");
+        character.metadata = { workflowKind: "character", characterAssetId: "character-asset", characterVersionPolicy: "current" };
+        const nodes = [target, character];
+        const connections = [connection(character.id)];
+        const references = buildCanvasResourceReferences(nodes, connections, target.id);
+        const prompt = "严格参考 @图片1，保持服装一致。";
+        expect(normalizeCanvasNodeMentionTokens(prompt, references)).toBe("严格参考 @角色1，保持服装一致。");
+        const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, []);
+        expect(context.prompt).toBe("严格参考 @角色1，保持服装一致。");
+        expect(context.characterReferences).toEqual([{ nodeId: character.id, assetId: "character-asset", requestedVersionId: undefined }]);
+        expect(() => buildNodeGenerationContext(target.id, nodes, connections, "参考 @图片2", [])).toThrow("@图片2");
+    });
+
+    test("角色卡与普通图片混合时，图片编号不指向角色卡", () => {
+        const target = targetNode();
+        const character = node("character", CanvasNodeType.Text, "");
+        character.metadata = { workflowKind: "character", characterAssetId: "character-asset" };
+        const image = node("scene", CanvasNodeType.Image, "data:image/png;base64,AA==");
+        const nodes = [target, character, image];
+        const connections = [connection(character.id), connection(image.id)];
+        const prompt = "@角色1 站在 @图片1 场景内。";
+        const references = buildCanvasResourceReferences(nodes, connections, target.id);
+        expect(normalizeCanvasNodeMentionTokens(prompt, references)).toBe(prompt);
+        const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, []);
+        expect(context.referenceImages.map((item) => item.id)).toEqual([image.id]);
+        expect(context.characterReferences.map((item) => item.nodeId)).toEqual([character.id]);
+    });
+
     test("父图无预览时仍可继承输入，显式子图输入优先且去重", () => {
         const a = node("a", CanvasNodeType.Image, "");
         a.metadata = { storageKey: "resource:a" };

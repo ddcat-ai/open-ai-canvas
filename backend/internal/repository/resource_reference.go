@@ -418,8 +418,23 @@ func (r *Repository) DeleteAssetsAndResources(userID string, assetIDs []string, 
 		if len(assetIDs) == 0 || len(ownedAssets) != len(assetIDs) {
 			return gorm.ErrRecordNotFound
 		}
-		// Explicit deletion and archive expiry must never invalidate a snapshot.
-		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
+		if deleteReferencedResources {
+			// 彻底删除：移除被删资源的画布历史索引，让删除 worker 可以释放物理对象；
+			// 历史快照正文保留，恢复该版本时由画布断链修复处理失效媒体。
+			if len(resourceIDs) > 0 {
+				// 与历史快照写入串行化，避免清除索引后又插入外键引用。
+				if r.Dialect() == "postgres" {
+					var resources []model.Resource
+					if err := tx.Select("id").Where("id IN ?", resourceIDs).Order("id").Clauses(clause.Locking{Strength: "UPDATE"}).Find(&resources).Error; err != nil {
+						return err
+					}
+				}
+				if err := tx.Where("resource_id IN ?", resourceIDs).Delete(&model.CanvasSnapshotResource{}).Error; err != nil {
+					return err
+				}
+			}
+		} else if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
+			// 受保护删除不得让任何画布历史快照失效。
 			return err
 		}
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id IN ?", assetIDs)

@@ -107,7 +107,7 @@ func TestAssetBatchDeleteHTTP(t *testing.T) {
 	}
 	assertAssets(1)
 
-	// The DELETE endpoint protects referenced assets just like batch deletion.
+	// DELETE /assets/:id 与批量删除是同一个「彻底删除」契约：引用不拦截，任务记录保留。
 	resource := model.Resource{ID: "single-resource", UserID: "batch-user", Provider: "unsupported-test-provider", ObjectKey: "single.png"}
 	payload := `{"url":"/api/resources/single-resource/file"}`
 	for _, record := range []any{
@@ -119,8 +119,12 @@ func TestAssetBatchDeleteHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if w := call(http.MethodDelete, "/api/assets/single", "", true); w.Code != http.StatusBadRequest {
+	if w := call(http.MethodDelete, "/api/assets/single", "", true); w.Code != http.StatusOK {
 		t.Fatalf("single referenced delete: %d %s", w.Code, w.Body.String())
 	}
-	assertAssets(2)
+	assertAssets(1)
+	var tasks int64
+	if err := db.Model(&model.Task{}).Where("id = ?", "running-task").Count(&tasks).Error; err != nil || tasks != 1 {
+		t.Fatalf("task history must be kept: count=%d err=%v", tasks, err)
+	}
 }

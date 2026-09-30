@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 function source(path: string) {
     return readFileSync(resolve(import.meta.dir, path), "utf8");
@@ -8,10 +9,13 @@ function source(path: string) {
 
 describe("canvas resource mention editor", () => {
     test("refreshes async reference previews even when prompt text has not changed", () => {
-        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
         const unchangedTextBranch = component.match(/if \(currentValue === value && lastRenderedValueRef.current === value\) \{([^}]+)\}/)?.[1] || "";
         expect(unchangedTextBranch).toContain("syncInlineMentionPreviews(editor, activeReferences)");
-        const sync = component.slice(component.indexOf("function syncInlineMentionPreviews("), component.indexOf("function MentionMenu("));
+        // syncInlineMentionPreviews 随拆分移到 canvas-mention-chips.tsx；只截取该函数本体做断言。
+        const chips = source("../src/components/canvas/canvas-mention-chips.tsx");
+        const syncStart = chips.indexOf("function syncInlineMentionPreviews(");
+        const sync = chips.slice(syncStart, chips.indexOf("\n}\n", syncStart) + 2);
         expect(sync).toContain('byId.get(chip.dataset.mentionReferenceId || "")');
         expect(sync).toContain('preview.getAttribute("src") !== src');
         expect(sync).toContain("preview.replaceWith(createInlinePreview(reference))");
@@ -20,7 +24,7 @@ describe("canvas resource mention editor", () => {
     });
 
     test("uses stable component classes for inline media references", () => {
-        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
 
         expect(component).toContain("chip.className = `canvas-resource-inline-mention");
         expect(component).toContain("canvas-resource-inline-preview is-${reference.kind}");
@@ -40,7 +44,7 @@ describe("canvas resource mention editor", () => {
     });
 
     test("exposes inline image references as replacement drop targets", () => {
-        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
         const css = source("../src/styles/globals.css");
 
         expect(component).toContain("activeDropReferenceId?: string | null");
@@ -53,10 +57,10 @@ describe("canvas resource mention editor", () => {
     });
 
     test("resolves storage-backed previews and renders a visible loading spinner", () => {
-        const editor = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
-        const panel = source("../src/components/canvas/canvas-node-prompt-panel.tsx");
+        const editor = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
+        const panel = moduleGroupSource("components/canvas/canvas-node-prompt-panel.tsx");
         const configComposer = source("../src/components/canvas/canvas-config-composer.tsx");
-        const project = source("../src/pages/canvas/project.tsx");
+        const project = moduleGroupSource("pages/canvas/project.tsx");
 
         expect(editor).toContain("useResolvedCanvasResourceReferences");
         expect(panel).toContain("<LoaderCircle className=");
@@ -84,7 +88,7 @@ describe("canvas resource mention editor", () => {
     });
 
     test("anchors the mention menu to the caret instead of the textarea edge", () => {
-        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
 
         expect(component).toContain("cursorOffset={mention.end}");
         expect(component).toContain("mentionCaretRect(anchor, cursorOffset)");
@@ -94,7 +98,7 @@ describe("canvas resource mention editor", () => {
     });
 
     test("renders skill references as descriptive workflow rows", () => {
-        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
         const css = source("../src/styles/globals.css");
 
         expect(component).toContain('reference.kind === "skill" ? "is-skill" : ""');
@@ -106,7 +110,7 @@ describe("canvas resource mention editor", () => {
     });
 
     test("agent composer attachments stay large, previewable, and mentionable", () => {
-        const component = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-cloud-agent-chat-ui.tsx") + source("../src/components/canvas/canvas-cloud-agent-composer.tsx");
         expect(component).toContain("w-20 shrink-0");
         expect(component).toContain("insertAttachmentMention");
         expect(component).toContain("@[attachment:");
@@ -116,7 +120,7 @@ describe("canvas resource mention editor", () => {
     });
 
     test("agent composer renders slash skill references as stable skill chips and consumes the typed slash query", () => {
-        const component = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-cloud-agent-chat-ui.tsx") + source("../src/components/canvas/canvas-cloud-agent-composer.tsx");
 
         expect(component).toContain("const token = `@[skill:${skill.skillId}] `");
         expect(component).toContain("slash.start + 1 + slash.query.length");
@@ -124,12 +128,12 @@ describe("canvas resource mention editor", () => {
         expect(component).toContain("[/、]([^\\s/、]*)$");
         // 保留主分支已恢复的固定 Skills 提示，不能因合并旧分支退回失效的外观配置断言。
         expect(source("../src/lib/canvas/agent-appearance.ts")).toContain("用 / 或 、 引用 Skills");
-        expect(source("../src/components/canvas/canvas-cloud-agent-panel.tsx")).toContain("用 / 或 、 引用 Skills");
+        expect(moduleGroupSource("components/canvas/canvas-cloud-agent-panel.tsx") + source("../src/components/canvas/canvas-cloud-agent-panel-parts.tsx")).toContain("用 / 或 、 引用 Skills");
     });
 
     test("skill chips use one colored icon instead of exposing the serialized token", () => {
-        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
-        const chat = source("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx");
+        const component = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
+        const chat = moduleGroupSource("components/canvas/canvas-cloud-agent-chat-ui.tsx") + source("../src/components/canvas/canvas-cloud-agent-composer.tsx");
         const css = source("../src/components/canvas/canvas-cloud-agent.css");
 
         expect(component).toContain('const isDecorated = reference.kind === "skill" || reference.kind === "tool"');

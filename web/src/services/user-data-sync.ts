@@ -1,12 +1,9 @@
-import { getMediaBlob } from "@/services/file-storage";
-import { getImageBlob } from "@/services/image-storage";
 import { deleteRemoteAssets, deleteRemoteCanvasProject, getRemoteAsset, getRemoteAssetsByIds, getRemoteCanvasProject, getRemoteUserDataSnapshot, listRemoteAssetsPage, restoreRemoteCanvasHistory, upsertRemoteAsset, upsertRemoteCanvasProject } from "@/services/api/user-data";
 import { ApiError } from "@/services/api/request";
 import { canvasContentHash, sameCanvasContent } from "@/lib/canvas/canvas-content";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { preserveCanvasSyncDraft, readCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 import { appQueryClient } from "@/lib/query-client";
-import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { parseAssetRecordList } from "@/lib/asset-record";
 import { assetForRemoteSync } from "@/lib/asset-remote-sync";
 import type { Asset } from "@/stores/use-asset-store";
@@ -18,6 +15,9 @@ import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store"
 import { repairMissingCanvasAssets, repairMissingCanvasVideoPreviews, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 import { applyAgentCanvasPatch, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
+import { collectLocalMediaKeys, ensureRemoteResourceReferences } from "./user-data-sync-media";
+
+export { numberValue } from "./user-data-sync-media";
 
 let activeRemoteUserId = "";
 type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
@@ -294,8 +294,6 @@ export async function loadAssetsForUse(ids: Iterable<string>) {
         if (requestedIds.some((id) => !available.has(id) || (activeRemoteUserId && !verifiedAssets.has(id)))) throw new Error("部分素材不存在或无权访问，请重新选择素材");
     });
 }
-
-const LOCAL_STORAGE_KEY_PATTERN = /^(image|video|audio|file|video-reference|audio-reference):/;
 
 export async function syncRemoteUserData(userId?: string | null) {
 	// 登录/切换账号时，服务端快照建立新的远端基线；本地 IndexedDB 只负责首屏缓存，
@@ -866,126 +864,12 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     if (dirtyProjects.length) void appQueryClient.invalidateQueries({ queryKey: ["canvas-library"] });
 }
 
-function collectLocalMediaKeys(value: unknown, set = new Set<string>()): string[] {
-    if (!value || typeof value !== "object") return [...set];
-    if (Array.isArray(value)) {
-        for (const item of value) collectLocalMediaKeys(item, set);
-        return [...set];
-    }
-    const record = value as Record<string, unknown>;
-    const storageKey = typeof record.storageKey === "string" ? record.storageKey : "";
-    if (isLocalStorageKey(storageKey) && !resourceIdFromStorageKey(storageKey)) {
-        set.add(storageKey);
-    } else {
-        const inline = inlineMediaDataUrl(record);
-        if (inline) set.add(`${inline.length}:${inline.slice(0, 64)}:${inline.slice(-64)}`);
-    }
-    for (const child of Object.values(record)) {
-        collectLocalMediaKeys(child, set);
-    }
-    return [...set];
-}
-
-async function ensureRemoteResourceReferences<T>(value: T, uploaded = new Map<string, string>(), onUploaded?: () => void): Promise<T> {
-    if (!value || typeof value !== "object") return value;
-    if (Array.isArray(value)) {
-        const result: unknown[] = [];
-        for (const item of value) result.push(await ensureRemoteResourceReferences(item, uploaded, onUploaded));
-        return result as T;
-    }
-
-    const next: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value)) {
-        next[key] = await ensureRemoteResourceReferences(child, uploaded, onUploaded);
-    }
-
-    const storageKey = typeof next.storageKey === "string" ? next.storageKey : "";
-    const remoteResourceId = resourceIdFromStorageKey(storageKey);
-    if (remoteResourceId) return applyResourceReference(next, storageKey) as T;
-
-    if (!isLocalStorageKey(storageKey)) {
-        const inline = inlineMediaDataUrl(next);
-        if (!inline) return next as T;
-        const identity = await inlineMediaUploadIdentity(inline);
-        const cached = uploaded.get(identity);
-        if (cached) return applyResourceReference(next, cached) as T;
-        const resourceStorage = await uploadInlineDataUrl(inline, identity);
-        uploaded.set(identity, resourceStorage);
-        onUploaded?.();
-        return applyResourceReference(next, resourceStorage) as T;
-    }
-
-    const cached = uploaded.get(storageKey);
-    if (cached) return applyResourceReference(next, cached) as T;
-    const resourceStorage = await uploadLocalStorageKey(storageKey, next);
-    uploaded.set(storageKey, resourceStorage);
-    onUploaded?.();
-    return applyResourceReference(next, resourceStorage) as T;
-}
-
-function applyResourceReference(payload: Record<string, unknown>, storageKey: string) {
-    const resourceId = resourceIdFromStorageKey(storageKey);
-    if (!resourceId) {
-        throw new Error(`远端资源引用无效：${storageKey}`);
-    }
-    const url = resourceFileUrl(resourceId);
-    payload.storageKey = storageKey;
-    for (const key of ["content", "dataUrl", "url", "coverUrl"]) {
-        if (typeof payload[key] === "string") payload[key] = url;
-    }
-    return payload;
-}
-
-function inlineMediaDataUrl(payload: Record<string, unknown>) {
-    for (const key of ["dataUrl", "content", "url", "coverUrl"]) {
-        const value = payload[key];
-        if (typeof value === "string" && /^data:(image|video|audio)\//i.test(value)) return value;
-    }
-    return "";
-}
-
-async function uploadInlineDataUrl(dataUrl: string, identity: string) {
-    const response = await fetch(dataUrl);
-    if (!response.ok) throw new Error("内嵌媒体读取失败");
-    const blob = await response.blob();
-    const kind: "image" | "video" | "audio" | "file" = blob.type.startsWith("image/") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
-    const resource = await uploadResourceFile(blob, kind, { idempotencyKey: identity });
-    return resourceStorageKey(resource.id);
-}
-
-async function inlineMediaUploadIdentity(dataUrl: string) {
-    const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(dataUrl));
-    return `inline:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
-
-async function uploadLocalStorageKey(storageKey: string, payload: Record<string, unknown>) {
-    const blob = storageKey.startsWith("image:") ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
-    if (!blob) throw new Error(`本地媒体不存在，无法同步：${storageKey}`);
-    const kind = blob.type.startsWith("image/") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
-    const resource = await uploadResourceFile(blob, kind, {
-        width: numberValue(payload.naturalWidth) || numberValue(payload.width),
-        height: numberValue(payload.naturalHeight) || numberValue(payload.height),
-        durationMs: numberValue(payload.durationMs),
-        idempotencyKey: storageKey,
-    });
-    return resourceStorageKey(resource.id);
-}
-
 function requireRemoteUserDataBaseline() {
     if (remoteUserDataPhase !== "ready") throw new Error("云端数据基线尚未建立，已停止写入");
 }
 
 function sameEntitySnapshot<T>(acknowledged: T | undefined, current: T) {
     return acknowledged !== undefined && (acknowledged === current || JSON.stringify(acknowledged) === JSON.stringify(current));
-}
-
-function isLocalStorageKey(value: string) {
-    return LOCAL_STORAGE_KEY_PATTERN.test(value) && !resourceIdFromStorageKey(value);
-}
-
-function numberValue(value: unknown) {
-    const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? number : undefined;
 }
 
 function sanitizeCanvasProjectForRemoteSync<T>(project: T): T {

@@ -22,6 +22,7 @@ export type BackendGenerationResult = {
     images?: Array<{ dataUrl: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string }>;
     video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string };
     audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
+    audios?: Array<{ dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string }>;
     text?: string;
     toolCalls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string }; thoughtSignature?: string }>;
     reasoning?: string;
@@ -305,7 +306,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
             referenceVideos: prepared.referenceVideos,
             referenceAudios: prepared.referenceAudios,
             mask: prepared.mask,
-            metadata: generationMetadata(config, {
+            metadata: generationMetadata(config, mode, {
                 ...metadata,
                 ...(options.clientOperationId ? { clientOperationId: options.clientOperationId } : {}),
                 ...(options.retryOf ? { retryOf: options.retryOf } : {}),
@@ -315,20 +316,33 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
     };
 }
 
-function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>) {
+function generationMetadata(config: AiConfig, mode: BackendGenerationMode, metadata?: Record<string, unknown>) {
     const channel = resolveModelChannel(config, config.model);
     const model = modelOptionName(config.model);
     const modelCost = channel.modelCosts?.find((item) => item.model === model);
     const protocol = modelCost?.protocol || channel.interfaceType;
-    const defaults = modelCost?.defaultOptions;
-    if (!protocol || !defaults || !Object.keys(defaults).length) return metadata;
+    if (!protocol) return metadata;
     const existing = metadata?.providerOptions && typeof metadata.providerOptions === "object" && !Array.isArray(metadata.providerOptions)
         ? metadata.providerOptions as Record<string, unknown>
         : {};
     const namespace = existing[protocol] && typeof existing[protocol] === "object" && !Array.isArray(existing[protocol])
         ? existing[protocol] as Record<string, unknown>
         : {};
-    return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...namespace } } };
+    const defaults = modelCost?.defaultOptions && typeof modelCost.defaultOptions === "object" ? modelCost.defaultOptions : {};
+    const audioOptions = mode === "audio" ? {
+        emo_control_method: config.audioEmotionControlMethod || "与音色参考音频相同",
+        emo_random: config.audioEmotionRandom === "true",
+        emo_happy: Number(config.audioEmotionHappy || 0),
+        emo_angry: Number(config.audioEmotionAngry || 0),
+        emo_sad: Number(config.audioEmotionSad || 0),
+        emo_afraid: Number(config.audioEmotionAfraid || 0),
+        emo_disgusted: Number(config.audioEmotionDisgusted || 0),
+        emo_melancholic: Number(config.audioEmotionMelancholic || 0),
+        emo_surprised: Number(config.audioEmotionSurprised || 0),
+        emo_calm: Number(config.audioEmotionCalm || 0),
+    } : {};
+    if (!Object.keys(defaults).length && !Object.keys(audioOptions).length && !Object.keys(namespace).length) return metadata;
+    return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...audioOptions, ...namespace } } };
 }
 
 async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAudio) {

@@ -258,6 +258,9 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	} else {
 		details = append(details, "不引用画布媒体资产")
 	}
+	if len(args.CharacterLabels) > 0 {
+		details = append(details, "使用角色卡："+truncateRunes(strings.Join(args.CharacterLabels, "、"), 200))
+	}
 	if args.Duration > 0 {
 		details = append(details, fmt.Sprintf("时长：%d 秒", args.Duration))
 	}

@@ -296,6 +296,16 @@ export type CanvasNodeMetadata = {
     audioFormat?: string;
     audioSpeed?: string;
     audioInstructions?: string;
+    audioEmotionControlMethod?: string;
+    audioEmotionRandom?: string;
+    audioEmotionHappy?: string;
+    audioEmotionAngry?: string;
+    audioEmotionSad?: string;
+    audioEmotionAfraid?: string;
+    audioEmotionDisgusted?: string;
+    audioEmotionMelancholic?: string;
+    audioEmotionSurprised?: string;
+    audioEmotionCalm?: string;
     references?: string[];
     naturalWidth?: number;
     naturalHeight?: number;

@@ -10,6 +10,25 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
+func TestCloudAgentPiThinkingEnabled(t *testing.T) {
+	tests := []struct {
+		name  string
+		level string
+		want  bool
+	}{
+		{name: "omitted", level: "", want: false},
+		{name: "off", level: "off", want: false},
+		{name: "enabled", level: "medium", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cloudAgentPiThinkingEnabled(tt.level); got != tt.want {
+				t.Fatalf("cloudAgentPiThinkingEnabled(%q) = %v, want %v", tt.level, got, tt.want)
+			}
+		})
+	}
+}
+
 // 线上复现（诊断号 ag5865c256d9fb9bcbf2f1719a4ec1023c）：模型一次写了很长的工具参数，
 // 流式拼出来的 JSON 多了一个括号，任务报"Agent 工具参数不是完整 JSON"。Go 执行循环
 // 会带 truncated_tool_arguments 纠偏重做，但 Pi 模型桥接把它当成不可重试的失败，整轮
@@ -64,6 +83,21 @@ func TestCloudAgentPiModelRetriesTruncatedToolArguments(t *testing.T) {
 	}
 
 	first := nextStep("")
+	var firstTask model.Task
+	if err := db.First(&firstTask, "id = ?", first).Error; err != nil {
+		t.Fatal(err)
+	}
+	var firstInput map[string]any
+	if err := json.Unmarshal([]byte(firstTask.InputJSON), &firstInput); err != nil {
+		t.Fatalf("decode first model task input: %v", err)
+	}
+	textOptions, ok := firstInput["textOptions"].(map[string]any)
+	if !ok {
+		t.Fatalf("first model task textOptions = %#v", firstInput["textOptions"])
+	}
+	if thinking, ok := textOptions["thinking"].(bool); !ok || thinking {
+		t.Fatalf("disabled thinking should be false, got %#v", textOptions["thinking"])
+	}
 	if err := db.Model(&model.Task{}).Where("id = ?", first).Updates(map[string]any{
 		"status": model.TaskStatusFailed,
 		"error":  "Agent 工具参数不是完整 JSON：invalid character '}' after array element",

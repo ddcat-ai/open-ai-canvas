@@ -4,9 +4,10 @@ import { resolve } from "node:path";
 
 import { createGenerationTaskSubscriptionService, type GenerationTask } from "../src/services/api/task-center";
 import { removeCreationConversationSnapshot, updateCreationConversationSnapshot } from "../src/services/creation-conversation-store";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("Create exposes one accessible copy action beside each displayed user prompt", async () => {
-    const source = await Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text();
+    const source = await Promise.resolve(moduleGroupSource("pages/create/creation-workspace.tsx"));
     expect(source).toContain('aria-label="复制提示词"');
     expect(source).toContain('copyText(visiblePrompt, "提示词已复制")');
 });
@@ -352,10 +353,10 @@ test("creation result handoff falls back by stable result order only for a compl
 });
 
 test("Create forwards owned result assets through one new canvas and the project persists before clearing the handoff", () => {
-    const workspace = readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-workspace.tsx"), "utf8");
+    const workspace = moduleGroupSource("pages/create/creation-workspace.tsx");
     const createPage = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
     const canvasIndex = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/index.tsx"), "utf8");
-    const canvasProject = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
+    const canvasProject = moduleGroupSource("pages/canvas/project.tsx");
 
     expect(workspace).toContain("onContinueCanvas(resultAssetIds)");
     expect(createPage).toContain("continueCreationConversationOnCanvas(source)");

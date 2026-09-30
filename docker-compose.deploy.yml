@@ -39,9 +39,10 @@ services:
         condition: service_healthy
 
   yingce-agent:
-    image: ${CANVAS_YINGCE_AGENT_IMAGE:?请先配置 CANVAS_YINGCE_AGENT_IMAGE（必须包含镜像 digest）}
+    # 让旧更新器也能完成本次升级；新版更新器在后续更新中会固定为镜像 digest。
+    image: ${CANVAS_YINGCE_AGENT_IMAGE:-ghcr.io/ddcat-ai/open-ai-canvas-yingce-agent:${CANVAS_IMAGE_TAG:?请先配置 CANVAS_IMAGE_TAG}}
     environment:
-      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:-${CANVAS_UPDATER_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}}
       MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-30}
       NODE_MAX_OLD_SPACE_SIZE: ${YINGCE_AGENT_NODE_MEMORY_MB:-512}
     healthcheck:
@@ -72,7 +73,7 @@ services:
       CANVAS_UPDATER_SOCKET: /run/open-ai-canvas-updater/updater.sock
       CANVAS_UPDATER_TOKEN: ${CANVAS_UPDATER_TOKEN:-}
       YINGCE_AGENT_URL: http://yingce-agent:8081
-      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:-${CANVAS_UPDATER_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}}
       YINGCE_AGENT_BRIDGE_HOST: backend
       CANVAS_LOG_LEVEL: ${CANVAS_LOG_LEVEL:-info}
       CANVAS_LOG_FORMAT: ${CANVAS_LOG_FORMAT:-text}

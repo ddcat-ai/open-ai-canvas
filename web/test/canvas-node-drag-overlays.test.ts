@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, test } from "bun:test";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
-const projectSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
+const projectSource = moduleGroupSource("pages/canvas/project.tsx");
 const selectionControllerSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-selection-controller.ts"), "utf8");
 const flat = (text: string) => text.replace(/\s+/g, " ");
 

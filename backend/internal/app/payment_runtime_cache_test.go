@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"infinite-canvas/backend/internal/protocol"
@@ -162,6 +163,35 @@ func TestPaymentRuntimeReadyAcceptsTaggedBackend(t *testing.T) {
 	}
 	if !paymentRuntimeReady(runtimeDir, pluginHash(packageData), "backend/provider") {
 		t.Fatal("tagged payment runtime was not marked ready")
+	}
+}
+
+// 启动时从插件包落盘支付运行目录只解压本机平台的可执行文件，其余平台产物不写盘；
+// 已就绪的同摘要目录直接复用，不重新解压。
+func TestPaymentRuntimeFromPackageExtractsOnlyHostArtifacts(t *testing.T) {
+	host := "backend/provider-" + runtime.GOOS + "-" + runtime.GOARCH
+	other := "backend/provider-plan9-386"
+	packageData := paymentRuntimePackageFiles(t, map[string][]byte{host: []byte("host-provider"), other: []byte("other-provider")})
+	packageDir := t.TempDir()
+	digest := pluginHash(packageData)
+	root, err := materializePaymentBackendFromPackage(packageDir, digest, "backend/provider", packageData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(host)))
+	if err != nil || string(actual) != "host-provider" {
+		t.Fatalf("host provider = %q err=%v", actual, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(other))); !os.IsNotExist(err) {
+		t.Fatalf("non-host provider must not be extracted: %v", err)
+	}
+	if !paymentRuntimeReady(root, digest, "backend/provider") {
+		t.Fatal("runtime must be marked ready")
+	}
+	// 就绪后即使传入损坏的包字节也直接复用：摘要与就绪标记一一对应，调用方已对原始字节校验摘要。
+	again, err := materializePaymentBackendFromPackage(packageDir, digest, "backend/provider", []byte("not a zip"))
+	if err != nil || again != root {
+		t.Fatalf("ready runtime was not reused: root=%q err=%v", again, err)
 	}
 }
 

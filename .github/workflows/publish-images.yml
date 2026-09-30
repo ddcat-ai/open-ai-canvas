@@ -48,9 +48,12 @@ jobs:
           echo "build_time=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
           echo "owner=${REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
+  # 镜像构建与质量检查并行：构建只推送不可变的 sha-<commit> 标签，不会被部署使用；
+  # 可变标签（latest / 版本号）的推广在 publish 中进行，并且必须等待 checks 通过。
+  # 这样发布总耗时约为 max(检查, 构建) 而不是两者相加。
   build:
     name: Build ${{ matrix.image }} (${{ matrix.arch }})
-    needs: [checks, prepare]
+    needs: [prepare]
     permissions:
       contents: read
       packages: write
@@ -135,7 +138,7 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.image }} manifest
-    needs: [prepare, build]
+    needs: [checks, prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: read

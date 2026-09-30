@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { appearanceLogoURL, normalizePublicAppearance } from "../src/stores/use-appearance-store";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("initial HTML stays brand neutral until the public appearance is resolved", async () => {
     const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/main.tsx", import.meta.url)).text()]);
@@ -85,7 +86,7 @@ test("auth scene consumes resolved appearance instead of hardcoded media constan
 
 test("appearance management exposes light and dark logo uploads plus the frame switch", async () => {
     const [pageSource, brandSource, adminStyles, globalStyles] = await Promise.all([
-        Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/admin/settings/appearance-settings-page.tsx")),
         Bun.file(new URL("../src/components/brand/brand-logo.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text(),
         Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
@@ -113,7 +114,7 @@ test("appearance management exposes light and dark logo uploads plus the frame s
 });
 
 test("object storage can adopt the configured English brand identifier without replacing saved prefixes automatically", async () => {
-    const source = await Bun.file(new URL("../src/pages/admin/settings/storage-settings-page.tsx", import.meta.url)).text();
+    const source = await Promise.resolve(moduleGroupSource("pages/admin/settings/storage-settings-page.tsx"));
 
     expect(source).toContain("state.appearance.brandSlug");
     expect(source).toContain("使用品牌标识");
@@ -122,7 +123,7 @@ test("object storage can adopt the configured English brand identifier without r
 });
 
 test("appearance management exposes a server-side reset to the built-in Yingce brand", async () => {
-    const [pageSource, apiSource] = await Promise.all([Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(), Bun.file(new URL("../src/services/api/appearance.ts", import.meta.url)).text()]);
+    const [pageSource, apiSource] = await Promise.all([Promise.resolve(moduleGroupSource("pages/admin/settings/appearance-settings-page.tsx")), Bun.file(new URL("../src/services/api/appearance.ts", import.meta.url)).text()]);
 
     expect(pageSource).toContain("恢复影策默认");
     expect(pageSource).toContain("resetAdminAppearance()");

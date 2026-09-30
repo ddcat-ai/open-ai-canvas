@@ -132,7 +132,7 @@ async function run() {
               description: tool.description,
               parameters: tool.parameters,
             })),
-            thinkingLevel: options?.reasoning,
+            thinkingLevel: options?.reasoning ?? "off",
           }, options?.signal);
           for (const text of result.steeringMessages ?? []) {
             await session.steer(text);

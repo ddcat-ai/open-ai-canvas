@@ -9,6 +9,32 @@ import (
 
 var cloudAgentMediaMention = regexp.MustCompile(`@(图片|视频|音频)[0-9]+`)
 
+func cloudAgentMediaComposerPrompt(prompt string, refs map[string]any) string {
+	labels := map[string]string{}
+	counts := map[string]int{}
+	for _, kind := range []struct{ field, label string }{
+		{"referenceImages", "图片"}, {"referenceVideos", "视频"}, {"referenceAudios", "音频"},
+	} {
+		for index, ref := range creationMaps(refs[kind.field]) {
+			if stringValue(ref["storageKey"]) == "" {
+				continue
+			}
+			label := kind.label
+			if stringValue(ref["canvasReferenceKind"]) == "character" {
+				label = "角色"
+			}
+			counts[label]++
+			labels[fmt.Sprintf("@%s%d", kind.label, index+1)] = fmt.Sprintf("@%s%d", label, counts[label])
+		}
+	}
+	return cloudAgentMediaMention.ReplaceAllStringFunc(prompt, func(token string) string {
+		if label := labels[token]; label != "" {
+			return label
+		}
+		return token
+	})
+}
+
 // Slot labels follow each media array's order, matching the canvas editor and
 // provider inputs. Text source edges do not consume a media slot.
 func cloudAgentMediaReferencePrompt(prompt string, refs map[string]any) (string, error) {

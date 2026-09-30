@@ -1,5 +1,23 @@
 ﻿# CHANGELOG
 
+## v1.5.9.1
+
+- 修复从 v1.5.8.x 在线更新时 Compose 校验失败（缺少 `CANVAS_YINGCE_AGENT_IMAGE`）：部署 Compose 在未配置时回退到同版本 Agent 镜像标签，`YINGCE_AGENT_TOKEN` 未配置时回退到 `CANVAS_UPDATER_TOKEN`；更新成功后，新版 Host Updater 会在下次更新时固定 Agent 镜像 digest 并生成独立 Token。
+- 在线更新的拉取阶段同时拉取 `yingce-agent` 镜像，避免镜像摘要校验失败。
+- 升级注意：v1.5.8.x 服务器请直接在线更新到 v1.5.9.1，无需手动修改 `.env`；本版本无数据库 schema 变更。
+
+## v1.5.9
+
+- 画布 Agent 改为独立 `yingce-agent` 容器运行，修复 stdout 管道提前关闭导致会话被误判失败；配置 `YINGCE_AGENT_URL` 后只走独立容器，失败不回退到内嵌进程。
+- 后台运行策略新增 Agent 同时对话上限（默认 30，范围 1-64），系统性能页展示 Agent 服务健康与进行中 / 排队数量；降低上限不会中断已开始的对话。
+- 修复 Agent 运行稳定性：工具参数 JSON 被截断时纠偏重做同一步；`ask_user` 后续跑改用服务端历史；等待用户确认时待办清单显示暂停。用户在节点上直接生成时自动关闭同节点的待审批任务，不重复提交、不扣费。
+- 统一后端日志出口（`CANVAS_LOG_LEVEL` / `CANVAS_LOG_FORMAT`），info 级别不再输出成功的查询请求、成功 SQL 和 Agent 流式事件，错误、慢请求和慢 SQL 仍会记录。
+- 签名资源地址有效期改为跟随后台「资源与请求策略」（默认 4 小时）；服务器访问地址允许本机、局域网或 HTTP 地址。
+- 内置技能包补齐方法卡与第三方许可声明，影策短剧制作工作流升级到 1.1.0。
+- 修复分镜预览按视频原始比例显示、模型选择弹窗宽度、Markdown 节点无法拖入背板等问题。
+- 后端与前端大文件按领域拆分为独立模块，行为不变。
+- 升级注意：`docker-compose.deploy.yml` 新增 `yingce-agent` 服务，部署前需在环境变量中配置 `CANVAS_YINGCE_AGENT_IMAGE`（含镜像 digest）和 `YINGCE_AGENT_TOKEN`；本版本无数据库 schema 变更。
+
 ## v1.5.8.2
 
 - 修复 Cloud Agent 审批恢复竞态：旧会话收尾期间批准操作不再丢失，审批决定与工具执行支持并发 revision 冲突重试，确保批准后能稳定恢复并返回最终回复。

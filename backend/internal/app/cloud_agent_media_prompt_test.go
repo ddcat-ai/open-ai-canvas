@@ -47,6 +47,28 @@ func TestCloudAgentMediaReferencePrompt(t *testing.T) {
 	}
 }
 
+func TestCloudAgentMediaComposerPromptSeparatesCharacterAndImageSlots(t *testing.T) {
+	refs := map[string]any{
+		"referenceImages": []any{
+			map[string]any{"storageKey": "resource:character", "canvasReferenceKind": "character"},
+			map[string]any{"storageKey": "resource:scene"},
+			map[string]any{"storageKey": "resource:character-two", "canvasReferenceKind": "character"},
+		},
+		"referenceAudios": []any{map[string]any{"storageKey": "resource:voice"}},
+	}
+	prompt := "@图片1、@图片2、@图片3 和 @音频1"
+	want := "@角色1、@图片1、@角色2 和 @音频1"
+	if got := cloudAgentMediaComposerPrompt(prompt, refs); got != want {
+		t.Fatalf("composer prompt = %q, want %q", got, want)
+	}
+	if prompt != "@图片1、@图片2、@图片3 和 @音频1" {
+		t.Fatal("provider prompt was mutated")
+	}
+	if got := cloudAgentMediaComposerPrompt("参考 @图片10", refs); got != "参考 @图片10" {
+		t.Fatalf("unbound reference changed: %q", got)
+	}
+}
+
 func TestCloudAgentMediaMentionsPersistAcrossApproval(t *testing.T) {
 	s, _, args := agentMediaFixture(t)
 	args.Prompt = "人物参考 @图片1，使用另一张图的假发。"

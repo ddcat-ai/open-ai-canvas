@@ -75,7 +75,7 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 			return nil, BadAuthRequest("参考节点不存在或重复")
 		}
 		seen[id] = true
-		ref, field, err := cloudAgentReference(s.repo, userID, nodes[id])
+		ref, field, err := cloudAgentMediaReference(s.repo, userID, canvas.ProjectID, nodes[id])
 		if err != nil {
 			return nil, err
 		}
@@ -93,6 +93,8 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 type cloudAgentMediaArgs struct {
 	Prepared              *cloudAgentPreparedMedia `json:"-"`
 	DraftRunID            string                   `json:"-"`
+	CharacterVersions     map[string]string        `json:"-"`
+	CharacterLabels       []string                 `json:"-"`
 	Mode                  string                   `json:"mode"`
 	Prompt                string                   `json:"prompt"`
 	LogicalModelID        string                   `json:"logicalModelId"`
@@ -395,7 +397,7 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 			return nil, nil, nil, BadAuthRequest("参考节点不存在或重复")
 		}
 		seen[id] = true
-		ref, payloadField, e := cloudAgentReference(repo, userID, nodes[id])
+		ref, payloadField, e := cloudAgentMediaReference(repo, userID, canvas.ProjectID, nodes[id])
 		if e != nil {
 			return nil, nil, nil, e
 		}
@@ -603,13 +605,34 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	if err := validateCloudAgentMediaArgs(a, state); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
-	_, _, refs, err := cloudAgentMediaDocument(s.repo, run.UserID, state.Request.CanvasID, a, state.TransientReferences)
+	canvas, doc, refs, err := cloudAgentMediaDocument(s.repo, run.UserID, state.Request.CanvasID, a, state.TransientReferences)
 	if err != nil {
 		return CreateTaskRequest{}, nil, err
+	}
+	characters, err := cloudAgentMediaCharacters(s.repo, run.UserID, canvas.ProjectID, doc, a)
+	if err != nil {
+		return CreateTaskRequest{}, nil, err
+	}
+	a.CharacterVersions = map[string]string{}
+	for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
+		if character := characters[id]; character != nil {
+			a.CharacterVersions[id] = character.Card.VersionID
+			a.CharacterLabels = append(a.CharacterLabels, fmt.Sprintf("%s（第%d版）", character.Name, character.Card.Version))
+		}
 	}
 	if a.Prepared != nil {
 		a.Prompt = stringValue(a.Prepared.Input["prompt"])
 	} else {
+		for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
+			if character := characters[id]; character != nil {
+				if text := character.prompt(); text != "" {
+					a.Prompt += "\n\n" + text
+				}
+			}
+		}
+		if utf8.RuneCountInString(a.Prompt) > 16000 {
+			return CreateTaskRequest{}, nil, BadAuthRequest("角色卡设定与生成提示词合计超过16000字符，请精简后重新提交")
+		}
 		a.Prompt, err = cloudAgentMediaReferencePrompt(a.Prompt, refs)
 		if err != nil {
 			return CreateTaskRequest{}, nil, err
@@ -623,6 +646,35 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	if a.ChannelID != "" {
 		config["channelId"], config["channelModelKey"], config["model"] = a.ChannelID, a.ChannelModelKey, a.ChannelModelKey
 	}
+	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
+	if len(a.CharacterVersions) > 0 {
+		resolvedVersions := make([]string, 0, len(a.CharacterVersions))
+		for id, versionID := range a.CharacterVersions {
+			resolvedVersions = append(resolvedVersions, id+":"+versionID)
+		}
+		metadata["resolvedCharacterVersions"] = resolvedVersions
+	}
+	if a.Mode == "audio" {
+		for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
+			character := characters[id]
+			if character == nil || character.Card.Voice == nil {
+				continue
+			}
+			voice := character.Card.Voice
+			voiceKey := strings.TrimSpace(voice.Profile.VoiceKey)
+			if voiceKey == "" {
+				continue
+			}
+			if strings.TrimSpace(stringValue(config["audioVoice"])) == "" {
+				config["audioVoice"] = voiceKey
+			}
+			if strings.TrimSpace(stringValue(config["audioInstructions"])) == "" && strings.TrimSpace(voice.Instructions) != "" {
+				config["audioInstructions"] = truncateRunes(voice.Instructions, 2000)
+			}
+			metadata["resolvedCharacterVoiceKey"] = voiceKey
+			break
+		}
+	}
 	input := refs
 	input["mode"], input["prompt"], input["config"] = a.Mode, a.Prompt, config
 	if err := validateCloudAgentMediaReferences(a.Mode, refs); err != nil {
@@ -632,7 +684,6 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	if operation == "" {
 		return CreateTaskRequest{}, nil, BadAuthRequest("生成模式尚未实现媒体任务适配器")
 	}
-	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
 	if a.Mode == "video" {
 		metadata["videoEditOperation"] = operation
 	}
@@ -749,6 +800,8 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		return err
 	}
 	meta["status"], meta["agentDraftRunId"], meta["referenceNodeIds"] = "idle", a.DraftRunID, a.ReferenceNodeIDs
+	meta["prompt"] = cloudAgentMediaComposerPrompt(a.Prompt, refs)
+	meta["composerContent"] = meta["prompt"]
 	if task != nil {
 		meta["status"], meta["taskId"], meta["taskStatus"] = "loading", task.ID, "queued"
 		delete(meta, "agentDraftRunId")

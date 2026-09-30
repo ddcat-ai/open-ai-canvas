@@ -242,6 +242,16 @@ export function buildAudioGenerationMetadata(config: AiConfig): CanvasNodeMetada
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
         audioInstructions: config.audioInstructions,
+        audioEmotionControlMethod: config.audioEmotionControlMethod,
+        audioEmotionRandom: config.audioEmotionRandom,
+        audioEmotionHappy: config.audioEmotionHappy,
+        audioEmotionAngry: config.audioEmotionAngry,
+        audioEmotionSad: config.audioEmotionSad,
+        audioEmotionAfraid: config.audioEmotionAfraid,
+        audioEmotionDisgusted: config.audioEmotionDisgusted,
+        audioEmotionMelancholic: config.audioEmotionMelancholic,
+        audioEmotionSurprised: config.audioEmotionSurprised,
+        audioEmotionCalm: config.audioEmotionCalm,
     };
 }
 

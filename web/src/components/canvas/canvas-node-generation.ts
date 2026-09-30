@@ -10,7 +10,7 @@ import { isNeutralColorGrade, resolveCanvasColorGradeReference } from "@/lib/can
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { mediaConversionSourceFingerprint } from "@/lib/media-conversion/contracts";
 import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
-import { compileCharacterReferencePrompt } from "@/lib/canvas/canvas-character-reference";
+import { compileCharacterReferencePrompt, normalizeCharacterImageMentions } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { audioFileExtension } from "@/lib/character-voice-formats";
@@ -301,11 +301,13 @@ export function generationInputMentionLabel(input: NodeGenerationInput, inputs: 
 }
 
 export function normalizeGenerationNodeMentionTokens(prompt: string, inputs: NodeGenerationInput[]) {
-    const labelByNodeId = new Map(generationSlotEntries(inputs).map(({ input, label }) => [input.nodeId, label]));
-    return prompt.replace(/@\[node:([^\]]+)\]/g, (token, nodeId: string) => {
+    const slots = generationSlotEntries(inputs);
+    const labelByNodeId = new Map(slots.map(({ input, label }) => [input.nodeId, label]));
+    const normalized = prompt.replace(/@\[node:([^\]]+)\]/g, (token, nodeId: string) => {
         const label = labelByNodeId.get(nodeId);
         return label ? `@${label}` : token;
     });
+    return normalizeCharacterImageMentions(normalized, slots.filter(({ input }) => input.type === "image").length, slots.filter(({ input }) => input.type === "character").map(({ label }) => label));
 }
 
 function hasResolvableGenerationMention(prompt: string, inputs: NodeGenerationInput[]) {

@@ -298,7 +298,7 @@ func TestDeleteGeneratedAssetTaskReferences(t *testing.T) {
 	}
 }
 
-func TestPurgeConfirmedAssetPreservesTaskReferences(t *testing.T) {
+func TestPurgeConfirmedAssetIgnoresTaskReferences(t *testing.T) {
 	svc, db, _ := newResourceDeletionTestService(t)
 	payload := `{"url":"/api/resources/purge-confirmed-resource/file"}`
 	resource := model.Resource{
@@ -319,16 +319,17 @@ func TestPurgeConfirmedAssetPreservesTaskReferences(t *testing.T) {
 		}
 	}
 
-	if err := svc.PurgeUserAsset("user-1", asset.ID); err == nil || !strings.Contains(err.Error(), "任务") {
-		t.Fatalf("PurgeUserAsset() ignored active task: %v", err)
+	// 用户确认的彻底删除不受任务引用拦截；任务记录本身保留，其中的媒体链接随之失效。
+	if err := svc.PurgeUserAsset("user-1", asset.ID); err != nil {
+		t.Fatalf("PurgeUserAsset() error = %v", err)
 	}
 	for _, check := range []struct {
 		model any
 		want  int64
 	}{
-		{&model.Asset{}, 1},
-		{&model.Resource{}, 1},
-		{&model.ResourceDeletionJob{}, 0},
+		{&model.Asset{}, 0},
+		{&model.Resource{}, 0},
+		{&model.ResourceDeletionJob{}, 1},
 		{&model.Task{}, 1},
 	} {
 		var count int64
@@ -373,7 +374,7 @@ func TestResourceDeletionWorkerRemovesObjectAndCompletesOutbox(t *testing.T) {
 	}
 }
 
-func TestExpiredArchivedAssetCleanupPreservesReferencedAsset(t *testing.T) {
+func TestExpiredArchivedAssetCleanupDeletesReferencedAssetAndUsesDeletionOutbox(t *testing.T) {
 	svc, db, _ := newResourceDeletionTestService(t)
 	old := time.Now().Add(-45 * 24 * time.Hour)
 	resource := model.Resource{
@@ -406,8 +407,8 @@ func TestExpiredArchivedAssetCleanupPreservesReferencedAsset(t *testing.T) {
 	if err := db.Model(&model.ResourceDeletionJob{}).Where("resource_id = ?", resource.ID).Count(&jobCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if assetCount != 1 || resourceCount != 1 || jobCount != 0 {
-		t.Fatalf("referenced archived asset was removed: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
+	if assetCount != 0 || resourceCount != 0 || jobCount != 1 {
+		t.Fatalf("referenced archived asset was not force deleted through outbox: asset=%d resource=%d jobs=%d", assetCount, resourceCount, jobCount)
 	}
 }
 

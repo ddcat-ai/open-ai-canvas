@@ -274,6 +274,35 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 		for key, value := range projected {
 			item[key] = value
 		}
+		if cloudAgentCharacterNode(node) {
+			if repo == nil {
+				item["character"] = map[string]any{"available": false, "issue": "角色资产读取服务不可用"}
+			} else {
+				canvas, canvasErr := repo.CanvasProjectForUser(userID, canvasID)
+				if canvasErr != nil {
+					return nil, canvasErr
+				}
+				character, characterErr := cloudAgentResolveCharacter(repo, userID, canvas.ProjectID, node)
+				if characterErr != nil {
+					item["character"] = map[string]any{"available": false, "issue": cloudAgentSafeToolError(characterErr)}
+				} else {
+					characterView := character.read(precise)
+					if precise {
+						_, referenceErr := cloudAgentCharacterImageReference(repo, userID, id, character)
+						characterView["imageReference"] = map[string]any{"ready": referenceErr == nil}
+						if referenceErr != nil {
+							characterView["imageReference"].(map[string]any)["issue"] = cloudAgentSafeToolError(referenceErr)
+						}
+						_, audioErr := cloudAgentCharacterAudioReference(repo, userID, id, character)
+						characterView["audioReference"] = map[string]any{"ready": audioErr == nil}
+						if audioErr != nil {
+							characterView["audioReference"].(map[string]any)["issue"] = cloudAgentSafeToolError(audioErr)
+						}
+					}
+					item["character"] = characterView
+				}
+			}
+		}
 		if capability.GenerationMode != "" {
 			generation := map[string]any{"taskStatus": "not_submitted"}
 			if reason, issue := cloudAgentMediaTargetIssue(node, capability.Type); reason != "" {

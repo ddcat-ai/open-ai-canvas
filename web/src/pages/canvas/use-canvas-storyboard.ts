@@ -17,6 +17,7 @@ import {
     expandStoryboardTextMentions,
     storyboardRowsFromTask,
     storyboardPromptTemplateMetadata,
+    withStoryboardOutputContract,
 } from "@/lib/canvas/canvas-project-domain";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { buildStoryboardAssetCatalog } from "@/lib/canvas/canvas-storyboard-assets";
@@ -168,16 +169,18 @@ export function useCanvasStoryboard({
             assertCurrent();
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined, ...skillExecution.metadata } } : node));
             assertCurrent();
+            // 输入框内容只是剧情，拆镜要求与镜头数、每镜时长都必须随契约一起发出去。
+            const storyboardPrompt = withStoryboardOutputContract(skillExecution.prompt, { shotCount: requestedShotCount, shotDurationSeconds });
             const request = {
                 projectId,
                 type: "canvas_text",
                 operation: "storyboard",
-                prompt: skillExecution.prompt,
+                prompt: storyboardPrompt,
                 model: generationConfig.model,
                 ...(logicalModelIDForConfig(generationConfig) ? { logicalModelId: logicalModelIDForConfig(generationConfig) } : {}),
                 input: {
                     mode: "text",
-                    prompt: skillExecution.prompt,
+                    prompt: storyboardPrompt,
                     canvasAssets: buildStoryboardAssetCatalog(nodesRef.current),
                     requirements: "输出可直接编辑并用于批量生成图片和视频的分镜表。",
                     projectStyle: storyboardContext.projectStyle,

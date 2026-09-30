@@ -20,6 +20,16 @@ export type CanvasGenerationRequestFingerprintInput = {
     };
     operation?: string;
     audioInstructions?: string;
+    audioEmotionControlMethod?: string;
+    audioEmotionRandom?: string;
+    audioEmotionHappy?: string;
+    audioEmotionAngry?: string;
+    audioEmotionSad?: string;
+    audioEmotionAfraid?: string;
+    audioEmotionDisgusted?: string;
+    audioEmotionMelancholic?: string;
+    audioEmotionSurprised?: string;
+    audioEmotionCalm?: string;
     promptTemplateOperation?: string;
     promptTemplateVariables?: Record<string, string>;
     context: Pick<NodeGenerationContext, "referenceImages" | "referenceVideos" | "referenceAudios" | "characterReferences" | "resolvedCharacterVersions" | "resolvedCharacterVoices">;
@@ -45,6 +55,16 @@ export function canvasGenerationRequestFingerprint(input: CanvasGenerationReques
         workflow: input.workflow,
         operation: input.operation,
         audioInstructions: input.audioInstructions,
+        audioEmotionControlMethod: input.audioEmotionControlMethod,
+        audioEmotionRandom: input.audioEmotionRandom,
+        audioEmotionHappy: input.audioEmotionHappy,
+        audioEmotionAngry: input.audioEmotionAngry,
+        audioEmotionSad: input.audioEmotionSad,
+        audioEmotionAfraid: input.audioEmotionAfraid,
+        audioEmotionDisgusted: input.audioEmotionDisgusted,
+        audioEmotionMelancholic: input.audioEmotionMelancholic,
+        audioEmotionSurprised: input.audioEmotionSurprised,
+        audioEmotionCalm: input.audioEmotionCalm,
         promptTemplateOperation: input.promptTemplateOperation,
         promptTemplateVariables: input.promptTemplateVariables,
         references: {

@@ -120,6 +120,22 @@ export function storyboardRowsOutputContract(requirement: string) {
     ].join("\n");
 }
 
+// 分镜文本任务实际发出的 prompt：技能上下文只描述工作流、不约束输出结构，画布节点和章节分镜又都没有
+// metadata.promptTemplateOperation（后端只在有该字段时编译服务端模板），所以契约必须由调用方显式拼上，
+// 否则模型按自然语言习惯返回 Markdown 表格或直接续写正文，解析阶段拿不到 rows。
+// 镜头数与每镜时长只能写进契约文本：后端 canvasGenerationInput 不读 input.shotCount / shotDurationSeconds，
+// 仅放进 input 时节点上的「N 镜」「每镜 N 秒」对模型不可见。
+export function withStoryboardOutputContract(prompt: string, options: { shotCount?: number; shotDurationSeconds?: number } = {}) {
+    const shotCount = Math.trunc(Number(options.shotCount) || 0);
+    const shotDurationSeconds = Math.trunc(Number(options.shotDurationSeconds) || 0);
+    const requirement = [
+        shotCount > 0 ? `全片共 ${shotCount} 个镜头` : "",
+        shotDurationSeconds > 0 ? `每镜约 ${shotDurationSeconds} 秒，durationSeconds 填写该值` : "",
+        "每个镜头必须能独立用于生成首帧图片和镜头视频。",
+    ].filter(Boolean).join("；");
+    return [prompt, storyboardRowsOutputContract(requirement)].join("\n\n");
+}
+
 // 文本任务的 result_json 外层是 {mode, reasoning, text} 包装，分镜表在 text 字段的内层 JSON 字符串里；
 // 历史模板路径可能直接落 {title, rows}。两种结构都要能解析，内层再做代码块剥离与首尾大括号截取兜底，
 // 模型偶发违反契约（包 ```json 或混入解释文字）时仍能取出分镜表。
