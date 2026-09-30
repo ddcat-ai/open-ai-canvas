@@ -1,5 +1,11 @@
 ﻿# CHANGELOG
 
+## v1.5.9.1
+
+- 修复从 v1.5.8.x 在线更新时 Compose 校验失败（缺少 `CANVAS_YINGCE_AGENT_IMAGE`）：部署 Compose 在未配置时回退到同版本 Agent 镜像标签，`YINGCE_AGENT_TOKEN` 未配置时回退到 `CANVAS_UPDATER_TOKEN`；更新成功后，新版 Host Updater 会在下次更新时固定 Agent 镜像 digest 并生成独立 Token。
+- 在线更新的拉取阶段同时拉取 `yingce-agent` 镜像，避免镜像摘要校验失败。
+- 升级注意：v1.5.8.x 服务器请直接在线更新到 v1.5.9.1，无需手动修改 `.env`；本版本无数据库 schema 变更。
+
 ## v1.5.9
 
 - 画布 Agent 改为独立 `yingce-agent` 容器运行，修复 stdout 管道提前关闭导致会话被误判失败；配置 `YINGCE_AGENT_URL` 后只走独立容器，失败不回退到内嵌进程。
