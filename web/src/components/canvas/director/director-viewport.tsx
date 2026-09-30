@@ -1,23 +1,23 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, Line, OrbitControls, TransformControls } from "@react-three/drei";
 import { Component, forwardRef, memo, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { AnimationClip, AnimationMixer, Box3, Bone, Camera, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MeshStandardMaterial, Object3D, OrthographicCamera, PerspectiveCamera, Plane, Quaternion, Raycaster, Scene, SkeletonHelper, Texture, TextureLoader, Vector2, Vector3, WebGLRenderer } from "three";
-import type { Material } from "three";
+import { AnimationClip, AnimationMixer, Camera, Color, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, Object3D, OrthographicCamera, PerspectiveCamera, Plane, Quaternion, Raycaster, Scene, SkeletonHelper, Texture, TextureLoader, Vector2, Vector3, WebGLRenderer } from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
-import { resolveDirectorBoneRotation } from "@/lib/canvas/director/director-animation-semantics";
 import { applyClaySceneMaterials } from "@/lib/canvas/director/director-clay-materials";
 import { createDirectorTransaction, installDirectorTerminalListeners } from "@/lib/canvas/director/director-gesture-transaction";
 import { emptyDirectorPlacementIntent, finiteDirectorGroundPoint, type DirectorGroundPoint, type DirectorPlacementIntent } from "@/lib/canvas/director/director-placement";
 import { directorDiagnosticObjectKind } from "@/lib/canvas/director/director-diagnostics";
 import { recordDirectorDiagnostic } from "@/lib/canvas/director/director-diagnostics-recorder";
 import { directorCaptureInitial, directorCaptureUsable, directorLoadIdentity, directorLoadInitial, installDirectorContextListeners, reduceDirectorCapture, reduceDirectorLoad, releaseDirectorCapture, resolveDirectorDisplay, restoreDirectorCapture, upsertDirectorFailedLoad, type DirectorFailedLoads, type DirectorLoadSignal } from "@/lib/canvas/director/director-recovery";
-import { disposeDirectorAdoptionFailure, disposeDirectorHelper, disposeDirectorMaterials, disposeDirectorModelResources, disposeDirectorObject3D, resolveDirectorLoadOwnership } from "@/lib/canvas/director/director-resources";
-import { DIRECTOR_DEFAULT_ACTOR_URL, directorPoseBoneDeltas, directorTransformPathLength, finiteDirectorTransformKeyframes, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
+import { disposeDirectorAdoptionFailure, disposeDirectorHelper, disposeDirectorModelResources, disposeDirectorObject3D, resolveDirectorLoadOwnership } from "@/lib/canvas/director/director-resources";
+import { DIRECTOR_DEFAULT_ACTOR_URL, directorTransformPathLength, finiteDirectorTransformKeyframes, interpolateDirectorTransform } from "@/lib/canvas/director/director-scene";
 import { DIRECTOR_DEFAULT_VIEW_MODE, directorViewFramingKey, resolveDirectorEffectiveViewport, resolveDirectorOrthographicFraming, resolveDirectorOrthographicFrustum, resolveDirectorViewFraming, type DirectorOrthographicFraming, type DirectorViewFraming, type DirectorViewMode } from "@/lib/canvas/director/director-view-modes";
 import { DirectorViewToolbar } from "@/components/canvas/director/director-view-toolbar";
 import { resolveMediaUrl } from "@/services/file-storage";
 import type { DirectorHumanoidBone, DirectorLight, DirectorObject, DirectorQuat, DirectorRenderMode, DirectorRig, DirectorScene, DirectorTransform, DirectorVec3 } from "@/types/director";
+import { applyActorReferenceMaterial, applyDirectorBoneTracks, directorFingerGroup, inferDirectorRig, normalizeModel, readRigRestRotations, screenPixelsToWorldRadius, updateActorReferenceColor } from "./director-viewport-rig";
+import { captureFrame, recordCanvas } from "./director-viewport-capture";
 
 export type DirectorOrbitControls = ComponentRef<typeof OrbitControls>;
 
@@ -45,12 +45,14 @@ type DirectorViewportProps = {
     onViewModeChange?: (mode: DirectorViewMode) => void;
     onSelectObject: (id: string | null) => void;
     onSelectBone: (bone: string | null) => void;
+    /** 快速镜头模式下，点击地面直接落位；不提供则保持高级工作台原有行为。 */
+    onGroundClick?: (point: DirectorGroundPoint) => void;
     onObjectTransform: (id: string, from: DirectorTransform, to: DirectorTransform) => void;
     onBoneTransform: (id: string, bone: string, rotation: DirectorQuat) => void;
     onActorRigReady: (id: string, rig: DirectorRig, animations: AnimationClip[]) => void;
 };
 
-type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: Camera; suspendDisplayMaterialOverride: () => () => void };
+export type CaptureContext = { gl: WebGLRenderer; scene: Scene; camera: Camera; suspendDisplayMaterialOverride: () => () => void };
 
 // 稳定空值：identity 不匹配时返回同一引用，避免下游 effect 依赖每次 render 都变化。
 const emptyAnimations: AnimationClip[] = [];
@@ -288,7 +290,7 @@ function DirectorViewportNotice({ title, description, actionLabel, onAction, var
     );
 }
 
-function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, playing, showMotionPaths = false, viewMode = DIRECTOR_DEFAULT_VIEW_MODE, onSelectObject, onSelectBone, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorCanvasSurfaceProps) {
+function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, showMotionPaths = false, viewMode = DIRECTOR_DEFAULT_VIEW_MODE, onSelectObject, onSelectBone, onGroundClick, onObjectTransform, onBoneTransform, onActorRigReady, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls }: DirectorCanvasSurfaceProps) {
     const { gl, camera, scene: threeScene, invalidate, set, size } = useThree();
     const orbitRef = useRef<DirectorOrbitControls>(null);
     const [transforming, setTransforming] = useState(false);
@@ -355,25 +357,51 @@ function DirectorSceneContent({ scene, selectedObjectId, selectedBone, transform
         const groundPlane = new Plane(new Vector3(0, 1, 0), 0);
         const hit = new Vector3();
         const ndc = new Vector2();
+        let pointerDown: { id: number; x: number; y: number; button: number } | null = null;
 
-        const onPointerMove = (event: PointerEvent) => {
+        const resolveGroundPoint = (event: PointerEvent) => {
             const bounds = canvasElement.getBoundingClientRect();
-            if (bounds.width <= 0 || bounds.height <= 0) return;
+            if (bounds.width <= 0 || bounds.height <= 0) return null;
             ndc.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
             raycaster.setFromCamera(ndc, camera);
-            // 射线与地面平行或背离时 intersectPlane 返回 null：保留上一个合法点，不写非法值。
-            if (!raycaster.ray.intersectPlane(groundPlane, hit)) return;
-            const point = finiteDirectorGroundPoint(hit.x, hit.z);
+            if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
+            return finiteDirectorGroundPoint(hit.x, hit.z);
+        };
+
+        const onPointerMove = (event: PointerEvent) => {
+            const point = resolveGroundPoint(event);
+            // 射线与地面平行或背离时保留上一个合法点，不写非法值。
             if (point) onGroundPoint(canvasElement, point);
         };
 
+        const onPointerDown = (event: PointerEvent) => {
+            if (!onGroundClick || event.button !== 0 || event.isPrimary === false) return;
+            pointerDown = { id: event.pointerId, x: event.clientX, y: event.clientY, button: event.button };
+        };
+
+        const onPointerUp = (event: PointerEvent) => {
+            const start = pointerDown;
+            pointerDown = null;
+            if (!start || start.id !== event.pointerId || start.button !== 0 || event.button !== 0) return;
+            // OrbitControls 旋转、平移或缩放结束时也会收到 pointerup，移动阈值避免误落位。
+            const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+            if (distance > 5) return;
+            const point = resolveGroundPoint(event);
+            if (point) onGroundClick?.(point);
+        };
+
         canvasElement.addEventListener("pointermove", onPointerMove, { passive: true });
+        canvasElement.addEventListener("pointerdown", onPointerDown, { passive: true });
+        canvasElement.addEventListener("pointerup", onPointerUp, { passive: true });
         return () => {
             canvasElement.removeEventListener("pointermove", onPointerMove);
+            canvasElement.removeEventListener("pointerdown", onPointerDown);
+            canvasElement.removeEventListener("pointerup", onPointerUp);
+            pointerDown = null;
             // 这个 renderer 的 canvas 卸载后，它记录的地面点不得再被读到。
             onGroundPoint(canvasElement, null);
         };
-    }, [camera, gl, onGroundPoint]);
+    }, [camera, gl, onGroundClick, onGroundPoint]);
 
     // OrbitControls 的真实 target 只能从实例读；activeCamera.target 只是初始 prop。
     // 挂载期登记一次即可：drei 重建实例会连带重跑本 effect。
@@ -938,131 +966,6 @@ function BoneController({ bone, selected, dimmed, onSelect }: { bone: Object3D |
     </group>;
 }
 
-function screenPixelsToWorldRadius(camera: Camera, distance: number, pixels: number, viewportHeight: number) {
-    const height = Math.max(1, viewportHeight);
-    if (camera instanceof PerspectiveCamera) return (pixels * 2 * Math.max(0.01, distance) * Math.tan((camera.fov * Math.PI) / 360)) / (height * Math.max(0.01, camera.zoom));
-    if (camera instanceof OrthographicCamera) return (pixels * (camera.top - camera.bottom)) / (height * Math.max(0.01, camera.zoom));
-    return pixels * 0.001;
-}
-
-function directorFingerGroup(bone: string | null) {
-    const match = bone?.match(/^(left|right)(Thumb|Index|Middle|Ring|Pinky)\d$/);
-    return match ? `${match[1]}${match[2]}` : null;
-}
-
-function normalizeModel(root: Object3D, castShadow: boolean, receiveShadow: boolean) {
-    root.updateMatrixWorld(true);
-    const bounds = new Box3().setFromObject(root, true);
-    const size = bounds.getSize(new Vector3());
-    const maxSize = Math.max(size.x, size.y, size.z, 0.001);
-    root.scale.multiplyScalar(2 / maxSize);
-    root.updateMatrixWorld(true);
-    const centered = new Box3().setFromObject(root, true);
-    const center = centered.getCenter(new Vector3());
-    root.position.sub(center);
-    root.position.y -= centered.min.y - center.y;
-    root.traverse((child) => {
-        const mesh = child as Mesh;
-        if (!mesh.isMesh) return;
-        mesh.castShadow = castShadow;
-        mesh.receiveShadow = receiveShadow;
-    });
-}
-
-function applyActorReferenceMaterial(root: Object3D, color: string) {
-    const material = new MeshStandardMaterial({ color, roughness: 0.74, metalness: 0.02 });
-    const replaced: Material[] = [];
-    root.traverse((child) => {
-        const mesh = child as Mesh;
-        if (!mesh.isMesh) return;
-        // 被顶掉的原材质不再被任何 mesh 引用，必须释放，否则每次加载都泄漏一份。
-        if (mesh.material) replaced.push(...(Array.isArray(mesh.material) ? mesh.material : [mesh.material]));
-        mesh.material = material;
-        mesh.userData.directorActor = true;
-        mesh.userData.directorActorMaterial = material;
-    });
-    disposeDirectorMaterials(replaced.filter((item) => item !== material));
-}
-
-function updateActorReferenceColor(root: Object3D, color: string) {
-    root.traverse((child) => {
-        const mesh = child as Mesh;
-        if (!mesh.isMesh || !mesh.userData.directorActor) return;
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        materials.forEach((material) => {
-            if (material instanceof MeshStandardMaterial) material.color.set(color);
-        });
-    });
-}
-
-function readRigRestRotations(root: Object3D, rig: DirectorRig) {
-    return Object.fromEntries(Object.entries(rig.boneMap).flatMap(([bone, name]) => {
-        const target = name ? root.getObjectByName(name) : null;
-        return target ? [[bone, target.quaternion.toArray() as DirectorQuat]] : [];
-    })) as Partial<Record<DirectorHumanoidBone, DirectorQuat>>;
-}
-
-function inferDirectorRig(root: Object3D, animationNames: string[]): DirectorRig {
-    const names = new Map<string, string>();
-    root.traverse((child) => { if (child instanceof Bone) names.set(normalizeBoneName(child.name), child.name); });
-    const fingerPatterns = (side: "left" | "right", finger: "thumb" | "index" | "middle" | "ring" | "pinky", segment: 1 | 2 | 3) => [
-        new RegExp(`^mixamorig${side}hand${finger}${segment}$`),
-        new RegExp(`^${side}hand${finger}${segment}$`),
-        new RegExp(`^${side}${finger}${segment}$`),
-        new RegExp(`^${finger}0?${segment}${side === "left" ? "l" : "r"}$`),
-    ];
-    const patterns: Record<DirectorHumanoidBone, RegExp[]> = {
-        root: [/^root$/, /armature/], hips: [/hips|pelvis/, /mixamorig.*hip/], spine: [/spine1?$|lowerback/], chest: [/spine2|chest|upperback/], neck: [/neck/], head: [/head/],
-        leftShoulder: [/leftshoulder|shoulder_l|mixamorigleftshoulder/], leftUpperArm: [/leftupperarm|leftarm|upperarm_l|mixamorigleftarm/], leftLowerArm: [/leftforearm|leftlowerarm|forearm_l|mixamorigleftforearm/], leftHand: [/^lefthand$/, /^handl$/, /^mixamoriglefthand$/],
-        leftThumb1: fingerPatterns("left", "thumb", 1), leftThumb2: fingerPatterns("left", "thumb", 2), leftThumb3: fingerPatterns("left", "thumb", 3),
-        leftIndex1: fingerPatterns("left", "index", 1), leftIndex2: fingerPatterns("left", "index", 2), leftIndex3: fingerPatterns("left", "index", 3),
-        leftMiddle1: fingerPatterns("left", "middle", 1), leftMiddle2: fingerPatterns("left", "middle", 2), leftMiddle3: fingerPatterns("left", "middle", 3),
-        leftRing1: fingerPatterns("left", "ring", 1), leftRing2: fingerPatterns("left", "ring", 2), leftRing3: fingerPatterns("left", "ring", 3),
-        leftPinky1: fingerPatterns("left", "pinky", 1), leftPinky2: fingerPatterns("left", "pinky", 2), leftPinky3: fingerPatterns("left", "pinky", 3),
-        rightShoulder: [/rightshoulder|shoulder_r|mixamorigrightshoulder/], rightUpperArm: [/rightupperarm|rightarm|upperarm_r|mixamorigrightarm/], rightLowerArm: [/rightforearm|rightlowerarm|forearm_r|mixamorigrightforearm/], rightHand: [/^righthand$/, /^handr$/, /^mixamorigrighthand$/],
-        rightThumb1: fingerPatterns("right", "thumb", 1), rightThumb2: fingerPatterns("right", "thumb", 2), rightThumb3: fingerPatterns("right", "thumb", 3),
-        rightIndex1: fingerPatterns("right", "index", 1), rightIndex2: fingerPatterns("right", "index", 2), rightIndex3: fingerPatterns("right", "index", 3),
-        rightMiddle1: fingerPatterns("right", "middle", 1), rightMiddle2: fingerPatterns("right", "middle", 2), rightMiddle3: fingerPatterns("right", "middle", 3),
-        rightRing1: fingerPatterns("right", "ring", 1), rightRing2: fingerPatterns("right", "ring", 2), rightRing3: fingerPatterns("right", "ring", 3),
-        rightPinky1: fingerPatterns("right", "pinky", 1), rightPinky2: fingerPatterns("right", "pinky", 2), rightPinky3: fingerPatterns("right", "pinky", 3),
-        leftUpperLeg: [/leftupleg|leftthigh|thigh_l|mixamorigleftupleg/], leftLowerLeg: [/leftleg|leftcalf|calf_l|mixamorigleftleg/], leftFoot: [/leftfoot|foot_l|mixamorigleftfoot/], rightUpperLeg: [/rightupleg|rightthigh|thigh_r|mixamorigrightupleg/], rightLowerLeg: [/rightleg|rightcalf|calf_r|mixamorigrightleg/], rightFoot: [/rightfoot|foot_r|mixamorigrightfoot/],
-    };
-    const boneMap = Object.fromEntries(Object.entries(patterns).map(([bone, candidates]) => [bone, candidates.map((pattern) => [...names.entries()].find(([normalized]) => pattern.test(normalized))?.[1]).find(Boolean)]).filter(([, name]) => Boolean(name))) as DirectorRig["boneMap"];
-    return { status: Object.keys(boneMap).length >= 8 ? "ready" : "unmapped", boneMap, animationNames };
-}
-
-function normalizeBoneName(name: string) {
-    return name.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function applyDirectorBoneTracks(model: Object3D, object: DirectorObject, playhead: number, rig: DirectorRig | null, restRotations: Partial<Record<DirectorHumanoidBone, DirectorQuat>>, hasActiveMotion: boolean) {
-    if (!rig) return;
-    const poseDeltas = hasActiveMotion ? {} : directorPoseBoneDeltas(object.pose || "stand");
-    Object.entries(rig.boneMap).forEach(([bone, name]) => {
-        const target = name ? model.getObjectByName(name) : null;
-        if (!target) return;
-        const humanoidBone = bone as DirectorHumanoidBone;
-        // hasActiveMotion 时 mixer 已写入 target.quaternion，直接作为动作层输入。
-        const rotation = resolveDirectorBoneRotation({
-            motion: hasActiveMotion ? target.quaternion.toArray() as DirectorQuat : null,
-            rest: hasActiveMotion ? null : restRotations[humanoidBone] || null,
-            poseDelta: hasActiveMotion ? null : poseDeltas[humanoidBone] || null,
-            override: object.boneOverrides?.[humanoidBone] || null,
-            keyframes: object.boneTracks?.find((item) => item.bone === bone)?.keyframes || null,
-            time: playhead,
-        });
-        if (rotation) {
-            target.quaternion.copy(new Quaternion(...rotation));
-            return;
-        }
-        if (hasActiveMotion) return;
-        const rest = restRotations[humanoidBone];
-        if (rest) target.quaternion.copy(new Quaternion(...rest));
-        const delta = poseDeltas[humanoidBone];
-        if (delta) target.quaternion.multiply(new Quaternion(...delta));
-    });
-}
-
 function DirectorBillboard({ object, selected }: { object: DirectorObject; selected: boolean }) {
     // 展示状态带 url 身份：只有与当前 object.url 匹配才交给 material，
     // 这样换 URL 的第一次 render 就卸下旧纹理，随后 cleanup 才 dispose。
@@ -1102,98 +1005,4 @@ function DirectorLightView({ light }: { light: DirectorLight }) {
     if (light.type === "point") return <pointLight position={position} color={light.color} intensity={light.intensity} castShadow={light.castShadow} />;
     if (light.type === "spot") return <spotLight position={position} color={light.color} intensity={light.intensity} angle={light.angle} penumbra={light.penumbra} castShadow={light.castShadow} />;
     return <directionalLight position={position} color={light.color} intensity={light.intensity} castShadow={light.castShadow} shadow-mapSize-width={1024} shadow-mapSize-height={1024} />;
-}
-
-async function captureFrame(context: CaptureContext | null, mode: DirectorRenderMode) {
-    if (!context) throw new Error("3D 视口尚未就绪");
-    const { gl, scene, camera } = context;
-    const resumeDisplayMaterialOverride = context.suspendDisplayMaterialOverride();
-    const previous = scene.overrideMaterial;
-    const override = mode === "depth" ? new MeshDepthMaterial() : mode === "normal" ? new MeshNormalMaterial() : mode === "pose" ? new MeshBasicMaterial({ color: "#ffffff", wireframe: true }) : null;
-    const restoreClayMaterials = mode === "clay" ? applyClaySceneMaterials(scene) : null;
-    try {
-        scene.overrideMaterial = override;
-        gl.render(scene, camera);
-        return await canvasToBlob(gl.domElement);
-    } finally {
-        scene.overrideMaterial = previous;
-        restoreClayMaterials?.();
-        override?.dispose();
-        resumeDisplayMaterialOverride();
-        gl.render(scene, camera);
-    }
-}
-
-async function recordCanvas(context: CaptureContext | null, duration: number, fps: number) {
-    if (!context) throw new Error("3D 视口尚未就绪");
-    if (!context.gl.domElement.captureStream || typeof MediaRecorder === "undefined") throw new Error("当前浏览器不支持视频录制，请导出帧序列");
-    const resumeDisplayMaterialOverride = context.suspendDisplayMaterialOverride();
-    const previousMaterial = context.scene.overrideMaterial;
-    const restoreClayMaterials = applyClaySceneMaterials(context.scene);
-    context.scene.overrideMaterial = null;
-    context.gl.render(context.scene, context.camera);
-    const stream = context.gl.domElement.captureStream(fps);
-    const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    const chunks: Blob[] = [];
-    // captureStream 依赖渲染循环持续产出新帧；循环里任何未捕获异常都会让剩余录制变成空帧，
-    // 与其 5 秒后静默产出残缺视频回写画布，不如捕获到首个错误就立刻中止并报错。
-    let renderError: Error | null = null;
-    const onRenderError = () => {
-        renderError ??= new Error("白膜视频录制期间发生渲染错误，请重试");
-        if (recorder.state !== "inactive") recorder.stop();
-    };
-    window.addEventListener("error", onRenderError);
-    const result = new Promise<Blob>((resolve, reject) => {
-        recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-        recorder.onerror = () => reject(new Error("白膜视频录制失败"));
-        recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || "video/webm" }));
-    });
-    recorder.start(250);
-    const stopTimer = window.setTimeout(() => { if (recorder.state !== "inactive") recorder.stop(); }, Math.max(250, duration * 1000 + 120));
-    try {
-        const blob = await result;
-        if (renderError) throw renderError;
-        const recorded = await probeRecordedDuration(blob);
-        if (!Number.isFinite(recorded) || recorded < Math.max(0.25, duration * 0.5)) throw new Error("白膜视频时长异常，录制可能不完整，请重试");
-        return blob;
-    } finally {
-        window.clearTimeout(stopTimer);
-        window.removeEventListener("error", onRenderError);
-        stream.getTracks().forEach((track) => track.stop());
-        restoreClayMaterials();
-        context.scene.overrideMaterial = previousMaterial;
-        resumeDisplayMaterialOverride();
-        context.gl.render(context.scene, context.camera);
-    }
-}
-
-async function probeRecordedDuration(blob: Blob) {
-    // Chrome MediaRecorder 产出的 webm 不带时长头，loaded metadata 时 duration 是 Infinity，
-    // 只有 seek 到末尾触发收尾后 duration 才是真实值；这是校验录制完整性的唯一途径。
-    const url = URL.createObjectURL(blob);
-    const video = document.createElement("video");
-    video.muted = true;
-    video.preload = "metadata";
-    try {
-        video.src = url;
-        await new Promise<void>((resolve, reject) => {
-            video.onloadedmetadata = () => resolve();
-            video.onerror = () => reject(new Error("白膜视频无法解析"));
-        });
-        if (video.duration !== Infinity) return video.duration;
-        await new Promise<void>((resolve) => {
-            const finish = () => { video.removeEventListener("seeked", finish); resolve(); };
-            video.addEventListener("seeked", finish);
-            video.currentTime = 1e6;
-            window.setTimeout(finish, 1000);
-        });
-        return video.duration;
-    } finally {
-        URL.revokeObjectURL(url);
-    }
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement) {
-    return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("3D 预览图导出失败"))), "image/png"));
 }

@@ -25,7 +25,8 @@ describe("assets page batch toolbar", () => {
     });
 
     test("places select all before cancel selection", () => {
-        const source = readFileSync(resolve(import.meta.dir, "../src/pages/assets/index.tsx"), "utf8");
+        // 批量操作条随素材库拆分移到 asset-library-panels.tsx。
+        const source = readFileSync(resolve(import.meta.dir, "../src/pages/assets/asset-library-panels.tsx"), "utf8");
         const selectAllIndex = source.search(/>\s*全选\s*<\/Button>/);
         const clearSelectionIndex = source.search(/>\s*取消选择\s*<\/Button>/);
 

@@ -11,7 +11,7 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-var ErrCreationConflict = errors.New("creation state changed; reload before continuing")
+var ErrCreationConflict = errors.New("数据已被更新，请刷新后重试")
 
 func (r *Repository) CreationStorageUsage(userID string) (int64, int64, error) {
 	var usage struct {

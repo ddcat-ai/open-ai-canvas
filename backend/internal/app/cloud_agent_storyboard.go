@@ -184,10 +184,8 @@ func prepareCloudAgentStoryboardCreate(repo *repository.Repository, userID, canv
 	if err != nil {
 		return nil, err
 	}
+	// 新建节点不依赖其它节点的内容：用户同时删改别的节点不影响这次创建，只要求 ID 未被占用。
 	beforeHash := cloudAgentCanvasHash(doc)
-	if beforeHash != args.SnapshotHash {
-		return nil, creationConflict("画布已变化，本次未写入；请重新读取并重新申请审批")
-	}
 	for _, node := range creationMaps(doc["nodes"]) {
 		if stringValue(node["id"]) == args.NodeID {
 			return nil, BadAuthRequest("分镜节点ID已存在")
@@ -244,8 +242,8 @@ func prepareCloudAgentStoryboardEdit(repo *repository.Repository, userID, canvas
 		return nil, err
 	}
 	beforeHash := cloudAgentCanvasHash(doc)
-	if beforeHash != args.SnapshotHash {
-		return nil, creationConflict("画布已变化，本次未写入；请重新读取并重新申请审批")
+	if !cloudAgentNodeSnapshotMatches(doc, args.NodeID, args.SnapshotHash) {
+		return nil, cloudAgentFieldError("snapshotHash", "stale_snapshot", "这个分镜在你读取之后被修改过，本次未写入；请重新读取分镜后再改")
 	}
 	node, storyboard, rows, err := storyboardNodeFromDocument(doc, args.NodeID)
 	if err != nil {
@@ -346,7 +344,7 @@ func applyCloudAgentStoryboardMutation(repo *repository.Repository, userID, canv
 	if len(plan.Preview.Items) > 0 {
 		nodeID = plan.Preview.Items[0].NodeID
 	}
-	return map[string]any{"canvasId": canvasID, "nodeId": nodeID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "summary": plan.Preview.Description, "preview": plan.Preview}, nil
+	return map[string]any{"canvasId": canvasID, "nodeId": nodeID, "snapshotHash": cloudAgentNodeHash(plan.Document, nodeID), "summary": plan.Preview.Description, "preview": plan.Preview}, nil
 }
 
 func mapsAsAny(values []map[string]any) []any {
@@ -357,7 +355,7 @@ func mapsAsAny(values []map[string]any) []any {
 	return out
 }
 
-func cloudAgentStoryboardReadResult(view any, nodeID string) (map[string]any, error) {
+func cloudAgentStoryboardReadResult(view any, nodeID, nodeHash string) (map[string]any, error) {
 	state, ok := view.(map[string]any)
 	if !ok {
 		return nil, BadAuthRequest("分镜读取结果无效")
@@ -383,7 +381,7 @@ func cloudAgentStoryboardReadResult(view any, nodeID string) (map[string]any, er
 	return map[string]any{
 		"nodeId":       nodeID,
 		"title":        node["title"],
-		"snapshotHash": state["snapshotHash"],
+		"snapshotHash": nodeHash,
 		"storyboard":   storyboard,
 	}, nil
 }

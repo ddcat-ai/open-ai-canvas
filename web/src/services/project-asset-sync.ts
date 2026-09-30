@@ -520,12 +520,13 @@ export async function consumeGenerationTaskAgent(
 export async function consumeGenerationTaskMessage(
     task: GenerationTask,
     messageId: string,
-    consumer: (input: { task: GenerationTask; resultUrls: string[]; effectKey: string; signal?: AbortSignal }) => Promise<void> | void,
+    consumer: (input: { task: GenerationTask; resultUrls: string[]; resultStorageKeys: string[]; effectKey: string; signal?: AbortSignal }) => Promise<void> | void,
     dependencies: {
         signal?: AbortSignal;
         managed?: true;
         materialize?: typeof materializeGenerationTaskAssets;
         materializedUrls?: typeof generationTaskMaterializedUrls;
+        materializedStorageKeys?: typeof generationTaskMaterializedStorageKeys;
         attachMessage?: typeof attachGenerationTaskMessage;
     } = {},
 ): Promise<GenerationTask> {
@@ -534,6 +535,7 @@ export async function consumeGenerationTaskMessage(
     }
     const materialized = await (dependencies.materialize ?? materializeGenerationTaskAssets)(task, dependencies.signal);
     const resultUrls = (dependencies.materializedUrls ?? generationTaskMaterializedUrls)(materialized);
+    const resultStorageKeys = (dependencies.materializedStorageKeys ?? generationTaskMaterializedStorageKeys)(materialized);
     const attach = dependencies.attachMessage ?? attachGenerationTaskMessage;
     const outputs = materialized.outputs?.filter((output) => output.materializedAssetId) ?? [];
     for (const output of outputs) {
@@ -542,7 +544,7 @@ export async function consumeGenerationTaskMessage(
             messageId,
             output.outputIndex,
             async ({ effectKey, signal }) => {
-                await consumer({ task: materialized, resultUrls, effectKey, signal });
+                await consumer({ task: materialized, resultUrls, resultStorageKeys, effectKey, signal });
             },
             dependencies.signal,
         );
@@ -555,8 +557,21 @@ export function generationTaskMaterializedUrls(task: GenerationTask): string[] {
     return (task.outputs || []).flatMap((output) => {
         const asset = output.materializedAssetId ? assets.find((candidate) => candidate.id === output.materializedAssetId) : undefined;
         if (!asset) return [];
-        if (asset.kind === "image") return [asset.data.dataUrl || asset.coverUrl];
-        if (asset.kind === "video" || asset.kind === "audio") return [asset.data.url];
+        if (asset.kind === "image") return [asset.data.dataUrl || asset.coverUrl].filter(Boolean);
+        if (asset.kind === "video" || asset.kind === "audio") return [asset.data.url].filter(Boolean);
         return [];
+    });
+}
+
+/**
+ * 返回生成结果的稳定素材定位符。对于远程资源是 resource:<id>，对于本地降级素材是
+ * 本地 IndexedDB storageKey。它可以持久化到历史记录，不能被短时效签名 URL 替代。
+ */
+export function generationTaskMaterializedStorageKeys(task: GenerationTask): string[] {
+    const assets = useAssetStore.getState().assets;
+    return (task.outputs || []).flatMap((output) => {
+        const asset = output.materializedAssetId ? assets.find((candidate) => candidate.id === output.materializedAssetId) : undefined;
+        if (!asset || (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) return [];
+        return asset.data.storageKey ? [asset.data.storageKey] : [];
     });
 }

@@ -152,7 +152,7 @@ export function useCanvasDirector({
             position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
             width: previewSize.width,
             height: previewSize.height,
-            metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["导演台构图", `镜头:${sourceNode.title}`] },
+            metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["导演台构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
         };
         if (previewIndex >= 0) nextNodes[previewIndex] = previewNode;
         else nextNodes.push(previewNode);
@@ -170,7 +170,7 @@ export function useCanvasDirector({
                 position: existingVideo?.position || { x: sourceNode.position.x, y: sourceNode.position.y + sourceNode.height + 48 },
                 width: existingVideo?.width || 360,
                 height: existingVideo?.height || 220,
-                metadata: { ...existingVideo?.metadata, ...videoMetadata(videoUpload), prompt: output.prompt, workflowKind: "reference_video", assetTags: ["导演台白膜", `镜头:${sourceNode.title}`] },
+                metadata: { ...existingVideo?.metadata, ...videoMetadata(videoUpload), prompt: output.prompt, workflowKind: "reference_video", assetTags: ["导演台白膜", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
             };
             if (videoIndex >= 0) nextNodes[videoIndex] = videoNode;
             else nextNodes.push(videoNode);

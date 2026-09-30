@@ -4,9 +4,10 @@ import { resolve } from "node:path";
 
 import { createGenerationTaskSubscriptionService, type GenerationTask } from "../src/services/api/task-center";
 import { removeCreationConversationSnapshot, updateCreationConversationSnapshot } from "../src/services/creation-conversation-store";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("Create exposes one accessible copy action beside each displayed user prompt", async () => {
-    const source = await Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text();
+    const source = await Promise.resolve(moduleGroupSource("pages/create/creation-workspace.tsx"));
     expect(source).toContain('aria-label="复制提示词"');
     expect(source).toContain('copyText(visiblePrompt, "提示词已复制")');
 });
@@ -95,7 +96,6 @@ test("Create refresh subscriptions share one durable scheduler observation witho
     });
 });
 
-
 test("task subscription can reconnect after an observation failure", async () => {
     let queryCalls = 0;
     const terminal: GenerationTask = {
@@ -138,10 +138,7 @@ test("task subscription can reconnect after an observation failure", async () =>
 });
 
 test("Create durably correlates failures that happen before the first Runtime response", async () => {
-    const source = [
-        await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(),
-        await Bun.file(new URL("../src/pages/create/creation-types.ts", import.meta.url)).text(),
-    ].join("\n");
+    const source = [await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(), await Bun.file(new URL("../src/pages/create/creation-types.ts", import.meta.url)).text()].join("\n");
     expect(source).toContain("generationErrorCode?: string");
     expect(source).toContain("generationOperation?: string");
     expect(source).toContain("generationOperation: task.operation");
@@ -356,14 +353,14 @@ test("creation result handoff falls back by stable result order only for a compl
 });
 
 test("Create forwards owned result assets through one new canvas and the project persists before clearing the handoff", () => {
-    const workspace = readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-workspace.tsx"), "utf8");
+    const workspace = moduleGroupSource("pages/create/creation-workspace.tsx");
     const createPage = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
     const canvasIndex = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/index.tsx"), "utf8");
-    const canvasProject = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
+    const canvasProject = moduleGroupSource("pages/canvas/project.tsx");
 
     expect(workspace).toContain("onContinueCanvas(resultAssetIds)");
     expect(createPage).toContain("continueCreationConversationOnCanvas(source)");
-    expect(createPage).toContain("if (ids.length !== item.resultUrls.length) throw new Error");
+    expect(createPage).toContain("if (ids.length !== Math.max(resultStorageKeys.length, resultUrls.length)) throw new Error");
     expect(createPage).toContain("await saveCreationConversations(next)");
     expect(createPage.indexOf("await saveCreationConversations(next)")).toBeLessThan(createPage.indexOf("navigate(`/canvas/${result.id}?${params.toString()}`)"));
     expect(canvasIndex).toContain('const handoffMode = mode === "handoff"');

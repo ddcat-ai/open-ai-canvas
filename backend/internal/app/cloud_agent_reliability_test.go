@@ -309,6 +309,9 @@ func TestCloudAgentReliabilityFailedContinuation(t *testing.T) {
 	if err := db.Model(&model.Task{}).Where("id = ?", root.ID).Updates(map[string]any{"status": model.TaskStatusFailed, "error": "mock failure"}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := s.advanceCloudAgentByID("user", root.ID); err != nil {
+		t.Fatal(err)
+	}
 	req := agentTestRequest()
 	req.Prompt = "继续刚才的任务"
 	req.IdempotencyKey = "audit-continuation-key"

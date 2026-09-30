@@ -6,20 +6,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/payment"
 	"infinite-canvas/backend/internal/protocol"
 	"infinite-canvas/backend/internal/repository"
-
-	"gorm.io/gorm"
 )
 
 const (
@@ -57,12 +53,18 @@ type UpdatePaymentProviderConfigRequest struct {
 }
 
 type TopupProductRequest struct {
-	Name                string `json:"name"`
-	Description         string `json:"description"`
-	AmountFen           int64  `json:"amountFen"`
-	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
-	Enabled             bool   `json:"enabled"`
-	SortOrder           int    `json:"sortOrder"`
+	Name                string                  `json:"name"`
+	Description         string                  `json:"description"`
+	AmountFen           int64                   `json:"amountFen"`
+	CreditsMicrocredits int64                   `json:"creditsMicrocredits"`
+	Enabled             bool                    `json:"enabled"`
+	SortOrder           int                     `json:"sortOrder"`
+	SaleStrategy        model.TopupSaleStrategy `json:"saleStrategy"`
+	PeriodDays          int                     `json:"periodDays"`
+	PeriodPurchaseLimit int                     `json:"periodPurchaseLimit"`
+	StockTotal          int64                   `json:"stockTotal"`
+	SaleStartAt         *time.Time              `json:"saleStartAt"`
+	SaleEndAt           *time.Time              `json:"saleEndAt"`
 }
 
 type CreatePaymentOrderRequest struct {
@@ -117,382 +119,6 @@ type AdminPaymentOrderUser struct {
 type AdminPaymentOrderView struct {
 	PaymentOrderView
 	User *AdminPaymentOrderUser `json:"user"`
-}
-
-func (s *Service) PaymentNotificationResponse(providerID string, success bool) (int, string, string) {
-	return PaymentNotificationResponseForWithRegistry(s.paymentRegistry, providerID, success, http.StatusInternalServerError)
-}
-
-func (s *Service) PaymentNotificationFailureResponse(providerID string, status int) (int, string, string) {
-	return PaymentNotificationResponseForWithRegistry(s.paymentRegistry, providerID, false, status)
-}
-
-func PaymentNotificationResponseFor(providerID string, success bool, failureStatus int) (int, string, string) {
-	registry, _ := payment.NewRegistry()
-	return PaymentNotificationResponseForWithRegistry(registry, providerID, success, failureStatus)
-}
-
-func PaymentNotificationResponseForWithRegistry(registry *payment.Registry, providerID string, success bool, failureStatus int) (int, string, string) {
-	if registry != nil {
-		if provider, ok := registry.Get(providerID); ok {
-			descriptor := provider.Descriptor()
-			response := descriptor.NotificationFailure
-			if success {
-				response = descriptor.NotificationSuccess
-			}
-			status := response.Status
-			if status == 0 {
-				status = failureStatus
-			}
-			contentType, body := response.ContentType, response.Body
-			if contentType == "" {
-				contentType = "text/plain; charset=utf-8"
-			}
-			return status, contentType, body
-		}
-	}
-	if success {
-		return http.StatusNoContent, "", ""
-	}
-	return failureStatus, "", ""
-}
-
-func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, error) {
-	if actor == nil {
-		return nil, Unauthorized("请先登录")
-	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
-		return nil, err
-	}
-	items := make([]PaymentProviderView, 0)
-	for _, descriptor := range s.paymentRegistry.Descriptors() {
-		view, _, err := s.paymentProviderView(descriptor)
-		if err != nil {
-			return nil, err
-		}
-		if view.Enabled && view.Configured {
-			items = append(items, view)
-		}
-	}
-	return items, nil
-}
-
-func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProviderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return nil, err
-	}
-	items := make([]AdminPaymentProviderView, 0)
-	for _, descriptor := range s.paymentRegistry.Descriptors() {
-		base, config, err := s.paymentProviderView(descriptor)
-		if err != nil {
-			return nil, err
-		}
-		manifest, _ := s.paymentManifestForProvider(descriptor.ID)
-		view := AdminPaymentProviderView{PaymentProviderView: base, Values: map[string]string{}, SecretConfigured: map[string]bool{}, ConfigFields: manifest.Configuration.Fields}
-		if config != nil {
-			values, err := s.decryptPaymentConfig(config)
-			if err != nil {
-				return nil, err
-			}
-			view.ConfigID = config.ID
-			view.ConfigEnabled = config.Enabled
-			view.Version = config.Version
-			view.UpdatedAt = &config.CreatedAt
-			for _, field := range manifest.Configuration.Fields {
-				if field.Secret {
-					view.SecretConfigured[field.Name] = strings.TrimSpace(values[field.Name]) != ""
-					continue
-				}
-				view.Values[field.Name] = values[field.Name]
-			}
-		}
-		items = append(items, view)
-	}
-	return items, nil
-}
-
-func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID string, request UpdatePaymentProviderConfigRequest) (*AdminPaymentProviderView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return nil, err
-	}
-	provider, ok := s.paymentRegistry.Get(providerID)
-	if !ok {
-		return nil, BadAuthRequest("未知支付渠道")
-	}
-	descriptor := provider.Descriptor()
-	manifest, ok := s.paymentManifestForProvider(descriptor.ID)
-	if !ok {
-		return nil, BadAuthRequest("支付插件清单不存在")
-	}
-	policy, ok := paymentExpiryPolicy(manifest, descriptor.ID)
-	if !ok {
-		return nil, BadAuthRequest("支付插件清单不存在")
-	}
-	if request.CloseAfterMinutes < policy.MinMinutes || request.CloseAfterMinutes > policy.MaxMinutes {
-		return nil, BadAuthRequest(fmt.Sprintf("未支付关闭时间必须为 %d-%d 分钟", policy.MinMinutes, policy.MaxMinutes))
-	}
-	values := make(payment.Config)
-	previousIdentity := make(map[string]string)
-	current, err := s.repo.LatestPaymentProviderConfig(providerID)
-	if err == nil {
-		values, err = s.decryptPaymentConfig(current)
-		if err != nil {
-			return nil, err
-		}
-		for _, field := range descriptor.IdentityFields {
-			previousIdentity[field] = strings.TrimSpace(values[field])
-		}
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	for _, field := range manifest.Configuration.Fields {
-		value, supplied := request.Values[field.Name]
-		value = strings.TrimSpace(value)
-		if field.Secret && (!supplied || value == "") {
-			continue
-		}
-		if !supplied && field.Default != nil && strings.TrimSpace(values[field.Name]) == "" {
-			value = strings.TrimSpace(fmt.Sprint(field.Default))
-		}
-		values[field.Name] = value
-	}
-	changedIdentityField := ""
-	for field, previous := range previousIdentity {
-		if previous != "" && strings.TrimSpace(values[field]) != previous {
-			changedIdentityField = field
-			break
-		}
-	}
-	if changedIdentityField != "" {
-		orderCount, err := s.repo.PaymentOrderCountForProvider(providerID)
-		if err != nil {
-			return nil, err
-		}
-		if orderCount > 0 {
-			return nil, BadAuthRequest("该渠道已有历史订单，首期不支持切换商户身份；请保持 " + changedIdentityField + " 不变")
-		}
-	}
-	if base := values["publicBaseUrl"]; base != "" {
-		if err := validatePaymentPublicBaseURL(base); err != nil {
-			return nil, BadAuthRequest(err.Error())
-		}
-	}
-	if request.Enabled {
-		if strings.TrimSpace(values["publicBaseUrl"]) == "" {
-			return nil, BadAuthRequest("启用支付渠道前必须填写服务器公网地址")
-		}
-		if err := provider.ValidateConfig(values); err != nil {
-			return nil, BadAuthRequest(err.Error())
-		}
-	}
-	plain, err := json.Marshal(values)
-	if err != nil {
-		return nil, err
-	}
-	ciphertext, err := s.encryptSettingSecret(string(plain))
-	if err != nil {
-		return nil, err
-	}
-	digest := sha256.Sum256(plain)
-	config := &model.PaymentProviderConfig{
-		ID: newID(), ProviderID: descriptor.ID, PluginID: descriptor.PluginID, PluginVersion: descriptor.PluginVersion,
-		Enabled: request.Enabled, CloseAfterMinutes: request.CloseAfterMinutes,
-		ConfigCipher: ciphertext, ConfigDigest: hex.EncodeToString(digest[:]), CreatedBy: actor.ID,
-	}
-	if err := s.repo.CreatePaymentProviderConfig(config); err != nil {
-		return nil, err
-	}
-	if err := s.appendAdminAudit(actor, "payment_provider.config.update", "payment_provider", providerID, "更新支付渠道配置", map[string]any{
-		"version": config.Version, "enabled": config.Enabled, "closeAfterMinutes": config.CloseAfterMinutes,
-	}); err != nil {
-		return nil, err
-	}
-	items, err := s.AdminPaymentProviders(actor)
-	if err != nil {
-		return nil, err
-	}
-	for index := range items {
-		if items[index].ID == providerID {
-			return &items[index], nil
-		}
-	}
-	return nil, errors.New("保存支付渠道配置后未找到渠道")
-}
-
-func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentProviderView, *model.PaymentProviderConfig, error) {
-	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode}
-	if manifest, ok := s.paymentManifestForProvider(descriptor.ID); ok {
-		if policy, found := paymentExpiryPolicy(manifest, descriptor.ID); found {
-			view.CloseAfterMinutes = policy.DefaultMinutes
-		}
-	}
-	state, err := s.pluginStateForUser(nil, descriptor.PluginID, s.Plugins())
-	if err == nil {
-		view.PluginEnabled = state.PlatformAvailable
-		view.Enabled = state.PlatformAvailable
-	}
-	config, configErr := s.repo.LatestPaymentProviderConfig(descriptor.ID)
-	if errors.Is(configErr, gorm.ErrRecordNotFound) {
-		return view, nil, nil
-	}
-	if configErr != nil {
-		return view, nil, configErr
-	}
-	view.Configured = strings.TrimSpace(config.ConfigCipher) != ""
-	view.Enabled = view.Enabled && config.Enabled
-	view.CloseAfterMinutes = config.CloseAfterMinutes
-	return view, config, nil
-}
-
-func (s *Service) paymentManifestForProvider(providerID string) (protocol.Manifest, bool) {
-	providerID = strings.TrimSpace(providerID)
-	if providerID == "" {
-		return protocol.Manifest{}, false
-	}
-	if s != nil {
-		for _, plugin := range s.Plugins() {
-			for _, contribution := range plugin.Manifest.Contributes.PaymentProviders {
-				if contribution.ID == providerID {
-					return protocolManifestFromPluginView(plugin), true
-				}
-			}
-		}
-	}
-	return bundledPaymentManifestForProvider(providerID)
-}
-
-func bundledPaymentManifestForProvider(providerID string) (protocol.Manifest, bool) {
-	for _, manifest := range bundledPaymentPluginManifests() {
-		for _, contribution := range manifest.Contributes.PaymentProviders {
-			if contribution.ID == providerID {
-				return manifest, true
-			}
-		}
-	}
-	return protocol.Manifest{}, false
-}
-
-func protocolManifestFromPluginView(plugin PluginView) protocol.Manifest {
-	return protocol.Manifest{
-		APIVersion: plugin.Manifest.APIVersion,
-		Metadata: protocol.Metadata{
-			ID: plugin.Manifest.ID, Version: plugin.Manifest.Version, Name: plugin.Manifest.Name,
-			Vendor: plugin.Manifest.Author, Description: plugin.Manifest.Description,
-			Documentation: plugin.Manifest.Documentation,
-		},
-		Surfaces:      plugin.Manifest.Surfaces,
-		Runtime:       plugin.Manifest.Runtime,
-		Permissions:   plugin.Manifest.Permissions,
-		Configuration: plugin.Manifest.Configuration,
-		Contributes:   plugin.Manifest.Contributes,
-	}
-}
-
-func paymentExpiryPolicy(manifest protocol.Manifest, providerID string) (protocol.ManifestPaymentExpiryPolicy, bool) {
-	for _, contribution := range manifest.Contributes.PaymentProviders {
-		if contribution.ID == providerID {
-			return contribution.ExpiryPolicy, true
-		}
-	}
-	if len(manifest.Contributes.PaymentProviders) == 1 {
-		return manifest.Contributes.PaymentProviders[0].ExpiryPolicy, true
-	}
-	return protocol.ManifestPaymentExpiryPolicy{}, false
-}
-
-func (s *Service) decryptPaymentConfig(config *model.PaymentProviderConfig) (payment.Config, error) {
-	if config == nil {
-		return nil, errors.New("支付渠道配置不存在")
-	}
-	plain, err := s.decryptSettingSecret(config.ConfigCipher)
-	if err != nil {
-		return nil, err
-	}
-	values := make(payment.Config)
-	if err := json.Unmarshal([]byte(plain), &values); err != nil {
-		return nil, errors.New("支付渠道配置内容无效")
-	}
-	return values, nil
-}
-
-func validatePaymentPublicBaseURL(value string) error {
-	parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(value), "/"))
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || parsed.RawQuery != "" || (parsed.Path != "" && parsed.Path != "/") {
-		return errors.New("服务器公网地址必须是有效的 HTTP(S) 根地址")
-	}
-	return nil
-}
-
-func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error) {
-	if actor == nil {
-		return nil, Unauthorized("请先登录")
-	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
-		return nil, err
-	}
-	return s.repo.TopupProducts(false)
-}
-
-func (s *Service) AdminTopupProducts(actor *model.User) ([]model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return nil, err
-	}
-	return s.repo.TopupProducts(true)
-}
-
-func (s *Service) CreateTopupProduct(actor *model.User, request TopupProductRequest) (*model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return nil, err
-	}
-	product, err := topupProductFromRequest(newID(), actor.ID, request)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.repo.CreateTopupProduct(product); err != nil {
-		return nil, err
-	}
-	if err := s.appendAdminAudit(actor, "topup_product.create", "topup_product", product.ID, "创建积分充值商品", map[string]any{"amountFen": product.AmountFen, "creditsMicrocredits": product.CreditsMicrocredits}); err != nil {
-		return nil, err
-	}
-	return product, nil
-}
-
-func (s *Service) UpdateTopupProduct(actor *model.User, id string, request TopupProductRequest) (*model.TopupProduct, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return nil, err
-	}
-	if _, err := s.repo.TopupProduct(id); err != nil {
-		return nil, err
-	}
-	product, err := topupProductFromRequest(strings.TrimSpace(id), actor.ID, request)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.repo.UpdateTopupProduct(product); err != nil {
-		return nil, err
-	}
-	if err := s.appendAdminAudit(actor, "topup_product.update", "topup_product", product.ID, "更新积分充值商品", map[string]any{"enabled": product.Enabled}); err != nil {
-		return nil, err
-	}
-	return s.repo.TopupProduct(product.ID)
-}
-
-func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*model.TopupProduct, error) {
-	name := strings.TrimSpace(request.Name)
-	if name == "" || len([]rune(name)) > 120 {
-		return nil, BadAuthRequest("充值商品名称不能为空且不能超过 120 个字符")
-	}
-	if request.AmountFen <= 0 || request.AmountFen > 100_000_000 {
-		return nil, BadAuthRequest("充值金额必须为 1 分至 100 万元")
-	}
-	if request.CreditsMicrocredits <= 0 || request.CreditsMicrocredits > maxTopupCreditsMicrocredits {
-		return nil, BadAuthRequest("充值积分必须为 0.000001 至 10 亿积分")
-	}
-	return &model.TopupProduct{
-		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500),
-		AmountFen: request.AmountFen, CreditsMicrocredits: request.CreditsMicrocredits,
-		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
-	}, nil
 }
 
 func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
@@ -551,7 +177,10 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}
-	order, created, err := s.repo.CreatePaymentOrder(order)
+	order, created, err := s.repo.CreatePaymentOrderWithProductReservation(order)
+	if errors.Is(err, repository.ErrTopupUnavailable) {
+		return nil, NewAppError(http.StatusConflict, "充值商品当前不可购买")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1005,106 +634,4 @@ func (s *Service) AdminClosePaymentOrder(ctx context.Context, actor *model.User,
 	}
 	view := paymentOrderView(*order)
 	return &view, nil
-}
-
-func (s *Service) startPaymentWorker(ctx context.Context) {
-	s.runWorkerLoop(func(ctx context.Context) {
-		s.drainPaymentNotifications()
-		notificationTicker := time.NewTicker(15 * time.Second)
-		defer notificationTicker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-notificationTicker.C:
-				s.drainPaymentNotifications()
-			}
-		}
-	})
-	s.runWorkerLoop(func(ctx context.Context) {
-		s.reconcileExpiredPaymentOrders(ctx)
-		orderTicker := time.NewTicker(15 * time.Second)
-		defer orderTicker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-orderTicker.C:
-				s.reconcileExpiredPaymentOrders(ctx)
-				s.queryPendingPaymentOrders(ctx)
-			}
-		}
-	})
-	s.runWorkerLoop(func(ctx context.Context) {
-		s.maybeRunDailyPaymentReconciliation(ctx)
-		reconciliationTicker := time.NewTicker(30 * time.Minute)
-		defer reconciliationTicker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-reconciliationTicker.C:
-				s.maybeRunDailyPaymentReconciliation(ctx)
-			}
-		}
-	})
-}
-
-func (s *Service) drainPaymentNotifications() {
-	items, err := s.repo.PendingPaymentNotifications(32)
-	if err != nil {
-		log.Printf("payment notification query failed: %v", err)
-		return
-	}
-	for index := range items {
-		item := &items[index]
-		if err := s.processPaymentNotification(item); err != nil {
-			delay := time.Duration(math.Pow(2, math.Min(float64(item.Attempts), 8))) * 5 * time.Second
-			_ = s.repo.RetryPaymentNotification(item.ID, safePaymentError(err), time.Now().Add(delay))
-		}
-	}
-}
-
-func (s *Service) reconcileExpiredPaymentOrders(ctx context.Context) {
-	orders, err := s.repo.ClaimExpiredPaymentOrders(32)
-	if err != nil {
-		log.Printf("expired payment order claim failed: %v", err)
-		return
-	}
-	for index := range orders {
-		order := &orders[index]
-		operationContext, cancel := context.WithTimeout(ctx, 45*time.Second)
-		err := s.closePaymentOrder(operationContext, order)
-		cancel()
-		if err != nil {
-			_ = s.repo.RestoreClosingPaymentOrder(order.ID, safePaymentError(err))
-		}
-	}
-}
-
-func (s *Service) queryPendingPaymentOrders(ctx context.Context) {
-	orders, err := s.repo.PaymentOrdersNeedingQuery(time.Now().Add(-30*time.Second), 32)
-	if err != nil {
-		log.Printf("pending payment order query failed: %v", err)
-		return
-	}
-	for index := range orders {
-		operationContext, cancel := context.WithTimeout(ctx, 20*time.Second)
-		err := s.queryPaymentOrder(operationContext, &orders[index])
-		cancel()
-		if err != nil {
-			log.Printf("payment order compensation query failed: order=%s error_type=%T", orders[index].ID, err)
-		}
-	}
-}
-
-func safePaymentError(err error) string {
-	if err == nil {
-		return ""
-	}
-	var providerErr *payment.ProviderError
-	if errors.As(err, &providerErr) && providerErr.Code != "" {
-		return truncateRunes(providerErr.Code, 1000)
-	}
-	return truncateRunes(fmt.Sprintf("%T", err), 1000)
 }

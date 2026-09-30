@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed agent-system-policy.md agent-media-policy.md
+//go:embed agent-system-policy.md agent-media-policy.md AGENTS.md
 var policyFiles embed.FS
 
 type Policy struct {
@@ -24,6 +24,15 @@ func LoadAgentPolicies() (system Policy, media Policy, err error) {
 	if err != nil {
 		return Policy{}, Policy{}, err
 	}
+	operations, err := loadPolicy("AGENTS.md")
+	if err != nil {
+		return Policy{}, Policy{}, err
+	}
+	if operations.ID != "cloud-agent-operations" {
+		return Policy{}, Policy{}, fmt.Errorf("agent operations policy identity is invalid")
+	}
+	system.Text += "\n\n" + operations.Text
+	system.Hash = hashPolicy(system.ID, system.Version, system.Text)
 	media, err = loadPolicy("agent-media-policy.md")
 	if err != nil {
 		return Policy{}, Policy{}, err
@@ -34,6 +43,11 @@ func LoadAgentPolicies() (system Policy, media Policy, err error) {
 	return system, media, nil
 }
 
+func hashPolicy(id string, version int, text string) string {
+	normalized := fmt.Sprintf("id:%s\nversion:%d\n%s", id, version, text)
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:])
+}
 func loadPolicy(path string) (Policy, error) {
 	data, err := policyFiles.ReadFile(path)
 	if err != nil {
@@ -43,9 +57,7 @@ func loadPolicy(path string) (Policy, error) {
 	if err != nil {
 		return Policy{}, fmt.Errorf("parse agent policy %s: %w", path, err)
 	}
-	normalized := fmt.Sprintf("id:%s\nversion:%d\n%s", id, version, text)
-	sum := sha256.Sum256([]byte(normalized))
-	return Policy{ID: id, Version: version, Text: text, Hash: hex.EncodeToString(sum[:])}, nil
+	return Policy{ID: id, Version: version, Text: text, Hash: hashPolicy(id, version, text)}, nil
 }
 
 func parsePolicyDocument(raw string) (string, int, string, error) {

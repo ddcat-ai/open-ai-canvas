@@ -75,3 +75,4 @@ backend/cmd/server/server
 backend/tmp_*
 # Keep the runtime in source control; its optional debug map is not deployed.
 /web/public/live2d/live2dcubismcore.min.js.map
+.zocde/

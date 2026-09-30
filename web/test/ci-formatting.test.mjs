@@ -71,9 +71,17 @@ describe("changed-file formatting gate", () => {
         expect(repo.messages).toEqual([]);
     });
 
-    test("invalid explicit base SHA fails closed", async () => {
+    test("unavailable explicit base SHA falls back to the head parent", async () => {
         const repo = fixture();
-        await expect(repo.check({ baseSha: "f".repeat(40) })).rejects.toThrow("git rev-parse");
+        repo.write("changed.ts", "const value=1;\n");
+        repo.commit();
+        await expect(repo.check({ baseSha: "f".repeat(40) })).rejects.toThrow("changed.ts");
+        expect(repo.messages).toContain(`Base SHA ${"f".repeat(40)} is unavailable; checking against the head parent instead.`);
+    });
+
+    test("malformed explicit base SHA fails closed", async () => {
+        const repo = fixture();
+        await expect(repo.check({ baseSha: "not-a-sha" })).rejects.toThrow("Invalid base SHA");
     });
 
     test("zero before SHA compares the parent commit", async () => {

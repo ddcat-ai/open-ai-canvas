@@ -73,7 +73,7 @@ func TestCachedTextReplayIsolatesUsersCursorsAndCopies(t *testing.T) {
 	}
 }
 
-func TestRuntimeConcurrencyCacheDoesNotCacheAuthoritativePolicy(t *testing.T) {
+func TestRuntimeConcurrencyCacheCachesAuthoritativePolicy(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -101,8 +101,8 @@ func TestRuntimeConcurrencyCacheDoesNotCacheAuthoritativePolicy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if queries.Load() != before+2 {
-		t.Fatal("authoritative policy incorrectly cached")
+	if queries.Load() != before {
+		t.Fatalf("authoritative policy cache missed: queries=%d before=%d", queries.Load(), before)
 	}
 	policy := defaultRuntimePolicy()
 	policy.Task.WorkerConcurrency = 7

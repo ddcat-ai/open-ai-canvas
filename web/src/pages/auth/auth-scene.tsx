@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "motion/react";
-import { ConfigProvider, Tabs } from "antd";
+import { Tabs } from "antd";
 import { ArrowLeft, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
@@ -7,8 +7,8 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { SiteComplianceFooter } from "@/components/layout/site-compliance-footer";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { getAntThemeConfig } from "@/lib/app-theme";
 import { brandStudioLabel, useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemeStore } from "@/stores/use-theme-store";
 
 const AUTH_TABS = [
     { key: "login", label: "登录" },
@@ -48,6 +48,7 @@ export function LinuxDOIcon() {
 
 export function AuthScene() {
     const appearance = useAppearanceStore((state) => state.appearance);
+    const theme = useThemeStore((state) => state.theme);
     const location = useLocation();
     const navigate = useNavigate();
     const reducedMotion = useReducedMotion();
@@ -74,18 +75,18 @@ export function AuthScene() {
     };
 
     return (
-        <main className="auth-scene h-dvh min-h-0 overflow-y-auto text-white lg:overflow-hidden">
+        <main className="auth-scene h-dvh min-h-0 overflow-y-auto lg:overflow-hidden">
             <div className="grid min-h-full lg:h-full lg:grid-cols-[minmax(0,1.32fr)_minmax(520px,1fr)]">
-                <section className="relative min-h-[250px] overflow-hidden sm:min-h-[320px] lg:min-h-0" aria-label={`${appearance.brandName}品牌影片`}>
+                <section className="auth-scene-hero relative min-h-[250px] overflow-hidden sm:min-h-[320px] lg:min-h-0" aria-label={`${appearance.brandName}品牌影片`}>
                     {videoActive && appearance.authVideoUrl ? <video ref={videoRef} className="absolute inset-0 size-full object-cover" src={appearance.authVideoUrl} poster={appearance.authVideoPosterUrl || undefined} autoPlay muted loop playsInline preload="metadata" onPlay={() => setVideoPlaying(true)} onPause={() => setVideoPlaying(false)} /> : appearance.authVideoPosterUrl && failedPosterURL !== appearance.authVideoPosterUrl ? <img className="absolute inset-0 size-full object-cover" src={appearance.authVideoPosterUrl} alt="" decoding="async" onError={() => setFailedPosterURL(appearance.authVideoPosterUrl)} /> : null}
-                    <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,5,8,.58),transparent_42%,rgba(4,5,8,.74))]" />
+                    <div aria-hidden className="auth-scene-hero-overlay absolute inset-0" />
                     <div aria-hidden className="auth-scene-video-blend absolute inset-y-0 right-0 hidden w-[clamp(120px,14vw,240px)] lg:block" />
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 p-5 sm:p-7 lg:p-9">
-                        <Link to="/" className="inline-flex items-center gap-2.5 text-sm font-semibold text-white drop-shadow-sm transition-opacity hover:opacity-80">
-                            <BrandLogo theme="dark" className="size-7" alt="" fallback={<span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />} />
+                        <Link to="/" className="auth-scene-brand inline-flex items-center gap-2.5 text-sm font-semibold drop-shadow-sm transition-opacity hover:opacity-80">
+                            <BrandLogo theme={theme} className="size-7" alt="" fallback={<span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />} />
                             {appearance.brandName}
                         </Link>
-                        <button type="button" className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl transition hover:bg-black/35 disabled:cursor-default" onClick={playVideo} disabled={videoPlaying || !appearance.authVideoUrl} aria-pressed={videoPlaying}>
+                        <button type="button" className="auth-scene-hero-control inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[var(--fs-label)] backdrop-blur-xl transition disabled:cursor-default" onClick={playVideo} disabled={videoPlaying || !appearance.authVideoUrl} aria-pressed={videoPlaying}>
                             <Play className="size-3 fill-current" />
                             {videoPlaying ? "创作正在发生" : "播放品牌影片"}
                         </button>
@@ -96,9 +97,9 @@ export function AuthScene() {
                         transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
                         className="absolute inset-x-0 bottom-0 max-w-2xl p-5 sm:p-7 lg:p-10"
                     >
-                        <p className="text-xs font-semibold tracking-[0.18em] text-white/58">{brandStudioLabel(appearance)}</p>
-                        <h1 className="mt-3 max-w-xl whitespace-pre-line text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">{appearance.authHeroTitle}</h1>
-                        {appearance.authHeroDescription ? <p className="mt-4 max-w-xl whitespace-pre-line text-sm leading-6 text-white/62 sm:text-base sm:leading-7">{appearance.authHeroDescription}</p> : null}
+                        <p className="auth-scene-hero-muted text-xs font-semibold tracking-[0.18em]">{brandStudioLabel(appearance)}</p>
+                        <h1 className="auth-scene-hero-title mt-3 max-w-xl whitespace-pre-line text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">{appearance.authHeroTitle}</h1>
+                        {appearance.authHeroDescription ? <p className="auth-scene-hero-muted mt-4 max-w-xl whitespace-pre-line text-sm leading-6 sm:text-base sm:leading-7">{appearance.authHeroDescription}</p> : null}
                     </motion.div>
                 </section>
 
@@ -115,25 +116,23 @@ export function AuthScene() {
                         transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
                         className="my-auto w-full max-w-[460px]"
                     >
-                        <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
-                            <div className="auth-card-dark auth-scene-card h-auto overflow-hidden rounded-lg backdrop-blur-2xl">
-                                <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "min-h-[500px]" : "min-h-[620px] sm:min-h-[640px]"}`}>
-                                    <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
-                                        <p className="auth-scene-eyebrow text-xs font-semibold tracking-[0.18em]">{copy.eyebrow}</p>
-                                        <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
-                                        <p className="auth-scene-muted mt-2 text-sm leading-6">{copy.description}</p>
-                                    </header>
-                                    {!recovery ? (
-                                        <div className="px-6 sm:px-8">
-                                            <Tabs className="auth-card-tabs" activeKey={activeTab} items={AUTH_TABS} onChange={(key) => navigate({ pathname: key === "register" ? "/register" : "/login", search: location.search })} />
-                                        </div>
-                                    ) : null}
-                                    <div key={location.pathname} className="flex-1 px-6 py-6 sm:px-8 sm:py-7">
-                                        <Outlet />
+                        <div className="auth-scene-card h-auto overflow-hidden rounded-lg backdrop-blur-2xl">
+                            <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "" : "min-h-[620px] sm:min-h-[640px]"}`}>
+                                <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
+                                    <p className="auth-scene-eyebrow text-xs font-semibold tracking-[0.18em]">{copy.eyebrow}</p>
+                                    <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
+                                    <p className="auth-scene-muted mt-2 text-sm leading-6">{copy.description}</p>
+                                </header>
+                                {!recovery ? (
+                                    <div className="px-6 sm:px-8">
+                                        <Tabs className="auth-card-tabs" activeKey={activeTab} items={AUTH_TABS} onChange={(key) => navigate({ pathname: key === "register" ? "/register" : "/login", search: location.search })} />
                                     </div>
-                                </section>
-                            </div>
-                        </ConfigProvider>
+                                ) : null}
+                                <div key={location.pathname} className={`${!recovery && activeTab === "login" ? "" : "flex-1"} px-6 py-6 sm:px-8 sm:py-7`}>
+                                    <Outlet />
+                                </div>
+                            </section>
+                        </div>
                     </motion.div>
                     <SiteComplianceFooter variant="auth" className="absolute inset-x-0 bottom-0" />
                 </section>

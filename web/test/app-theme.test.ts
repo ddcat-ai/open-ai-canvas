@@ -17,11 +17,17 @@ describe("shared action colors and focus feedback", () => {
         test(`custom primary action states reach product and admin in ${dark ? "dark" : "light"} mode`, () => {
             const skin = duplicateSkinDefinition(DEFAULT_CLASSIC_SKIN, ["classic"]);
             Object.assign(skin.tokens[dark ? "dark" : "light"], {
-                primary: "#123456", primaryHover: "#234567", primaryActive: "#345678", primaryForeground: "#abcdef",
+                primary: "#123456",
+                primaryHover: "#234567",
+                primaryActive: "#345678",
+                primaryForeground: "#abcdef",
             });
             for (const theme of [getAntThemeConfig(dark, skin), getIsolatedAdminAntTheme(dark, skin)]) {
                 expect(theme.components?.Button).toMatchObject({
-                    colorPrimary: "#123456", colorPrimaryHover: "#234567", colorPrimaryActive: "#345678", primaryColor: "#abcdef",
+                    colorPrimary: "#123456",
+                    colorPrimaryHover: "#234567",
+                    colorPrimaryActive: "#345678",
+                    primaryColor: "#abcdef",
                 });
                 expect(theme.token?.controlOutlineWidth).toBe(0);
                 expect(theme.components?.Input?.activeShadow).toBe("none");
@@ -36,6 +42,6 @@ describe("shared action colors and focus feedback", () => {
         const theme = getWorkspaceAntThemeConfig();
         expect(theme.components?.Button?.colorPrimary).toBeUndefined();
         expect(theme.components?.Button?.primaryColor).toBeUndefined();
-        expect(theme.components?.Input?.activeShadow).toBeUndefined();
+        expect(theme.components?.Input?.activeShadow).toBe("none");
     });
 });

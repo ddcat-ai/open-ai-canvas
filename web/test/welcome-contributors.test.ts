@@ -21,6 +21,7 @@ test("welcome contributors parse the README HTML table", () => {
     expect(people[0]?.signature).toContain("没有任何黑魔法");
     expect(people.some((person) => person.name === "爱笑的毛毛虫")).toBe(true);
     expect(people.some((person) => person.name === "morrow" && person.email === "3201190041@qq.com" && person.signature === "最难不过坚持")).toBe(true);
+    expect(people.some((person) => person.name === "亿媒网老宋" && person.avatar === "assets/user-song.jpg" && person.email === "61731514@qq.com" && person.signature === "全国10W+媒体、自媒体，助力企业品牌传播")).toBe(true);
     expect(people.filter((person) => person.isFounder)).toHaveLength(1);
 });
 

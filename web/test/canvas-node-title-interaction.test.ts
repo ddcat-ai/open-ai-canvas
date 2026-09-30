@@ -11,15 +11,15 @@ describe("canvas node title interaction", () => {
     test("disables iframe hit testing only during node dragging", () => {
         expect(canvasStylesSource).toMatch(/\[data-canvas-node-dragging="true"\] \.node-element iframe\s*\{\s*pointer-events: none;/);
         expect(liveViewportSource).toContain('if (preview) container.dataset.canvasNodeDragging = "true"');
-        expect(liveViewportSource).toContain('else delete container.dataset.canvasNodeDragging');
+        expect(liveViewportSource).toContain("else delete container.dataset.canvasNodeDragging");
     });
-    test("exposes a drag handle without bypassing read-only or locked nodes", () => {
-        expect(nodeSource).toContain('onDragStart={readOnly ? undefined : (event) => onMouseDown(event, data.id)}');
-        expect(nodeSource).toContain('disabled={!onDragStart || Boolean(node.metadata?.locked)}');
-        expect(nodeSource).toContain('onDragStart?.(event)');
-        expect(nodeSource).toContain('event.currentTarget.setPointerCapture(event.pointerId)');
-        expect(nodeSource).toContain('拖动此处移动节点；点击名称可重命名');
-        expect(nodeSource).toContain('onClick={onEdit}');
+    test("keeps title editing separate from node-body dragging and protects locked titles", () => {
+        expect(nodeSource).toContain("editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}");
+        expect(nodeSource).toContain("onMouseDown={(event) => onMouseDown(event, data.id)}");
+        const selection = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-selection-controller.ts"), "utf8");
+        expect(selection).toContain("if (clickedNode?.metadata?.locked)");
+        expect(selection).toContain("!node.metadata?.locked");
+        expect(nodeSource).toContain("onClick={onEdit}");
     });
     test("keeps the toolbar hover bridge from intercepting the external title", () => {
         const hoverBridge = canvasStylesSource.match(/\.canvas-node-toolbar::after\s*\{([\s\S]*?)\}/)?.[1] || "";

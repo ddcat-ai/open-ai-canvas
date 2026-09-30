@@ -12,8 +12,19 @@ export async function checkChangedFormatting({ cwd = process.cwd(), baseSha = pr
         return result.stdout;
     };
     const head = git(["rev-parse", "--verify", `${headSha}^{commit}`]).trim();
-    // 新分支/tag 的 before 为全零；首次提交没有父提交，改为检查整棵树。
-    const base = baseSha && !/^0+$/.test(baseSha) ? git(["rev-parse", "--verify", `${baseSha}^{commit}`]).trim() : git(["rev-list", "--parents", "-n", "1", head]).trim().split(" ")[1];
+    const parent = git(["rev-list", "--parents", "-n", "1", head]).trim().split(" ")[1] || null;
+    let base = parent;
+    if (baseSha && !/^0+$/.test(baseSha)) {
+        // 强制改写提交历史后，push 事件里的 before 可能已不在 checkout 中；
+        // 对合法但失效的 SHA 退回当前父提交，仍校验本次提交的完整改动。
+        if (!/^[0-9a-f]{40}$/i.test(baseSha)) throw new Error(`Invalid base SHA: ${baseSha}`);
+        const resolved = spawnSync("git", ["rev-parse", "--verify", `${baseSha}^{commit}`], { cwd, encoding: "utf8" });
+        if (resolved.status === 0) {
+            base = resolved.stdout.trim();
+        } else {
+            log(`Base SHA ${baseSha} is unavailable; checking against the head parent instead.`);
+        }
+    }
     const files = (base ? git(["diff", "--relative", "--name-only", "--diff-filter=ACMR", "-z", base, head, "--", "."]) : git(["ls-tree", "-r", "--name-only", "-z", head, "--", "."]))
         .split("\0")
         .filter((file) => /\.(css|html|json|js|jsx|md|mdx|mjs|cjs|ts|tsx|yaml|yml)$/.test(file));

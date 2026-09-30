@@ -58,7 +58,7 @@ func (s *Service) UserAssetsPage(userID string, page int, pageSize int, filter U
 	}
 	rawAssets := make([]json.RawMessage, 0, len(assets))
 	for _, asset := range assets {
-		if payload := clientAssetPayload(asset); len(payload) > 0 {
+		if payload := clientAssetListPayload(asset); len(payload) > 0 {
 			rawAssets = append(rawAssets, payload)
 		}
 	}

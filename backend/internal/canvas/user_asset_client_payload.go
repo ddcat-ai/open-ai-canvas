@@ -46,6 +46,51 @@ func ClientAssetPayload(asset model.Asset) json.RawMessage {
 	return encoded
 }
 
+// ClientAssetListPayload is the list variant used by the paginated asset
+// library.  The list only needs enough metadata to render cards and perform
+// an action; generation prompts and other verbose metadata belong to the
+// asset detail/snapshot paths.  Keeping them out of every page also avoids
+// repeatedly parsing and copying the same prompt strings in the browser.
+func ClientAssetListPayload(asset model.Asset) json.RawMessage {
+	raw := ClientAssetPayload(asset)
+	if len(raw) == 0 {
+		return nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil || payload == nil {
+		return raw
+	}
+	if metadata, ok := payload["metadata"].(map[string]any); ok {
+		// 列表只需要项目归属提示。canvasId 仍保留，避免列表卡片把画布素材
+		// 错显示成“未关联项目”；节点 ID、生成提示和其他同步上下文在详情路径读取。
+		for key := range metadata {
+			if key != "projectName" && key != "projectIds" && key != "canvasId" {
+				delete(metadata, key)
+			}
+		}
+		if len(metadata) == 0 {
+			delete(payload, "metadata")
+		}
+	}
+	// 图片封面和 dataUrl、视频封面和 url 通常是同一个地址；列表保留
+	// coverUrl 字段以满足前端合同，但不再重复传输这段长 URL。
+	if cover, ok := payload["coverUrl"].(string); ok {
+		if data, ok := payload["data"].(map[string]any); ok {
+			for _, key := range []string{"dataUrl", "url"} {
+				if value, ok := data[key].(string); ok && value == cover {
+					payload["coverUrl"] = ""
+					break
+				}
+			}
+		}
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return raw
+	}
+	return encoded
+}
+
 func deriveAssetCoverURL(payload map[string]any) string {
 	if value, ok := payload["coverUrl"].(string); ok && strings.TrimSpace(value) != "" {
 		return value

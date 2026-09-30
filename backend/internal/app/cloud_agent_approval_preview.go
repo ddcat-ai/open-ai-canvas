@@ -258,6 +258,9 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	} else {
 		details = append(details, "不引用画布媒体资产")
 	}
+	if len(args.CharacterLabels) > 0 {
+		details = append(details, "使用角色卡："+truncateRunes(strings.Join(args.CharacterLabels, "、"), 200))
+	}
 	if args.Duration > 0 {
 		details = append(details, fmt.Sprintf("时长：%d 秒", args.Duration))
 	}
@@ -331,7 +334,7 @@ func cloudAgentApprovalCallHash(call cloudAgentCall) string {
 	// server revalidates the prepared dependency hash below, which deliberately
 	// ignores layout-only edits such as moving a node.
 	arguments := call.Function.Arguments
-	if call.Function.Name == "generate_media" {
+	if call.Function.Name == "generate_media" || call.Function.Name == "image_layer_split" {
 		var object map[string]any
 		if err := json.Unmarshal([]byte(arguments), &object); err == nil {
 			delete(object, "snapshotHash")

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import { useState, type ButtonHTMLAttributes } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2, type LucideIcon } from "lucide-react";
 
@@ -19,7 +19,12 @@ import { cn } from "@/lib/utils";
  * 明暗：全部颜色走 token；active 按压底用 bg-surface-active，明暗自动适配。
  */
 export const iconButtonVariants = cva(
-    ["inline-flex shrink-0 items-center justify-center rounded-md", "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", "disabled:pointer-events-none disabled:opacity-45", "motion-safe:active:scale-[0.96]"],
+    [
+        "inline-flex shrink-0 items-center justify-center rounded-md",
+        "outline-none focus-visible:outline-none data-[input-modality=keyboard]:focus-visible:ring-2 data-[input-modality=keyboard]:focus-visible:ring-ring",
+        "disabled:pointer-events-none disabled:opacity-45",
+        "motion-safe:active:scale-[0.96]",
+    ],
     {
         variants: {
             variant: {
@@ -58,9 +63,31 @@ export type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
         active?: boolean;
     };
 
-export function IconButton({ variant, size, icon: Icon, loading = false, active = false, className, type = "button", disabled, ...props }: IconButtonProps) {
+export function IconButton({ variant, size, icon: Icon, loading = false, active = false, className, type = "button", disabled, onPointerDown, onKeyDown, onBlur, ...props }: IconButtonProps) {
+    const [inputModality, setInputModality] = useState<"pointer" | "keyboard">("pointer");
     return (
-        <button data-slot="icon-button" type={type} disabled={disabled || loading} aria-busy={loading || undefined} data-active={active || undefined} className={cn(iconButtonVariants({ variant, size }), className)} {...props}>
+        <button
+            data-slot="icon-button"
+            data-input-modality={inputModality}
+            type={type}
+            disabled={disabled || loading}
+            aria-busy={loading || undefined}
+            data-active={active || undefined}
+            className={cn(iconButtonVariants({ variant, size }), className)}
+            onPointerDown={(event) => {
+                setInputModality("pointer");
+                onPointerDown?.(event);
+            }}
+            onKeyDown={(event) => {
+                if (event.key === "Tab" || event.key === "Enter" || event.key === " ") setInputModality("keyboard");
+                onKeyDown?.(event);
+            }}
+            onBlur={(event) => {
+                setInputModality("pointer");
+                onBlur?.(event);
+            }}
+            {...props}
+        >
             {loading ? <Loader2 aria-hidden className="animate-spin" /> : <Icon aria-hidden />}
         </button>
     );

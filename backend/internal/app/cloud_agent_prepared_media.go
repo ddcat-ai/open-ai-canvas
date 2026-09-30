@@ -35,6 +35,7 @@ type cloudAgentPreparedMedia struct {
 	Quote              cloudAgentMediaQuote `json:"quote"`
 	Input              map[string]any       `json:"input,omitempty"`
 	ResourceSignatures map[string]string    `json:"resourceSignatures,omitempty"`
+	CharacterVersions  map[string]string    `json:"characterVersions,omitempty"`
 }
 
 func (p *cloudAgentPreparedMedia) publicView() *cloudAgentPreparedMedia {
@@ -70,7 +71,7 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 	}
 	resourceProjection := func(metadata map[string]any) map[string]any {
 		resource := map[string]any{}
-		for _, key := range []string{"storageKey", "assetId", "resourceId", "generationTaskId", "outputReference", "status", "mimeType", "naturalWidth", "naturalHeight", "width", "height", "durationMs", "etag"} {
+		for _, key := range []string{"storageKey", "assetId", "resourceId", "generationTaskId", "outputReference", "status", "mimeType", "naturalWidth", "naturalHeight", "width", "height", "durationMs", "etag", "characterAssetId", "characterVersionId", "characterVersionPolicy"} {
 			if value, exists := metadata[key]; exists {
 				resource[key] = value
 			}
@@ -110,7 +111,7 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 	if args.SourceNodeID != "" {
 		node := nodes[args.SourceNodeID]
 		metadata, _ := node["metadata"].(map[string]any)
-		source = map[string]any{"id": args.SourceNodeID, "type": node["type"], "content": metadata["content"], "prompt": metadata["prompt"]}
+		source = map[string]any{"id": args.SourceNodeID, "type": node["type"], "content": metadata["content"], "prompt": metadata["prompt"], "characterAssetId": metadata["characterAssetId"], "characterVersionId": metadata["characterVersionId"], "characterVersionPolicy": metadata["characterVersionPolicy"]}
 	}
 	edges := []any{}
 	for _, edge := range creationMaps(doc["connections"]) {
@@ -180,6 +181,7 @@ func prepareCloudAgentMediaApproval(repo *repository.Repository, userID string, 
 		return nil, err
 	}
 	prepared := &cloudAgentPreparedMedia{Version: 1, GenerationID: newID(), DependencyHash: dependency, ResolvedHash: resolved, QuoteHash: cloudAgentQuoteHash(order), Input: request.Input, ResourceSignatures: map[string]string{}, Quote: cloudAgentMediaQuote{ID: newID(), ExpiresAt: time.Now().UTC().Add(cloudAgentMediaQuoteLifetime)}}
+	prepared.CharacterVersions = plan.Args.CharacterVersions
 	if order != nil {
 		prepared.Quote.AmountMicrocredits, prepared.Quote.BillingMode = order.AmountMicrocredits, order.BillingMode
 		prepared.Quote.PriceVersion, prepared.Quote.PriceTierID, prepared.Quote.PriceTierVersion = order.PriceVersion, order.PriceTierID, order.PriceTierVersion
@@ -221,6 +223,26 @@ func validateCloudAgentPreparedAdmission(repo *repository.Repository, userID str
 	}
 	if dependency != prepared.DependencyHash {
 		return creationConflict("画布生成依赖已变化，请重新准备并批准；未提交任务")
+	}
+	if len(prepared.CharacterVersions) > 0 {
+		canvas, err := repo.CanvasProjectForUser(userID, task.ProjectID)
+		if err != nil {
+			return err
+		}
+		nodes, err := creationObjects(doc["nodes"])
+		if err != nil {
+			return err
+		}
+		for id, versionID := range prepared.CharacterVersions {
+			node := nodes[id]
+			if node == nil || !cloudAgentCharacterNode(node) {
+				return creationConflict("角色卡已变化，请重新准备并批准；未提交任务")
+			}
+			character, err := cloudAgentResolveCharacter(repo, userID, canvas.ProjectID, node)
+			if err != nil || character.Card.VersionID != versionID {
+				return creationConflict("角色卡版本已变化，请重新准备并批准；未提交任务")
+			}
+		}
 	}
 	hash, err := cloudAgentResolvedMediaHash(task)
 	if err != nil {

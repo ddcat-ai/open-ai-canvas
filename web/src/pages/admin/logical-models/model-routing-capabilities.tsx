@@ -1,4 +1,4 @@
-import { Button, InputNumber, Select, Tag } from "antd";
+import { Button, InputNumber, Tag } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
 import { Callout } from "@/pages/admin/ui/controls";
 import { RotateCcw } from "lucide-react";
@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import type { CapabilityImageSize, CapabilitySpec, OptionConstraint } from "@/services/api/logical-models";
 import type { ChannelModel } from "@/services/api/wallet";
 import { STANDARD_IMAGE_SIZE_VALUES } from "@/lib/model-capabilities";
+import { Select } from "@/components/ui/base/select";
 
 export type CapabilityKind = CapabilitySpec["capability"];
 export type Scalar = string | number | boolean;

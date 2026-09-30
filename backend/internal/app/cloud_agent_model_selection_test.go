@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -88,6 +89,22 @@ func TestCloudAgentMediaToolsDeclareExclusiveModelSelection(t *testing.T) {
 		parameters := function["parameters"].(map[string]any)
 		if !strings.Contains(function["description"].(string), cloudAgentModelSelectionDescription) || parameters["additionalProperties"] != false {
 			t.Fatalf("incomplete model selection schema: %#v", parameters)
+		}
+		oneOf, ok := parameters["oneOf"].([]map[string]any)
+		if !ok || len(oneOf) != 2 {
+			t.Fatalf("model selection must be explicit and mutually exclusive: %#v", parameters["oneOf"])
+		}
+		if got := oneOf[0]["required"]; !strings.Contains(fmt.Sprint(got), "logicalModelId") {
+			t.Fatalf("logical model branch missing: %#v", oneOf)
+		}
+		if got := oneOf[1]["required"]; !strings.Contains(fmt.Sprint(got), "channelId") || !strings.Contains(fmt.Sprint(got), "channelModelKey") {
+			t.Fatalf("channel model branch missing: %#v", oneOf)
+		}
+		if _, ok := oneOf[0]["not"]; !ok {
+			t.Fatalf("logical model branch must reject mixed channel fields: %#v", oneOf[0])
+		}
+		if _, ok := oneOf[1]["not"]; !ok {
+			t.Fatalf("channel model branch must reject logicalModelId: %#v", oneOf[1])
 		}
 		props := parameters["properties"].(map[string]any)
 		for _, field := range []string{"logicalModelId", "channelId", "channelModelKey"} {

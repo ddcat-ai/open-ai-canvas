@@ -4,14 +4,19 @@ import (
 	"encoding/json"
 	"infinite-canvas/backend/internal/assets"
 	"infinite-canvas/backend/internal/kernel"
+	"net/http"
+	"strconv"
 	"strings"
 
 	"infinite-canvas/backend/internal/model"
 )
 
 type MediaAssetReference struct {
-	AssetID    string
-	ResourceID string
+	AssetID       string
+	ResourceID    string
+	NodeID        string
+	Path          string
+	ReferenceType string
 }
 
 // validateCanvasMediaAssets is the final server-side invariant for canvas sync:
@@ -23,17 +28,24 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 	if err != nil {
 		return kernel.BadAuthRequest("画布媒体数据格式错误")
 	}
-	if len(references) == 0 {
+	allResourceReferences, err := assets.CollectDocumentResourceReferences(string(raw))
+	if err != nil {
+		return kernel.BadAuthRequest("画布媒体数据格式错误")
+	}
+	if len(references) == 0 && len(allResourceReferences) == 0 {
 		return nil
 	}
 
 	assetIDSet := make(map[string]struct{}, len(references))
-	resourceIDSet := make(map[string]struct{}, len(references))
+	resourceIDSet := make(map[string]struct{}, len(references)+len(allResourceReferences))
 	for _, reference := range references {
 		if reference.AssetID == "" {
 			return kernel.BadAuthRequest("画布媒体尚未进入素材库，请等待同步完成后重试")
 		}
 		assetIDSet[reference.AssetID] = struct{}{}
+		resourceIDSet[reference.ResourceID] = struct{}{}
+	}
+	for _, reference := range allResourceReferences {
 		resourceIDSet[reference.ResourceID] = struct{}{}
 	}
 
@@ -56,11 +68,18 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 			readyResources[resource.ID] = struct{}{}
 		}
 	}
+	missing := make([]assets.DocumentResourceReference, 0)
+	for _, reference := range allResourceReferences {
+		if _, exists := readyResources[reference.ResourceID]; !exists {
+			reference.Source = "current"
+			missing = append(missing, reference)
+		}
+	}
+	if len(missing) > 0 {
+		return canvasResourcesMissingError(missing)
+	}
 
 	for _, reference := range references {
-		if _, exists := readyResources[reference.ResourceID]; !exists {
-			return kernel.BadAuthRequest("画布媒体对应的云端资源不存在或尚未就绪，请重新上传")
-		}
 		resourceIDs, assetExists := assetResources[reference.AssetID]
 		if !assetExists {
 			return kernel.BadAuthRequest("画布媒体尚未进入素材库，请等待同步完成后重试")
@@ -70,6 +89,18 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 		}
 	}
 	return nil
+}
+
+func canvasResourcesMissingError(references []assets.DocumentResourceReference) *kernel.AppError {
+	ids := make(map[string]struct{}, len(references))
+	for _, reference := range references {
+		ids[reference.ResourceID] = struct{}{}
+	}
+	err := kernel.NewAppError(http.StatusConflict, "画布引用的素材已变化，当前内容未被覆盖，请修复缺失素材后重试")
+	err.Code = kernel.CodeCanvasResourcesMissing
+	err.Reason = kernel.ReasonCanvasResourcesMissing
+	err.Details = map[string]any{"resourceIds": assets.SortedIDs(ids), "missingResources": references}
+	return err
 }
 
 // validateAssetCanvasReferences prevents an Asset update from changing the
@@ -131,6 +162,7 @@ func (s *Service) ValidateAssetReplacementCanvasReferences(userID string, replac
 func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
 	var payload struct {
 		Nodes []struct {
+			ID       string `json:"id"`
 			Type     string `json:"type"`
 			Metadata struct {
 				AssetID    string `json:"assetId"`
@@ -160,15 +192,16 @@ func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
 		if !isCanvasMediaKind(node.Type) {
 			continue
 		}
+		assetID := strings.TrimSpace(node.Metadata.AssetID)
 		resourceID := firstCanvasResourceID(node.Metadata.StorageKey, node.Metadata.Content)
-		if resourceID == "" {
-			continue
+		if resourceID != "" {
+			references = append(references, MediaAssetReference{
+				AssetID: assetID, ResourceID: resourceID, NodeID: node.ID,
+				Path: "nodes[" + node.ID + "].metadata.storageKey", ReferenceType: "storageKey",
+			})
 		}
-		references = append(references, MediaAssetReference{
-			AssetID: strings.TrimSpace(node.Metadata.AssetID), ResourceID: resourceID,
-		})
 	}
-	for _, clip := range payload.Timeline.Clips {
+	for index, clip := range payload.Timeline.Clips {
 		media := clip.DirectMedia
 		if media == nil || !isCanvasMediaKind(media.Kind) {
 			continue
@@ -179,6 +212,7 @@ func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
 		}
 		references = append(references, MediaAssetReference{
 			AssetID: strings.TrimSpace(media.AssetID), ResourceID: resourceID,
+			Path: "timeline.clips[" + strconv.Itoa(index) + "].directMedia", ReferenceType: "directMedia",
 		})
 	}
 	return references, nil

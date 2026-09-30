@@ -10,20 +10,20 @@ import (
 	"time"
 
 	"infinite-canvas/backend/internal/model"
-
-	"gorm.io/gorm"
 )
 
 const runtimePolicySettingKey = "runtime_policy"
 
 const (
-	maxRuntimeUploadMB       int64 = 999
-	maxRuntimeStorageGB      int64 = 999
-	maxRuntimeDataMB         int64 = 999_999
-	maxRuntimeCount          int64 = 999_999_999
-	maxRuntimeRate                 = 999_999
-	maxRuntimeConcurrency          = 999
-	maxRuntimeTimeoutMinutes       = 9_999
+	maxRuntimeUploadMB        int64 = 999
+	maxRuntimeStorageGB       int64 = 999
+	maxRuntimeDataMB          int64 = 999_999
+	maxRuntimeCount           int64 = 999_999_999
+	maxRuntimeRate                  = 999_999
+	maxRuntimeConcurrency           = 999
+	maxRuntimeTimeoutMinutes        = 9_999
+	defaultWorkerConcurrency        = 8
+	defaultChannelConcurrency       = 8
 )
 
 // 画布 Agent 单步的输出上限与执行时限。上限是"每次模型调用"的边界（思考 + 正文 + 工具参数），
@@ -36,6 +36,9 @@ const (
 	MinRuntimeAgentStepTimeoutSeconds   = 30
 	MaxRuntimeAgentStepTimeoutSeconds   = 3_600
 	DefaultRuntimeAgentStepTimeout      = 0
+	MinRuntimeAgentSessions             = 1
+	MaxRuntimeAgentSessions             = 64
+	DefaultRuntimeAgentSessions         = 30
 )
 
 // agentStepMaxOutputTokensDefault 读取部署级覆盖并按同一套范围夹取；环境变量无法表达"不限制"（0），
@@ -67,6 +70,14 @@ type RuntimeResourcePolicy struct {
 	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
 }
 
+type RuntimeStoragePolicy struct {
+	TransferTimeoutSeconds      int   `json:"transferTimeoutSeconds"`
+	AccessURLTTLSeconds         int   `json:"accessURLTTLSeconds"`
+	ProviderAccessURLTTLSeconds int   `json:"providerAccessURLTTLSeconds"`
+	NonSeekableBufferMB         int64 `json:"nonSeekableBufferMB"`
+	ErrorBodyKB                 int64 `json:"errorBodyKB"`
+}
+
 type RuntimeTaskPolicy struct {
 	WorkerConcurrency        int `json:"workerConcurrency"`
 	ChannelConcurrency       int `json:"channelConcurrency"`
@@ -82,6 +93,8 @@ type RuntimeTaskPolicy struct {
 	AgentStepMaxOutputTokens int `json:"agentStepMaxOutputTokens"`
 	// AgentStepTimeoutSeconds 是画布 Agent 单步模型调用的秒级墙钟；0 表示沿用文本任务超时。
 	AgentStepTimeoutSeconds int `json:"agentStepTimeoutSeconds"`
+	// AgentMaxSessions 是同时进行中的画布 Agent 轮次上限。审批等待不占用名额。
+	AgentMaxSessions int `json:"agentMaxSessions"`
 }
 
 type RuntimeRequestPolicy struct {
@@ -108,6 +121,7 @@ type RuntimeRequestPolicy struct {
 
 type RuntimePolicySetting struct {
 	Resource RuntimeResourcePolicy `json:"resource"`
+	Storage  RuntimeStoragePolicy  `json:"storage"`
 	Task     RuntimeTaskPolicy     `json:"task"`
 	Request  RuntimeRequestPolicy  `json:"request"`
 }
@@ -145,8 +159,15 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			APICallLogCount:         100_000,
 			RecycleBinRetentionDays: 30,
 		},
+		Storage: RuntimeStoragePolicy{
+			TransferTimeoutSeconds:      120,
+			AccessURLTTLSeconds:         14_400,
+			ProviderAccessURLTTLSeconds: 14_400,
+			NonSeekableBufferMB:         64,
+			ErrorBodyKB:                 1,
+		},
 		Task: RuntimeTaskPolicy{
-			WorkerConcurrency:        effectiveChannelConcurrencyLimit(envInt("CANVAS_WORKER_CONCURRENCY", TaskWorkerConcurrency)),
+			WorkerConcurrency:        defaultWorkerConcurrencyLimit(),
 			ChannelConcurrency:       defaultChannelConcurrencyLimit(),
 			ActiveTaskLimit:          5,
 			ImageTimeoutMinutes:      8,
@@ -157,6 +178,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			DefaultTimeoutMinutes:    10,
 			AgentStepMaxOutputTokens: agentStepMaxOutputTokensDefault(),
 			AgentStepTimeoutSeconds:  agentStepTimeoutSecondsDefault(),
+			AgentMaxSessions:         DefaultRuntimeAgentSessions,
 		},
 		Request: RuntimeRequestPolicy{
 			TaskCreatePerMinute:        30,
@@ -197,6 +219,7 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AgentStepMaxOutputTokens: MaxRuntimeAgentStepOutputTokens, AgentStepTimeoutSeconds: MaxRuntimeAgentStepTimeoutSeconds,
+		AgentMaxSessions: MaxRuntimeAgentSessions,
 	}
 	value.Request = RuntimeRequestPolicy{
 		TaskCreatePerMinute:     maxRuntimeRate,
@@ -216,8 +239,21 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 func SelfUseRuntimePolicy() RuntimePolicySetting { return selfUseRuntimePolicy() }
 
 func (s *Service) RuntimePolicy() (RuntimePolicySetting, error) {
-	_, value, err := s.readRuntimePolicy()
-	return value, err
+	if s.runtimePolicyCache == nil {
+		_, value, err := s.readRuntimePolicy()
+		return value, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return s.runtimePolicyCache.Get(ctx, runtimePolicySettingKey, func(ctx context.Context) (RuntimePolicySetting, int, error) {
+		reader := &Service{
+			repo:        s.repo.WithContext(ctx),
+			host:        s.host,
+			Coordinator: s.Coordinator,
+		}
+		_, value, err := reader.readRuntimePolicy()
+		return value, 2048, err
+	})
 }
 
 func (s *Service) RuntimeConcurrencySetting() (RuntimeTaskPolicy, error) {
@@ -225,7 +261,7 @@ func (s *Service) RuntimeConcurrencySetting() (RuntimeTaskPolicy, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	return s.concurrencyCache.Get(ctx, runtimePolicySettingKey, func(ctx context.Context) (RuntimeTaskPolicy, int, error) {
-		reader := &Service{repo: s.repo.WithContext(ctx), host: s.host, Coordinator: s.Coordinator, concurrencyCache: s.concurrencyCache}
+		reader := &Service{repo: s.repo.WithContext(ctx), host: s.host, Coordinator: s.Coordinator, concurrencyCache: s.concurrencyCache, runtimePolicyCache: s.runtimePolicyCache}
 		policy, err := reader.RuntimePolicy()
 		return policy.Task, 256, err
 	})
@@ -284,6 +320,9 @@ func (s *Service) UpdateRuntimePolicySetting(actor *model.User, value RuntimePol
 	}
 
 	s.concurrencyCache.Clear()
+	if s.runtimePolicyCache != nil {
+		s.runtimePolicyCache.Clear()
+	}
 	if err := s.appendAdminAudit(actor, "runtime_policy.update", "system_setting", runtimePolicySettingKey, "更新资源与请求策略", map[string]any{"before": before, "after": value}); err != nil {
 		return nil, err
 	}
@@ -303,6 +342,9 @@ func (s *Service) ResetRuntimePolicySetting(actor *model.User) (*PublicRuntimePo
 	}
 
 	s.concurrencyCache.Clear()
+	if s.runtimePolicyCache != nil {
+		s.runtimePolicyCache.Clear()
+	}
 	after := DefaultRuntimePolicy()
 	if err := s.appendAdminAudit(actor, "runtime_policy.reset", "system_setting", runtimePolicySettingKey, "重置资源与请求策略", map[string]any{"before": before, "after": after}); err != nil {
 		return nil, err
@@ -311,13 +353,13 @@ func (s *Service) ResetRuntimePolicySetting(actor *model.User) (*PublicRuntimePo
 }
 
 func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySetting, error) {
-	setting, err := s.repo.SystemSetting(runtimePolicySettingKey)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		value := DefaultRuntimePolicy()
-		return nil, value, validateRuntimePolicy(value)
-	}
+	setting, err := s.repo.SystemSettingOptional(runtimePolicySettingKey)
 	if err != nil {
 		return nil, RuntimePolicySetting{}, err
+	}
+	if setting == nil {
+		value := DefaultRuntimePolicy()
+		return nil, value, validateRuntimePolicy(value)
 	}
 	value := DefaultRuntimePolicy()
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
@@ -363,6 +405,22 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	if resource.RecycleBinRetentionDays < 0 || resource.RecycleBinRetentionDays > 365 {
 		return kernel.BadAuthRequest("回收站保留天数必须是 0-365 的整数 (0 表示不自动清理)")
 	}
+	storage := value.Storage
+	if storage.TransferTimeoutSeconds < 10 || storage.TransferTimeoutSeconds > 3_600 {
+		return kernel.BadAuthRequest("对象存储传输超时必须是 10-3600 秒的整数")
+	}
+	if storage.AccessURLTTLSeconds < 60 || storage.AccessURLTTLSeconds > 86_400 {
+		return kernel.BadAuthRequest("对象存储访问地址有效期必须是 60-86400 秒的整数")
+	}
+	if storage.ProviderAccessURLTTLSeconds < 300 || storage.ProviderAccessURLTTLSeconds > 86_400 {
+		return kernel.BadAuthRequest("模型输入资源地址有效期必须是 300-86400 秒的整数")
+	}
+	if storage.NonSeekableBufferMB < 1 || storage.NonSeekableBufferMB > maxRuntimeUploadMB {
+		return kernel.BadAuthRequest(fmt.Sprintf("对象存储非可寻址上传缓冲必须是 1-%d MB 的整数", maxRuntimeUploadMB))
+	}
+	if storage.ErrorBodyKB < 1 || storage.ErrorBodyKB > 1024 {
+		return kernel.BadAuthRequest("对象存储错误响应保留必须是 1-1024 KB 的整数")
+	}
 	task := value.Task
 	for label, item := range map[string]int{
 		"Worker 并发数": task.WorkerConcurrency, "全局渠道并发数": task.ChannelConcurrency, "活动任务上限": task.ActiveTaskLimit,
@@ -385,6 +443,9 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	}
 	if task.AgentStepTimeoutSeconds != 0 && (task.AgentStepTimeoutSeconds < MinRuntimeAgentStepTimeoutSeconds || task.AgentStepTimeoutSeconds > MaxRuntimeAgentStepTimeoutSeconds) {
 		return kernel.BadAuthRequest(fmt.Sprintf("Agent 单步超时必须是 0 或 %d-%d 秒的整数 (0 表示沿用文本任务超时)", MinRuntimeAgentStepTimeoutSeconds, MaxRuntimeAgentStepTimeoutSeconds))
+	}
+	if task.AgentMaxSessions < MinRuntimeAgentSessions || task.AgentMaxSessions > MaxRuntimeAgentSessions {
+		return kernel.BadAuthRequest(fmt.Sprintf("Agent 同时对话上限必须是 %d-%d 的整数", MinRuntimeAgentSessions, MaxRuntimeAgentSessions))
 	}
 	request := value.Request
 	for label, item := range map[string]int{

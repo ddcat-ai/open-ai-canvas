@@ -22,6 +22,8 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 		"POST /api/tasks":                   false,
 		"POST /api/tasks/:id/recover-media": false,
 		"GET /api/resources":                false,
+		"GET /api/skills/presets":           false,
+		"GET /api/agent/skills/usage":       false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path
@@ -39,5 +41,11 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/openapi.yaml", nil))
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "openapi: 3.0.3") || !strings.Contains(recorder.Body.String(), "url: /api") {
 		t.Fatalf("openapi.yaml status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/skills/presets", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"presets"`) {
+		t.Fatalf("skills presets status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

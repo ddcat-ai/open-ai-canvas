@@ -165,7 +165,7 @@ func (s *Service) prepareCloudAgentImageInspection(userID, canvasID string, stat
 	}
 	cacheKey := cloudAgentImageInspectionCacheKey(args.NodeID, stringValue(reference["storageKey"]), canvas.Revision)
 	if state.ImageInspectionReads != nil && state.ImageInspectionReads[cacheKey] > 0 {
-		return nil, &cloudAgentReadLoopError{ToolName: "canvas_inspect_image", Count: state.ImageInspectionReads[cacheKey] + 1}
+		return nil, &cloudAgentReadLoopError{ToolName: "canvas_inspect_image", Count: state.ImageInspectionReads[cacheKey] + 1, ReasonCode: "vision_read_guard"}
 	}
 	receipt := map[string]any{
 		"nodeId":   args.NodeID,

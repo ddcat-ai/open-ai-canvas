@@ -98,7 +98,7 @@ export default function ForgotPasswordPage() {
                     <Input
                         id="recovery-email"
                         size="large"
-                        prefix={<Mail className="size-4 text-white/35" />}
+                        prefix={<Mail className="auth-scene-icon size-4" />}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                         placeholder="请输入绑定邮箱"
@@ -120,7 +120,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={submitReset} className="space-y-4">
             <AuthField label="账号邮箱" htmlFor="recovery-email-confirm">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                    <Input id="recovery-email-confirm" size="large" prefix={<Mail className="size-4 text-white/35" />} value={email} readOnly autoComplete="email" />
+                    <Input id="recovery-email-confirm" size="large" prefix={<Mail className="auth-scene-icon size-4" />} value={email} readOnly autoComplete="email" />
                     <Button htmlType="button" size="large" onClick={editEmail}>
                         修改邮箱
                     </Button>
@@ -131,7 +131,7 @@ export default function ForgotPasswordPage() {
                     <Input
                         id="recovery-code"
                         size="large"
-                        prefix={<ShieldCheck className="size-4 text-white/35" />}
+                        prefix={<ShieldCheck className="auth-scene-icon size-4" />}
                         value={emailCode}
                         onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                         placeholder="6 位验证码"
@@ -149,7 +149,7 @@ export default function ForgotPasswordPage() {
                     <Input.Password
                         id="recovery-password"
                         size="large"
-                        prefix={<LockKeyhole className="size-4 text-white/35" />}
+                        prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder="至少 8 位"
@@ -162,7 +162,7 @@ export default function ForgotPasswordPage() {
                     <Input.Password
                         id="recovery-confirm-password"
                         size="large"
-                        prefix={<LockKeyhole className="size-4 text-white/35" />}
+                        prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={confirmPassword}
                         onChange={(event) => setConfirmPassword(event.target.value)}
                         placeholder="再次输入密码"
@@ -183,7 +183,7 @@ export default function ForgotPasswordPage() {
 function AuthField({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
     return (
         <div className="space-y-2">
-            <label htmlFor={htmlFor} className="block text-xs font-medium text-white/62">
+            <label htmlFor={htmlFor} className="auth-scene-label block text-xs font-medium">
                 {label}
             </label>
             {children}
@@ -194,7 +194,7 @@ function AuthField({ label, htmlFor, children }: { label: string; htmlFor: strin
 function BackToLogin({ to }: { to: string }) {
     return (
         <div className="text-center">
-            <Link to={to} className="inline-flex min-h-8 items-center gap-1.5 rounded-sm text-xs text-white/50 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45">
+            <Link to={to} className="auth-scene-link inline-flex min-h-8 items-center gap-1.5 rounded-sm text-xs transition-colors">
                 <ArrowLeft className="size-3.5" />
                 返回登录
             </Link>
@@ -204,7 +204,7 @@ function BackToLogin({ to }: { to: string }) {
 
 function Notice({ icon, children }: { icon: ReactNode; children: ReactNode }) {
     return (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] px-3 py-2.5 text-xs leading-5 text-amber-100/78">
+        <div className="auth-scene-notice flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5">
             <span className="mt-0.5 shrink-0">{icon}</span>
             {children}
         </div>

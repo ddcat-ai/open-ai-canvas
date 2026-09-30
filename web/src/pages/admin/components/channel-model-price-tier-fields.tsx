@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, InputNumber, Segmented, Select, Switch, type FormInstance } from "antd";
+import { Alert, Button, Form, Input, InputNumber, Segmented, Switch, type FormInstance } from "antd";
 import { Trash2 } from "lucide-react";
 import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolSupportsTokenBilling, type ModelProtocol } from "@/lib/model-protocols";
@@ -6,6 +6,7 @@ import type { ModelCapabilityChoice as EditableCapability } from "@/components/m
 import type { ChannelModelFormValues as FormValues } from "./channel-model-editor-form";
 import { normalizeUpstreamModelKey } from "./channel-model-price-tier-form";
 import { CreditCostFields } from "./credit-cost-fields";
+import { Select } from "@/components/ui/base/select";
 
 export function PriceTierFields({
     index,

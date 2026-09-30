@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -140,14 +141,11 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".yingce-plugin") {
 			continue
 		}
-		packageData, err := os.ReadFile(filepath.Join(officialDir, entry.Name()))
-		if err != nil {
-			return fmt.Errorf("读取官方插件包 %s：%w", entry.Name(), err)
-		}
-		pkg, err := protocol.ParsePluginPackage(packageData)
+		official, err := inspectOfficialPluginPackage(filepath.Join(officialDir, entry.Name()))
 		if err != nil {
 			return fmt.Errorf("校验官方插件包 %s：%w", entry.Name(), err)
 		}
+		packageData, pkg := official.data, official.info
 		if strings.HasPrefix(strings.TrimSpace(pkg.Manifest.Runtime.Backend), "host:") {
 			return fmt.Errorf("官方插件 %q 不能依赖 host 执行器", pkg.Manifest.Metadata.ID)
 		}
@@ -173,9 +171,9 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 		if err != nil {
 			return fmt.Errorf("编码官方插件 %q：%w", id, err)
 		}
-		hash := pluginHash(packageData)
+		hash := official.hash
 		packageName := hash + ".yingce-plugin"
-		if err := writePluginFile(filepath.Join(c.packageDir, packageName), packageData); err != nil {
+		if err := cachePluginPackage(filepath.Join(c.packageDir, packageName), packageData, official.path); err != nil {
 			return fmt.Errorf("缓存官方插件 %q：%w", id, err)
 		}
 		now := time.Now().UTC()
@@ -243,6 +241,59 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return c.writeRegistry(result)
+}
+
+// officialPluginPackage 是一次读取官方插件包得到的全部结果：原始字节、摘要与清单。
+type officialPluginPackage struct {
+	path string
+	data []byte
+	hash string
+	info protocol.PluginPackageInfo
+}
+
+type officialPluginPackageKey struct {
+	path    string
+	size    int64
+	modTime int64
+}
+
+// officialPluginPackageCache 在进程内缓存官方插件包的读取结果。
+//
+// 官方包随镜像发布、运行期间不会变化；以路径 + 大小 + 修改时间作键，文件被替换时
+// 自然失效。生产环境每个进程只构造一次 Service，缓存几乎无收益；但测试会构造上千个
+// Service，每次重新读取、哈希、解析 85MB 的官方包会让后端测试慢数分钟。
+var officialPluginPackageCache sync.Map // officialPluginPackageKey -> officialPluginPackage
+
+func inspectOfficialPluginPackage(path string) (officialPluginPackage, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return officialPluginPackage{}, err
+	}
+	key := officialPluginPackageKey{path: path, size: info.Size(), modTime: info.ModTime().UnixNano()}
+	if cached, ok := officialPluginPackageCache.Load(key); ok {
+		result := cached.(officialPluginPackage)
+		// Manifest 含指针与切片字段；每个调用方拿到独立解码的副本，缓存条目永远不会被共享修改。
+		// 清单只有几 KB，重新解码的成本可以忽略，昂贵的是读包、哈希与 zip 结构校验。
+		var manifest protocol.Manifest
+		if err := json.Unmarshal(result.info.ManifestRaw, &manifest); err != nil {
+			return officialPluginPackage{}, err
+		}
+		result.info.Manifest = manifest
+		return result, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return officialPluginPackage{}, err
+	}
+	// 启动只需要清单：支付插件包内含多平台可执行文件（解压约 44MB/个），
+	// 真正落盘执行时 reload 会按摘要校验并只解压本机平台需要的文件。
+	pkg, err := protocol.InspectPluginPackage(data)
+	if err != nil {
+		return officialPluginPackage{}, err
+	}
+	result := officialPluginPackage{path: path, data: data, hash: pluginHash(data), info: pkg}
+	officialPluginPackageCache.Store(key, result)
+	return result, nil
 }
 
 func isSystemPaymentPluginID(id string) bool {
@@ -435,14 +486,7 @@ func (c *pluginRuntime) reload() error {
 		record.PackageSHA256 = packageSHA256
 		record.SHA256 = packageSHA256
 		plugins[id] = record
-		pkg, parseErr := protocol.ParsePluginPackage(packageData)
-		if parseErr != nil {
-			record.Status = "invalid"
-			record.Error = parseErr.Error()
-			plugins[id] = record
-			continue
-		}
-		runtimeDir, materializeErr := materializePaymentBackend(c.packageDir, packageSHA256, pkg)
+		runtimeDir, materializeErr := materializePaymentBackendFromPackage(c.packageDir, packageSHA256, manifest.Runtime.BackendEntry, packageData)
 		if materializeErr != nil {
 			record.Status = "invalid"
 			record.Error = materializeErr.Error()
@@ -478,6 +522,96 @@ func (c *pluginRuntime) reload() error {
 	return nil
 }
 
+// materializePaymentBackendFromPackage 先按摘要检查运行目录是否已就绪，只有需要落盘时
+// 才完整解析插件包。摘要已由调用方对原始字节校验，就绪标记与摘要一一对应，
+// 因此跳过解析不会放过被篡改的包。
+func materializePaymentBackendFromPackage(packageDir, hash, backendEntry string, packageData []byte) (string, error) {
+	digest := strings.ToLower(strings.TrimSpace(hash))
+	root := filepath.Join(packageDir, "runtime", digest)
+	if len(digest) == sha256.Size*2 && paymentRuntimeReady(root, digest, strings.TrimSpace(backendEntry)) {
+		return root, nil
+	}
+	if len(digest) == sha256.Size*2 && linkReadyPaymentRuntime(packageDir, digest, strings.TrimSpace(backendEntry)) {
+		return root, nil
+	}
+	defer func() { rememberPaymentRuntime(digest, root, strings.TrimSpace(backendEntry)) }()
+	// 只解压本机平台能执行的文件：官方包内含 7 个平台的可执行文件，
+	// 其余平台的产物永远不会被 ResolveRPCBackendPath 选中，解压只是浪费 IO。
+	entry := strings.TrimSpace(backendEntry)
+	hostCandidates := make(map[string]struct{})
+	for _, candidate := range protocol.PaymentRPCBackendCandidates(entry, runtime.GOOS, runtime.GOARCH) {
+		hostCandidates[candidate] = struct{}{}
+	}
+	pkg, err := protocol.ParsePluginPackageFiles(packageData, func(name string) bool {
+		if !strings.HasPrefix(name, "backend/") {
+			return false
+		}
+		if _, host := hostCandidates[name]; host {
+			return true
+		}
+		return !protocol.IsPaymentRPCBackendArtifact(entry, name)
+	})
+	if err != nil {
+		return "", err
+	}
+	return materializePaymentBackend(packageDir, hash, pkg)
+}
+
+// readyPaymentRuntimes 记录本进程内已就绪的支付插件运行目录（摘要 -> 目录）。
+// 同一摘要的运行目录内容完全相同，新的数据目录可以直接硬链接复用，
+// 避免每次重新解压约 6MB 的可执行文件。生产环境只有一个数据目录，这里不会命中。
+var readyPaymentRuntimes sync.Map // digest -> root
+
+func rememberPaymentRuntime(digest, root, backendEntry string) {
+	if paymentRuntimeReady(root, digest, backendEntry) {
+		readyPaymentRuntimes.Store(digest, root)
+	}
+}
+
+// linkReadyPaymentRuntime 把本进程已就绪的同摘要运行目录硬链接到 packageDir。
+// 源目录必须仍然通过就绪校验；任何一步失败都返回 false，由调用方走完整解压。
+func linkReadyPaymentRuntime(packageDir, digest, backendEntry string) bool {
+	cached, ok := readyPaymentRuntimes.Load(digest)
+	if !ok {
+		return false
+	}
+	source := cached.(string)
+	root := filepath.Join(packageDir, "runtime", digest)
+	if source == root || !paymentRuntimeReady(source, digest, backendEntry) {
+		return false
+	}
+	runtimeRoot := filepath.Join(packageDir, "runtime")
+	if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
+		return false
+	}
+	temporaryRoot, err := os.MkdirTemp(runtimeRoot, ".payment-runtime-")
+	if err != nil {
+		return false
+	}
+	defer os.RemoveAll(temporaryRoot)
+	linkErr := filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(temporaryRoot, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o700)
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("unexpected runtime entry %q", rel)
+		}
+		return os.Link(path, target)
+	})
+	if linkErr != nil || os.Rename(temporaryRoot, root) != nil {
+		return false
+	}
+	return paymentRuntimeReady(root, digest, backendEntry)
+}
+
 func materializePaymentBackend(packageDir, hash string, pkg protocol.PluginPackage) (string, error) {
 	digest := strings.ToLower(strings.TrimSpace(hash))
 	if len(digest) != sha256.Size*2 {
@@ -503,7 +637,8 @@ func materializePaymentBackend(packageDir, hash string, pkg protocol.PluginPacka
 	defer os.RemoveAll(temporaryRoot)
 
 	for name, content := range pkg.Files {
-		if !strings.HasPrefix(name, "backend/") || strings.HasSuffix(name, "/") {
+		// content 为 nil 表示该条目按需未解压（见 ParsePluginPackageFiles），不能写成空文件。
+		if content == nil || !strings.HasPrefix(name, "backend/") || strings.HasSuffix(name, "/") {
 			continue
 		}
 		target := filepath.Join(temporaryRoot, filepath.FromSlash(name))
@@ -779,6 +914,22 @@ func (c *pluginRuntime) writeRegistry(records []pluginRegistryRecord) error {
 		return err
 	}
 	return writePluginFile(c.registryPath, data)
+}
+
+// cachePluginPackage 写入以内容摘要命名的插件包缓存。文件名即摘要，且 writePluginFile
+// 通过临时文件 + rename 原子发布，所以同名文件存在且大小一致就是同一份内容，无需重写。
+//
+// source 非空时先尝试硬链接到官方包原文件（同一文件系统内零拷贝）；跨文件系统
+// （生产环境镜像目录与 /data 卷）会失败并回退为普通写入。即使链接到的内容与摘要
+// 不一致，reload 也会按摘要校验并把插件标为 invalid，不会放过错误的包。
+func cachePluginPackage(path string, data []byte, source string) error {
+	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Size() == int64(len(data)) {
+		return nil
+	}
+	if source != "" && os.Link(source, path) == nil {
+		return nil
+	}
+	return writePluginFile(path, data)
 }
 
 func writePluginFile(path string, data []byte) error {

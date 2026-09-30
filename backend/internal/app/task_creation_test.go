@@ -172,6 +172,35 @@ func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t 
 	}
 }
 
+func TestResolveSystemChannelModelSelectionMatchesMiniMax768PTier(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceMiniMaxVideo), "MiniMax-H3")
+	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "video", model.ChannelInterfaceMiniMaxVideo, profile, []model.ChannelModelPriceTier{
+		newSelectionPriceTier("tier-768p", `{"vquality":"768p"}`, "MiniMax-H3", "per_second"),
+		newSelectionPriceTier("tier-2k", `{"vquality":"1440p"}`, "MiniMax-H3", "per_second"),
+	})
+
+	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+		"mode":            "video",
+		"referenceImages": []any{map[string]any{"storageKey": "resource:test"}},
+		"config": map[string]any{
+			"channelId":    channel.ID,
+			"model":        channelModel.ModelKey,
+			"vquality":     "768",
+			"videoSeconds": "15",
+		},
+	}, "canvas_video", "image_to_video")
+	if err != nil {
+		t.Fatalf("resolveSystemChannelModelSelection() error = %v", err)
+	}
+	config := resolved["config"].(map[string]any)
+	if config["priceTierId"] != "tier-768p" {
+		t.Fatalf("priceTierId = %#v, want tier-768p", config["priceTierId"])
+	}
+	if config["vquality"] != "768" {
+		t.Fatalf("execution vquality = %#v, want original provider-facing value 768", config["vquality"])
+	}
+}
+
 func TestResolveSystemChannelModelSelectionAppliesServerDefaults(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
 	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceGrokImage, profile, []model.ChannelModelPriceTier{

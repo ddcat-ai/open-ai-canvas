@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { removeCreationAttachment } from "../src/pages/create/creation-assets";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 function compactSource(source: string) {
     return source.replace(/\s+/g, " ").trim();
@@ -13,7 +14,7 @@ function readCreateSource() {
 }
 
 function readCreateWorkspaceSource() {
-    return readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-workspace.tsx"), "utf8");
+    return moduleGroupSource("pages/create/creation-workspace.tsx");
 }
 
 describe("creation library button", () => {
@@ -65,7 +66,7 @@ describe("creation library button", () => {
 
     test("previews prompt reference images without removing them", () => {
         const createSource = readCreateWorkspaceSource();
-        const canvasSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node-prompt-panel.tsx"), "utf8");
+        const canvasSource = moduleGroupSource("components/canvas/canvas-node-prompt-panel.tsx");
 
         expect(createSource).toContain('className="creation-user-message-attachments"');
         expect(createSource).toContain('setPreviewType(kind === "video" ? "video" : "image")');
@@ -130,7 +131,7 @@ describe("creation library button", () => {
         const createSource = readCreateWorkspaceSource();
 
         expect(assets).toContain("resolveResourceUrl(asset.data.storageKey");
-        expect(createSource).toContain("<CachedResourceImage storageKey={item.storageKey}");
+        expect(createSource.replace(/\s+/g, " ")).toContain("<CachedResourceImage storageKey={item.storageKey}");
         expect(createSource).toContain("resolveResourceUrl(item.storageKey, item.previewUrl)");
     });
 

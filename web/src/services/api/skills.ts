@@ -4,6 +4,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 
 let addedSkillsRequest: { scope: string; promise: Promise<{ skills: Skill[] }> } | null = null;
 let addedSkillsCache: { scope: string; value: { skills: Skill[] }; expiresAt: number } | null = null;
+let addedSkillsCacheVersion = 0;
 
 export type SkillSort = "popular" | "new" | "updated";
 export type SkillScope = "public" | "mine" | "created" | "favorites";
@@ -25,7 +26,7 @@ export type Skill = {
     contentHash: string;
     fileCount: number;
     totalBytes: number;
-    sourceType: "builtin" | "markdown" | "zip" | "github" | string;
+    sourceType: "builtin" | "markdown" | "zip" | string;
     sourceUrl: string;
     sourceRef: string;
     sourceSubdir: string;
@@ -54,9 +55,48 @@ export type Skill = {
     extraInfo: string;
     isAdded: boolean;
     isOwner: boolean;
+    libraryCategoryId?: string;
 };
 
-export type SkillCategory = { value: string; label: string };
+/** /skills/added 只返回运行时目录需要的引用字段，不携带编辑器和同步详情。 */
+export type AddedSkillReference = Pick<Skill, "skillId" | "skillName" | "description" | "versionId" | "version" | "tag" | "isLike" | "isAdded" | "isOwner" | "libraryCategoryId">;
+
+export type SkillCategory = { value: string; label: string; count?: number };
+
+
+export type SkillLibraryCategory = {
+    id: string;
+    name: string;
+    scope: "personal" | "platform";
+    count: number;
+};
+
+export type SkillLibraryCategoryList = {
+    categories: SkillLibraryCategory[];
+    totalCount: number;
+    uncategorizedCount: number;
+};
+
+export type SkillLibraryCategoryMutationInput = {
+    name: string;
+    scope?: "personal" | "platform";
+};
+
+/**
+ * 场景预设：平台只读目录（GET /skills/presets，随二进制内置）。
+ * 内容是「一个起步场景 → 一组已上架技能 ID」，不含任何技能正文，也不占用用户配额。
+ * 预设目录只读；选中技能作用于当前会话，缺失技能会持久安装到用户技能库。
+ */
+export type SkillPreset = {
+    presetId: string;
+    name: string;
+    scene: string;
+    skillIds: string[];
+    rationale: string;
+    source: string;
+    evidence: string;
+    upgrade: string;
+};
 
 export type SkillList = {
     skills: Skill[];
@@ -75,6 +115,8 @@ export type ListSkillsInput = {
     sort?: SkillSort;
     search?: string;
     tag?: string;
+    libraryCategoryId?: string;
+    libraryUncategorized?: boolean;
 };
 
 export type SkillMutationInput = {
@@ -138,18 +180,41 @@ export function listSkills(input: ListSkillsInput = {}) {
     return http.get<SkillList>(`/skills?${params.toString()}`);
 }
 
+
+export function listSkillLibraryCategories(scope: "mine" | "created" = "mine") {
+    return http.get<SkillLibraryCategoryList>("/skills/library-categories", { params: { scope } });
+}
+
+export function createSkillLibraryCategory(input: SkillLibraryCategoryMutationInput) {
+    return http.post<{ category: SkillLibraryCategory }>("/skills/library-categories", input).finally(invalidateAddedSkillsCache);
+}
+
+export function deleteSkillLibraryCategory(id: string) {
+    return http.delete<{ deleted: boolean }>(`/skills/library-categories/${encodeURIComponent(id)}`).finally(invalidateAddedSkillsCache);
+}
+
+export function setSkillLibraryCategory(skillId: string, categoryId: string) {
+    return http.patch<{ skill: Skill }>(`/skills/${encodeURIComponent(skillId)}/library-category`, { categoryId }).finally(invalidateAddedSkillsCache);
+}
+
 export function getSkill(id: string) {
     return http.get<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}`);
 }
 
+/** 场景预设目录：公开只读，与 /skills 同级的市场元数据，无需用户上下文。 */
+export function listSkillPresets() {
+    return http.get<{ presets: SkillPreset[] }>("/skills/presets");
+}
+
 export function listAddedSkills() {
     const scope = getActiveUserScope();
+    const version = addedSkillsCacheVersion;
     const now = Date.now();
     if (addedSkillsCache?.scope === scope && addedSkillsCache.expiresAt > now) return Promise.resolve(addedSkillsCache.value);
     if (addedSkillsRequest?.scope === scope) return addedSkillsRequest.promise;
     const promise = readAddedSkillsWithRetry()
         .then((value) => {
-            addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
+            if (version === addedSkillsCacheVersion) addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
             return value;
         })
         .finally(() => {
@@ -163,7 +228,8 @@ async function readAddedSkillsWithRetry() {
     const retryDelays = [300, 900, 1800];
     for (let attempt = 0; ; attempt += 1) {
         try {
-            return await http.get<{ skills: Skill[] }>("/skills/added");
+            const response = await http.get<{ skills: AddedSkillReference[] }>("/skills/added");
+            return { skills: response.skills.map(normalizeAddedSkillReference) };
         } catch (cause) {
             if (!(cause instanceof ApiError) || !cause.retryable || attempt >= retryDelays.length) throw cause;
             await new Promise<void>((resolve) => globalThis.setTimeout(resolve, retryDelays[attempt]));
@@ -171,8 +237,53 @@ async function readAddedSkillsWithRetry() {
     }
 }
 
+function normalizeAddedSkillReference(skill: AddedSkillReference): Skill {
+    // 兼容旧后端/测试桩返回的最小关系对象；正式接口返回完整的轻量引用时
+    // 才补齐宽 Skill 类型的展示默认值。
+    if (!skill.skillName && !skill.versionId) return skill as unknown as Skill;
+    return {
+        skillId: skill.skillId,
+        skillName: skill.skillName,
+        description: skill.description,
+        versionId: skill.versionId,
+        version: skill.version,
+        contentHash: "",
+        fileCount: 0,
+        totalBytes: 0,
+        sourceType: "",
+        sourceUrl: "",
+        sourceRef: "",
+        sourceSubdir: "",
+        sourceCommit: "",
+        syncStatus: "synced",
+        autoUpdate: false,
+        status: 1,
+        markdownUrl: "",
+        createdAt: "",
+        updatedAt: "",
+        source: 0,
+        tag: skill.tag,
+        sortWeight: 0,
+        isPrivate: false,
+        likeCount: 0,
+        isLike: skill.isLike,
+        ownerUid: "",
+        effectiveUser: { name: "", avatarUrl: "", uid: "" },
+        originalSkillId: null,
+        showcaseMedia: [],
+        addedCount: 0,
+        isTest: false,
+        extraInfo: "",
+        isAdded: skill.isAdded,
+        isOwner: skill.isOwner,
+        libraryCategoryId: skill.libraryCategoryId || "",
+    };
+}
+
 function invalidateAddedSkillsCache() {
+    addedSkillsCacheVersion += 1;
     addedSkillsCache = null;
+    addedSkillsRequest = null;
     if (typeof window !== "undefined") window.dispatchEvent(new Event("canvas-skills-changed"));
 }
 

@@ -102,6 +102,16 @@ func TestCloudAgentNodeCapabilityCardsExplainStoryboardTradeoffs(t *testing.T) {
 	if !strings.Contains(videoGoodFor, "多图参考视频") {
 		t.Fatalf("video capability card does not explain multi-image video: %s", videoGoodFor)
 	}
+	frame := byType["frame"]
+	frameGoodFor := strings.Join(frame["goodFor"].([]string), "\n")
+	frameNotIdealFor := strings.Join(frame["notIdealFor"].([]string), "\n")
+	if !strings.Contains(frameGoodFor, "按场景或镜头组") || !strings.Contains(frameGoodFor, "制作") || !strings.Contains(frameNotIdealFor, "分镜脚本节点") {
+		t.Fatalf("frame capability card does not explain its use cases and limits: %+v", frame)
+	}
+	capabilityGuide := cloudAgentCapabilityGuide()
+	if !strings.Contains(capabilityGuide, "按场景或镜头组") || !strings.Contains(capabilityGuide, "可移动、可折叠") {
+		t.Fatalf("Agent system guide does not explain when to use a canvas frame: %s", capabilityGuide)
+	}
 	guide := strings.Join(result["selectionGuide"].([]string), "\n")
 	if !strings.Contains(guide, "多镜头") || !strings.Contains(guide, "model_list") || !strings.Contains(guide, "不要为了形式") {
 		t.Fatalf("selection guide does not express soft routing: %s", guide)
@@ -272,7 +282,7 @@ func TestCloudAgentStoryboardRejectsUnsafeOrStaleMutations(t *testing.T) {
 		"snapshotHash": "stale", "nodeId": "storyboard-1", "action": "update", "rowId": rowID,
 		"patch": map[string]any{"dialogue": "不应写入"},
 	})
-	if _, err := prepareCloudAgentStoryboardEdit(s.repo, "user", canvas.ID, stale); err == nil || !strings.Contains(err.Error(), "画布已变化") {
+	if _, err := prepareCloudAgentStoryboardEdit(s.repo, "user", canvas.ID, stale); err == nil || !strings.Contains(err.Error(), "被修改过") {
 		t.Fatalf("stale snapshot was not rejected: %v", err)
 	}
 

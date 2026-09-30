@@ -36,7 +36,13 @@ func TestCloudAgentToolErrorClass(t *testing.T) {
 		{"上游 5xx", canvasRequest, call("task_get"), providerHTTPError{StatusCode: 503}, true, cloudAgentToolErrorUpstream, true, "report_to_user"},
 		{"上游 4xx", canvasRequest, call("task_get"), providerHTTPError{StatusCode: 400}, true, cloudAgentToolErrorUpstream, false, "report_to_user"},
 		{"超时", canvasRequest, call("task_get"), context.DeadlineExceeded, true, cloudAgentToolErrorUpstream, true, "report_to_user"},
-		{"其它", canvasRequest, call("task_get"), errors.New("说不清"), true, cloudAgentToolErrorUnknown, true, ""},
+		{"其它", canvasRequest, call("task_get"), errors.New("说不清"), true, cloudAgentToolErrorUnknown, false, "report_to_user"},
+		{"媒体准入失败", canvasRequest, call("generate_media"), &cloudAgentMediaAdmissionError{
+			error:          errors.New("model admission rejected"),
+			Reason:         "media_admission_failed",
+			ErrorClass:     cloudAgentToolErrorAdmission,
+			RequiredAction: "report_to_user",
+		}, true, cloudAgentToolErrorAdmission, false, "report_to_user"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

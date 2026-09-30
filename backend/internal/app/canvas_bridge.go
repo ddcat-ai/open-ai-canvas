@@ -210,12 +210,20 @@ func (s *Service) UserCanvasProjectSummaries(userID string) ([]UserDataSummary, 
 	return s.canvasDomain().UserCanvasProjectSummaries(userID)
 }
 
+func (s *Service) UserCanvasProjectMetadata(userID string, id string) (*model.CanvasProject, error) {
+	return s.canvasDomain().UserCanvasProjectMetadata(userID, id)
+}
+
 func (s *Service) UserCanvasProject(userID string, id string) (json.RawMessage, error) {
 	return s.canvasDomain().UserCanvasProject(userID, id)
 }
 
 func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (UserDataSummary, error) {
 	return s.canvasDomain().UpsertUserCanvasProject(userID, raw)
+}
+
+func (s *Service) RepairUserCanvasProject(userID string, raw json.RawMessage) (UserDataSummary, error) {
+	return s.canvasDomain().RepairUserCanvasProject(userID, raw)
 }
 
 func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
@@ -260,6 +268,10 @@ func (s *Service) UserCanvasProjectsPage(userID string, page int, pageSize int, 
 
 func clientAssetPayload(asset model.Asset) json.RawMessage {
 	return canvas.ClientAssetPayload(asset)
+}
+
+func clientAssetListPayload(asset model.Asset) json.RawMessage {
+	return canvas.ClientAssetListPayload(asset)
 }
 
 func validateSyncedPayload(raw json.RawMessage, label string) error {

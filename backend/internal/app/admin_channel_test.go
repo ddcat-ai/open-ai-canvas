@@ -168,7 +168,8 @@ func TestDuplicateSystemChannelCopiesSecretsModelsAndPriceTiers(t *testing.T) {
 }
 
 func TestChannelFromRequestStoresAndClearsHeaders(t *testing.T) {
-	request := ChannelRequest{Name: "Headers", BaseURL: "https://example.com/v1", Headers: []OutboundHeader{{Name: "User-Agent", Value: "Custom Agent"}}}
+	// URL validation is real, but this non-network test must not depend on DNS.
+	request := ChannelRequest{Name: "Headers", BaseURL: "https://93.184.216.34/v1", Headers: []OutboundHeader{{Name: "User-Agent", Value: "Custom Agent"}}}
 	channel, err := channelFromRequest(request, model.ModelChannel{})
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +218,7 @@ func TestRuntimeConcurrencyUsesEnvironmentFallback(t *testing.T) {
 	}
 
 	useGlobal := true
-	channel, err := channelFromRequest(ChannelRequest{Name: "Global", BaseURL: "https://example.com/v1", UseGlobalConcurrency: &useGlobal}, model.ModelChannel{ConcurrencyLimit: 4})
+	channel, err := channelFromRequest(ChannelRequest{Name: "Global", BaseURL: "https://93.184.216.34/v1", UseGlobalConcurrency: &useGlobal}, model.ModelChannel{ConcurrencyLimit: 4})
 	if err != nil || channel.ConcurrencyLimit != 0 {
 		t.Fatalf("global concurrency channel = %#v, error = %v", channel, err)
 	}

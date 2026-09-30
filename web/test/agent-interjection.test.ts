@@ -6,7 +6,8 @@ import { expect, test } from "bun:test";
 // （旧代码 `disabled={busy || running || …}`），策略提示词也据此写着「运行中用户无法打字」。
 // 所以这里的断言要盯住两件事：入口真的打开了，以及旧前提没有残留在代码里。
 test("运行中不再锁死输入框，发送走插话而不是新建轮次", async () => {
-    const panel = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent-panel.tsx", import.meta.url)).text();
+    // 面板拆分为主组件、展示组件与事件归约三个模块，源码约束覆盖整个模块组。
+    const panel = (await Promise.all(["canvas-cloud-agent-panel.tsx", "canvas-cloud-agent-panel-parts.tsx", "canvas-cloud-agent-events.ts"].map((file) => Bun.file(new URL(`../src/components/canvas/${file}`, import.meta.url)).text()))).join("\n");
 
     // 运行中走插话分支（不建轮次、不走那套扣费幂等记账）
     expect(panel).toContain("await interject(value)");
@@ -16,7 +17,9 @@ test("运行中不再锁死输入框，发送走插话而不是新建轮次", as
 
     // 输入框的禁用条件里不能再有 running —— 只保留「连不上事件流」「历史/待确认未水合」这类真不能发的状态
     expect(panel).toContain('disabled={Boolean(run && connectionStatus !== "connected")');
-    expect(panel).not.toContain("disabled={busy || running ||");
+    const composer = panel.match(/<AgentChatComposer[\s\S]*?disabled=\{([^\n]+)\}/)?.[1];
+    expect(composer).toBeDefined();
+    expect(composer).not.toMatch(/\bbusy\b|\brunning\b/);
     // 停止按钮由 running 驱动，发送按钮由我们自己的请求驱动，两者不再互斥
     expect(panel).toContain("sending={busy}");
     expect(panel).toContain("running={running}");
@@ -29,7 +32,8 @@ test("运行中不再锁死输入框，发送走插话而不是新建轮次", as
 });
 
 test("输入框运行中同时给出「发送（插话）」与「停止」", async () => {
-    const composer = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent-chat-ui.tsx", import.meta.url)).text();
+    // 输入区已拆到 canvas-cloud-agent-composer.tsx，与消息渲染一起检查。
+    const composer = (await Promise.all(["canvas-cloud-agent-chat-ui.tsx", "canvas-cloud-agent-composer.tsx"].map((file) => Bun.file(new URL(`../src/components/canvas/${file}`, import.meta.url)).text()))).join("\n");
 
     // 关键改动：canStop 不再等于 sending —— 否则运行中两个动作只能二选一
     expect(composer).toContain("const canStop = Boolean(running && onStop);");

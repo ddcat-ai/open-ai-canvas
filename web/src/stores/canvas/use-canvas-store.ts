@@ -512,6 +512,10 @@ export const useCanvasStore = create<CanvasStore>()(
                 const current = state.projects.find((project) => project.id === id);
                 if (!current) return state;
                 const next = { ...current, ...patch };
+                if (Object.keys(patch).every((key) => key === "viewport")) {
+                    if (samePersistenceValue(current.viewport, next.viewport)) return state;
+                    return { projects: state.projects.map((project) => project === current ? next : project) };
+                }
                 const contentChanged = !sameCanvasContent(current, next);
                 if (!contentChanged && samePersistenceValue(current.viewport, next.viewport)) return state;
                 if (contentChanged) next.updatedAt = new Date().toISOString();

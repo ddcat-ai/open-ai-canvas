@@ -210,6 +210,37 @@ func (r *Repository) LatestProviderRequestIDsForTasks(taskIDs []string) (map[str
 	return result, nil
 }
 
+// APICallLogUsageForTask 返回一次任务调用里上游上报的用量。
+// 这是模型自己的分词器算出的计数，是上下文压力可以采信的权威锚点；
+// 没有上报（usage_available=false 或输入为 0）时返回 false，调用方退回本地估算。
+func (r *Repository) APICallLogUsageForTask(userID, taskID string) (model.ApiCallLog, bool, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(taskID) == "" {
+		return model.ApiCallLog{}, false, nil
+	}
+	var log model.ApiCallLog
+	err := r.db.Where("user_id = ? AND task_id = ? AND capability = ? AND status = ? AND usage_available = ?", userID, taskID, "text", model.ApiCallStatusSucceeded, true).
+		Order("created_at DESC").Limit(1).Find(&log).Error
+	if err != nil {
+		return model.ApiCallLog{}, false, err
+	}
+	if log.ID == "" || log.InputTokens <= 0 {
+		return model.ApiCallLog{}, false, nil
+	}
+	return log, true, nil
+}
+
+// LatestAPICallStatusForTask 返回任务最近一次上游调用的 HTTP 状态码；
+// 任务没收到任何上游响应（例如网络错误）时返回 0。
+func (r *Repository) LatestAPICallStatusForTask(taskID string) (int, error) {
+	if strings.TrimSpace(taskID) == "" {
+		return 0, nil
+	}
+	var log model.ApiCallLog
+	err := r.db.Select("status_code").Where("task_id = ? AND request_kind <> ?", taskID, "poll").
+		Order("created_at DESC").Limit(1).Find(&log).Error
+	return log.StatusCode, err
+}
+
 func (r *Repository) HasAPICallLogForTask(taskID string) (bool, error) {
 	if strings.TrimSpace(taskID) == "" {
 		return false, nil

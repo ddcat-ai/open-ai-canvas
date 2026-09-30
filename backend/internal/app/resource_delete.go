@@ -43,9 +43,14 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	if len(assetRecords) != len(assetIDs) {
 		return NotFound("素材不存在或无权删除")
 	}
+	// 删除语义（产品约定，勿收紧）：
+	//   - purge=true 是用户在素材库确认后的「彻底删除」（单个 DELETE、批量删除、清空回收站），
+	//     不因画布、任务、项目或画布历史快照仍引用而拒绝；旧引用随之失效，画布保存时由
+	//     repairMissingResources 修复断链。
+	//   - purge=false 是内部普通删除：回收站（archived）素材同样直接删除，其余素材保留引用保护。
+	//   - 无论哪种，被其他素材复用的资源与物理对象都保留，物理删除一律经 Outbox 异步执行。
 	deleteReferencedResources := purge
 	if !purge {
-		// 内部普通删除仍为单素材保护路径；用户显式删除统一走 purge。
 		if len(assetRecords) != 1 {
 			return BadAuthRequest("普通删除仅支持单个素材")
 		}
@@ -90,21 +95,24 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 
 	usages := make([]resourceUsage, 0)
 	if !deleteReferencedResources {
-		assetReferences, referenceErr := s.repo.AssetBusinessReferences(userID, assetIDs[0])
-		if referenceErr != nil {
-			return referenceErr
-		}
-		for _, reference := range assetReferences {
-			usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+		for _, assetID := range assetIDs {
+			assetReferences, referenceErr := s.repo.AssetBusinessReferences(userID, assetID)
+			if referenceErr != nil {
+				return referenceErr
+			}
+			for _, reference := range assetReferences {
+				usages = append(usages, resourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+			}
 		}
 	}
 	if len(ownedIDs) > 0 {
 		var snapshot repository.ResourceReferenceSnapshot
 		var snapshotErr error
 		if deleteReferencedResources {
+			// 彻底删除只需要知道哪些资源仍被「其他素材」复用（这些资源要保留），不扫描任务和画布。
 			snapshot, snapshotErr = s.repo.OtherAssetResourceReferences(userID, assetIDs)
 		} else {
-			snapshot, snapshotErr = s.repo.ResourceReferenceSnapshot(userID, assetIDs[0], ownedIDs)
+			snapshot, snapshotErr = s.repo.ResourceReferenceSnapshotExcludingAssets(userID, assetIDs, ownedIDs)
 		}
 		if snapshotErr != nil {
 			return snapshotErr

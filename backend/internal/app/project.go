@@ -503,9 +503,12 @@ func newProjectUnit(projectID string, req CreateProjectUnitRequest, position int
 	if kind != model.ProjectUnitKindChapter && kind != model.ProjectUnitKindEpisode {
 		return model.ProjectUnit{}, BadAuthRequest("不支持的项目单元类型")
 	}
-	title := strings.TrimSpace(req.Title)
+	title := model.NormalizeProjectUnitTitle(req.Title)
 	if title == "" {
 		return model.ProjectUnit{}, BadAuthRequest("章节标题不能为空")
+	}
+	if !model.ValidProjectUnitTitle(title) {
+		return model.ProjectUnit{}, BadAuthRequest("章节标题不能超过 240 个字符")
 	}
 	if position < 0 {
 		position = 0
@@ -524,7 +527,10 @@ func (s *Service) UpdateProjectUnit(userID string, projectID string, unitID stri
 		return model.ProjectUnit{}, err
 	}
 	sourceChanged := unit.SourceText != req.SourceText
-	if title := strings.TrimSpace(req.Title); title != "" {
+	if title := model.NormalizeProjectUnitTitle(req.Title); title != "" {
+		if !model.ValidProjectUnitTitle(title) {
+			return model.ProjectUnit{}, BadAuthRequest("章节标题不能超过 240 个字符")
+		}
 		unit.Title = title
 	}
 	unit.SourceText = req.SourceText

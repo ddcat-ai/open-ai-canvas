@@ -7,10 +7,18 @@ on:
 permissions:
   contents: read
 
+# 同一个 PR 连续推送时取消旧的检查，只保留最新提交；被发布流程调用（workflow_call）时
+# 每次运行使用独立分组，绝不互相取消，避免中间提交的镜像发布被跳过。
+concurrency:
+  group: quality-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    # go test 自身有 20 分钟超时；这里兜底防止依赖服务卡死时占用 Runner 数小时。
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: backend
@@ -39,6 +47,14 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
           cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+          cache-dependency-path: backend/agent-runtime/pi/package-lock.json
+      - name: Install Pi Agent runtime dependencies
+        working-directory: backend/agent-runtime/pi
+        run: npm ci --omit=dev --ignore-scripts
       - name: Install redis-server for integration tests
         # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
         run: |
@@ -51,7 +67,10 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          go test -json ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+          # internal/app 约 1000 个用例串行执行，是后端检查的关键路径（本地约 2–3 分钟）。
+          # 此前每个用例构造 Service 时都会完整解压 85MB 官方插件包（约 4 秒/次，累计 7 分钟以上），
+          # 现已改为只读清单 + 进程内缓存；若该包耗时再次明显上涨，先查 newPluginRuntime。
+          go test -json -timeout=20m ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
       - name: Ensure dependency-backed tests were not skipped
         shell: bash
         run: |
@@ -94,6 +113,7 @@ jobs:
   web:
     name: Web checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web

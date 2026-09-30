@@ -1,6 +1,6 @@
 import { runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
 import { PromptTemplateOperation, promptTemplateTaskPlaceholder } from "@/lib/prompts";
-import { storyboardRowsFromTask, storyboardRowsOutputContract } from "@/lib/canvas/canvas-project-domain";
+import { storyboardRowsFromTask, withStoryboardOutputContract } from "@/lib/canvas/canvas-project-domain";
 import { parseChapterAssetBreakdown, type ChapterAssetBreakdown } from "@/lib/canvas/chapter-asset-breakdown";
 import { parseCharacterBreakdown } from "@/lib/canvas/canvas-character-reference";
 import { backendProviderConfig, parseBackendGenerationResult } from "@/services/api/generation-task";
@@ -91,10 +91,7 @@ export async function generateChapterStoryboard(input: ChapterStoryboardGenerati
         selectedSkillIds: input.selectedSkillIds,
     });
     // 技能上下文只描述工作流，不会约束输出结构；必须显式带上输出契约，否则模型返回 Markdown 表格。
-    const prompt = [
-        skillExecution.prompt,
-        storyboardRowsOutputContract("每个镜头必须能独立用于生成首帧图片和镜头视频。"),
-    ].join("\n\n");
+    const prompt = withStoryboardOutputContract(skillExecution.prompt);
     const task = await createGenerationTask({
         projectId: input.projectId,
         type: "canvas_text",

@@ -100,7 +100,7 @@ export function CreditOperationsPage() {
 
 export function AccessSettingsPage() {
     return (
-        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口" scroll>
+        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口与服务协议" scroll>
             <AccessSettingsPanel />
         </AdminPageFrame>
     );

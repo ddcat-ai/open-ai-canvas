@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, InputNumber, Modal, Select, Spin, Switch } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Spin, Switch } from "antd";
 import { ChevronRight, Copy, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -14,6 +14,7 @@ import { ChannelModelManager } from "../components/channel-model-manager";
 import { ChannelOrderDialog } from "../components/channel-order-dialog";
 import { selectChannelWorkspace } from "./channel-workspace-state";
 import "./channels-page.css";
+import { Select } from "@/components/ui/base/select";
 
 type ChannelFormValues = {
     name: string;

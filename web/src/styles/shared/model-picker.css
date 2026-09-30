@@ -66,7 +66,6 @@
     }
 
     .creation-model-picker-menu {
-        width: min(384px, calc(100vw - 24px)) !important;
         max-height: min(460px, calc(100vh - 24px));
         overflow-x: hidden;
         overflow-y: auto;
@@ -139,11 +138,6 @@
 
     .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:first-child {
         font-size: 13px;
-    }
-
-    .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:nth-child(2) {
-        margin-top: 5px;
-        font-size: 10px;
     }
 
 .creation-model-picker.canvas-composer-model-picker {
@@ -222,9 +216,6 @@ html:not(.dark) .creation-model-picker.canvas-composer-model-picker[aria-expande
             height: 34px;
         }
 
-        .creation-model-picker-menu {
-            width: min(440px, calc(100vw - 96px)) !important;
-        }
 .creation-model-picker.canvas-composer-model-picker { height: 42px; border-radius: 12px; padding: 0 11px; font-size: 12px; }
 .creation-model-picker.canvas-composer-model-picker { width: min(150px, 44vw); }
 }
@@ -309,11 +300,12 @@ html:not(.dark) .creation-model-picker.canvas-composer-model-picker[aria-expande
 
     .canvas-model-picker-popover {
         filter: none !important;
+        max-width: calc(100vw - 24px);
     }
 
     .canvas-model-picker-menu {
-        width: max-content !important;
-        min-width: max(var(--canvas-model-picker-trigger-width, 0px), 260px);
+        box-sizing: border-box;
+        min-width: 0;
         max-width: calc(100vw - 24px);
         max-height: min(420px, calc(100vh - 32px));
         overflow-x: hidden;
@@ -373,17 +365,6 @@ html:not(.dark) .creation-model-picker.canvas-composer-model-picker[aria-expande
         display: flex;
         align-items: center;
         width: 100%;
-    }
-
-    .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) {
-        flex: 1 1 auto;
-        min-width: 0;
-        overflow: visible;
-    }
-
-    .canvas-model-picker-popover .canvas-model-picker-option > span:first-child > span:nth-child(2) > span {
-        overflow: visible;
-        text-overflow: clip;
     }
 
     .canvas-model-picker-option-check {
@@ -541,7 +522,7 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
 
 .creation-model-picker-surface .ant-popover-inner-content { padding: 0 !important; }
 
-.creation-model-picker-menu { width: min(332px, calc(100vw - 24px)) !important; max-height: min(420px, calc(100vh - 24px)); padding: 7px !important; background: transparent !important; color: #f0f1f2 !important; }
+.creation-model-picker-menu { max-height: min(420px, calc(100vh - 24px)); padding: 7px !important; background: transparent !important; color: #f0f1f2 !important; }
 .creation-model-picker-heading { display: flex; align-items: center; gap: 6px; padding: 4px 7px 7px; color: #8e949d; font-size: 10px; }
 .creation-model-picker-heading strong { color: #e6e8eb; font-weight: 500; }
 .creation-model-picker-menu .canvas-model-picker-group-label { padding: 6px 7px 5px; font-size: 10px; }
@@ -549,7 +530,6 @@ html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-m
 .creation-model-picker-menu .canvas-model-picker-option > span:first-child { gap: 8px; }
 .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:first-child { width: 26px; height: 26px; border: 0; border-radius: 5px; background: rgba(255, 255, 255, .07) !important; }
 .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:first-child { font-size: 11px; }
-.creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:nth-child(2) > span:nth-child(2) { margin-top: 3px; font-size: 9px; }
 
 html:not(.dark) .creation-model-picker-surface { background: rgba(255, 255, 255, .94) !important; box-shadow: 0 16px 38px rgba(28, 32, 37, .12) !important; }
 html:not(.dark) .creation-model-picker-menu { color: #727980 !important; }
@@ -648,10 +628,10 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 /* 品牌/模型两级菜单是 ModelPicker 默认结构，不能只写在 creation variant 下。 */
 .canvas-model-picker-menu.is-brand-list {
-    width: min(360px, calc(100vw - 24px)) !important;
+    width: min(360px, calc(100vw - 24px));
 }
 .canvas-model-picker-menu.is-model-list {
-    width: min(800px, calc(100vw - 24px)) !important;
+    width: min(800px, calc(100vw - 24px));
 }
 .canvas-model-picker-two-pane {
     display: grid;
@@ -676,7 +656,7 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 @media (max-width: 720px) {
     .canvas-model-picker-menu:is(.is-brand-list, .is-model-list) {
-        width: calc(100vw - 24px) !important;
+        width: calc(100vw - 24px);
     }
     .canvas-model-picker-two-pane {
         grid-template-columns: minmax(0, 1fr);
@@ -723,10 +703,33 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     color: color-mix(in srgb, currentColor 52%, transparent);
     font-size: 10px;
 }
+.canvas-model-picker-option-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+
+.canvas-model-picker-option-name {
+    flex: 1 1 10rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.canvas-model-picker-option-price {
+    min-width: 0;
+    max-width: 100%;
+}
+
 .canvas-model-picker-description {
-    height: 16px;
-    line-height: 16px;
+    font-size: var(--fs-caption);
+    min-height: 1.5em;
+    line-height: 1.5;
     margin-top: 5px !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
     visibility: hidden;
     opacity: 0;
 }
@@ -761,6 +764,10 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--model-price-ink) 9%, transparent);
     padding: 2px 5px;
+    max-width: 100%;
+    flex-wrap: wrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -795,7 +802,6 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .app-user-workspace .creation-model-picker-menu.is-brand-list {
     max-height: none !important;
     overflow: visible !important;
-    width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brands { display: grid; gap: 5px; }
@@ -835,7 +841,6 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-model-picker-surface .creation-model-picker-menu.is-brand-list {
     max-height: none !important;
     overflow: visible !important;
-    width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }
 .creation-model-picker-surface .canvas-model-picker-brands { display: grid; gap: 5px; }

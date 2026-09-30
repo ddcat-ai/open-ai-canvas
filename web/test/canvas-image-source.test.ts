@@ -4,9 +4,15 @@ import { resolve } from "node:path";
 import { createPortraitTextureNode, isCanvasImageSourceNode } from "../src/lib/canvas/canvas-image-source";
 import { canGenerateImageInPlace } from "../src/lib/canvas/canvas-generation-layout";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 const source: CanvasNodeData = {
-    id: "uploaded", type: CanvasNodeType.Image, title: "原图", position: { x: 10, y: 20 }, width: 300, height: 200,
+    id: "uploaded",
+    type: CanvasNodeType.Image,
+    title: "原图",
+    position: { x: 10, y: 20 },
+    width: 300,
+    height: 200,
     metadata: { content: "original-image", storageKey: "original-key", status: "success" },
 };
 const read = (path: string) => readFileSync(resolve(import.meta.dir, "../src", path), "utf8");
@@ -42,7 +48,7 @@ describe("上传图片是输入素材", () => {
         expect(canGenerateImageInPlace(source)).toBe(false);
     });
     test("页面和工具入口共享素材判定，人物质感接入原图连线", () => {
-        expect(flat(read("pages/canvas/project.tsx"))).toContain("dialogNode && !isCanvasImageSourceNode(dialogNode)");
+        expect(flat(moduleGroupSource("pages/canvas/project.tsx"))).toContain("dialogNode && !isCanvasImageSourceNode(dialogNode)");
         expect(read("lib/canvas/tool-registry/definitions/node-hover-tools.tsx")).toContain("!isCanvasImageSourceNode(ctx.node)");
         const mediaTools = read("pages/canvas/use-canvas-media-tools.ts");
         const portrait = mediaTools.slice(mediaTools.indexOf("const openPortraitTextureEditor"), mediaTools.indexOf("const cropImageNode"));

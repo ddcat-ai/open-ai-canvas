@@ -18,7 +18,10 @@ export type CreationMessage = {
     createdAt: string;
     status?: CreationStatus;
     model?: string;
+    /** 当前会话内的临时访问地址；长期身份使用 resultStorageKeys。 */
     resultUrls?: string[];
+    /** 生成结果对应的稳定素材定位符，不随 OSS 签名 URL 过期。 */
+    resultStorageKeys?: string[];
     error?: string;
     generationErrorCode?: string;
     generationOperation?: string;

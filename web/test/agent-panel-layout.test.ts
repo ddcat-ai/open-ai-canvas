@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { changeAgentPanelLayout, clampAgentPanelLayout, restoreAgentPanelLayout } from "@/lib/canvas/agent-panel-layout";
+import { changeAgentPanelLayout, clampAgentPanelLayout, defaultAgentPanelLayout, restoreAgentPanelLayout } from "@/lib/canvas/agent-panel-layout";
 import { agentErrorPresentation, agentSubmissionErrorTitle } from "@/lib/canvas/agent-error-presentation";
 import { ApiError } from "@/services/api/request";
 
@@ -14,6 +14,10 @@ describe("Agent window layout", () => {
         const layout = restoreAgentPanelLayout(null, { width: 1024, height: 650 });
         expect(layout.height).toBe(626);
         expect(layout.top).toBe(12);
+    });
+    it("offers a compact reset without altering a saved window until requested", () => {
+        expect(restoreAgentPanelLayout(JSON.stringify(start), viewport)).toEqual(start);
+        expect(defaultAgentPanelLayout(viewport)).toEqual({ left: 848, top: 148, width: 420, height: 640 });
     });
     it("keeps the bottom/right anchor when resizing from top/left", () => {
         const layout = changeAgentPanelLayout(start, "northwest", -120, 60, viewport);

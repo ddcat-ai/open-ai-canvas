@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -535,12 +537,25 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		metadata, err := svc.UserCanvasProjectMetadata(user.ID, c.Param("id"))
+		if err != nil {
+			fail(c, http.StatusNotFound, err)
+			return
+		}
+		etag := canvasProjectResponseETag(metadata)
+		c.Header("ETag", etag)
+		c.Header("Cache-Control", "private, no-cache")
+		addVaryHeader(c, "Accept-Encoding")
+		if ifNoneMatch(c.GetHeader("If-None-Match"), etag) {
+			c.Status(http.StatusNotModified)
+			return
+		}
 		project, err := svc.UserCanvasProject(user.ID, c.Param("id"))
 		if err != nil {
 			fail(c, http.StatusNotFound, err)
 			return
 		}
-		ok(c, gin.H{"project": project})
+		okCanvasProject(c, project)
 	})
 	r.GET("/canvas-projects/:id/history", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -591,7 +606,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		log.Printf("canvas_restore request_id=%q trace_id=%q actor=%q canvas=%q snapshot=%q base_revision=%d revision=%d", RequestID(c), TraceID(c), user.ID, c.Param("id"), c.Param("snapshotId"), *req.Revision, project.Revision)
+		slog.Info("canvas_restore", "request_id", RequestID(c), "trace_id", TraceID(c), "actor", user.ID, "canvas", c.Param("id"), "snapshot", c.Param("snapshotId"), "base_revision", *req.Revision, "revision", project.Revision)
 		ok(c, gin.H{"project": project})
 	})
 	r.PUT("/canvas-projects/:id", func(c *gin.Context) {
@@ -606,7 +621,8 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
 		var req struct {
-			Project json.RawMessage `json:"project"`
+			Project                json.RawMessage `json:"project"`
+			RepairMissingResources bool            `json:"repairMissingResources"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -629,14 +645,27 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if audit.Revision != nil {
 			baseRevision = *audit.Revision
 		}
-		project, err := svc.UpsertUserCanvasProject(user.ID, req.Project)
+		var project service.UserDataSummary
+		if req.RepairMissingResources {
+			project, err = svc.RepairUserCanvasProject(user.ID, req.Project)
+		} else {
+			project, err = svc.UpsertUserCanvasProject(user.ID, req.Project)
+		}
 		defer func() {
 			nodesBefore, nodesAfter := -1, len(audit.Nodes)
 			if project.SaveAudit != nil {
 				nodesBefore, nodesAfter = project.SaveAudit.NodesBefore, project.SaveAudit.NodesAfter
 			}
 			// Metadata only: never log prompts, media URLs, cookies, or the canvas payload.
-			log.Printf("canvas_save request_id=%q trace_id=%q actor=%q canvas=%q base_revision=%d revision=%d nodes_before=%d nodes_after=%d connections=%d status=%d", RequestID(c), TraceID(c), user.ID, identity.ID, baseRevision, project.Revision, nodesBefore, nodesAfter, len(audit.Connections), c.Writer.Status())
+			// 自动保存非常频繁：常规保存只在 debug 输出；节点减少（可能丢数据）或保存失败才提升级别。
+			level := slog.LevelDebug
+			switch {
+			case c.Writer.Status() >= http.StatusBadRequest:
+				level = slog.LevelWarn
+			case nodesBefore >= 0 && nodesAfter < nodesBefore:
+				level = slog.LevelInfo
+			}
+			slog.Log(c.Request.Context(), level, "canvas_save", "request_id", RequestID(c), "trace_id", TraceID(c), "actor", user.ID, "canvas", identity.ID, "base_revision", baseRevision, "revision", project.Revision, "nodes_before", nodesBefore, "nodes_after", nodesAfter, "connections", len(audit.Connections), "status", c.Writer.Status())
 		}()
 		if err != nil {
 			failService(c, err)
@@ -667,6 +696,75 @@ func hasUserAssetPageFilters(c *gin.Context) bool {
 	return false
 }
 
+func okCanvasProject(c *gin.Context, project json.RawMessage) {
+	payload, err := json.Marshal(gin.H{
+		"code": service.CodeOK,
+		"data": gin.H{"project": project},
+		"msg":  "ok",
+	})
+	if err != nil {
+		failInternal(c, http.StatusInternalServerError, err)
+		return
+	}
+	if len(payload) >= 1024 && acceptsGzip(c.GetHeader("Accept-Encoding")) {
+		var compressed bytes.Buffer
+		writer, err := gzip.NewWriterLevel(&compressed, gzip.BestSpeed)
+		if err != nil {
+			failInternal(c, http.StatusInternalServerError, err)
+			return
+		}
+		_, writeErr := writer.Write(payload)
+		closeErr := writer.Close()
+		if writeErr != nil || closeErr != nil {
+			failInternal(c, http.StatusInternalServerError, errors.Join(writeErr, closeErr))
+			return
+		}
+		c.Header("Content-Encoding", "gzip")
+		c.Header("Content-Length", strconv.Itoa(compressed.Len()))
+		c.Data(http.StatusOK, "application/json; charset=utf-8", compressed.Bytes())
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
+}
+
+func acceptsGzip(header string) bool {
+	wildcardAccepted := false
+	for _, item := range strings.Split(header, ",") {
+		parts := strings.Split(item, ";")
+		encoding := strings.TrimSpace(strings.ToLower(parts[0]))
+		accepted := true
+		for _, parameter := range parts[1:] {
+			name, value, found := strings.Cut(strings.TrimSpace(parameter), "=")
+			if found && strings.EqualFold(strings.TrimSpace(name), "q") {
+				quality, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+				accepted = err == nil && quality > 0
+			}
+		}
+		if encoding == "gzip" {
+			return accepted
+		}
+		if encoding == "*" {
+			wildcardAccepted = accepted
+		}
+	}
+	return wildcardAccepted
+}
+
+func addVaryHeader(c *gin.Context, value string) {
+	for _, existing := range c.Writer.Header().Values("Vary") {
+		for _, token := range strings.Split(existing, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), value) {
+				return
+			}
+		}
+	}
+	c.Header("Vary", strings.Join(append(c.Writer.Header().Values("Vary"), value), ", "))
+}
+
+func canvasProjectResponseETag(project *model.CanvasProject) string {
+	return `W/` + strconv.Quote(fmt.Sprintf("canvas-%d", project.Revision))
+}
+
 func resourceResponseETag(resource *model.Resource) string {
 	value := strings.Trim(strings.TrimSpace(resource.ETag), `"`)
 	if value == "" {
@@ -676,8 +774,16 @@ func resourceResponseETag(resource *model.Resource) string {
 }
 
 func ifNoneMatch(header string, etag string) bool {
+	normalize := func(value string) string {
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && strings.EqualFold(value[:2], "W/") {
+			return strings.TrimSpace(value[2:])
+		}
+		return value
+	}
+	etag = normalize(etag)
 	for _, candidate := range strings.Split(header, ",") {
-		candidate = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(candidate), "W/"))
+		candidate = normalize(candidate)
 		if candidate == "*" || candidate == etag {
 			return true
 		}

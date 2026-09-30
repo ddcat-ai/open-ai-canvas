@@ -26,6 +26,9 @@ func TestCloudAgentContinuesAfterContractChange(t *testing.T) {
 		Updates(map[string]any{"status": model.TaskStatusFailed, "error": "mock failure"}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", root.ID).Update("status", "failed").Error; err != nil {
+		t.Fatal(err)
+	}
 	// 在该轮快照里制造一次「合同变更」：把能力集哈希改掉。
 	execution, err := s.repo.CloudAgent("user", root.ID)
 	if err != nil {

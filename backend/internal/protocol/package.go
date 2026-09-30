@@ -28,9 +28,49 @@ type PluginPackage struct {
 	Files       map[string][]byte
 }
 
+// PluginPackageInfo 是只读取清单、不解压其余文件的包摘要。
+// 它刻意不携带 Files：调用方无法误把"只校验过结构"的包内容写到磁盘或执行。
+type PluginPackageInfo struct {
+	Manifest    Manifest
+	ManifestRaw []byte
+}
+
 // ParsePluginPackage validates the package container and returns its manifest
 // and files. Uploaded code is never executed by this function.
 func ParsePluginPackage(data []byte) (PluginPackage, error) {
+	return readPluginPackage(data, nil)
+}
+
+// InspectPluginPackage 与 ParsePluginPackage 做同样的结构校验（路径白名单、文件数、
+// 单文件声明大小、符号链接、manifest 与运行时入口），但只解压 manifest.json。
+//
+// 为什么需要它：官方支付插件每个包内含 7 个平台的可执行文件，解压后约 44MB；
+// 服务启动（以及每个构造 Service 的测试）只需要清单即可完成注册。全量解压让每次
+// 启动多花约 4 秒，CI 中上百个测试累计 7 分钟以上。
+//
+// 限制：未解压的条目只校验 zip 头声明的大小，不校验 CRC。整包完整性由调用方
+// 对原始字节计算 SHA-256 保证；真正需要落盘执行文件时仍必须走 ParsePluginPackage。
+func InspectPluginPackage(data []byte) (PluginPackageInfo, error) {
+	pkg, err := readPluginPackage(data, func(string) bool { return false })
+	if err != nil {
+		return PluginPackageInfo{}, err
+	}
+	return PluginPackageInfo{Manifest: pkg.Manifest, ManifestRaw: pkg.ManifestRaw}, nil
+}
+
+// ParsePluginPackageFiles 与 ParsePluginPackage 做完全相同的校验，但只解压 keep 返回 true
+// 的条目（manifest.json 总会解压）；其余条目在 Files 中值为 nil，仅用于存在性判断。
+// 被解压的条目仍会经过 zip 的 CRC 校验。
+func ParsePluginPackageFiles(data []byte, keep func(name string) bool) (PluginPackage, error) {
+	if keep == nil {
+		keep = func(string) bool { return false }
+	}
+	return readPluginPackage(data, keep)
+}
+
+// readPluginPackage 是各种读取方式的共同实现。keep 为 nil 表示解压全部条目；
+// 否则只解压 manifest.json 与 keep 选中的条目，其余只登记文件名（值为 nil）。
+func readPluginPackage(data []byte, keep func(name string) bool) (PluginPackage, error) {
 	if len(data) == 0 || len(data) > PluginPackageMaxBytes {
 		return PluginPackage{}, fmt.Errorf("plugin package must be between 1 and %d bytes", PluginPackageMaxBytes)
 	}
@@ -59,6 +99,10 @@ func ParsePluginPackage(data []byte) (PluginPackage, error) {
 		}
 		if file.UncompressedSize64 > pluginPackageMaxEntry {
 			return PluginPackage{}, fmt.Errorf("plugin package file %q exceeds %d bytes", name, pluginPackageMaxEntry)
+		}
+		if keep != nil && name != "manifest.json" && !keep(name) {
+			files[name] = nil
+			continue
 		}
 		stream, err := file.Open()
 		if err != nil {

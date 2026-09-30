@@ -8,7 +8,7 @@ import (
 	"infinite-canvas/backend/internal/repository"
 )
 
-const TaskWorkerConcurrency = 3
+const TaskWorkerConcurrency = 8
 
 // Host 由组合根注入，避免 platform → app 回环。
 type Host interface {
@@ -28,10 +28,11 @@ func (nopHost) ChannelConcurrencyLimit(string) (int, error) {
 }
 
 type Service struct {
-	repo             *repository.Repository
-	host             Host
-	Coordinator      *Coordinator
-	concurrencyCache *BoundedReadCache[string, RuntimeTaskPolicy]
+	repo               *repository.Repository
+	host               Host
+	Coordinator        *Coordinator
+	concurrencyCache   *BoundedReadCache[string, RuntimeTaskPolicy]
+	runtimePolicyCache *BoundedReadCache[string, RuntimePolicySetting]
 }
 
 func New(repo *repository.Repository, coordinator *Coordinator, host Host) *Service {
@@ -39,10 +40,11 @@ func New(repo *repository.Repository, coordinator *Coordinator, host Host) *Serv
 		host = nopHost{}
 	}
 	return &Service{
-		repo:             repo,
-		host:             host,
-		Coordinator:      coordinator,
-		concurrencyCache: NewBoundedReadCache[string, RuntimeTaskPolicy](1, 1024, 1, 2*time.Second),
+		repo:               repo,
+		host:               host,
+		Coordinator:        coordinator,
+		concurrencyCache:   NewBoundedReadCache[string, RuntimeTaskPolicy](1, 1024, 1, 2*time.Second),
+		runtimePolicyCache: NewBoundedReadCache[string, RuntimePolicySetting](1, 8192, 1, 2*time.Second),
 	}
 }
 

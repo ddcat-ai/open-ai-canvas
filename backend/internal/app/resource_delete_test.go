@@ -319,6 +319,7 @@ func TestPurgeConfirmedAssetIgnoresTaskReferences(t *testing.T) {
 		}
 	}
 
+	// 用户确认的彻底删除不受任务引用拦截；任务记录本身保留，其中的媒体链接随之失效。
 	if err := svc.PurgeUserAsset("user-1", asset.ID); err != nil {
 		t.Fatalf("PurgeUserAsset() error = %v", err)
 	}

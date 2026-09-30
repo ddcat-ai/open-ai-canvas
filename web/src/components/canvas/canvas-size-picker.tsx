@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Select } from "antd";
 
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/base/select";
 
 const sizeOptions = ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"];
 

@@ -11,7 +11,7 @@ const (
 	qiniuKodoProvider    = "qiniu"
 	s3Provider           = "s3"
 	defaultOSSPathPrefix = "open-ai-canvas"
-	resourceAccessURLTTL = 5 * time.Minute
+	resourceAccessURLTTL = 4 * time.Hour
 )
 
 type Settings struct {
@@ -31,8 +31,17 @@ type Settings struct {
 	SessionToken      string           `json:"sessionToken"`
 	StorageLocationID string           `json:"storageLocationId"`
 	AllowUserS3       bool             `json:"allowUserS3"`
+	Runtime           RuntimePolicy    `json:"-"`
 	// 平台切换云厂商后仍需读取历史资源，因此仅归档非当前厂商的访问密钥。
 	ArchivedCredentials map[string]Credentials `json:"archivedCredentials,omitempty"`
+}
+
+type RuntimePolicy struct {
+	TransferTimeout       time.Duration
+	AccessURLTTL          time.Duration
+	ProviderAccessURLTTL  time.Duration
+	MaxBufferedUploadSize int64
+	ErrorBodyLimit        int64
 }
 
 type Credentials struct {
@@ -80,6 +89,21 @@ func NormalizeSettings(value Settings) Settings {
 	}
 	value.SessionToken = strings.TrimSpace(value.SessionToken)
 	value.StorageLocationID = strings.TrimSpace(value.StorageLocationID)
+	if value.Runtime.TransferTimeout <= 0 {
+		value.Runtime.TransferTimeout = 2 * time.Minute
+	}
+	if value.Runtime.AccessURLTTL <= 0 {
+		value.Runtime.AccessURLTTL = resourceAccessURLTTL
+	}
+	if value.Runtime.ProviderAccessURLTTL <= 0 {
+		value.Runtime.ProviderAccessURLTTL = 4 * time.Hour
+	}
+	if value.Runtime.MaxBufferedUploadSize <= 0 {
+		value.Runtime.MaxBufferedUploadSize = 64 << 20
+	}
+	if value.Runtime.ErrorBodyLimit <= 0 {
+		value.Runtime.ErrorBodyLimit = 1024
+	}
 	value.ArchivedCredentials = CloneCredentials(value.ArchivedCredentials)
 	return value
 }

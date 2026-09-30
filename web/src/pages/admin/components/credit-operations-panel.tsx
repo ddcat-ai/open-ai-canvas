@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Select } from "antd";
+import { App, Button, Drawer, Form, Input, InputNumber, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { BadgeCheck, Coins, Plus, RefreshCw, Search, Trash2, Undo2 } from "lucide-react";
 
@@ -10,6 +10,7 @@ import { listAdminUsers, type AdminReferenceData, type AdminUser } from "@/servi
 import { adjustAdminUserCredits, getAdminCreditPolicy, listAdminBillingOrders, resolveAdminBillingOrder, resolveAdminBillingOrders, updateAdminCreditPolicy, type BillingOrder } from "@/services/api/wallet";
 
 import { AdminBatchBar, AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 export type CreditOperation = "policy" | "adjustment" | null;
 

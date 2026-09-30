@@ -24,6 +24,12 @@ func PaymentRPCBackendCandidates(entry, goos, goarch string) []string {
 	return uniqueStrings(candidates)
 }
 
+// IsPaymentRPCBackendArtifact 判断包内文件是否是 entry 对应的某个平台的可执行文件
+// （entry 本身、entry-<os>-<arch>、<dir>/<os>-<arch>/<base>，以及它们的 .exe 形式）。
+func IsPaymentRPCBackendArtifact(entry, name string) bool {
+	return HasAnyPaymentRPCBackend(entry, map[string][]byte{name: nil})
+}
+
 func HasAnyPaymentRPCBackend(entry string, files map[string][]byte) bool {
 	entry = strings.TrimSuffix(strings.TrimSpace(entry), ".exe")
 	if entry == "" {

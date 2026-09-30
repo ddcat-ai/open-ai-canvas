@@ -112,6 +112,7 @@ export type CreateAgentRunInput = {
     channelId?: string;
     channelModelKey?: string;
     skillIds?: string[];
+    focusNodeIds?: string[];
     permissionMode?: AgentPermissionMode;
     contextScope?: string[];
     budget?: { maxCredits?: number; maxGenerationTasks?: number; maxVideoSeconds?: number; maxSteps?: number };

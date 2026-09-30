@@ -35,19 +35,21 @@ func TestPurgeAssetsBatchSharedResourcesAndHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Force an error late in the resource transaction, after asset and outbox writes.
-	if err := db.Exec("CREATE TRIGGER fail_batch_resource_delete BEFORE DELETE ON resources BEGIN SELECT RAISE(ABORT, 'forced failure'); END;").Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := svc.PurgeUserAssets("user-1", []string{"first", "second"}); err == nil {
-		t.Fatal("expected rollback")
-	}
 	assertCount := func(record any, want int64) {
 		t.Helper()
 		var count int64
 		if err := db.Model(record).Count(&count).Error; err != nil || count != want {
 			t.Fatalf("%T count=%d want=%d err=%v", record, count, want, err)
 		}
+	}
+
+	// 彻底删除不受任务、画布与画布历史引用拦截（产品约定）；
+	// 但事务后段失败时，素材、版本、表现、历史索引与 Outbox 必须整批回滚。
+	if err := db.Exec("CREATE TRIGGER fail_batch_resource_delete BEFORE DELETE ON resources BEGIN SELECT RAISE(ABORT, 'forced failure'); END;").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.PurgeUserAssets("user-1", []string{"first", "second"}); err == nil {
+		t.Fatal("expected rollback")
 	}
 	assertCount(&model.Asset{}, 3)
 	assertCount(&model.Resource{}, 4)
@@ -58,6 +60,7 @@ func TestPurgeAssetsBatchSharedResourcesAndHistory(t *testing.T) {
 	if err := db.Exec("DROP TRIGGER fail_batch_resource_delete").Error; err != nil {
 		t.Fatal(err)
 	}
+
 	if err := svc.PurgeUserAssets("user-1", []string{"first", " second ", "first"}); err != nil {
 		t.Fatal(err)
 	}

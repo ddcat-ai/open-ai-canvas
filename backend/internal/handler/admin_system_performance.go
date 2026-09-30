@@ -23,6 +23,26 @@ func RegisterAdminSystemPerformanceRoutes(r *gin.RouterGroup, svc *service.Servi
 		ok(c, result)
 	})
 
+	r.PUT("/admin/system-performance/agent-limit", func(c *gin.Context) {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var request service.AgentSessionLimitRequest
+		if err := c.ShouldBindJSON(&request); err != nil {
+			failService(c, service.BadAuthRequest("Agent 并发请求无效"))
+			return
+		}
+		result, err := svc.UpdateAgentSessionLimit(c.Request.Context(), actor, request.MaxSessions)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+
 	r.POST("/admin/system-performance/cache/clear", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {

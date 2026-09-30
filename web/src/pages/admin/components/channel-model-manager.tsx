@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Input, Modal, Popconfirm, Select, Space } from "antd";
+import { App, Button, Checkbox, Input, Modal, Popconfirm, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
@@ -14,6 +14,7 @@ import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge, Admin
 import { ChannelOrderDialog } from "./channel-order-dialog";
 import { ChannelModelCostSummary } from "./channel-model-cost-summary";
 import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
+import { Select } from "@/components/ui/base/select";
 
 export function ChannelModelManager({ channel, onChanged }: { channel: ModelChannel; onChanged: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();

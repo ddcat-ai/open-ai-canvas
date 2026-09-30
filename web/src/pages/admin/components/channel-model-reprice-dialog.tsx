@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Alert, App, Button, InputNumber, Select, Table } from "antd";
+import { Alert, App, Button, InputNumber, Table } from "antd";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { repriceAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
 import { specificationLabel } from "./channel-model-cost-summary";
 import { formatModelMargin, formatModelPrice, modelRepricePayload, modelRepriceRows, parseSaleInput, previewModelRepricing, type ModelRepriceRow } from "./channel-model-pricing";
+import { Select } from "@/components/ui/base/select";
 
 export function ChannelModelRepriceDialog({ channelId, channelName, items, onClose, onSaved }: { channelId: string; channelName: string; items: ChannelModel[]; onClose: () => void; onSaved: () => Promise<void> }) {
     const { message } = App.useApp();

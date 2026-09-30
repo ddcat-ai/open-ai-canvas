@@ -1,4 +1,4 @@
-import { App, Button, Input, Select, Space, Tag, Tooltip } from "antd";
+import { App, Button, Input, Space, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -7,6 +7,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { agentLessonCategoryLabel, deleteAdminAgentLesson, listAdminAgentLessons, type AdminAgentLesson } from "@/services/api/admin-agent-lessons";
 import { listAdminUsers, type AdminUser } from "@/services/api/auth";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 function authorLabel(record: AdminAgentLesson) {
     if (record.authorDisplayName && record.authorUsername) return `${record.authorDisplayName}（${record.authorUsername}）`;

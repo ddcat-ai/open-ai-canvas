@@ -8,7 +8,7 @@ import (
 func TestDashscopeWan3VideoCreateAndLifecycle(t *testing.T) {
 	adapter := officialPackageAdapter(t, "dashscope-wan3-video.yingce-plugin", "dashscope-wan3-video")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
-		Model: "wan3.0-video-prime", Prompt: "一只猫在海边奔跑", Duration: 6, AspectRatio: "16:9", Resolution: "1080P",
+		Model: "wan3.0-video-prime", Prompt: "一只猫在海边奔跑", Duration: 6, AspectRatio: "16:9", Resolution: "1080p",
 		GenerateAudio: true, Watermark: true,
 		Inputs: []MediaReference{
 			{URL: "https://cdn.example/audio.mp3", Kind: "audio", Role: "reference_audio", Order: 3},

@@ -81,12 +81,13 @@ float fbm(vec3 p) {
 }
 
 void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-  vec2 p = uv * 2.0 - 1.0;
-  p.x *= u_resolution.x / u_resolution.y;
+  // Center on the pixel grid. Dividing by the canvas size and then
+  // stretching x by the aspect ratio shifts the disc whenever the
+  // backing store is not square (border box, DPR rounding).
+  vec2 p = (gl_FragCoord.xy - u_resolution.xy * 0.5) / (0.5 * min(u_resolution.x, u_resolution.y));
   float r = length(p);
   if (r > 1.0) discard;
-  float y = uv.y;
+  float y = p.y * 0.5 + 0.5;
   float t = u_time * 0.18;
   float n1 = fbm(vec3(p * 1.28, t));
   float n2 = fbm(vec3(p * 2.35 + n1 * 0.55, t * 1.22));

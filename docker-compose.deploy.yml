@@ -27,8 +27,9 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: ghcr.io/ddcat-ai/open-ai-canvas-backend:${CANVAS_IMAGE_TAG:-latest}
-    command: ["migrate-schema", "up"]
+    image: ${CANVAS_BACKEND_IMAGE:?请先配置 CANVAS_BACKEND_IMAGE（必须包含镜像 digest）}
+    entrypoint: ["migrate-schema"]
+    command: ["up"]
     environment:
       CANVAS_BACKEND_DATA_DIR: /data
       CANVAS_DATABASE_DRIVER: postgres
@@ -37,8 +38,22 @@ services:
       postgres:
         condition: service_healthy
 
+  yingce-agent:
+    image: ${CANVAS_YINGCE_AGENT_IMAGE:?请先配置 CANVAS_YINGCE_AGENT_IMAGE（必须包含镜像 digest）}
+    environment:
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}
+      MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-30}
+      NODE_MAX_OLD_SPACE_SIZE: ${YINGCE_AGENT_NODE_MEMORY_MB:-512}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   backend:
-    image: ghcr.io/ddcat-ai/open-ai-canvas-backend:${CANVAS_IMAGE_TAG:-latest}
+    image: ${CANVAS_BACKEND_IMAGE:?请先配置 CANVAS_BACKEND_IMAGE（必须包含镜像 digest）}
     environment:
       CANVAS_BACKEND_ADDR: ":8080"
       CANVAS_BACKEND_DATA_DIR: /data
@@ -56,6 +71,11 @@ services:
       CANVAS_PUBLIC_BASE_URL: ${CANVAS_PUBLIC_BASE_URL:-}
       CANVAS_UPDATER_SOCKET: /run/open-ai-canvas-updater/updater.sock
       CANVAS_UPDATER_TOKEN: ${CANVAS_UPDATER_TOKEN:-}
+      YINGCE_AGENT_URL: http://yingce-agent:8081
+      YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}
+      YINGCE_AGENT_BRIDGE_HOST: backend
+      CANVAS_LOG_LEVEL: ${CANVAS_LOG_LEVEL:-info}
+      CANVAS_LOG_FORMAT: ${CANVAS_LOG_FORMAT:-text}
       GIN_MODE: release
     volumes:
       - ${CANVAS_DATA_PATH:-backend-data}:/data
@@ -67,13 +87,18 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      yingce-agent:
+        condition: service_healthy
     restart: unless-stopped
     stop_grace_period: ${CANVAS_SHUTDOWN_TIMEOUT:-10m}
 
   web:
-    image: ghcr.io/ddcat-ai/open-ai-canvas-web:${CANVAS_IMAGE_TAG:-latest}
+    image: ${CANVAS_WEB_IMAGE:?请先配置 CANVAS_WEB_IMAGE（必须包含镜像 digest）}
     ports:
       - "${CANVAS_HTTP_PORT:-3000}:3000"
+    volumes:
+      # Keep hashed chunks from the current and previous web releases for old tabs.
+      - ${CANVAS_WEB_DATA_PATH:-web-data}:/usr/share/nginx/html
     depends_on:
       backend:
         condition: service_healthy
@@ -83,3 +108,4 @@ volumes:
   backend-data:
   postgres-data:
   redis-data:
+  web-data:

@@ -1,4 +1,4 @@
-import { App, Button, DatePicker, Form, Input, Modal, Popconfirm, Select, Switch } from "antd";
+import { App, Button, DatePicker, Form, Input, Modal, Popconfirm, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Trash2, Edit3, Search } from "lucide-react";
 import dayjs, { type Dayjs } from "dayjs";
@@ -23,6 +23,7 @@ import { BANNER_TITLE_MAX_CHARS, bannerTitleCharCount, bannerTitlePlainText, nor
 import { AdminDataTable } from "./admin-ui";
 import { BannerNoticeTypeSelector } from "./banner-notice-type-selector";
 import { BannerNoticePreview, BannerTitleEditor } from "./banner-title-editor";
+import { Select } from "@/components/ui/base/select";
 
 type FormValues = {
     noticeType: BannerNoticeType;

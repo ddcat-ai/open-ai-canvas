@@ -1,16 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 /**
  * 生产接线回归：模板与模式的领域函数正确，不代表真实入口用上了。
  * 这里锁住「新建必须选模板」「已有场景不弹模板」「时间轴只在动画模式」三条链路。
  */
-const workbench = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/canvas-director-workbench.tsx"), "utf8");
+const workbench = moduleGroupSource("components/canvas/director/canvas-director-workbench.tsx");
 const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/director-viewport-dock.tsx"), "utf8");
-const viewport = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/director-viewport.tsx"), "utf8");
+const viewport = moduleGroupSource("components/canvas/director/director-viewport.tsx");
 const hook = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-director.ts"), "utf8");
-const project = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
+const project = moduleGroupSource("pages/canvas/project.tsx");
 const modal = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/canvas-director-template-modal.tsx"), "utf8");
 const store = readFileSync(resolve(import.meta.dir, "../src/stores/canvas/use-director-workbench-store.ts"), "utf8");
 const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
@@ -95,25 +96,27 @@ describe("模式接线", () => {
     });
 
     test("骨骼/姿势入口只对演员开放，且由 bones 把关", () => {
-        expect(workbench).toContain('{capabilities.bones && (object.kind === "actor" || object.primitive === "character") ? <>');
+        const normalizedWorkbench = workbench.replace(/\s+/g, " ");
+        expect(normalizedWorkbench).toContain('{capabilities.bones && (object.kind === "actor" || object.primitive === "character") ? ( <>');
         // motionClips 不得再作为放行条件：带动画的普通模型不是演员。
         expect(workbench).not.toContain('object.primitive === "character" || motionClips.length) ? <>');
     });
 
     test("姿态模式提供全身与当前骨骼重置，不删除动画轨道", () => {
         const inspector = slice(workbench, "function ObjectInspector(", "function LightInspector(");
-        expect(inspector).toContain('onClick={() => applyPose("stand")}>重置姿态</Button>');
+        const normalizedInspector = inspector.replace(/\s+/g, " ");
+        expect(normalizedInspector).toContain('onClick={() => applyPose("stand")}> 重置姿态 </Button>');
         expect(inspector).toContain("delete boneOverrides[selectedBoneId]");
-        expect(inspector).toContain(">重置当前骨骼</Button>");
+        expect(normalizedInspector).toContain("> 重置当前骨骼 </Button>");
         expect(inspector).not.toContain("boneTracks: []");
     });
 
     test("动作片段与骨骼入口解耦：任何带 Clip 的对象都能调播放速度/循环", () => {
-        expect(workbench).toContain('{motionClips.length ? <><Field label="动作片段">');
+        expect(workbench.replace(/\s+/g, " ")).toContain('{motionClips.length ? ( <> <Field label="动作片段">');
     });
 
     test("关键帧入口由 keyframes 把关", () => {
-        expect(workbench).toContain("{capabilities.keyframes ? <>");
+        expect(workbench.replace(/\s+/g, " ")).toContain("{capabilities.keyframes ? ( <>");
     });
 
     test("渲染视图下拉按当前模式过滤，而不是写死五项", () => {

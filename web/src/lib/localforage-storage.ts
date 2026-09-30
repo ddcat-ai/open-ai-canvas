@@ -1,7 +1,7 @@
 import localforage from "localforage";
 import type { StateStorage } from "zustand/middleware";
 
-import { scopedStorageKey } from "@/lib/user-scope";
+import { isUserScopedPersistenceSuppressed, scopedStorageKey } from "@/lib/user-scope";
 
 localforage.config({
     name: "infinite-canvas",
@@ -24,10 +24,12 @@ export function localForageStorageForScope(scope?: string): StateStorage {
         },
         setItem: async (name, value) => {
             if (!browserStorageAvailable()) return;
+            if (isUserScopedPersistenceSuppressed()) return;
             await localforage.setItem(keyFor(name), value);
         },
         removeItem: async (name) => {
             if (!browserStorageAvailable()) return;
+            if (isUserScopedPersistenceSuppressed()) return;
             await localforage.removeItem(keyFor(name));
         },
     };

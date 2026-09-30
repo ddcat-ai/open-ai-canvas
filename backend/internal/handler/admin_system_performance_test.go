@@ -14,6 +14,7 @@ func TestAdminSystemPerformanceRoutesAreRegistered(t *testing.T) {
 	RegisterAdminSystemPerformanceRoutes(router.Group("/api"), &service.Service{})
 	wanted := map[string]bool{
 		"GET /api/admin/system-performance":              false,
+		"PUT /api/admin/system-performance/agent-limit":  false,
 		"POST /api/admin/system-performance/cache/clear": false,
 	}
 	for _, route := range router.Routes() {

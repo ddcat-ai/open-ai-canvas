@@ -81,7 +81,7 @@ func (s *Service) testOSSSetting(scope string, ownerID string, actorID string, r
 	}()
 
 	testKey := path.Join(value.PathPrefix, ".yingce-tests", scope, newID())
-	if err := verifyOSSConnection(value, testKey); err != nil {
+	if err := verifyOSSConnection(s.storageSettingWithRuntimePolicy(value), testKey); err != nil {
 		return nil, err
 	}
 

@@ -17,6 +17,33 @@ func agentTestRequest() CloudAgentRequest {
 	return req
 }
 
+func TestCloudAgentPiCarrierCheckpointKeepsTaskHistoryAnchor(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	s.legacyCloudAgentRootTask = false
+	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
+	if err != nil {
+		t.Fatalf("new Pi Agent run must checkpoint successfully: %v", err)
+	}
+	execution, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ActiveTaskID != "" {
+		t.Fatalf("Pi carrier must not be an active model task: %q", state.ActiveTaskID)
+	}
+	if len(state.TaskIDs) != 1 || state.TaskIDs[0] != run.ID {
+		t.Fatalf("Pi carrier lost its durable task-history anchor: %#v", state.TaskIDs)
+	}
+}
+
 func TestCloudAgentRunSurvivesTaskInputCompaction(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
@@ -201,6 +228,9 @@ func TestCloudAgentTerminalRunWithOlderCapabilityCanContinueOnCurrentContract(t 
 	if childState.ParentID != parent.ID || len(childState.TextHistory) != 2 || childState.TextHistory[1].Content != "旧合同下的可信回复" {
 		t.Fatalf("historical conversation context was not preserved: %+v", childState)
 	}
+	if childState.ConfirmationRounds != 0 || len(childState.ConfirmationFingerprints) != 0 {
+		t.Fatalf("normal completed parent incorrectly inherited confirmation budget: rounds=%d fingerprints=%v", childState.ConfirmationRounds, childState.ConfirmationFingerprints)
+	}
 	var storedParent model.CloudAgentExecution
 	if err = db.First(&storedParent, "id = ?", parent.ID).Error; err != nil {
 		t.Fatal(err)
@@ -266,6 +296,23 @@ func TestCloudAgentValidation(t *testing.T) {
 	}
 }
 
+func TestCloudAgentValidationNormalizesFocusNodeIDs(t *testing.T) {
+	req := agentTestRequest()
+	req.FocusNodeIDs = []string{" node-1 ", "node-2"}
+	if err := validateCloudAgentRequest(&req); err != nil {
+		t.Fatalf("trimmed focus node IDs should be normalized consistently: %v", err)
+	}
+	if req.FocusNodeIDs[0] != "node-1" {
+		t.Fatalf("focus node ID was validated but not normalized: %#v", req.FocusNodeIDs)
+	}
+
+	req = agentTestRequest()
+	req.FocusNodeIDs = []string{"node-1", " node-1 "}
+	if err := validateCloudAgentRequest(&req); err == nil {
+		t.Fatal("focus node IDs that normalize to the same node must be rejected")
+	}
+}
+
 func TestCloudAgentAdmissionAndContinuation(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	canvas := model.CanvasProject{ID: "agent-canvas", UserID: "user", Title: "test", PayloadJSON: `{"nodes":[{"id":"n","type":"text","metadata":{"content":"剧情片段","secret":"do-not-send"}}]}`}
@@ -312,6 +359,9 @@ func TestCloudAgentAdmissionAndContinuation(t *testing.T) {
 		t.Fatal("running parent accepted")
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", run.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"可信回复"}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", run.ID).Update("status", "completed").Error; err != nil {
 		t.Fatal(err)
 	}
 	continued, err := s.CreateCloudAgentRun("user", next, run.ID)
@@ -362,8 +412,12 @@ func TestCloudAgentAdmissionAcceptsTokenPricingWithQuotedChargeLimit(t *testing.
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
-
-	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
+	if err := db.Model(&model.CreditAccount{}).Where("user_id = ?", "user").Update("available_microcredits", int64(1_000_000_000)).Error; err != nil {
+		t.Fatal(err)
+	}
+	request := agentTestRequest()
+	request.Budget.MaxCredits = 100_000
+	run, err := s.CreateCloudAgentRun("user", request, "")
 	if err != nil {
 		t.Fatalf("token-priced Agent request was rejected: %v", err)
 	}
@@ -394,6 +448,8 @@ func TestCloudAgentWorkerPersistsRealResponse(t *testing.T) {
 	defer upstream.Close()
 	s, db, _, _ := creationTestService(t)
 	s = New(s.repo, s.dataDir)
+	s.disablePiRuntime = true
+	s.legacyCloudAgentRootTask = true
 	t.Cleanup(func() { _ = s.Close() })
 	if err := db.Model(&model.ModelChannel{}).Where("id = ?", "channel").Updates(map[string]any{"base_url": upstream.URL, "api_key": "test-only"}).Error; err != nil {
 		t.Fatal(err)

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("滚动条样式按复用边界拆分，并保持全局入口可用", async () => {
     const [application, globals, shared, creation, creationWorkspace, editor, editorShell] = await Promise.all([
@@ -6,7 +7,7 @@ test("滚动条样式按复用边界拆分，并保持全局入口可用", async
         Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
         Bun.file(new URL("../src/styles/shared/scrollbars.css", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/create/creation-scrollbars.css", import.meta.url)).text(),
-        Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text(),
+        Promise.resolve(moduleGroupSource("pages/create/creation-workspace.tsx")),
         Bun.file(new URL("../src/lib/plugins/builtin/editor/editor-shell.css", import.meta.url)).text(),
         Bun.file(new URL("../src/lib/plugins/builtin/editor/editor-shell.tsx", import.meta.url)).text(),
     ]);

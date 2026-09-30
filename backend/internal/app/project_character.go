@@ -507,6 +507,10 @@ func (s *Service) characterCard(userID string, asset *model.Asset) (CharacterCar
 	if err != nil {
 		return CharacterCardSummary{}, err
 	}
+	return s.characterCardVersion(userID, version)
+}
+
+func (s *Service) characterCardVersion(userID string, version *model.AssetVersion) (CharacterCardSummary, error) {
 	definition := map[string]any{}
 	if err := json.Unmarshal([]byte(version.DefinitionJSON), &definition); err != nil {
 		return CharacterCardSummary{}, err

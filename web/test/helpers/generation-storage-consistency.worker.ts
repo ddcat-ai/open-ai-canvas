@@ -396,6 +396,29 @@ async function runMediaCommitRace(mediaType: "video" | "audio") {
 async function runCanvasBatchCommitRace() {
     const harness = installStorageHarness();
     const previousScope = getActiveUserScope();
+    const { apiClient } = await import("../../src/services/api/request");
+    const originalAdapter = apiClient.defaults.adapter;
+    apiClient.defaults.adapter = async (config) => {
+        if (config.method !== "post" || config.url !== "/resources/access") throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+        const requests = JSON.parse(config.data) as { resourceId: string; variant: string }[];
+        const items = requests.map(({ resourceId, variant }) => {
+            if (!["image-0", "image-1"].includes(resourceId)) throw new Error(`Unexpected resource: ${resourceId}`);
+            return {
+                resourceId,
+                access: {
+                    resourceId,
+                    requestedVariant: variant,
+                    actualVariant: variant,
+                    url: `/api/resources/${resourceId}/content`,
+                    delivery: "platform-local",
+                    issuedAt: new Date().toISOString(),
+                    refreshAt: new Date(Date.now() + 60000).toISOString(),
+                    revision: "test",
+                },
+            };
+        });
+        return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { items }, msg: "ok" } };
+    };
     let unregister: (() => void) | undefined;
     try {
         setActiveUserScope("canvas-batch-commit-race");
@@ -407,30 +430,58 @@ async function runCanvasBatchCommitRace() {
         const { parseCanvasStorageDocument } = await import("../../src/lib/canvas/canvas-storage-revision");
         const { CanvasNodeType } = await import("../../src/types/canvas");
         const projectId = useCanvasStore.getState().createProject("batch race");
-        const nodes = Array.from({ length: 5 }, (_, index) => ({ id: `node-${index}`, type: CanvasNodeType.Image, title: `image-${index}`, position: { x: index * 400, y: 0 }, width: 320, height: 240, metadata: { taskId: `task-${index}`, status: index < 2 ? "loading" as const : "error" as const } }));
+        const nodes = Array.from({ length: 5 }, (_, index) => ({
+            id: `node-${index}`,
+            type: CanvasNodeType.Image,
+            title: `image-${index}`,
+            position: { x: index * 400, y: 0 },
+            width: 320,
+            height: 240,
+            metadata: { taskId: `task-${index}`, status: index < 2 ? ("loading" as const) : ("error" as const) },
+        }));
         const ref: { current: import("../../src/types/canvas").CanvasNodeData[] } = { current: nodes };
         const setNodes = createCanvasStateWriter(ref, () => {});
         useCanvasStore.getState().updateProject(projectId, { nodes });
         await flushCanvasStorePersistence();
-        useAssetStore.setState({ assets: [0, 1].map((index) => ({ id: `asset-${index}`, kind: "image" as const, title: "generated", coverUrl: "/image.png", tags: [], createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z", data: { dataUrl: "/image.png", storageKey: `resource:image-${index}`, width: 640, height: 480, bytes: 100, mimeType: "image/png" } })) });
+        useAssetStore.setState({
+            assets: [0, 1].map((index) => ({
+                id: `asset-${index}`,
+                kind: "image" as const,
+                title: "generated",
+                coverUrl: "/image.png",
+                tags: [],
+                createdAt: "2026-09-21T00:00:00Z",
+                updatedAt: "2026-09-21T00:00:00Z",
+                data: { dataUrl: "/image.png", storageKey: `resource:image-${index}`, width: 640, height: 480, bytes: 100, mimeType: "image/png" },
+            })),
+        });
         unregister = registerCanvasGenerationLiveProject({ scope: getActiveUserScope(), projectId, adapter: { read: () => ({ nodes: ref.current, connections: [], chatSessions: [], activeChatId: null }), write: (state) => setNodes(state.nodes) } });
         let edited = false;
         harness.hooks.onSet = (storeName, _key, value) => {
             if (edited || storeName !== "app_state" || typeof value !== "string" || !value.includes("attach:task-")) return;
             edited = true;
-            setNodes((current) => [...current.map((node) => node.id === "node-0" ? { ...node, title: "用户改名", position: { x: 700, y: 500 } } : node), { ...nodes[0], id: "new-during-save", metadata: {} }]);
+            setNodes((current) => [...current.map((node) => (node.id === "node-0" ? { ...node, title: "用户改名", position: { x: 700, y: 500 } } : node)), { ...nodes[0], id: "new-during-save", metadata: {} }]);
         };
-        await Promise.all([0, 1].map((index) => applyCanvasGenerationTaskNodeEffect({
-            projectId, nodeId: `node-${index}`, nodesRef: ref, setNodes,
-            task: { id: `task-${index}`, projectId, type: "canvas_image", status: "succeeded", prompt: "test", attempts: 1, createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:01Z", resultJson: "{}" },
-            output: { outputIndex: 0, mediaType: "image", materializedAssetId: `asset-${index}` }, effectKey: `attach:task-${index}:0`,
-        })));
+        await Promise.all(
+            [0, 1].map((index) =>
+                applyCanvasGenerationTaskNodeEffect({
+                    projectId,
+                    nodeId: `node-${index}`,
+                    nodesRef: ref,
+                    setNodes,
+                    task: { id: `task-${index}`, projectId, type: "canvas_image", status: "succeeded", prompt: "test", attempts: 1, createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:01Z", resultJson: "{}" },
+                    output: { outputIndex: 0, mediaType: "image", materializedAssetId: `asset-${index}` },
+                    effectKey: `attach:task-${index}:0`,
+                }),
+            ),
+        );
         useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
         await flushCanvasStorePersistence();
         const stored = parseCanvasStorageDocument(await localForageStorageForScope(getActiveUserScope()).getItem(CANVAS_STORE_KEY), []);
         return { edited, live: ref.current, restored: stored.state.projects.find((project) => project.id === projectId)?.nodes };
     } finally {
         unregister?.();
+        apiClient.defaults.adapter = originalAdapter;
         setActiveUserScope(previousScope);
         harness.restore();
     }

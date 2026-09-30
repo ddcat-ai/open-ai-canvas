@@ -50,6 +50,27 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	}
 }
 
+func TestBuiltInAppearanceSkinAuthPalettesFollowMode(t *testing.T) {
+	for _, skin := range defaultAppearanceSkinThemes() {
+		if skin.Tokens.Light.AuthBackground == skin.Tokens.Dark.AuthBackground || skin.Tokens.Light.AuthCard == skin.Tokens.Dark.AuthCard {
+			t.Errorf("skin %s reuses dark auth surfaces in light mode", skin.ID)
+		}
+		for _, mode := range []struct {
+			name   string
+			tokens AppearanceSkinModeTokens
+		}{
+			{name: "light", tokens: skin.Tokens.Light},
+			{name: "dark", tokens: skin.Tokens.Dark},
+		} {
+			for label, foreground := range map[string]string{"text": mode.tokens.Text, "muted": mode.tokens.AuthMuted, "accent": mode.tokens.AuthAccent} {
+				if ratio := appearanceColorContrastRatio(t, foreground, mode.tokens.AuthCard); ratio < 4.5 {
+					t.Errorf("skin %s %s auth %s contrast = %.2f, want at least 4.5", skin.ID, mode.name, label, ratio)
+				}
+			}
+		}
+	}
+}
+
 func TestBuiltInAppearanceSkinTooltipPairsMeetContrast(t *testing.T) {
 	for _, skin := range defaultAppearanceSkinThemes() {
 		modes := []struct {
@@ -415,8 +436,15 @@ func TestAppearanceSkinLibrarySupportsEditableCopiesAndProtectsClassic(t *testin
 	legacyCustom.Tokens.Light.DangerHover = ""
 	legacyCustom.Tokens.Light.DangerActive = ""
 	legacyCustom.Tokens.Light.DangerForeground = ""
-	backfilled := normalizeAppearanceSkinThemes([]AppearanceSkinTheme{legacyCustom})[0]
-	if backfilled.Tokens.Light.SwitchChecked != "#123456" || backfilled.Tokens.Light.SwitchCheckedHover != "#234567" || backfilled.Tokens.Light.SwitchUnchecked != legacyCustom.Tokens.Light.ControlBorder || backfilled.Tokens.Light.DangerHover != legacyCustom.Tokens.Light.Danger {
+	backfilledThemes := normalizeAppearanceSkinThemes([]AppearanceSkinTheme{legacyCustom})
+	var backfilled AppearanceSkinTheme
+	for _, theme := range backfilledThemes {
+		if theme.ID == legacyCustom.ID {
+			backfilled = theme
+			break
+		}
+	}
+	if backfilled.ID != legacyCustom.ID || backfilled.Tokens.Light.SwitchChecked != "#123456" || backfilled.Tokens.Light.SwitchCheckedHover != "#234567" || backfilled.Tokens.Light.SwitchUnchecked != legacyCustom.Tokens.Light.ControlBorder || backfilled.Tokens.Light.DangerHover != legacyCustom.Tokens.Light.Danger {
 		t.Fatalf("legacy skin state backfill = %#v", backfilled.Tokens.Light)
 	}
 
@@ -431,17 +459,25 @@ func TestAppearanceSkinLibrarySupportsEditableCopiesAndProtectsClassic(t *testin
 		t.Fatalf("custom skin round trip = %#v", updated)
 	}
 
+	classic := defaultClassicAppearanceSkin()
 	withoutClassic := append([]AppearanceSkinTheme(nil), themes[1:]...)
-	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: withoutClassic})
-	if err == nil || !strings.Contains(err.Error(), "不能修改或删除") {
-		t.Fatalf("missing classic error = %v", err)
+	restored, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: withoutClassic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.SkinThemes[0] != classic {
+		t.Fatalf("missing classic was not restored = %#v", restored.SkinThemes[0])
 	}
 
 	mutatedClassic := append([]AppearanceSkinTheme(nil), themes...)
 	mutatedClassic[0].Name = "改名"
-	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: mutatedClassic})
-	if err == nil || !strings.Contains(err.Error(), "不能修改或删除") {
-		t.Fatalf("mutated classic error = %v", err)
+	mutatedClassic[0].Tokens.Light.Primary = "#000000"
+	overwritten, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: mutatedClassic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overwritten.SkinThemes[0] != classic || overwritten.Public.ActiveSkin.ID != custom.ID {
+		t.Fatalf("mutated classic was not overwritten = %#v", overwritten.SkinThemes[0])
 	}
 
 	invalidColor := append([]AppearanceSkinTheme(nil), themes...)

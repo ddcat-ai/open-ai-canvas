@@ -43,9 +43,9 @@ func BuiltinRegistry() *Registry {
 		}),
 		{
 			Type: "frame", Version: "1", Label: "背板", DefaultWidth: 760, DefaultHeight: 520,
-			Purpose:       "组织一组相关节点的画布区域。",
-			GoodFor:       []string{"按场景整理节点", "划分工作区域"},
-			NotIdealFor:   []string{"承载结构化镜头数据", "替代具体业务节点"},
+			Purpose:       "在画布上建立可移动、可折叠的视觉分区，用来归组相关节点；背板本身不承载创作正文或生成结果。",
+			GoodFor:       []string{"按场景或镜头组归拢脚本、参考图和生成结果", "按前期策划、制作、交付等阶段划分工作区", "为大型画布建立清晰分区，便于移动或折叠整组内容"},
+			NotIdealFor:   []string{"承载结构化镜头数据（应使用分镜脚本节点）", "存放需要 Agent 单独读写的正文（应使用文本或 Markdown 节点）", "替代具体业务节点或媒体生成节点"},
 			Tradeoffs:     []string{"改善空间组织但不增加内容结构或生成能力"},
 			SummaryFields: []string{"label"}, DetailFields: []string{"label"},
 			CreateMetadata: func(string) map[string]any {

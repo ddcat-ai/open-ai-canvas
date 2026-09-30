@@ -48,9 +48,12 @@ jobs:
           echo "build_time=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
           echo "owner=${REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
+  # 镜像构建与质量检查并行：构建只推送不可变的 sha-<commit> 标签，不会被部署使用；
+  # 可变标签（latest / 版本号）的推广在 publish 中进行，并且必须等待 checks 通过。
+  # 这样发布总耗时约为 max(检查, 构建) 而不是两者相加。
   build:
     name: Build ${{ matrix.image }} (${{ matrix.arch }})
-    needs: [checks, prepare]
+    needs: [prepare]
     permissions:
       contents: read
       packages: write
@@ -75,6 +78,11 @@ jobs:
             arch: arm64
             platforms: linux/arm64
             runner: ubuntu-24.04-arm
+          - image: open-ai-canvas-yingce-agent
+            dockerfile: yingce-agent/Dockerfile
+            arch: multi
+            platforms: linux/amd64,linux/arm64
+            runner: ubuntu-24.04
     env:
       IMAGE: ghcr.io/${{ needs.prepare.outputs.owner }}/${{ matrix.image }}
     steps:
@@ -92,7 +100,9 @@ jobs:
         run: bash .github/scripts/resolve-image.sh "$IMAGE_REF"
       - name: Build and push immutable commit image
         id: build
-        if: steps.existing.outputs.found != 'true'
+        # A version tag is a release boundary: rebuild its image even if a SHA tag
+        # already exists, so a stale/corrupt SHA tag cannot be promoted as a release.
+        if: startsWith(github.ref, 'refs/tags/v') || steps.existing.outputs.found != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -128,7 +138,7 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.image }} manifest
-    needs: [prepare, build]
+    needs: [checks, prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -136,7 +146,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [open-ai-canvas-web, open-ai-canvas-backend]
+        image: [open-ai-canvas-web, open-ai-canvas-backend, open-ai-canvas-yingce-agent]
     # 不同提交可并行编译，但同一镜像的可变标签更新必须串行。
     concurrency:
       group: image-tags-${{ matrix.image }}-${{ github.ref }}
@@ -207,12 +217,18 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* || "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             prerelease_args+=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" \
-            dist/open-ai-canvas-host-updater-linux-amd64 \
-            dist/open-ai-canvas-host-updater-linux-arm64 \
-            dist/SHA256SUMS \
-            docker-compose.deploy.yml \
-            --verify-tag \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file dist/RELEASE_NOTES.md \
-            "${prerelease_args[@]}"
+          assets=(
+            dist/open-ai-canvas-host-updater-linux-amd64
+            dist/open-ai-canvas-host-updater-linux-arm64
+            dist/SHA256SUMS
+            docker-compose.deploy.yml
+          )
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file dist/RELEASE_NOTES.md \
+              "${prerelease_args[@]}"
+          fi

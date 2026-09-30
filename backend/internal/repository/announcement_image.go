@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrAnnouncementImageDraftUnavailable = errors.New("announcement image draft unavailable")
-var ErrAnnouncementImageReferenced = errors.New("announcement image is still referenced")
+var ErrAnnouncementImageDraftUnavailable = errors.New("公告图片草稿已失效，请重新上传")
+var ErrAnnouncementImageReferenced = errors.New("公告图片仍被引用，无法删除")
 
 func (r *Repository) CreateAnnouncementImageDraft(draft *model.AnnouncementImageDraft) error {
 	return r.db.Create(draft).Error

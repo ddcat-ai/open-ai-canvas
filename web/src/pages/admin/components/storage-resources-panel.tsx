@@ -1,4 +1,4 @@
-import { App, Button, Input, Modal, Select } from "antd";
+import { App, Button, Input, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Search, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
@@ -9,6 +9,7 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatTile, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
 
 const pageSizes = [20, 50, 100];
 

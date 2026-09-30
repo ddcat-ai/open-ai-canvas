@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Button, Input, InputNumber, Select } from "antd";
+import { Button, Input, InputNumber } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Switch } from "@/components/ui/base/switch";
 import { AlertTriangle, Box, Check, FileImage, Link2, Plus, Save, SlidersHorizontal, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
+import { Select } from "@/components/ui/base/select";
 
 import {
     createStyleProfileSnapshot,

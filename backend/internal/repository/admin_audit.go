@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	ErrBulkUserNotFound    = errors.New("bulk user not found")
-	ErrBulkCurrentAdmin    = errors.New("bulk includes current admin")
-	ErrBulkLastActiveAdmin = errors.New("bulk removes last active admin")
+	ErrBulkUserNotFound    = errors.New("所选用户中有不存在的账号")
+	ErrBulkCurrentAdmin    = errors.New("批量操作不能包含当前管理员自己")
+	ErrBulkLastActiveAdmin = errors.New("不能移除最后一个可用的管理员")
 )
 
 type AdminUserCounts struct {

@@ -1,0 +1,140 @@
+/*
+ * 影策统一输入框。
+ *
+ * 场景分三类，避免每个页面再画一套描边：
+ * - field：表单、搜索、筛选、弹窗里的独立输入。默认无边填充，悬停只加深表面，
+ *   键盘聚焦才出现低对比提示。
+ * - inset：输入框已经放进卡片、行、验证码容器里。外壳不再画第二层边框。
+ * - borderless：标题、节点名等行内编辑，只保留文字，不出现控件盒子。
+ *
+ * 带前缀、后缀、清除按钮或前后附加内容时，Ant Design 会在外壳里再放一个
+ * input。这里强制内层透明且无边，保证任何场景都只有一层视觉边界。
+ */
+
+:root {
+    --unified-input-surface: color-mix(in srgb, var(--foreground) 6%, transparent);
+    --unified-input-surface-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
+    --unified-input-surface-focus: color-mix(in srgb, var(--foreground) 12%, transparent);
+    --unified-input-focus: color-mix(in srgb, var(--ring) 34%, transparent);
+    --unified-input-placeholder: color-mix(in srgb, var(--foreground) 42%, transparent);
+    --unified-input-addon: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+:where(.ant-input:not(textarea), .ant-input-affix-wrapper, .ant-input-number, .ant-input-number-affix-wrapper, .ant-input-group-wrapper .ant-input-group-addon, .ant-otp-input) {
+    border-color: transparent !important;
+    border-radius: var(--r-lg) !important;
+    background: var(--unified-input-surface) !important;
+    box-shadow: none !important;
+    transition:
+        background-color var(--motion-state, 180ms) ease,
+        color var(--motion-state, 180ms) ease !important;
+}
+
+:where(textarea.ant-input, .ant-input-textarea textarea.ant-input) {
+    border-color: transparent !important;
+    border-radius: var(--r-lg) !important;
+    background: var(--unified-input-surface) !important;
+    box-shadow: none !important;
+}
+
+:where(
+    .ant-input:not(.ant-input-disabled):hover,
+    .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-disabled):hover,
+    .ant-input-number:not(.ant-input-number-disabled):hover,
+    .ant-input-number-affix-wrapper:not(.ant-input-number-affix-wrapper-disabled):hover
+) {
+    border-color: transparent !important;
+    background: var(--unified-input-surface-hover) !important;
+    box-shadow: none !important;
+}
+
+:where(.ant-input:focus, .ant-input-focused, .ant-input-affix-wrapper-focused, .ant-input-number-focused, .ant-input-number-affix-wrapper-focused) {
+    border-color: transparent !important;
+    background: var(--unified-input-surface-focus) !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+:where(.ant-input-affix-wrapper > .ant-input, .ant-input-number .ant-input-number-input, .ant-input-number-affix-wrapper .ant-input-number-input, .ant-input-search .ant-input) {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+:where(.ant-input, .ant-input-number-input)::placeholder {
+    color: var(--unified-input-placeholder) !important;
+}
+
+.ant-input-group-wrapper .ant-input-group-addon {
+    border: 0 !important;
+    background: var(--unified-input-addon) !important;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent) !important;
+    box-shadow: none !important;
+}
+
+.ant-input-search .ant-input-group-addon,
+.ant-input-search .ant-input-search-btn,
+.ant-input-search .ant-input-search-button {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* 外壳已经承担视觉时，内部输入不再形成第二层线条。 */
+:where(.ant-input-affix-wrapper .ant-input, .ant-input-group .ant-input, .ant-input-group .ant-input-affix-wrapper, .ant-otp .ant-otp-input-wrapper .ant-input) {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* 错误和警告仍需要可识别的状态，但不再叠加发光描边。 */
+:where(.ant-input-status-error:not(.ant-input-disabled), .ant-input-affix-wrapper-status-error:not(.ant-input-affix-wrapper-disabled), .ant-input-number-status-error:not(.ant-input-number-disabled)) {
+    background: color-mix(in srgb, var(--destructive, #ef4444) 10%, transparent) !important;
+}
+
+:where(.ant-input-status-warning:not(.ant-input-disabled), .ant-input-affix-wrapper-status-warning:not(.ant-input-affix-wrapper-disabled), .ant-input-number-status-warning:not(.ant-input-number-disabled)) {
+    background: color-mix(in srgb, var(--warning, #f59e0b) 12%, transparent) !important;
+}
+
+:where(.ant-input-disabled, .ant-input-affix-wrapper-disabled, .ant-input-number-disabled, .ant-input-number-affix-wrapper-disabled) {
+    background: color-mix(in srgb, var(--foreground) 4%, transparent) !important;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent) !important;
+    box-shadow: none !important;
+}
+
+/* 鼠标点击只改变表面；键盘导航才显示焦点。 */
+:where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-input-number-affix-wrapper):focus:not(:focus-visible),
+:where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-input-number-affix-wrapper):focus-visible:not([data-input-modality="keyboard"]) {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+:where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-input-number-affix-wrapper):focus-visible[data-input-modality="keyboard"] {
+    outline: 1px solid var(--unified-input-focus) !important;
+    outline-offset: 1px !important;
+    box-shadow: none !important;
+}
+
+/* inset：父容器已经是输入表面，子输入框退成纯文字区。 */
+:where(.auth-code-field, .canvas-prompt-optimizer-sender, .ant-input-group, .ant-space-compact) :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number) {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* borderless：行内改名和节点标题不需要控件底。 */
+:where(.ant-input-borderless, .ant-input-affix-wrapper-borderless, .ant-input-number-borderless) {
+    min-height: auto !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+:where(.ant-input-borderless, .ant-input-affix-wrapper-borderless, .ant-input-number-borderless):hover,
+:where(.ant-input-borderless, .ant-input-affix-wrapper-borderless, .ant-input-number-borderless):focus,
+:where(.ant-input-borderless, .ant-input-affix-wrapper-borderless, .ant-input-number-borderless):focus-within {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent) !important;
+    box-shadow: none !important;
+}

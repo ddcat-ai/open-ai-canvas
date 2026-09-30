@@ -18,6 +18,14 @@ export type CharacterBreakdown = {
     voiceTimbre: string;
 };
 
+export function normalizeCharacterImageMentions(prompt: string, imageCount: number, characterLabels: string[]) {
+    if (imageCount > 0 || !characterLabels.length) return prompt;
+    return prompt.replace(/@图片([1-9]\d*)(?=$|\s|[,.!?;:，。！？；：、)\]}】）])/g, (token, index: string) => {
+        const label = characterLabels[Number(index) - 1];
+        return label ? "@" + label : token;
+    });
+}
+
 export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], assets: ProjectAsset[]) {
     const characters = new Map(assets.filter((asset) => asset.category === "character" && asset.character).map((asset) => [asset.id, asset]));
     let changed = false;

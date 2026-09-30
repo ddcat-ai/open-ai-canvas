@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 
@@ -21,7 +21,12 @@ import { cn } from "@/lib/utils";
  * 明暗：全部颜色走 token；active 用按压底语义 token，明暗自动适配。
  */
 export const toolButtonVariants = cva(
-    ["inline-flex select-none items-center justify-center gap-1.5 rounded-md", "font-medium transition-colors", "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", "disabled:pointer-events-none disabled:opacity-45"],
+    [
+        "inline-flex select-none items-center justify-center gap-1.5 rounded-md px-3",
+        "font-medium transition-colors",
+        "outline-none focus-visible:outline-none data-[input-modality=keyboard]:focus-visible:ring-2 data-[input-modality=keyboard]:focus-visible:ring-ring",
+        "disabled:pointer-events-none disabled:opacity-45",
+    ],
     {
         variants: {
             variant: {
@@ -74,12 +79,14 @@ export type ToolButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
         label?: ReactNode;
     };
 
-export function ToolButton({ variant, size, tone, icon, active = false, expands = false, loading = false, label, className, type = "button", disabled, ...props }: ToolButtonProps) {
+export function ToolButton({ variant, size, tone, icon, active = false, expands = false, loading = false, label, className, type = "button", disabled, onPointerDown, onKeyDown, onBlur, ...props }: ToolButtonProps) {
+    const [inputModality, setInputModality] = useState<"pointer" | "keyboard">("pointer");
     const pressed = !expands && active;
     const expanded = expands && active;
     return (
         <button
             data-slot="tool-button"
+            data-input-modality={inputModality}
             type={type}
             disabled={disabled || loading}
             aria-pressed={pressed || undefined}
@@ -87,6 +94,18 @@ export function ToolButton({ variant, size, tone, icon, active = false, expands 
             aria-busy={loading || undefined}
             data-active={active || undefined}
             className={cn(toolButtonVariants({ variant, size, tone, active }), className)}
+            onPointerDown={(event) => {
+                setInputModality("pointer");
+                onPointerDown?.(event);
+            }}
+            onKeyDown={(event) => {
+                if (event.key === "Tab" || event.key === "Enter" || event.key === " ") setInputModality("keyboard");
+                onKeyDown?.(event);
+            }}
+            onBlur={(event) => {
+                setInputModality("pointer");
+                onBlur?.(event);
+            }}
             {...props}
         >
             {loading ? <Loader2 aria-hidden className="animate-spin" /> : icon}

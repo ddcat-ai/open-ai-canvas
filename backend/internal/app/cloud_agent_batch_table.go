@@ -209,8 +209,8 @@ func prepareCloudAgentBatchTableEdit(repo *repository.Repository, userID, canvas
 		return nil, err
 	}
 	beforeHash := cloudAgentCanvasHash(doc)
-	if beforeHash != args.SnapshotHash {
-		return nil, creationConflict("画布已变化，本次未写入；请重新读取并重新申请审批")
+	if !cloudAgentNodeSnapshotMatches(doc, args.NodeID, args.SnapshotHash) {
+		return nil, cloudAgentFieldError("snapshotHash", "stale_snapshot", "这个批量创作表在你读取之后被修改过，本次未写入；请重新读取后再改")
 	}
 	node, table, rows, columns, err := batchTableNodeFromDocument(doc, args.NodeID)
 	if err != nil {
@@ -405,10 +405,10 @@ func applyCloudAgentBatchTableMutation(repo *repository.Repository, userID, canv
 			return nil, err
 		}
 	}
-	return map[string]any{"canvasId": canvasID, "nodeId": plan.Preview.Items[0].NodeID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "summary": plan.Preview.Description, "preview": plan.Preview}, nil
+	return map[string]any{"canvasId": canvasID, "nodeId": plan.Preview.Items[0].NodeID, "snapshotHash": cloudAgentNodeHash(plan.Document, plan.Preview.Items[0].NodeID), "summary": plan.Preview.Description, "preview": plan.Preview}, nil
 }
 
-func cloudAgentBatchTableReadResult(view any, nodeID string) (map[string]any, error) {
+func cloudAgentBatchTableReadResult(view any, nodeID, nodeHash string) (map[string]any, error) {
 	state, ok := view.(map[string]any)
 	if !ok {
 		return nil, BadAuthRequest("批量创作表读取结果无效")
@@ -431,5 +431,5 @@ func cloudAgentBatchTableReadResult(view any, nodeID string) (map[string]any, er
 			row["rowId"] = row["id"]
 		}
 	}
-	return map[string]any{"nodeId": nodeID, "title": node["title"], "snapshotHash": state["snapshotHash"], "batchTable": table}, nil
+	return map[string]any{"nodeId": nodeID, "title": node["title"], "snapshotHash": nodeHash, "batchTable": table}, nil
 }

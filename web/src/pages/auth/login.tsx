@@ -69,7 +69,7 @@ export default function LoginPage() {
             {methods.length > 0 && <Segmented block aria-label="登录方式" value={method} disabled={submitting} options={[{ value: "password", label: "密码登录" }, ...methods.map((value) => ({ value, label: methodLabels[value] }))]} onChange={(value) => { setMethod(value as typeof method); setVerification({ ...emptyVerification }); }} />}
             {method !== "password" ? <VerificationFields key={method} purpose="login" method={method} value={verification} onChange={setVerification} disabled={submitting} /> : <>
             <AuthField label="用户名 / 邮箱" htmlFor="login-account">
-                <Input id="login-account" size="large" prefix={<UserRound className="size-4 text-white/35" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
+                <Input id="login-account" size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
             </AuthField>
             <AuthField
                 label="密码"
@@ -77,7 +77,7 @@ export default function LoginPage() {
                 action={
                     <Link
                         to={forgotPasswordURL}
-                        className="-my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium text-blue-300/80 transition-colors hover:text-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/45"
+                        className="auth-scene-link -my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium transition-colors"
                     >
                         忘记密码？
                     </Link>
@@ -86,7 +86,7 @@ export default function LoginPage() {
                 <Input.Password
                     id="login-password"
                     size="large"
-                    prefix={<LockKeyhole className="size-4 text-white/35" />}
+                    prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="请输入密码"
@@ -100,7 +100,7 @@ export default function LoginPage() {
             </Button>
             {linuxdoEnabled ? (
                 <>
-                    <Divider plain className="!border-white/10 !text-white/30">
+                    <Divider plain className="auth-scene-divider">
                         或
                     </Divider>
                     <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
@@ -116,7 +116,7 @@ function AuthField({ label, htmlFor, action, children }: { label: string; htmlFo
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-                <label htmlFor={htmlFor} className="text-xs font-medium text-white/62">
+                <label htmlFor={htmlFor} className="auth-scene-label text-xs font-medium">
                     {label}
                 </label>
                 {action}

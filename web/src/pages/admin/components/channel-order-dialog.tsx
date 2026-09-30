@@ -1,8 +1,9 @@
-import { App, Button, InputNumber, Modal, Select, Spin } from "antd";
+import { App, Button, InputNumber, Modal, Spin } from "antd";
 import { ArrowDown, ArrowUp, GripVertical, ListOrdered } from "lucide-react";
 import { useRef, useState } from "react";
 import { AdminEmpty } from "@/pages/admin/components/admin-ui";
 import { getChannelOrder, saveChannelOrder, type ChannelOrderItem } from "@/services/api/channel-order";
+import { Select } from "@/components/ui/base/select";
 
 export function moveOrderItem<T extends { id: string }>(items: T[], id: string, target: number): T[] {
     const from = items.findIndex((item) => item.id === id);

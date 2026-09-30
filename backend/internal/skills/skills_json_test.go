@@ -58,3 +58,24 @@ func TestParseShowcaseMediaAcceptsStoredSnakeCase(t *testing.T) {
 		t.Fatalf("unexpected camelCase parse: %+v", items)
 	}
 }
+
+func TestAddedSkillReferenceJSONExcludesEditorAndSyncPayload(t *testing.T) {
+	body, err := json.Marshal(AddedSkillReference{
+		SkillID: "skill-1", SkillName: "镜头拆解", Description: "用于镜头规划", VersionID: "v1",
+		Version: "1.0.0", Tag: "creative", IsAdded: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, key := range []string{"instruction", "extraInfo", "showcaseMedia", "sourceUrl", "syncStatus", "effectiveUser"} {
+		if strings.Contains(text, `"`+key+`"`) {
+			t.Fatalf("added skill reference contains %s: %s", key, text)
+		}
+	}
+	for _, key := range []string{"skillId", "skillName", "versionId", "tag", "isAdded"} {
+		if !strings.Contains(text, `"`+key+`"`) {
+			t.Fatalf("added skill reference misses %s: %s", key, text)
+		}
+	}
+}

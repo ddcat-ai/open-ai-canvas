@@ -47,7 +47,8 @@ func TestProviderPollingDeadlineDefaultsToOneHour(t *testing.T) {
 
 func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	svc := &Service{}
-	input, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://example.com", InterfaceType: string(model.ChannelInterfaceNewAPIChannel2)}})
+	// Only validate policy here; a public IP keeps SSRF checks without external DNS.
+	input, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: string(model.ChannelInterfaceNewAPIChannel2)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	if svc.shouldDeferVideoProviderTask(base, string(input), providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}) {
 		t.Fatal("untyped provider error must not be deferred")
 	}
-	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://example.com", InterfaceType: string(model.ChannelInterfaceNewAPIVideo)}})
+	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: string(model.ChannelInterfaceNewAPIVideo)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestResumableVideoDeadlineUsesResolvedSystemChannelProtocol(t *testing.T) {
 	}
 	channel := model.ModelChannel{
 		ID: "channel-video", UserID: "admin", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Video",
-		BaseURL: "https://example.com", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["video-model"]`,
+		BaseURL: "https://93.184.216.34", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["video-model"]`,
 	}
 	channelModel := model.ChannelModel{
 		ID: "model-video", ChannelID: channel.ID, ModelKey: "video-model", Capability: "video",

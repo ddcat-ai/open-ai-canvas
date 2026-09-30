@@ -1,7 +1,7 @@
 /* Rare UI Fluid Orb inspired launcher: isolated from canvas wheel/pointer gestures. */
 .fluid-orb {
     position: relative;
-    display: inline-block;
+    display: block;
     flex: 0 0 auto;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--fluid-orb-color, #7164f6) 18%, white);

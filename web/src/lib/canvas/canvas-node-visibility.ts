@@ -1,7 +1,7 @@
 import { canvasNodeBounds, type CanvasSpatialBounds, type CanvasSpatialIndex } from "@/lib/canvas/canvas-spatial-index";
 import type { CanvasNodeData } from "@/types/canvas";
 
-const intersects = (a: CanvasSpatialBounds, b: CanvasSpatialBounds) => a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+export const intersectsCanvasBounds = (a: CanvasSpatialBounds, b: CanvasSpatialBounds) => a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
 
 /** 预算只能裁减屏外预加载，不能裁掉屏内节点或正在交互的节点。 */
 export function selectCanvasVisibleNodes({
@@ -25,8 +25,8 @@ export function selectCanvasVisibleNodes({
         const node = nodeById.get(id);
         if (!node || hiddenIds.has(id)) continue;
         const bounds = canvasNodeBounds(node);
-        if (forcedIds.has(id) || intersects(bounds, view)) visible.push(node);
-        else if (retainedIds.has(id) || intersects(bounds, enter)) overscan.push(node);
+        if (forcedIds.has(id) || intersectsCanvasBounds(bounds, view)) visible.push(node);
+        else if (retainedIds.has(id) || intersectsCanvasBounds(bounds, enter)) overscan.push(node);
     }
     return [...visible, ...overscan.slice(0, Math.max(0, budget - visible.length))];
 }

@@ -27,6 +27,17 @@ type CloudAgentExecution struct {
 	UpdatedAt      time.Time
 }
 
+// CloudAgentPiSession stores Pi's native JSONL session independently from the
+// bounded control checkpoint. Pi owns transcript and compaction semantics;
+// Go only persists the opaque session snapshot and its revision.
+type CloudAgentPiSession struct {
+	RunID        string `gorm:"primaryKey;size:80"`
+	UserID       string `gorm:"index;size:36;not null"`
+	SessionJSONL string `gorm:"column:session_jsonl;type:text;not null"`
+	Revision     int64  `gorm:"not null;default:1"`
+	UpdatedAt    time.Time
+}
+
 // Journal rows are append-only and commit in the same transaction as the run.
 type CloudAgentEventRecord struct {
 	RunID     string `gorm:"primaryKey;size:80"`

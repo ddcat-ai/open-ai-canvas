@@ -1,4 +1,4 @@
-import { Button, Select } from "antd";
+import { Button } from "antd";
 import { IconButton } from "@/components/ui/base/buttons";
 import { EmptyState } from "@/components/ui/product/empty-state";
 import { Maximize, Power, PowerOff, ZoomIn, ZoomOut } from "lucide-react";
@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 
 import { WorkflowFieldMappingEditor } from "@/components/workflow-field-mapping-editor";
 import type { WorkflowFieldMapping, WorkflowGraphPreview } from "@/stores/use-config-store";
+import { Select } from "@/components/ui/base/select";
 
 type WorkflowNode = {
     id: string;

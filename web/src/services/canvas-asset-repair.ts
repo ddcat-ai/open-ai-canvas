@@ -1,9 +1,11 @@
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
-import { resourceIdFromStorageKey } from "@/services/api/resources";
+import { refreshResource, resourceIdFromStorageKey } from "@/services/api/resources";
+import { ApiError } from "@/services/api/request";
 import { useAssetStore, type Asset, type NewAsset } from "@/stores/use-asset-store";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { TimelineDirectMedia } from "@/types/timeline";
+import { getActiveUserScope } from "@/lib/user-scope";
 
 export type CanvasAssetRepairResult = {
     createdAssets: number;
@@ -132,6 +134,67 @@ function mediaContent(media: TimelineDirectMedia) {
 
 function assetStorageKey(asset: Asset) {
     return asset.kind === "text" || asset.kind === "entity" ? undefined : asset.data.storageKey;
+}
+
+export type CanvasVideoPreviewRepairResult = {
+    clearedPreviews: number;
+    updatedProjects: number;
+};
+
+/** 仅清理确认缺失的派生封面；网络/鉴权失败必须上抛，不能当作不存在。 */
+export async function repairMissingCanvasVideoPreviews(projectIds?: Set<string>, lookup = refreshResource): Promise<CanvasVideoPreviewRepairResult> {
+    const scope = getActiveUserScope();
+    const projects = useCanvasStore.getState().projects.filter((project) => !projectIds || projectIds.has(project.id));
+    const previewResourceIds = new Set<string>();
+    for (const project of projects) {
+        for (const node of project.nodes) {
+            for (const id of previewResourceIDs(node)) previewResourceIds.add(id);
+        }
+    }
+    const invalidIds = new Set<string>();
+    const ids = [...previewResourceIds];
+    for (let offset = 0; offset < ids.length; offset += 8) {
+        await Promise.all(ids.slice(offset, offset + 8).map(async (id) => {
+            try {
+                const resource = await lookup(id);
+                if (resource.status !== "ready") invalidIds.add(id);
+            } catch (error) {
+                if (error instanceof ApiError && error.status === 404) invalidIds.add(id);
+                else throw error;
+            }
+        }));
+    }
+    if (getActiveUserScope() !== scope) throw new Error("账号已切换，已停止修复视频封面");
+    if (!invalidIds.size) return { clearedPreviews: 0, updatedProjects: 0 };
+
+    let clearedPreviews = 0;
+    let updatedProjects = 0;
+    const canvasStore = useCanvasStore.getState();
+    // Re-read live projects after I/O; never replace edits made while diagnosing.
+    for (const project of canvasStore.projects.filter((item) => !projectIds || projectIds.has(item.id))) {
+        let changed = false;
+        const nodes = project.nodes.map((node) => {
+            if (!previewResourceIDs(node).some((id) => invalidIds.has(id)) || !node.metadata?.videoPreview) return node;
+            const { videoPreview: _videoPreview, ...metadata } = node.metadata;
+            changed = true;
+            clearedPreviews += 1;
+            return { ...node, metadata };
+        });
+        if (!changed) continue;
+        canvasStore.updateProject(project.id, { nodes });
+        updatedProjects += 1;
+    }
+    return { clearedPreviews, updatedProjects };
+}
+
+function previewResourceIDs(node: CanvasNodeData): string[] {
+    const preview = node.metadata?.videoPreview;
+    if (!preview) return [];
+    return Object.entries(preview).flatMap(([key, value]) => {
+        if (!["storageKey", "url", "dataUrl", "content"].includes(key) || typeof value !== "string") return [];
+        const id = resourceIdFromStorageKey(value) || value.match(/(?:^|\/)api\/resources\/([A-Za-z0-9_-]+)\/file(?:[?#]|$)/)?.[1];
+        return id ? [id] : [];
+    });
 }
 
 export type CanvasAssetRebindResult = {

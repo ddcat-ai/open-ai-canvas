@@ -516,14 +516,14 @@ func TestImageResponseKeepsBase64AsDataURL(t *testing.T) {
 
 func TestOpenAIImagesEditUsesJSONImageReferences(t *testing.T) {
 	adapter := officialPackageAdapter(t, "openai-images.yingce-plugin", "openai-image")
-	if !adapter.Metadata().RequiresPublicMediaURLs {
-		t.Fatal("OpenAI Images reference inputs must be hydrated as public URLs")
+	if adapter.Metadata().RequiresPublicMediaURLs {
+		t.Fatal("OpenAI Images must accept inline image data without a public storage URL")
 	}
 	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model:  "gpt-image-2.5",
 		Prompt: "combine both references",
 		Images: []MediaReference{
-			{URL: "https://cdn.example/reference-1.png", Role: "edit_source", Order: 0},
+			{DataURL: "data:image/png;base64,aW1hZ2U=", Role: "edit_source", Order: 0},
 			{URL: "https://cdn.example/reference-2.png", Role: "edit_source", Order: 1},
 			{URL: "https://cdn.example/mask.png", Role: "mask", Order: 2},
 		},
@@ -542,7 +542,7 @@ func TestOpenAIImagesEditUsesJSONImageReferences(t *testing.T) {
 	if !ok || len(images) != 2 {
 		t.Fatalf("images = %#v", body["images"])
 	}
-	for index, want := range []string{"https://cdn.example/reference-1.png", "https://cdn.example/reference-2.png"} {
+	for index, want := range []string{"data:image/png;base64,aW1hZ2U=", "https://cdn.example/reference-2.png"} {
 		image, ok := images[index].(map[string]any)
 		if !ok || image["image_url"] != want {
 			t.Fatalf("images[%d] = %#v, want image_url %q", index, images[index], want)

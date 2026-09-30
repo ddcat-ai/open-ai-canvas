@@ -171,12 +171,15 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
         metadata.naturalWidth = primary.metadata?.naturalWidth;
         metadata.naturalHeight = primary.metadata?.naturalHeight;
         metadata.primaryImageId = primary.id;
+        if (primary.metadata?.producedModel) metadata.producedModel = primary.metadata.producedModel;
+        else delete metadata.producedModel;
         metadata.status = "success";
         delete metadata.errorDetails;
         delete metadata.generationErrorCode;
         delete metadata.failedPromptFingerprint;
     } else {
         delete metadata.content;
+        delete metadata.producedModel;
         delete metadata.storageKey;
         delete metadata.assetId;
         delete metadata.mimeType;

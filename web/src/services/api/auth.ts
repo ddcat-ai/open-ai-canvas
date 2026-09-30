@@ -4,10 +4,8 @@ import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import type { CanvasDrawingEngineSetting } from "@/lib/canvas/canvas-drawing-engine";
 import type { FeatureAvailability } from "@/stores/use-user-store";
 import { http, apiBaseURL } from "@/services/api/request";
-import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 import type { VerificationPolicy } from "./verification";
-
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
 let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
@@ -42,7 +40,6 @@ export type AdminUser = LocalUser & {
 
 export type AuthSessionPayload = {
     user: LocalUser | null;
-    logicalModels?: PublicLogicalModel[];
     runtimeLimits?: RuntimeLimits;
     drawingEngine?: CanvasDrawingEngineSetting;
     features?: FeatureAvailability;
@@ -331,6 +328,14 @@ export type RuntimeResourcePolicy = {
     recycleBinRetentionDays?: number;
 };
 
+export type RuntimeStoragePolicy = {
+    transferTimeoutSeconds: number;
+    accessURLTTLSeconds: number;
+    providerAccessURLTTLSeconds: number;
+    nonSeekableBufferMB: number;
+    errorBodyKB: number;
+};
+
 export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;
@@ -345,6 +350,8 @@ export type RuntimeTaskPolicy = {
     agentStepMaxOutputTokens: number;
     /** 画布 Agent 单步模型调用的秒级墙钟；0 表示沿用文本任务超时。 */
     agentStepTimeoutSeconds: number;
+    /** 同时进行中的画布 Agent 轮次上限。审批等待不占用名额。 */
+    agentMaxSessions: number;
 };
 
 export type RuntimeRequestPolicy = {
@@ -371,6 +378,7 @@ export type RuntimeRequestPolicy = {
 
 export type RuntimePolicySetting = {
     resource: RuntimeResourcePolicy;
+    storage: RuntimeStoragePolicy;
     task: RuntimeTaskPolicy;
     request: RuntimeRequestPolicy;
     configured?: boolean;
@@ -380,7 +388,19 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<VerificationPolicy & { firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsBindingAvailable: boolean; emailBindingAvailable: boolean }>("/auth/settings");
+    return http.get<
+        VerificationPolicy & {
+            firstUser: boolean;
+            registrationEnabled: boolean;
+            linuxdoEnabled: boolean;
+            emailEnabled: boolean;
+            emailCodeRequired: boolean;
+            smsBindingAvailable: boolean;
+            emailBindingAvailable: boolean;
+            agreementTitle?: string;
+            agreementContent?: string;
+        }
+    >("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
@@ -393,7 +413,8 @@ export function getAuthSession() {
     const now = Date.now();
     if (authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
     if (authSessionRequest) return authSessionRequest;
-    authSessionRequest = http.get<AuthSessionPayload>("/auth/session")
+    authSessionRequest = http
+        .get<AuthSessionPayload>("/auth/session")
         .then((payload) => {
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
@@ -416,7 +437,9 @@ export function getAdminFeatureAvailability() {
     return http.get<{ features: FeatureAvailability }>("/admin/settings/features");
 }
 
-export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>) {
+export function updateAdminFeatureAvailability(
+    features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>,
+) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
@@ -569,7 +592,7 @@ export function getAdminSelfUseRuntimePolicy() {
     return http.get<{ setting: RuntimePolicySetting }>("/admin/settings/runtime-policy/self-use");
 }
 
-export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting, "resource" | "task" | "request">) {
+export function updateAdminRuntimePolicySetting(input: Pick<RuntimePolicySetting, "resource" | "storage" | "task" | "request">) {
     return http.put<{ setting: RuntimePolicySetting }>("/admin/settings/runtime-policy", input);
 }
 

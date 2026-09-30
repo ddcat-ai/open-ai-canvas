@@ -1,6 +1,6 @@
 import type { CloudAgentPlanItem, CloudAgentUserQuestion } from "@/components/canvas/canvas-cloud-agent-chat-ui";
 
-type PlanCarrier = { planItems?: CloudAgentPlanItem[] };
+type PlanCarrier = { planItems?: CloudAgentPlanItem[]; planTerminal?: boolean };
 
 /**
  * 从对话消息流里挑出**当前该展示的那份**待办清单。
@@ -15,6 +15,18 @@ export function latestAgentPlanItems(messages: readonly PlanCarrier[]): CloudAge
         if (items?.length) return items;
     }
     return [];
+}
+
+/**
+ * 计划清单可以在运行结束后仍保留未完成项。这个标记必须和清单一起
+ * 持久化，否则从本地历史恢复时，未完成项会被误显示为仍在执行。
+ */
+export function latestAgentPlanTerminal(messages: readonly PlanCarrier[]): boolean {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const items = messages[index].planItems;
+        if (items?.length) return messages[index].planTerminal === true;
+    }
+    return false;
 }
 
 /** 全部完成才收起清单；只要还有未开始/进行中，就一直占着输入框上方那一行。 */

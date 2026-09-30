@@ -173,7 +173,7 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
                     const distance = pointer ? Math.hypot(pointer.x - column, pointer.y - row) : 4;
                     const proximity = dragging ? Math.max(0, 1 - distance / 1.7) : 0;
                     return (
-                        <button key={item.id} type="button" aria-label={item.label} title={item.label} className="relative m-auto grid size-7 place-items-center rounded-full outline-none" onClick={() => onChange(item)}>
+                        <button key={item.id} type="button" data-icon-only aria-label={item.label} title={item.label} className="relative m-auto grid size-7 place-items-center rounded-full outline-none" onClick={() => onChange(item)}>
                             <motion.span
                                 animate={{ scale: active ? 1.65 : 1 + proximity * 0.42, opacity: active ? 1 : onPath ? 0.88 : 0.42 + proximity * 0.45 }}
                                 transition={reducedMotion ? { duration: 0 } : aceternityMotion.spring.dock}

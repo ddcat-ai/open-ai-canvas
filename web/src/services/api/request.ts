@@ -7,6 +7,7 @@ export type BackendEnvelope<T> = {
     data: T;
     msg: string;
     reason?: string;
+    details?: Record<string, unknown>;
 };
 
 /**
@@ -18,16 +19,18 @@ export class ApiError extends Error {
     readonly status?: number;
     readonly code?: number;
     readonly reason?: string;
+    readonly details?: Record<string, unknown>;
     readonly retryable: boolean;
     readonly retryAfterMs?: number;
     readonly cause?: unknown;
 
-    constructor(message: string, options: { status?: number; code?: number; reason?: string; retryable?: boolean; retryAfterMs?: number; cause?: unknown } = {}) {
+    constructor(message: string, options: { status?: number; code?: number; reason?: string; details?: Record<string, unknown>; retryable?: boolean; retryAfterMs?: number; cause?: unknown } = {}) {
         super(message);
         this.name = "ApiError";
         this.status = options.status;
         this.code = options.code;
         this.reason = options.reason;
+        this.details = options.details;
         this.retryable = options.retryable ?? isRetryableStatus(options.status ?? options.code);
         this.retryAfterMs = options.retryAfterMs;
         this.cause = options.cause;
@@ -43,14 +46,16 @@ export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: tr
  * 取消请求必须继续抛出 AbortError，不能被包装成普通失败，否则页面切换会被误报为错误。
  */
 
-export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; status?: number; headers?: unknown }>) {
+export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; status?: number; headers?: unknown }>, options: { allowNotModified?: boolean } = {}) {
     try {
         const response = await promise;
+        if (response.status === 304 && options.allowNotModified) return { notModified: true } as T;
         if (response.data.code !== 0) {
             throw new ApiError(response.data.msg || "请求失败", {
                 status: response.status,
                 code: response.data.code,
                 reason: response.data.reason,
+                details: response.data.details,
                 retryable: isRetryableStatus(response.status) || isRetryableStatus(response.data.code),
                 retryAfterMs: retryAfterMilliseconds(response.headers),
             });
@@ -75,7 +80,10 @@ function unwrapTransportError(error: unknown): never {
             status,
             code,
             reason: error.response?.data?.reason,
-            retryable: isRetryableStatus(status) || isRetryableStatus(code),
+            details: error.response?.data?.details,
+            // 没有 response 的 AxiosError 代表请求没有拿到 HTTP 响应（断网、连接重置、DNS、超时等）。
+            // 这类错误不能靠 status 判断，但对保存来说通常是暂时性的，应交给上层有限退避重试。
+            retryable: status === undefined || isRetryableStatus(status) || isRetryableStatus(code),
             retryAfterMs: retryAfterMilliseconds(error.response?.headers),
             cause: error,
         });
@@ -115,10 +123,13 @@ function retryAfterMilliseconds(headers: unknown) {
     return Math.max(0, retryAt - Date.now());
 }
 
-export type HttpRequestConfig = Omit<AxiosRequestConfig, "method" | "url" | "data" | "baseURL">;
+export type HttpRequestConfig = Omit<AxiosRequestConfig, "method" | "url" | "data" | "baseURL"> & {
+    allowNotModified?: boolean;
+};
 
 async function send<T>(method: string, url: string, data?: unknown, config?: HttpRequestConfig) {
-    return request<T>(apiClient.request<BackendEnvelope<T>>({ method, url, data, ...config }));
+    const { allowNotModified, ...axiosConfig } = config || {};
+    return request<T>(apiClient.request<BackendEnvelope<T>>({ method, url, data, ...axiosConfig }), { allowNotModified });
 }
 
 /**

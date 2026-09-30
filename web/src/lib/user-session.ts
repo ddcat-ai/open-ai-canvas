@@ -2,10 +2,10 @@ import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/
 import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
-import { scopedLocalStorage, setActiveUserScope } from "@/lib/user-scope";
-import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { scopedLocalStorage, setActiveUserScope, withUserScopedPersistenceSuppressed } from "@/lib/user-scope";
+import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceSuppressed } from "@/stores/canvas/use-canvas-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
-import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
+import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, withAssetStorePersistenceSuppressed } from "@/stores/use-asset-store";
 import { CONFIG_STORE_KEY, defaultConfig, normalizeConfigSnapshot, useConfigStore, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 import { CREATION_PREFERENCES_STORE_KEY, useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { defaultModelCapabilityConfig, STANDARD_IMAGE_SIZE_VALUES, type ModelCapabilityConfig } from "@/lib/model-capabilities";
@@ -13,19 +13,27 @@ import { imageSizeConfigWithPresets } from "@/lib/image-size-presets";
 import { useUserStore } from "@/stores/use-user-store";
 import { PLUGIN_STORE_KEY, usePluginStore } from "@/stores/use-plugin-store";
 import { initializeRemoteUserDataSession, installRemoteUserDataAutoSync, resetRemoteUserDataSync, withRemoteUserDataSyncExclusive } from "@/services/user-data-sync";
+import { clearResourceAccessCache } from "@/services/api/resources";
+import { clearResourceBlobCache } from "@/services/resource-blob-cache";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
+import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 
 export async function switchUserStorageScope(userId?: string | null) {
     await withGenerationConsumersPaused(async () => {
         await withRemoteUserDataSyncExclusive(async () => {
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
             resetRemoteUserDataSync();
+            clearResourceAccessCache();
+            clearResourceBlobCache();
             setActiveUserScope(userId);
         });
     });
 }
 
+let sessionGeneration = 0;
+
 export async function applyUserSession(payload: AuthSessionPayload) {
+    const generation = ++sessionGeneration;
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
@@ -33,36 +41,68 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
         if (previousUserId !== nextUserId) appQueryClient.clear();
         await switchUserStorageScope(payload.user?.id);
-        const [persistedCanvas, persistedCanvasHistory, persistedAssets, persistedPlugins] = await Promise.all([
-            localForageStorage.getItem(CANVAS_STORE_KEY),
-            localForageStorage.getItem(CANVAS_HISTORY_STORE_KEY),
-            localForageStorage.getItem(ASSET_STORE_KEY),
-            localForageStorage.getItem(PLUGIN_STORE_KEY),
-        ]);
-        const persistedConfig = scopedLocalStorage.getItem(CONFIG_STORE_KEY);
-        const persistedCreationPreferences = scopedLocalStorage.getItem(CREATION_PREFERENCES_STORE_KEY);
-        usePluginStore.setState({ hydrated: false, runtimeStatuses: {}, pluginStates: {} });
+        // 切换存储 scope 时 user store 仍保留旧身份；此处只能先检查 generation，
+        // 否则登录后的新用户会被误判为过期会话，hydrated 永远无法解除。
+        if (!isCurrentGeneration(generation)) return;
+        withCanvasStorePersistenceSuppressed(() => withAssetStorePersistenceSuppressed(() => withUserScopedPersistenceSuppressed(() => {
+            resetUserScopedMemory();
+        })));
         useUserStore.getState().setUser(payload.user);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
         useUserStore.getState().setDrawingEngine(payload.drawingEngine);
         useUserStore.getState().setFeatures(payload.features);
-        await Promise.all([
-            useCanvasStore.persist.rehydrate(),
-            useCanvasHistoryStore.persist.rehydrate(),
-            useAssetStore.persist.rehydrate(),
-            useConfigStore.persist.rehydrate(),
-            usePluginStore.persist.rehydrate(),
-            useCreationPreferencesStore.persist.rehydrate(),
-        ]);
-        // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
-        if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
-        if (!persistedCanvasHistory) useCanvasHistoryStore.setState({ deletedProjects: [] });
-        if (!persistedAssets) useAssetStore.setState({ assets: [] });
-        if (!persistedPlugins) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
-        if (!persistedCreationPreferences) useCreationPreferencesStore.setState({ preferences: {} });
+        installRemoteUserDataAutoSync();
+        useUserStore.getState().setHydrated(true);
+        void hydrateUserSessionData(payload, generation).catch((error) => {
+            if (isCurrentSession(generation, nextUserId)) console.warn("用户工作区后台初始化失败，基础页面仍可继续", error);
+        });
+    } finally {
+        if (useUserStore.getState().hydrated === false && isCurrentGeneration(generation)) useUserStore.getState().setHydrated(true);
+    }
+}
+
+function resetUserScopedMemory() {
+    useCanvasStore.setState({ projects: [], hydrated: false });
+    useCanvasHistoryStore.setState({ deletedProjects: [] });
+    useAssetStore.setState({ assets: [], hydrated: false });
+    useConfigStore.setState({ config: normalizeConfigSnapshot({ config: defaultConfig }).config });
+    usePluginStore.setState({ hydrated: false, installations: [], runtimeStatuses: {}, pluginStates: {} });
+    useCreationPreferencesStore.setState({ hydrated: false, preferences: {} });
+}
+
+async function hydrateUserSessionData(payload: AuthSessionPayload, generation: number) {
+    const startedAt = performance.now();
+    const userId = payload.user?.id || "";
+    const [canvas, canvasHistory, assets, plugins] = await Promise.allSettled([
+        localForageStorage.getItem(CANVAS_STORE_KEY),
+        localForageStorage.getItem(CANVAS_HISTORY_STORE_KEY),
+        localForageStorage.getItem(ASSET_STORE_KEY),
+        localForageStorage.getItem(PLUGIN_STORE_KEY),
+    ]);
+    if (!isCurrentSession(generation, userId)) return;
+    const persistedConfig = safeScopedStorageGet(CONFIG_STORE_KEY);
+    const persistedCreationPreferences = safeScopedStorageGet(CREATION_PREFERENCES_STORE_KEY);
+    await Promise.allSettled([
+        useCanvasStore.persist.rehydrate(),
+        useCanvasHistoryStore.persist.rehydrate(),
+        useAssetStore.persist.rehydrate(),
+        useConfigStore.persist.rehydrate(),
+        usePluginStore.persist.rehydrate(),
+        useCreationPreferencesStore.persist.rehydrate(),
+    ]);
+    if (!isCurrentSession(generation, userId)) return;
+    // Zustand 在目标 scope 没有快照时会保留旧内存，必须显式恢复该 scope 的空状态。
+    if (!hasPersistedValue(canvas)) useCanvasStore.setState({ projects: [] });
+    if (!hasPersistedValue(canvasHistory)) useCanvasHistoryStore.setState({ deletedProjects: [] });
+    if (!hasPersistedValue(assets)) useAssetStore.setState({ assets: [] });
+    if (!hasPersistedValue(plugins)) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
+    if (!persistedCreationPreferences) useCreationPreferencesStore.setState({ preferences: {} });
+
+    try {
+        const catalog = await getModelCatalog();
+        if (!isCurrentSession(generation, userId)) return;
         if (!persistedConfig) {
             // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
-            const catalog = await getModelCatalog();
             const initialSystemConfig = {
                 ...defaultConfig,
                 channels: modelCatalogChannels(catalog),
@@ -73,15 +113,50 @@ export async function applyUserSession(payload: AuthSessionPayload) {
             };
             useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
         } else {
-            const catalog = await getModelCatalog();
             useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
         }
-        installRemoteUserDataAutoSync();
-        if (payload.user?.id) {
-            await initializeRemoteUserDataSession(payload.user.id);
-        } else resetRemoteUserDataSync();
-    } finally {
-        useUserStore.getState().setHydrated(true);
+    } catch (error) {
+        if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
+    }
+
+    if (userId) {
+        try {
+            await initializeRemoteUserDataSession(userId);
+        } catch (error) {
+            if (isCurrentSession(generation, userId)) console.warn("远端用户数据后台同步初始化失败", error);
+        }
+    } else {
+        resetRemoteUserDataSync();
+    }
+    if (isCurrentSession(generation, userId)) {
+        recordDiagnosticEvent({
+            category: "navigation",
+            level: "info",
+            code: "startup.workspace_background_ready",
+            message: "工作区后台状态初始化完成",
+            durationMs: performance.now() - startedAt,
+        });
+    }
+}
+
+function isCurrentSession(generation: number, userId: string) {
+    return generation === sessionGeneration && (useUserStore.getState().user?.id || "") === userId;
+}
+
+function isCurrentGeneration(generation: number) {
+    return generation === sessionGeneration;
+}
+
+function hasPersistedValue(result: PromiseSettledResult<unknown>) {
+    return result.status === "fulfilled" && result.value !== null && result.value !== undefined;
+}
+
+function safeScopedStorageGet(key: string) {
+    try {
+        return scopedLocalStorage.getItem(key);
+    } catch (error) {
+        console.warn("读取用户本地配置失败", { key, error });
+        return null;
     }
 }
 

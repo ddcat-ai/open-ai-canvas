@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { bringCanvasNodeToFront, sortCanvasNodesByStackOrder } from "../src/lib/canvas/canvas-node-stack-order";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
-const projectSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/project.tsx"), "utf8");
+const projectSource = moduleGroupSource("pages/canvas/project.tsx");
 const worldLayersSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/canvas-project-world-layers.tsx"), "utf8");
 const selectionControllerSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-selection-controller.ts"), "utf8");
 

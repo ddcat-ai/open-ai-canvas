@@ -73,6 +73,11 @@ export function changesRequireOSSRetest(changedValues: Record<string, unknown>) 
     return Object.keys(changedValues).some((key) => CONNECTION_FIELDS.has(key));
 }
 
+export function validateOSSConnectionDraft(input: OSSConnectionTestDraft) {
+    if (!trimConnectionValue(input.bucket)) return "请填写对象存储 Bucket";
+    return "";
+}
+
 export function normalizeOSSConnectionTestInput(input: OSSConnectionTestDraft): OSSConnectionTestInput {
     return {
         provider: input.provider,

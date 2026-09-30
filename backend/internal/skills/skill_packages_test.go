@@ -14,6 +14,13 @@ import (
 	"gorm.io/gorm"
 )
 
+type builtinSkillDefinition struct {
+	SkillID     string
+	SkillName   string
+	Description string
+	Instruction string
+}
+
 func TestArchiveFromMarkdownInfersMetadata(t *testing.T) {
 	archive, err := archiveFromMarkdown([]byte("# 小说转分镜\n\n把小说段落拆成可拍摄的镜头。\n"), "", "")
 	if err != nil {
@@ -224,19 +231,23 @@ func TestEnsureSkillPackagesMigratesAndRefreshesBuiltinSkills(t *testing.T) {
 	if err := svc.EnsureSkillPackages(); err != nil {
 		t.Fatal(err)
 	}
-	assertSkillVersionCount(t, db, builtin.ID, 2)
+	assertSkillVersionCount(t, db, builtin.ID, 1)
 	assertSkillVersionCount(t, db, userSkill.ID, 1)
 
 	var refreshed model.Skill
 	if err := db.First(&refreshed, "id = ?", builtin.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	wantArchive, err := archiveFromMarkdown([]byte(refreshed.Instruction), refreshed.Name, refreshed.Description)
+	version, err := svc.repo.SkillVersion(refreshed.CurrentVersionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if refreshed.ContentHash != wantArchive.ContentHash || refreshed.CurrentVersionID == "" {
-		t.Fatalf("builtin package was not refreshed: %#v", refreshed)
+	body, err := svc.readSkillArchiveEntry(version, "SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "# 内置导演\n\n第一版" {
+		t.Fatalf("legacy package was unexpectedly rewritten: %q", body)
 	}
 }
 

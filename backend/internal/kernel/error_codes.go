@@ -16,28 +16,30 @@ const (
 	CodeUnavailable     = 503
 	CodeTimeout         = 504
 
-	CodeQuotaExceeded       = 40301
-	CodeIdempotencyConflict = 40901
-	CodeRateLimited         = 42901
+	CodeQuotaExceeded          = 40301
+	CodeIdempotencyConflict    = 40901
+	CodeCanvasResourcesMissing = 40902
+	CodeRateLimited            = 42901
 )
 
 // ErrorReason 是稳定机器可读原因，前端应判断 reason 而不是解析 msg。
 type ErrorReason string
 
 const (
-	ReasonInvalidArgument    ErrorReason = "invalid_argument"
-	ReasonUnauthorized       ErrorReason = "unauthorized"
-	ReasonForbidden          ErrorReason = "forbidden"
-	ReasonNotFound           ErrorReason = "not_found"
-	ReasonConflict           ErrorReason = "conflict"
-	ReasonFailedPrecondition ErrorReason = "failed_precondition"
-	ReasonQuotaExceeded      ErrorReason = "quota_exceeded"
-	ReasonRateLimited        ErrorReason = "rate_limited"
-	ReasonUnavailable        ErrorReason = "unavailable"
-	ReasonTimeout            ErrorReason = "timeout"
-	ReasonInternal           ErrorReason = "internal"
-	ReasonBadGateway         ErrorReason = "bad_gateway"
-	ReasonUpstreamDNSFailed  ErrorReason = "upstream_dns_failed"
+	ReasonInvalidArgument        ErrorReason = "invalid_argument"
+	ReasonUnauthorized           ErrorReason = "unauthorized"
+	ReasonForbidden              ErrorReason = "forbidden"
+	ReasonNotFound               ErrorReason = "not_found"
+	ReasonConflict               ErrorReason = "conflict"
+	ReasonCanvasResourcesMissing ErrorReason = "canvas_history_resources_missing"
+	ReasonFailedPrecondition     ErrorReason = "failed_precondition"
+	ReasonQuotaExceeded          ErrorReason = "quota_exceeded"
+	ReasonRateLimited            ErrorReason = "rate_limited"
+	ReasonUnavailable            ErrorReason = "unavailable"
+	ReasonTimeout                ErrorReason = "timeout"
+	ReasonInternal               ErrorReason = "internal"
+	ReasonBadGateway             ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed      ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

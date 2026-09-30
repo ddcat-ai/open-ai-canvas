@@ -1,25 +1,50 @@
-import { App, Button, Form, Input, Select, Skeleton } from "antd";
+import { App, Button, Form, Input, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, BadgeCheck, ChevronDown, Globe2, KeyRound, LockKeyhole, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { AlertTriangle, BadgeCheck, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, RefreshCw, RotateCcw, Save, ShieldCheck, Sparkles, UserPlus, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { getAdminLinuxDOSetting, getAdminRegistrationSetting, updateAdminLinuxDOSetting, updateAdminRegistrationSetting, type LinuxDOSetting, type RegistrationSetting } from "@/services/api/wallet";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
+import { Select } from "@/components/ui/base/select";
+
+const DEFAULT_AGREEMENT_TEMPLATE = `一、服务说明与接受
+欢迎使用本平台提供的 AI 影视与内容创作服务。在注册或使用本平台各项功能前，请务必仔细阅读并理解本协议。当您勾选同意或点击注册、登录按钮，即表示您已自愿接受本协议所有条款的约束。
+
+二、账号注册与安全
+1. 用户在注册时应提供真实、准确、合法的个人信息，并自行妥善保管账号密码及相关凭据。
+2. 任何通过该账号进行的行为均视为用户本人的行为，因保管不当造成的损失由用户自行承担。
+
+三、内容合规与用户承诺
+1. 用户使用本平台生成、上传或发布的文本、图片、视频、音频等所有内容，必须遵守国家相关法律法规及公序良俗。
+2. 严禁利用本平台从事任何违反国家法律、侵害他人合法权益（包括但不限于肖像权、名誉权、知识产权、个人隐私等）或危害网络安全的活动。
+
+四、知识产权与免责声明
+1. 用户利用本平台创作产生的合法作品归用户所有或依法享有相应权利。
+2. AI 模型生成的内容受算法模型与提示词影响，平台对其完整性、准确性不作绝对保证，用户应自行审慎评估和使用。
+
+五、服务变更与终止
+平台有权根据业务发展、技术升级或合规要求适时调整服务内容及本协议条款。修改后的条款一经发布即发生效力。`;
 
 type LinuxDOFormValues = Omit<LinuxDOSetting, "hasClientSecret" | "updatedAt">;
 
 export default function AccessSettingsPanel() {
     const { message, modal } = App.useApp();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName) || "平台";
     const [linuxdo, setLinuxdo] = useState<LinuxDOSetting | null>(null);
     const [registration, setRegistration] = useState<RegistrationSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [savingLinuxDO, setSavingLinuxDO] = useState(false);
     const [savingRegistration, setSavingRegistration] = useState(false);
+    const [savingAgreement, setSavingAgreement] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [draftLinuxDOEnabled, setDraftLinuxDOEnabled] = useState(false);
+    const [agreementTitle, setAgreementTitle] = useState("");
+    const [agreementContent, setAgreementContent] = useState("");
+    const [agreementDirty, setAgreementDirty] = useState(false);
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
     const [form] = Form.useForm<LinuxDOFormValues>();
@@ -38,6 +63,9 @@ export default function AccessSettingsPanel() {
                 if (requestVersion !== requestVersionRef.current) return;
                 setLinuxdo(linuxdoData.setting);
                 setRegistration(registrationData.setting);
+                setAgreementTitle(registrationData.setting.agreementTitle || "");
+                setAgreementContent(registrationData.setting.agreementContent || "");
+                setAgreementDirty(false);
                 setDirty(false);
                 setSaveError("");
                 if (announce) message.success("已重新读取当前登录与注册配置");
@@ -69,24 +97,29 @@ export default function AccessSettingsPanel() {
         setDraftLinuxDOEnabled(linuxdo.enabled);
     }, [form, linuxdo, loading, registration]);
 
-    const blocker = useBlocker(dirty && !savingLinuxDO);
+    const unsaved = (dirty && !savingLinuxDO) || (agreementDirty && !savingAgreement);
+    const blocker = useBlocker(unsaved);
+
+    // 条款编辑区下方的字数与段落提示：与注册页的分段规则保持一致（按空行分段），
+    // 让管理员在保存前就能看到条款会被拆成几段。
+    const agreementParagraphsCount = agreementContent.trim() ? agreementContent.trim().split(/\n\s*\n/).length : 0;
 
     useEffect(() => {
         const beforeUnload = (event: BeforeUnloadEvent) => {
-            if (!dirty || savingLinuxDO) return;
+            if (!unsaved) return;
             event.preventDefault();
         };
         window.addEventListener("beforeunload", beforeUnload);
         return () => window.removeEventListener("beforeunload", beforeUnload);
-    }, [dirty, savingLinuxDO]);
+    }, [unsaved]);
 
     useEffect(() => {
         if (blocker.state !== "blocked" || navigationConfirmOpenRef.current) return;
         navigationConfirmOpenRef.current = true;
         navigationTriggerRef.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
         modal.confirm({
-            title: "放弃 Linux.do 登录调整？",
-            content: "当前表单有尚未保存的调整，离开后这些内容会丢失。用户注册状态不受影响。",
+            title: "放弃未保存的登录与注册调整？",
+            content: "当前有尚未保存的表单调整，离开后这些内容会丢失。用户注册状态不受影响。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -118,14 +151,46 @@ export default function AccessSettingsPanel() {
         message.info("已撤销 Linux.do 登录的未保存调整");
     };
 
+    const saveAgreement = async () => {
+        if (!registration || savingAgreement) return;
+        setSavingAgreement(true);
+        setSaveError("");
+        try {
+            const data = await updateAdminRegistrationSetting({
+                enabled: registration.enabled,
+                agreementTitle: agreementTitle.trim(),
+                agreementContent: agreementContent.trim(),
+            });
+            setRegistration(data.setting);
+            setAgreementTitle(data.setting.agreementTitle || "");
+            setAgreementContent(data.setting.agreementContent || "");
+            setAgreementDirty(false);
+            message.success("服务协议已保存，注册页将立即生效");
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "保存服务协议失败";
+            setSaveError(`${errorMessage}。未自动重试，请重新读取当前配置后再决定是否保存。`);
+            message.error(errorMessage);
+        } finally {
+            setSavingAgreement(false);
+        }
+    };
+
+    const resetAgreementDraft = () => {
+        if (!registration || savingAgreement) return;
+        setAgreementTitle(registration.agreementTitle || "");
+        setAgreementContent(registration.agreementContent || "");
+        setAgreementDirty(false);
+        message.info("已撤销服务协议的未保存调整");
+    };
+
     const requestRefresh = () => {
-        if (!dirty) {
+        if (!dirty && !agreementDirty) {
             void load(false, true);
             return;
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前 Linux.do 表单中的未保存内容，并以服务端配置为准。",
+            content: "重新读取会丢弃当前表单中的未保存内容（含服务协议），并以服务端配置为准。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -415,6 +480,103 @@ export default function AccessSettingsPanel() {
                                 </details>
                             </>
                         ) : null}
+                    </Form>
+                </SettingsSectionCard>
+            </div>
+
+            <div id="admin-access-agreement" className="admin-settings-anchor">
+                <SettingsSectionCard
+                    className="admin-access-section admin-access-agreement-section"
+                    icon={<FileText className="size-4" aria-hidden="true" />}
+                    title="3. 服务协议名称与条款"
+                    description="注册页勾选框与弹窗展示的内容。协议名称留空时自动跟随品牌名生成，条款留空时注册页给出待补充提示。"
+                    status={<AdminStatusBadge label={agreementDirty ? "待保存" : agreementContent.trim() ? "已自定义" : "待补充"} tone={agreementDirty ? "warning" : agreementContent.trim() ? "success" : "neutral"} />}
+                    footer={
+                        <>
+                            <div className="admin-access-footer-note">
+                                <BadgeCheck className="size-4" aria-hidden="true" />
+                                <span>保存后注册页立即生效，无需重启服务</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {agreementDirty ? (
+                                    <Button icon={<RotateCcw className="size-4" />} disabled={savingAgreement} onClick={resetAgreementDraft}>
+                                        撤销
+                                    </Button>
+                                ) : null}
+                                <Button type="primary" icon={<Save className="size-4" />} loading={savingAgreement} disabled={!agreementDirty || loading || refreshing} onClick={() => void saveAgreement()}>
+                                    保存服务协议
+                                </Button>
+                            </div>
+                        </>
+                    }
+                >
+                    <Form layout="vertical" requiredMark={false} disabled={loading || refreshing || savingAgreement}>
+                        <Form.Item
+                            label="协议名称"
+                            extra={`留空时自动跟随品牌名生成，即《${brandName}服务协议》。此处只需填名称本身，书名号由注册页补充。`}
+                            className="admin-access-agreement-title-field"
+                        >
+                            <Input
+                                value={agreementTitle}
+                                maxLength={60}
+                                placeholder={`${brandName}服务协议`}
+                                onChange={(event) => {
+                                    setAgreementTitle(event.target.value);
+                                    setAgreementDirty(true);
+                                }}
+                            />
+                        </Form.Item>
+                        <Form.Item
+                            label="协议条款内容"
+                            extra="支持多段落文本，按空行分段展示；留空时注册页弹窗显示“服务协议内容待补充”。"
+                            className="admin-access-agreement-content-field"
+                        >
+                            <Input.TextArea
+                                value={agreementContent}
+                                maxLength={20000}
+                                autoSize={{ minRows: 8, maxRows: 20 }}
+                                placeholder="输入服务协议条款正文"
+                                onChange={(event) => {
+                                    setAgreementContent(event.target.value);
+                                    setAgreementDirty(true);
+                                }}
+                            />
+                        </Form.Item>
+                        <div className="admin-access-agreement-toolbar">
+                            <div className="admin-access-agreement-template-note">
+                                <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+                                <span>没有准备条款时，可先填入通用模板再按需修改。</span>
+                            </div>
+                            <div className="admin-access-agreement-template-actions">
+                                <span className="admin-access-agreement-metric">
+                                    {agreementContent.trim() ? `${agreementParagraphsCount} 段 · ${agreementContent.length} 字` : "尚未填写条款"}
+                                </span>
+                                <Button
+                                    size="small"
+                                    disabled={savingAgreement || loading || refreshing}
+                                    onClick={() => {
+                                        setAgreementContent(DEFAULT_AGREEMENT_TEMPLATE);
+                                        setAgreementDirty(true);
+                                    }}
+                                >
+                                    填入通用模板
+                                </Button>
+                                {agreementContent.trim() ? (
+                                    <Button
+                                        size="small"
+                                        type="text"
+                                        danger
+                                        disabled={savingAgreement || loading || refreshing}
+                                        onClick={() => {
+                                            setAgreementContent("");
+                                            setAgreementDirty(true);
+                                        }}
+                                    >
+                                        清空
+                                    </Button>
+                                ) : null}
+                            </div>
+                        </div>
                     </Form>
                 </SettingsSectionCard>
             </div>

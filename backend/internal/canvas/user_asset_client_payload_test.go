@@ -60,3 +60,24 @@ func TestClientAssetPayloadPreservesCompleteDocument(t *testing.T) {
 		t.Fatalf("payload changed: %s", raw)
 	}
 }
+
+func TestClientAssetListPayloadDropsVerboseMetadata(t *testing.T) {
+	asset := model.Asset{PayloadJSON: `{"id":"asset-1","kind":"image","title":"列表","coverUrl":"https://example.com/a.png","tags":[],"data":{"dataUrl":"https://example.com/a.png","width":2,"height":3,"bytes":1,"mimeType":"image/png"},"metadata":{"prompt":"很长的生成提示词","nodeId":"node-1","projectIds":["project-1"]}}`}
+	var payload map[string]any
+	if err := json.Unmarshal(ClientAssetListPayload(asset), &payload); err != nil {
+		t.Fatal(err)
+	}
+	metadata := payload["metadata"].(map[string]any)
+	if _, found := metadata["prompt"]; found {
+		t.Fatalf("list payload still contains prompt: %#v", metadata)
+	}
+	if _, found := metadata["nodeId"]; found {
+		t.Fatalf("list payload still contains node metadata: %#v", metadata)
+	}
+	if metadata["projectIds"].([]any)[0] != "project-1" {
+		t.Fatalf("list payload dropped useful metadata: %#v", metadata)
+	}
+	if payload["coverUrl"] != "" {
+		t.Fatalf("duplicate cover URL was not removed: %#v", payload["coverUrl"])
+	}
+}

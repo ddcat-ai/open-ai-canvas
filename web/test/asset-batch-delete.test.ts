@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { QueryObserver } from "@tanstack/react-query";
 import { readFileSync } from "node:fs";
+import localforage from "localforage";
 
 import { apiClient } from "@/services/api/request";
 import { deleteAssetsWithRemoteSync, initializeRemoteUserDataSession, loadAssetLibraryPage, resetRemoteUserDataSync } from "@/services/user-data-sync";
@@ -8,35 +9,75 @@ import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/
 import { appQueryClient } from "@/lib/query-client";
 
 const originalAdapter = apiClient.defaults.adapter;
+let originalWindow: PropertyDescriptor | undefined;
+const originalGet = localforage.getItem;
+const originalSet = localforage.setItem;
+const originalRemove = localforage.removeItem;
 async function within<T>(promise: Promise<T>): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-        return await Promise.race([promise, new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error("删除或刷新链路未结束")), 1000);
-        })]);
+        return await Promise.race([
+            promise,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error("删除或刷新链路未结束")), 1000);
+            }),
+        ]);
     } finally {
         clearTimeout(timer);
     }
 }
-const asset = (id: string): Asset => ({
-    id, kind: "text", title: id, coverUrl: "", tags: [],
-    createdAt: "2026-09-21T00:00:00.000Z", updatedAt: "2026-09-21T00:00:00.000Z",
-    data: { content: "测试素材" },
-} as Asset);
+const asset = (id: string): Asset =>
+    ({
+        id,
+        kind: "text",
+        title: id,
+        coverUrl: "",
+        tags: [],
+        createdAt: "2026-09-21T00:00:00.000Z",
+        updatedAt: "2026-09-21T00:00:00.000Z",
+        data: { content: "测试素材" },
+    }) as Asset;
 
 beforeEach(async () => {
+    originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const storage = new Map<string, string>();
+    const indexed = new Map<string, unknown>();
+    localforage.getItem = (async (key: string) => indexed.get(key) ?? null) as typeof localforage.getItem;
+    localforage.setItem = (async (key: string, value: unknown) => {
+        indexed.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
+    localforage.removeItem = async (key: string) => {
+        indexed.delete(key);
+    };
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: globalThis.setTimeout,
+            clearTimeout: globalThis.clearTimeout,
+            localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
+        },
+    });
     useAssetStore.setState({ assets: [] });
     await flushAssetStorePersistence();
     await initializeRemoteUserDataSession("batch-test-user");
 });
 
 afterEach(async () => {
-    await appQueryClient.cancelQueries();
-    appQueryClient.clear();
-    apiClient.defaults.adapter = originalAdapter;
-    resetRemoteUserDataSync();
-    useAssetStore.setState({ assets: [] });
-    await flushAssetStorePersistence();
+    try {
+        await appQueryClient.cancelQueries();
+        appQueryClient.clear();
+        apiClient.defaults.adapter = originalAdapter;
+        resetRemoteUserDataSync();
+        useAssetStore.setState({ assets: [] });
+        await flushAssetStorePersistence();
+    } finally {
+        localforage.getItem = originalGet;
+        localforage.setItem = originalSet;
+        localforage.removeItem = originalRemove;
+        if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+        else delete (globalThis as { window?: unknown }).window;
+    }
 });
 
 describe("素材批量删除", () => {
@@ -50,23 +91,35 @@ describe("素材批量删除", () => {
             return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { ids }, msg: "ok" } };
         };
         let updates = 0;
-        const stop = useAssetStore.subscribe((state, previous) => { if (state.assets !== previous.assets) updates++; });
+        const stop = useAssetStore.subscribe((state, previous) => {
+            if (state.assets !== previous.assets) updates++;
+        });
         try {
             await deleteAssetsWithRemoteSync(ids);
             expect(requests).toEqual([{ method: "post", url: "/assets/batch-delete", body: ids }]);
             expect(useAssetStore.getState().assets.map((item) => item.id)).toEqual(["keep"]);
             expect(updates).toBe(1);
-        } finally { stop(); }
+        } finally {
+            stop();
+        }
     });
 
     test.each([false, true])("真实分页查询刷新不阻塞删除完成（刷新失败：%s）", async (failRefresh) => {
         const initialPage = {
-            assets: [asset("first"), asset("keep")], total: 2, page: 1, pageSize: 20,
-            kindCounts: {}, categoryCounts: {}, folderCounts: {}, hasMore: false,
+            assets: [asset("first"), asset("keep")],
+            total: 2,
+            page: 1,
+            pageSize: 20,
+            kindCounts: {},
+            categoryCounts: {},
+            folderCounts: {},
+            hasMore: false,
         };
         useAssetStore.setState({ assets: initialPage.assets });
         let releaseRefresh!: () => void;
-        const refreshGate = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+        const refreshGate = new Promise<void>((resolve) => {
+            releaseRefresh = resolve;
+        });
         const requests: string[] = [];
         apiClient.defaults.adapter = async (config) => {
             requests.push(`${config.method} ${config.url}`);
@@ -75,22 +128,38 @@ describe("素材批量删除", () => {
             }
             await refreshGate;
             if (failRefresh) throw new Error("列表暂时不可用");
-            return { config, headers: {}, status: 200, statusText: "OK", data: {
-                code: 0, data: { ...initialPage, assets: [asset("keep")], total: 1 }, msg: "ok",
-            } };
+            return {
+                config,
+                headers: {},
+                status: 200,
+                statusText: "OK",
+                data: {
+                    code: 0,
+                    data: { ...initialPage, assets: [asset("keep")], total: 1 },
+                    msg: "ok",
+                },
+            };
         };
         const warning = spyOn(console, "warn").mockImplementation(() => {});
-        const observers = ["asset-library", "asset-picker"].map((key) => new QueryObserver(appQueryClient, {
-            queryKey: [key, "delete-regression"],
-            queryFn: () => loadAssetLibraryPage({ page: 1, pageSize: 20 }),
-            initialData: initialPage,
-        }));
+        const observers = ["asset-library", "asset-picker"].map(
+            (key) =>
+                new QueryObserver(appQueryClient, {
+                    queryKey: [key, "delete-regression"],
+                    queryFn: () => loadAssetLibraryPage({ page: 1, pageSize: 20 }),
+                    initialData: initialPage,
+                }),
+        );
         const stops: (() => void)[] = [];
-        const refreshed = observers.map((observer) => new Promise<void>((resolve) => {
-            stops.push(observer.subscribe((result) => {
-                if (result.fetchStatus === "idle" && (result.isError || result.data?.total === 1)) resolve();
-            }));
-        }));
+        const refreshed = observers.map(
+            (observer) =>
+                new Promise<void>((resolve) => {
+                    stops.push(
+                        observer.subscribe((result) => {
+                            if (result.fetchStatus === "idle" && (result.isError || result.data?.total === 1)) resolve();
+                        }),
+                    );
+                }),
+        );
         try {
             // GET 尚未返回，删除必须已返回，调用方才能关闭 Modal / Popconfirm。
             await within(deleteAssetsWithRemoteSync(["first"]));

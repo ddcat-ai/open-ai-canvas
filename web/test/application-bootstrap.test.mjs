@@ -33,7 +33,9 @@ async function prepareEntry(dev, pathname) {
     let entryLoaded;
     const appearanceReady = new Promise((resolve) => (resolveAppearance = resolve));
     const loaded = new Promise((resolve) => (entryLoaded = resolve));
-    runInNewContext(await build.outputs[0].text(), { window: { location: { pathname } }, events, appearanceReady, entryLoaded });
+    const listeners = new Map();
+    runInNewContext(await build.outputs[0].text(), { window: { location: { pathname }, addEventListener: (name, listener) => listeners.set(name, listener) }, events, appearanceReady, entryLoaded });
+    expect(typeof listeners.get("vite:preloadError")).toBe("function");
     return { events, resolveAppearance, loaded };
 }
 
@@ -50,12 +52,11 @@ for (const [dev, pathname] of [
     [true, "/dev/director-repro/"],
     [true, "/dev/director-repro-other"],
 ]) {
-    test(`appearance still blocks normal startup: dev=${dev} path=${pathname}`, async () => {
+    test(`appearance loads in parallel with normal startup: dev=${dev} path=${pathname}`, async () => {
         const entry = await prepareEntry(dev, pathname);
-        expect(entry.events).toEqual(["appearance"]);
-        entry.resolveAppearance();
         await entry.loaded;
         expect(entry.events).toEqual(["appearance", "./application"]);
+        entry.resolveAppearance();
     });
 }
 

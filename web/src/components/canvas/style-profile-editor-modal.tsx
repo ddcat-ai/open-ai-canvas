@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { App, Button, Input, Segmented, Select } from "antd";
+import { App, Button, Input, Segmented } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Braces, Image, Layers3, Save, Sparkles } from "lucide-react";
 
 import { StyleAssetBindingModal } from "@/components/canvas/style-asset-binding-modal";
 import { createStyleProfileSnapshot, styleProfileValidationMessage, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
+import { Select } from "@/components/ui/base/select";
 
 type EditorSection = "identity" | "prompt" | "execution";
 

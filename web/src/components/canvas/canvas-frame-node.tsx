@@ -6,6 +6,7 @@ import { CometCard } from "@/components/ui/aceternity/comet-card";
 import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { FRAME_HEADER_HEIGHT, FRAME_PADDING, isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
+import type { CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type Position } from "@/types/canvas";
@@ -14,6 +15,7 @@ type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     data,
+    renderLOD = "full",
     dragOffset,
     childNodes,
     scale,
@@ -33,6 +35,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     data: CanvasNodeData;
     dragOffset?: Position;
     childNodes: CanvasNodeData[];
+    renderLOD?: CanvasNodeRenderLOD;
     scale: number;
     isSelected: boolean;
     isDropTarget: boolean;
@@ -51,6 +54,7 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     const collapsed = Boolean(data.metadata?.frame?.collapsed);
     const folder = isCanvasFolderNode(data);
     const [editing, setEditing] = useState(false);
+    const [hovered, setHovered] = useState(false);
     const [title, setTitle] = useState(data.title);
     const resizeRef = useRef({
         active: false,
@@ -148,10 +152,12 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
 
     const active = isSelected || isDropTarget;
     const linkedFolder = Boolean(data.metadata?.folder?.assetFolderId);
+    const fullDetail = renderLOD === "full" || hovered || editing;
 
     return (
         <div
             data-node-id={data.id}
+            data-node-lod={fullDetail ? "full" : renderLOD}
             role={folder && collapsed ? "group" : undefined}
             tabIndex={folder && collapsed ? 0 : undefined}
             aria-label={folder && collapsed ? `${data.title}，文件夹，${childNodes.length} 项内容。按回车打开` : undefined}
@@ -170,8 +176,8 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                 event.preventDefault();
                 onToggleCollapsed(data.id);
             }}
-            onMouseEnter={() => onHoverStart?.(data.id)}
-            onMouseLeave={() => onHoverEnd?.(data.id)}
+            onMouseEnter={() => { setHovered(true); onHoverStart?.(data.id); }}
+            onMouseLeave={() => { setHovered(false); onHoverEnd?.(data.id); }}
         >
             {/* 帧节点同样禁用指针跟随 3D 位移，hover 使用 CSS 静态抬升 */}
             <CometCard
@@ -183,10 +189,14 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
                     background: folder && collapsed ? "transparent" : active ? theme.frame.activeFill : theme.frame.fill,
                     borderColor: folder && collapsed ? "transparent" : active ? theme.frame.activeStroke : theme.frame.stroke,
                     borderWidth: folder && collapsed ? 0 : 1 / Math.max(scale, 0.05),
-                    boxShadow: folder && collapsed ? "none" : isSelected ? `0 0 0 ${1 / Math.max(scale, 0.05)}px ${theme.frame.activeStroke}33, 0 24px 72px ${theme.spatial.shadow}` : `0 18px 54px ${theme.spatial.shadow}`,
+                    boxShadow: !fullDetail || (folder && collapsed) ? "none" : isSelected ? `0 0 0 ${1 / Math.max(scale, 0.05)}px ${theme.frame.activeStroke}33, 0 24px 72px ${theme.spatial.shadow}` : `0 18px 54px ${theme.spatial.shadow}`,
                 }}
             >
-                {folder && collapsed ? (
+                {!fullDetail ? (
+                    <div className="flex h-full items-center justify-center rounded-[var(--node-radius)]" style={{ background: theme.frame.fill, color: theme.node.text }}>
+                        {data.title} · {childNodes.length}
+                    </div>
+                ) : folder && collapsed ? (
                     // 素材库目录是单一事实源；画布节点只负责浏览和调用，避免本地改名后被同步结果覆盖。
                     <CanvasFolderPreview
                         data={data}

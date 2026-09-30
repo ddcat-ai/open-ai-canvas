@@ -76,6 +76,13 @@ func TestCloudAgentEstimatedTokensIsConservativeForChinese(t *testing.T) {
 	}
 }
 
+func TestCloudAgentCompactionReadingDoesNotTrustInvalidConfiguredWindow(t *testing.T) {
+	budget := cloudAgentContextBudget{InputBudgetTokens: 1000, CompactAtTokens: 850, Source: "channel-model", Configured: false}
+	if _, configured := cloudAgentCompactionReadingFor(budget, 900); configured {
+		t.Fatal("invalid capability window was treated as a real token budget")
+	}
+}
+
 func TestFitCloudAgentModelContextUsesTokenBudget(t *testing.T) {
 	request := canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": strings.Repeat("中文", 5000)}}}
 	if err := fitCloudAgentModelContext(&request, 1_000); err == nil {

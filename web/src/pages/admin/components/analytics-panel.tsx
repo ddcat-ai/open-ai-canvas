@@ -1,4 +1,4 @@
-import { Alert, App, Button, DatePicker, Select, Tabs, Tag } from "antd";
+import { Alert, App, Button, DatePicker, Tabs, Tag } from "antd";
 import { Tooltip } from "@/pages/admin/ui/controls";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -11,6 +11,7 @@ import { useSearchParams } from "react-router";
 import { ListToolbar, PaginationBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 import { exportAdminAnalytics, getAdminAnalytics, listAdminUsers, type AdminReferenceData, type AdminAnalytics, type AnalyticsFilters } from "@/services/api/auth";
 import { analyticsFinanceColumns, formatCredits, formatFinanceCost, formatFinanceMargin } from "./analytics-finance";
+import { Select } from "@/components/ui/base/select";
 
 type Props = {
     users: AdminReferenceData["users"];

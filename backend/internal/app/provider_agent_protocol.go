@@ -84,6 +84,8 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 	}
 	request := *source
 	request.Messages = messages
+	// 同名工具会被多数供应商直接拒绝（400）。按名称去重，保留第一次出现的定义。
+	request.Tools = dedupeCanonicalAgentTools(source.Tools)
 	result := &agentToolRequests{}
 	if declarative {
 		result.ChatCompletion = canonicalAgentChatBody(&request, false)
@@ -422,4 +424,19 @@ func canonicalAgentText(content interface{}) string {
 		}
 	}
 	return strings.Join(texts, "\n")
+}
+
+func dedupeCanonicalAgentTools(tools []map[string]interface{}) []map[string]interface{} {
+	seen := make(map[string]bool, len(tools))
+	result := make([]map[string]interface{}, 0, len(tools))
+	for _, tool := range tools {
+		function, _ := tool["function"].(map[string]interface{})
+		name := stringField(function, "name")
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		result = append(result, tool)
+	}
+	return result
 }

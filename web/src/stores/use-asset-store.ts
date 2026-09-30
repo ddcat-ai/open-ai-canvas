@@ -96,7 +96,7 @@ function recordAssetStorageDocument(scope: string, document: AssetStorageDocumen
     });
 }
 
-function withAssetStorePersistenceSuppressed<T>(operation: () => T) {
+export function withAssetStorePersistenceSuppressed<T>(operation: () => T) {
     suppressAssetStorePersistence += 1;
     try {
         return operation();

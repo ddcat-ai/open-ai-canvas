@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 /**
  * 生产接线回归：领域函数正确不代表用户能删到关键帧。
  * 这里锁住「时间轴入口 -> workbench -> 领域函数」这条链路真的接上了。
  */
 const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/director-viewport-dock.tsx"), "utf8");
-const workbench = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/canvas-director-workbench.tsx"), "utf8");
+const workbench = moduleGroupSource("components/canvas/director/canvas-director-workbench.tsx");
 const sequencer = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/director-sequencer.tsx"), "utf8");
 const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 

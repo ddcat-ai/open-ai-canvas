@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"sort"
 	"strings"
 	"testing"
@@ -114,8 +115,8 @@ func cloudAgentDispatchedToolNames(t *testing.T) []string {
 		file string
 		fn   string
 	}{
-		{"cloud_agent_runtime.go", "advanceCloudAgentTool"},
-		{"cloud_agent_tools.go", "cloudAgentReadTool"},
+		{"app 包", "advanceCloudAgentTool"},
+		{"app 包", "cloudAgentReadTool"},
 	} {
 		file := parseCloudAgentFile(t, target.file)
 		found := false
@@ -210,13 +211,27 @@ func collectStringLiteralsOf(nodes []ast.Expr, out map[string]bool) {
 	}
 }
 
+// parseCloudAgentFile 解析 app 包内全部非测试源码并合成一个 *ast.File。
+//
+// 守卫按函数名定位分派实现，而不是写死文件名：大文件按职责拆分后
+// （例如 advanceCloudAgentTool 移到 cloud_agent_runtime_tools.go），守卫依然有效。
+// name 仅用于错误信息。
 func parseCloudAgentFile(t *testing.T, name string) *ast.File {
 	t.Helper()
-	file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+	fset := token.NewFileSet()
+	packages, err := parser.ParseDir(fset, ".", func(info fs.FileInfo) bool {
+		return !strings.HasSuffix(info.Name(), "_test.go")
+	}, 0)
 	if err != nil {
-		t.Fatalf("解析 %s 失败：%v", name, err)
+		t.Fatalf("解析 app 包（%s）失败：%v", name, err)
 	}
-	return file
+	merged := &ast.File{Name: ast.NewIdent("app")}
+	for _, pkg := range packages {
+		for _, file := range pkg.Files {
+			merged.Decls = append(merged.Decls, file.Decls...)
+		}
+	}
+	return merged
 }
 
 func sortedKeys(values map[string]bool) []string {

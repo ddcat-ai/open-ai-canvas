@@ -67,7 +67,14 @@ func writeAppError(c *gin.Context, appErr *service.AppError) {
 		}
 		logHandlerError(c, appErr.Status, diagnosticErr)
 	}
-	writeFailure(c, appErr.Status, code, reason, message)
+	body := gin.H{"code": code, "data": nil, "msg": message}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	if len(appErr.Details) > 0 {
+		body["details"] = appErr.Details
+	}
+	c.JSON(appErr.Status, body)
 }
 
 // failInternal 保留真实 HTTP 状态，但绝不把未分类错误原文写入响应。

@@ -4,12 +4,54 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 )
+
+func TestCanvasProjectPayloadReplacesMetadataAndPreservesDocument(t *testing.T) {
+	project := model.CanvasProject{
+		ID:          "canvas-authoritative",
+		Title:       "Current title",
+		ProjectID:   "project-current",
+		Revision:    9,
+		CreatedAt:   time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		UpdatedAt:   time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC),
+		PayloadJSON: `{"id":"stale","title":"stale","revision":1,"nodes":[ { "id": "node-1", "metadata": {"content":"large"} } ],"connections":[],"custom":{"preserve":true}}`,
+	}
+	raw, err := canvasProjectPayload(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &actual); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]any{
+		"id": project.ID, "title": project.Title, "projectId": project.ProjectID,
+		"revision": project.Revision, "createdAt": project.CreatedAt, "updatedAt": project.UpdatedAt,
+	} {
+		var got any
+		if err := json.Unmarshal(actual[key], &got); err != nil {
+			t.Fatal(err)
+		}
+		encodedWant, _ := json.Marshal(want)
+		var decodedWant any
+		_ = json.Unmarshal(encodedWant, &decodedWant)
+		if !reflect.DeepEqual(got, decodedWant) {
+			t.Errorf("%s = %#v, want %#v", key, got, decodedWant)
+		}
+	}
+	for _, key := range []string{"nodes", "connections", "custom"} {
+		if len(actual[key]) == 0 || !json.Valid(actual[key]) {
+			t.Errorf("original %s payload was not preserved: %s", key, actual[key])
+		}
+	}
+}
 
 func TestCanvasHistoryRestore(t *testing.T) {
 	svc := newCanvasHistoryTestService(t)

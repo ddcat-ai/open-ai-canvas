@@ -128,8 +128,7 @@ export function InfiniteCanvas({ interactive = true, containerRef, viewport, app
             const container = containerRef.current;
             if (container) container.dataset.canvasViewportInteracting = "true";
             nextViewportRef.current = next;
-            if (frameRef.current) return;
-            frameRef.current = requestAnimationFrame((now) => {
+            if (!frameRef.current) frameRef.current = requestAnimationFrame((now) => {
                 frameRef.current = null;
                 const pending = nextViewportRef.current;
                 if (!pending) return;
@@ -494,7 +493,7 @@ function isCanvasInternalDragEvent(event: React.DragEvent<HTMLDivElement>) {
     return Boolean(target?.closest(CANVAS_INTERNAL_DRAG_SELECTOR));
 }
 
-function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {
+export function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {
     const colorTheme = useActiveTheme();
     const gridColor = resolveCanvasGridColor(appearance, colorTheme, mode);
     const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} 0.8px, transparent 1px)` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;

@@ -40,6 +40,11 @@ RUN apk add --no-cache build-base
 
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
+# go.mod 含本地 replace（github.com/casdoor/go-sms-sender => ./third_party/go-sms-sender）。
+# go mod download 解析依赖时就需要读到该目录的 go.mod，而这行执行时完整源码尚未复制，
+# 缺了它会报 "reading third_party/go-sms-sender/go.mod: no such file or directory"。
+# 后面 COPY backend ./ 会覆盖为完整源码，这里只为让依赖解析通过。
+COPY backend/third_party ./third_party
 # 模块保留在普通镜像层中，供后续编译及跨 Runner 的 GHA 层缓存复用。
 RUN go mod download
 COPY backend ./
@@ -54,7 +59,13 @@ RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/migrate-schema ./cmd/migrate-schema; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/migrate-sqlite-postgres ./cmd/migrate-sqlite-postgres
 
-FROM alpine:3.22
+FROM node:22.19-alpine AS pi-runtime-deps
+
+WORKDIR /app/backend/agent-runtime/pi
+COPY backend/agent-runtime/pi/package.json backend/agent-runtime/pi/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+
+FROM node:22.19-alpine
 
 RUN apk add --no-cache ca-certificates tzdata wget \
     && addgroup -S app \
@@ -70,6 +81,9 @@ COPY --from=backend-build /out/infinite-canvas-backend /usr/local/bin/infinite-c
 COPY --from=backend-build /out/migrate-schema /usr/local/bin/migrate-schema
 COPY --from=backend-build /out/migrate-sqlite-postgres /usr/local/bin/migrate-sqlite-postgres
 COPY --from=payment-package-smoke /app/plugin-packages /app/plugin-packages
+COPY --from=pi-runtime-deps /app/backend/agent-runtime/pi/node_modules /app/backend/agent-runtime/pi/node_modules
+COPY backend/agent-runtime/pi/package.json backend/agent-runtime/pi/package-lock.json /app/backend/agent-runtime/pi/
+COPY backend/agent-runtime/pi/agent-runtime.mjs /app/backend/agent-runtime/pi/agent-runtime.mjs
 
 USER app
 EXPOSE 8080

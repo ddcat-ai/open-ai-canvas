@@ -1,4 +1,5 @@
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
+import { normalizeCharacterImageMentions } from "@/lib/canvas/canvas-character-reference";
 import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { writeCanvasNodePrompt } from "@/lib/canvas/canvas-node-prompt";
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
@@ -113,10 +114,12 @@ export function canvasResourceMentionToken(reference: CanvasResourceReference) {
 }
 
 export function normalizeCanvasNodeMentionTokens(prompt: string, references: CanvasResourceReference[]) {
-    return references.reduce((value, reference) => {
+    const normalized = references.reduce((value, reference) => {
         if (!reference.nodeId || reference.assetId || reference.kind === "skill" || reference.kind === "tool") return value;
         return value.split(canvasNodeMentionToken(reference.nodeId)).join(`@${reference.label}`);
     }, prompt);
+    const active = references.filter((reference) => reference.active && !reference.assetId);
+    return normalizeCharacterImageMentions(normalized, active.filter((reference) => reference.kind === "image").length, active.filter((reference) => reference.kind === "character").map((reference) => reference.label));
 }
 
 /** 将提示词内已连接素材的名称替换为对应引用；同名的每处指代都会保留为独立引用。 */

@@ -67,22 +67,55 @@ test("workspace starts collapsed and keeps separated navigation and bottom toggl
     expect(panel).toContain('className="canvas-workspace-rail-items"');
     expect(panel.indexOf("canvas-workspace-rail-toggle")).toBeGreaterThan(panel.indexOf("entries.map"));
     const css = component("canvas-workspace-panel.css");
-    expect(css).toContain("gap: var(--space-3)");
+    expect(css).toContain("gap: var(--space-1)");
     expect(css).toContain("margin-top: auto");
     expect(css).toContain("prefers-reduced-motion: reduce");
 });
 
-test("rail shares canvas dock colors rather than muted workspace navigation colors", () => {
+test("rail inherits canvas dock colors from the workspace shell", () => {
     const panel = component("canvas-workspace-panel.tsx");
     expect(panel).toContain("canvasThemes[useActiveTheme()]");
-    expect(panel).toContain('...canvasDockStyle(theme), boxShadow: "none"');
+    expect(panel).toContain('className="canvas-workspace-shell" style={{ ...canvasDockStyle(theme)');
+    expect(panel).toContain("background: undefined");
+    expect(panel).not.toContain('boxShadow: "none"');
     const railCss = component("canvas-workspace-panel.css").split(".canvas-workspace-rail {")[1];
     expect(railCss).not.toContain("var(--muted-foreground)");
     expect(railCss).not.toContain("var(--workspace-navigation)");
-    for (const token of ["--dock-command-hover", "--dock-command-active", "--dock-command-active-text", "--dock-tooltip-border"]) expect(railCss).toContain(`var(${token})`);
+    for (const token of ["--dock-command-hover", "--dock-command-active", "--dock-command-active-text"]) expect(railCss).toContain(`var(${token})`);
     for (const theme of Object.values(canvasThemes)) {
         const style = canvasDockStyle(theme);
         expect(style.background).toBe("var(--dock-surface)");
         expect(style.color).toBe(theme.toolbar.item);
     }
+});
+
+test("editor rail and expanded panel share one restrained glass surface without hard dividers", () => {
+    const page = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
+    const panel = component("canvas-workspace-panel.tsx");
+    const styles = component("canvas-workspace-panel.css");
+    expect(page).toContain('<InfiniteCanvas');
+    expect(page).not.toContain("canvas-workspace-backdrop");
+    expect(page).toContain("canvas-main-with-workspace");
+    expect(styles).toContain(".canvas-main-with-workspace .canvas-editor-shell {\n    z-index: 0;");
+    expect(styles).toContain(".canvas-workspace-shell {\n    position: absolute;");
+    expect(styles).toContain("left: var(--canvas-workspace-inset)");
+    expect(styles).toContain(".canvas-workspace-zoom-controls");
+    expect(styles).toContain(".canvas-main-with-workspace > .canvas-project-sidebar {\n        margin-left: var(--space-16);");
+    expect(styles).toContain(".canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-topbar");
+    expect(panel).not.toContain("canvas-workspace-rail-divider");
+    expect(panel).not.toContain("<strong>工作区</strong>");
+    expect(styles).not.toContain(".canvas-workspace-rail-divider");
+    expect(styles).not.toContain("border-right: 1px solid var(--dock-border)");
+    expect(styles).not.toContain('canvas-workspace-rail-button[aria-pressed="true"]::before');
+    expect(styles).toContain("margin: var(--space-2) 0 var(--space-2) var(--space-2)");
+    expect(styles).toContain("--canvas-workspace-material: color-mix(in srgb, var(--canvas-workspace-base, var(--background)) 72%, transparent);");
+    expect(styles).not.toContain("backdrop-filter: blur(16px)");
+    expect(styles).toContain("backdrop-filter: blur(22px) saturate(140%);");
+    expect(styles).toContain(".canvas-workspace-shell .canvas-workspace-panel {\n    background: transparent;");
+    expect(styles).toContain(".canvas-workspace-panel > :is(header, .border-b) {\n    border-bottom: 0 !important;");
+    expect(styles).toContain("border-radius: var(--r-2xl)");
+    expect(styles).not.toContain("border-radius: calc(var(--radius) * 3.5)");
+    expect(page).toContain('workspaceOpen ? "canvas-workspace-expanded" : ""');
+    expect(styles).not.toContain("backdrop-filter: none");
+    expect(styles).not.toContain("box-shadow: none");
 });

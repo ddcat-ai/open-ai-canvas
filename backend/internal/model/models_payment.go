@@ -6,6 +6,14 @@ type PaymentOrderStatus string
 type PaymentNotificationStatus string
 type PaymentReconciliationStatus string
 type PaymentReconciliationResult string
+type TopupSaleStrategy string
+
+const (
+	TopupSaleStrategyUnlimited TopupSaleStrategy = "unlimited"
+	TopupSaleStrategyPeriodic  TopupSaleStrategy = "periodic"
+	TopupSaleStrategyInventory TopupSaleStrategy = "inventory"
+	TopupSaleStrategyTimed     TopupSaleStrategy = "timed"
+)
 
 const (
 	PaymentOrderCreated      PaymentOrderStatus = "created"
@@ -35,17 +43,26 @@ const (
 // TopupProduct is the server-owned price and credit snapshot source. Clients
 // select a product ID and can never submit their own payable amount or credits.
 type TopupProduct struct {
-	ID                  string    `json:"id" gorm:"primaryKey;size:36"`
-	Name                string    `json:"name" gorm:"size:120"`
-	Description         string    `json:"description,omitempty" gorm:"size:500"`
-	AmountFen           int64     `json:"amountFen" gorm:"index"`
-	CreditsMicrocredits int64     `json:"creditsMicrocredits"`
-	Enabled             bool      `json:"enabled" gorm:"index"`
-	SortOrder           int       `json:"sortOrder" gorm:"index"`
-	CreatedBy           string    `json:"createdBy" gorm:"index;size:36"`
-	UpdatedBy           string    `json:"updatedBy" gorm:"index;size:36"`
-	CreatedAt           time.Time `json:"createdAt"`
-	UpdatedAt           time.Time `json:"updatedAt"`
+	ID                  string            `json:"id" gorm:"primaryKey;size:36"`
+	Name                string            `json:"name" gorm:"size:120"`
+	Description         string            `json:"description,omitempty" gorm:"size:500"`
+	AmountFen           int64             `json:"amountFen" gorm:"index"`
+	CreditsMicrocredits int64             `json:"creditsMicrocredits"`
+	Enabled             bool              `json:"enabled" gorm:"index"`
+	SortOrder           int               `json:"sortOrder" gorm:"index"`
+	SaleStrategy        TopupSaleStrategy `json:"saleStrategy" gorm:"size:24;index"`
+	PeriodDays          int               `json:"periodDays,omitempty"`
+	PeriodPurchaseLimit int               `json:"periodPurchaseLimit,omitempty"`
+	StockTotal          int64             `json:"stockTotal,omitempty"`
+	StockRemaining      int64             `json:"stockRemaining,omitempty"`
+	SaleStartAt         *time.Time        `json:"saleStartAt,omitempty"`
+	SaleEndAt           *time.Time        `json:"saleEndAt,omitempty"`
+	SaleStatus          string            `json:"saleStatus,omitempty" gorm:"-"`
+	CanPurchase         bool              `json:"canPurchase" gorm:"-"`
+	CreatedBy           string            `json:"createdBy" gorm:"index;size:36"`
+	UpdatedBy           string            `json:"updatedBy" gorm:"index;size:36"`
+	CreatedAt           time.Time         `json:"createdAt"`
+	UpdatedAt           time.Time         `json:"updatedAt"`
 }
 
 // PaymentProviderConfig is immutable and versioned. Payment orders pin one
@@ -71,6 +88,7 @@ type PaymentOrder struct {
 	MerchantOrderNo       string             `json:"merchantOrderNo" gorm:"size:32;uniqueIndex"`
 	ProductID             string             `json:"productId" gorm:"size:36;index"`
 	ProductName           string             `json:"productName" gorm:"size:120"`
+	StockReserved         bool               `json:"-" gorm:"not null;default:false"`
 	ProviderID            string             `json:"providerId" gorm:"size:80;index;uniqueIndex:idx_payment_provider_trade,priority:1"`
 	PluginID              string             `json:"pluginId" gorm:"size:120;index"`
 	PluginVersion         string             `json:"pluginVersion" gorm:"size:40"`
