@@ -70,6 +70,10 @@ func (s *Service) resolveResourceAccess(resource *model.Resource, options Resour
 		if err != nil {
 			return nil, WrapAppError(503, "无法解析资源实际存储位置", err)
 		}
+		setting = s.storageSettingWithRuntimePolicy(setting)
+	} else {
+		// 本地资源无需存储配置，只注入运行时策略，让平台签名地址同样遵循后台配置的有效期。
+		setting.Runtime = s.storageSettingWithRuntimePolicy(ossSettingValue{}).Runtime
 	}
 	return assets.ResolveAccess(resource, setting, options, time.Now().UTC(), func(variant assets.ResourceVariant, expires time.Time) (string, error) {
 		return s.signedResourceAccessURL(resource, variant, expires, options.Purpose == assets.PurposeProvider)
@@ -133,9 +137,6 @@ func (s *Service) signedResourceAccessURL(resource *model.Resource, variant asse
 	base, err := s.publicResourceBaseURL()
 	if err != nil {
 		return "", err
-	}
-	if base.Scheme != "https" {
-		return "", BadAuthRequest("模型读取平台资源需要配置 HTTPS 公网访问地址")
 	}
 	return base.ResolveReference(u).String(), nil
 }

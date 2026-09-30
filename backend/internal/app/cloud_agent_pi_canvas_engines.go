@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -510,7 +510,7 @@ func (e *CanvasSearchEngine) generateHighlight(node model.CanvasNode, query Canv
 // handleMessageStart 处理消息开始事件
 func (s *Service) handleMessageStart(userID, runID string, data map[string]any) (any, error) {
 	// 记录消息开始
-	log.Printf("[Agent] message_start run=%s", runID)
+	slog.Debug("agent message_start", "run", runID)
 
 	// 更新运行状态
 	run, err := s.repo.CloudAgent(userID, runID)
@@ -537,14 +537,14 @@ func (s *Service) handleMessageStart(userID, runID string, data map[string]any) 
 func (s *Service) handleMessageDelta(userID, runID string, data map[string]any) (any, error) {
 	delta, _ := data["delta"].(string)
 	messageID, _ := data["messageId"].(string)
-	log.Printf("[Agent] message_delta run=%s messageId=%s len=%d", runID, messageID, len(delta))
+	slog.Debug("agent message_delta", "run", runID, "message_id", messageID, "len", len(delta))
 
 	// 推送实时增量到前端
 	if err := s.broadcastAgentEvent(userID, runID, "message_delta", map[string]any{
 		"delta":     delta,
 		"messageId": messageID,
 	}); err != nil {
-		log.Printf("[Agent] failed to broadcast message_delta: %v", err)
+		slog.Warn("agent message_delta broadcast failed", "run", runID, "error", err)
 	}
 
 	return map[string]any{"ok": true}, nil
@@ -552,19 +552,19 @@ func (s *Service) handleMessageDelta(userID, runID string, data map[string]any) 
 
 // handleMessageEnd 处理消息结束事件（关键修复点）
 func (s *Service) handleMessageEnd(userID, runID string, data map[string]any) (any, error) {
-	log.Printf("[Agent] message_end run=%s data=%+v", runID, data)
+	slog.Debug("agent message_end", "run", runID, "role", data["role"])
 
 	// 检查消息角色，防止将用户消息误认为助手消息
 	role, _ := data["role"].(string)
 	if role == "user" {
 		// 这是用户消息结束，不是助手响应，直接返回
-		log.Printf("[Agent] ignoring user message_end run=%s", runID)
+		slog.Debug("agent message_end ignored", "run", runID, "role", "user")
 		return map[string]any{"ok": true, "ignored": true, "reason": "user message"}, nil
 	}
 
 	// 只处理助手消息结束
 	if role != "assistant" {
-		log.Printf("[Agent] ignoring non-assistant message_end run=%s role=%s", runID, role)
+		slog.Debug("agent message_end ignored", "run", runID, "role", role)
 		return map[string]any{"ok": true, "ignored": true, "reason": fmt.Sprintf("non-assistant role: %s", role)}, nil
 	}
 
@@ -585,7 +585,7 @@ func (s *Service) handleMessageEnd(userID, runID string, data map[string]any) (a
 	// 计数真实的助手响应
 	state.PiAssistantResponses++
 
-	log.Printf("[Agent] assistant response completed run=%s count=%d", runID, state.PiAssistantResponses)
+	slog.Debug("agent assistant response completed", "run", runID, "count", state.PiAssistantResponses)
 
 	if err := s.saveCloudAgentRuntimeState(userID, runID, &state); err != nil {
 		return nil, err
@@ -597,7 +597,7 @@ func (s *Service) handleMessageEnd(userID, runID string, data map[string]any) (a
 // handleToolCall 处理工具调用事件
 func (s *Service) handleToolCall(userID, runID string, data map[string]any) (any, error) {
 	toolName, _ := data["toolName"].(string)
-	log.Printf("[Agent] tool_call run=%s tool=%s", runID, toolName)
+	slog.Debug("agent tool_call", "run", runID, "tool", toolName)
 
 	return map[string]any{"ok": true}, nil
 }
@@ -605,7 +605,7 @@ func (s *Service) handleToolCall(userID, runID string, data map[string]any) (any
 // handleError 处理错误事件
 func (s *Service) handleError(userID, runID string, data map[string]any) (any, error) {
 	errorMsg, _ := data["error"].(string)
-	log.Printf("[Agent] error run=%s error=%s", runID, errorMsg)
+	slog.Warn("agent runtime error", "run", runID, "error", errorMsg)
 
 	// 更新运行状态为失败
 	run, err := s.repo.CloudAgent(userID, runID)
@@ -687,7 +687,7 @@ func (s *Service) updatePiRunWithStep(userID, runID string, revision int64, step
 
 // routeStandardTool 路由标准工具（非画布工具）
 func (s *Service) routeStandardTool(ctx context.Context, userID, runID, toolName string, payload map[string]json.RawMessage) (any, error) {
-	log.Printf("[Agent] routing standard tool: %s", toolName)
+	slog.Debug("agent routing standard tool", "run", runID, "tool", toolName)
 
 	// 将参数从 json.RawMessage 转换为 map[string]any
 	args := make(map[string]any)

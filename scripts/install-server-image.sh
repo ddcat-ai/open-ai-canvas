@@ -118,9 +118,14 @@ prepare_environment() {
         fi
         CANVAS_BACKEND_IMAGE="${IMAGE_REPOSITORY}-backend:${CANVAS_IMAGE_TAG}"
         CANVAS_WEB_IMAGE="${IMAGE_REPOSITORY}-web:${CANVAS_IMAGE_TAG}"
+        CANVAS_YINGCE_AGENT_IMAGE="${IMAGE_REPOSITORY}-yingce-agent:${CANVAS_IMAGE_TAG}"
         set_env_value .env CANVAS_IMAGE_TAG "$CANVAS_IMAGE_TAG"
         set_env_value .env CANVAS_BACKEND_IMAGE "$CANVAS_BACKEND_IMAGE"
         set_env_value .env CANVAS_WEB_IMAGE "$CANVAS_WEB_IMAGE"
+        set_env_value .env CANVAS_YINGCE_AGENT_IMAGE "$CANVAS_YINGCE_AGENT_IMAGE"
+        if ! grep -Eq '^YINGCE_AGENT_TOKEN=.{32,}$' .env; then
+            set_env_value .env YINGCE_AGENT_TOKEN "$(openssl rand -hex 32)"
+        fi
         return
     fi
 
@@ -140,6 +145,8 @@ CANVAS_HTTP_PORT=${CANVAS_HTTP_PORT}
 CANVAS_IMAGE_TAG=${CANVAS_IMAGE_TAG}
 CANVAS_BACKEND_IMAGE=${IMAGE_REPOSITORY}-backend:${CANVAS_IMAGE_TAG}
 CANVAS_WEB_IMAGE=${IMAGE_REPOSITORY}-web:${CANVAS_IMAGE_TAG}
+CANVAS_YINGCE_AGENT_IMAGE=${IMAGE_REPOSITORY}-yingce-agent:${CANVAS_IMAGE_TAG}
+YINGCE_AGENT_TOKEN=$(openssl rand -hex 32)
 CANVAS_REGISTRATION_ENABLED=false
 CANVAS_ALLOW_PRIVATE_UPSTREAMS=false
 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=
@@ -185,13 +192,16 @@ start_services() {
     if ! docker compose --env-file .env -f "$COMPOSE_FILE" pull; then
         fail "GHCR 镜像拉取失败；如果容器包尚未公开，请通过 GHCR_USERNAME 和 GHCR_TOKEN 登录后重试"
     fi
-    local backend_digest web_digest
+    local backend_digest web_digest agent_digest
     backend_digest="$(docker image inspect "$CANVAS_BACKEND_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-backend" '$0 ~ "^" repository "@sha256:" { print; exit }')"
     web_digest="$(docker image inspect "$CANVAS_WEB_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-web" '$0 ~ "^" repository "@sha256:" { print; exit }')"
+    agent_digest="$(docker image inspect "$CANVAS_YINGCE_AGENT_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-yingce-agent" '$0 ~ "^" repository "@sha256:" { print; exit }')"
     [[ "$backend_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-backend@sha256:[a-f0-9]{64}$ ]] || fail "后端镜像未返回可验证的仓库 digest"
     [[ "$web_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-web@sha256:[a-f0-9]{64}$ ]] || fail "Web 镜像未返回可验证的仓库 digest"
+    [[ "$agent_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-yingce-agent@sha256:[a-f0-9]{64}$ ]] || fail "Agent 镜像未返回可验证的仓库 digest"
     set_env_value .env CANVAS_BACKEND_IMAGE "$backend_digest"
     set_env_value .env CANVAS_WEB_IMAGE "$web_digest"
+    set_env_value .env CANVAS_YINGCE_AGENT_IMAGE "$agent_digest"
     docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 600
 }
 

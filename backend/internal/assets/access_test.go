@@ -185,3 +185,19 @@ func errorReason(err error) string {
 	}
 	return err.Error()
 }
+
+func TestResolveAccessUsesRuntimePolicyTTL(t *testing.T) {
+	now := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	resource := testReadyResource("local")
+	setting := storage.Settings{Runtime: storage.RuntimePolicy{AccessURLTTL: 2 * time.Hour, ProviderAccessURLTTL: 6 * time.Hour}}
+	var variants []ResourceVariant
+	for purpose, want := range map[AccessPurpose]time.Duration{PurposeDisplay: 2 * time.Hour, PurposeProvider: 6 * time.Hour} {
+		access, err := ResolveAccess(resource, setting, AccessOptions{Purpose: purpose}, now, testPlatformURL(&variants))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if access.ExpiresAt == nil || !access.ExpiresAt.Equal(now.Add(want)) {
+			t.Fatalf("%s access expiry = %v, want %v", purpose, access.ExpiresAt, now.Add(want))
+		}
+	}
+}

@@ -612,6 +612,13 @@
     transition: border-color var(--motion-instant) ease-out, transform var(--motion-instant) var(--motion-ease-out);
 }
 
+video.workflow-preview-media {
+    display: block;
+    height: auto;
+    aspect-ratio: auto;
+    object-fit: contain;
+}
+
 .workflow-preview-media-button {
     position: relative;
     display: block;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { agentApprovalMatchesSettings, agentApprovalModel, agentApprovalModelSelection, agentImageApproval } from "../src/lib/canvas/agent-media-approval";
+import { AGENT_APPROVAL_SUPERSEDED_BY_NODE, agentApprovalMatchesSettings, agentApprovalModel, agentApprovalModelSelection, agentApprovalTargetGenerating, agentImageApproval, agentMediaApprovalTargetNodeId } from "../src/lib/canvas/agent-media-approval";
+import type { CanvasNodeData } from "../src/types/canvas";
 import { createModelChannel, defaultConfig, encodeChannelModel } from "../src/stores/use-config-store";
 
 describe("image generation approval settings", () => {
@@ -36,5 +37,30 @@ describe("image generation approval settings", () => {
         expect(agentApprovalModel(config, { ...channel, size: args.size, quality: args.quality })).toBe(encodeChannelModel("platform", cost.model));
         expect(() => agentApprovalModelSelection(config, encodeChannelModel("personal", cost.model))).toThrow("平台模型");
         expect(agentApprovalModel(config, { logicalModelId: "removed", size: args.size, quality: args.quality })).toBe("");
+    });
+});
+
+describe("approval target already generating on the canvas", () => {
+    const detail = { toolName: "generate_media", arguments: JSON.stringify({ mode: "image", prompt: "p", size: "1:1", nodeId: "draft-1" }) };
+    const node = (metadata: Record<string, unknown>) => ({ id: "draft-1", type: "image", title: "开场分镜", position: { x: 0, y: 0 }, width: 200, height: 200, metadata }) as unknown as CanvasNodeData;
+
+    it("reads the target node from SSE events and restored snapshots", () => {
+        expect(agentMediaApprovalTargetNodeId(detail)).toBe("draft-1");
+        expect(agentMediaApprovalTargetNodeId({ call: { function: { name: "generate_media", arguments: detail.arguments } } })).toBe("draft-1");
+        expect(agentMediaApprovalTargetNodeId({ toolName: "canvas_apply_ops", arguments: detail.arguments })).toBe("");
+        expect(agentMediaApprovalTargetNodeId({ toolName: "generate_media", arguments: "{" })).toBe("");
+    });
+
+    it("blocks approval only while the same node is generating", () => {
+        expect(agentApprovalTargetGenerating(detail, [node({ status: "idle" })])).toBeUndefined();
+        expect(agentApprovalTargetGenerating(detail, [node({ status: "loading" })])?.id).toBe("draft-1");
+        expect(agentApprovalTargetGenerating(detail, [node({ taskId: "t1", taskStatus: "running" })])?.id).toBe("draft-1");
+        expect(agentApprovalTargetGenerating(detail, [node({ status: "idle" })], "draft-1")?.id).toBe("draft-1");
+        expect(agentApprovalTargetGenerating(detail, [{ ...node({ status: "loading" }), id: "other" }])).toBeUndefined();
+        expect(agentApprovalTargetGenerating(detail, undefined)).toBeUndefined();
+    });
+
+    it("uses the same decision value as the backend", () => {
+        expect(AGENT_APPROVAL_SUPERSEDED_BY_NODE).toBe("superseded_by_node");
     });
 });

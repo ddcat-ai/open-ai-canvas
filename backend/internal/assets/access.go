@@ -102,9 +102,11 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	if resource.Status != model.ResourceStatusReady {
 		return nil, AccessError(http.StatusConflict, "resource_not_ready", "资源尚未上传完成")
 	}
-	ttl := 5 * time.Minute
+	// 有效期来自后台「资源与请求策略」；未注入运行时策略时回落到存储层默认值（均为 4 小时）。
+	runtime := storage.NormalizeSettings(storage.Settings{Runtime: setting.Runtime}).Runtime
+	ttl := runtime.AccessURLTTL
 	if options.Purpose == PurposeProvider {
-		ttl = 4 * time.Hour
+		ttl = runtime.ProviderAccessURLTTL
 	}
 	expires := now.Add(ttl)
 	if !options.ExpiresAt.IsZero() && options.ExpiresAt.Before(expires) {

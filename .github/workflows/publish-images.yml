@@ -75,6 +75,11 @@ jobs:
             arch: arm64
             platforms: linux/arm64
             runner: ubuntu-24.04-arm
+          - image: open-ai-canvas-yingce-agent
+            dockerfile: yingce-agent/Dockerfile
+            arch: multi
+            platforms: linux/amd64,linux/arm64
+            runner: ubuntu-24.04
     env:
       IMAGE: ghcr.io/${{ needs.prepare.outputs.owner }}/${{ matrix.image }}
     steps:
@@ -138,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [open-ai-canvas-web, open-ai-canvas-backend]
+        image: [open-ai-canvas-web, open-ai-canvas-backend, open-ai-canvas-yingce-agent]
     # 不同提交可并行编译，但同一镜像的可变标签更新必须串行。
     concurrency:
       group: image-tags-${{ matrix.image }}-${{ github.ref }}

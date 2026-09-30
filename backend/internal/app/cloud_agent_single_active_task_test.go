@@ -26,6 +26,20 @@ func TestCloudAgentModelStepWaitsForPendingMediaTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 媒体生成在所有模式下都要先审批；批准后才提交媒体任务。
+	if state.Approval == nil {
+		t.Fatalf("media did not request approval (status=%s)", run.Status)
+	}
+	s.disablePiRuntime = true
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	if run, err = s.repo.CloudAgent("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if state, err = cloudAgentDecode(run); err != nil {
+		t.Fatal(err)
+	}
 	if state.MediaTaskID == "" {
 		t.Fatalf("fixture did not submit a media task (status=%s failure=%q)", run.Status, run.FailureMessage)
 	}

@@ -36,6 +36,9 @@ const (
 	MinRuntimeAgentStepTimeoutSeconds   = 30
 	MaxRuntimeAgentStepTimeoutSeconds   = 3_600
 	DefaultRuntimeAgentStepTimeout      = 0
+	MinRuntimeAgentSessions             = 1
+	MaxRuntimeAgentSessions             = 64
+	DefaultRuntimeAgentSessions         = 30
 )
 
 // agentStepMaxOutputTokensDefault 读取部署级覆盖并按同一套范围夹取；环境变量无法表达"不限制"（0），
@@ -90,6 +93,8 @@ type RuntimeTaskPolicy struct {
 	AgentStepMaxOutputTokens int `json:"agentStepMaxOutputTokens"`
 	// AgentStepTimeoutSeconds 是画布 Agent 单步模型调用的秒级墙钟；0 表示沿用文本任务超时。
 	AgentStepTimeoutSeconds int `json:"agentStepTimeoutSeconds"`
+	// AgentMaxSessions 是同时进行中的画布 Agent 轮次上限。审批等待不占用名额。
+	AgentMaxSessions int `json:"agentMaxSessions"`
 }
 
 type RuntimeRequestPolicy struct {
@@ -156,7 +161,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 		},
 		Storage: RuntimeStoragePolicy{
 			TransferTimeoutSeconds:      120,
-			AccessURLTTLSeconds:         300,
+			AccessURLTTLSeconds:         14_400,
 			ProviderAccessURLTTLSeconds: 14_400,
 			NonSeekableBufferMB:         64,
 			ErrorBodyKB:                 1,
@@ -173,6 +178,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			DefaultTimeoutMinutes:    10,
 			AgentStepMaxOutputTokens: agentStepMaxOutputTokensDefault(),
 			AgentStepTimeoutSeconds:  agentStepTimeoutSecondsDefault(),
+			AgentMaxSessions:         DefaultRuntimeAgentSessions,
 		},
 		Request: RuntimeRequestPolicy{
 			TaskCreatePerMinute:        30,
@@ -213,6 +219,7 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AgentStepMaxOutputTokens: MaxRuntimeAgentStepOutputTokens, AgentStepTimeoutSeconds: MaxRuntimeAgentStepTimeoutSeconds,
+		AgentMaxSessions: MaxRuntimeAgentSessions,
 	}
 	value.Request = RuntimeRequestPolicy{
 		TaskCreatePerMinute:     maxRuntimeRate,
@@ -436,6 +443,9 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	}
 	if task.AgentStepTimeoutSeconds != 0 && (task.AgentStepTimeoutSeconds < MinRuntimeAgentStepTimeoutSeconds || task.AgentStepTimeoutSeconds > MaxRuntimeAgentStepTimeoutSeconds) {
 		return kernel.BadAuthRequest(fmt.Sprintf("Agent 单步超时必须是 0 或 %d-%d 秒的整数 (0 表示沿用文本任务超时)", MinRuntimeAgentStepTimeoutSeconds, MaxRuntimeAgentStepTimeoutSeconds))
+	}
+	if task.AgentMaxSessions < MinRuntimeAgentSessions || task.AgentMaxSessions > MaxRuntimeAgentSessions {
+		return kernel.BadAuthRequest(fmt.Sprintf("Agent 同时对话上限必须是 %d-%d 的整数", MinRuntimeAgentSessions, MaxRuntimeAgentSessions))
 	}
 	request := value.Request
 	for label, item := range map[string]int{

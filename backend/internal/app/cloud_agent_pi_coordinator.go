@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,9 +232,11 @@ func (s *Service) recoverCloudAgentPiRunners() {
 			if run.Status == "waiting_approval" || run.Status == "waiting_user" {
 				continue
 			}
-			// 批准后的媒体任务仍在生成：由 finishApprovedCloudAgentMedia 等结果回写后再恢复运行。
-			// 这时提前启动运行时，会在媒体任务未结束时再入队模型步骤，形成两个活动任务。
-			if s.cloudAgentAwaitingMedia(run.UserID, run.ID) {
+			// 批准后的媒体任务仍在生成。进程重启后内存 waiter 已经消失，这里按
+			// 持久化的任务 ID 重建；不能同时再启动一轮模型步骤。
+			state, decodeErr := cloudAgentDecode(&run)
+			if decodeErr == nil && state.MediaTaskID != "" {
+				s.startApprovedCloudAgentMediaWaiter(run.UserID, run.ID, state.MediaTaskID)
 				continue
 			}
 			s.startCloudAgentPi(run.UserID, run.ID)
@@ -243,18 +246,6 @@ func (s *Service) recoverCloudAgentPiRunners() {
 			return
 		}
 	}
-}
-
-// cloudAgentAwaitingMedia reports whether the run is waiting on an approved
-// media task. The runtime must not start (and schedule a model step) until that
-// task has been written back; one run owns at most one active task.
-func (s *Service) cloudAgentAwaitingMedia(userID, runID string) bool {
-	run, err := s.repo.CloudAgent(userID, runID)
-	if err != nil {
-		return false
-	}
-	state, err := cloudAgentDecode(run)
-	return err == nil && state.MediaTaskID != ""
 }
 
 // runCloudAgentPiSession 核心会话管理
@@ -390,7 +381,7 @@ type EnhancedPiRequestParams struct {
 
 // buildEnhancedPiRequest 构建增强的 Pi 请求（核心方法）
 func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiRequestParams) (cloudAgentPiProcessRequest, error) {
-	log.Printf("[Agent] building enhanced request for canvas=%s", params.CanvasID)
+	slog.Debug("agent building request", "canvas", params.CanvasID)
 
 	// 1. 构建工具列表（包括画布工具）
 	tools := s.buildCompletePiTools(params.Canonical.Tools)
@@ -399,7 +390,7 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 	skillPaths := s.buildSkillPaths(params.RuntimeState.Skills)
 	enabledSkills := s.buildSkillManifests(params.RuntimeState.Skills)
 
-	log.Printf("[Agent] enabled skills: %d", len(enabledSkills))
+	slog.Debug("agent enabled skills", "count", len(enabledSkills))
 
 	// 3. 构建 Profile 配置
 	profile := s.buildProfileConfig(params.RuntimeState.Profile)
@@ -419,11 +410,11 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 		return cloudAgentPiProcessRequest{}, fmt.Errorf("marshal canvas: %w", err)
 	}
 
-	log.Printf("[Agent] canvas intelligence: nodes=%d, focus=%d, relationships=%d, clusters=%d",
+	slog.Debug("agent canvas intelligence", "nodes",
 		enhancedCanvas.Snapshot.TotalNodes,
-		len(enhancedCanvas.Snapshot.FocusNodes),
-		len(enhancedCanvas.Snapshot.Relationships),
-		len(enhancedCanvas.Snapshot.Layout.Clusters))
+		"focus", len(enhancedCanvas.Snapshot.FocusNodes),
+		"relationships", len(enhancedCanvas.Snapshot.Relationships),
+		"clusters", len(enhancedCanvas.Snapshot.Layout.Clusters))
 
 	// 6. 构建 Features 配置
 	features := s.buildFeaturesConfig(params.RuntimeState)
@@ -471,7 +462,7 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 		Model:       modelConfig,
 	}
 
-	log.Printf("[Agent] request built successfully")
+	slog.Debug("agent request built", "canvas", params.CanvasID)
 	return request, nil
 }
 
@@ -701,7 +692,11 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 
 	// 上游临时故障（5xx、429、超时、连接错误、空回复）自动重试，首次失败后最多再试 3 次，
 	// 指数退避。参数/鉴权类 4xx 重试也不会变好，直接失败。
+	// 模型吐出损坏的工具参数 JSON（截断或多一个括号）时，那次调用并没有被执行：
+	// 与 Go 执行循环的 correctCloudAgentTruncatedCalls 一致，附上 truncated_tool_arguments
+	// 纠偏上下文重做这一步，而不是把整轮判死。次数与临时故障共用同一个上限。
 	var lastErr error
+	var correction []map[string]any
 	for attempt := 0; attempt <= cloudAgentModelStepRetries; attempt++ {
 		if attempt > 0 {
 			delay := time.Duration(1<<(attempt-1)) * time.Second
@@ -712,13 +707,16 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 			case <-time.After(delay):
 			}
 		}
-		result, retryable, err := s.runCloudAgentModelStep(ctx, userID, runID, request.Messages, request.ThinkingLevel)
+		result, retryable, err := s.runCloudAgentModelStep(ctx, userID, runID, request.Messages, request.ThinkingLevel, correction...)
 		if err == nil {
 			return result, nil
 		}
 		lastErr = err
 		if !retryable {
 			return nil, err
+		}
+		if errors.Is(err, errCloudAgentTruncatedToolArguments) && correction == nil {
+			correction = []map[string]any{cloudAgentRuntimeMessage(cloudAgentRuntimeContext{Kind: cloudAgentContextTruncatedArguments})}
 		}
 	}
 	return nil, lastErr
@@ -727,8 +725,12 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 // cloudAgentModelStepRetries 是单步模型调用首次失败后的最大重试次数。
 const cloudAgentModelStepRetries = 3
 
+// errCloudAgentTruncatedToolArguments 标记"模型返回的工具参数不是完整 JSON"：
+// 调用未执行，可以带纠偏上下文重做同一步。
+var errCloudAgentTruncatedToolArguments = errors.New("truncated tool arguments")
+
 // runCloudAgentModelStep 调度并等待一次模型步骤；第二个返回值表示失败是否值得重试。
-func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID string, messages []map[string]any, thinkingLevel string) (any, bool, error) {
+func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID string, messages []map[string]any, thinkingLevel string, correction ...map[string]any) (any, bool, error) {
 	// 运行时发起 /model 的同时会并发推送事件（message_start、session_snapshot 等），
 	// 这些事件也会推进运行 revision。调度模型步骤是 CAS 写入：冲突时重新读取
 	// 最新状态再调度，而不是把整轮判失败。冲突时事务整体回滚，不会产生任务或扣费。
@@ -764,11 +766,22 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		}
 
 		canonical := canonicalFromRuntimeMessages(messages, state.Canonical.Tools, state.Canonical.SystemPrompt)
+		// A continuation starts a fresh Pi process. If its session snapshot was
+		// unavailable, the runtime transcript is shorter than the server-authored
+		// canonical history. Reuse canonical directly so provider tool_calls are
+		// not accidentally converted as if they were Pi content blocks.
+		if len(state.Canonical.Messages) > len(messages) {
+			canonical = state.Canonical
+		}
 		canonical.PromptCacheKey = state.Canonical.PromptCacheKey
 		if len(canonical.Messages) == 0 {
 			return nil, false, fmt.Errorf("no canonical messages")
 		}
 		state.Canonical = canonical
+		if len(correction) > 0 {
+			// 纠偏上下文只用于这一次请求，不写回运行状态，避免下一步重复出现。
+			canonical.Messages = append(append([]map[string]any(nil), canonical.Messages...), correction...)
+		}
 		input := map[string]any{
 			"mode":          "text",
 			"prompt":        state.Request.Prompt,
@@ -813,12 +826,19 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	taskID := state.ActiveTaskID
 	task, err := s.waitCloudAgentTask(ctx, taskID)
 	if err != nil {
-		retryable := ctx.Err() == nil && s.cloudAgentModelTaskRetryable(taskID)
+		truncated := false
+		if failed, lookupErr := s.repo.Task(taskID); lookupErr == nil && failed != nil && failed.Status != model.TaskStatusSucceeded {
+			truncated = cloudAgentTruncatedToolArguments(failed)
+		}
+		retryable := ctx.Err() == nil && (truncated || s.cloudAgentModelTaskRetryable(taskID))
 		if retryable {
 			// 释放失败的步骤，下一次重试才能重新入队。
 			if releaseErr := s.finishCloudAgentPiModelStep(userID, runID, taskID, "", ""); releaseErr != nil {
 				return nil, false, releaseErr
 			}
+		}
+		if truncated {
+			err = fmt.Errorf("%w: %v", errCloudAgentTruncatedToolArguments, err)
 		}
 		return nil, retryable, err
 	}
@@ -1085,6 +1105,32 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 	if call.Function.Name == "" {
 		return nil, fmt.Errorf("tool call is missing a name")
 	}
+
+	// 工具白名单校验：拒绝未声明的工具调用
+	run, err := s.repo.CloudAgent(userID, runID)
+	if err != nil {
+		return nil, err
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		return nil, err
+	}
+
+	allowedTools := make(map[string]bool)
+	for _, tool := range state.Canonical.Tools {
+		if fn, ok := tool["function"].(map[string]interface{}); ok {
+			name := stringValue(fn["name"])
+			if name != "" {
+				allowedTools[name] = true
+			}
+		}
+	}
+
+	if !allowedTools[call.Function.Name] {
+		log.Printf("[Agent] rejected undeclared tool call: %s in run %s", call.Function.Name, runID)
+		return nil, fmt.Errorf("未声明的工具: %s", call.Function.Name)
+	}
+
 	return s.executeCloudAgentRuntimeTool(ctx, userID, runID, call)
 }
 
@@ -1141,7 +1187,15 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 			if trimmed := strings.TrimSpace(content); trimmed == "" || trimmed == "null" {
 				content = `{"error":"工具没有返回结果"}`
 			}
-			return map[string]any{"content": content, "isError": cloudAgentToolContentIsError(content)}, nil
+			result := map[string]any{"content": content, "isError": cloudAgentToolContentIsError(content)}
+			if call.Function.Name == "ask_user" {
+				var payload map[string]any
+				if json.Unmarshal([]byte(content), &payload) == nil && stringValue(payload["phase"]) == "question" {
+					// ask_user 已经把本轮交给用户，Pi 不能再发起下一次模型调用。
+					result["terminate"] = true
+				}
+			}
+			return result, nil
 		}
 		if state.MediaTaskID == "" {
 			return nil, fmt.Errorf("tool %s produced no result", call.Function.Name)

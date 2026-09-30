@@ -462,7 +462,7 @@ export default function StorageSettingsPage() {
                                 <div className="admin-storage-form-section">
                                     <FormSectionTitle icon={<Globe2 className="size-4" />} title="公开访问根地址" description="用于生成本地资源的短时签名链接；填写站点根地址，不要附带 /api、查询参数或片段。" />
                                     <div className="admin-storage-local-field">
-                                        <Form.Item name="publicBaseUrl" label="服务器访问地址" extra="服务端还会按部署安全策略校验协议、主机及私网访问许可。">
+                                        <Form.Item name="publicBaseUrl" label="服务器访问地址" extra="支持本机、局域网或公网地址，例如 http://192.168.1.10:8080。">
                                             <div className="admin-storage-address-control">
                                                 <Input aria-label="服务器访问地址" autoComplete="off" inputMode="url" placeholder="https://canvas.example.com" prefix={<Globe2 className="size-4 text-foreground/35" />} />
                                                 <Button

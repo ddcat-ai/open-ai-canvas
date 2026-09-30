@@ -1,8 +1,19 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { rmSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { Agent, setGlobalDispatcher } from "undici";
+import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
+
+// Node 自带 undici 的 header/body 超时默认 300 秒，短于文本任务 8 分钟和视频任务 60 分钟。
+// 设为 0 后只由 Go 侧任务期限取消 bridge；这里不再提前切断仍在排队或生成中的步骤。
+setGlobalDispatcher(new Agent({
+  connectTimeout: 30_000,
+  headersTimeout: 0,
+  bodyTimeout: 0,
+}));
 
 const providerID = "infinite-canvas";
 const api = "openai-completions";
@@ -69,7 +80,19 @@ async function run() {
     throw new Error("Agent runtime is missing its bridge, session, or model configuration");
   }
 
-  const modelRuntime = await ModelRuntime.create({ agentDir: request.agentDir });
+  // 每次运行使用独立的空配置目录：SDK 的 auth.json / models.json / 锁文件都落在这里，
+  // 不读取宿主 ~/.pi，也不会执行预置 auth.json 里的 !command。运行结束即删除。
+  const isolatedDir = await mkdtemp(join(tmpdir(), "agent-runtime-"));
+  process.env.HOME = isolatedDir;
+  process.env.PI_CODING_AGENT_DIR = isolatedDir;
+  process.on("exit", () => {
+    try { rmSync(isolatedDir, { recursive: true, force: true }); } catch {}
+  });
+  request.agentDir = isolatedDir;
+  const modelRuntime = await ModelRuntime.create({
+    authPath: join(isolatedDir, "auth.json"),
+    modelsPath: join(isolatedDir, "models.json"),
+  });
   modelRuntime.registerProvider(providerID, {
     name: "影策模型任务",
     baseUrl: "http://agent-runtime.invalid/v1",
@@ -170,6 +193,7 @@ async function run() {
           content: [{ type: "text", text: result.content || "操作正在等待用户审批。" }],
           details: { approvalId: result.approvalId, paused: true },
           isError: true,
+          terminate: true,
         };
       }
       // 工具结果必须是非空文本：交回 "null" 会让模型返回空回复。
@@ -179,6 +203,7 @@ async function run() {
         content: [{ type: "text", text }],
         details: result.details,
         isError: Boolean(result.isError),
+        terminate: Boolean(result.terminate),
       };
     },
   }));
@@ -192,15 +217,18 @@ async function run() {
   } else {
     sessionManager = SessionManager.create(request.cwd, request.sessionDir);
   }
+  // 严格隔离：不探索文件系统的 packages/skills/extensions
   const resourceLoader = new DefaultResourceLoader({
     cwd: request.cwd,
     agentDir: request.agentDir,
     noExtensions: true,
+    noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
     noContextFiles: true,
     additionalSkillPaths: request.skillPaths ?? [],
     systemPrompt: request.systemPrompt,
+    settingsManager: SettingsManager.inMemory({}),
   });
   await resourceLoader.reload();
 
@@ -249,6 +277,10 @@ async function run() {
     sessionConfig.permissions = request.permissions;
   }
 
+  // 只启用平台声明的工具，不使用 SDK 默认工具
+  const platformToolNames = tools.map(t => t.name);
+  sessionConfig.tools = platformToolNames;
+  
   ({ session } = await createAgentSession(sessionConfig));
 
   const compactionConfig = request.compaction || {

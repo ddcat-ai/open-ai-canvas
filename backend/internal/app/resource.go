@@ -32,8 +32,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const providerResourceURLTTL = 4 * time.Hour
-
 var errInvalidGeneratedDataURL = errors.New("生成内容 data URL 无效")
 
 type ResourceStream = assets.ResourceStream
@@ -95,10 +93,18 @@ func (s *Service) publicResourceBaseURL() (*url.URL, error) {
 	return validatePublicResourceBaseURL(raw)
 }
 
+// 服务器访问地址是本服务对外暴露的根地址，由管理员自行决定，
+// 允许本机、局域网或任意主机；这里只校验格式，不套用出站私网策略。
 func validatePublicResourceBaseURL(raw string) (*url.URL, error) {
-	parsed, err := ValidateOutboundURL(raw)
-	if err != nil {
-		return nil, err
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Hostname() == "" {
+		return nil, BadAuthRequest("服务器访问地址必须是完整的 http/https 地址")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, BadAuthRequest("服务器访问地址只支持 http/https")
+	}
+	if parsed.User != nil {
+		return nil, BadAuthRequest("服务器访问地址不能包含认证信息")
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
 		return nil, BadAuthRequest("服务器访问地址不能包含查询参数或片段")

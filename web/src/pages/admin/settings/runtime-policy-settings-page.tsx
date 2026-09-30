@@ -77,6 +77,14 @@ const agentFields: PolicyField[] = [
         min: 0,
         max: 3_600,
     },
+    {
+        group: "task",
+        name: "agentMaxSessions",
+        label: "同时对话上限",
+        extra: "同时进行中的画布 Agent 轮次，新安装默认 30。审批等待不占名额，降低上限不会中断已开始的对话。",
+        unit: "个",
+        max: 64,
+    },
 ];
 
 const rateFields: PolicyField[] = [

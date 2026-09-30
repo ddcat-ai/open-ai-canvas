@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	agentruntime "infinite-canvas/backend/internal/agent/runtime"
+	"infinite-canvas/backend/internal/agent/yingceagent"
 )
 
 // These aliases keep the app coordinator's request shape stable while the
@@ -37,7 +40,7 @@ type cloudAgentPiProcessRequest struct {
 }
 
 func runCloudAgentPi(ctx context.Context, request cloudAgentPiProcessRequest, bridge cloudAgentPiBridge) error {
-	return agentruntime.Run(ctx, agentruntime.ProcessRequest{
+	runtimeRequest := agentruntime.ProcessRequest{
 		BridgeURL: request.BridgeURL, BridgeToken: request.BridgeToken,
 		SessionFile: request.SessionFile, SessionJSONL: request.SessionJSONL, SessionDir: request.SessionDir,
 		SessionID: request.SessionId, UserID: request.UserId, CanvasID: request.CanvasId, RunID: request.RunId,
@@ -45,5 +48,9 @@ func runCloudAgentPi(ctx context.Context, request cloudAgentPiProcessRequest, br
 		SkillPaths: request.SkillPaths, EnabledSkills: request.EnabledSkills, Profile: request.Profile,
 		Memory: request.Memory, Canvas: request.Canvas, Features: request.Features, Tools: request.Tools,
 		Compaction: request.Compaction, Permissions: request.Permissions, Model: request.Model,
-	}, agentruntime.Bridge(bridge))
+	}
+	if endpoint := strings.TrimSpace(os.Getenv("YINGCE_AGENT_URL")); endpoint != "" {
+		return yingceagent.Run(ctx, endpoint, os.Getenv("YINGCE_AGENT_TOKEN"), os.Getenv("YINGCE_AGENT_BRIDGE_HOST"), runtimeRequest, agentruntime.Bridge(bridge))
+	}
+	return agentruntime.Run(ctx, runtimeRequest, agentruntime.Bridge(bridge))
 }

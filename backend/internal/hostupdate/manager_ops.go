@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -246,6 +247,7 @@ func (m *Manager) restartSelf() {
 type deploymentImages struct {
 	backend string
 	web     string
+	agent   string
 }
 
 func immutableImageRefs(repository, version string) deploymentImages {
@@ -254,6 +256,7 @@ func immutableImageRefs(repository, version string) deploymentImages {
 	return deploymentImages{
 		backend: "ghcr.io/" + owner + "/open-ai-canvas-backend:" + tag,
 		web:     "ghcr.io/" + owner + "/open-ai-canvas-web:" + tag,
+		agent:   "ghcr.io/" + owner + "/open-ai-canvas-yingce-agent:" + tag,
 	}
 }
 
@@ -329,12 +332,16 @@ func (m *Manager) writeComposeEnvOverride(images deploymentImages) (string, erro
 		cleanup()
 		return "", err
 	}
+	if err := setEnvValue(path, "CANVAS_YINGCE_AGENT_IMAGE", images.agent); err != nil {
+		cleanup()
+		return "", err
+	}
 	return path, nil
 }
 
 func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {
 	images := immutableImageRefs(m.config.Repository, targetVersion)
-	refs := []string{images.backend, images.web}
+	refs := []string{images.backend, images.web, images.agent}
 	digests := make([]string, 0, len(refs))
 	for _, image := range refs {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -362,7 +369,7 @@ func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {
 		}
 		digests = append(digests, digest)
 	}
-	return deploymentImages{backend: digests[0], web: digests[1]}, nil
+	return deploymentImages{backend: digests[0], web: digests[1], agent: digests[2]}, nil
 }
 
 func setDeploymentImages(path, version string, images deploymentImages) error {
@@ -372,7 +379,28 @@ func setDeploymentImages(path, version string, images deploymentImages) error {
 	if err := setEnvValue(path, "CANVAS_BACKEND_IMAGE", images.backend); err != nil {
 		return err
 	}
-	return setEnvValue(path, "CANVAS_WEB_IMAGE", images.web)
+	if err := setEnvValue(path, "CANVAS_WEB_IMAGE", images.web); err != nil {
+		return err
+	}
+	if err := setEnvValue(path, "CANVAS_YINGCE_AGENT_IMAGE", images.agent); err != nil {
+		return err
+	}
+	return ensureAgentToken(path)
+}
+
+func ensureAgentToken(path string) error {
+	values, err := readEnvFile(path)
+	if err != nil {
+		return err
+	}
+	if len(strings.TrimSpace(values["YINGCE_AGENT_TOKEN"])) >= 32 {
+		return nil
+	}
+	token := make([]byte, 32)
+	if _, err := rand.Read(token); err != nil {
+		return fmt.Errorf("生成 Agent 服务凭证：%w", err)
+	}
+	return setEnvValue(path, "YINGCE_AGENT_TOKEN", hex.EncodeToString(token))
 }
 
 func (m *Manager) createBackup(version string) (Backup, error) {

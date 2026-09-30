@@ -39,7 +39,6 @@ export function MarkdownNodeContent({ node, theme }: MarkdownNodeContentProps) {
             data-canvas-no-zoom
             style={{ color: theme.node.text }}
             onWheel={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
         >
             <AIMessageMarkdown>{source}</AIMessageMarkdown>
         </div>

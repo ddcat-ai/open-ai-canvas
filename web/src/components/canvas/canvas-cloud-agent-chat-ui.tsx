@@ -934,9 +934,25 @@ export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (t
     );
 }
 
-export function AgentPlanBar({ items, theme, minimized, onToggle, terminal = false }: { items: CloudAgentPlanItem[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; minimized: boolean; onToggle: () => void; terminal?: boolean }) {
+export function AgentPlanBar({
+    items,
+    theme,
+    minimized,
+    onToggle,
+    terminal: runEnded = false,
+    waitingUser = false,
+}: {
+    items: CloudAgentPlanItem[];
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    minimized: boolean;
+    onToggle: () => void;
+    terminal?: boolean;
+    /** 本轮停在 ask_user 等用户拍板：清单是暂停，不是停止。 */
+    waitingUser?: boolean;
+}) {
     const doneCount = items.filter((entry) => entry.status === "done").length;
     const allDone = doneCount === items.length;
+    const terminal = runEnded && !waitingUser;
     return (
         <div className="agent-plan-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
             <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2" aria-expanded={!minimized} onClick={onToggle}>
@@ -945,6 +961,7 @@ export function AgentPlanBar({ items, theme, minimized, onToggle, terminal = fal
                 <span className="text-[11px] tabular-nums opacity-50">
                     {doneCount}/{items.length}
                 </span>
+                {waitingUser && !allDone ? <span className="shrink-0 text-[10px] opacity-55">等待你确认后继续</span> : null}
                 {terminal && !allDone ? <span className="shrink-0 text-[10px] opacity-55">本轮已结束，未完成项已停止</span> : null}
                 <span className="min-w-0 flex-1" />
                 <span className="shrink-0 text-[11px] opacity-50">{minimized ? "展开" : "收起"}</span>
@@ -959,7 +976,7 @@ export function AgentPlanBar({ items, theme, minimized, onToggle, terminal = fal
                         return (
                             <li key={entry.id} className="flex min-w-0 items-start gap-1.5 text-xs">
                                 <Icon
-                                    className={doing && !terminal ? "mt-[3px] size-3 shrink-0 animate-spin" : "mt-[3px] size-3 shrink-0"}
+                                    className={doing && !terminal && !waitingUser ? "mt-[3px] size-3 shrink-0 animate-spin" : "mt-[3px] size-3 shrink-0"}
                                     style={{ color: done ? "#429477" : terminal ? theme.node.muted : doing ? theme.accent.primary : theme.node.muted }}
                                 />
                                 <span className={done ? "min-w-0 break-words line-through opacity-50" : terminal ? "min-w-0 break-words opacity-55" : "min-w-0 break-words"}>{entry.title}</span>

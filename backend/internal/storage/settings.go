@@ -11,7 +11,7 @@ const (
 	qiniuKodoProvider    = "qiniu"
 	s3Provider           = "s3"
 	defaultOSSPathPrefix = "open-ai-canvas"
-	resourceAccessURLTTL = 5 * time.Minute
+	resourceAccessURLTTL = 4 * time.Hour
 )
 
 type Settings struct {

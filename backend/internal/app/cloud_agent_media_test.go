@@ -619,7 +619,9 @@ func TestCloudAgentMediaPreviousDraftRequiresNewApproval(t *testing.T) {
 	}
 }
 
-func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
+// 界面承诺“图片、视频始终先创建草稿，再经独立审批才提交”：auto 也必须先审批，
+// 审批前不建任务、不扣费；批准后恰好提交一次。
+func TestCloudAgentAutoMediaRequiresApprovalBeforeSubmit(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	// Omitted size and duration should be filled by the selected model's catalog
 	// defaults during admission instead of producing a repair turn.
@@ -638,16 +640,28 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run.Status == "waiting_approval" || state.Approval != nil {
-		t.Fatalf("auto mode unexpectedly requested approval: status=%s approval=%+v", run.Status, state.Approval)
+	if run.Status != "waiting_approval" || state.Approval == nil {
+		t.Fatalf("auto mode submitted media without approval: status=%s", run.Status)
+	}
+	var pendingTasks, pendingOrders int64
+	db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&pendingTasks)
+	db.Model(&model.BillingOrder{}).Count(&pendingOrders)
+	if pendingTasks != 0 || pendingOrders != ordersBefore {
+		t.Fatalf("charged/submitted before approval: tasks=%d orders=%d before=%d", pendingTasks, pendingOrders, ordersBefore)
+	}
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = s.repo.CloudAgent("user", run.ID)
+	state, err = cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if state.MediaTaskID == "" {
-		t.Fatalf("auto mode did not submit a media task: %+v", state.Events)
-	}
-	for _, event := range state.Events {
-		if event.Type == "approval_requested" {
-			t.Fatal("auto mode emitted an approval event")
-		}
+		t.Fatalf("approved auto media was not submitted: status=%s", run.Status)
 	}
 	task, err := s.repo.TaskForUser("user", state.MediaTaskID)
 	if err != nil {
@@ -665,7 +679,7 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 	nodes, _ := creationObjects(doc["nodes"])
 	meta, _ := nodes[a.NodeID]["metadata"].(map[string]any)
 	if meta["status"] != "loading" || meta["taskId"] != task.ID || meta["agentDraftRunId"] != nil {
-		t.Fatalf("auto submission did not finalize the draft: %+v", meta)
+		t.Fatalf("approved submission did not finalize the draft: %+v", meta)
 	}
 	var tasks, orders int64
 	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
@@ -675,7 +689,7 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	if tasks != 1 || orders != ordersBefore+1 {
-		t.Fatalf("auto submission created unexpected records: tasks=%d orders=%d before=%d", tasks, orders, ordersBefore)
+		t.Fatalf("approved submission created unexpected records: tasks=%d orders=%d before=%d", tasks, orders, ordersBefore)
 	}
 	// Re-entering a submitted call is idempotent and must not reserve/submit a
 	// second generation.
@@ -686,7 +700,7 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	if tasks != 1 {
-		t.Fatalf("re-entering auto media duplicated task: %d", tasks)
+		t.Fatalf("re-entering approved media duplicated task: %d", tasks)
 	}
 
 	// Admission failures are still non-billed tool failures and do not create an

@@ -149,6 +149,17 @@ func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.Clou
 	})
 	return &run, err
 }
+
+// CloudAgentIDsWaitingApprovalForCanvas lists the caller's runs paused on an
+// approval for one canvas. Callers reload each run before mutating it.
+func (r *Repository) CloudAgentIDsWaitingApprovalForCanvas(userID, canvasID string) ([]string, error) {
+	var ids []string
+	err := r.db.Model(&model.CloudAgentExecution{}).
+		Where("user_id = ? AND canvas_id = ? AND status = ?", userID, canvasID, "waiting_approval").
+		Order("id").Limit(20).Pluck("id", &ids).Error
+	return ids, err
+}
+
 func (r *Repository) CloudAgentRoots() ([]model.Task, error) {
 	var tasks []model.Task
 	err := r.db.Where("operation = ? AND id NOT IN (SELECT id FROM cloud_agent_executions)", "cloud_agent").Order("created_at").Limit(50).Find(&tasks).Error

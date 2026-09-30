@@ -18,6 +18,32 @@
 
 ## 2. 开始工作前
 
+### Agent 本地开发
+
+详细说明请参考 [docs/AGENT_LOCAL_DEVELOPMENT.md](docs/AGENT_LOCAL_DEVELOPMENT.md)。
+
+**快速启动**：
+
+```bash
+# 1. 安装 Agent runtime 依赖
+cd backend/agent-runtime/pi && npm install && cd ../../..
+
+# 2. 启动后端（自动使用嵌入模式）
+cd backend
+CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug go run ./cmd/server
+
+# 3. 启动前端
+cd web && bun run dev
+```
+
+本地开发不设置 `YINGCE_AGENT_URL` 时，后端在本进程内启动 Node，无需单独启动 yingce-agent。
+
+生产 Compose 设置 `YINGCE_AGENT_URL` 后只调用 yingce-agent 容器。远程服务失败时不要回退到内嵌进程，否则同一步可能执行两次。不要删除 `yingce-agent/` 或把它从发布流程里撤掉。
+
+---
+
+### 其他本地开发说明
+
 1. 先读取任务涉及的入口、调用方、配置、锁文件和相邻测试；先理解现状，再决定是否抽象或重构。
 2. 使用 `rg` / `rg --files` 搜索，优先并行读取相关文件。不要为了“统一风格”改动无关模块、依赖、格式或用户已有修改。
 3. 先形成目标边界：页面负责什么、service 负责什么、handler/service/repository 如何分层、数据和错误如何流动。新增 helper 必须消除真实重复或隔离明确协议，不能只透传参数。

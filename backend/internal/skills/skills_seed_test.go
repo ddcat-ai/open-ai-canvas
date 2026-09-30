@@ -2,6 +2,7 @@ package skills
 
 import (
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
@@ -10,6 +11,24 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+// 总纲名录里写死的 `cards/…` 路径会被 Agent 直接交给 skill_read_file；
+// 包里缺卡时只会在运行时报「读取参考资料失败」，所以在这里提前拦住。
+func TestBuiltinPackagesShipReferencedCards(t *testing.T) {
+	packages, err := loadBuiltinSkillPackages(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 只认具体文件名；`cards/<slug>.md` 这类占位写法不算引用。
+	reference := regexp.MustCompile("`(cards/[^`<>\\s]+\\.md)`")
+	for _, item := range packages {
+		for _, match := range reference.FindAllStringSubmatch(string(item.archive.Files["SKILL.md"]), -1) {
+			if _, ok := item.archive.Files[match[1]]; !ok {
+				t.Errorf("builtin skill %s (%s) references missing %s", item.skill.ID, item.skill.Name, match[1])
+			}
+		}
+	}
+}
 
 func TestBuiltinMarkdownPackagesPreserveHistoryAndUserState(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "skills.db")), &gorm.Config{})

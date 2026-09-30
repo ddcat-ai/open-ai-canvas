@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -70,7 +70,7 @@ func (s *Service) cloudAgentRefreshStepSnapshotHash(run *model.CloudAgentExecuti
 			return call
 		}
 		call = cloudAgentRewriteCallSnapshotHash(call, latest)
-		log.Printf("agent step hash filled: run=%s step=%d index=%d tool=%s", run.ID, state.Step, state.CallIndex, call.Function.Name)
+		slog.Debug("agent step hash filled", "run", run.ID, "step", state.Step, "index", state.CallIndex, "tool", call.Function.Name)
 		return call
 	}
 	baseline := state.StepSnapshotHash
@@ -118,6 +118,6 @@ func (s *Service) cloudAgentRefreshStepSnapshotHash(run *model.CloudAgentExecuti
 		return call
 	}
 	call = cloudAgentRewriteCallSnapshotHash(call, latest)
-	log.Printf("agent step hash refreshed: run=%s step=%d index=%d tool=%s", run.ID, state.Step, state.CallIndex, call.Function.Name)
+	slog.Debug("agent step hash refreshed", "run", run.ID, "step", state.Step, "index", state.CallIndex, "tool", call.Function.Name)
 	return call
 }

@@ -27,6 +27,7 @@ type (
 	AdminAuditPage                         = app.AdminAuditPage
 	AdminCacheClearGroupResult             = app.AdminCacheClearGroupResult
 	AdminCacheClearRequest                 = app.AdminCacheClearRequest
+	AgentSessionLimitRequest               = app.AgentSessionLimitRequest
 	AdminCacheClearResult                  = app.AdminCacheClearResult
 	AdminChannelModelFetchResult           = app.AdminChannelModelFetchResult
 	AdminChannelModelImportRequest         = app.AdminChannelModelImportRequest

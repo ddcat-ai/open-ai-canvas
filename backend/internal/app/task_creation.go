@@ -209,6 +209,10 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 	s.recordActivity(userID, "task", 1)
 	_ = s.log(userID, task.ID, "info", "任务已进入队列", "")
+	if req.admission == nil {
+		// 用户直接在节点上生成时，关闭 Agent 对同一节点仍在等待的生成审批。
+		s.supersedeCloudAgentApprovalsForNodeTask(userID, &task, normalizedInput)
+	}
 	return taskForOutput(task), nil
 }
 

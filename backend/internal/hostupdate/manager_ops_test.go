@@ -172,7 +172,7 @@ func TestWriteComposeEnvOverrideReplacesImageRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := &Manager{config: Config{InstallDir: installDir, EnvFile: ".env", StateDir: stateDir}}
-	path, err := manager.writeComposeEnvOverride(deploymentImages{backend: "new-backend", web: "new-web"})
+	path, err := manager.writeComposeEnvOverride(deploymentImages{backend: "new-backend", web: "new-web", agent: "new-agent"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestWriteComposeEnvOverrideReplacesImageRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 	value := string(data)
-	if !strings.Contains(value, "CANVAS_BACKEND_IMAGE=new-backend\n") || !strings.Contains(value, "CANVAS_WEB_IMAGE=new-web\n") || !strings.Contains(value, "POSTGRES_DB=canvas\n") {
+	if !strings.Contains(value, "CANVAS_BACKEND_IMAGE=new-backend\n") || !strings.Contains(value, "CANVAS_WEB_IMAGE=new-web\n") || !strings.Contains(value, "CANVAS_YINGCE_AGENT_IMAGE=new-agent\n") || !strings.Contains(value, "POSTGRES_DB=canvas\n") {
 		t.Fatalf("unexpected override env: %q", value)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -403,7 +403,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			return nil, err
 		}
 		if superseded {
-			log.Printf("agent run %s cannot resume after a contract change; continuing in a new turn", parentID)
+			slog.Info("agent run cannot resume after a contract change; continuing in a new turn", "run", parentID)
 		} else if !cloudAgentRunTerminal(parentRun.Status) || parentRun.CleanupPending {
 			return nil, kernel.NewAppError(409, "上一轮 Agent 尚未结束")
 		}

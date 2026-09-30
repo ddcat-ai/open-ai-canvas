@@ -3,14 +3,18 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	agentruntime "infinite-canvas/backend/internal/agent/runtime"
+	"infinite-canvas/backend/internal/agent/yingceagent"
 	"infinite-canvas/backend/internal/buildinfo"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/platform"
 	"infinite-canvas/backend/internal/repository"
 
 	"github.com/redis/go-redis/v9"
@@ -28,7 +32,21 @@ type AdminSystemPerformance struct {
 	Disk        SystemPerformanceDisk           `json:"disk"`
 	Database    repository.DatabaseRuntimeStats `json:"database"`
 	Redis       SystemPerformanceRedis          `json:"redis"`
+	Agents      []SystemPerformanceAgent        `json:"agents"`
 	Build       buildinfo.Info                  `json:"build"`
+}
+
+type SystemPerformanceAgent struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Mode            string `json:"mode"`
+	Endpoint        string `json:"endpoint"`
+	Healthy         bool   `json:"healthy"`
+	Active          int    `json:"active"`
+	Limit           int    `json:"limit"`
+	Queued          int    `json:"queued"`
+	ConfiguredLimit int    `json:"configuredLimit"`
+	StatusMessage   string `json:"statusMessage,omitempty"`
 }
 
 type SystemPerformanceHost struct {
@@ -149,15 +167,96 @@ func (s *Service) AdminSystemPerformance(ctx context.Context, actor *model.User)
 	disk := collectSystemDisk(s.dataDir)
 	databaseStats, databaseErr := s.repo.DatabaseRuntimeStats(ctx)
 	redisStats := s.collectRedisPerformance(ctx)
+	agents := s.collectAgentServices(ctx)
 	status := "healthy"
-	if databaseErr != nil || !databaseStats.Connected || !disk.Available || !disk.Writable || s.ValidateRuntime() != nil || (redisStats.Configured && !redisStats.Connected) {
+	if databaseErr != nil || !databaseStats.Connected || !disk.Available || !disk.Writable || s.ValidateRuntime() != nil || (redisStats.Configured && !redisStats.Connected) || agentServicesDegraded(agents) {
 		status = "degraded"
 	}
 	return &AdminSystemPerformance{
 		CollectedAt: time.Now(), Status: status,
 		Host:   SystemPerformanceHost{Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, CPUCores: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), ProcessID: os.Getpid(), UptimeSeconds: int64(time.Since(systemProcessStartedAt).Seconds()), Goroutines: runtime.NumGoroutine(), ActiveWorkerTasks: s.ActiveWorkerTasks(), LoadAverage: load, LoadAverageAvailable: loadAvailable},
-		Memory: memory, Disk: disk, Database: databaseStats, Redis: redisStats, Build: buildinfo.Current(),
+		Memory: memory, Disk: disk, Database: databaseStats, Redis: redisStats, Agents: agents, Build: buildinfo.Current(),
 	}, nil
+}
+
+type AgentSessionLimitRequest struct {
+	MaxSessions int `json:"maxSessions"`
+}
+
+func (s *Service) UpdateAgentSessionLimit(ctx context.Context, actor *model.User, maxSessions int) (*SystemPerformanceAgent, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	if maxSessions < platform.MinRuntimeAgentSessions || maxSessions > platform.MaxRuntimeAgentSessions {
+		return nil, BadAuthRequest(fmt.Sprintf("Agent 同时对话上限必须是 %d-%d 的整数", platform.MinRuntimeAgentSessions, platform.MaxRuntimeAgentSessions))
+	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	policy.Task.AgentMaxSessions = maxSessions
+	if _, err := s.UpdateRuntimePolicySetting(actor, policy); err != nil {
+		return nil, err
+	}
+	if err := s.applyAgentSessionLimit(ctx, maxSessions); err != nil {
+		return nil, err
+	}
+	agents := s.collectAgentServices(ctx)
+	if len(agents) == 0 {
+		return nil, fmt.Errorf("Agent 服务状态不可用")
+	}
+	return &agents[0], nil
+}
+
+func (s *Service) applyAgentSessionLimit(ctx context.Context, maxSessions int) error {
+	agentruntime.SetProcessLimit(maxSessions)
+	endpoint := strings.TrimSpace(os.Getenv("YINGCE_AGENT_URL"))
+	if endpoint == "" {
+		return nil
+	}
+	return yingceagent.SetLimit(ctx, endpoint, os.Getenv("YINGCE_AGENT_TOKEN"), maxSessions)
+}
+
+func (s *Service) collectAgentServices(ctx context.Context) []SystemPerformanceAgent {
+	configured := platform.DefaultRuntimeAgentSessions
+	if policy, err := s.RuntimePolicy(); err == nil && policy.Task.AgentMaxSessions > 0 {
+		configured = policy.Task.AgentMaxSessions
+	}
+	endpoint := strings.TrimSpace(os.Getenv("YINGCE_AGENT_URL"))
+	if endpoint == "" {
+		active, limit := agentruntime.ProcessUsage()
+		return []SystemPerformanceAgent{{
+			ID: "embedded", Name: "画布 Agent", Mode: "embedded", Endpoint: "本进程",
+			Healthy: true, Active: active, Limit: limit, ConfiguredLimit: configured,
+			StatusMessage: "本地开发由后端进程直接启动，不单独占用容器。",
+		}}
+	}
+	service := SystemPerformanceAgent{
+		ID: "yingce-agent", Name: "画布 Agent", Mode: "remote", Endpoint: endpoint,
+		ConfiguredLimit: configured,
+	}
+	status, err := yingceagent.Inspect(ctx, endpoint)
+	if err != nil {
+		service.StatusMessage = "独立 Agent 服务不可达。正在进行的对话会失败，不会自动改回本进程执行。"
+		return []SystemPerformanceAgent{service}
+	}
+	service.Healthy = status.OK
+	service.Active = status.Active
+	service.Limit = status.Limit
+	service.Queued = status.Queued
+	if status.Limit != configured {
+		service.StatusMessage = "运行中的上限与已保存配置不一致，重新保存一次即可应用。"
+	}
+	return []SystemPerformanceAgent{service}
+}
+
+func agentServicesDegraded(agents []SystemPerformanceAgent) bool {
+	for _, agent := range agents {
+		if !agent.Healthy {
+			return true
+		}
+	}
+	return false
 }
 
 func collectSystemMemory() SystemPerformanceMemory {

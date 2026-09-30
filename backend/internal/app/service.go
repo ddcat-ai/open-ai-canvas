@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -166,6 +167,7 @@ func (s *Service) StartWorker() {
 	s.startResourceDeletionWorker(ctx)
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
+	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
@@ -178,6 +180,19 @@ func (s *Service) StartWorker() {
 			}
 		}
 	})
+}
+
+func (s *Service) syncAgentSessionLimit() {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		slog.Warn("agent session limit load failed", "error", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.applyAgentSessionLimit(ctx, policy.Task.AgentMaxSessions); err != nil {
+		slog.Warn("agent session limit apply failed", "error", err)
+	}
 }
 
 func (s *Service) BeginDrain() { s.backgroundWorkers().BeginDrain() }
