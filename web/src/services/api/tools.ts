@@ -82,3 +82,57 @@ export function createTool(input: ToolMutationInput) {
 export function deleteTool(id: number) {
     return http.delete<{ deleted: boolean }>(`/tools/${encodeURIComponent(String(id))}`);
 }
+
+// 后台工具管理：可查询禁用/私有工具，不受用户侧可见性约束。
+export type AdminToolListInput = {
+    page?: number;
+    pageSize?: number;
+    type?: ToolType | string;
+    source?: ToolSource | string;
+    enabled?: boolean;
+    search?: string;
+};
+
+export type AdminToolUpdateInput = {
+    enabled?: boolean;
+    visibility?: ToolVisibility;
+    sortWeight?: number;
+};
+
+export type AdminToolList = {
+    tools: ToolSummary[];
+    totalCount: number;
+    page: number;
+    pageSize: number;
+};
+
+export function listAdminTools(input: AdminToolListInput = {}, config?: HttpRequestConfig) {
+    const params = serializeApiParams(compactApiParams(input as ApiParams));
+    return http.get<AdminToolList>(`/admin/tools?${params.toString()}`, config);
+}
+
+export function getAdminTool(id: number, config?: HttpRequestConfig) {
+    return http.get<ToolItem>(`/admin/tools/${encodeURIComponent(String(id))}`, config);
+}
+
+export type AdminToolMutationInput = ToolMutationInput & {
+    source?: ToolSource;
+    enabled?: boolean;
+    sortWeight?: number;
+};
+
+export function createAdminTool(input: AdminToolMutationInput) {
+    return http.post<ToolItem>("/admin/tools", input);
+}
+
+export function editAdminTool(id: number, input: AdminToolMutationInput) {
+    return http.put<ToolItem>(`/admin/tools/${encodeURIComponent(String(id))}`, input);
+}
+
+export function updateAdminTool(id: number, input: AdminToolUpdateInput) {
+    return http.patch<ToolSummary>(`/admin/tools/${encodeURIComponent(String(id))}`, input);
+}
+
+export function deleteAdminTool(id: number) {
+    return http.delete<{ deleted: boolean }>(`/admin/tools/${encodeURIComponent(String(id))}`);
+}
