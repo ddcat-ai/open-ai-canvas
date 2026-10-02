@@ -18,6 +18,7 @@ var officialPaymentPackageIDs = []string{
 	"official-payment-xunhupay",
 	"official-payment-zhifufm",
 	"official-payment-epay",
+	"official-payment-huifu-h5",
 }
 
 var officialPaymentTaggedArtifacts = []string{
