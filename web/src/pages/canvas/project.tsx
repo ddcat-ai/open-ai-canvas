@@ -17,7 +17,7 @@ import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
 import copyToClipboard from "copy-to-clipboard";
 import { nanoid } from "nanoid";
-import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, writeCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
+import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, resolveCanvasConnectionAppearance, writeCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { persistCanvasMediaPerformanceMode, readCanvasMediaPerformanceMode } from "@/lib/canvas/canvas-performance-mode";
 import { filterCanvasDisplayConnections, persistCanvasHideNodeConnections, readCanvasHideNodeConnections } from "@/lib/canvas/canvas-connection-visibility";
@@ -328,6 +328,7 @@ function InfiniteCanvasPage() {
     }, [canvasStorageScope, projectId]);
 
     const resolvedCanvasAppearance = useMemo(() => resolveCanvasAppearance(canvasAppearance, colorTheme), [canvasAppearance, colorTheme]);
+    const connectionStyle = useMemo(() => resolveCanvasConnectionAppearance(canvasAppearance), [canvasAppearance]);
     const applyCanvasAppearance = useCallback(
         (next: CanvasAppearance) => {
             const fallback = canvasAppearanceBaseTheme(next, colorTheme);
@@ -2616,6 +2617,7 @@ function InfiniteCanvasPage() {
                                             viewport={viewport}
                                             theme={theme}
                                             displayConnections={visibleDisplayConnections}
+                                            connectionStyle={connectionStyle}
                                             selectedConnectionId={selectedConnectionId}
                                             relatedConnectionIds={relatedHighlight.connectionIds}
                                             scriptScrollTopById={scriptScrollTopById}
@@ -2650,6 +2652,7 @@ function InfiniteCanvasPage() {
                                                 viewportScale={viewport.k}
                                                 connectionLayerBounds={connectionLayerBounds}
                                                 displayConnections={visibleDisplayConnections}
+                                                connectionStyle={connectionStyle}
                                                 selectedConnectionId={selectedConnectionId}
                                                 relatedConnectionIds={relatedHighlight.connectionIds}
                                                 scriptScrollTopById={scriptScrollTopById}

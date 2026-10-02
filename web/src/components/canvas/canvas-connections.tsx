@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
+import { DEFAULT_CANVAS_CONNECTION_STYLE, type CanvasConnectionStyle } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
@@ -14,6 +15,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     fromScrollTop = 0,
     toScrollTop = 0,
     active,
+    connectionStyle = DEFAULT_CANVAS_CONNECTION_STYLE,
     visualMode = "full",
     hideVisual = false,
     onSelect,
@@ -25,6 +27,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     fromScrollTop?: number;
     toScrollTop?: number;
     active: boolean;
+    connectionStyle?: CanvasConnectionStyle;
     visualMode?: "full" | "hover-only";
     hideVisual?: boolean;
     onSelect: () => void;
@@ -36,6 +39,13 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || hovered);
     const showEmphasis = !hideVisual && emphasized;
+    const showFlow = showEmphasis && (visualMode === "full" || hovered || active);
+    const connectionOpacity = connectionStyle.opacity / 100;
+    const mainStrokeWidth = emphasized ? Math.max(connectionStyle.width * 1.4, connectionStyle.width + 0.8) : connectionStyle.width;
+    const underlayStrokeWidth = emphasized ? connectionStyle.width + 3 : connectionStyle.width + 1.5;
+    const flowStrokeWidth = Math.max(1, connectionStyle.width * 1.1);
+    const cometStrokeWidth = Math.max(1.2, connectionStyle.width * 1.3);
+    const mainStrokeOpacity = emphasized ? Math.max(connectionOpacity, 0.92) : connectionOpacity;
     const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
     return (
@@ -59,9 +69,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             {showEmphasis ? <path
                 d={pathD}
                 stroke={theme.accent.primary}
-                strokeWidth="8"
+                strokeWidth={Math.max(4, connectionStyle.width * 4)}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={0.18}
+                strokeOpacity={Math.max(0.12, connectionOpacity * 0.24)}
                 fill="none"
                 strokeLinecap="round"
                 style={{ pointerEvents: "none", filter: "blur(3px)" }}
@@ -89,9 +99,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             {showVisual ? <path
                 d={pathD}
                 stroke={theme.node.muted}
-                strokeWidth={emphasized ? 5 : 3.5}
+                strokeWidth={underlayStrokeWidth}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.18 : 0.16}
+                strokeOpacity={emphasized ? Math.max(0.14, connectionOpacity * 0.24) : connectionOpacity * 0.2}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -100,25 +110,25 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             {showVisual ? <path
                 d={pathD}
                 stroke={emphasized ? theme.accent.primary : theme.node.muted}
-                strokeWidth={emphasized ? 2.8 : 2}
+                strokeWidth={mainStrokeWidth}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity={emphasized ? 0.95 : 0.8}
+                strokeOpacity={mainStrokeOpacity}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
             {showVisual ? <>
-                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
-                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
-            {showVisual && emphasized ? <path
+            {showFlow ? <path
                 className="canvas-connection-flow"
                 d={pathD}
                 stroke={`url(#${gradientId})`}
-                strokeWidth="2.2"
+                strokeWidth={flowStrokeWidth}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity="0.84"
+                strokeOpacity={Math.max(0.6, connectionOpacity)}
                 strokeDasharray="18 26"
                 fill="none"
                 strokeLinecap="round"
@@ -127,11 +137,11 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
             {/* 流光：一小段高亮沿路径跑。周期与虚线流动刻意不同（2.1s vs 1.25s），
                 两者错拍才像有光在走；同频会锁成一条整体平移的虚线。 */}
-            {showEmphasis ? <path
+            {showFlow ? <path
                 className="canvas-connection-comet"
                 d={pathD}
                 stroke={`url(#${gradientId}-comet)`}
-                strokeWidth="2.6"
+                strokeWidth={cometStrokeWidth}
                 vectorEffect="non-scaling-stroke"
                 strokeDasharray="16 118"
                 fill="none"
@@ -140,7 +150,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
         </g>
     );
-}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
+}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.connectionStyle === next.connectionStyle && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
 
 export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0) {
     const startX = from.position.x + from.width;
