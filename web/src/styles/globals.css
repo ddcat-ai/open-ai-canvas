@@ -647,6 +647,12 @@
     text-align: center;
 }
 
+.site-compliance-footer > span {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
 .site-compliance-footer a {
     display: inline-flex;
     align-items: center;

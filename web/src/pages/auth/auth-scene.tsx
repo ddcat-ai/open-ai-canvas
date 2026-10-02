@@ -103,38 +103,40 @@ export function AuthScene() {
                     </motion.div>
                 </section>
 
-                <section className="auth-scene-form-pane relative flex min-h-[660px] items-start justify-center overflow-y-auto px-4 pb-24 pt-20 sm:px-8 lg:min-h-0 lg:px-10 lg:pb-24 lg:pt-20">
+                <section className="auth-scene-form-pane relative flex min-h-[660px] flex-col items-center overflow-y-auto px-4 pt-20 sm:px-8 lg:min-h-0 lg:px-10 lg:pt-20">
                     <Link to="/" className="auth-scene-return absolute right-5 top-5 z-20 inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs backdrop-blur-xl transition lg:right-8 lg:top-8">
                         <ArrowLeft className="size-3.5" />
                         返回首页
                     </Link>
 
-                    <motion.div
-                        initial={reducedMotion ? false : { opacity: 0, y: 14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        layout={!reducedMotion}
-                        transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
-                        className="my-auto w-full max-w-[460px]"
-                    >
-                        <div className="auth-scene-card h-auto overflow-hidden rounded-lg backdrop-blur-2xl">
-                            <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "" : "min-h-[620px] sm:min-h-[640px]"}`}>
-                                <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
-                                    <p className="auth-scene-eyebrow text-xs font-semibold tracking-[0.18em]">{copy.eyebrow}</p>
-                                    <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
-                                    <p className="auth-scene-muted mt-2 text-sm leading-6">{copy.description}</p>
-                                </header>
-                                {!recovery ? (
-                                    <div className="px-6 sm:px-8">
-                                        <Tabs className="auth-card-tabs" activeKey={activeTab} items={AUTH_TABS} onChange={(key) => navigate({ pathname: key === "register" ? "/register" : "/login", search: location.search })} />
+                    <div className="flex w-full flex-1 items-center justify-center">
+                        <motion.div
+                            initial={reducedMotion ? false : { opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            layout={!reducedMotion}
+                            transition={{ duration: aceternityMotion.duration.panel, ease: aceternityMotion.easing.enter }}
+                            className="my-auto w-full max-w-[460px]"
+                        >
+                            <div className="auth-scene-card h-auto overflow-hidden rounded-lg backdrop-blur-2xl">
+                                <section aria-label={copy.title} className={`flex flex-col ${recovery ? "min-h-[600px]" : activeTab === "login" ? "" : "min-h-[620px] sm:min-h-[640px]"}`}>
+                                    <header className="px-6 pb-5 pt-6 sm:px-8 sm:pt-7">
+                                        <p className="auth-scene-eyebrow text-xs font-semibold tracking-[0.18em]">{copy.eyebrow}</p>
+                                        <h2 className="mt-2 text-3xl font-semibold">{copy.title}</h2>
+                                        <p className="auth-scene-muted mt-2 text-sm leading-6">{copy.description}</p>
+                                    </header>
+                                    {!recovery ? (
+                                        <div className="px-6 sm:px-8">
+                                            <Tabs className="auth-card-tabs" activeKey={activeTab} items={AUTH_TABS} onChange={(key) => navigate({ pathname: key === "register" ? "/register" : "/login", search: location.search })} />
+                                        </div>
+                                    ) : null}
+                                    <div key={location.pathname} className={`${!recovery && activeTab === "login" ? "" : "flex-1"} px-6 py-6 sm:px-8 sm:py-7`}>
+                                        <Outlet />
                                     </div>
-                                ) : null}
-                                <div key={location.pathname} className={`${!recovery && activeTab === "login" ? "" : "flex-1"} px-6 py-6 sm:px-8 sm:py-7`}>
-                                    <Outlet />
-                                </div>
-                            </section>
-                        </div>
-                    </motion.div>
-                    <SiteComplianceFooter variant="auth" className="absolute inset-x-0 bottom-0" />
+                                </section>
+                            </div>
+                        </motion.div>
+                    </div>
+                    <SiteComplianceFooter variant="auth" className="relative inset-auto w-full shrink-0" />
                 </section>
             </div>
         </main>
