@@ -26,6 +26,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 import { normalizeTimelineProject } from "@/lib/timeline/timeline-tracks";
 import { formatTimelineTime } from "@/lib/timeline/timeline-view";
 import { useEditorStoreContext } from "@/components/editor/editor-context";
+import { usePluginStore } from "@/stores/use-plugin-store";
 import type { TimelineProject } from "@/types/timeline";
 
 const EDITOR_TIMELINE_KEY = "editor-timeline";
@@ -43,8 +44,11 @@ function createEmptyEditorTimeline(): TimelineProject {
 /** 插槽堆叠：只渲染通过权限检查的插件贡献；无可用插件时显示明确的缺失能力提示。
  *  缺权限插件不渲染，改为一行诊断提示；无贡献时显示空态（停用插件可见）。 */
 function SlotStack({ slots, emptyHint }: { slots: EditorSlotRegistration[]; emptyHint: string }) {
-    const allowed = slots.filter((slot) => pluginMayRenderEditorSlot(slot.pluginId, slot.slot).allowed);
-    const denied = slots.filter((slot) => !pluginMayRenderEditorSlot(slot.pluginId, slot.slot).allowed);
+    const pluginStates = usePluginStore((state) => state.pluginStates);
+    // 插件停用（含未读到服务端状态）时不渲染其贡献，落到下方空态提示。
+    const enabledSlots = slots.filter((slot) => pluginStates[slot.pluginId]?.effectiveEnabled === true);
+    const allowed = enabledSlots.filter((slot) => pluginMayRenderEditorSlot(slot.pluginId, slot.slot).allowed);
+    const denied = enabledSlots.filter((slot) => !pluginMayRenderEditorSlot(slot.pluginId, slot.slot).allowed);
     if (allowed.length === 0 && denied.length === 0) {
         return (
             <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 px-4 text-center">
