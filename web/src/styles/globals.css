@@ -5680,7 +5680,10 @@ html:not(.dark) .creation-studio-control[aria-expanded="true"] { background: #e7
     .model-default-option.is-selected { background: var(--workspace-accent-soft); }
     .model-default-option-icon { background: color-mix(in srgb, var(--foreground) 5%, transparent); }
     .model-default-option.is-selected .model-default-option-icon { background: color-mix(in srgb, var(--workspace-surface-strong) 72%, transparent); }
-    .model-default-option-scope, .model-default-price { color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+    .model-default-option-copy { display: grid; min-width: 0; align-content: start; gap: 2px; padding-top: 0; }
+    .model-default-option-directory { display: block; min-width: 0; color: color-mix(in srgb, var(--foreground) 66%, transparent); font-size: var(--fs-label); font-weight: 520; line-height: 1.25; }
+    .model-default-option-meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-micro); line-height: 1.25; }
+    .model-default-option-scope, .model-default-price { color: inherit; font-variant-numeric: tabular-nums; }
     .model-default-option-check { background: color-mix(in srgb, var(--foreground) 7%, transparent); }
     .model-default-option-check.is-selected { background: var(--control-check-bg); color: var(--control-check-fg); }
 
@@ -17117,12 +17120,23 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     min-height: 36px;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+    max-width: 100%;
     border: 1px solid var(--user-border);
     border-radius: 11px;
     background: var(--user-surface-muted);
     padding: 0 11px;
     color: var(--user-ink-muted);
     font-size: 11px;
+}
+
+.workspace-wallet-provider-label {
+    display: block;
+    min-width: 0;
+    max-width: min(30ch, 100%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .workspace-wallet-providers button.is-selected {

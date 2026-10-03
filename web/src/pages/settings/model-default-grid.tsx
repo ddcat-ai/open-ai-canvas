@@ -2,6 +2,7 @@ import { AudioLines, Check, Film, Image, MessageSquareText } from "lucide-react"
 
 import { ModelIcon } from "@/components/model-picker";
 import { cn } from "@/lib/utils";
+import { modelChannelLabel } from "@/lib/model-picker-groups";
 import {
     filterModelsByCapability,
     modelDisplayName,
@@ -48,6 +49,7 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                             <div role="radiogroup" aria-label={group.title} className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {models.map((model) => {
                                     const channel = resolveModelChannel(config, model);
+                                    const directoryLabel = modelChannelLabel(config, model);
                                     const selected = config[group.modelKey] === model;
                                     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
                                     return (
@@ -66,10 +68,12 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                                                 <span className="model-default-option-icon grid size-8 shrink-0 place-items-center rounded-md">
                                                     <ModelIcon config={config} model={model} />
                                                 </span>
-                                                <span className="min-w-0 flex-1">
+                                                <span className="model-default-option-copy min-w-0 flex-1">
                                                     <span className="block truncate text-xs font-semibold">{modelDisplayName(config, model)}</span>
-                                                    <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[var(--fs-tiny)] text-foreground/45">
-                                                        <span className="max-w-full truncate">{channel.name || "未命名渠道"}</span>
+                                                    <span className="model-default-option-directory truncate" title={`二级目录：${directoryLabel}`}>
+                                                        {directoryLabel}
+                                                    </span>
+                                                    <span className="model-default-option-meta">
                                                         <span className="model-default-option-scope">{channel.scope === "system" ? "系统" : "自定义"}</span>
                                                         {creditsEnabled && cost ? <span className="model-default-price">{formatPrice(cost.billingMode === "token" ? (cost.outputTokenPriceMicrocredits || 0) : cost.unitPriceMicrocredits)} /{cost.billingMode === "token" ? "百万 Token" : cost.billingMode === "per_second" ? "秒" : "次"}</span> : null}
                                                     </span>

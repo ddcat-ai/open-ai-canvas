@@ -111,6 +111,21 @@
     transform: translateY(-1px);
 }
 .app-user-workspace .creation-launchpad .creation-reference-add-button:active:not(:disabled) { transform: scale(.97); }
+.app-user-workspace .creation-chat-control[aria-pressed="true"],
+.app-user-workspace .creation-chat-control[aria-pressed="true"]:hover {
+    background: var(--user-surface) !important;
+    color: var(--user-ink) !important;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--user-ink) 10%, transparent) !important;
+}
+.app-user-workspace .creation-chat-control[aria-pressed="true"] > svg { color: currentColor !important; }
+
+.dark .app-user-workspace .creation-chat-control[aria-pressed="true"],
+.dark .app-user-workspace .creation-chat-control[aria-pressed="true"]:hover {
+    background: var(--user-control-pressed) !important;
+    box-shadow: inset 0 0 0 1px var(--user-border-strong), 0 3px 12px rgba(0, 0, 0, .28) !important;
+}
+.dark .app-user-workspace .creation-chat-control[aria-pressed="true"] > svg { color: currentColor !important; }
+
 @keyframes creation-submit-sheen { to { transform: translateX(120%); } }
 @media (prefers-reduced-motion: reduce) {
     .creation-mode-button:active { transform: none; }

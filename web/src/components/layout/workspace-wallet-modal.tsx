@@ -352,7 +352,7 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
                                                         onClick={() => setSelectedProviderId(provider.id)}
                                                     >
                                                         <CreditCard />
-                                                        {provider.name}
+                                                        <span className="workspace-wallet-provider-label">{provider.name}</span>
                                                     </button>
                                                 ))}
                                             </div>
