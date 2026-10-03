@@ -21,6 +21,8 @@ func TestUserFacingTaskErrorMatchesCanvasNodeClassification(t *testing.T) {
 		{"rate limit", "HTTP 429", "服务当前繁忙，请稍后重试。"},
 		{"auth", "status 401", "生成服务鉴权失败，请检查渠道配置。"},
 		{"provider json", `接口请求失败：{"error":{"message":"图片尺寸不支持"}}`, "图片尺寸不支持"},
+		{"model capability", "所选模型不支持当前请求：当前模型不支持「参考素材生成视频」", "所选模型不支持当前生成方式或输入，请切换模型或调整输入后重试。"},
+		{"technical provider", "provider request failed: invalid_request_error", "模型服务处理失败，请稍后重试或换用其他模型。"},
 		{"moderation", "sensitive_words_detected", taskErrorModerationMessage},
 		{"storage", "参考图片上传失败：bucket denied", "参考素材上传到对象存储失败，请检查对象存储配置后重试。"},
 		{"readable chinese", "模型服务拒绝了请求，请检查模型和参数", "模型服务拒绝了请求，请检查模型和参数"},

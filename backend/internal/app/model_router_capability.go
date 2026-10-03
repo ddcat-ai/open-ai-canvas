@@ -271,7 +271,7 @@ func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityM
 		reasons = append(reasons, "能力类型不匹配")
 	}
 	if operation := normalizeCapabilityValue(intent.Operation); operation != "" && len(spec.Operations) > 0 && !containsNormalized(spec.Operations, operation) {
-		reasons = append(reasons, "不支持操作 "+intent.Operation)
+		reasons = append(reasons, "当前模型不支持「"+capabilityOperationLabel(operation)+"」")
 	}
 	for inputType, count := range intent.Inputs {
 		if count < 0 {
@@ -305,6 +305,31 @@ func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityM
 		}
 	}
 	return CapabilityMatch{Matched: len(reasons) == 0, Reasons: reasons}
+}
+
+func capabilityOperationLabel(name string) string {
+	switch normalizeCapabilityValue(name) {
+	case "text_to_image":
+		return "文生图"
+	case "image_to_image":
+		return "图生图"
+	case "text_to_video":
+		return "文生视频"
+	case "image_to_video":
+		return "图片生视频"
+	case "reference_to_video":
+		return "参考素材生成视频"
+	case "audio_to_video":
+		return "音频生视频"
+	case "extend":
+		return "视频续写"
+	case "inpaint":
+		return "局部修改"
+	case "style_transfer":
+		return "风格迁移"
+	default:
+		return "当前生成方式"
+	}
 }
 
 func capabilityInputLabel(name string) string {
