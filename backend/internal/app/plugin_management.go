@@ -15,6 +15,7 @@ const (
 	PluginAIArtCritique       = "ai-art-critique"
 	PluginMediaConversion     = "media-conversion"
 	PluginEditorShell         = "editor-shell"
+	PluginIgoStudio           = "igo-studio-ecommerce-agent"
 
 	PluginOriginOfficial = "official"
 	PluginOriginSystem   = "system"
@@ -84,6 +85,10 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
 	PluginEditorShell: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
+	},
+	PluginIgoStudio: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
+import { defaultModelCapabilityConfig, IMAGE_QUALITY_CAPABILITY_OPTIONS } from "../src/lib/model-capabilities";
 import { formatVideoResolutionLabel, normalizeVideoResolution, videoDimensionsForRatioAndResolution, videoResolutionComparisonKey, VIDEO_RESOLUTION_CAPABILITY_OPTIONS, VIDEO_RESOLUTION_OPTIONS } from "../src/lib/video-generation-options";
 
 describe("video generation resolution options", () => {
     test("统一档位包含 1440P 与 4K，并识别常见别名", () => {
-        expect(VIDEO_RESOLUTION_OPTIONS).toEqual([480, 720, 1080, 1440, 2160]);
-        expect(VIDEO_RESOLUTION_CAPABILITY_OPTIONS).toEqual(["480p", "720p", "1080p", "1440p", "2160p"]);
+        expect(VIDEO_RESOLUTION_OPTIONS).toEqual([480, 720, 768, 1080, 1440, 2160]);
+        expect(VIDEO_RESOLUTION_CAPABILITY_OPTIONS).toEqual(["480p", "720p", "768p", "1080p", "1440p", "2160p"]);
         expect(normalizeVideoResolution("2k")).toBe("1440");
         expect(normalizeVideoResolution("1440p")).toBe("1440");
         expect(normalizeVideoResolution("4K")).toBe("2160");
@@ -30,10 +30,28 @@ describe("video generation resolution options", () => {
     });
 
     test("按协议限制实际可选档位", () => {
-        expect(defaultModelCapabilityConfig("newapi-channel-2").video?.resolutions).toEqual(["480p", "720p", "1080p", "1440p", "2160p"]);
+        expect(defaultModelCapabilityConfig("newapi-channel-2").video?.resolutions).toEqual(["480p", "720p", "768p", "1080p", "1440p", "2160p"]);
         expect(defaultModelCapabilityConfig("volcengine-ark-video").video?.resolutions).toEqual(["480p", "720p", "1080p"]);
         expect(defaultModelCapabilityConfig("volcengine-jimeng-video").video?.resolutions).toEqual(["720p"]);
         expect(defaultModelCapabilityConfig("gemini-veo").video?.resolutions).toEqual(["720p", "1080p"]);
+        expect(defaultModelCapabilityConfig("grsai-minimax-h3").video?.resolutions).toEqual(["480p", "768p", "1080p"]);
+    });
+
+    test("全局图片质量档位包含 xhigh 与 max", () => {
+        expect(IMAGE_QUALITY_CAPABILITY_OPTIONS).toEqual(["auto", "low", "medium", "high", "xhigh", "max"]);
+        expect(defaultModelCapabilityConfig().image?.quality).toEqual({
+            supported: true,
+            values: ["auto", "low", "medium", "high", "xhigh", "max"],
+            default: "auto",
+        });
+    });
+
+    test("Grsai 图片协议公开完整质量档位", () => {
+        expect(defaultModelCapabilityConfig("grsai-gpt-image", "gpt-image-2.5").image?.quality).toEqual({
+            supported: true,
+            values: ["auto", "low", "medium", "high", "xhigh", "max"],
+            default: "auto",
+        });
     });
 
     test("火山方舟默认开启全模态参考模式", () => {

@@ -135,3 +135,37 @@ func TestRetryableProtocolMediaDownload(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskNeedsProviderMediaRepair(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		task   *model.Task
+		needed bool
+	}{
+		{name: "missing result", task: &model.Task{Type: "canvas_video", Status: model.TaskStatusSucceeded}, needed: true},
+		{name: "external result", task: &model.Task{Type: "canvas_video", Status: model.TaskStatusSucceeded, ResultJSON: `{"video":{"url":"https://cdn.example/video.mp4"}}`}, needed: true},
+		{name: "stored result", task: &model.Task{Type: "canvas_video", Status: model.TaskStatusSucceeded, ResultJSON: `{"video":{"url":"/api/resources/resource-1/file"}}`}, needed: false},
+		{name: "non-video task", task: &model.Task{Type: "canvas_image", Status: model.TaskStatusSucceeded}, needed: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := taskNeedsProviderMediaRepair(test.task); got != test.needed {
+				t.Fatalf("taskNeedsProviderMediaRepair() = %v, want %v", got, test.needed)
+			}
+		})
+	}
+}
+
+func TestAdminQuerySucceededVideoWithoutStoredMediaReportsRecoveryFailure(t *testing.T) {
+	service, db, _, _ := creationTestService(t)
+	actor := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	if err := db.Create(&model.Task{ID: "video-task", UserID: "user", Type: "canvas_video", Status: model.TaskStatusSucceeded, ResultJSON: `{"video":{"url":"https://example.invalid/video.mp4"}}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ApiCallLog{ID: "video-log", UserID: "user", TaskID: "video-task", Capability: "video"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.AdminQueryFailedVideoTask(context.Background(), actor, "video-log", "")
+	if err == nil || !strings.Contains(err.Error(), "没有可恢复的上游任务 ID") || result != nil {
+		t.Fatalf("admin recovery result = %#v, err = %v; missing provider ID must be reported", result, err)
+	}
+}

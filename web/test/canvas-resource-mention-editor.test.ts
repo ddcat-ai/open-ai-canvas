@@ -31,6 +31,16 @@ describe("canvas resource mention editor", () => {
         expect(component).not.toContain("size-[1.18em]");
     });
 
+    test("pastes clipboard images as files while Shift+Enter remains a newline", () => {
+        const component = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+
+        expect(component).toContain("onPasteFiles?: (files: File[]) => void");
+        expect(component).toContain("const clipboardImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith(\"image/\"))");
+        expect(component).toContain("onPasteFiles(clipboardImages)");
+        expect(component).toContain("if (event.key !== \"Enter\" || event.shiftKey) return false;");
+        expect(component).toContain("replaceEditableSelection(\"\\n\")");
+    });
+
     test("clamps native media dimensions so video previews cannot cover prompt text", () => {
         const css = source("../src/styles/globals.css");
         const previewRule = css.match(/\.canvas-resource-inline-preview \{[^}]+}/)?.[0] || "";

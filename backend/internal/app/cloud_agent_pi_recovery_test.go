@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 // 重启恢复：上一个运行时进程已为这一步建好模型任务、任务也已成功，但结果没交回。
@@ -103,5 +106,89 @@ func TestCloudAgentPiTurnSettled(t *testing.T) {
 		if got := cloudAgentPiTurnSettled(tc.jsonl, tc.state); got != tc.want {
 			t.Errorf("%s: settled = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestCloudAgentPiContinuationRequiresFreshAssistantResponse(t *testing.T) {
+	s, _, a := agentMediaFixture(t)
+	run, _ := agentMediaRun(t, s, a, "auto")
+	setResponses := func(count int) {
+		t.Helper()
+		current, err := s.repo.CloudAgent("user", run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, err := cloudAgentDecode(current)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state.PiAssistantResponses = count
+		if err := s.repo.MutateCloudAgent("user", run.ID, current.Revision, func(row *model.CloudAgentExecution, _ *repository.Repository) error {
+			return cloudAgentSave(row, &state)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setResponses(1)
+	if err := s.completeCloudAgentPiRun("user", run.ID, 1); err == nil {
+		t.Fatal("old assistant response completed a new turn")
+	}
+	current, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil || current.Status == "completed" {
+		t.Fatalf("continuation state=%#v err=%v", current, err)
+	}
+	setResponses(2)
+	if err := s.completeCloudAgentPiRun("user", run.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	current, err = s.repo.CloudAgent("user", run.ID)
+	if err != nil || current.Status != "completed" {
+		t.Fatalf("fresh response state=%#v err=%v", current, err)
+	}
+}
+
+func TestCloudAgentPiSessionRejectsEmptyContinuation(t *testing.T) {
+	for _, fresh := range []bool{false, true} {
+		t.Run(map[bool]string{false: "old-response-only", true: "fresh-response"}[fresh], func(t *testing.T) {
+			s, _, a := agentMediaFixture(t)
+			run, state := agentMediaRun(t, s, a, "auto")
+			state.PiAssistantResponses = 1
+			state.Calls = nil
+			if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(row *model.CloudAgentExecution, _ *repository.Repository) error {
+				row.Status = "running"
+				return cloudAgentSave(row, &state)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			// 只替换进程输出，仍经过真实会话入口、Node启动、HTTP事件桥和收尾事务。
+			script := `let input = ""; for await (const chunk of process.stdin) input += chunk;
+const request = JSON.parse(input);
+`
+			if fresh {
+				script += `const result = await fetch(request.bridgeURL + "/event", {method: "POST", headers: {"authorization": "Bearer " + request.bridgeToken, "content-type": "application/json"}, body: JSON.stringify({type: "message_end", role: "assistant"})});
+if (!result.ok) throw new Error("event rejected");
+`
+			}
+			script += `process.stdout.write('{"event":"settled"}\n');`
+			directory := t.TempDir()
+			if err := os.WriteFile(filepath.Join(directory, "agent-runtime.mjs"), []byte(script), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("CANVAS_PI_RUNTIME_DIR", directory)
+			t.Setenv("YINGCE_AGENT_URL", "")
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			err := s.runCloudAgentPiSession(ctx, "user", run.ID)
+			if fresh && err != nil {
+				t.Fatal(err)
+			}
+			if !fresh && (err == nil || !strings.Contains(err.Error(), "no new assistant response")) {
+				t.Fatalf("old response incorrectly completed continuation: %v", err)
+			}
+			stored, err := s.repo.CloudAgent("user", run.ID)
+			if err != nil || (stored.Status == "completed") != fresh {
+				t.Fatalf("session status=%#v err=%v", stored, err)
+			}
+		})
 	}
 }

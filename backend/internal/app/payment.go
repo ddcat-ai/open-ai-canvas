@@ -28,6 +28,7 @@ type PaymentProviderView struct {
 	PluginID          string `json:"pluginId"`
 	Name              string `json:"name"`
 	Icon              string `json:"icon"`
+	PayType           string `json:"payType"`
 	CheckoutMode      string `json:"checkoutMode"`
 	Enabled           bool   `json:"enabled"`
 	PluginEnabled     bool   `json:"pluginEnabled"`
@@ -118,7 +119,8 @@ type AdminPaymentOrderUser struct {
 
 type AdminPaymentOrderView struct {
 	PaymentOrderView
-	User *AdminPaymentOrderUser `json:"user"`
+	PayType string                 `json:"payType"`
+	User    *AdminPaymentOrderUser `json:"user"`
 }
 
 func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
@@ -181,10 +183,16 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	if errors.Is(err, repository.ErrTopupUnavailable) {
 		return nil, NewAppError(http.StatusConflict, "充值商品当前不可购买")
 	}
+	if errors.Is(err, repository.ErrPaymentIdempotencyConflict) {
+		return nil, NewAppError(http.StatusConflict, "支付幂等标识已用于不同的商品或支付渠道")
+	}
 	if err != nil {
 		return nil, err
 	}
 	if !created {
+		if order.ProductID != productID || order.ProviderID != providerID {
+			return nil, NewAppError(http.StatusConflict, "支付幂等标识已用于不同的商品或支付渠道")
+		}
 		view := paymentOrderView(*order)
 		return &view, nil
 	}
@@ -195,7 +203,7 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	}
 	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
 	checkout, err := provider.CreateOrder(ctx, values, payment.CreateRequest{
-		MerchantOrderNo: order.MerchantOrderNo, Description: product.Name, AmountFen: order.AmountFen,
+		MerchantOrderNo: order.MerchantOrderNo, Description: order.ProductName, AmountFen: order.AmountFen,
 		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
 		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
@@ -582,6 +590,11 @@ func (s *Service) AdminPaymentOrderPage(actor *model.User, query PaymentOrderQue
 	views := make([]AdminPaymentOrderView, 0, len(orders))
 	for _, order := range orders {
 		view := AdminPaymentOrderView{PaymentOrderView: paymentOrderView(order)}
+		payType, err := s.paymentOrderPayType(order)
+		if err != nil {
+			return nil, err
+		}
+		view.PayType = payType
 		if user, ok := users[order.UserID]; ok {
 			view.User = &AdminPaymentOrderUser{ID: user.ID, Username: user.Username, DisplayName: user.DisplayName, Email: user.Email}
 		}

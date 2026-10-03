@@ -42,7 +42,7 @@ func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgent
 	}
 	// 事件已全量落库，运行详情只返回一页：默认是尾部窗口，sinceSeq 只取增量。
 	// 四个位置字段与 events 一起返回，客户端据此判断"是否还有更早的记录"。
-	out.Events = s.cloudAgentRunEventsForView(task.UserID, run, &state, view.SinceSeq, view.EventLimit)
+	out.Events = s.cloudAgentRunEventsForView(task.UserID, run, &state, view.SinceSeq, view.EventLimit, view.FromStart)
 	// EventSeqBase 必须与真正返回的这一页对齐（eventLimit 把它收窄时也一样），
 	// 不变量 events[i].seq == eventSeqBase + i + 1 才成立。页为空时退回窗口水位：
 	// 那时没有"首条事件"，但仍然要能说明窗口在整条日志里的位置。
@@ -54,7 +54,7 @@ func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgent
 	if len(out.Events) > 0 {
 		out.LatestSeq = out.Events[len(out.Events)-1].Seq
 	}
-	if view.SinceSeq == 0 && len(out.Events) < out.EventCount {
+	if view.SinceSeq == 0 && !view.FromStart && len(out.Events) < out.EventCount {
 		out.EventsTruncated = true
 	}
 	out.Approval = state.Approval
@@ -242,7 +242,7 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 					eventType = "assistant_delta"
 					payload = map[string]any{"messageId": task.ID, "text": delta}
 				}
-				if err := s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+				if err := s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 					state.event(run.ID, eventType, payload)
 					state.ActiveTextDraft = task.TextDraft
 					return cloudAgentSave(current, &state)
@@ -290,7 +290,7 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		if cloudAgentStepTimedOut(task) && state.StepTimeoutEscalated < cloudAgentMaxStepTimeoutEscalations {
 			return s.correctCloudAgentStepTimeout(run, &state)
 		}
-		return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+		return s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 			if task.Status != model.TaskStatusSucceeded {
 				current.Status = "failed"
 				text, reason := cloudAgentModelFailure(task)
@@ -327,6 +327,10 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 						return cloudAgentSave(current, &state)
 					}
 					cloudAgentDropInterjections(run.ID, "本轮已达到模型调用上限", &state)
+				}
+				if state.CommerceBatch != nil && !cloudAgentStepBudgetExhausted(&state) {
+					state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "user", "content": cloudAgentCommerceRecoveryInstruction + " 先调用 commerce_plan_wait，不要提前结束。"})
+					return cloudAgentSave(current, &state)
 				}
 				if !cloudAgentStepBudgetExhausted(&state) && !state.ActionNudged {
 					if pending := cloudAgentPendingPlanItems(state.Plan); len(pending) > 0 {
@@ -390,7 +394,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		}
 		return contextErr
 	}
-	s.attachCloudAgentLessons(&canonical, run.UserID, cloudAgentLessonTaskText(&state))
+	if state.Request.Surface != "creation" {
+		s.attachCloudAgentLessons(&canonical, run.UserID, cloudAgentLessonTaskText(&state))
+	}
 	references, refErr := s.cloudAgentImageReferences(run.UserID, state.Request, &canonical)
 	if refErr != nil {
 		return s.failCloudAgent(run, &state, cloudAgentSafeToolError(refErr))
@@ -506,6 +512,12 @@ func (s *Service) terminateCloudAgent(run *model.CloudAgentExecution, message st
 	if run == nil {
 		return errors.New(message)
 	}
+	if run.ExecutionFence != nil {
+		return s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+			current.Status, current.FailureMessage, current.CleanupPending = "failed", message, true
+			return nil
+		})
+	}
 	if err := s.repo.MarkCloudAgentFailed(run.UserID, run.ID, run.Revision, message); err != nil && !errors.Is(err, repository.ErrCreationConflict) {
 		return err
 	}
@@ -513,7 +525,7 @@ func (s *Service) terminateCloudAgent(run *model.CloudAgentExecution, message st
 }
 
 func (s *Service) failCloudAgent(run *model.CloudAgentExecution, state *cloudAgentRuntime, message string) error {
-	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+	return s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 		current.Status = "failed"
 		current.FailureMessage = truncateRunes(message, 1000)
 		cloudAgentDropInterjections(run.ID, "本轮已结束："+truncateRunes(message, 120), state)

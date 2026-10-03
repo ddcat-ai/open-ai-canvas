@@ -47,6 +47,10 @@
 .creative-agent-custom-answer { display: flex; flex-direction: column; gap: var(--space-2); }
 .creative-agent-custom-answer > span { color: var(--muted-foreground); font-size: var(--fs-caption); }
 .creative-agent-proposal-summary { line-height: 1.8; }
+.creative-agent-style-lock { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--control-selected-border) 70%, var(--border)); border-radius: var(--control-radius); background: color-mix(in srgb, var(--control-selected-bg) 60%, var(--background)); }
+.creative-agent-style-lock p, .creative-agent-style-lock small { margin: 0; color: var(--muted-foreground); line-height: 1.6; }
+.creative-agent-style-lock strong { font-weight: 600; }
+.creative-agent-style-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); color: var(--muted-foreground); font-size: var(--fs-caption); line-height: 1.6; }
 .creative-agent-deliverables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 .creative-agent-deliverables li { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .creative-agent-deliverables span { color: var(--muted-foreground); font-size: var(--fs-caption); }

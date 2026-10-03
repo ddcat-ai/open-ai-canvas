@@ -32,6 +32,13 @@ type providerPayloadError struct {
 
 func (e providerPayloadError) Error() string { return e.message }
 
+// A complete provider response explicitly failed or contained no image output.
+// It is safe to stop polling that job and try another channel.
+type providerGenerationFailedError struct{ cause error }
+
+func (e providerGenerationFailedError) Error() string { return e.cause.Error() }
+func (e providerGenerationFailedError) Unwrap() error { return e.cause }
+
 type providerHTTPError struct {
 	StatusCode int
 	Status     string

@@ -99,18 +99,40 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	return skills, total, err
 }
 
-// 内置技能使用稳定的外部技能 ID 幂等更新，用户加入和收藏关系保留在独立状态表中。
+// 内置技能只插入不存在的 ID，保留已有技能的正文、归属和可见性。
 func (r *Repository) UpsertBuiltinSkills(skills []model.Skill) error {
 	if len(skills) == 0 {
 		return errors.New("builtin skills are empty")
 	}
 	return r.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"owner_id", "author_name", "author_avatar_url", "name", "description", "instruction", "status", "source", "tag", "sort_weight", "is_private",
-			"markdown_url", "showcase_media_json", "extra_info", "initial_like_count", "initial_added_count", "created_at", "updated_at",
-		}),
+		Columns:   []clause.Column{{Name: "id"}},
+		DoNothing: true,
 	}).Create(&skills).Error
+}
+
+func (r *Repository) BuiltinSkillExists(id string) (bool, error) {
+	var count int64
+	err := r.db.Model(&model.Skill{}).Where("id = ?", id).Count(&count).Error
+	return count > 0, err
+}
+
+func (r *Repository) InsertBuiltinSkillWithPackage(skill *model.Skill, version *model.SkillVersion, files []model.SkillFile) (bool, error) {
+	inserted := false
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(skill)
+		if result.Error != nil || result.RowsAffected == 0 {
+			return result.Error
+		}
+		inserted = true
+		if err := tx.Create(version).Error; err != nil {
+			return err
+		}
+		if len(files) > 0 {
+			return tx.Create(&files).Error
+		}
+		return nil
+	})
+	return inserted && err == nil, err
 }
 
 func (r *Repository) Skill(id string) (*model.Skill, error) {

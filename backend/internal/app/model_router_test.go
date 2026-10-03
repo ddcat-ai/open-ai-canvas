@@ -91,6 +91,22 @@ func TestModelRequestIntentNormalizesImageSpecificationValues(t *testing.T) {
 	}
 }
 
+func TestSKUSelectorCanonicalizesTextOperationsForTextPriceTier(t *testing.T) {
+	channelModel := model.ChannelModel{PriceTiers: []model.ChannelModelPriceTier{
+		{ID: "text", SelectorJSON: `{"operation":"text_generation"}`, Enabled: true, PriceConfigured: true},
+	}}
+	for _, operation := range []string{"", "text", "storyboard", "cloud_agent_step", "text_generation"} {
+		intent := ModelRequestIntentFromTaskInput(map[string]any{"mode": "text"}, "canvas_text", operation)
+		selector := skuSelectorForIntent(intent)
+		if selector["operation"] != "text_generation" {
+			t.Fatalf("operation=%q produced selector=%#v, want canonical text_generation", operation, selector)
+		}
+		if tier := channelModelPriceTierForIntent(channelModel, intent); tier == nil || tier.ID != "text" {
+			t.Fatalf("operation=%q did not match text price tier: %#v", operation, tier)
+		}
+	}
+}
+
 func TestSKUSelectorInfersImageResolutionFromSizeWhenQualityIsAutomatic(t *testing.T) {
 	for _, test := range []struct {
 		size string

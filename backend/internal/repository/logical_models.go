@@ -282,7 +282,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updated := tx.Model(&model.Task{}).
 			Where("id = ? AND status = ? AND route_id = ?", taskID, model.TaskStatusRunning, expectedRouteID).
-			Updates(map[string]any{"route_id": routeID, "channel_model_id": channelModelID, "input_json": inputJSON, "updated_at": time.Now()})
+			Updates(map[string]any{"route_id": routeID, "channel_model_id": channelModelID, "input_json": inputJSON, "provider_request_id": "", "poll_stage": "", "next_poll_at": nil, "updated_at": time.Now()})
 		if updated.Error != nil {
 			return updated.Error
 		}

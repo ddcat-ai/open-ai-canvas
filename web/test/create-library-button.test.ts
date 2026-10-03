@@ -59,7 +59,7 @@ describe("creation library button", () => {
         const workspace = readCreateWorkspaceSource();
 
         expect(source).toContain('modelGroupReferenceLimits(config, preferredModel || selectedModel, "video")');
-        expect(source).toContain("reconcileCreationAttachmentLimits(attachments, mentionReferences, videoReferenceLimits)");
+        expect(source).toContain("reconcileCreationAttachmentLimits(requestAttachments, mentionReferences, videoReferenceLimits)");
         expect(workspace).toContain('props.mode !== "video" || props.maxReferences > 0');
         expect(workspace).not.toContain('props.videoProfile.operations.includes("image_to_video")');
     });
@@ -80,7 +80,7 @@ describe("creation library button", () => {
         const source = readCreateWorkspaceSource();
         const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
-        expect(source).toContain('import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react"');
+        expect(source).toContain('import { Reorder } from "motion/react"');
         expect(source).toContain("<Reorder.Group");
         expect(source).toContain('axis="x"');
         expect(source).toContain("values={visibleAttachments}");
@@ -158,11 +158,11 @@ describe("creation library button", () => {
 });
 
 describe("creation homepage default mode", () => {
-    test("opens the empty homepage on image generation instead of video", () => {
+    test("opens a fresh homepage in Agent mode rather than restoring a manual media mode", () => {
         const source = readCreateSource();
-        expect(source).toContain("import { defaultCreationMode, modeLabels,");
-        expect(source).toContain("initialComposerPreferences.mode || defaultCreationMode");
-        expect(source).toContain("saved.mode || defaultCreationMode");
+        expect(source).toContain("creationModelCapability, defaultCreationMode, modeLabels,");
+        expect(source).toContain("useState<CreationMode>(defaultCreationMode)");
+        expect(source).toContain("const nextMode = defaultCreationMode");
         expect(source).not.toContain('mode || "video"');
     });
 });
@@ -176,7 +176,8 @@ describe("creation thread chrome", () => {
         expect(workspace).toContain("useWorkspaceTopBarMount");
         expect(workspace).toContain("createPortal(toolbar, mount)");
         expect(topBar).toContain("WorkspaceTopBarExtensionSlot");
-        expect(product).toContain(".creation-chat-dock .creation-mode-tabs");
+        expect(product).not.toContain(".creation-chat-dock .creation-mode-tabs");
+        expect(workspace).toContain("className=\"creation-mode-dropdown\"");
         expect(product).not.toContain("creation-composer-mode-row");
     });
 

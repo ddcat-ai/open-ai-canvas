@@ -1,0 +1,40 @@
+{
+  "batchId": "batch_demo_001",
+  "status": "partial_succeeded",
+  "product": { "productId": "prod_123", "sku": "SKU-RED-001", "title": "红色陶瓷杯" },
+  "items": [
+    {
+      "itemId": "batch_demo_001:SKU-RED-001:front:studio:white:1000x1000",
+      "idempotencyKey": "idem_batch_demo_001_front_white_1000",
+      "angle": "front",
+      "scene": "studio",
+      "background": "white",
+      "size": "1000x1000",
+      "status": "succeeded",
+      "retry": { "allowed": false, "attempts": 1 },
+      "asset": { "assetId": "asset_001" }
+    },
+    {
+      "itemId": "batch_demo_001:SKU-RED-001:detail:table:oak:1600x1200",
+      "idempotencyKey": "idem_batch_demo_001_detail_oak_1600",
+      "angle": "detail",
+      "scene": "table",
+      "background": "oak",
+      "size": "1600x1200",
+      "status": "unknown_submitted",
+      "retry": { "allowed": false, "attempts": 1 },
+      "error": { "code": "upstream_timeout", "message": "状态未知，等待恢复查询" }
+    }
+  ],
+  "retryPolicy": { "maxAttempts": 3, "backoffMs": [1000, 5000, 30000], "perItemTimeoutMs": 120000, "batchTimeoutMs": 900000 },
+  "recovery": { "resumeCursor": "item:batch_demo_001:1", "replayRequiresSameIdempotencyKey": true },
+  "styleLock": {
+    "version": "1",
+    "fingerprint": "style-a1b2c3d4",
+    "globalPrompt": "真实商品摄影，温暖自然的北欧家居风格，保持商品轮廓与颜色",
+    "negativePrompt": "不要改变商品结构，不要添加多余配件",
+    "anchorItemId": "batch_demo_001:SKU-RED-001:front:studio:white:1000x1000",
+    "sharedPromptPrefix": "风格锁定（style-a1b2c3d4）",
+    "anchorFirst": true
+  }
+}

@@ -35,7 +35,25 @@ const (
 //
 // 事件表里没有该运行的行时（升级前的旧检查点把事件放在 state_json 里），退回内存窗口，
 // 保证老运行仍可读。
-func (s *Service) cloudAgentRunEventsForView(userID string, run *model.CloudAgentExecution, state *cloudAgentRuntime, sinceSeq, limit int) []CloudAgentEvent {
+func (s *Service) cloudAgentRunEventsForView(userID string, run *model.CloudAgentExecution, state *cloudAgentRuntime, sinceSeq, limit int, fromStart bool) []CloudAgentEvent {
+	if fromStart {
+		if limit <= 0 || limit > cloudAgentRunEventDeltaLimit {
+			limit = cloudAgentRunEventDeltaLimit
+		}
+		rows, err := s.repo.CloudAgentEventRecords(userID, run.ID, 0, limit)
+		if err != nil {
+			log.Printf("agent event recovery %s: %v", run.ID, err)
+			return nil
+		}
+		events := make([]CloudAgentEvent, 0, len(rows))
+		for _, row := range rows {
+			events = append(events, cloudAgentEventFromRecord(row))
+		}
+		if len(events) == 0 && state.EventSeqBase == 0 {
+			return append([]CloudAgentEvent(nil), state.Events[:min(len(state.Events), limit)]...)
+		}
+		return events
+	}
 	if sinceSeq > 0 {
 		pageLimit := cloudAgentRunEventDeltaLimit
 		if limit > 0 && limit < pageLimit {

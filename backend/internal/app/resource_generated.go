@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -45,7 +46,7 @@ func (s *Service) persistGeneratedMediaResultMode(userID string, result map[stri
 	if err := json.Unmarshal(encoded, &normalized); err != nil {
 		return nil, err
 	}
-	value, err := s.persistGeneratedMediaValueMode(userID, normalized, skipInvalidDataURL, enforceQuota)
+	value, err := s.persistGeneratedMediaValueMode(userID, normalized, skipInvalidDataURL, enforceQuota, "")
 	if err != nil {
 		return nil, err
 	}
@@ -53,14 +54,14 @@ func (s *Service) persistGeneratedMediaResultMode(userID string, result map[stri
 }
 
 func (s *Service) persistGeneratedMediaValue(userID string, value interface{}) (interface{}, error) {
-	return s.persistGeneratedMediaValueMode(userID, value, false, true)
+	return s.persistGeneratedMediaValueMode(userID, value, false, true, "")
 }
 
-func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{}, skipInvalidDataURL bool, enforceQuota bool) (interface{}, error) {
+func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{}, skipInvalidDataURL bool, enforceQuota bool, kindHint string) (interface{}, error) {
 	switch item := value.(type) {
 	case []interface{}:
 		for index, child := range item {
-			stored, err := s.persistGeneratedMediaValueMode(userID, child, skipInvalidDataURL, enforceQuota)
+			stored, err := s.persistGeneratedMediaValueMode(userID, child, skipInvalidDataURL, enforceQuota, kindHint)
 			if err != nil {
 				return nil, err
 			}
@@ -68,54 +69,30 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 		}
 		return item, nil
 	case map[string]interface{}:
+		kindHint = generatedMediaKind(item, kindHint)
 		if raw := inlineMediaValue(item); raw != "" {
 			mimeType, data, err := s.decodeDataURL(raw)
 			if err != nil && !skipInvalidDataURL {
 				return nil, err
 			}
 			if err == nil {
-				kind := normalizeResourceKind("", mimeType)
-				width, height := intValue(item["width"]), intValue(item["height"])
-				if kind == "image" && (width <= 0 || height <= 0) {
-					width, height = imageDimensions(data)
+				if err := s.persistGeneratedMediaBytes(userID, item, raw, mimeType, data, enforceQuota); err != nil {
+					return nil, err
 				}
-				quotaDay := ""
-				if enforceQuota {
-					quotaDay, err = s.reserveGeneratedResourceQuota(userID, int64(len(data)))
-					if err != nil {
-						return nil, err
-					}
-				}
-				resource, _, err := s.storeResource(userID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, int64(len(data)), width, height, int64(intValue(item["durationMs"])), bytes.NewReader(data), nil, false)
+			}
+		} else if enforceQuota {
+			if raw := remoteMediaValue(item, kindHint); raw != "" {
+				policy, err := s.RuntimePolicy()
 				if err != nil {
-					if enforceQuota {
-						s.releaseUserUploadQuota(userID, quotaDay, int64(len(data)))
-					}
-					return nil, fmt.Errorf("生成内容写入资源存储失败：%w", err)
+					return nil, err
 				}
-				if enforceQuota {
-					s.commitUserUploadQuota(userID, int64(len(data)))
+				if err := s.persistGeneratedMediaRemote(userID, item, raw, kindHint, megabytes(policy.Resource.GeneratedFileMB)+1); err != nil {
+					return nil, err
 				}
-				resourceURL := resourceFileURL(resource.ID)
-				for _, key := range []string{"dataUrl", "content", "url", "coverUrl"} {
-					if text, ok := item[key].(string); ok && (text == raw || strings.HasPrefix(text, "blob:")) {
-						item[key] = resourceURL
-					}
-				}
-				if _, ok := item["dataUrl"]; ok {
-					item["dataUrl"] = resourceURL
-				}
-				item["url"] = resourceURL
-				item["storageKey"] = "resource:" + resource.ID
-				item["resourceId"] = resource.ID
-				item["bytes"] = resource.Size
-				item["mimeType"] = resource.MimeType
-				item["width"] = resource.Width
-				item["height"] = resource.Height
 			}
 		}
 		for key, child := range item {
-			stored, err := s.persistGeneratedMediaValueMode(userID, child, skipInvalidDataURL, enforceQuota)
+			stored, err := s.persistGeneratedMediaValueMode(userID, child, skipInvalidDataURL, enforceQuota, generatedMediaKindForKey(key, kindHint))
 			if err != nil {
 				return nil, err
 			}
@@ -125,6 +102,122 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 	default:
 		return value, nil
 	}
+}
+
+func (s *Service) persistGeneratedMediaBytes(userID string, item map[string]interface{}, raw string, mimeType string, data []byte, enforceQuota bool) error {
+	kind := normalizeResourceKind("", mimeType)
+	width, height := intValue(item["width"]), intValue(item["height"])
+	if kind == "image" && (width <= 0 || height <= 0) {
+		width, height = imageDimensions(data)
+	}
+	return s.persistGeneratedMediaReader(userID, item, raw, kind, mimeType, int64(len(data)), width, height, bytes.NewReader(data), enforceQuota)
+}
+
+func (s *Service) persistGeneratedMediaRemote(userID string, item map[string]interface{}, raw string, kindHint string, maxBytes int64) error {
+	stream, err := openRemoteGeneratedMedia(raw, kindHint, maxBytes)
+	if err != nil {
+		return fmt.Errorf("生成内容下载失败：%w", err)
+	}
+	if stream.size < 0 || stream.mimeType == "application/octet-stream" {
+		_ = stream.body.Close()
+		payload, err := downloadRemoteResource(raw, maxBytes)
+		if err != nil {
+			return fmt.Errorf("生成内容下载失败：%w", err)
+		}
+		if kindHint != "" && !strings.HasPrefix(strings.ToLower(payload.mimeType), kindHint+"/") {
+			return fmt.Errorf("生成内容类型不匹配：期望 %s，实际 %s", kindHint, payload.mimeType)
+		}
+		return s.persistGeneratedMediaBytes(userID, item, raw, payload.mimeType, payload.data, true)
+	}
+	defer stream.body.Close()
+	return s.persistGeneratedMediaReader(userID, item, raw, kindHint, stream.mimeType, stream.size, intValue(item["width"]), intValue(item["height"]), stream.body, true)
+}
+
+func (s *Service) persistGeneratedMediaReader(userID string, item map[string]interface{}, raw string, kind string, mimeType string, size int64, width int, height int, body io.Reader, enforceQuota bool) error {
+	quotaDay := ""
+	if enforceQuota {
+		var err error
+		quotaDay, err = s.reserveGeneratedResourceQuota(userID, size)
+		if err != nil {
+			return err
+		}
+	}
+	writeObject := s.storeResourceObject
+	if enforceQuota {
+		writeObject = s.storeTaskMediaObject
+	}
+	resource, stored, err := s.storeResourceWithWriter(userID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, size, width, height, int64(intValue(item["durationMs"])), body, nil, false, writeObject)
+	if err != nil {
+		if enforceQuota {
+			s.releaseUserUploadQuota(userID, quotaDay, size)
+		}
+		return fmt.Errorf("生成内容写入资源存储失败：%w", err)
+	}
+	if enforceQuota {
+		if stored {
+			s.commitUserUploadQuota(userID, size)
+		} else {
+			s.releaseUserUploadQuota(userID, quotaDay, size)
+		}
+	}
+	resourceURL := resourceFileURL(resource.ID)
+	for _, key := range []string{"dataUrl", "content", "url", "coverUrl"} {
+		if text, ok := item[key].(string); ok && (text == raw || strings.HasPrefix(text, "blob:")) {
+			item[key] = resourceURL
+		}
+	}
+	if _, ok := item["dataUrl"]; ok {
+		item["dataUrl"] = resourceURL
+	}
+	item["url"] = resourceURL
+	item["storageKey"] = "resource:" + resource.ID
+	item["resourceId"] = resource.ID
+	item["bytes"] = resource.Size
+	item["mimeType"] = resource.MimeType
+	item["width"] = resource.Width
+	item["height"] = resource.Height
+	return nil
+}
+
+func generatedMediaKind(item map[string]interface{}, fallback string) string {
+	for _, key := range []string{"kind", "mode", "mimeType"} {
+		value, _ := item[key].(string)
+		value = strings.ToLower(strings.TrimSpace(value))
+		switch {
+		case value == "image" || strings.HasPrefix(value, "image/"):
+			return "image"
+		case value == "video" || strings.HasPrefix(value, "video/"):
+			return "video"
+		case value == "audio" || strings.HasPrefix(value, "audio/"):
+			return "audio"
+		}
+	}
+	return fallback
+}
+
+func generatedMediaKindForKey(key string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "image", "images":
+		return "image"
+	case "video", "videos":
+		return "video"
+	case "audio", "audios":
+		return "audio"
+	default:
+		return fallback
+	}
+}
+
+func remoteMediaValue(item map[string]interface{}, kindHint string) string {
+	if kindHint != "image" && kindHint != "video" && kindHint != "audio" {
+		return ""
+	}
+	for _, key := range []string{"dataUrl", "content", "url"} {
+		if text, ok := item[key].(string); ok && isPublicMediaURL(strings.TrimSpace(text)) {
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
 }
 
 func inlineMediaValue(item map[string]interface{}) string {
@@ -214,6 +307,56 @@ func downloadRemoteResource(rawURL string, maxBytes int64) (remoteResourcePayloa
 		fileName = "resource." + extensionFromMimeType(mimeType)
 	}
 	return remoteResourcePayload{url: parsed.String(), endpoint: parsed.Host, fileName: fileName, mimeType: mimeType, data: data}, nil
+}
+
+type remoteGeneratedMediaStream struct {
+	body     io.ReadCloser
+	size     int64
+	mimeType string
+}
+
+func openRemoteGeneratedMedia(rawURL string, kindHint string, maxBytes int64) (remoteGeneratedMediaStream, error) {
+	parsed, err := validateRemoteResourceURL(rawURL)
+	if err != nil {
+		return remoteGeneratedMediaStream{}, err
+	}
+	client := OutboundHTTPClient(90 * time.Second)
+	req, err := http.NewRequest(http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return remoteGeneratedMediaStream{}, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return remoteGeneratedMediaStream{}, err
+	}
+	closeWithError := func(closeErr error) (remoteGeneratedMediaStream, error) {
+		_ = resp.Body.Close()
+		return remoteGeneratedMediaStream{}, closeErr
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return closeWithError(fmt.Errorf("远程资源下载失败：%s", resp.Status))
+	}
+	if resp.ContentLength == 0 {
+		return closeWithError(errors.New("远程资源为空"))
+	}
+	if maxBytes > 0 && resp.ContentLength >= maxBytes {
+		return closeWithError(BadAuthRequest(fmt.Sprintf("远程资源必须小于 %s", formatStorageLimit(maxBytes))))
+	}
+	mimeType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if idx := strings.Index(mimeType, ";"); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		mimeType = mime.TypeByExtension(path.Ext(parsed.Path))
+	}
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	mimeType = strings.ToLower(mimeType)
+	if kindHint != "" && mimeType != "application/octet-stream" && !strings.HasPrefix(mimeType, kindHint+"/") {
+		return closeWithError(fmt.Errorf("生成内容类型不匹配：期望 %s，实际 %s", kindHint, mimeType))
+	}
+	return remoteGeneratedMediaStream{body: resp.Body, size: resp.ContentLength, mimeType: mimeType}, nil
 }
 
 func openRemoteResource(rawURL string) (io.ReadCloser, error) {

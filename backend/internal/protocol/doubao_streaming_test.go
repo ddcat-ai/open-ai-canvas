@@ -155,3 +155,102 @@ func TestDoubaoSeedAudioCreateSendsReferenceAudioAndImage(t *testing.T) {
 		t.Fatalf("image reference = %#v", imageReference)
 	}
 }
+
+func TestDoubaoSeedAudioRequestAwareJSONAudioFormat(t *testing.T) {
+	manifest, err := os.ReadFile("../../../plugin-packages/doubao-streaming-tts/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parser, ok := adapter.(RequestAwareCreateParser)
+	if !ok {
+		t.Fatal("Doubao adapter does not support request-aware create parsing")
+	}
+	for _, tc := range []struct {
+		format string
+		mime   string
+	}{
+		{format: "wav", mime: "audio/wav"},
+		{format: "pcm", mime: "audio/pcm"},
+		{format: "ogg_opus", mime: "audio/ogg"},
+		{format: "mp3", mime: "audio/mpeg"},
+	} {
+		t.Run(tc.format, func(t *testing.T) {
+			result, err := parser.ParseCreateWithRequest(context.Background(), GenerationRequest{Extra: map[string]any{"audioFormat": tc.format}}, []byte(`{"code":0,"audio":"aGVsbG8="}`))
+			if err != nil || result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Audios) != 1 {
+				t.Fatalf("result = %#v, err = %v", result, err)
+			}
+			audio := result.Result.Audios[0]
+			if audio.MIMEType != tc.mime || audio.DataURL != "data:"+tc.mime+";base64,aGVsbG8=" {
+				t.Fatalf("audio = %#v, want MIME %q", audio, tc.mime)
+			}
+		})
+	}
+}
+
+func TestDoubaoSeedAudioReferenceValidation(t *testing.T) {
+	manifest, err := os.ReadFile("../../../plugin-packages/doubao-streaming-tts/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := MediaReference{URL: "https://cdn.example/image.png", Kind: "image"}
+	audio := MediaReference{URL: "https://cdn.example/voice.mp3", Kind: "audio"}
+	for _, tc := range []struct {
+		name     string
+		images   []MediaReference
+		audios   []MediaReference
+		wantFail bool
+	}{
+		{name: "mixed image and audio", images: []MediaReference{image}, audios: []MediaReference{audio}, wantFail: true},
+		{name: "two images", images: []MediaReference{image, image}, wantFail: true},
+		{name: "four audios", audios: []MediaReference{audio, audio, audio, audio}, wantFail: true},
+		{name: "one image", images: []MediaReference{image}},
+		{name: "three audios", audios: []MediaReference{audio, audio, audio}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Capability: CapabilityAudio, Model: "seed-audio-1.0", Prompt: "你好", Images: tc.images, Audios: tc.audios,
+			}})
+			if tc.wantFail {
+				if err == nil {
+					t.Fatalf("invalid references were accepted: %#v", spec.Body)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			references, ok := spec.Body.(map[string]any)["references"].([]any)
+			if !ok || len(references) != len(tc.images)+len(tc.audios) {
+				t.Fatalf("references = %#v", spec.Body)
+			}
+		})
+	}
+}
+
+func TestDoubaoSeedAudioPromptMetadataMapsTextPrompt(t *testing.T) {
+	manifest, err := os.ReadFile("../../../plugin-packages/doubao-streaming-tts/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, param := range adapter.Metadata().Parameters {
+		if param.Name == "prompt" {
+			if param.Mapping != "text_prompt" {
+				t.Fatalf("prompt mapping = %q", param.Mapping)
+			}
+			return
+		}
+	}
+	t.Fatal("prompt parameter missing")
+}

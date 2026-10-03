@@ -61,8 +61,10 @@ func TestPostgresAssetIDMigration(t *testing.T) {
 			t.Fatalf("create legacy table: %v", err)
 		}
 	}
-	if err := MigrateSchema(db); err != nil {
-		t.Fatalf("migrate schema: %v", err)
+	// 本用例只验证基线中的列扩容；这些局部旧表没有完整迁移历史，
+	// 不能通过生产升级入口猜测并登记为已知旧库。
+	if err := migrateSchemaV1(db); err != nil {
+		t.Fatalf("migrate baseline asset columns: %v", err)
 	}
 
 	for _, migration := range assetIDColumnMigrations {

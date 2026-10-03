@@ -15,6 +15,7 @@ docs/content/docs/*
 !docs/content/docs/plugins/
 docs/content/docs/plugins/*
 !docs/content/docs/plugins/ai-art-critique.mdx
+!docs/content/docs/plugins/igo-studio-ecommerce-agent.mdx
 # Keep the task stability runbook versioned without unignoring generated docs.
 !docs/content/docs/backend/
 docs/content/docs/backend/*

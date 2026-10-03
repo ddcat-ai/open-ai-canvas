@@ -337,6 +337,7 @@ type cloudAgentLessonCategory struct {
 }
 
 var cloudAgentLessonCategories = []cloudAgentLessonCategory{
+	{Key: "smart_creation", Label: "智能创作"},
 	{Key: "storyboard", Label: "分镜"},
 	{Key: "video", Label: "视频生成"},
 	{Key: "image", Label: "图像生成"},

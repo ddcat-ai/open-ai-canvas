@@ -36,6 +36,42 @@ func TestTaskInputUsesWorkflowProvider(t *testing.T) {
 	}
 }
 
+func TestCreateTaskIdempotencyReplaysAndRejectsChangedRequest(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	req := creationTextRequest()
+	req.IdempotencyKey = "ordinary-task-key"
+
+	first, err := s.CreateTask("user", req)
+	if err != nil {
+		t.Fatalf("first task creation failed: %v", err)
+	}
+	second, err := s.CreateTask("user", req)
+	if err != nil {
+		t.Fatalf("idempotent replay failed: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("idempotent replay created task %q, want original %q", second.ID, first.ID)
+	}
+
+	changed := req
+	changed.Prompt = "不同的请求"
+	if _, err := s.CreateTask("user", changed); err == nil {
+		t.Fatal("changed request reused an idempotency key")
+	} else if appErr, ok := err.(*AppError); !ok || appErr.Status != 409 {
+		t.Fatalf("changed request error = %T %v, want status 409", err, err)
+	}
+
+	for _, record := range []any{&model.Task{}, &model.BillingOrder{}, &model.CreditLedgerEntry{}} {
+		var count int64
+		if err := db.Model(record).Count(&count).Error; err != nil {
+			t.Fatalf("count %T: %v", record, err)
+		}
+		if count != 1 {
+			t.Fatalf("%T count = %d, want 1", record, count)
+		}
+	}
+}
+
 func TestResolveTaskModelSelectionAllowsExplicitSystemChannelWhenFrontendModelsEnabled(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

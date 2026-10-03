@@ -1,4 +1,4 @@
-import type { EditorSlotKind, PluginManifest, PluginManifestV2, RegisteredPlugin } from "./plugin-types";
+import type { EditorSlotKind, PluginInstallation, PluginManifest, PluginManifestV2, RegisteredPlugin } from "./plugin-types";
 import { unregisterPluginSlots } from "./editor-slot-registry";
 import { registerPluginCanvasNodes, unregisterNodeDefinitions } from "@/lib/canvas/node-registry";
 
@@ -28,7 +28,7 @@ function assertManifest(manifest: PluginManifest | PluginManifestV2) {
 }
 
 function assertManifestV1Contributions(contributes: PluginManifest["contributes"]) {
-    if (!contributes || Object.values(contributes).every((value) => !value || value.length === 0)) {
+    if (!contributes || Object.values(contributes).every((value) => !value || (Array.isArray(value) ? value.length === 0 : false))) {
         throw new Error("插件至少需要声明一种贡献能力");
     }
 }
@@ -44,7 +44,7 @@ function assertManifestV2(manifest: PluginManifestV2) {
     }
     // 贡献检查：v1 贡献字段或 editorSlots 至少声明一项（editorSlots 是合法的 v2 独立贡献）。
     const { editorSlots, ...v1Contributions } = manifest.contributes;
-    if (Object.values(v1Contributions).every((value) => !value || value.length === 0) && !editorSlots?.length) {
+    if (Object.values(v1Contributions).every((value) => !value || (Array.isArray(value) ? value.length === 0 : false)) && !editorSlots?.length) {
         throw new Error("插件至少需要声明一种贡献能力");
     }
 }
@@ -86,4 +86,12 @@ export function listRegisteredPlugins() {
 
 export function listRegisteredManifests(): Array<PluginManifest | PluginManifestV2> {
     return listRegisteredPlugins().map(({ manifest }) => manifest);
+}
+
+export function isHomepageCreationPluginEnabled(plugin: RegisteredPlugin | undefined, installation: PluginInstallation | undefined, effectiveEnabled?: boolean) {
+    return Boolean(plugin?.createHomepageCreationAgent && plugin.manifest.contributes.homepageCreation && installation && (effectiveEnabled ?? installation.enabled));
+}
+
+export function isSmartCreationPluginEnabled(plugin: RegisteredPlugin | undefined, installation: PluginInstallation | undefined, effectiveEnabled?: boolean) {
+    return Boolean(plugin?.createSmartCreationAgent && plugin.manifest.contributes.smartCreation && installation && (effectiveEnabled ?? installation.enabled));
 }

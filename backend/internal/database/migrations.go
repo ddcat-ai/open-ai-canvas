@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -11,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 43
+const CurrentSchemaVersion int64 = 47
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -29,6 +30,9 @@ const prefixedIDSequenceReconcileChecksum = "sha256:prefixed-id-sequence-reconci
 const skillLibraryCategoriesChecksum = "sha256:skill-library-categories-v39-20260926"
 const builtinSkillTombstonesChecksum = "sha256:builtin-skill-tombstones-v40-20260927"
 const resourceThumbnailChecksum = "sha256:resource-thumbnail-v41-20260927"
+const taskIdempotencyChecksum = "sha256:task-idempotency-v36-20260924"
+const taskIdempotencyConvergenceChecksum = "sha256:task-idempotency-convergence-v44-20261001"
+const cloudAgentSessionsChecksum = "sha256:cloud-agent-sessions-v47-20261002"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -145,6 +149,39 @@ var schemaMigrations = []migration{
 	{version: 43, name: "topup_sale_strategies", checksum: "sha256:topup-sale-strategies-v43-20260929", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.TopupProduct{}, &model.PaymentOrder{})
 	}},
+	{version: 44, name: "task_idempotency_convergence", checksum: taskIdempotencyConvergenceChecksum, apply: migrateTaskIdempotencyConvergence},
+	{version: 45, name: "cloud_agent_receipts", checksum: "sha256:cloud-agent-receipts-v45-20261001", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.CloudAgentReceipt{})
+	}},
+	{version: 46, name: "channel_model_time_pricing", checksum: "sha256:channel-model-time-pricing-v46-20261002", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.ChannelModelPriceTier{})
+	}},
+	{version: 47, name: "cloud_agent_sessions", checksum: cloudAgentSessionsChecksum, apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.AgentSession{}, &model.CloudAgentExecution{})
+	}},
+}
+
+func migrateTaskIdempotencyConvergence(tx *gorm.DB) error {
+	for _, field := range []string{"IdempotencyKey", "IdempotencyFingerprint"} {
+		if !tx.Migrator().HasColumn(&model.Task{}, field) {
+			if err := tx.Migrator().AddColumn(&model.Task{}, field); err != nil {
+				return fmt.Errorf("增加任务幂等列 %s：%w", field, err)
+			}
+		}
+	}
+	if !tx.Migrator().HasIndex(&model.Task{}, "idx_tasks_user_idempotency") {
+		if err := tx.Migrator().CreateIndex(&model.Task{}, "idx_tasks_user_idempotency"); err != nil {
+			return fmt.Errorf("创建任务用户幂等索引：%w", err)
+		}
+	}
+	return nil
+}
+
+func migrateSchemaV36(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.Task{}); err != nil {
+		return fmt.Errorf("创建普通任务幂等字段与索引：%w", err)
+	}
+	return nil
 }
 
 func migratePrefixedIDSequenceReconcile(tx *gorm.DB) error {
@@ -160,7 +197,13 @@ func migrateCloudAgentGeminiCacheIdentity(tx *gorm.DB) error {
 	// (user_id, cache_key) identity used by the model tags.
 	for _, name := range []string{"idx_cloud_agent_gemini_caches_cache_key", "idx_cloud_agent_gemini_cache_cache_key"} {
 		if tx.Migrator().HasIndex(&model.CloudAgentGeminiCache{}, name) {
-			if err := tx.Migrator().DropIndex(&model.CloudAgentGeminiCache{}, name); err != nil {
+			var err error
+			if tx.Dialector.Name() == "postgres" {
+				err = tx.Exec(fmt.Sprintf("DROP INDEX %q", name)).Error
+			} else {
+				err = tx.Migrator().DropIndex(&model.CloudAgentGeminiCache{}, name)
+			}
+			if err != nil {
 				return fmt.Errorf("删除 Gemini 缓存旧唯一索引 %s：%w", name, err)
 			}
 		}
@@ -289,29 +332,35 @@ func migrateChannelPresentation(tx *gorm.DB) error {
 }
 
 func migrationsForDatabase(db *gorm.DB) ([]migration, error) {
+	plan := append([]migration(nil), schemaMigrations...)
 	var applied schemaMigration
 	err := db.First(&applied, "version = ?", 6).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return schemaMigrations, nil
+		// A valid prefix may end before v6.
+	} else if err != nil {
+		return nil, fmt.Errorf("读取数据库迁移 6：%w", err)
+	} else if applied.Name == "asset_library_folders" {
+		legacy := migration{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7}
+		if err := validateMigrationRecord(applied, legacy); err != nil {
+			return nil, err
+		}
+		plan[5] = legacy
+		plan[6] = migration{version: 7, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaV6}
+	}
+	applied = schemaMigration{}
+	err = db.First(&applied, "version = ?", 36).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return plan, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("读取数据库迁移 6：%w", err)
+		return nil, fmt.Errorf("读取数据库迁移 36：%w", err)
 	}
-	if applied.Name != "asset_library_folders" {
-		return schemaMigrations, nil
-	}
-	legacy := migration{version: 6, name: "asset_library_folders", checksum: assetLibraryFoldersChecksum, apply: migrateSchemaV7}
-	if err := validateMigrationRecord(applied, legacy); err != nil {
-		return nil, err
-	}
-	plan := append([]migration(nil), schemaMigrations...)
-	for index, item := range plan {
-		switch item.version {
-		case 6:
-			plan[index] = legacy
-		case 7:
-			plan[index] = migration{version: 7, name: "resource_playback_variant", checksum: resourcePlaybackChecksum, apply: migrateSchemaV6}
+	if applied.Name == "task_idempotency" {
+		local := migration{version: 36, name: "task_idempotency", checksum: taskIdempotencyChecksum, apply: migrateSchemaV36}
+		if err := validateMigrationRecord(applied, local); err != nil {
+			return nil, err
 		}
+		plan[35] = local
 	}
 	return plan, nil
 }
@@ -481,25 +530,16 @@ func MigrateSchema(db *gorm.DB) error {
 				return fmt.Errorf("获取数据库迁移锁：%w", err)
 			}
 		}
-		if err := tx.AutoMigrate(&schemaMigration{}); err != nil {
-			return fmt.Errorf("初始化数据库迁移记录：%w", err)
-		}
-		plan, err := migrationsForDatabase(tx)
+		plan, applied, err := validatedMigrationPrefix(tx)
 		if err != nil {
 			return err
 		}
-		for _, item := range plan {
-			var applied schemaMigration
-			err := tx.First(&applied, "version = ?", item.version).Error
-			if err == nil {
-				if err := validateMigrationRecord(applied, item); err != nil {
-					return err
-				}
-				continue
+		if !tx.Migrator().HasTable(&schemaMigration{}) {
+			if err := tx.AutoMigrate(&schemaMigration{}); err != nil {
+				return fmt.Errorf("初始化数据库迁移记录：%w", err)
 			}
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("读取数据库迁移 %d：%w", item.version, err)
-			}
+		}
+		for _, item := range plan[len(applied):] {
 			if err := item.apply(tx); err != nil {
 				return fmt.Errorf("执行数据库迁移 %d（%s）：%w", item.version, item.name, err)
 			}
@@ -512,40 +552,66 @@ func MigrateSchema(db *gorm.DB) error {
 	})
 }
 
+// All recorded history is checked before a migration may touch business tables.
+func validatedMigrationPrefix(db *gorm.DB) ([]migration, []schemaMigration, error) {
+	hasHistory := db.Migrator().HasTable(&schemaMigration{})
+	tables, err := db.Migrator().GetTables()
+	if err != nil {
+		return nil, nil, fmt.Errorf("读取数据库表清单：%w", err)
+	}
+	hasBusinessTable := false
+	for _, table := range tables {
+		if table != "schema_migrations" && !strings.HasPrefix(table, "sqlite_") {
+			hasBusinessTable = true
+			break
+		}
+	}
+	if !hasHistory {
+		if hasBusinessTable {
+			return nil, nil, errors.New("数据库已有业务表但没有迁移记录，拒绝初始化")
+		}
+		return schemaMigrations, nil, nil
+	}
+	var records []schemaMigration
+	if err := db.Order("version").Find(&records).Error; err != nil {
+		return nil, nil, fmt.Errorf("读取数据库迁移记录：%w", err)
+	}
+	if len(records) == 0 && hasBusinessTable {
+		return nil, nil, errors.New("数据库已有业务表但迁移记录为空，拒绝初始化")
+	}
+	plan, err := migrationsForDatabase(db)
+	if err != nil {
+		return nil, nil, err
+	}
+	for index, record := range records {
+		if record.Version != int64(index+1) || index >= len(plan) {
+			return nil, nil, fmt.Errorf("数据库迁移记录不连续或超出程序支持版本：%d", record.Version)
+		}
+		if err := validateMigrationRecord(record, plan[index]); err != nil {
+			return nil, nil, err
+		}
+	}
+	return plan, records, nil
+}
+
 func ReadSchemaStatus(db *gorm.DB) (SchemaStatus, error) {
 	status := SchemaStatus{Expected: CurrentSchemaVersion}
-	if !db.Migrator().HasTable(&schemaMigration{}) {
-		return status, nil
-	}
-	if err := db.Model(&schemaMigration{}).Select("COALESCE(MAX(version), 0)").Scan(&status.Current).Error; err != nil {
-		return status, fmt.Errorf("读取数据库结构版本：%w", err)
-	}
-	if status.Current != status.Expected {
-		return status, nil
-	}
-	if err := validateMigrationRecords(db); err != nil {
+	_, records, err := validatedMigrationPrefix(db)
+	if err != nil {
 		return status, err
 	}
-	status.Ready = true
+	status.Current = int64(len(records))
+	status.Ready = status.Current == status.Expected
 	return status, nil
 }
 
 func validateMigrationRecords(db *gorm.DB) error {
-	plan, err := migrationsForDatabase(db)
+	_, records, err := validatedMigrationPrefix(db)
 	if err != nil {
 		return err
 	}
-	for _, item := range plan {
-		var applied schemaMigration
-		if err := db.First(&applied, "version = ?", item.version).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("数据库缺少迁移记录 %d（%s）", item.version, item.name)
-			}
-			return fmt.Errorf("读取数据库迁移 %d：%w", item.version, err)
-		}
-		if err := validateMigrationRecord(applied, item); err != nil {
-			return err
-		}
+	if len(records) != len(schemaMigrations) {
+		return fmt.Errorf("数据库缺少迁移记录 %d", len(records)+1)
 	}
 	return nil
 }

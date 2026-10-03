@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed agent-system-policy.md agent-media-policy.md AGENTS.md
+//go:embed agent-system-policy.md agent-media-policy.md AGENTS.md creation-agent-system-policy.md creation-agent-media-policy.md
 var policyFiles embed.FS
 
 type Policy struct {
@@ -39,6 +39,24 @@ func LoadAgentPolicies() (system Policy, media Policy, err error) {
 	}
 	if system.ID != "cloud-agent-system" || media.ID != "cloud-agent-media" {
 		return Policy{}, Policy{}, fmt.Errorf("agent policy identities are invalid")
+	}
+	return system, media, nil
+}
+
+// LoadCreationAgentPolicies is a separate homepage contract, not a canvas
+// policy with a conflicting footer. The canvas operations document is never
+// included in this surface.
+func LoadCreationAgentPolicies() (system Policy, media Policy, err error) {
+	system, err = loadPolicy("creation-agent-system-policy.md")
+	if err != nil {
+		return Policy{}, Policy{}, err
+	}
+	media, err = loadPolicy("creation-agent-media-policy.md")
+	if err != nil {
+		return Policy{}, Policy{}, err
+	}
+	if system.ID != "creation-agent-system" || media.ID != "creation-agent-media" {
+		return Policy{}, Policy{}, fmt.Errorf("creation agent policy identities are invalid")
 	}
 	return system, media, nil
 }

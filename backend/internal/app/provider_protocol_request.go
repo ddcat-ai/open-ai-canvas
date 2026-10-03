@@ -28,6 +28,9 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		}
 	}
 	aspectRatio := input.Config.Size
+	if input.Mode == "video" && strings.EqualFold(strings.TrimSpace(input.Config.InterfaceType), "grsai-minimax-h3") {
+		aspectRatio = normalizeGrsaiMiniMaxH3AspectRatio(aspectRatio)
+	}
 	if input.Mode == "image" && strings.TrimSpace(input.Config.InterfaceType) == string(model.ChannelInterfaceOpenAIImage) {
 		aspectRatio = normalizePixelSize(aspectRatio)
 	}

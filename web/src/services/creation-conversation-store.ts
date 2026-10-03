@@ -2,6 +2,26 @@ import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { getActiveUserScope } from "@/lib/user-scope";
 
 export const CREATION_CONVERSATIONS_KEY = "creation-conversations-v1";
+export const CREATION_AGENT_PENDING_KEY = "creation-agent-pending-v1";
+export type PendingCreationAgentSubmission = { sessionId: string; key: string; fingerprint: string; prompt: string; createdAt: string; request: import("@/services/api/agent").CreateAgentRunInput; parentRunId?: string };
+
+export async function loadPendingCreationAgentSubmission(conversationId: string): Promise<PendingCreationAgentSubmission | null> {
+    const value = await localForageStorageForScope(getActiveUserScope()).getItem(`${CREATION_AGENT_PENDING_KEY}:${conversationId}`);
+    if (!value) return null;
+    try {
+        const parsed = JSON.parse(value) as PendingCreationAgentSubmission;
+        if (!parsed.sessionId || !parsed.key || parsed.request?.idempotencyKey !== parsed.key || parsed.request.sessionId !== parsed.sessionId || parsed.request.surface !== "creation") throw new Error("invalid pending submission");
+        return parsed;
+    } catch { throw new Error("待确认的 Agent 请求记录已损坏；请先核对服务端运行记录，避免重复提交任务"); }
+}
+
+export async function savePendingCreationAgentSubmission(conversationId: string, pending: PendingCreationAgentSubmission) {
+    await localForageStorageForScope(getActiveUserScope()).setItem(`${CREATION_AGENT_PENDING_KEY}:${conversationId}`, JSON.stringify(pending));
+}
+
+export async function clearPendingCreationAgentSubmission(conversationId: string, scope = getActiveUserScope()) {
+    await localForageStorageForScope(scope).removeItem(`${CREATION_AGENT_PENDING_KEY}:${conversationId}`);
+}
 
 type PendingCreationMessage = {
     id: string;
@@ -49,8 +69,8 @@ export function pendingCreationTaskIds(conversations: StoredCreationConversation
     return Array.from(new Set(taskIds));
 }
 
-export async function loadCreationConversations<T extends StoredCreationConversation>() {
-    const storage = localForageStorageForScope(getActiveUserScope());
+export async function loadCreationConversations<T extends StoredCreationConversation>(scope = getActiveUserScope()) {
+    const storage = localForageStorageForScope(scope);
     const value = await storage.getItem(CREATION_CONVERSATIONS_KEY);
     if (!value) return null;
     let parsed: unknown;
@@ -75,7 +95,22 @@ function persistableCreationConversations<T extends StoredCreationConversation>(
     })) as T[];
 }
 
-export async function saveCreationConversations<T extends StoredCreationConversation>(conversations: T[]) {
-    const storage = localForageStorageForScope(getActiveUserScope());
+export async function saveCreationConversations<T extends StoredCreationConversation>(conversations: T[], scope = getActiveUserScope()) {
+    const storage = localForageStorageForScope(scope);
     await storage.setItem(CREATION_CONVERSATIONS_KEY, JSON.stringify(persistableCreationConversations(conversations)));
+}
+
+// A server deletion may finish after logout. Clean its original cache without
+// reading or replacing the newly signed-in account's in-memory conversations.
+export async function removeStoredCreationConversation(conversationId: string, scope = getActiveUserScope()) {
+    if (!conversationId) throw new Error("缺少要删除的创作对话 ID");
+    const stored = await loadCreationConversations(scope);
+    if (stored?.some((conversation) => conversation.id === conversationId)) {
+        await saveCreationConversations(removeCreationConversationSnapshot(stored, conversationId), scope);
+    }
+    await clearPendingCreationAgentSubmission(conversationId, scope);
+}
+
+export function queueCreationConversationsSave<T extends StoredCreationConversation>(previous: Promise<unknown>, conversations: T[], scope = getActiveUserScope()) {
+    return previous.catch(() => undefined).then(() => saveCreationConversations(conversations, scope));
 }

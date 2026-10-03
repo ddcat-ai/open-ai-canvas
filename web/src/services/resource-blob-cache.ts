@@ -77,6 +77,12 @@ export async function cacheResourceObjectUrl(storageKey: string) {
     return task;
 }
 
+/** Start warming a remote resource without making cache availability part of rendering. */
+export function scheduleResourceBlobCache(storageKey: string) {
+    if (!storageKey) return;
+    void cacheResourceObjectUrl(storageKey).catch(() => undefined);
+}
+
 function withDownloadSlot<T>(task: () => Promise<T>) {
     return new Promise<T>((resolve, reject) => {
         downloadQueue.push(() => {

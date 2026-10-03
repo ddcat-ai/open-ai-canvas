@@ -146,7 +146,7 @@ func TestCloudAgentPiModelRetriesTruncatedToolArguments(t *testing.T) {
 	}
 	// 纠偏上下文只用于那一次请求，不能写回运行历史。
 	for _, message := range state.Canonical.Messages {
-		if strings.Contains(stringField(message, "content"), string(cloudAgentContextTruncatedArguments)) {
+		if stringField(message, "role") != "system" && strings.Contains(stringField(message, "content"), string(cloudAgentContextTruncatedArguments)) {
 			t.Fatal("correction context leaked into persisted canonical history")
 		}
 	}

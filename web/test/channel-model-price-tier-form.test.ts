@@ -70,14 +70,14 @@ describe("channel model price tier defaults", () => {
 
         expect(priceTierToForm(base).matchMode).toBe("default");
         expect(priceTierToForm({ ...base, selector: { quality: "2k" } }).matchMode).toBe("advanced");
-        expect(priceTierToForm({ ...base, selector: { videoGenerateAudio: "false" } })).toMatchObject({ matchMode: "default", videoGenerateAudio: "false" });
+        expect(priceTierToForm({ ...base, selector: { videoGenerateAudio: "false" } })).toMatchObject({ matchMode: "advanced", videoGenerateAudio: "false" });
     });
 
-    test("keeps video matching limited to operation and resolution", () => {
+    test("keeps video matching selectors for duration, audio, and reference count", () => {
         for (const videoGenerateAudio of ["true", "false"]) {
             const tier = { ...defaultPriceTier("advanced"), operation: "image_to_video", resolution: "1080p", videoSeconds: 10, videoGenerateAudio, imageCount: 2 };
-            expect(skuSelectorFromForm("video", tier)).toEqual({ operation: "image_to_video", vquality: "1080p" });
-            expect(priceTierVideoSecondsFromForm("video", tier)).toBe(0);
+            expect(skuSelectorFromForm("video", tier)).toEqual({ operation: "image_to_video", vquality: "1080p", videoSeconds: "10", videoGenerateAudio, imageCount: "2" });
+            expect(priceTierVideoSecondsFromForm("video", tier)).toBe(10);
             expect(skuSelectorFromForm("image", { ...defaultPriceTier("advanced"), videoSeconds: 10, videoGenerateAudio, imageCount: 2 })).toEqual({});
         }
         expect(skuSelectorFromForm("video", defaultPriceTier("advanced"))).toEqual({});

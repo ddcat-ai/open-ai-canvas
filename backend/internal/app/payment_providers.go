@@ -222,7 +222,7 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 }
 
 func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentProviderView, *model.PaymentProviderConfig, error) {
-	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode}
+	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode, PayType: resolvePaymentType(descriptor.ID, nil)}
 	if manifest, ok := s.paymentManifestForProvider(descriptor.ID); ok {
 		if policy, found := paymentExpiryPolicy(manifest, descriptor.ID); found {
 			view.CloseAfterMinutes = policy.DefaultMinutes
@@ -241,9 +241,58 @@ func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentPro
 		return view, nil, configErr
 	}
 	view.Configured = strings.TrimSpace(config.ConfigCipher) != ""
+	if view.Configured {
+		values, err := s.decryptPaymentConfig(config)
+		if err != nil {
+			return view, nil, err
+		}
+		view.PayType = resolvePaymentType(descriptor.ID, values)
+	}
 	view.Enabled = view.Enabled && config.Enabled
 	view.CloseAfterMinutes = config.CloseAfterMinutes
 	return view, config, nil
+}
+
+func resolvePaymentType(providerID string, values map[string]string) string {
+	switch providerID {
+	case PaymentProviderAlipay:
+		return "alipay"
+	case PaymentProviderWeChat:
+		return "wechat"
+	}
+	switch strings.ToLower(strings.TrimSpace(values["payType"])) {
+	case "alipay", "ali", "aloop":
+		return "alipay"
+	case "wxpay", "wechat", "wx", "tloop":
+		return "wechat"
+	case "qqpay", "qq":
+		return "qq"
+	case "usdt":
+		return "usdt"
+	default:
+		return strings.TrimSpace(values["payType"])
+	}
+}
+
+func (s *Service) paymentOrderPayType(order model.PaymentOrder) (string, error) {
+	if direct := resolvePaymentType(order.ProviderID, nil); direct != "" {
+		return direct, nil
+	}
+	if strings.TrimSpace(order.ProviderConfigID) == "" {
+		return "", nil
+	}
+	config, err := s.repo.PaymentProviderConfig(order.ProviderConfigID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	values, err := s.decryptPaymentConfig(config)
+	if err != nil {
+		return "", err
+	}
+	return resolvePaymentType(order.ProviderID, values), nil
 }
 
 func (s *Service) paymentManifestForProvider(providerID string) (protocol.Manifest, bool) {

@@ -167,16 +167,20 @@ func runtimeToolCalls(calls []cloudAgentCall) []map[string]any {
 // advanceCloudAgentTool（权限、审批、计费、画布写入都在那里治理）。
 func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, payload map[string]json.RawMessage) (any, error) {
 	var request struct {
-		CallID    string          `json:"callId"`
-		Name      string          `json:"name"`
-		ToolName  string          `json:"toolName"`
-		Arguments json.RawMessage `json:"arguments"`
+		CallID     string          `json:"callId"`
+		Name       string          `json:"name"`
+		ToolName   string          `json:"toolName"`
+		Arguments  json.RawMessage `json:"arguments"`
+		ReplayOnly bool            `json:"replayOnly"`
 	}
 	if err := decodePiPayload(payload, &request); err != nil {
 		return nil, err
 	}
 	var call cloudAgentCall
-	call.ID = firstNonEmpty(request.CallID, generateID())
+	call.ID = request.CallID
+	if call.ID == "" || len(call.ID) > 160 {
+		return nil, BadAuthRequest("工具调用缺少有效的固定标识")
+	}
 	call.Function.Name = firstNonEmpty(request.Name, request.ToolName)
 	call.Function.Arguments = strings.TrimSpace(string(request.Arguments))
 	if call.Function.Arguments == "" || call.Function.Arguments == "null" {
@@ -187,11 +191,11 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 	}
 
 	// 工具白名单校验：拒绝未声明的工具调用
-	run, err := s.repo.CloudAgent(userID, runID)
+	run, err := s.ownedCloudAgent(ctx, userID, runID)
 	if err != nil {
 		return nil, err
 	}
-	state, err := cloudAgentDecode(run)
+	state, err := cloudAgentDecodeForExecution(run)
 	if err != nil {
 		return nil, err
 	}
@@ -210,31 +214,111 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 		log.Printf("[Agent] rejected undeclared tool call: %s in run %s", call.Function.Name, runID)
 		return nil, fmt.Errorf("未声明的工具: %s", call.Function.Name)
 	}
+	if request.ReplayOnly {
+		content, ok := cloudAgentCommittedToolReplay(&state, call)
+		if !ok {
+			return nil, NewAppError(409, "已审批工具缺少匹配的执行结果，未重新执行")
+		}
+		if cloudAgentWrite(call.Function.Name) {
+			receipt, err := s.repo.CloudAgentReceipt(userID, runID, "tool", call.ID)
+			if err != nil {
+				return nil, NewAppError(409, "已审批写入缺少执行回执，未重新执行")
+			}
+			digest, err := cloudAgentCallDigest(call)
+			if err != nil || receipt.Status != "committed" || receipt.Name != call.Function.Name || receipt.InputSHA256 != digest {
+				return nil, NewAppError(409, "已审批写入回执与工具调用不符，未重新执行")
+			}
+		}
+		return map[string]any{"content": content, "isError": cloudAgentToolContentIsError(content)}, nil
+	}
 
 	return s.executeCloudAgentRuntimeTool(ctx, userID, runID, call)
+}
+
+func cloudAgentCommittedToolReplay(state *cloudAgentRuntime, call cloudAgentCall) (string, bool) {
+	want, err := cloudAgentCallDigest(call)
+	if err != nil || state == nil {
+		return "", false
+	}
+	// Pi's /model request is persisted before the assistant tool calls arrive.
+	// The Go tool executor keeps the exact admitted call and its completed index,
+	// while the canonical transcript keeps the committed result.
+	matched := false
+	for index, original := range state.Calls {
+		if original.ID != call.ID {
+			continue
+		}
+		digest, err := cloudAgentCallDigest(original)
+		if err != nil || index >= state.CallIndex || original.Function.Name != call.Function.Name || digest != want {
+			return "", false
+		}
+		matched = true
+		break
+	}
+	if !matched {
+		return "", false
+	}
+	for i := len(state.Canonical.Messages) - 1; i >= 0; i-- {
+		message := state.Canonical.Messages[i]
+		if stringField(message, "role") == "tool" && stringField(message, "tool_call_id") == call.ID {
+			return stringField(message, "content"), true
+		}
+	}
+	return "", false
 }
 
 func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runID string, call cloudAgentCall) (any, error) {
 	executed := false
 	for attempt := 0; attempt < 8 && !executed; attempt++ {
-		run, err := s.repo.CloudAgent(userID, runID)
+		run, err := s.ownedCloudAgent(ctx, userID, runID)
 		if err != nil {
 			return nil, err
+		}
+		// This helper is also called directly by recovery paths. Check the
+		// admitted execution contract before creating even a pending receipt.
+		if _, err := cloudAgentDecodeForExecution(run); err != nil {
+			return nil, err
+		}
+		if cloudAgentWrite(call.Function.Name) {
+			receipt, err := s.prepareCloudAgentWriteReceipt(run, call)
+			if errors.Is(err, repository.ErrCreationConflict) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if receipt.Status == "committed" {
+				return cloudAgentReceiptResponse(receipt)
+			}
+			if receipt.Status != "pending" {
+				return nil, NewAppError(409, "工具提交结果需要核对，未自动重发")
+			}
+			run, err = s.ownedCloudAgent(ctx, userID, runID)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if cloudAgentRunTerminal(run.Status) {
 			return nil, fmt.Errorf("run already terminated")
 		}
-		state, err := cloudAgentDecode(run)
+		state, err := cloudAgentDecodeForExecution(run)
 		if err != nil {
 			return nil, err
 		}
 		if state.StepLimits, err = s.cloudAgentStepLimits(); err != nil {
 			return nil, err
 		}
-		state.Calls = []cloudAgentCall{call}
-		state.CallIndex = 0
-		state.Approval = nil
+		if !cloudAgentWrite(call.Function.Name) {
+			state.Calls = []cloudAgentCall{call}
+			state.CallIndex = 0
+			state.Approval = nil
+		} else if state.CallIndex >= len(state.Calls) || state.Calls[state.CallIndex].ID != call.ID {
+			return nil, NewAppError(409, "工具恢复记录不一致，未自动重发")
+		}
 		err = s.advanceCloudAgentTool(run, &state)
+		if errors.Is(err, errCloudAgentReceiptReplay) {
+			continue
+		}
 		if errors.Is(err, repository.ErrCreationConflict) {
 			time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
 			continue
@@ -253,6 +337,16 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		if err != nil {
 			return nil, err
 		}
+		run.ExecutionFence = cloudAgentFence(ctx)
+		if run.Status == "completed" || run.Status == "failed" {
+			// The same tool still needs its committed question or failure result.
+			// Only this terminal read retains the original owner and lease.
+			if err := s.repo.CheckCloudAgentPiSnapshotOwner(run, cloudAgentFence(ctx)); err != nil {
+				return nil, err
+			}
+		} else if err := s.repo.CheckCloudAgentOwner(run, cloudAgentFence(ctx)); err != nil {
+			return nil, err
+		}
 		state, err := cloudAgentDecode(run)
 		if err != nil {
 			return nil, err
@@ -260,30 +354,27 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		if run.Status == "waiting_approval" && state.Approval != nil {
 			return map[string]any{"pause": true, "approvalId": state.Approval.ID, "content": "操作正在等待用户审批。"}, nil
 		}
-		if cloudAgentRunTerminal(run.Status) && run.Status != "completed" {
-			return nil, fmt.Errorf("%s", firstNonEmpty(run.FailureMessage, "Agent 工具执行失败"))
-		}
 		if content, ok := cloudAgentToolMessage(&state, call.ID); ok {
 			if trimmed := strings.TrimSpace(content); trimmed == "" || trimmed == "null" {
 				content = `{"error":"工具没有返回结果"}`
 			}
 			result := map[string]any{"content": content, "isError": cloudAgentToolContentIsError(content)}
-			if call.Function.Name == "ask_user" {
-				var payload map[string]any
-				if json.Unmarshal([]byte(content), &payload) == nil && stringValue(payload["phase"]) == "question" {
-					// ask_user 已经把本轮交给用户，Pi 不能再发起下一次模型调用。
-					result["terminate"] = true
-				}
+			if cloudAgentRunTerminal(run.Status) {
+				// Persist the paired result without another model call after termination.
+				result["terminate"] = true
 			}
 			return result, nil
+		}
+		if cloudAgentRunTerminal(run.Status) && run.Status != "completed" {
+			return nil, fmt.Errorf("%s", firstNonEmpty(run.FailureMessage, "Agent 工具执行失败"))
 		}
 		if state.MediaTaskID == "" {
 			return nil, fmt.Errorf("tool %s produced no result", call.Function.Name)
 		}
-		if _, err := s.waitCloudAgentTask(ctx, state.MediaTaskID); err != nil && ctx.Err() != nil {
+		if _, err := s.waitCloudAgentMediaTask(ctx, userID, runID, state.MediaTaskID); err != nil && ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if err := s.settleCloudAgentMedia(userID, runID); err != nil {
+		if err := s.settleCloudAgentMedia(userID, runID, cloudAgentFence(ctx)); err != nil {
 			return nil, err
 		}
 	}
@@ -291,12 +382,13 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 
 // settleCloudAgentMedia 在媒体任务结束后用唯一的业务执行器回写画布、记录工具结果并释放
 // MediaTaskID。任务仍在生成时直接返回；并发写冲突时重读重试。
-func (s *Service) settleCloudAgentMedia(userID, runID string) error {
+func (s *Service) settleCloudAgentMedia(userID, runID string, fences ...*model.CloudAgentFence) error {
 	for attempt := 0; attempt < 8; attempt++ {
 		latest, err := s.repo.CloudAgent(userID, runID)
 		if err != nil {
 			return err
 		}
+		cloudAgentBindFence(latest, fences)
 		fresh, err := cloudAgentDecode(latest)
 		if err != nil {
 			return err
@@ -304,7 +396,16 @@ func (s *Service) settleCloudAgentMedia(userID, runID string) error {
 		if fresh.MediaTaskID == "" || fresh.CallIndex >= len(fresh.Calls) {
 			return nil
 		}
-		err = s.advanceCloudAgentMedia(latest, &fresh, fresh.Calls[fresh.CallIndex])
+		call := fresh.Calls[fresh.CallIndex]
+		if cloudAgentCommerceBatchCall(call.Function.Name) {
+			batch := fresh.CommerceBatch
+			if fresh.Approval != nil && fresh.Approval.Batch != nil {
+				batch = fresh.Approval.Batch
+			}
+			err = s.advanceCloudAgentCommerceBatch(latest, &fresh, call, batch)
+		} else {
+			err = s.advanceCloudAgentMedia(latest, &fresh, call)
+		}
 		if !errors.Is(err, repository.ErrCreationConflict) {
 			return err
 		}
@@ -335,6 +436,27 @@ func cloudAgentToolContentIsError(content string) bool {
 // cloudAgentPiEvent 事件桥接。Node 端事件是平铺字段（{type, message, ...}），
 // 不是 {type, data}；这里把整个 payload 作为事件数据交给处理器。
 func (s *Service) cloudAgentPiEvent(ctx context.Context, userID, runID string, payload map[string]json.RawMessage) (any, error) {
+	var eventType string
+	if err := json.Unmarshal(payload["type"], &eventType); err != nil {
+		return nil, fmt.Errorf("decode Agent event type: %w", err)
+	}
+	run, err := s.repo.CloudAgent(userID, runID)
+	if err != nil {
+		return nil, err
+	}
+	terminalFlush := (run.Status == "completed" || run.Status == "failed") && (eventType == "session_snapshot" || eventType == "tool_call_end")
+	if terminalFlush {
+		// The same live owner may finish a terminated tool's journal flush.
+		err = s.repo.CheckCloudAgentPiSnapshotOwner(run, cloudAgentFence(ctx))
+	} else {
+		err = s.repo.CheckCloudAgentOwner(run, cloudAgentFence(ctx))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Pi event %s: %w", eventType, err)
+	}
+	if terminalFlush && eventType == "tool_call_end" {
+		return map[string]any{"ok": true}, nil
+	}
 	data := map[string]any{}
 	for key, raw := range payload {
 		var value any
@@ -343,7 +465,6 @@ func (s *Service) cloudAgentPiEvent(ctx context.Context, userID, runID string, p
 		}
 		data[key] = value
 	}
-	eventType, _ := data["type"].(string)
 	if nested, ok := data["data"].(map[string]any); ok {
 		for key, value := range nested {
 			if _, exists := data[key]; !exists {
@@ -359,24 +480,26 @@ func (s *Service) cloudAgentPiEvent(ctx context.Context, userID, runID string, p
 
 	switch eventType {
 	case "message_start":
-		return s.handleMessageStart(userID, runID, data)
+		return s.handleMessageStart(userID, runID, data, cloudAgentFence(ctx))
 	case "message_delta":
-		return s.handleMessageDelta(userID, runID, data)
+		return s.handleMessageDelta(userID, runID, data, cloudAgentFence(ctx))
 	case "message_end":
-		return s.handleMessageEnd(userID, runID, data)
+		return s.handleMessageEnd(userID, runID, data, cloudAgentFence(ctx))
+	case "compaction_start", "compaction_end":
+		return s.handlePiCompaction(userID, runID, data, cloudAgentFence(ctx))
 	case "session_snapshot":
-		return s.handlePiSessionSnapshot(userID, runID, data)
+		return s.handlePiSessionSnapshot(userID, runID, data, cloudAgentFence(ctx))
 	case "tool_call", "tool_call_start", "tool_call_end":
-		return s.handleToolCall(userID, runID, data)
+		return s.handleToolCall(userID, runID, data, cloudAgentFence(ctx))
 	case "error":
-		return s.handleError(userID, runID, data)
+		return s.handleError(userID, runID, data, cloudAgentFence(ctx))
 	default:
 		return map[string]any{"ok": true}, nil
 	}
 }
 
 // handlePiSessionSnapshot 持久化 Pi 原生会话 JSONL，用于审批恢复和续轮。
-func (s *Service) handlePiSessionSnapshot(userID, runID string, data map[string]any) (any, error) {
+func (s *Service) handlePiSessionSnapshot(userID, runID string, data map[string]any, fences ...*model.CloudAgentFence) (any, error) {
 	sessionJSONL, _ := data["sessionJSONL"].(string)
 	if sessionJSONL == "" {
 		return map[string]any{"ok": true}, nil
@@ -389,7 +512,14 @@ func (s *Service) handlePiSessionSnapshot(userID, runID string, data map[string]
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
-		err = s.repo.SaveCloudAgentPiSession(&model.CloudAgentPiSession{RunID: runID, UserID: userID, SessionJSONL: sessionJSONL, UpdatedAt: time.Now()}, expected)
+		run, err := s.repo.CloudAgent(userID, runID)
+		if err != nil {
+			return nil, err
+		}
+		cloudAgentBindFence(run, fences)
+		err = s.repo.MutateCloudAgentPiSnapshot(run, func(_ *model.CloudAgentExecution, repo *repository.Repository) error {
+			return repo.SaveCloudAgentPiSession(&model.CloudAgentPiSession{RunID: runID, UserID: userID, SessionJSONL: sessionJSONL, UpdatedAt: time.Now()}, expected)
+		})
 		if err == nil {
 			if expected == 0 {
 				// OnConflict DoNothing：并发首写时再按 revision 覆盖一次。
@@ -399,7 +529,7 @@ func (s *Service) handlePiSessionSnapshot(userID, runID string, data map[string]
 			}
 			return map[string]any{"ok": true}, nil
 		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
+		if !errors.Is(err, gorm.ErrRecordNotFound) && !errors.Is(err, repository.ErrCreationConflict) {
 			return nil, err
 		}
 	}

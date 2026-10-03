@@ -72,26 +72,39 @@ type ChannelModel struct {
 // SelectorKey 是规范化 JSON，用于 PostgreSQL 的活动规格唯一约束。旧的 Resolution / VideoSeconds
 // 仅保留给历史 API 与升级回填，不能再作为 SKU 唯一性依据。
 type ChannelModelPriceTier struct {
-	CostPricing                  CreditCostPricing `json:"-" gorm:"embedded;embeddedPrefix:cost_"`
-	ID                           string            `json:"id" gorm:"primaryKey;size:36"`
-	ChannelModelID               string            `json:"channelModelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_price_tier_active,priority:1,where:deleted_at IS NULL"`
-	SelectorKey                  string            `json:"selectorKey" gorm:"size:500;not null;default:{};uniqueIndex:idx_channel_model_price_tier_active,priority:2,where:deleted_at IS NULL"`
-	SelectorJSON                 string            `json:"-" gorm:"type:text;not null;default:{}"`
-	Selector                     map[string]string `json:"selector,omitempty" gorm:"-"`
-	Resolution                   string            `json:"resolution" gorm:"size:24;not null;default:*"`
-	VideoSeconds                 int               `json:"videoSeconds" gorm:"not null;default:0"`
-	ProviderModelKey             string            `json:"providerModelKey" gorm:"size:120"`
-	BillingMode                  string            `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
-	PriceConfigured              bool              `json:"priceConfigured" gorm:"index"`
-	Enabled                      bool              `json:"enabled" gorm:"index"`
-	PriceVersion                 int64             `json:"priceVersion"`
-	CreatedAt                    time.Time         `json:"createdAt"`
-	UpdatedAt                    time.Time         `json:"updatedAt"`
-	DeletedAt                    gorm.DeletedAt    `json:"-" gorm:"index"`
+	CostPricing                  CreditCostPricing   `json:"-" gorm:"embedded;embeddedPrefix:cost_"`
+	ID                           string              `json:"id" gorm:"primaryKey;size:36"`
+	ChannelModelID               string              `json:"channelModelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_price_tier_active,priority:1,where:deleted_at IS NULL"`
+	SelectorKey                  string              `json:"selectorKey" gorm:"size:500;not null;default:{};uniqueIndex:idx_channel_model_price_tier_active,priority:2,where:deleted_at IS NULL"`
+	SelectorJSON                 string              `json:"-" gorm:"type:text;not null;default:{}"`
+	Selector                     map[string]string   `json:"selector,omitempty" gorm:"-"`
+	Resolution                   string              `json:"resolution" gorm:"size:24;not null;default:*"`
+	VideoSeconds                 int                 `json:"videoSeconds" gorm:"not null;default:0"`
+	ProviderModelKey             string              `json:"providerModelKey" gorm:"size:120"`
+	BillingMode                  string              `json:"billingMode" gorm:"size:32"`
+	UnitPriceMicrocredits        int64               `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64               `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64               `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64               `json:"cachedTokenPriceMicrocredits"`
+	TimePricing                  *ChannelTimePricing `json:"timePricing,omitempty" gorm:"serializer:json;type:text"`
+	PriceConfigured              bool                `json:"priceConfigured" gorm:"index"`
+	Enabled                      bool                `json:"enabled" gorm:"index"`
+	PriceVersion                 int64               `json:"priceVersion"`
+	CreatedAt                    time.Time           `json:"createdAt"`
+	UpdatedAt                    time.Time           `json:"updatedAt"`
+	DeletedAt                    gorm.DeletedAt      `json:"-" gorm:"index"`
+}
+
+// ChannelTimePricing configures daily price multipliers for one price tier.
+type ChannelTimePricing struct {
+	Timezone string                     `json:"timezone"`
+	Periods  []ChannelTimePricingPeriod `json:"periods"`
+}
+
+type ChannelTimePricingPeriod struct {
+	StartTime  string  `json:"startTime"`
+	EndTime    string  `json:"endTime"`
+	Multiplier float64 `json:"multiplier"`
 }
 
 type ApiCallLog struct {

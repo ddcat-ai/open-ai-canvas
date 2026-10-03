@@ -21,7 +21,7 @@
 | 统一字段 | 类型 | 必填 | 上游映射 | 说明 |
 | --- | --- | --- | --- | --- |
 | `model` | string | 是 | `model` | 音频模型 ID。 |
-| `prompt` | string | 是 | `input` | 待合成文本。 |
+| `prompt` | string | 是 | `text_prompt` | 待合成文本。 |
 | `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段。 |
 
 ## 上游请求模板逐字段清单
@@ -126,7 +126,7 @@
             "name": "prompt",
             "type": "string",
             "required": true,
-            "mapping": "input",
+            "mapping": "text_prompt",
             "description": "待合成文本。"
           },
           {
@@ -135,6 +135,63 @@
             "required": false,
             "mapping": "provider-specific fields",
             "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                1
+              ]
+            },
+            "message": "豆包音频最多支持 1 张参考图片"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.audios"
+                  }
+                },
+                3
+              ]
+            },
+            "message": "豆包音频最多支持 3 段参考音频"
+          },
+          {
+            "assert": {
+              "$not": {
+                "$and": [
+                  {
+                    "$gt": [
+                      {
+                        "$len": {
+                          "$ref": "request.images"
+                        }
+                      },
+                      0
+                    ]
+                  },
+                  {
+                    "$gt": [
+                      {
+                        "$len": {
+                          "$ref": "request.audios"
+                        }
+                      },
+                      0
+                    ]
+                  }
+                ]
+              }
+            },
+            "message": "豆包音频不能同时使用图片和音频参考素材"
           }
         ],
         "create": {

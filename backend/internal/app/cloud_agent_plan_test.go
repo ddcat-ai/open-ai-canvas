@@ -48,6 +48,19 @@ func TestCloudAgentPlanRequiresFirstApprovalOnlyInRequestApproval(t *testing.T) 
 	}
 }
 
+func TestCreationPlanningContinuesUntilConcreteMediaReview(t *testing.T) {
+	call := cloudAgentCall{ID: "planning-only"}
+	call.Function.Name = "plan_update"
+	call.Function.Arguments = `{"items":[{"id":"revise","title":"按备注调整规格与风格","status":"doing"},{"id":"review","title":"提交完整方案及报价","status":"pending"}]}`
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{Surface: "creation", PermissionMode: "request_approval"}}
+	if cloudAgentPlanRequiresFirstApproval(state, call) {
+		t.Fatal("creation paused before producing a concrete media plan and quote")
+	}
+	if _, err := cloudAgentApplyPlanUpdate(state, call); err != nil || len(state.Plan) != 2 {
+		t.Fatalf("planning checklist could not update: %v", err)
+	}
+}
+
 func TestCloudAgentInheritedPlanReachesFirstModelRequest(t *testing.T) {
 	s, db, root := reliableAgentRoot(t)
 	run, state := agentInterjectionState(t, s, root.ID)

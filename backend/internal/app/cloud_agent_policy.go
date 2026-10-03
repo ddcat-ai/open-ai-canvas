@@ -10,9 +10,16 @@ import (
 )
 
 const (
-	cloudAgentCompilerVersion  = "cloud-agent-policy-compiler/v4"
-	cloudAgentDefaultReasoning = "off"
+	cloudAgentCompilerVersion              = "cloud-agent-policy-compiler/v4"
+	cloudAgentDefaultReasoning             = "off"
+	cloudAgentCreationCapabilitySetVersion = "creation-agent-capabilities/v5"
 )
+
+const cloudAgentCreationCapabilityGuide = "首页创作能力：当前会话对话与规划、按本轮所选图片/视频执行模型生成、已授权附件引用、电商计划审核、本会话任务查询。能否读取图片内容取决于当前对话模型声明的图片输入能力和本次实际附图。当前入口没有画布数据、画布工具、默认长期偏好或个人记忆。"
+
+func cloudAgentCreationCapabilitySetHash() string {
+	return agentProfileHash(cloudAgentCreationCapabilityGuide)
+}
 
 type cloudAgentPolicySnapshot struct {
 	SystemPolicyID       string `json:"systemPolicyId"`
@@ -148,15 +155,23 @@ func cloudAgentSkillManifestDescription(description string) string {
 
 func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
 	system, media, err := prompts.LoadAgentPolicies()
+	creation := req.Surface == "creation"
+	if creation {
+		system, media, err = prompts.LoadCreationAgentPolicies()
+	}
 	if err != nil {
 		return "", cloudAgentPolicySnapshot{}, err
 	}
 	mode := cloudAgentReasoningMode(req)
 	capabilityHash := cloudAgentCapabilitySetHash()
+	capabilityVersion := cloudAgentCapabilitySetVersion
+	if creation {
+		capabilityHash, capabilityVersion = cloudAgentCreationCapabilitySetHash(), cloudAgentCreationCapabilitySetVersion
+	}
 	snapshot := cloudAgentPolicySnapshot{
 		SystemPolicyID: system.ID, SystemPolicyVersion: system.Version, SystemPolicyHash: system.Hash,
 		MediaPolicyID: media.ID, MediaPolicyVersion: media.Version, MediaPolicyHash: media.Hash,
-		CapabilitySetVersion: cloudAgentCapabilitySetVersion, CapabilitySetHash: capabilityHash,
+		CapabilitySetVersion: capabilityVersion, CapabilitySetHash: capabilityHash,
 		ReasoningMode: mode, CompilerVersion: cloudAgentCompilerVersion,
 		ProfileRevision: profile.Revision, ProfileHash: profile.Hash,
 	}
@@ -168,8 +183,17 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 	b.WriteString(media.Text)
 	b.WriteString("\n\n")
 	recorder.mark(&b, "mediaPolicy", "媒体策略")
-	b.WriteString(cloudAgentCapabilityGuide())
-	recorder.mark(&b, "capabilities", "节点能力与选型")
+	if creation {
+		b.WriteString(cloudAgentCreationCapabilityGuide)
+		recorder.mark(&b, "capabilities", "首页创作能力")
+		if req.OutputPreference == "concise" {
+			b.WriteString("\n\n输出偏好：简洁。优先让用户看到图片和主要结果；正文只简短说明交付数量、关键规格、真实完成或失败状态及必要下一步。完整方案由审核卡承载，不在正文重复逐图方案、素材与事实清单、风格说明或大段结果表格。普通问答和必要澄清保持信息完整。结构化计划、逐图生成提示词、上图文案、费用与审批信息仍须完整准确，只精简用户可见的说明。用户本轮明确要求详细解释时优先满足该要求。")
+			recorder.mark(&b, "outputPreference", "输出偏好")
+		}
+	} else {
+		b.WriteString(cloudAgentCapabilityGuide())
+		recorder.mark(&b, "capabilities", "节点能力与选型")
+	}
 	// Behavior belongs to versioned policies; the compiler only projects facts.
 	context := map[string]any{
 		"source": "server_snapshot", "permissionMode": req.PermissionMode,
@@ -180,25 +204,37 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 		},
 		"maxToolCalls": cloudAgentMaxToolCalls, "maxOutputBytes": cloudAgentMaxOutputBytes,
 	}
-	if strings.TrimSpace(canvasSummary) != "" {
+	if creation {
+		context["surface"] = "creation"
+		context["dialogueImageInputEnabled"] = req.VisionEnabled
+		if req.OutputPreference != "" {
+			context["outputPreference"] = req.OutputPreference
+		}
+	}
+	if !creation && strings.TrimSpace(canvasSummary) != "" {
 		// Callers may provide a catalog for policy-contract tests or other
 		// isolated compilation paths. The production run path deliberately
 		// passes an empty value and places the catalog in canonical messages so
 		// the stable system prefix remains cacheable.
 		context["canvasSummary"] = canvasSummary
 	}
-	if len(anchors) > 0 {
+	if !creation && len(anchors) > 0 {
 		// User intent remains in user messages, never frozen into system context.
 		context["referenceCandidates"] = anchors[0].ReferenceAssets
 	}
 	manifests := make([]map[string]any, 0, len(skills))
 	for _, skill := range skills {
-		manifests = append(manifests, map[string]any{"skillId": skill.ID, "name": skill.Name, "description": cloudAgentSkillManifestDescription(skill.Description), "version": skill.Version, "hash": skill.Hash, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill)})
+		if err := validateCloudAgentSkillSurface(skill, req.Surface); err != nil {
+			return "", cloudAgentPolicySnapshot{}, err
+		}
+		manifests = append(manifests, map[string]any{"skillId": skill.ID, "name": skill.Name, "description": cloudAgentSkillManifestDescription(skill.Description), "version": skill.Version, "hash": skill.Hash, "surfaces": skill.Surfaces, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill)})
 	}
 	context["skills"] = manifests
 	layers := make([]map[string]any, 0, len(profile.Layers))
-	for _, layer := range profile.Layers {
-		layers = append(layers, map[string]any{"scope": layer.Scope, "revision": layer.Revision, "hash": layer.Hash, "characters": utf8.RuneCountInString(layer.Content)})
+	if !creation {
+		for _, layer := range profile.Layers {
+			layers = append(layers, map[string]any{"scope": layer.Scope, "revision": layer.Revision, "hash": layer.Hash, "characters": utf8.RuneCountInString(layer.Content)})
+		}
 	}
 	context["profileLayers"] = layers
 	encoded, err := json.Marshal(context)

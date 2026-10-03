@@ -28,6 +28,7 @@ func cloudAgentDecode(run *model.CloudAgentExecution) (cloudAgentRuntime, error)
 		return state, fmt.Errorf("decode Agent runtime state: %w", err)
 	}
 	state.RuntimeRunID = run.ID
+	state.ExecutionFence = run.ExecutionFence
 	if run.CheckpointVersion >= 2 {
 		if len(run.Transcript) != run.MessageCount {
 			return state, errors.New("Agent execution transcript is incomplete")
@@ -106,6 +107,9 @@ func cloudAgentDecodeForExecution(run *model.CloudAgentExecution) (cloudAgentRun
 	if err := validateCloudAgentPolicySnapshot(state.Policy); err != nil {
 		return state, WrapAppError(409, "Agent 运行使用旧版执行合同，无法继续原运行；请新建一轮消息", err)
 	}
+	if (state.Request.Surface == "creation") != (state.Policy.SystemPolicyID == "creation-agent-system") {
+		return state, NewAppError(409, "Agent 运行的入口与执行合同不一致，请继续发送新消息")
+	}
 	return state, nil
 }
 
@@ -118,7 +122,7 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 		// execution identity. Durable rows are always validated below.
 		return nil
 	}
-	if state.Request.CanvasID == "" || state.Request.Prompt == "" || state.Request.PermissionMode == "" {
+	if (state.Request.Surface != "creation" && state.Request.CanvasID == "") || state.Request.Prompt == "" || state.Request.PermissionMode == "" {
 		return errors.New("Agent runtime request is incomplete")
 	}
 	if err := validateCloudAgentRequest(&state.Request); err != nil {
@@ -224,7 +228,7 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 		return errors.New("Agent runtime active task is not in task history")
 	}
 	if state.MediaTaskID != "" {
-		if !cloudAgentContainsString(state.TaskIDs, state.MediaTaskID) || state.CallIndex >= len(state.Calls) || (state.Calls[state.CallIndex].Function.Name != "generate_media" && state.Calls[state.CallIndex].Function.Name != "image_layer_split") {
+		if !cloudAgentContainsString(state.TaskIDs, state.MediaTaskID) || state.CallIndex >= len(state.Calls) || (state.Calls[state.CallIndex].Function.Name != "generate_media" && state.Calls[state.CallIndex].Function.Name != "image_layer_split" && (!cloudAgentCommerceBatchCall(state.Calls[state.CallIndex].Function.Name) || state.CommerceBatch == nil && (state.Approval == nil || state.Approval.Batch == nil))) {
 			return errors.New("Agent runtime media task is not attached to current call")
 		}
 	}
@@ -299,13 +303,18 @@ func validateCloudAgentPolicySnapshot(snapshot cloudAgentPolicySnapshot) error {
 	if snapshot.CompilerVersion != cloudAgentCompilerVersion {
 		return errors.New("Agent runtime policy compiler is unsupported")
 	}
-	if snapshot.CapabilitySetVersion != cloudAgentCapabilitySetVersion {
-		return errors.New("Agent runtime capability contract is unsupported")
-	}
 	if snapshot.ReasoningMode != "off" && snapshot.ReasoningMode != "auto" && snapshot.ReasoningMode != "deep" {
 		return errors.New("Agent runtime reasoning mode is invalid")
 	}
 	system, media, err := prompts.LoadAgentPolicies()
+	capabilityVersion, capabilityHash := cloudAgentCapabilitySetVersion, cloudAgentCapabilitySetHash()
+	if snapshot.SystemPolicyID == "creation-agent-system" {
+		system, media, err = prompts.LoadCreationAgentPolicies()
+		capabilityVersion, capabilityHash = cloudAgentCreationCapabilitySetVersion, cloudAgentCreationCapabilitySetHash()
+	}
+	if snapshot.CapabilitySetVersion != capabilityVersion {
+		return errors.New("Agent runtime capability contract is unsupported")
+	}
 	if err != nil {
 		return fmt.Errorf("load Agent runtime policies: %w", err)
 	}
@@ -314,7 +323,7 @@ func validateCloudAgentPolicySnapshot(snapshot cloudAgentPolicySnapshot) error {
 	}
 	// An existing run keeps its admitted prompt and tool schema. Never resume it
 	// against changed policies or capabilities under an unchanged version label.
-	if snapshot.SystemPolicyHash != system.Hash || snapshot.MediaPolicyHash != media.Hash || snapshot.CapabilitySetHash != cloudAgentCapabilitySetHash() {
+	if snapshot.SystemPolicyHash != system.Hash || snapshot.MediaPolicyHash != media.Hash || snapshot.CapabilitySetHash != capabilityHash {
 		return errors.New("Agent runtime policy or capability contract has changed")
 	}
 	return nil
@@ -495,6 +504,11 @@ func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) er
 		return cloudAgentCheckpointFailure("state size", fmt.Errorf("Agent 状态超过 512KB 上限（%d bytes）", len(raw)))
 	}
 	run.CanvasID, run.ActiveTaskID, run.MediaTaskID = state.Request.CanvasID, state.ActiveTaskID, state.MediaTaskID
+	run.SessionID = state.Request.SessionID
+	run.Surface = state.Request.Surface
+	if contextSelection, marshalErr := json.Marshal(state.Request.ContextSelection); marshalErr == nil {
+		run.ContextSelectionJSON = string(contextSelection)
+	}
 	run.ParentID = state.ParentID
 	if run.Title == "" {
 		run.Title = truncateRunes(state.Request.Prompt, 80)

@@ -3,6 +3,13 @@ import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { getActiveUserScope } from "@/lib/user-scope";
 import type { AgentPermissionMode, AgentRun } from "@/services/api/agent";
 
+/** Pick the newest run that belongs to the canvas currently being opened. */
+export function latestCloudAgentRunForCanvas(runs: AgentRun[], canvasId: string): AgentRun | null {
+    return [...runs]
+        .filter((run) => run.canvasId === canvasId)
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] || null;
+}
+
 export type CloudAgentConversationMessage = {
     id: string;
     role: "user" | "assistant" | "system" | "tool" | "error";
@@ -21,6 +28,7 @@ export type CloudAgentConversationMessage = {
 
 export type CloudAgentConversation = {
     id: string;
+    sessionId?: string;
     title: string;
     messages: CloudAgentConversationMessage[];
     run: AgentRun | null;
@@ -138,6 +146,7 @@ function isConversationDocument(value: unknown): value is CloudAgentConversation
             && Array.isArray(candidate.messages)
             && typeof candidate.createdAt === "string"
             && typeof candidate.updatedAt === "string"
+            && (candidate.sessionId === undefined || typeof candidate.sessionId === "string")
             && ["read_only", "auto", "request_approval"].includes(candidate.permissionMode || "");
     });
 }

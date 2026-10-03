@@ -18,6 +18,8 @@ import {
     getAgentRun,
     createAgentRun,
     decideAgentApproval,
+    listAgentSessions,
+    getAgentSession,
     sendAgentInterjection,
     sendAgentMessage,
     subscribeAgentEvents,
@@ -35,6 +37,7 @@ import { addSkill, listAddedSkills, listSkillLibraryCategories, listSkills, list
 import {
     clearCloudAgentPendingSubmission,
     cloudAgentConversationTitle,
+    latestCloudAgentRunForCanvas,
     loadCloudAgentConversations,
     loadCloudAgentPendingSubmission,
     saveCloudAgentConversations,
@@ -73,6 +76,52 @@ type CloudAgentPanelProps = {
     runningNodeId?: string | null;
 };
 type AgentPanelView = "chat" | "history" | "settings";
+
+async function mergeRemoteAgentSessions(canvasId: string, local: CloudAgentConversation[]) {
+    try {
+        const result = await listAgentSessions({ canvasId, surface: "canvas", limit: 50 });
+        const remoteSessions = result.sessions || [];
+        const localSessionIds = new Set(local.flatMap((conversation) => [conversation.sessionId, conversation.run?.sessionId].filter((id): id is string => Boolean(id))));
+        const remoteOnly = remoteSessions.filter((session) => !localSessionIds.has(session.id)).slice(0, 20);
+        const details = await Promise.all(remoteOnly.map(async (session) => {
+            try {
+                const detail = await getAgentSession(session.id, AbortSignal.timeout(8_000));
+                return { session, run: latestCloudAgentRunForCanvas(detail.runs || [], canvasId), loaded: true };
+            } catch {
+                return { session, run: null, loaded: false };
+            }
+        }));
+        const additions: CloudAgentConversation[] = details.filter(({ run, loaded }) => !loaded || Boolean(run)).map(({ session, run }) => ({
+            id: session.id,
+            sessionId: session.id,
+            title: session.title || "Agent 会话",
+            messages: [{
+                id: `remote-session:${session.id}`,
+                role: "system" as const,
+                text: run ? `已恢复服务端会话，最新运行状态：${agentRunStatusLabel(run.status)}。可以继续发送新的要求。` : "已发现服务端会话，可以继续发送新的要求。",
+                detail: { source: "server-session", sessionId: session.id, runId: run?.id },
+            }],
+            run,
+            model: run?.model,
+            permissionMode: run?.permissionMode || "request_approval",
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+        }));
+        const merged = [...local, ...additions];
+        const remoteById = new Map(remoteSessions.map((session) => [session.id, session]));
+        return merged.sort((a, b) => {
+            const aUpdated = a.sessionId ? remoteById.get(a.sessionId)?.updatedAt || a.updatedAt : a.updatedAt;
+            const bUpdated = b.sessionId ? remoteById.get(b.sessionId)?.updatedAt || b.updatedAt : b.updatedAt;
+            return Date.parse(bUpdated) - Date.parse(aUpdated);
+        });
+    } catch {
+        return local;
+    }
+}
+
+function agentRunStatusLabel(status: AgentRun["status"]) {
+    return status === "completed" ? "已完成" : status === "failed" ? "失败" : status === "cancelled" ? "已取消" : status === "waiting_approval" ? "等待审批" : status === "running" || status === "queued" ? "执行中" : status;
+}
 
 export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, selectedNodeIds, references, open, prefillPrompt, onOpen, onCollapse, onFocusNode, canvasNodes, runningNodeId }: CloudAgentPanelProps) {
     const userId = useUserStore((state) => state.user?.id);
@@ -462,8 +511,10 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         void loadCloudAgentConversations(canvasId)
             .then(async (document) => {
                 if (!active) return;
-                const current = document.conversations.find((conversation) => conversation.id === document.activeId) || document.conversations[0];
-                setConversations(document.conversations);
+                const merged = await mergeRemoteAgentSessions(canvasId, document.conversations);
+                if (!active) return;
+                const current = merged.find((conversation) => conversation.id === document.activeId) || merged[0];
+                setConversations(merged);
                 if (current) {
                     setActiveConversationId(current.id);
                     setMessages(current.messages);
@@ -500,6 +551,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             const existing = current.find((conversation) => conversation.id === activeConversationId);
             const next: CloudAgentConversation = {
                 id: activeConversationId,
+                sessionId: run?.sessionId || existing?.sessionId,
                 title: cloudAgentConversationTitle(messages),
                 messages,
                 run,
@@ -609,11 +661,14 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 const agentConfig = { ...config, model: selectedModel };
                 const requestConfig = resolveModelRequestConfig(agentConfig, selectedModel);
                 const logicalModelId = logicalModelIDForConfig(agentConfig);
+                const existingConversation = conversations.find((conversation) => conversation.id === activeConversationId);
                 const input = {
                     canvasId,
                     prompt: value,
                     reasoningMode,
                     profileRevision: profileView.revision,
+                    ...(existingConversation?.sessionId || run?.sessionId ? { sessionId: existingConversation?.sessionId || run?.sessionId } : {}),
+                    surface: "canvas",
                     model: modelOptionName(selectedModel) || undefined,
                     ...(logicalModelId ? { logicalModelId } : requestConfig.channelId ? { channelId: requestConfig.channelId, channelModelKey: modelOptionName(selectedModel) || undefined } : {}),
                     skillIds: [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])],
@@ -648,6 +703,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             await saveCloudAgentConversations(canvasId, activeConversationId, [
                 {
                     id: activeConversationId,
+                    sessionId: run?.sessionId || existing?.sessionId,
                     title: cloudAgentConversationTitle(nextMessages),
                     messages: nextMessages,
                     run,
@@ -666,6 +722,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             accepted = true;
             if (currentScope.current === scope) {
                 setRun(result.run);
+                setConversations((current) => current.map((conversation) => conversation.id === activeConversationId ? { ...conversation, sessionId: result.run.sessionId || conversation.sessionId, run: result.run, updatedAt: new Date().toISOString() } : conversation));
             }
             await clearCloudAgentPendingSubmission(canvasId, activeConversationId);
             if (currentScope.current === scope) pendingSubmission.current = null;
@@ -1011,7 +1068,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                                             buckets={sceneBuckets}
                                             installedIds={installedSkillIds}
                                             theme={theme}
-                                            disabled={busy || running || !pendingHydrated || Boolean(presetApplyingId)}
+                                            disabled={Boolean(busy || running || !pendingHydrated || presetApplyingId)}
                                             onPick={(preset) => void applyScenePreset(preset)}
                                             onPickSkill={(skill) => void applySingleSkill(skill)}
                                         />

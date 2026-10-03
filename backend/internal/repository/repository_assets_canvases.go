@@ -42,13 +42,18 @@ func (r *Repository) AssetsForUserIDs(userID string, ids []string) ([]model.Asse
 }
 
 func (r *Repository) UpsertAsset(asset *model.Asset) error {
-	result := r.db.Model(&model.Asset{}).
-		Where("id = ? AND user_id = ?", asset.ID, asset.UserID).
-		Updates(map[string]any{"folder_id": asset.FolderID, "kind": asset.Kind, "category": asset.Category, "status": asset.Status, "primary_version_id": asset.PrimaryVersionID, "title": asset.Title, "payload_json": asset.PayloadJSON, "updated_at": asset.UpdatedAt})
-	if result.Error != nil || result.RowsAffected > 0 {
-		return result.Error
-	}
-	return r.db.Create(asset).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockOwnedWriteUser(tx, asset.UserID); err != nil {
+			return err
+		}
+		result := tx.Model(&model.Asset{}).
+			Where("id = ? AND user_id = ?", asset.ID, asset.UserID).
+			Updates(map[string]any{"folder_id": asset.FolderID, "kind": asset.Kind, "category": asset.Category, "status": asset.Status, "primary_version_id": asset.PrimaryVersionID, "title": asset.Title, "payload_json": asset.PayloadJSON, "updated_at": asset.UpdatedAt})
+		if result.Error != nil || result.RowsAffected > 0 {
+			return result.Error
+		}
+		return tx.Create(asset).Error
+	})
 }
 
 func (r *Repository) DeleteAsset(userID string, id string) error {
@@ -69,6 +74,9 @@ func (r *Repository) FindExpiredArchivedAssets(cutoff time.Time, limit int) ([]m
 
 func (r *Repository) ReplaceAssets(userID string, assets []model.Asset) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockOwnedWriteUser(tx, userID); err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.Asset{}, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
@@ -107,12 +115,20 @@ func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
 	if expected == 0 {
 		created := *project
 		created.Revision = 1
-		result := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&created)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrCanvasRevisionConflict
+		if err := r.db.Transaction(func(tx *gorm.DB) error {
+			if err := lockOwnedWriteUser(tx, project.UserID); err != nil {
+				return err
+			}
+			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&created)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrCanvasRevisionConflict
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 		project.Revision = 1
 		return nil

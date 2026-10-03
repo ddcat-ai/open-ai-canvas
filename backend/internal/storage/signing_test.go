@@ -60,6 +60,23 @@ func TestDisplayURLIsDeterministicForAlignedSigningTime(t *testing.T) {
 	}
 }
 
+func TestOssBucketBaseURLPrefixesHostnameWithoutNetwork(t *testing.T) {
+	base, err := OssBucketBaseURL(Settings{Endpoint: "https://oss.example.test", Bucket: "private-bucket"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.Scheme != "https" || base.Host != "private-bucket.oss.example.test" {
+		t.Fatalf("bucket base = %s", base.String())
+	}
+	ipBase, err := OssBucketBaseURL(Settings{Endpoint: "https://1.1.1.1", Bucket: "private-bucket"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ipBase.Host != "1.1.1.1" {
+		t.Fatalf("IP endpoint changed to %s", ipBase.Host)
+	}
+}
+
 func TestOneShotURLsKeepCurrentTimeSigningWithoutCacheOverride(t *testing.T) {
 	setting := Settings{Provider: qiniuKodoProvider, Endpoint: "https://up-z0.qiniup.com", Bucket: "bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value"}
 	value, err := SignedOriginObjectDownloadURL(setting, "users/u-1/video/clip.mp4", time.Now().Add(time.Hour), "镜头.mp4")

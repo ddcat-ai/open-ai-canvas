@@ -29,6 +29,10 @@ Dola-pool 的任务按 API Key 隔离；创建与查询必须使用同一把 Key
 
 错误响应使用 `{ "detail": "错误原因" }`。其他状态码与参数限制以 Dola-pool 接口文档及 `/v1/models` 当前返回为准。
 
+## 取消边界
+
+当前 profile 未声明经验证的上游取消端点，使用 `nonCancelable` 明确该边界。任务提交后不能保证取消上游任务。
+
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
 
@@ -287,6 +291,9 @@ Dola-pool 的任务按 API Key 隔离；创建与查询必须使用同一把 Key
             "message"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前插件未声明经验证的上游取消端点，提交后不能保证取消上游任务。"
         }
       }
     ]

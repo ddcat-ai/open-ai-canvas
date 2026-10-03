@@ -7,6 +7,7 @@ import type { ResponseInputMessage } from "@/services/api/image";
 import { dynamicCreativePlan, type CreativeDynamicPlan } from "./creative-plan";
 import { normalizeCreativeField } from "./creative-agent-contract";
 import { CREATIVE_SCENARIOS, type CreativeAnswers, type CreativeBrief, type CreativeGenerationItem, type CreativePlan, type CreativeProposal, type CreativeQuestionRequest, type CreativeScenarioId } from "./creative-agent-contract";
+import { compileCreativeStylePrompt, normalizeCreativeStyleBible } from "./creative-style-plan";
 
 export type CreativeReference = { id: string; title: string; kind: "image" | "text"; assetId?: string; storageKey?: string; text?: string; mimeType?: string; width?: number; height?: number };
 export type CreativeMessage = { id: string; role: "user" | "assistant"; text: string; question?: CreativeQuestionRequest; answers?: CreativeAnswers; proposal?: CreativeProposal };
@@ -54,7 +55,7 @@ export function mergeCreativeBrief(brief: CreativeBrief, raw: unknown, _scene: C
 }
 
 export function normalizeCreativeProposal(raw: unknown, id: string, version: number, config: AiConfig, references: CreativeReference[] = []): CreativeProposal<{ existingAssets: Record<string, CreativeReference> }> {
-    const data = record(raw), workflow = record(data.workflow);
+    const data = record(raw), workflow = record(data.workflow), styleBible = normalizeCreativeStyleBible(data.styleBible);
     const existingAssets: Record<string, CreativeReference> = {};
     if (!Array.isArray(workflow.nodes) || workflow.nodes.length < 1 || workflow.nodes.length > 20) throw new Error("方案应包含 1 至 20 个有明确用途的节点");
     const nodes = workflow.nodes.map((value) => {
@@ -71,7 +72,7 @@ export function normalizeCreativeProposal(raw: unknown, id: string, version: num
         const shots = Array.isArray(node.shots) ? node.shots.map((value) => { const shot = record(value); const durationSeconds = Number(shot.durationSeconds); if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error("分镜时长必须大于零"); return { durationSeconds, videoMotionPrompt: required(shot.videoMotionPrompt, "分镜视频提示词"), dialogue: str(shot.dialogue) }; }) : undefined;
         if (shots && shots.length > 100) throw new Error("分镜最多 100 行");
         if (kind === "script" && !shots?.length) throw new Error("分镜方案必须提供非空 script.shots，每镜填写 durationSeconds 和 videoMotionPrompt；请把已设计镜头转成真实行，不能只填 content 或 prompt");
-        return { ref: required(node.ref, "节点引用"), kind: kind as "text" | "image" | "video" | "styleboard" | "story_input" | "script", title: required(node.title, "节点标题"), content, prompt, shots, runGeneration: false, referenceRefs: Array.isArray(node.referenceRefs) ? node.referenceRefs.map(String) : [], referenceNodeIds: Array.isArray(node.referenceNodeIds) ? node.referenceNodeIds.map(String) : [] };
+        return { ref: required(node.ref, "节点引用"), kind: kind as "text" | "image" | "video" | "styleboard" | "story_input" | "script", title: required(node.title, "节点标题"), content, prompt: styleBible && (kind === "image" || kind === "video") && !assetId ? compileCreativeStylePrompt(styleBible, prompt) : prompt, shots, runGeneration: false, referenceRefs: Array.isArray(node.referenceRefs) ? node.referenceRefs.map(String) : [], referenceNodeIds: Array.isArray(node.referenceNodeIds) ? node.referenceNodeIds.map(String) : [] };
     });
     const refs = new Set(nodes.map((node) => node.ref));
     if (refs.size !== nodes.length) throw new Error("方案节点引用重复");
@@ -100,13 +101,14 @@ export function normalizeCreativeProposal(raw: unknown, id: string, version: num
         // A model may repeat a real canvas ID in both reference fields. Keep one verified input.
         node.referenceNodeIds = [...referenceNodeIds];
         const seconds = item.seconds === undefined ? undefined : Number(item.seconds);
-        const result = { ref, mode: node.kind, model, size: str(item.size) || undefined, seconds, quality: str(item.quality) || undefined, referenceRefs };
+        const result = { ref, mode: node.kind, model, size: str(item.size) || undefined, seconds, quality: str(item.quality) || undefined, referenceRefs, styleFingerprint: styleBible?.fingerprint };
         assertCreativeMediaCapability(result, config, referenceRefs.length + node.referenceNodeIds.length);
         node.referenceRefs = referenceRefs;
         return result;
     });
     const mediaRefs = generationItems.map((item) => item.ref);
     if (new Set(mediaRefs).size !== mediaRefs.length) throw new Error("方案存在重复的 generationItems.ref，每个待生成媒体节点只能对应一个生成项");
+    if (styleBible?.anchorRef && !mediaRefs.includes(styleBible.anchorRef) && !existingAssets[styleBible.anchorRef]) throw new Error(`风格锚点 ${styleBible.anchorRef} 不对应可用的图片节点`);
     const missing = nodes.filter((node) => (node.kind === "image" || node.kind === "video") && !existingAssets[node.ref] && !mediaRefs.includes(node.ref));
     if (missing.length) throw new Error(`方案缺少媒体生成配置：${missing.map((node) => `${node.title}（ref=${node.ref}，mode=${node.kind}）`).join("、")}。请补齐 generationItems；配置用于方案校验与报价，不代表立即生成，仍需用户确认。`);
     // 引用图的循环依赖会造成永远没有可执行批次。
@@ -114,7 +116,7 @@ export function normalizeCreativeProposal(raw: unknown, id: string, version: num
     const visit = (ref: string) => { if (visiting.has(ref)) throw new Error("方案存在循环素材依赖"); if (visited.has(ref)) return; visiting.add(ref); generationItems.find((item) => item.ref === ref)?.referenceRefs?.forEach(visit); visiting.delete(ref); visited.add(ref); };
     mediaRefs.forEach(visit);
     const edges = (Array.isArray(workflow.edges) ? workflow.edges : []).map((value) => { const edge = record(value); const from = str(edge.from), to = str(edge.to); if (!refs.has(from) || !refs.has(to) || from === to) throw new Error("方案连线引用无效"); return { from, to }; });
-    return { id, version, title: required(data.title, "标题"), summary: required(data.summary, "摘要"), markdown: required(data.markdown, "完整内容"), deliverables: Array.isArray(data.deliverables) ? data.deliverables.map(String) : [], workflow: { title: str(data.title), nodes: nodes.map((node) => existingAssets[node.ref] ? { ...node, prompt: `引用已有素材：${node.title}` } : node), edges, autoRun: false }, generationItems, extra: { existingAssets } };
+    return { id, version, title: required(data.title, "标题"), summary: required(data.summary, "摘要"), markdown: required(data.markdown, "完整内容"), deliverables: Array.isArray(data.deliverables) ? data.deliverables.map(String) : [], styleBible, workflow: { title: str(data.title), nodes: nodes.map((node) => existingAssets[node.ref] ? { ...node, prompt: `引用已有素材：${node.title}` } : node), edges, autoRun: false }, generationItems, extra: { existingAssets } };
 }
 
 export function assertCreativeMediaCapability(item: CreativeGenerationItem, config: AiConfig, referenceCount: number) {

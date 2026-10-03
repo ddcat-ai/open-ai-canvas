@@ -1,6 +1,6 @@
 import { agentCanvasActions, agentCanvasActionLabel } from "@/lib/canvas/agent-canvas-actions";
 import { Button } from "antd";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, List, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Wrench, XCircle } from "lucide-react";
@@ -374,10 +374,9 @@ export function AgentChatMessage({
 }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
-    const displayedText = useTypewriterText(item.text, item.role === "assistant" && isStreaming);
     const formAnswer = item.formAnswer ?? (isUser ? parseCloudAgentFormAnswer(item.text) : undefined);
     const markdownComponents = useMemo(() => createAgentMessageMarkdownComponents(references, onFocusNode), [onFocusNode, references]);
-    const agentMarkdownText = rewriteAgentNodeLinks(displayedText, references);
+    const agentMarkdownText = rewriteAgentNodeLinks(item.text, references);
     const errorTone = item.errorSeverity === "warning" ? "warning" : "error";
     const color = item.role === "error" ? (errorTone === "warning" ? "#b45309" : "#ef4444") : theme.node.text;
     if (item.reasoning) {
@@ -439,7 +438,7 @@ export function AgentChatMessage({
                     </span>
                 ) : null}
                 {item.role === "assistant" ? (
-                    <AIMessageMarkdown className="text-left" isStreaming={isStreaming} streamingAnimation="none" components={markdownComponents}>
+                    <AIMessageMarkdown className="text-left" isStreaming={isStreaming} smoothStreaming components={markdownComponents}>
                         {agentMarkdownText}
                     </AIMessageMarkdown>
                 ) : formAnswer ? (
@@ -485,74 +484,6 @@ export function AgentReasoningFeed({ items, theme }: { items: CloudAgentChatMess
             </details>
         </div>
     );
-}
-
-/**
- * Agent SSE events contain text chunks. Keep the full text in the message
- * state, but reveal one code point at a time so a chunk never appears as a
- * whole block. The loop continues briefly after the stream ends to drain any
- * text that was buffered by the network.
- */
-function useTypewriterText(targetText: string, shouldAnimate: boolean) {
-    const targetRef = useRef(targetText);
-    const visibleRef = useRef(shouldAnimate ? "" : targetText);
-    const hasAnimatedRef = useRef(shouldAnimate);
-    const runningRef = useRef(false);
-    const timerRef = useRef<number | null>(null);
-    const [visibleText, setVisibleText] = useState(visibleRef.current);
-
-    targetRef.current = targetText;
-
-    const startLoop = useCallback(() => {
-        if (runningRef.current) return;
-        runningRef.current = true;
-
-        const step = () => {
-            const target = targetRef.current;
-            const targetCharacters = Array.from(target);
-            const visibleCharacters = Array.from(visibleRef.current);
-            const visibleIsPrefix = target.startsWith(visibleRef.current);
-
-            if (!visibleIsPrefix || visibleCharacters.length > targetCharacters.length) {
-                visibleRef.current = "";
-                setVisibleText("");
-            }
-
-            const currentCharacters = Array.from(visibleRef.current);
-            if (currentCharacters.length >= targetCharacters.length) {
-                runningRef.current = false;
-                timerRef.current = null;
-                return;
-            }
-
-            const nextText = targetCharacters.slice(0, currentCharacters.length + 1).join("");
-            visibleRef.current = nextText;
-            setVisibleText(nextText);
-            timerRef.current = window.setTimeout(step, 16);
-        };
-
-        step();
-    }, []);
-
-    useEffect(() => {
-        if (shouldAnimate) hasAnimatedRef.current = true;
-        if (!hasAnimatedRef.current && !shouldAnimate) {
-            visibleRef.current = targetText;
-            setVisibleText(targetText);
-            return;
-        }
-        startLoop();
-    }, [shouldAnimate, startLoop, targetText]);
-
-    useEffect(
-        () => () => {
-            if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-            runningRef.current = false;
-        },
-        [],
-    );
-
-    return visibleText;
 }
 
 function AgentMessageText({ text, references }: { text: string; references: CanvasResourceReference[] }) {

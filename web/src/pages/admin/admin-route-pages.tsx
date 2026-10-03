@@ -1,5 +1,5 @@
 import { Button } from "antd";
-import { Plus, Settings2, UserRoundCog } from "lucide-react";
+import { Plus } from "lucide-react";
 import { lazy, useState } from "react";
 
 import { useAdminContext } from "./admin-context";
@@ -9,7 +9,6 @@ import { readAnnouncementPendingReview } from "./components/admin-announcement-s
 const AnalyticsPanel = lazy(() => import("./components/analytics-panel"));
 const AdminAnnouncementsPanel = lazy(() => import("./components/admin-announcements-panel"));
 const AdminBannerAnnouncementsPanel = lazy(() => import("./components/admin-banner-announcements-panel"));
-const CreditOperationsPanel = lazy(() => import("./components/credit-operations-panel"));
 const AccessSettingsPanel = lazy(() => import("./components/access-settings-panel"));
 const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"));
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
@@ -71,29 +70,6 @@ export function BannerAnnouncementsPage() {
             }
         >
             <AdminBannerAnnouncementsPanel createOpen={createOpen} onCreateOpenChange={setCreateOpen} />
-        </AdminPageFrame>
-    );
-}
-
-export function CreditOperationsPage() {
-    const { references } = useAdminContext();
-    const [activeOperation, setActiveOperation] = useState<"policy" | "adjustment" | null>(null);
-    return (
-        <AdminPageFrame
-            title="积分运营"
-            description="异常计费核对、积分策略与人工调账"
-            actions={
-                <>
-                    <Button icon={<Settings2 className="size-4" />} onClick={() => setActiveOperation("policy")}>
-                        积分策略
-                    </Button>
-                    <Button type="primary" icon={<UserRoundCog className="size-4" />} onClick={() => setActiveOperation("adjustment")}>
-                        人工调账
-                    </Button>
-                </>
-            }
-        >
-            <CreditOperationsPanel users={references.users} activeOperation={activeOperation} onOperationChange={setActiveOperation} />
         </AdminPageFrame>
     );
 }

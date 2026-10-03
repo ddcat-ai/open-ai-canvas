@@ -82,6 +82,18 @@ func smallWindowCompactionFixture(t *testing.T) (*Service, *gorm.DB, *model.Clou
 	return s, db, run, state, budget
 }
 
+func TestNativePiCompactionTaskDoesNotConsumeDialogueStep(t *testing.T) {
+	s, _, run, state, _ := smallWindowCompactionFixture(t)
+	step, lastTask := state.Step, state.LastStepTaskID
+	if err := s.enqueueCloudAgentContextCompaction(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	_, saved := decodeCloudAgentCompactionState(t, s, run.ID)
+	if saved.Step != step || saved.LastStepTaskID != lastTask || saved.LastStepOperation == cloudAgentContextCompactionOperation {
+		t.Fatalf("native compaction altered dialogue accounting: step %d→%d, last %q→%q, operation %q", step, saved.Step, lastTask, saved.LastStepTaskID, saved.LastStepOperation)
+	}
+}
+
 // 下一步预计输入超过可用输入预算的压缩线时：暂停步进循环去压缩，而不是直接判死。
 func TestCloudAgentCompactionRequestsWhenTokenLineReached(t *testing.T) {
 	s, _, run, state, budget := smallWindowCompactionFixture(t)

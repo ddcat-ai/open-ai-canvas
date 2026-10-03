@@ -269,7 +269,10 @@ func TestNegativeBalanceBlocksNewReservationsAndAcceptsRepayment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.CreditAccount{}, &model.BillingOrder{}, &model.CreditLedgerEntry{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.CreditAccount{}, &model.BillingOrder{}, &model.CreditLedgerEntry{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "user-1", Username: "negative-balance-user", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&model.CreditAccount{UserID: "user-1", AvailableMicrocredits: -1_000_000}).Error; err != nil {

@@ -6,6 +6,10 @@ type (
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest
+	CloudAgentContextSelection             = app.CloudAgentContextSelection
+	CloudAgentSessionRequest               = app.CloudAgentSessionRequest
+	CloudAgentSession                      = app.CloudAgentSession
+	CloudAgentSessionDetail                = app.CloudAgentSessionDetail
 	CloudAgentRunViewOptions               = app.CloudAgentRunViewOptions
 	CloudAgentMediaSettings                = app.CloudAgentMediaSettings
 	CloudAgentCapabilitySet                = app.CloudAgentCapabilitySet
@@ -257,6 +261,7 @@ type (
 	ResolveBillingBatchResult              = app.ResolveBillingBatchResult
 	ResolveBillingRequest                  = app.ResolveBillingRequest
 	ResourceDelivery                       = app.ResourceDelivery
+	ImageResourceArchiveItem               = app.ImageResourceArchiveItem
 	ResourceAccessOptions                  = app.ResourceAccessOptions
 	ResourceAccessRequest                  = app.ResourceAccessRequest
 	ResourceAccess                         = app.ResourceAccess

@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -89,6 +90,45 @@ func TestProviderRequestErrorDetails(t *testing.T) {
 			code, text := providerRequestErrorDetails(tt.err)
 			if code != tt.code || text != tt.text {
 				t.Fatalf("providerRequestErrorDetails() = (%q, %q), want (%q, %q)", code, text, tt.code, tt.text)
+			}
+		})
+	}
+}
+
+func TestProviderRequestErrorDetailsRedactsURLCredentials(t *testing.T) {
+	err := &url.Error{Op: "Post", URL: "https://provider.example/v1/chat/completions?token=secret-token", Err: errors.New("connection refused")}
+	_, text := providerRequestErrorDetails(err)
+	if strings.Contains(text, "secret-token") || strings.Contains(text, "provider.example") {
+		t.Fatalf("provider error leaked URL data: %q", text)
+	}
+	if text == "" {
+		t.Fatal("provider error text is empty")
+	}
+}
+
+func TestProtocolRequestForGrsaiMiniMaxH3NormalizesCanvasAspectRatio(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "square preset", input: "1:1", want: "square"},
+		{name: "landscape preset", input: "16:9", want: "landscape"},
+		{name: "portrait preset", input: "9:16", want: "portrait"},
+		{name: "pixel square", input: "1024x1024", want: "square"},
+		{name: "already normalized", input: "portrait", want: "portrait"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := protocolRequestFromInput(canvasGenerationInput{
+				Mode: "video",
+				Config: providerConfig{
+					InterfaceType: "grsai-minimax-h3",
+					Size:          tt.input,
+				},
+			})
+			if request.AspectRatio != tt.want {
+				t.Fatalf("protocolRequestFromInput(%q).AspectRatio = %q, want %q", tt.input, request.AspectRatio, tt.want)
 			}
 		})
 	}

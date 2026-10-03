@@ -22,7 +22,7 @@ func TestMigrateSchemaV25PreservesHistoricalBillingOrders(t *testing.T) {
 	if err := db.Exec(`INSERT INTO billing_orders (id, user_id, idempotency_key, capability, billing_mode, quantity, amount_microcredits, output_tokens, usage_available, status) VALUES ('legacy', 'user', 'task', 'video', 'token', 118800, 1900800, 108000, true, 'settled')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 25).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 25).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {

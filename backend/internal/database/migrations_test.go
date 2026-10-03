@@ -108,7 +108,7 @@ func TestMigrateSchemaV35UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.EmailVerificationCode{}, "attempts"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 35).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 35).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,7 +141,7 @@ func TestMigrateSchemaV15UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.AgentProfile{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 15).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 15).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -167,7 +167,7 @@ func TestMigrateSchemaV16UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.AgentLesson{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 16).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 16).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -193,7 +193,7 @@ func TestMigrateSchemaV17UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropIndex(&model.AgentLesson{}, "idx_agent_lessons_author_status"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 17).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 17).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -219,7 +219,7 @@ func TestMigrateSchemaV18UpgradesExistingDatabase(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.AgentMemorySetting{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 18).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 18).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -248,7 +248,7 @@ func TestMigrateSchemaV19AddsPaymentPluginVersion(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.PaymentOrder{}, "PluginVersion"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 19).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 19).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -277,11 +277,11 @@ func TestMigrateSchemaV20UpgradesExistingDatabaseWithBannerAnnouncements(t *test
 	if !db.Migrator().HasTable(&model.BannerAnnouncement{}) {
 		t.Fatal("v20 migration did not create banner_announcements table")
 	}
-	// 模拟旧库升级：删表 + 删除 v20 记录，重跑迁移应能重建。
+	// 模拟旧库升级：删表 + 删除 v20 及其后的记录，保留有效的历史前缀。
 	if err := db.Migrator().DropTable(&model.BannerAnnouncement{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 20).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 20).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -314,7 +314,7 @@ func TestMigrateSchemaV21AddsBannerAnnouncementTitleRuns(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.BannerAnnouncement{}, "title_runs"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 21).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 21).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -354,7 +354,7 @@ func TestMigrateSchemaV22AddsBannerAnnouncementNoticeType(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.BannerAnnouncement{}, "notice_type"); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 22).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 22).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {
@@ -393,7 +393,7 @@ func TestMigrateSchemaV23BackfillsCanvasRevisions(t *testing.T) {
 	if err := db.Exec(`INSERT INTO canvas_projects (id, user_id, title, payload_json) VALUES ('legacy', 'owner', 'Existing canvas', '{"nodes":[]}')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Where("version = ?", 23).Delete(&schemaMigration{}).Error; err != nil {
+	if err := db.Where("version >= ?", 23).Delete(&schemaMigration{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := MigrateSchema(db); err != nil {

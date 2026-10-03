@@ -474,7 +474,7 @@ func TestResolveProviderConfigMapsSKUToProviderModel(t *testing.T) {
 	svc.dataDir = t.TempDir()
 	channel := model.ModelChannel{
 		ID: "channel-1", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Seedance",
-		BaseURL: "https://ark.cn-beijing.volces.com/api/v3", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["seedance-2-5-480p"]`,
+		BaseURL: "https://1.1.1.1/api/v3", APIKey: "test-key", APIFormat: "openai", ModelsJSON: `["seedance-2-5-480p"]`,
 	}
 	if err := svc.encryptSystemChannelSecrets(&channel); err != nil {
 		t.Fatal(err)

@@ -24,7 +24,7 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		capabilities := service.CloudAgentCapabilitySetInfo()
-		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": true, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": service.CloudAgentSupportedToolNames(), "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
+		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "surfaces": []string{"canvas", "creation"}, "contextScopes": []string{"canvas"}, "contextCompaction": "pi_native", "maxRuntimeRequestBytes": 8 << 20, "skills": true, "writeTools": true, "billing": "fixed_request", "maxSteps": 0, "tools": service.CloudAgentSupportedToolNames(), "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
 	})
 	// Skill usage is derived from the caller's own journal receipts, so it stays
 	// read-only and never exposes another user's runs.
@@ -40,6 +40,114 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, view)
+	})
+	// Sessions are the durable conversation index. Runs remain immutable turns;
+	// this endpoint lets another device recover the same session without relying
+	// on browser-local state.
+	r.GET("/agent/sessions", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		limit, err := agentSessionLimit(c.Query("limit"))
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		canvasID := strings.TrimSpace(c.Query("canvasId"))
+		var items []service.CloudAgentSession
+		if canvasID != "" {
+			items, err = svc.CloudAgentSessionsForCanvas(user.ID, canvasID, c.Query("surface"), c.Query("status"), limit)
+		} else {
+			items, err = svc.CloudAgentSessions(user.ID, c.Query("surface"), c.Query("status"), limit)
+		}
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sessions": items})
+	})
+	r.POST("/agent/sessions", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.CloudAgentSessionRequest
+		decoder := json.NewDecoder(c.Request.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			fail(c, http.StatusBadRequest, errors.New("请求必须只包含一个 JSON 对象"))
+			return
+		}
+		item, err := svc.CreateCloudAgentSession(user.ID, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"session": item})
+	})
+	r.DELETE("/agent/sessions/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteCloudAgentSession(user.ID, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"id": c.Param("id"), "deleted": true})
+	})
+	r.GET("/agent/sessions/:id/runs", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		limit, err := agentSessionLimit(c.Query("limit"))
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		items, err := svc.CloudAgentSessionRuns(user.ID, c.Param("id"), limit, c.Query("before"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		cursor := ""
+		if len(items) == limit {
+			cursor = items[len(items)-1].ID
+		}
+		ok(c, gin.H{"runs": items, "nextRunCursor": cursor})
+	})
+	r.GET("/agent/sessions/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		item, err := svc.CloudAgentSession(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		items, err := svc.CloudAgentSessionRuns(user.ID, c.Param("id"), 50)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		cursor := ""
+		if len(items) == 50 {
+			cursor = items[len(items)-1].ID
+		}
+		ok(c, gin.H{"session": item, "runs": items, "nextRunCursor": cursor})
 	})
 	// Profiles are durable preference data, not an authorization surface. The
 	// service validates scope ownership and the compiler injects the effective
@@ -282,7 +390,7 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		if req.Decision != "approve" && req.Decision != "reject" {
+		if req.Decision != "approve" && req.Decision != "reject" && req.Decision != "refresh" {
 			fail(c, http.StatusBadRequest, errors.New("decision 无效"))
 			return
 		}
@@ -322,7 +430,7 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.Header("Content-Type", "text/event-stream")
 		c.Header("Cache-Control", "no-cache")
 		c.Header("X-Accel-Buffering", "no")
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		revision := run.Revision
 		lastWrite := time.Now()
@@ -357,10 +465,22 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			case <-c.Request.Context().Done():
 				return
 			case <-ticker.C:
+				options.SinceSeq = int(after)
 				run, err = svc.CloudAgentRunIfChanged(user.ID, c.Param("id"), revision, options)
 			}
 		}
 	})
+}
+
+func agentSessionLimit(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 50, nil
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || limit < 1 || limit > 100 {
+		return 0, errors.New("limit 必须是 1–100 的整数")
+	}
+	return limit, nil
 }
 
 func writeAgentSSE(c *gin.Context, event string, id int64, value any) {
@@ -381,6 +501,12 @@ const agentRunEventQueryLimit = 500
 
 func agentRunViewOptions(c *gin.Context) (service.CloudAgentRunViewOptions, error) {
 	options := service.CloudAgentRunViewOptions{}
+	if raw := strings.TrimSpace(c.Query("fromStart")); raw != "" {
+		if raw != "1" {
+			return options, errors.New("fromStart 只能是 1")
+		}
+		options.FromStart = true
+	}
 	for _, item := range []struct {
 		name  string
 		value *int
@@ -399,6 +525,9 @@ func agentRunViewOptions(c *gin.Context) (service.CloudAgentRunViewOptions, erro
 			return options, fmt.Errorf("%s 必须是 %d–%d 之间的整数", item.name, item.min, item.max)
 		}
 		*item.value = parsed
+	}
+	if options.FromStart && options.SinceSeq != 0 {
+		return options, errors.New("fromStart 与 sinceSeq 不能同时使用")
 	}
 	return options, nil
 }

@@ -5,6 +5,8 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+Agent 执行权与回执：`repository/cloud_agent_owner.go` 在运行 CAS 事务内核验租约；`repository/cloud_agent_receipt.go` 保存有界回执；`app/cloud_agent_pi_owner.go` 管理执行与续租；`app/cloud_agent_pi_receipt.go` 将回执和业务副作用绑定；`agent-runtime/pi/agent-runtime.mjs` 在模型请求前持久稳定步骤检查点。新增表由结构迁移 45 创建。
+
 ## 画布 Agent 配置与 Live2D
 
 - 后台入口：`web/src/pages/admin/settings/appearance-settings-page.tsx` 与 `components/canvas-appearance-editor.tsx`。

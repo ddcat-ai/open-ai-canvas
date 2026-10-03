@@ -174,6 +174,8 @@ type Metadata struct {
 	Create                  string       `json:"-"`
 	Poll                    string       `json:"-"`
 	Cancel                  string       `json:"-"`
+	NonCancelable           bool         `json:"-"`
+	NonCancelableReason     string       `json:"-"`
 	ContentType             string       `json:"-"`
 	Documentation           string       `json:"documentation,omitempty"`
 	LegacyAliases           []string     `json:"-"`
@@ -299,6 +301,8 @@ type ManifestContributions struct {
 	AICapabilities   []string                  `json:"aiCapabilities,omitempty"`
 	Agents           []string                  `json:"agents,omitempty"`
 	ImportExport     []string                  `json:"importExport,omitempty"`
+	// SmartCreation 是创作页智能创作的声明式策略：提示词、工具 schema、计划默认值和执行参数都由插件包提供，宿主只负责执行。
+	SmartCreation *ManifestSmartCreation `json:"smartCreation,omitempty"`
 }
 
 type ManifestSMSProvider struct {
@@ -343,9 +347,17 @@ type ManifestProvider struct {
 	Agent                   *ManifestOperation     `json:"agent,omitempty"`
 	Poll                    *ManifestOperation     `json:"poll,omitempty"`
 	Cancel                  *ManifestOperation     `json:"cancel,omitempty"`
+	NonCancelable           *ManifestNonCancelable `json:"nonCancelable,omitempty"`
 	Result                  *ManifestOperation     `json:"result,omitempty"`
 	Response                ManifestResponse       `json:"response"`
 	AgentResponse           *ManifestAgentResponse `json:"agentResponse,omitempty"`
+}
+
+// ManifestNonCancelable makes an asynchronous provider's cancellation
+// boundary explicit. It means the host may stop local polling, but must not
+// claim that the upstream job was cancelled.
+type ManifestNonCancelable struct {
+	Reason string `json:"reason"`
 }
 
 type ManifestAuth struct {
@@ -393,6 +405,17 @@ type ManifestTransform struct {
 type ManifestCommand struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
+}
+
+// ManifestSmartCreation 描述智能创作插件的声明式策略。宿主不执行插件代码，
+// 只读取这里的提示词、工具 schema、计划默认值和执行参数；Planner/Defaults/Execution
+// 保留原始 JSON，前端按智能创作合同解析，后端只做边界校验。
+type ManifestSmartCreation struct {
+	Entry     string          `json:"entry"`
+	Label     string          `json:"label,omitempty"`
+	Planner   json.RawMessage `json:"planner,omitempty"`
+	Defaults  json.RawMessage `json:"defaults,omitempty"`
+	Execution json.RawMessage `json:"execution,omitempty"`
 }
 
 func (r RequestSpec) Validate() error {

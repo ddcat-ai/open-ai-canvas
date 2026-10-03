@@ -93,13 +93,39 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
         if (tier.matchMode === "advanced") {
             if (tier.operation && tier.operation !== "*" && !operations[capability]?.includes(tier.operation)) fail("生成方式与模型能力不匹配");
             const specific = (value: string | undefined) => Boolean(value && value !== "*");
-            if (!(specific(tier.operation) || (capability === "image" && (specific(tier.quality) || specific(tier.size))) || (capability === "video" && specific(tier.resolution)))) fail("规格价格至少需要一个匹配条件；统一价格请选择默认价格");
+            if (!(specific(tier.operation) || (capability === "image" && (specific(tier.quality) || specific(tier.size))) || (capability === "video" && (specific(tier.resolution) || tier.videoSeconds > 0 || tier.videoGenerateAudio !== "*" || tier.imageCount > 0)))) fail("规格价格至少需要一个匹配条件；统一价格请选择默认价格");
         }
         const prices = tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice];
         if (prices.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)) fail("积分价格必须是 0 到 1000000 之间的有效数值");
         if (tier.costConfigured) {
             const costs = tier.billingMode !== "token" ? [tier.costUnitPrice] : capability === "video" ? [tier.costOutputTokenPrice] : [tier.costInputTokenPrice, tier.costOutputTokenPrice, tier.costCachedTokenPrice];
             if (costs.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)) fail("积分成本价必须是 0 到 1000000 之间的有效数值");
+        }
+        if (tier.timePricingEnabled) {
+            const periods = tier.timePricing?.periods || [];
+            if (!tier.timePricing?.timezone?.trim()) fail("时间段计费必须选择时区");
+            if (periods.length === 0) fail("时间段计费至少需要一条时间段");
+            const toMinute = (value: string) => {
+                const match = /^(\d{2}):(\d{2})$/.exec(String(value || ""));
+                if (!match) return -1;
+                const hour = Number(match[1]);
+                const minute = Number(match[2]);
+                return hour <= 23 && minute <= 59 ? hour * 60 + minute : -1;
+            };
+            const normalized = periods.map((period) => {
+                const start = toMinute(period.startTime);
+                let end = toMinute(period.endTime);
+                if (end === 0) end = 24 * 60;
+                if (start < 0 || end <= start) fail("时间段必须使用 HH:mm，且结束时间晚于开始时间；跨午夜请拆成两段");
+                if (typeof period.multiplier !== "number" || !Number.isFinite(period.multiplier) || period.multiplier < 0.01 || period.multiplier > 100 || Math.abs(period.multiplier * 100 - Math.round(period.multiplier * 100)) > 1e-9) {
+                    fail("时间段倍率必须为 0.01 到 100，最多两位小数");
+                }
+                return { start, end };
+            });
+            normalized.sort((left, right) => left.start - right.start);
+            for (let periodIndex = 1; periodIndex < normalized.length; periodIndex += 1) {
+                if (normalized[periodIndex].start < normalized[periodIndex - 1].end) fail("时间段不能重叠");
+            }
         }
     });
 }

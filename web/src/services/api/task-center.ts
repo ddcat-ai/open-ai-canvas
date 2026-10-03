@@ -122,9 +122,10 @@ export type CreateTaskInput = {
     operation?: string;
     prompt: string;
     provider?: string;
-    model?: string;
+	model?: string;
 	logicalModelId?: string;
-    input?: Record<string, unknown>;
+	idempotencyKey?: string;
+	input?: Record<string, unknown>;
 };
 export function createGenerationTask(input: CreateTaskInput) {
     return http.post<GenerationTask>("/tasks", input).then((task) => {

@@ -106,6 +106,7 @@ func (e *cloudAgentReadLoopError) Error() string {
 
 type cloudAgentApproval struct {
 	Prepared  *cloudAgentPreparedMedia  `json:"prepared,omitempty"`
+	Batch     *cloudAgentCommerceBatch  `json:"commerceBatch,omitempty"`
 	ModelName string                    `json:"modelName,omitempty"`
 	ID        string                    `json:"approvalId"`
 	Call      cloudAgentCall            `json:"call"`
@@ -116,6 +117,9 @@ type cloudAgentApproval struct {
 }
 
 type cloudAgentRuntime struct {
+	ExecutionLease     model.CloudAgentExecutionLease        `json:"executionLease,omitempty"`
+	ExecutionFence     *model.CloudAgentFence                `json:"-"`
+	ModelReceipt       *model.CloudAgentReceipt              `json:"-"`
 	RuntimeRunID       string                                `json:"-"`
 	Request            CloudAgentRequest                     `json:"request"`
 	Policy             cloudAgentPolicySnapshot              `json:"policy"`
@@ -154,11 +158,14 @@ type cloudAgentRuntime struct {
 	StepSnapshotHash               string                                  `json:"stepSnapshotHash,omitempty"`
 	StoryboardTaskID               string                                  `json:"storyboardTaskId,omitempty"`
 	Plan                           []cloudAgentPlanItem                    `json:"plan,omitempty"`
+	CommercePlan                   *cloudAgentCommercePlan                 `json:"commercePlan,omitempty"`
+	CommerceBatch                  *cloudAgentCommerceBatch                `json:"commerceBatch,omitempty"`
 	ConfirmationRounds             int                                     `json:"confirmationRounds,omitempty"`
 	ConfirmationFingerprints       []string                                `json:"confirmationFingerprints,omitempty"`
 	PendingConfirmationFingerprint string                                  `json:"pendingConfirmationFingerprint,omitempty"`
 	PendingInterjections           []cloudAgentInterjection                `json:"pendingInterjections,omitempty"`
 	PiResumePrompt                 string                                  `json:"piResumePrompt,omitempty"`
+	PiTurnID                       string                                  `json:"piTurnId,omitempty"`
 	TransientReferences            map[string]cloudAgentTransientReference `json:"transientReferences,omitempty"`
 	InterjectionIDs                []string                                `json:"interjectionIds,omitempty"`
 	Events                         []CloudAgentEvent                       `json:"events"`
@@ -166,6 +173,7 @@ type cloudAgentRuntime struct {
 	// the Pi runtime. Completion must not be inferred from a clean Node exit:
 	// a provider/session error can otherwise be reported as a successful run.
 	PiAssistantResponses int    `json:"piAssistantResponses,omitempty"`
+	PiRecoveryAttempts   int    `json:"piRecoveryAttempts,omitempty"`
 	IsGenerating         bool   `json:"isGenerating,omitempty"`
 	LastError            string `json:"lastError,omitempty"`
 	// EmptyOutputEscalated 记录"空输出已经升级重试过几次"（关思考 + 放大输出预算）。
@@ -265,7 +273,7 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	// not an active model task; validation and recovery use TaskIDs as the run's
 	// immutable task-history anchor. Leaving this nil makes every new Pi run
 	// fail its first checkpoint with "Agent runtime task history is invalid".
-	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: "", TaskIDs: []string{task.ID}, Step: 0, Decisions: map[string]string{}, Plan: initial.Plan, ConfirmationRounds: initial.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), initial.ConfirmationFingerprints...), PendingConfirmationFingerprint: "", Events: []CloudAgentEvent{}, StepLimits: limits}
+	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: "", TaskIDs: []string{task.ID}, Step: 0, Decisions: map[string]string{}, Plan: initial.Plan, CommercePlan: initial.CommercePlan, ConfirmationRounds: initial.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), initial.ConfirmationFingerprints...), PendingConfirmationFingerprint: "", Events: []CloudAgentEvent{}, StepLimits: limits}
 	if !carrier {
 		state.ActiveTaskID = task.ID
 		state.Step = 1
@@ -279,10 +287,16 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 		}
 		state.event(task.ID, "tool_completed", map[string]any{"toolName": "skills_load", "skillIds": skillIDs, "text": fmt.Sprintf("已启用 %d 个技能，正文将按需读取", len(initial.Skills))})
 	}
-	if len(state.Plan) > 0 {
+	if state.Request.Surface != "creation" && len(state.Plan) > 0 {
 		// 继承的待办清单必须挂到本轮：前端按 plan-<runId> 展示清单，不发这条事件时
 		// 界面会一直停在上一轮（已结束）的清单上，显示"未完成项已停止"。
-		state.event(task.ID, "plan_updated", map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan), "inherited": true})
+		payload := map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan), "inherited": true}
+		if state.CommercePlan != nil {
+			payload["planId"], payload["version"] = state.CommercePlan.PlanID, state.CommercePlan.Version
+			payload["platform"], payload["site"], payload["language"] = state.CommercePlan.Platform, state.CommercePlan.Site, state.CommercePlan.Language
+			payload["items"] = cloudAgentCommercePlanItems(state.CommercePlan)
+		}
+		state.event(task.ID, "plan_updated", payload)
 	}
 	pressure := s.cloudAgentContextPressure(input.Requests.Canonical, initial.Request.Prompt, initial.Request)
 	if carrier {

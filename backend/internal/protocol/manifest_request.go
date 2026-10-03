@@ -13,6 +13,9 @@ import (
 )
 
 func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, request GenerationRequest, taskID string) (RequestSpec, error) {
+	if strings.EqualFold(strings.TrimSpace(operation.Method), "NONE") {
+		return RequestSpec{}, fmt.Errorf("协议仅声明合同，不提供可执行的 HTTP 操作")
+	}
 	requestValues := manifestRequestValues(request)
 	env := map[string]any{"request": requestValues, "taskId": taskID}
 	var body any

@@ -18,6 +18,22 @@ fail() {
     exit 1
 }
 
+set_env_value() {
+    local path="$1"
+    local key="$2"
+    local value="$3"
+    local temporary
+    temporary="$(mktemp "${path}.XXXXXX")"
+    awk -v key="$key" -v value="$value" '
+        BEGIN { updated=0 }
+        $0 ~ "^" key "=" { print key "=" value; updated=1; next }
+        { print }
+        END { if (!updated) print key "=" value }
+    ' "$path" > "$temporary"
+    chmod --reference="$path" "$temporary"
+    mv "$temporary" "$path"
+}
+
 require_root() {
     if [[ "${EUID}" -ne 0 ]]; then
         fail "请使用 README 中带 sudo 的一键安装命令"
@@ -84,6 +100,23 @@ prepare_environment() {
     if [[ -f .env ]]; then
         grep -Eq '^POSTGRES_PASSWORD=.+$' .env || fail "现有 .env 缺少 POSTGRES_PASSWORD"
         grep -Eq '^DATABASE_URL=.+$' .env || fail "现有 .env 缺少 DATABASE_URL"
+        grep -Eq '^MINIO_ROOT_USER=.+$' .env || set_env_value .env MINIO_ROOT_USER minioadmin
+        if ! grep -Eq '^MINIO_ROOT_PASSWORD=.+$' .env; then
+            set_env_value .env MINIO_ROOT_PASSWORD "$(openssl rand -hex 32)"
+        fi
+        local configured_private_hosts
+        configured_private_hosts="$(sed -n 's/^CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=//p' .env | tail -n 1)"
+        case ",${configured_private_hosts}," in
+        *,minio,*) ;;
+        *)
+            if [[ -n "$configured_private_hosts" ]]; then
+                configured_private_hosts="${configured_private_hosts},minio"
+            else
+                configured_private_hosts="minio"
+            fi
+            set_env_value .env CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS "$configured_private_hosts"
+            ;;
+        esac
         local configured_http_port
         configured_http_port="$(sed -n 's/^CANVAS_HTTP_PORT=//p' .env | tail -n 1)"
         if [[ -n "$configured_http_port" ]]; then
@@ -106,8 +139,10 @@ DATABASE_URL=postgresql://open_ai_canvas:${database_password}@postgres:5432/open
 CANVAS_HTTP_PORT=${CANVAS_HTTP_PORT}
 CANVAS_REGISTRATION_ENABLED=false
 CANVAS_ALLOW_PRIVATE_UPSTREAMS=false
-CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=
+CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=minio
 CANVAS_CORS_ORIGINS=
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=$(openssl rand -hex 32)
 EOF
 }
 

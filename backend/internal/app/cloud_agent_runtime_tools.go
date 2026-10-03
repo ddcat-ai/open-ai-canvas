@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
@@ -251,7 +253,7 @@ func (s *Service) advanceCloudAgentReadBatch(run *model.CloudAgentExecution, sta
 
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
-	err := s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+	err := s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 		for _, item := range outcomes {
 			var readLoopErr *cloudAgentReadLoopError
 			if errors.As(item.err, &readLoopErr) {
@@ -301,7 +303,40 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 		return s.terminateCloudAgent(run, "审批内容与待执行操作不一致，本轮已停止")
 	}
 	allowed := cloudAgentToolAllowed(state.Request, call.Function.Name)
+	if allowed && (call.Function.Name == "commerce_plan_submit" || call.Function.Name == "commerce_plan_wait") && state.Request.Surface == "creation" && state.Request.PermissionMode != "read_only" {
+		return s.advanceCloudAgentCommercePlan(run, state, call)
+	}
 	mediaTool := call.Function.Name == "generate_media" || call.Function.Name == "image_layer_split"
+	if allowed && mediaTool && state.MediaTaskID != "" {
+		return s.advanceCloudAgentMedia(run, state, call)
+	}
+	if allowed && call.Function.Name == "generate_media" && state.Request.Surface == "creation" && state.CommercePlan != nil && state.MediaTaskID == "" {
+		_, identity, err := s.cloudAgentResolvedMediaCall(run.UserID, state, call)
+		if err != nil {
+			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+		}
+		existing, err := s.repo.TaskForUser(run.UserID, identity.TaskID)
+		if err == nil {
+			matches := cloudAgentCommerceTaskMatches(existing, state.CommercePlan, identity.ItemID)
+			if identity.RetryFailedTaskID != "" {
+				matches = cloudAgentCommerceRetryTaskMatches(existing, run.UserID, state, identity)
+			}
+			if !matches {
+				return s.cloudAgentMediaError(run, state, "admission", false, false, creationConflict("计划交付项已有不同版本任务；不能重复收费生成"))
+			}
+			return s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				state.event(run.ID, "generation_task_reused", map[string]any{"taskId": existing.ID, "status": existing.Status, "planId": state.CommercePlan.PlanID, "text": "计划交付项已有生成任务，已恢复原任务状态"})
+				cloudAgentToolResult(run.ID, state, call, map[string]any{"taskId": existing.ID, "status": existing.Status, "taskSubmitted": true, "reused": true}, nil)
+				return cloudAgentSave(current, state)
+			})
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := cloudAgentCommerceDependenciesReady(s.repo, run.UserID, state, identity.ItemID); err != nil {
+			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+		}
+	}
 	// 媒体工具在所有模式下都进入审批；其他写入只在 request_approval 下审批。
 	if allowed && cloudAgentWrite(call.Function.Name) && (state.Request.PermissionMode == "request_approval" || mediaTool) && state.Approval == nil {
 		var plan *cloudAgentMediaPlan
@@ -314,12 +349,19 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			return s.terminateCloudAgent(run, "Agent 运行策略不可用，本轮已停止")
 		}
 		if call.Function.Name == "generate_media" || call.Function.Name == "image_layer_split" {
-			mediaCall := cloudAgentMediaCall(call)
+			mediaCall, identity, err := s.cloudAgentResolvedMediaCall(run.UserID, state, call)
+			if err != nil {
+				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+			}
 			req, prepared, err := s.prepareCloudAgentMedia(run, state, mediaCall)
 			if err != nil {
 				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 			}
 			mediaRequest, plan = req, prepared
+			plan.CommerceKey = identity.TaskID
+			plan.CommerceItemID = identity.ItemID
+			plan.CommerceRetryFailedTaskID = identity.RetryFailedTaskID
+			plan.CommerceRetryPromptHash = identity.RetryPromptHash
 			// A durable auto checkpoint already contains the exact admitted input and
 			// quote. Reusing it avoids a second dry admission after a worker restart.
 			if plan.Prepared == nil {
@@ -337,6 +379,9 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				if err := applyCloudAgentResolvedMediaDefaults(&req, prepared, preparedTask); err != nil {
 					return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 				}
+				if prepared.Args.Mode == "video" && state.Request.Budget.MaxVideoSeconds > 0 && state.VideoSeconds > state.Request.Budget.MaxVideoSeconds-prepared.Args.Duration {
+					return s.cloudAgentMediaError(run, state, "admission", false, false, BadAuthRequest("模型默认时长超过本轮视频预算，未提交任务"))
+				}
 				mediaRequest, plan = req, prepared
 			}
 			modelName, err = s.cloudAgentMediaModelName(plan.Args)
@@ -344,11 +389,18 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 			}
 		}
-		if plan != nil && state.Request.PermissionMode == "auto" && !mediaTool {
+		autoRepair := false
+		if plan != nil && plan.CommerceRetryFailedTaskID != "" {
+			autoRepair, err = s.cloudAgentCommerceAutoImageRetry(run, state, plan.CommerceItemID, plan.CommerceRetryFailedTaskID, plan.CommerceRetryPromptHash)
+			if err != nil {
+				return err
+			}
+		}
+		if plan != nil && state.Request.Surface == "creation" && call.Function.Name == "generate_media" && (state.Request.PermissionMode == "auto" && plan.CommerceRetryFailedTaskID == "" || autoRepair) {
 			if plan.Prepared != nil {
 				// The draft and quote were already checkpointed. Reuse them after a
 				// worker restart instead of dry-admitting and mutating the canvas again.
-				latest, err := s.repo.CloudAgent(run.UserID, run.ID)
+				latest, err := s.reloadCloudAgent(run)
 				if err != nil {
 					return err
 				}
@@ -362,26 +414,8 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			// its immutable quote in one checkpoint transaction, then release the
 			// lock before enqueueCloudAgentTask performs the billed submission.
 			s.storageMu.Lock()
-			err := s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
-				if err := createCloudAgentMediaNode(repo, run.UserID, state.Request.CanvasID, plan, nil, policy, cloudAgentCanvasEventRecorder(run.ID, state)); err != nil {
-					return err
-				}
-				canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
-				if err != nil {
-					return err
-				}
-				doc, err := creationDocument(canvas.PayloadJSON)
-				if err != nil {
-					return err
-				}
-				plan.Args.SnapshotHash = cloudAgentMediaContentHash(doc)
-				raw, err := json.Marshal(plan.Args)
-				if err != nil {
-					return err
-				}
-				call.Function.Arguments = string(raw)
-				state.Calls[state.CallIndex] = call
-				preparedMedia, err := prepareCloudAgentMediaApproval(repo, run.UserID, doc, plan, mediaRequest, preparedTask, mediaPreparation.Order)
+			err := s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+				preparedMedia, err := prepareCloudAgentMediaApproval(repo, run.UserID, cloudAgentCreationMediaDocument(), plan, mediaRequest, preparedTask, mediaPreparation.Order)
 				if err != nil {
 					return err
 				}
@@ -392,7 +426,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			})
 			s.storageMu.Unlock()
 			if err != nil {
-				latest, readErr := s.repo.CloudAgent(run.UserID, run.ID)
+				latest, readErr := s.reloadCloudAgent(run)
 				if readErr != nil || latest.Revision != run.Revision {
 					return err
 				}
@@ -402,7 +436,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				}
 				return s.cloudAgentMediaError(latest, &fresh, "admission", false, false, err)
 			}
-			latest, err := s.repo.CloudAgent(run.UserID, run.ID)
+			latest, err := s.reloadCloudAgent(run)
 			if err != nil {
 				return err
 			}
@@ -414,29 +448,38 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 		}
 		s.storageMu.Lock()
 		defer s.storageMu.Unlock()
-		return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+		return s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 			var preview cloudAgentApprovalPreview
 			var preparedMedia *cloudAgentPreparedMedia
 			if plan != nil {
-				if err := createCloudAgentMediaNode(repo, run.UserID, state.Request.CanvasID, plan, nil, policy, cloudAgentCanvasEventRecorder(run.ID, state)); err != nil {
-					return err
+				doc := cloudAgentCreationMediaDocument()
+				if state.Request.Surface != "creation" {
+					if err := createCloudAgentMediaNode(repo, run.UserID, state.Request.CanvasID, plan, nil, policy, cloudAgentCanvasEventRecorder(run.ID, state)); err != nil {
+						return err
+					}
+					canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
+					if err != nil {
+						return err
+					}
+					doc, err = creationDocument(canvas.PayloadJSON)
+					if err != nil {
+						return err
+					}
+					plan.Args.SnapshotHash = cloudAgentMediaContentHash(doc)
+					raw, err := json.Marshal(plan.Args)
+					if err != nil {
+						return err
+					}
+					call.Function.Arguments = string(raw)
+					state.Calls[state.CallIndex] = call
 				}
-				canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
-				if err != nil {
-					return err
-				}
-				doc, err := creationDocument(canvas.PayloadJSON)
-				if err != nil {
-					return err
-				}
-				plan.Args.SnapshotHash = cloudAgentMediaContentHash(doc)
-				raw, err := json.Marshal(plan.Args)
-				if err != nil {
-					return err
-				}
-				call.Function.Arguments = string(raw)
-				state.Calls[state.CallIndex] = call
 				preview = cloudAgentMediaApprovalPreview(plan, modelName)
+				if state.Request.Surface == "creation" {
+					preview.Description = "媒体任务已完成模型能力、参考资源、报价与预算校验；批准后才提交收费生成，结果保存在任务中心。"
+					if plan.CommerceRetryFailedTaskID != "" {
+						preview.Description = "已核对该计划交付项的原任务失败。此次是独立重试，已重新校验模型能力、参考资源、报价与预算；批准后才提交新的收费任务，原任务记录和成功产物保留。"
+					}
+				}
 				preparedMedia, err = prepareCloudAgentMediaApproval(repo, run.UserID, doc, plan, mediaRequest, preparedTask, mediaPreparation.Order)
 				if err != nil {
 					return err
@@ -507,7 +550,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	}
 	if allowed && call.Function.Name == "plan_update" && cloudAgentPlanRequiresFirstApproval(state, call) {
 		if preview, ok := cloudAgentPlanApprovalPreview(call); ok {
-			return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+			return s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 				approvalID := fmt.Sprintf("%s-%d-%d", run.ID, state.Step, state.CallIndex)
 				state.Approval = &cloudAgentApproval{ID: approvalID, Call: call, CallHash: cloudAgentApprovalCallHash(call), Preview: preview}
 				current.Status = "waiting_approval"
@@ -549,7 +592,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
-	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+	return s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 		var result any
 		var toolErr error
 		switch {
@@ -582,6 +625,25 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 						}
 						state.ImageInspectionReads[inspection.CacheKey]++
 					}
+				}
+			}
+		case call.Function.Name == "commerce_plan_submit":
+			var plan *cloudAgentCommercePlan
+			plan, toolErr = cloudAgentParseCommercePlan(state.Request, call)
+			if toolErr == nil {
+				if state.CommercePlan != nil && state.CommercePlan.PlanID == plan.PlanID && state.CommercePlan.Version == plan.Version && cloudAgentCommercePlanHash(state.CommercePlan) != cloudAgentCommercePlanHash(plan) {
+					toolErr = BadAuthRequest("同一电商计划版本的内容已固定；请递增版本后重新提交")
+				} else {
+					state.CommercePlan = plan
+					state.Plan = make([]cloudAgentPlanItem, 0, len(plan.Items))
+					for _, item := range plan.Items {
+						state.Plan = append(state.Plan, cloudAgentPlanItem{ID: item.ID, Title: item.Title, Status: "pending"})
+					}
+					payload := cloudAgentCommerceReviewPayload(plan, state.Request, state.Skills, state.Events)
+					payload["pendingTitles"] = cloudAgentPendingPlanItems(state.Plan)
+					state.event(run.ID, "plan_updated", payload)
+					items := cloudAgentCommercePlanItems(plan)
+					result = map[string]any{"planId": plan.PlanID, "version": plan.Version, "items": items}
 				}
 			}
 		case call.Function.Name == "skill_read_file", call.Function.Name == "model_list", call.Function.Name == "image_annotation_render":

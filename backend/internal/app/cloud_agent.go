@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/repository"
 )
 
 const cloudAgentOperation = "cloud_agent"
@@ -23,19 +24,26 @@ const cloudAgentOperation = "cloud_agent"
 // turns reference the previous run, not a mutable in-memory conversation. This
 // reuses transactional billing, worker leases, cancellation and text replay.
 type CloudAgentRequest struct {
-	ReasoningMode   string   `json:"reasoningMode,omitempty"`
-	ProfileRevision string   `json:"profileRevision,omitempty"`
-	CanvasID        string   `json:"canvasId"`
-	Prompt          string   `json:"prompt"`
-	Model           string   `json:"model,omitempty"`
-	LogicalModelID  string   `json:"logicalModelId,omitempty"`
-	ChannelID       string   `json:"channelId,omitempty"`
-	ChannelModelKey string   `json:"channelModelKey,omitempty"`
-	PermissionMode  string   `json:"permissionMode"`
-	SkillIDs        []string `json:"skillIds,omitempty"`
-	ContextScope    []string `json:"contextScope"`
-	FocusNodeIDs    []string `json:"focusNodeIds,omitempty"`
-	Budget          struct {
+	ReasoningMode    string                     `json:"reasoningMode,omitempty"`
+	ProfileRevision  string                     `json:"profileRevision,omitempty"`
+	SessionID        string                     `json:"sessionId,omitempty"`
+	Surface          string                     `json:"surface,omitempty"`
+	CanvasID         string                     `json:"canvasId"`
+	Prompt           string                     `json:"prompt"`
+	Model            string                     `json:"model,omitempty"`
+	LogicalModelID   string                     `json:"logicalModelId,omitempty"`
+	ChannelID        string                     `json:"channelId,omitempty"`
+	ChannelModelKey  string                     `json:"channelModelKey,omitempty"`
+	PermissionMode   string                     `json:"permissionMode"`
+	SkillIDs         []string                   `json:"skillIds,omitempty"`
+	ContextScope     []string                   `json:"contextScope"`
+	ContextSelection CloudAgentContextSelection `json:"contextSelection,omitempty"`
+	FocusNodeIDs     []string                   `json:"focusNodeIds,omitempty"`
+	Attachments      []CloudAgentAttachment     `json:"attachments,omitempty"`
+	AttachmentMode   string                     `json:"attachmentMode,omitempty"`
+	OutputPreference string                     `json:"outputPreference,omitempty"`
+	MediaSettings    *CloudAgentCreationMedia   `json:"mediaSettings,omitempty"`
+	Budget           struct {
 		MaxCredits         float64 `json:"maxCredits"`
 		MaxGenerationTasks int     `json:"maxGenerationTasks,omitempty"`
 		MaxVideoSeconds    int     `json:"maxVideoSeconds,omitempty"`
@@ -48,6 +56,45 @@ type CloudAgentRequest struct {
 	// 必须持久化：工具授权校验每步都从落库状态重建，丢掉这个标记会让模型看得见工具
 	// 却被判为"未获本轮权限授权"。
 	VisionEnabled bool `json:"visionEnabled,omitempty"`
+}
+
+type CloudAgentAttachment struct {
+	ResourceID string `json:"resourceId"`
+	StorageKey string `json:"storageKey"`
+	Kind       string `json:"kind"`
+	Role       string `json:"role"`
+	Name       string `json:"name"`
+	TurnIndex  int    `json:"turnIndex,omitempty"`
+}
+
+type CloudAgentCreationMedia struct {
+	Image *CloudAgentCreationMediaChoice `json:"image,omitempty"`
+	Video *CloudAgentCreationMediaChoice `json:"video,omitempty"`
+}
+
+type CloudAgentCreationMediaChoice struct {
+	Selection       CloudAgentMediaModelSelection `json:"selection"`
+	ParameterMode   string                        `json:"parameterMode"`
+	Size            string                        `json:"size,omitempty"`
+	Quality         string                        `json:"quality,omitempty"`
+	DurationSeconds int                           `json:"durationSeconds,omitempty"`
+	Count           int                           `json:"count,omitempty"`
+}
+
+type CloudAgentMediaModelSelection struct {
+	LogicalModelID  string `json:"logicalModelId,omitempty"`
+	ChannelID       string `json:"channelId,omitempty"`
+	ChannelModelKey string `json:"channelModelKey,omitempty"`
+}
+
+// CloudAgentContextSelection is the persisted selection of context sources
+// for one run. ContextScope remains the wire-compatible legacy field; new
+// callers can use this typed object without changing the execution contract.
+type CloudAgentContextSelection struct {
+	Surface   string   `json:"surface,omitempty"`
+	Scopes    []string `json:"scopes,omitempty"`
+	CanvasID  string   `json:"canvasId,omitempty"`
+	ProjectID string   `json:"projectId,omitempty"`
 }
 
 const cloudAgentMaxStepsLimit = 9999
@@ -66,6 +113,7 @@ type cloudAgentState struct {
 	ParentID                       string                    `json:"parentId"`
 	Fingerprint                    string                    `json:"fingerprint"`
 	CreativeAnchor                 cloudAgentCreativeAnchor  `json:"creativeAnchor,omitempty"`
+	CommercePlan                   *cloudAgentCommercePlan   `json:"commercePlan,omitempty"`
 	Plan                           []cloudAgentPlanItem      `json:"plan,omitempty"`
 	ConfirmationRounds             int                       `json:"confirmationRounds,omitempty"`
 	ConfirmationFingerprints       []string                  `json:"confirmationFingerprints,omitempty"`
@@ -76,23 +124,29 @@ type cloudAgentState struct {
 }
 
 type CloudAgentRun struct {
-	ID             string              `json:"id"`
-	CanvasID       string              `json:"canvasId"`
-	ParentID       string              `json:"parentId,omitempty"`
-	Status         string              `json:"status"`
-	Revision       int64               `json:"revision"`
-	CleanupPending bool                `json:"cleanupPending,omitempty"`
-	FailureMessage string              `json:"failureMessage,omitempty"`
-	PermissionMode string              `json:"permissionMode"`
-	Model          string              `json:"model"`
-	CreatedAt      time.Time           `json:"createdAt"`
-	UpdatedAt      time.Time           `json:"updatedAt"`
-	Events         []CloudAgentEvent   `json:"events,omitempty"`
-	Skills         []cloudAgentSkill   `json:"skills,omitempty"`
-	Approval       *cloudAgentApproval `json:"approval,omitempty"`
-	SpentCredits   float64             `json:"spentCredits"`
-	Step           int                 `json:"step"`
-	ActiveMessage  map[string]string   `json:"activeMessage,omitempty"`
+	ID               string                     `json:"id"`
+	IdempotencyKey   string                     `json:"idempotencyKey,omitempty"`
+	UserPrompt       string                     `json:"userPrompt,omitempty"`
+	SessionID        string                     `json:"sessionId,omitempty"`
+	CanvasID         string                     `json:"canvasId"`
+	ParentID         string                     `json:"parentId,omitempty"`
+	Surface          string                     `json:"surface,omitempty"`
+	ContextSelection CloudAgentContextSelection `json:"contextSelection,omitempty"`
+	Attachments      []CloudAgentAttachment     `json:"attachments,omitempty"`
+	Status           string                     `json:"status"`
+	Revision         int64                      `json:"revision"`
+	CleanupPending   bool                       `json:"cleanupPending,omitempty"`
+	FailureMessage   string                     `json:"failureMessage,omitempty"`
+	PermissionMode   string                     `json:"permissionMode"`
+	Model            string                     `json:"model"`
+	CreatedAt        time.Time                  `json:"createdAt"`
+	UpdatedAt        time.Time                  `json:"updatedAt"`
+	Events           []CloudAgentEvent          `json:"events,omitempty"`
+	Skills           []cloudAgentSkill          `json:"skills,omitempty"`
+	Approval         *cloudAgentApproval        `json:"approval,omitempty"`
+	SpentCredits     float64                    `json:"spentCredits"`
+	Step             int                        `json:"step"`
+	ActiveMessage    map[string]string          `json:"activeMessage,omitempty"`
 	// 事件已全量落库，运行详情只返回一页，因此必须把"这一页在整条日志里的位置"说清楚：
 	// EventSeqBase 是本次返回的首条事件之前已入库的条数（不变量 events[i].seq ==
 	// eventSeqBase + i + 1），EventCount 是该运行累计事件条数，LatestSeq 可直接当作下次
@@ -108,6 +162,7 @@ type CloudAgentRun struct {
 type CloudAgentRunViewOptions struct {
 	SinceSeq   int
 	EventLimit int
+	FromStart  bool
 }
 
 func validateCloudAgentRequest(req *CloudAgentRequest) error {
@@ -116,10 +171,25 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	}
 	// IDs and protocol selectors are identifiers, not free-form text. Keep their
 	// validation in one place so byte/rune and Unicode handling cannot drift.
-	if err := validateCloudAgentID(req.CanvasID, "画布 ID", 80); err != nil {
+	if req.Surface == "creation" {
+		if req.CanvasID != "" {
+			return BadAuthRequest("creation 场景不能指定画布")
+		}
+	} else {
+		if err := validateCloudAgentID(req.CanvasID, "画布 ID", 80); err != nil {
+			return err
+		}
+		req.CanvasID = strings.TrimSpace(req.CanvasID)
+	}
+	if req.SessionID != "" {
+		if err := validateCloudAgentID(req.SessionID, "会话 ID", 80); err != nil {
+			return err
+		}
+		req.SessionID = strings.TrimSpace(req.SessionID)
+	}
+	if err := normalizeCloudAgentContextSelection(req); err != nil {
 		return err
 	}
-	req.CanvasID = strings.TrimSpace(req.CanvasID)
 	if err := validateCloudAgentPrompt(req.Prompt, 16000); err != nil {
 		return err
 	}
@@ -129,6 +199,12 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	}
 	if req.PermissionMode != "read_only" && req.PermissionMode != "request_approval" && req.PermissionMode != "auto" {
 		return BadAuthRequest("无效的 Agent 执行权限")
+	}
+	if req.OutputPreference != "" && req.OutputPreference != "concise" && req.OutputPreference != "detailed" {
+		return BadAuthRequest("输出偏好必须是 concise 或 detailed")
+	}
+	if req.Surface != "creation" && req.OutputPreference != "" {
+		return BadAuthRequest("输出偏好仅适用于首页创作")
 	}
 	for value, spec := range map[string]struct {
 		label string
@@ -201,6 +277,41 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	if req.PermissionMode == "read_only" && (req.Budget.MaxGenerationTasks != 0 || req.Budget.MaxVideoSeconds != 0) {
 		return BadAuthRequest("只读模式不能设置生成预算")
 	}
+	if req.Surface == "creation" && len(req.ContextScope) != 0 {
+		return BadAuthRequest("creation 场景不能读取画布上下文")
+	}
+	if req.Surface != "creation" && (len(req.Attachments) > 0 || req.AttachmentMode != "" || req.MediaSettings != nil) {
+		return BadAuthRequest("画布 Agent 不接受 creation 素材和媒体设置")
+	}
+	if req.AttachmentMode != "" && req.AttachmentMode != "inherit" && req.AttachmentMode != "replace" && req.AttachmentMode != "append" {
+		return BadAuthRequest("素材模式必须是 inherit、replace 或 append")
+	}
+	if req.AttachmentMode == "inherit" && len(req.Attachments) != 0 {
+		return BadAuthRequest("继承素材时不能同时提交新附件，请使用追加或替换模式")
+	}
+	if len(req.Attachments) > 16 {
+		return BadAuthRequest("本轮最多引用 16 个素材")
+	}
+	for i := range req.Attachments {
+		attachment := &req.Attachments[i]
+		if err := validateCloudAgentID(attachment.ResourceID, "素材 ID", 80); err != nil {
+			return err
+		}
+		if attachment.StorageKey != "resource:"+attachment.ResourceID {
+			return BadAuthRequest("素材 storageKey 必须对应 resourceId")
+		}
+		if attachment.Kind != "image" && attachment.Kind != "video" && attachment.Kind != "audio" {
+			return BadAuthRequest("仅支持图片、视频、音频素材；文件和文档尚未接入")
+		}
+		switch attachment.Role {
+		case "product", "person", "reference", "competitor", "style", "source":
+		default:
+			return BadAuthRequest("素材角色无效")
+		}
+		if !utf8.ValidString(attachment.Name) || strings.TrimSpace(attachment.Name) == "" || utf8.RuneCountInString(attachment.Name) > 120 {
+			return BadAuthRequest("素材名称无效")
+		}
+	}
 	if len(req.ContextScope) > 1 || (len(req.ContextScope) == 1 && req.ContextScope[0] != "canvas") {
 		return BadAuthRequest("当前仅支持已保存画布摘要，其他上下文尚未开放")
 	}
@@ -209,6 +320,73 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	}
 	if math.IsNaN(req.Budget.MaxCredits) || math.IsInf(req.Budget.MaxCredits, 0) || req.Budget.MaxCredits <= 0 || req.Budget.MaxCredits > 1000000 {
 		return BadAuthRequest("本轮积分上限必须大于 0 且不超过 1000000")
+	}
+	return nil
+}
+
+func normalizeCloudAgentContextSelection(req *CloudAgentRequest) error {
+	if req == nil {
+		return BadAuthRequest("请求不能为空")
+	}
+	if strings.TrimSpace(req.Surface) == "" {
+		req.Surface = "canvas"
+	} else if err := validateCloudAgentID(req.Surface, "Agent surface", 64); err != nil {
+		return err
+	} else {
+		req.Surface = strings.TrimSpace(req.Surface)
+	}
+	if req.Surface != "canvas" && req.Surface != "creation" {
+		return BadAuthRequest("无效的 Agent surface")
+	}
+	selection := &req.ContextSelection
+	if selection.Surface == "" {
+		selection.Surface = req.Surface
+	} else if err := validateCloudAgentID(selection.Surface, "上下文 surface", 64); err != nil {
+		return err
+	} else {
+		selection.Surface = strings.TrimSpace(selection.Surface)
+	}
+	if selection.Surface != req.Surface {
+		return BadAuthRequest("surface 与 contextSelection.surface 不一致")
+	}
+	if req.Surface == "creation" && (selection.CanvasID != "" || selection.ProjectID != "") {
+		return BadAuthRequest("creation 场景不能指定画布或项目上下文")
+	}
+	if selection.CanvasID != "" {
+		if err := validateCloudAgentID(selection.CanvasID, "上下文画布 ID", 80); err != nil {
+			return err
+		}
+		selection.CanvasID = strings.TrimSpace(selection.CanvasID)
+		if selection.CanvasID != req.CanvasID {
+			return BadAuthRequest("上下文画布必须属于当前 Agent 画布")
+		}
+	} else {
+		selection.CanvasID = req.CanvasID
+	}
+	if selection.ProjectID != "" {
+		if err := validateCloudAgentID(selection.ProjectID, "上下文项目 ID", 80); err != nil {
+			return err
+		}
+		selection.ProjectID = strings.TrimSpace(selection.ProjectID)
+	}
+	if req.Surface == "creation" && len(selection.Scopes) > 0 {
+		return BadAuthRequest("creation 场景不能指定画布上下文")
+	}
+	if len(selection.Scopes) > 0 {
+		if len(selection.Scopes) > 1 {
+			return BadAuthRequest("当前仅支持一个上下文 scope")
+		}
+		for index, scope := range selection.Scopes {
+			if scope != "canvas" {
+				return BadAuthRequest("当前仅支持 canvas 上下文 scope")
+			}
+			selection.Scopes[index] = scope
+		}
+		if len(req.ContextScope) == 0 {
+			req.ContextScope = append([]string(nil), selection.Scopes...)
+		}
+	} else if len(req.ContextScope) > 0 {
+		selection.Scopes = append([]string(nil), req.ContextScope...)
 	}
 	return nil
 }
@@ -230,6 +408,14 @@ func cloudAgentID(userID, key string) string {
 	return "ag" + hex.EncodeToString(sum[:16])
 }
 
+// cloudAgentSessionID gives an implicit first-turn session a stable identity.
+// The session is created before the idempotent task transaction, so a random
+// ID would make concurrent retries produce different request fingerprints.
+func cloudAgentSessionID(userID, key string) string {
+	sum := sha256.Sum256([]byte("session\x00" + userID + "\x00" + key))
+	return "ags" + hex.EncodeToString(sum[:16])
+}
+
 func cloudAgentFingerprint(req CloudAgentRequest, parent string) string {
 	data, _ := json.Marshal(struct {
 		Request CloudAgentRequest
@@ -244,7 +430,7 @@ func agentRunOutput(task *model.Task, state cloudAgentState) *CloudAgentRun {
 	if task.Status == model.TaskStatusSucceeded {
 		status = "completed"
 	}
-	return &CloudAgentRun{ID: task.ID, CanvasID: task.ProjectID, ParentID: state.ParentID, Status: status, PermissionMode: state.Request.PermissionMode, Model: task.Model, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt, Skills: state.Skills}
+	return &CloudAgentRun{ID: task.ID, IdempotencyKey: state.Request.IdempotencyKey, UserPrompt: state.Request.Prompt, SessionID: state.Request.SessionID, CanvasID: task.ProjectID, ParentID: state.ParentID, Surface: state.Request.Surface, ContextSelection: state.Request.ContextSelection, Attachments: append([]CloudAgentAttachment(nil), state.Request.Attachments...), Status: status, PermissionMode: state.Request.PermissionMode, Model: task.Model, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt, Skills: state.Skills}
 }
 
 func (s *Service) cloudAgentTask(userID, id string) (*model.Task, cloudAgentState, error) {
@@ -287,7 +473,7 @@ func (s *Service) cloudAgentTask(userID, id string) (*model.Task, cloudAgentStat
 	if task.ID != cloudAgentID(userID, state.Request.IdempotencyKey) || task.ProjectID != state.Request.CanvasID {
 		return nil, input.Agent, kernel.NotFound("Agent 运行不存在")
 	}
-	input.Agent = cloudAgentState{Version: 1, Request: state.Request, ParentID: state.ParentID, Fingerprint: state.Fingerprint, CreativeAnchor: state.CreativeAnchor, ConfirmationRounds: state.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), state.ConfirmationFingerprints...), PendingConfirmationFingerprint: state.PendingConfirmationFingerprint, Skills: state.Skills, Profile: state.Profile, Policy: state.Policy}
+	input.Agent = cloudAgentState{Version: 1, Request: state.Request, ParentID: state.ParentID, Fingerprint: state.Fingerprint, CreativeAnchor: state.CreativeAnchor, CommercePlan: state.CommercePlan, ConfirmationRounds: state.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), state.ConfirmationFingerprints...), PendingConfirmationFingerprint: state.PendingConfirmationFingerprint, Skills: state.Skills, Profile: state.Profile, Policy: state.Policy}
 	return task, input.Agent, nil
 }
 
@@ -346,28 +532,87 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if userID == "" {
 		return nil, kernel.Unauthorized("请先登录")
 	}
-	canvas, err := s.repo.CanvasProjectForUser(userID, req.CanvasID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, kernel.NotFound("画布不存在或尚未保存到服务端，请先完成画布同步")
+	var canvas *model.CanvasProject
+	var err error
+	if req.Surface == "canvas" {
+		canvas, err = s.repo.CanvasProjectForUser(userID, req.CanvasID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, kernel.NotFound("画布不存在或尚未保存到服务端，请先完成画布同步")
+			}
+			return nil, err
 		}
-		return nil, err
+	}
+	for _, attachment := range req.Attachments {
+		resource, err := s.repo.ResourceForUser(userID, attachment.ResourceID)
+		if err != nil || resource.Status != model.ResourceStatusReady || !strings.HasPrefix(strings.ToLower(resource.MimeType), attachment.Kind+"/") {
+			return nil, BadAuthRequest("素材不存在、不属于当前用户、尚未就绪或类型不匹配")
+		}
+	}
+	if req.MediaSettings != nil {
+		for _, item := range []struct {
+			mode   string
+			choice *CloudAgentCreationMediaChoice
+		}{{"image", req.MediaSettings.Image}, {"video", req.MediaSettings.Video}} {
+			if item.choice == nil {
+				continue
+			}
+			choice := item.choice
+			selection := choice.Selection
+			if choice.ParameterMode != "auto" && choice.ParameterMode != "manual" {
+				return nil, BadAuthRequest("媒体参数模式必须是 auto 或 manual")
+			}
+			if (selection.LogicalModelID == "") == (selection.ChannelID == "" || selection.ChannelModelKey == "") || (selection.LogicalModelID != "" && (selection.ChannelID != "" || selection.ChannelModelKey != "")) {
+				return nil, BadAuthRequest("媒体执行模型选择无效")
+			}
+			if choice.ParameterMode == "auto" && (choice.Size != "" || choice.Quality != "" || choice.DurationSeconds != 0 || choice.Count != 0) {
+				return nil, BadAuthRequest("自动媒体参数不能同时设置手动约束")
+			}
+			if choice.Count < 0 || choice.Count > 10 || choice.DurationSeconds < 0 || choice.DurationSeconds > 600 || (item.mode == "image" && choice.DurationSeconds != 0) || (item.mode == "video" && choice.Count != 0) {
+				return nil, BadAuthRequest("媒体数量或时长约束无效")
+			}
+			if _, err := s.cloudAgentMediaModelName(cloudAgentMediaArgs{Mode: item.mode, LogicalModelID: selection.LogicalModelID, ChannelID: selection.ChannelID, ChannelModelKey: selection.ChannelModelKey}); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// Resolve and freeze the effective preference document before idempotency
 	// lookup. A retry without an explicit revision must still refer to the same
 	// immutable input; a changed profile therefore cannot silently create a
 	// different run under the same key.
-	profile, err := s.cloudAgentProfileSnapshot(userID, req.CanvasID)
-	if err != nil {
-		return nil, err
+	profile := cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")}
+	if req.Surface != "creation" {
+		profile, err = s.cloudAgentProfileSnapshot(userID, req.CanvasID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if req.ProfileRevision != "" && req.ProfileRevision != profile.Revision {
 		return nil, creationConflict("Agent 偏好已变化，请重新读取后提交")
 	}
 	req.ProfileRevision = profile.Revision
 	id := cloudAgentID(userID, req.IdempotencyKey)
-	fingerprint := cloudAgentFingerprint(req, parentID)
 	if existing, state, lookupErr := s.cloudAgentTask(userID, id); lookupErr == nil {
+		if state.Request.SessionID != "" {
+			if _, err := s.CloudAgentSession(userID, state.Request.SessionID); err != nil {
+				return nil, err
+			}
+		}
+		// Retries may omit sessionId because it was assigned by the server on
+		// the first request. Compare against the persisted canonical request.
+		if req.SessionID == "" {
+			req.SessionID = state.Request.SessionID
+		}
+		if req.SessionID != "" && req.Surface == cloudAgentDefaultSurface && state.Request.Surface != "" {
+			req.Surface = state.Request.Surface
+		}
+		if len(req.ContextSelection.Scopes) == 0 && len(req.ContextScope) == 0 {
+			req.ContextSelection = state.Request.ContextSelection
+			// Preserve the stored empty-array representation in the fingerprint.
+			// append(nil, empty...) changes [] to null and rejects identical retries.
+			req.ContextScope = state.Request.ContextScope
+		}
+		fingerprint := cloudAgentFingerprint(req, parentID)
 		if state.Fingerprint == "" || state.Fingerprint != fingerprint {
 			return nil, kernel.NewAppError(409, "幂等键已用于不同请求，请使用新的幂等键")
 		}
@@ -382,17 +627,23 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			return nil, lookupErr
 		}
 	}
+	if _, err := s.ensureCloudAgentSession(userID, &req, parentID); err != nil {
+		return nil, err
+	}
+	fingerprint := cloudAgentFingerprint(req, parentID)
 	var history []providerTextMessage
+	var nativeSessionJSONL string
 	var creativeAnchor cloudAgentCreativeAnchor
 	var inheritedPlan []cloudAgentPlanItem
+	var inheritedCommercePlan *cloudAgentCommercePlan
 	inheritedConfirmationRounds := 0
 	var inheritedConfirmationFingerprints []string
 	if parentID != "" {
-		parent, _, parentErr := s.cloudAgentTask(userID, parentID)
+		parent, parentTaskState, parentErr := s.cloudAgentTask(userID, parentID)
 		if parentErr != nil {
 			return nil, parentErr
 		}
-		if parent.ProjectID != req.CanvasID {
+		if parent.ProjectID != req.CanvasID || firstNonEmpty(parentTaskState.Request.Surface, cloudAgentDefaultSurface) != req.Surface {
 			return nil, kernel.Forbidden("不能跨画布追加 Agent 消息")
 		}
 		superseded := s.cloudAgentParentCanBeSuperseded(userID, parentID)
@@ -418,10 +669,24 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err != nil {
 			return nil, WrapAppError(409, "上一轮 Agent 历史记录不完整，无法继续对话；请新建对话", err)
 		}
-		inheritedPlan = parentState.Plan
-		if parentRun.Status == "completed" && parentState.PendingConfirmationFingerprint != "" {
-			inheritedConfirmationRounds = parentState.ConfirmationRounds
-			inheritedConfirmationFingerprints = append([]string(nil), parentState.ConfirmationFingerprints...)
+		appendAttachments := req.AttachmentMode == "append" || req.AttachmentMode == "" && len(req.Attachments) > 0
+		if err := s.resolveCloudAgentCreationAttachments(userID, &req, parentState.Request.Attachments); err != nil {
+			return nil, err
+		}
+		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
+			nativeSessionJSONL = session.SessionJSONL
+		}
+		// Prior plans remain conversation context. A new creation turn must plan
+		// its own product, market and quantity before exposing executable items.
+		if req.Surface != "creation" {
+			inheritedPlan = parentState.Plan
+			inheritedCommercePlan = parentState.CommercePlan
+		}
+		if req.Surface != "creation" || cloudAgentCreationAttachmentsPreserveContext(parentState.Request.Attachments, req.Attachments, appendAttachments) {
+			if parentRun.Status == "completed" && parentState.PendingConfirmationFingerprint != "" {
+				inheritedConfirmationRounds = parentState.ConfirmationRounds
+				inheritedConfirmationFingerprints = append([]string(nil), parentState.ConfirmationFingerprints...)
+			}
 		}
 		// 视觉事实跨轮继承：这一轮已经看过的画面与模型自己写下的观察随锚点带过来，
 		// 否则新轮会把看过的图重新标成"没有视觉识别证据"并再花一次视觉 token。
@@ -436,32 +701,44 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		}
 		// 压缩时 TextHistory 与 Canonical 长度相同；压缩后本轮仍可能继续回答或收到插话。
 		// 只补压缩边界之后的内容，不能重复原始要求，也不能丢掉最终回复。
-		history = cloudAgentContinuationHistory(history, parentState, parent.Prompt, text)
+		if nativeSessionJSONL == "" {
+			history = cloudAgentContinuationHistory(history, parentState, parent.Prompt, text)
+		} else {
+			// The Pi JSONL is the complete ordered transcript. The canonical request
+			// carries only fresh server facts, never a second copy of prior dialogue.
+			history = nil
+		}
 		// 事实交接帧不能因为压缩而缺席：长会话恰恰最需要它，而且"别重复提交收费任务"的
 		// 依据只在这份帧里（它带的是上一轮真实的工具结果与画布改动）。
 		if strings.TrimSpace(context) != "" {
 			history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 		}
 	}
-	history = trimCloudAgentTextHistory(history, cloudAgentHistoryKeepRounds, cloudAgentHistoryMaxBytes)
 	encodedHistory, err := json.Marshal(history)
 	if err != nil {
 		return nil, err
 	}
-	if len(encodedHistory) > cloudAgentHistoryMaxBytes {
-		return nil, BadAuthRequest("对话上下文超过 64KB，请新建对话")
+	if len(encodedHistory) > 8<<20 {
+		return nil, BadAuthRequest("旧会话上下文超过 8MB，请新建对话")
 	}
 	var inheritedAnchor *cloudAgentCreativeAnchor
 	if creativeAnchor.Version > 0 {
 		inheritedAnchor = &creativeAnchor
 	}
-	creativeAnchor, err = cloudAgentCreativeAnchorForCanvas(s.repo, userID, canvas, req.Prompt, inheritedAnchor)
+	if req.Surface == "canvas" {
+		creativeAnchor, err = cloudAgentCreativeAnchorForCanvas(s.repo, userID, canvas, req.Prompt, inheritedAnchor)
+		if err != nil {
+			return nil, err
+		}
+	}
+	skillSnapshots, err := s.cloudAgentSkills(userID, req.SkillIDs, req.Surface)
 	if err != nil {
 		return nil, err
 	}
-	skillSnapshots, err := s.cloudAgentSkills(userID, req.SkillIDs)
-	if err != nil {
-		return nil, err
+	if req.Surface == "creation" && len(req.SkillIDs) == 0 {
+		for _, skill := range skillSnapshots {
+			req.SkillIDs = append(req.SkillIDs, skill.ID)
+		}
 	}
 	// 看图能力取决于本轮渠道模型自己的合同（text.references.maxImages），在建 run 时定格并
 	// 持久化：工具授权每步都从落库状态重建，运行期间不再变化，客户端传入值被忽略。
@@ -479,7 +756,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if err != nil {
 		return nil, err
 	}
-	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, ConfirmationRounds: inheritedConfirmationRounds, ConfirmationFingerprints: inheritedConfirmationFingerprints, Skills: skillSnapshots, Profile: profile, Policy: policy}
+	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, CommercePlan: inheritedCommercePlan, ConfirmationRounds: inheritedConfirmationRounds, ConfirmationFingerprints: inheritedConfirmationFingerprints, Skills: skillSnapshots, Profile: profile, Policy: policy}
 	canonical := cloudAgentCanonicalFor(system, history, req.Prompt, req, len(profile.Layers) > 0)
 	// Keep the catalog out of TextHistory (which defines conversation turns),
 	// while exposing it as a fresh data message for this run immediately before
@@ -493,7 +770,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		last := canonical.Messages[len(canonical.Messages)-1]
 		canonical.Messages = append(append([]map[string]any{}, canonical.Messages[:len(canonical.Messages)-1]...), catalog, last)
 	}
-	s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
+	if req.Surface != "creation" {
+		s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
+	}
 	// 必须登记进 state.Policy（值拷贝）：state 才是随任务持久化、被运行期读取的那份，
 	// 在这里改局部 policy 不会生效。登记之后压力读数的"系统提示分段"才能把 memory 摊开，
 	// 并与 system 桶合计对齐。
@@ -503,15 +782,13 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
 		"agentRequests": map[string]any{"canonical": canonical},
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
-	input["piSessionJSONL"] = ""
-	if parentID != "" {
-		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
-			input["piSessionJSONL"] = session.SessionJSONL
-		}
-	}
+	input["piSessionJSONL"] = nativeSessionJSONL
 	task, err := s.CreateTask(userID, CreateTaskRequest{ProjectID: req.CanvasID, Type: "canvas_text", Operation: cloudAgentOperation, Prompt: req.Prompt, Model: req.Model, LogicalModelID: req.LogicalModelID, Input: input,
 		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale))), NonBillable: true}})
 	if err != nil {
+		if errors.Is(err, repository.ErrAgentSessionUnavailable) {
+			return nil, kernel.NotFound("Agent 会话不存在")
+		}
 		// A concurrent identical request may have won the transaction. Never
 		// replace its result or reserve credits a second time.
 		if existing, stored, readErr := s.cloudAgentTask(userID, id); readErr == nil {

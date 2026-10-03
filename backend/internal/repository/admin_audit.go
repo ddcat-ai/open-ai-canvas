@@ -31,6 +31,16 @@ func (r *Repository) AppendAdminAudit(event *model.AdminAuditEvent) error {
 func (r *Repository) BulkDisableUsers(actorID string, userIDs []string, events []model.AdminAuditEvent, now time.Time) ([]model.User, error) {
 	var users []model.User
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := r.lockAdminUserMutation(tx, actorID); err != nil {
+			return err
+		}
+		var actor model.User
+		if err := tx.First(&actor, "id = ?", actorID).Error; err != nil {
+			return err
+		}
+		if actor.Role != model.UserRoleAdmin || actor.Status != model.UserStatusActive {
+			return errors.New("当前管理员账号不可用")
+		}
 		query := tx.Where("id IN ?", userIDs)
 		if r.Dialect() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE"})

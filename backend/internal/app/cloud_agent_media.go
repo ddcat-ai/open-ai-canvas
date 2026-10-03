@@ -91,31 +91,37 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 }
 
 type cloudAgentMediaArgs struct {
-	Prepared              *cloudAgentPreparedMedia `json:"-"`
-	DraftRunID            string                   `json:"-"`
-	CharacterVersions     map[string]string        `json:"-"`
-	CharacterLabels       []string                 `json:"-"`
-	Mode                  string                   `json:"mode"`
-	Prompt                string                   `json:"prompt"`
-	LogicalModelID        string                   `json:"logicalModelId"`
-	ChannelID             string                   `json:"channelId"`
-	ChannelModelKey       string                   `json:"channelModelKey"`
-	Duration              int                      `json:"durationSeconds"`
-	Size                  string                   `json:"size"`
-	Quality               string                   `json:"quality"`
-	VideoGenerateAudio    *bool                    `json:"videoGenerateAudio"`
-	SnapshotHash          string                   `json:"snapshotHash"`
-	NodeID                string                   `json:"nodeId"`
-	Title                 string                   `json:"title"`
-	SourceNodeID          string                   `json:"sourceNodeId"`
-	ReferenceNodeIDs      []string                 `json:"referenceNodeIds"`
-	ReferenceTransientIDs []string                 `json:"referenceTransientIds"`
+	Prepared              *cloudAgentPreparedMedia      `json:"-"`
+	DraftRunID            string                        `json:"-"`
+	CharacterVersions     map[string]string             `json:"-"`
+	CharacterLabels       []string                      `json:"-"`
+	Mode                  string                        `json:"mode"`
+	Prompt                string                        `json:"prompt"`
+	LogicalModelID        string                        `json:"logicalModelId"`
+	ChannelID             string                        `json:"channelId"`
+	ChannelModelKey       string                        `json:"channelModelKey"`
+	Duration              int                           `json:"durationSeconds"`
+	Size                  string                        `json:"size"`
+	Quality               string                        `json:"quality"`
+	VideoGenerateAudio    *bool                         `json:"videoGenerateAudio"`
+	SnapshotHash          string                        `json:"snapshotHash"`
+	NodeID                string                        `json:"nodeId"`
+	Title                 string                        `json:"title"`
+	SourceNodeID          string                        `json:"sourceNodeId"`
+	ReferenceNodeIDs      []string                      `json:"referenceNodeIds"`
+	ReferenceTransientIDs []string                      `json:"referenceTransientIds"`
+	AttachmentResourceIDs []string                      `json:"attachmentResourceIds"`
+	References            []cloudAgentCreationReference `json:"references,omitempty"`
 }
 
 type cloudAgentMediaPlan struct {
-	Args                cloudAgentMediaArgs
-	CallID              string
-	TransientReferences map[string]cloudAgentTransientReference
+	Args                      cloudAgentMediaArgs
+	CallID                    string
+	CommerceKey               string
+	CommerceItemID            string
+	CommerceRetryFailedTaskID string
+	CommerceRetryPromptHash   string
+	TransientReferences       map[string]cloudAgentTransientReference
 	// Prepared is populated by the auto path after its dry admission. Approval
 	// mode keeps the same admission in state.Approval.Prepared.
 	Prepared *cloudAgentPreparedMedia `json:"-"`
@@ -597,17 +603,26 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		return CreateTaskRequest{}, nil, cloudAgentJSONArgumentError(err)
 	}
 	a.Mode = strings.ToLower(strings.TrimSpace(a.Mode))
-	if err := validateCloudAgentModelSelection(call.Function.Arguments, a); err != nil {
-		return CreateTaskRequest{}, nil, err
+	if state == nil || state.Request.Surface != "creation" {
+		if err := validateCloudAgentModelSelection(call.Function.Arguments, a); err != nil {
+			return CreateTaskRequest{}, nil, err
+		}
 	}
 	a.DraftRunID = run.ID
+	callHash := cloudAgentApprovalCallHash(call)
+	if state.Request.Surface == "creation" && state.CommercePlan != nil && state.CallIndex >= 0 && state.CallIndex < len(state.Calls) && state.Calls[state.CallIndex].ID == call.ID {
+		callHash = cloudAgentApprovalCallHash(state.Calls[state.CallIndex])
+	}
 	if state.Approval != nil && state.Approval.Prepared != nil &&
-		state.Approval.CallHash == cloudAgentApprovalCallHash(call) {
+		state.Approval.CallHash == callHash {
 		a.Prepared = state.Approval.Prepared
 	} else if state.AutoPreparedMedia != nil &&
-		state.AutoPreparedCallHash == cloudAgentApprovalCallHash(call) &&
+		state.AutoPreparedCallHash == callHash &&
 		time.Now().Before(state.AutoPreparedMedia.Quote.ExpiresAt) {
 		a.Prepared = state.AutoPreparedMedia
+	}
+	if state.Request.Surface == "creation" {
+		return s.prepareCloudAgentCreationMedia(run, state, a, call.ID)
 	}
 	if err := s.fillCloudAgentMediaSnapshotHash(run.UserID, state.Request.CanvasID, &a); err != nil {
 		return CreateTaskRequest{}, nil, err

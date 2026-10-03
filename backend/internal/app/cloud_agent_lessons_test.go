@@ -342,6 +342,9 @@ func TestLessonTaskTextCoversPromptPlanAndCalls(t *testing.T) {
 }
 
 func TestLessonCategoryIsControlled(t *testing.T) {
+	if label, ok := cloudAgentLessonCategoryOf("smart_creation"); !ok || label != "smart_creation" {
+		t.Fatal("智能创作分类未注册")
+	}
 	if _, ok := cloudAgentLessonCategoryOf("storyboard"); !ok {
 		t.Fatal("合法分类被拒")
 	}

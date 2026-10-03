@@ -9642,6 +9642,44 @@
     flex: 1 1 520px;
 }
 
+.admin-price-tier-time-pricing {
+    margin-top: 18px;
+    padding: 14px;
+    border: 1px solid var(--admin-divider);
+    border-radius: 10px;
+    background: var(--admin-layer-2);
+}
+
+.admin-price-tier-time-pricing-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-price-tier-time-periods {
+    display: grid;
+    gap: 8px;
+}
+
+.admin-price-tier-time-periods-header,
+.admin-price-tier-time-period-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 100px 36px;
+    align-items: start;
+    gap: 8px;
+}
+
+.admin-price-tier-time-periods-header {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.admin-price-tier-time-period-row .ant-form-item {
+    margin-bottom: 0;
+}
+
 .admin-price-tier-unit-price .ant-input-number,
 .admin-price-tier-cost-grid .ant-input-number {
     width: 100% !important;

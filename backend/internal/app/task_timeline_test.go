@@ -28,6 +28,11 @@ func newTimelineTaskTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(database.Models()...); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	for _, userID := range []string{"usr-render-test", "usr-timeline-test", "usr-create-test", "usr-a", "usr-b", "usr-img"} {
+		if err := db.Create(&model.User{ID: userID, Username: userID, Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+			t.Fatalf("seed user %s: %v", userID, err)
+		}
+	}
 	return &Service{repo: repository.New(db)}, db
 }
 

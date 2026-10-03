@@ -115,6 +115,8 @@ export async function resolveMediaUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (resourceId) {
+        // Worker/SSR consumers cannot resolve the browser-relative `/api` base URL.
+        if ((typeof window === "undefined" || typeof window.location === "undefined") && typeof document === "undefined") return fallback;
         // 展示直接命中 OSS/CDN；平台资源文件接口只保留给私有源站代理或本地存储兜底。
         return resolveResourceAccessURL((await getResourceAccess(storageKey, "display")).url);
     }

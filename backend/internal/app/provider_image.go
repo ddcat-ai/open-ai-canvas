@@ -274,7 +274,7 @@ func geminiImageDataURLs(payload map[string]interface{}) ([]map[string]string, e
 		}
 	}
 	if len(images) == 0 {
-		return nil, errors.New("Gemini Images 接口没有返回图片")
+		return nil, providerGenerationFailedError{cause: errors.New("Gemini Images 接口没有返回图片")}
 	}
 	return images, nil
 }
@@ -432,7 +432,7 @@ func volcengineArkImageDataURLs(ctx context.Context, config providerConfig, payl
 			continue
 		}
 		if !isPublicMediaURL(value) {
-			return nil, errors.New("火山方舟图片接口没有返回可下载的图片")
+			return nil, providerGenerationFailedError{cause: errors.New("火山方舟图片接口没有返回可下载的图片")}
 		}
 		// 方舟默认返回临时 CDN 地址。必须由后端下载成内联结果，后续资源持久化才能
 		// 原子地写入服务器或用户配置的对象存储，且不依赖浏览器跨域访问方舟 CDN。
@@ -527,7 +527,7 @@ func normalizeVolcengineArkImageSize(value string) string {
 
 func imageDataURLs(payload imageResponse) ([]map[string]string, error) {
 	if len(payload.Data) == 0 {
-		return nil, errors.New("接口没有返回图片")
+		return nil, providerGenerationFailedError{cause: errors.New("接口没有返回图片")}
 	}
 	images := make([]map[string]string, 0, len(payload.Data))
 	for _, item := range payload.Data {
@@ -540,7 +540,7 @@ func imageDataURLs(payload imageResponse) ([]map[string]string, error) {
 		}
 	}
 	if len(images) == 0 {
-		return nil, errors.New("接口没有返回可用图片")
+		return nil, providerGenerationFailedError{cause: errors.New("接口没有返回可用图片")}
 	}
 	return images, nil
 }

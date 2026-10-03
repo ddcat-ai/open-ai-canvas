@@ -16,6 +16,7 @@ describe("official application plugin classification", () => {
         expect(isOfficialApplicationPluginId("prompt-optimizer")).toBe(true);
         expect(isOfficialApplicationPluginId("eagle-asset-connector")).toBe(true);
         expect(isOfficialApplicationPluginId("runninghub-workflow-provider")).toBe(true);
+        expect(isOfficialApplicationPluginId("igo-studio-ecommerce-agent")).toBe(true);
     });
 
     test("does not treat uploaded or unknown plugins as official applications", () => {
@@ -29,7 +30,7 @@ describe("official application plugin classification", () => {
     test("exposes a single de-duplicated id list", () => {
         const ids = [...OFFICIAL_APPLICATION_PLUGIN_IDS];
         expect(new Set(ids).size).toBe(ids.length);
-        expect(ids.length).toBe(5);
+        expect(ids.length).toBe(6);
     });
 
     test("both plugin pages consume the shared list instead of a local copy", () => {

@@ -52,11 +52,12 @@ for (const [dev, pathname] of [
     [true, "/dev/director-repro/"],
     [true, "/dev/director-repro-other"],
 ]) {
-    test(`appearance loads in parallel with normal startup: dev=${dev} path=${pathname}`, async () => {
+    test(`appearance blocks normal startup until the brand resolves: dev=${dev} path=${pathname}`, async () => {
         const entry = await prepareEntry(dev, pathname);
+        expect(entry.events).toEqual(["appearance"]);
+        entry.resolveAppearance();
         await entry.loaded;
         expect(entry.events).toEqual(["appearance", "./application"]);
-        entry.resolveAppearance();
     });
 }
 

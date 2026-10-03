@@ -167,6 +167,31 @@ func registerAdminUserRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"user": updated})
 	})
+	r.GET("/admin/users/:id/delete-preflight", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.UserDeletePreflight(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.POST("/admin/users/:id/disable", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DisableUser(user, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
 	r.DELETE("/admin/users/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

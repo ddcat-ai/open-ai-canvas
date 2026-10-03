@@ -20,7 +20,7 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 	image := &ImageCapabilityConfig{
 		References:            ImageReferenceConfig{PromptMaxChars: 32000, MaxImages: 16, MaxImageBytes: 30 * 1024 * 1024, MaskSupported: true},
 		Size:                  ImageSizeConfig{Parameter: "size", Values: defaultImageSizeValues(), Default: "1:1", AllowCustom: true},
-		Quality:               ImageQualityConfig{Supported: true, Values: []string{"auto", "low", "medium", "high"}, Default: "auto"},
+		Quality:               ImageQualityConfig{Supported: true, Values: []string{"auto", "low", "medium", "high", "xhigh", "max"}, Default: "auto"},
 		TransparentBackground: VideoBooleanConfig{Supported: true, Default: false},
 		ResponseFormat:        ParameterSupport{Supported: true},
 		OutputFormat:          ParameterSupport{Supported: true},
@@ -99,7 +99,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
 		Ratios:            []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"},
 		DefaultRatio:      "16:9",
-		Resolutions:       []string{"480p", "720p", "1080p", "1440p", "2160p"},
+		Resolutions:       []string{"480p", "720p", "768p", "1080p", "1440p", "2160p"},
 		DefaultResolution: "720p",
 		GenerateAudio:     VideoBooleanConfig{Supported: false, Default: false},
 		Watermark:         VideoBooleanConfig{Supported: false, Default: false},
@@ -155,6 +155,16 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
 	case model.ChannelInterfaceAgnesVideo:
 		video = applyModelSpecificVideoCapability(video, protocol, modelName)
+	}
+	if strings.EqualFold(strings.TrimSpace(protocol), "grsai-minimax-h3") {
+		video.References.MaxImages = 9
+		video.References.MaxAudios = 3
+		video.References.MaxAudioBytes = 15 * 1024 * 1024
+		video.References.MaxAudioDuration = 15
+		video.Ratios = []string{"21:9", "16:9", "9:16", "4:3", "3:4", "1:1", "3:2", "2:3"}
+		video.DefaultRatio = "16:9"
+		video.Resolutions = []string{"480p", "768p", "1080p"}
+		video.DefaultResolution = "768p"
 	}
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }

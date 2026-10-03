@@ -32,6 +32,22 @@ func appendProtocolQuery(rawURL string, values map[string][]string) (string, err
 	return parsed.String(), nil
 }
 
+func preserveProtocolVideoURL(result *protocol.Result) (map[string]interface{}, bool) {
+	if result == nil || len(result.Videos) == 0 {
+		return nil, false
+	}
+	reference := result.Videos[0]
+	url := strings.TrimSpace(reference.URL)
+	if url == "" || !isPublicMediaURL(url) {
+		return nil, false
+	}
+	item := map[string]interface{}{"kind": "video", "url": url}
+	if mimeType := strings.TrimSpace(reference.MIMEType); mimeType != "" {
+		item["mimeType"] = mimeType
+	}
+	return map[string]interface{}{"mode": "video", "video": item}, true
+}
+
 func finishProtocolResult(ctx context.Context, config providerConfig, mode string, taskID string, result *protocol.Result, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	if result == nil {
 		return nil, errors.New("声明式协议已完成但没有返回结果")

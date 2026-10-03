@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,26 @@ import (
 	"testing"
 	"time"
 )
+
+func TestReadOutputRequiresOneFinalSettledEvent(t *testing.T) {
+	for _, tc := range []struct {
+		name, output string
+		wantError    bool
+	}{
+		{"empty", "", true},
+		{"truncated", `{"event":"progress"}` + "\n", true},
+		{"settled then progress", `{"event":"settled"}` + "\n" + `{"event":"progress"}` + "\n", true},
+		{"duplicate settled", `{"event":"settled"}` + "\n" + `{"event":"settled"}` + "\n", true},
+		{"normal", `{"event":"progress"}` + "\n" + `{"event":"settled"}` + "\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ReadOutput(strings.NewReader(tc.output))
+			if (err != nil) != tc.wantError {
+				t.Fatal(fmt.Sprintf("ReadOutput() error = %v, wantError = %v", err, tc.wantError))
+			}
+		})
+	}
+}
 
 // fakeRuntime 用一个假的 agent-runtime.mjs 替换真实运行时，只验证 Go 侧的进程与输出处理。
 func fakeRuntime(t *testing.T, script string) {
@@ -46,6 +68,30 @@ func TestSetProcessLimitDoesNotStopActiveWork(t *testing.T) {
 func noopBridge() Bridge {
 	handler := func(context.Context, map[string]json.RawMessage) (any, error) { return map[string]any{"ok": true}, nil }
 	return Bridge{Model: handler, Tool: handler, Event: handler}
+}
+
+func TestRunPreservesCancellationBeforeSettled(t *testing.T) {
+	fakeRuntime(t, `
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+const request = JSON.parse(input);
+setInterval(() => {}, 1000);
+await fetch(request.bridgeURL + "/event", {
+  method: "POST",
+  headers: { Authorization: "Bearer " + request.bridgeToken },
+  body: JSON.stringify({ event: "ready" }),
+});
+`)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	bridge := noopBridge()
+	bridge.Event = func(context.Context, map[string]json.RawMessage) (any, error) {
+		cancel()
+		return map[string]any{"ok": true}, nil
+	}
+	if err := Run(ctx, ProcessRequest{}, bridge); !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context cancellation, not a missing settled failure, got %v", err)
+	}
 }
 
 // 回归：Wait 早于读完 stdout 时，大量输出后正常退出会被判成
@@ -89,6 +135,8 @@ func TestRunDoesNotLeakBackendEnvironment(t *testing.T) {
 if (process.env.DATABASE_URL) {
   process.stdout.write(JSON.stringify({ event: "runtime_error", message: "leaked" }) + "\n");
   process.exitCode = 1;
+} else {
+  process.stdout.write(JSON.stringify({ event: "settled" }) + "\n");
 }
 `)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

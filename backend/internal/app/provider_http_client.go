@@ -217,10 +217,10 @@ func doJSON(req *http.Request, target interface{}) error {
 	}
 	if payload, ok := target.(*imageResponse); ok {
 		if payload.Error != nil && payload.Error.Message != "" {
-			return errors.New(providerPayloadErrorMessage(payload.Error.Message))
+			return providerPayloadError{raw: payload.Error.Message, message: providerPayloadErrorMessage(payload.Error.Message)}
 		}
 		if payload.Code != nil && *payload.Code != 0 {
-			return errors.New(providerPayloadErrorMessage(payload.Msg))
+			return providerPayloadError{raw: payload.Msg, message: providerPayloadErrorMessage(payload.Msg)}
 		}
 	}
 	if payload, ok := target.(*map[string]interface{}); ok {
@@ -528,6 +528,20 @@ func safeProviderLogError(err error) string {
 	var httpErr providerHTTPError
 	if errors.As(err, &httpErr) {
 		return fmt.Sprintf("上游 HTTP %d", httpErr.StatusCode)
+	}
+	// net/http wraps transport failures in url.Error, whose Error method includes
+	// the full request URL. Query strings may contain user supplied or provider
+	// credentials, so keep only the operation and nested transport reason.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Err == nil {
+			return strings.TrimSpace(urlErr.Op)
+		}
+		reason := safeProviderLogError(urlErr.Err)
+		if strings.TrimSpace(urlErr.Op) == "" {
+			return reason
+		}
+		return strings.TrimSpace(urlErr.Op) + ": " + reason
 	}
 	return truncateRunes(err.Error(), 500)
 }

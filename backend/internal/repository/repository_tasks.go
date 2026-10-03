@@ -32,6 +32,21 @@ func (r *Repository) TaskForUser(userID string, id string) (*model.Task, error) 
 	return &task, nil
 }
 
+func (r *Repository) TaskForUserByIdempotencyKey(userID string, key string) (*model.Task, error) {
+	if strings.TrimSpace(key) == "" {
+		return nil, nil
+	}
+	var task model.Task
+	err := r.db.First(&task, "user_id = ? AND idempotency_key = ?", userID, key).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
 func (r *Repository) ActiveTaskCountForUser(userID string) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.Task{}).Where("user_id = ? AND status IN ?", userID, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}).Count(&count).Error
@@ -139,10 +154,19 @@ func (r *Repository) DeferRunningTaskForProviderPoll(id string, owner string, st
 
 // 人工恢复仅锁定失败任务；旧 worker 的租约可覆盖，但未过期的人工恢复租约不能并发抢占。
 func (r *Repository) ClaimFailedTaskProviderRecovery(id string, userID string, owner string, leaseDuration time.Duration) error {
+	return r.ClaimTaskProviderRecovery(id, userID, owner, leaseDuration, false)
+}
+
+// A succeeded task is eligible only after the caller confirms that its media was not persisted.
+func (r *Repository) ClaimTaskProviderRecovery(id string, userID string, owner string, leaseDuration time.Duration, allowSucceeded bool) error {
 	now := time.Now()
+	statuses := []model.TaskStatus{model.TaskStatusFailed}
+	if allowSucceeded {
+		statuses = append(statuses, model.TaskStatusSucceeded)
+	}
 	query := r.db.Model(&model.Task{}).Where(
-		"id = ? AND status = ? AND (lease_owner = '' OR lease_owner NOT LIKE ? OR lease_expires_at IS NULL OR lease_expires_at <= ?)",
-		id, model.TaskStatusFailed, "manual-recovery:%", now,
+		"id = ? AND status IN ? AND (lease_owner = '' OR lease_owner NOT LIKE ? OR lease_expires_at IS NULL OR lease_expires_at <= ?)",
+		id, statuses, "manual-recovery:%", now,
 	)
 	if strings.TrimSpace(userID) != "" {
 		query = query.Where("user_id = ?", userID)

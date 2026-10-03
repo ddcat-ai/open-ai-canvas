@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router";
 import { PaymentCheckoutCode } from "@/components/payment-checkout-code";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
+import { paymentTypeLabel } from "@/pages/admin/payments/payment-method";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { cn } from "@/lib/utils";
@@ -352,7 +353,7 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
                                                         onClick={() => setSelectedProviderId(provider.id)}
                                                     >
                                                         <CreditCard />
-                                                        {provider.name}
+                                                        {paymentTypeLabel(provider.payType)}
                                                     </button>
                                                 ))}
                                             </div>
@@ -366,7 +367,7 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
                                         <CircleAlert />
                                         <div>
                                             <strong>在线充值暂不可用</strong>
-                                            <span>当前没有已启用的充值商品或支付渠道，请使用兑换码或联系管理员。</span>
+                                            <span>当前没有已启用的充值商品或支付方式，请使用兑换码或联系管理员。</span>
                                         </div>
                                     </div>
                                 )}

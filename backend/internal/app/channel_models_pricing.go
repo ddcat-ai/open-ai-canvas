@@ -22,10 +22,6 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 	for _, resolution := range config.Video.Resolutions {
 		resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
 	}
-	durationSupported := make(map[int]bool, len(config.Video.Duration.Values))
-	for _, seconds := range config.Video.Duration.Values {
-		durationSupported[seconds] = true
-	}
 	for _, tier := range tiers {
 		if tier.Resolution != "*" && !resolutionSupported[normalizeChannelModelTierResolution(tier.Resolution)] {
 			return BadAuthRequest("价格档分辨率不在该视频模型支持范围内：" + tier.Resolution)
@@ -33,17 +29,28 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 		if tier.VideoSeconds == 0 {
 			continue
 		}
-		if !videoDurationSupported(config.Video) {
+		duration := config.Video.Duration
+		if tier.Resolution != "*" {
+			duration = videoDurationConfigForResolution(config.Video, tier.Resolution)
+		}
+		if !videoDurationSupportedForConfig(duration) {
 			continue
 		}
-		if config.Video.Duration.Selection == "enum" && !durationSupported[tier.VideoSeconds] {
+		if duration.Selection == "enum" && !containsInt(duration.Values, tier.VideoSeconds) {
 			return BadAuthRequest(fmt.Sprintf("价格档时长 %d 秒不在该视频模型支持范围内", tier.VideoSeconds))
 		}
-		if config.Video.Duration.Selection == "range" && (tier.VideoSeconds < config.Video.Duration.Min || tier.VideoSeconds > config.Video.Duration.Max || (config.Video.Duration.Step > 0 && (tier.VideoSeconds-config.Video.Duration.Min)%config.Video.Duration.Step != 0)) {
+		if duration.Selection == "range" && (tier.VideoSeconds < duration.Min || tier.VideoSeconds > duration.Max || (duration.Step > 0 && (tier.VideoSeconds-duration.Min)%duration.Step != 0)) {
 			return BadAuthRequest(fmt.Sprintf("价格档时长 %d 秒不在该视频模型支持范围内", tier.VideoSeconds))
 		}
 	}
 	return nil
+}
+
+func videoDurationSupportedForConfig(config VideoDurationConfig) bool {
+	if config.Selection == "enum" {
+		return len(config.Values) > 0
+	}
+	return config.Min > 0 && config.Max >= config.Min && config.Step > 0
 }
 
 // syncLogicalModelsFromChannelModel 只失效路由目录。系统渠道 SKU 与前台模型目录
@@ -93,6 +100,10 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		if err := validateChannelModelTierPricing(capability, protocol, billingMode, input); err != nil {
 			return nil, err
 		}
+		timePricing, err := normalizeChannelTimePricing(input.TimePricing)
+		if err != nil {
+			return nil, BadAuthRequest(err.Error())
+		}
 		id, idErr := s.repo.NextPrefixedID("PTIER")
 		if idErr != nil {
 			return nil, idErr
@@ -112,6 +123,7 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 			InputTokenPriceMicrocredits:  input.InputTokenPriceMicrocredits,
 			OutputTokenPriceMicrocredits: input.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits: input.CachedTokenPriceMicrocredits,
+			TimePricing:                  timePricing,
 			PriceConfigured:              input.PriceConfigured,
 			Enabled:                      enabled,
 			PriceVersion:                 1,

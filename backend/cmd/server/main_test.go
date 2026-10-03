@@ -83,3 +83,12 @@ func TestRedactCanvasSharePath(t *testing.T) {
 		t.Fatalf("unrelated path changed: %s", got)
 	}
 }
+
+func TestRedactCanvasSharePathStripsQueryAndFragment(t *testing.T) {
+	if got := redactCanvasSharePath("/api/tasks?secret=should-not-log#fragment"); got != "/api/tasks" {
+		t.Fatalf("request query leaked into access log path: %s", got)
+	}
+	if got := redactCanvasSharePath("/api/public/canvas-shares/private-token/resources?secret=should-not-log"); got != "/api/public/canvas-shares/:token/resources" {
+		t.Fatalf("share path query leaked into access log path: %s", got)
+	}
+}

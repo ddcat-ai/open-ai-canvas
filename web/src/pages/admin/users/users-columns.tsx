@@ -1,5 +1,5 @@
 import type { ColumnsType } from "antd/es/table";
-import { Eye, Pencil, Power } from "lucide-react";
+import { Eye, Pencil, Power, Trash2 } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
@@ -24,12 +24,14 @@ export function createUserColumns({
     onView,
     onEdit,
     onToggleStatus,
+    onDelete,
 }: {
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
     onToggleStatus: (user: AdminUser) => Promise<void>;
+    onDelete: (user: AdminUser) => Promise<void>;
 }): ColumnsType<AdminUser> {
     const columns: Array<ColumnsType<AdminUser>[number] & { key: UserColumnKey }> = [
         {
@@ -77,6 +79,14 @@ export function createUserColumns({
                                 okText: user.status === "active" ? "确认停用" : "确认启用",
                             },
                             onClick: () => onToggleStatus(user),
+                        },
+                        {
+                            key: "delete",
+                            label: "删除用户",
+                            icon: <Trash2 className="size-3.5" />,
+                            danger: true,
+                            disabled: user.id === actorId,
+                            onClick: () => onDelete(user),
                         },
                         { key: "edit", label: "编辑用户", icon: <Pencil className="size-3.5" />, onClick: () => onEdit(user) },
                     ]}

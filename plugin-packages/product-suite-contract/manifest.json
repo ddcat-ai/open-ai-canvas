@@ -1,0 +1,138 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "product-suite-contract",
+  "name": "电商套图 Agent 合同",
+  "version": "1.1.0",
+  "author": "iGO Studio",
+  "description": "电商套图 Agent 的风格锁、批次状态与恢复合同；不发起网络请求。",
+  "surfaces": [
+    "fullscreen",
+    "hybrid"
+  ],
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": []
+  },
+  "contributes": {
+    "agents": [
+      "ecommerce-conversational"
+    ],
+    "aiCapabilities": [
+      "ecommerce-style-planner"
+    ],
+    "providers": [
+      {
+        "id": "product-suite-contract",
+        "label": "Product Suite Batch Contract",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "canvas",
+          "creation"
+        ],
+        "baseUrl": "https://product-suite-contract.invalid",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "none"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": false,
+            "mapping": "model",
+            "description": "由实际图片 provider 选择。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": false,
+            "mapping": "prompt",
+            "description": "由套图模板展开后的单项提示词。"
+          }
+        ],
+        "batchContract": {
+          "version": "1.0",
+          "required": [
+            "batchId",
+            "product",
+            "items",
+            "retryPolicy",
+            "recovery",
+            "styleLock"
+          ],
+          "itemRequired": [
+            "itemId",
+            "idempotencyKey",
+            "angle",
+            "scene",
+            "background",
+            "size",
+            "status",
+            "retry"
+          ],
+          "status": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "unknown_submitted"
+          ],
+          "batchStatus": [
+            "queued",
+            "running",
+            "partial_succeeded",
+            "succeeded",
+            "failed",
+            "recovering"
+          ],
+          "retry": {
+            "unknownSubmittedIsRetryable": false,
+            "failedIsRetryable": true
+          },
+          "redaction": {
+            "sensitivePaths": [
+              "credentials.apiKey",
+              "credentials.secretKey",
+              "headers.authorization"
+            ]
+          },
+          "timeout": {
+            "perItemMsRequired": true,
+            "batchMsRequired": true,
+            "timeoutOutcome": "failed"
+          },
+          "recovery": {
+            "resumeCursorRequired": true,
+            "replayRequiresSameIdempotencyKey": true
+          },
+          "styleLock": {
+            "required": [
+              "version",
+              "fingerprint",
+              "globalPrompt",
+              "negativePrompt",
+              "anchorItemId",
+              "sharedPromptPrefix"
+            ],
+            "anchorFirst": true,
+            "maxParallelBeforeAnchor": 1
+          }
+        },
+        "create": {
+          "method": "NONE",
+          "path": "/contract-only",
+          "contentType": "application/json"
+        },
+        "response": {
+          "status": "succeeded"
+        }
+      }
+    ]
+  },
+  "documentation": "# 电商套图 Agent 合同\n\n这是产品套图批量生成的静态合同包，不绑定具体图片供应商，也不会发起网络请求。实际执行器应把每个套图项展开为一个普通 image provider 请求，并持久化本合同中的 `batchId`、`itemId` 和 `idempotencyKey`。\n\n- `product-suite-contract`：manifest 中的合同摘要与错误边界，同时声明 `ecommerce-conversational` Agent 能力和 `ecommerce-style-planner` 风格规划能力。\n- `docs/product-suite-contract.json`：批次、SKU、角度/场景、背景、尺寸矩阵、重试和恢复的 JSON Schema。\n- `fixtures/product-suite.json`：部分成功与未知提交状态样例。\n\n### 状态边界\n\n`unknown_submitted` 表示上游可能已接受请求。它不能自动重试，恢复流程必须用同一个 `itemId` 和 `idempotencyKey` 查询或人工决策。只有明确的 `failed` 项可按 `retryPolicy` 重试；重试次数超过上限后保持 `failed`。\n\n`partial_succeeded` 允许批次在部分 item 成功时交付已完成素材。重启后从 `recovery.resumeCursor` 继续，已经成功或未知提交的 item 不得换用新幂等键重复提交。\n\n`styleLock` 是电商套图的统一风格合同。它保存稳定的 `fingerprint`、全局正向/负向约束、锚点 item 和共享提示词前缀；锚点 item 完成前最多只允许执行一张图，后续图片必须复用同一风格锁。\n\n超时、退避和脱敏字段只作为合同边界；实际 HTTP timeout、retry/backoff、日志脱敏必须由宿主运行时实现并单独验收。\n\n该包仍然是静态合同，不发起网络请求。宿主关闭或卸载该包后，套图编排能力应整体不可用，不影响原有普通图片生成。\n\n---\n\n# 电商套图 Agent 合同\n\n这是电商套图 Agent 的静态合同插件。它描述批次、SKU、角度/场景、背景、尺寸矩阵、统一风格锁、幂等键、重试与恢复边界，不发起网络请求，也不替代实际图片 provider。\n\n## 批次与响应\n\n- 创建与执行由宿主的套图编排器负责，实际图片生成 provider 由每个批次项单独选择。\n- 每个批次项必须保留稳定的 `itemId` 和 `idempotencyKey`，恢复时复用原幂等键。\n- `unknown_submitted` 表示上游提交结果未知，不允许自动重试，避免重复计费或重复生成。\n- 响应状态使用 `queued`、`running`、`succeeded`、`failed`、`unknown_submitted`，批次状态使用 `partial_succeeded` 等合同枚举。\n- 超时、重试、脱敏和恢复游标均由合同字段明确表达；敏感凭证不得进入日志或任务正文。\n- `styleLock` 必须在规划阶段生成，所有图片共享同一风格指纹和提示词前缀；锚点图完成前不并发生成其余图片。\n\n## 执行边界\n\n该包是静态合同，不提供可执行的 HTTP 操作。实际执行器接入前，宿主必须拒绝将其当作图片 provider 直接发起请求。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"product-suite-contract\",\n  \"name\": \"电商套图 Agent 合同\",\n  \"version\": \"1.1.0\",\n  \"author\": \"iGO Studio\",\n  \"description\": \"电商套图 Agent 的风格锁、批次状态与恢复合同；不发起网络请求。\",\n  \"surfaces\": [\n    \"fullscreen\",\n    \"hybrid\"\n  ],\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": []\n  },\n  \"contributes\": {\n    \"agents\": [\n      \"ecommerce-conversational\"\n    ],\n    \"aiCapabilities\": [\n      \"ecommerce-style-planner\"\n    ],\n    \"providers\": [\n      {\n        \"id\": \"product-suite-contract\",\n        \"label\": \"Product Suite Batch Contract\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"canvas\",\n          \"creation\"\n        ],\n        \"baseUrl\": \"https://product-suite-contract.invalid\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"none\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"model\",\n            \"description\": \"由实际图片 provider 选择。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"prompt\",\n            \"description\": \"由套图模板展开后的单项提示词。\"\n          }\n        ],\n        \"batchContract\": {\n          \"version\": \"1.0\",\n          \"required\": [\n            \"batchId\",\n            \"product\",\n            \"items\",\n            \"retryPolicy\",\n            \"recovery\",\n            \"styleLock\"\n          ],\n          \"itemRequired\": [\n            \"itemId\",\n            \"idempotencyKey\",\n            \"angle\",\n            \"scene\",\n            \"background\",\n            \"size\",\n            \"status\",\n            \"retry\"\n          ],\n          \"status\": [\n            \"queued\",\n            \"running\",\n            \"succeeded\",\n            \"failed\",\n            \"unknown_submitted\"\n          ],\n          \"batchStatus\": [\n            \"queued\",\n            \"running\",\n            \"partial_succeeded\",\n            \"succeeded\",\n            \"failed\",\n            \"recovering\"\n          ],\n          \"retry\": {\n            \"unknownSubmittedIsRetryable\": false,\n            \"failedIsRetryable\": true\n          },\n          \"redaction\": {\n            \"sensitivePaths\": [\n              \"credentials.apiKey\",\n              \"credentials.secretKey\",\n              \"headers.authorization\"\n            ]\n          },\n          \"timeout\": {\n            \"perItemMsRequired\": true,\n            \"batchMsRequired\": true,\n            \"timeoutOutcome\": \"failed\"\n          },\n          \"recovery\": {\n            \"resumeCursorRequired\": true,\n            \"replayRequiresSameIdempotencyKey\": true\n          },\n          \"styleLock\": {\n            \"required\": [\n              \"version\",\n              \"fingerprint\",\n              \"globalPrompt\",\n              \"negativePrompt\",\n              \"anchorItemId\",\n              \"sharedPromptPrefix\"\n            ],\n            \"anchorFirst\": true,\n            \"maxParallelBeforeAnchor\": 1\n          }\n        },\n        \"create\": {\n          \"method\": \"NONE\",\n          \"path\": \"/contract-only\",\n          \"contentType\": \"application/json\"\n        },\n        \"response\": {\n          \"status\": \"succeeded\"\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

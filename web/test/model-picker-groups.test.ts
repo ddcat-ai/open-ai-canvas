@@ -29,6 +29,18 @@ function fixture() {
     return normalizeConfigSnapshot({ config: { ...defaultConfig, channels: systemChannelModelChannels(channels), model: "b::seedance-2.0", videoModel: "b::seedance-2.0" } }).config;
 }
 
+test("video model compatibility checks duration against the selected resolution", () => {
+    const config = fixture();
+    const profile = config.channels[1].modelCosts![0].capabilityConfig!.video!;
+    profile.duration = { selection: "range", min: 1, max: 15, step: 1, default: 6 };
+    profile.resolutions = ["720p", "1080p"];
+    profile.durationByResolution = { "1080p": { selection: "range", min: 1, max: 10, step: 1, default: 6 } };
+    const selected = "b::seedance-2.0";
+    expect(modelCompatibilityError(config, selected, { capability: "video", videoSeconds: "15", options: { vquality: "720" } })).toBe("");
+    expect(modelCompatibilityError(config, selected, { capability: "video", videoSeconds: "15", options: { vquality: "1080" } })).toBe("不支持当前视频时长");
+    expect(modelCompatibilityError(config, selected, { capability: "video", videoSeconds: "10", options: { vquality: "1080p" } })).toBe("");
+});
+
 test("same model display name groups all channels and preserves their prices", () => {
     const config = fixture();
     const groups = groupModelsForPicker(config, selectableModelsByCapability(config, "video"));

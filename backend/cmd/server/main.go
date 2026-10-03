@@ -174,6 +174,9 @@ func run(ctx context.Context) error {
 }
 
 func redactCanvasSharePath(path string) string {
+	if index := strings.IndexAny(path, "?#"); index >= 0 {
+		path = path[:index]
+	}
 	const prefix = "/api/public/canvas-shares/"
 	if !strings.HasPrefix(path, prefix) {
 		return path

@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 技能初始化与已有记录保护
+
+当前 `EnsureBuiltinSkills` 只插入尚不存在的技能 ID，不覆盖同 ID 的既有名称、正文、归属、可见性、启用状态及其他元数据。启动不自动把本地修改过的内置技能还原为默认稿，也不使已禁用记录重新启用；代价是相同 ID 的上游正文更新不会再由启动种子自动下发。
+
+`EnsureSkillPackages` 保留已有当前版本、包正文及参考文件；包文件缺失时仅从哈希一致的孤儿归档恢复，无可恢复文件则保留原版本并记录诊断。仅无版本的记录从其原正文初始化文件包；不因 legacy 正文与已有包的 hash 不同而创建替换版本。用户主动更新与 GitHub 同步仍走原有显式更新路径，不被启动保留规则关闭。技能保护本身不新增数据库表或字段。
+
+当前 Agent 通过技能文件包按需读取 `SKILL.md` 入口与参考文件；旧记录的 `Instruction` 仍是无版本记录首次建包的来源。因此验收应分别核对技能正文、版本文件、私有及禁用权限、安装与收藏关联；单独比较包 hash 不足以证明已有记录完整保留。
+
 ## 画布 Agent 外观配置
 
 `system_settings` 的 `appearance` JSON 合同版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`。独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
@@ -19,11 +27,13 @@ description: 影策后端核心持久化表与状态边界
 
 ## 结构迁移与版本
 
-当前结构版本为 42。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。
+版本 37 清理两个已知旧缓存单列唯一索引名。PostgreSQL 在迁移事务内使用 `DROP INDEX`，然后建立 `(user_id, cache_key)` 用户级唯一索引；旧缓存行不重写。
+
+当前结构版本为 47。版本 45 `cloud_agent_receipts` 新增 Agent 持久操作回执表，校验和为 `sha256:cloud-agent-receipts-v45-20261001`，不转换旧业务行或改写已有迁移登记。版本 44 `task_idempotency_convergence` 仅补齐缺失的任务幂等列与 `(user_id, idempotency_key)` 唯一索引；版本 36 仅接受已知本地 `task_idempotency` 或上游 `cloud_agent_gemini_cache` 的精确名称与校验和，原登记时间保持不变。版本 37 可为本地路线创建此前缺失的 Gemini 缓存表。迁移前只读校验历史为合法连续前缀，未知、缺号、超版本或有业务表但无登记均拒绝。版本 43 `topup_sale_strategies` 为充值商品与订单增加销售策略字段。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。
 
 版本 36 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
 
-升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 42，回退需恢复匹配的数据库备份，并评估备份之后的新写入；不能只切回旧镜像。关闭自动迁移的生产环境必须运行正式迁移；手工改表不能更新 `schema_migrations` 的版本与校验和记录。
+升级前备份，按既有流程执行 `migrate-schema up` 和 `verify` 后再启动新后端。旧版本二进制不支持版本 47，回退需恢复匹配的数据库备份，并评估备份之后的新写入；不能只切回旧镜像。关闭自动迁移的生产环境必须运行正式迁移；手工改表不能更新 `schema_migrations` 的版本与校验和记录。
 
 ### 生成成功后的作品保存恢复
 
@@ -31,6 +41,14 @@ description: 影策后端核心持久化表与状态边界
 - `media_recovery_json` 使用已有 settings-key 加密，记录媒体地址、暂存文件名、资源 ID 和有界重试计数；不保存媒体 base64，不向任务 JSON/摘要返回该字段。数据库与 `.settings-key` 必须一起备份；该字段计入任务存储用量。
 - 下载前写入恢复记录，下载后记录暂存文件，上传后记录资源。通过任务 ID 和输出索引生成稳定的资源上传键、素材 ID；任务成功、结果记录及素材登记在同一数据库事务提交，登记失败则不发布任务成功。
 - 记录保留在终态任务中，成功后清理对应暂存文件；任务的既有保留/删除策略不变。结构迁移只增加列，不扫描日志，不修改历史任务、结果或账单。没有恢复记录的历史失败任务不会自动变为可恢复。
+
+### Agent 操作回执与执行权
+
+`cloud_agent_receipts` 使用 `(run_id, kind, operation_key)` 复合主键，保存用户、操作名、输入 SHA-256、`pending|committed|unknown` 状态、结果、任务 ID 和时间。`tool` 回执绑定固定工具调用 ID；`model_step` 绑定先持久到 Pi 原生检查点的步骤 ID 与重试序号。画布写入、媒体任务/订单准入及相应回执在运行 CAS 的同一事务提交。回执正文上限 128 KiB；超限回滚副作用。会话压缩不能删除回执。
+
+执行租约保存在 `cloud_agent_executions.state_json.executionLease`，包含随机 token、递增 epoch 与数据库时间计算的有效期；120 秒租期、30 秒续租。写事务在运行行锁内检查执行权，失主后旧进程的模型、工具、事件、快照和完成/失败写入被拒绝。用户审批和取消会废止旧执行权。
+
+旧运行缺少稳定步骤或写入回执时停止自动重发，已有可证明的媒体任务可接手收尾；供应商提交结果未知时保留任务并提示核对，不承诺外部服务无条件只执行一次。恢复采用 Pi 公开 continuation 接口；恢复时上下文溢出安全失败，不保证自动压缩恢复。删除 Agent 会话将会话标记为 `deleted`，保留执行日志、账单和已生成素材；有活动运行或任务时拒绝删除。管理员删除用户会清理账号业务数据，并将财务及审计记录关联到匿名主体。停用用户会改变账号可用状态并清除登录态。
 
 ### 云端 Agent 运行时
 
@@ -43,12 +61,16 @@ description: 影策后端核心持久化表与状态边界
 | `agent_profiles` | 保存用户、项目和画布层的 Agent 常驻偏好、哈希和独立 revision | `(user_id, scope, project_id, canvas_id)` 唯一；归属由 service 校验，写入使用 revision CAS；正文不能授权新能力 |
 | `agent_lessons` | 用户私有的 Agent 记忆。Agent 写入待审，用户自己批准后才会注入该用户的会话 | 按 `author_user_id` 隔离；写入机械脱敏；`steps_json` 存路线；`hits` 是主动查阅、`injected` 是自动注入；管理员可按用户查看和删除，不能代批 |
 | `agent_memory_settings` | 用户私有的记忆压缩周期、文本模型和最近一次压缩任务状态 | 主键 `user_id`；压缩结果只在 `compact_task_id` 匹配时应用到该用户已批准记忆 |
+| `channel_model_price_tiers.time_pricing` | 保存价格档的时间段倍率配置 | JSON 保存 IANA 时区与不重叠时间段；订单创建时计算出的倍率写入账单快照，后续修改配置不影响已创建订单 |
+| `agent_sessions` | 保存 Agent 会话身份与画布/项目关联 | 会话归属由服务端校验；由迁移版本 47 创建 |
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 
 历史迁移说明：版本 2 为 `schema_migrations.applied_at` 增加 `idx_schema_migrations_applied_at` 索引；版本 3 `asset_taxonomy_candidate_identity` 为资产候选增加规范化名称和来源，收敛资产分类，并为待确认候选建立项目内部分唯一索引；版本 4 `resource_upload_key` 为资源上传幂等补充 `resources.upload_key` 列和用户维度唯一索引；版本 5 `payment_topup` 创建积分充值、支付通知和对账所需结构；版本 6 `resource_playback_variant` 增加资源播放副本状态；版本 7 `asset_library_folders` 增加用户素材自定义分类及 `assets.folder_id`；版本 8 `logical_model_active_code` 将前台模型 code 的唯一约束限定为未归档记录；版本 9 `channel_presentation` 为渠道添加 `public_alias`（默认空字符串）与 `sort_order`（默认 0），为渠道模型添加 `sort_order`（默认 0），不重写既有凭据、价格或能力配置；版本 10 `creation_runtime` 创建创作运行与提交表，并为任务增加可空且唯一的 `creation_submission_id`，旧任务无需伪造提交标识即可继续使用；版本 11 `cloud_agent_runtime` 创建 `cloud_agent_executions`；版本 12 `agent_token_charge_limit` 为账单增加 Agent Token 收费上限；版本 13 `cloud_agent_canvas_mutation` 持久化 Agent 画布变更；版本 14 `cloud_agent_recovery_control` 增加运行恢复控制字段和旧运行回填；版本 15 `agent_profiles` 创建常驻偏好表；版本 16 `agent_lessons` 创建用户记忆表（含分类、路线 JSON、注入/查阅计数）；版本 17 `agent_lessons_owner_index` 为 `(author_user_id, status)` 增加复合索引；版本 18 `agent_memory_settings` 创建按用户隔离的压缩周期与最近一次压缩任务状态；版本 19 `payment_plugin_version` 为已有 `payment_provider_configs` 和 `payment_orders` 补上 `plugin_version`，用于把配置和订单钉在具体插件版本上；版本 20 `banner_announcements` 创建首页常驻滚动通知表；版本 21 `banner_announcement_title_runs` 为通知标题增加样式分段；版本 22 `banner_announcement_notice_type` 增加通知类型底色；版本 23 `canvas_revision_history` 为既有画布回填 `revision = 1` 并新增历史快照与资源引用表。版本 24 `channel_model_label` 为渠道模型增加 `channel_label`（最长 80 字、非空、默认空字符串），不重写模型标识、上游 ID、价格或能力；版本 25 `video_token_formula_snapshot` 为账单增加视频公式用量及用量来源快照。版本 26 `channel_model_description` 为渠道模型增加 `description`（最长 500 字、非空、默认空字符串），供二级选项展示使用说明，不重写身份或价格。版本 27 `channel_credit_cost` 为价格档添加管理员积分成本，并在账单保存执行线路的成本快照；成本不进入普通用户 API。已发布版本的实现和校验和不得修改。
 
 渠道模型的文本能力 JSON 还可声明 `contextWindowTokens` 与 `maxOutputTokens`。这两个字段是模型能力合同，不是数据库或 Agent checkpoint 的容量配置；旧记录读取时补 128K / 16K 默认值。运行状态、journal 和 transcript 的持久化边界仍由既有 runtime 表及其 512KB checkpoint 校验负责，本阶段没有通过扩大 checkpoint 绕过模型上下文限制。
+
+版本 46 为渠道模型价格档增加 `time_pricing` 时间段倍率 JSON；版本 47 创建 `agent_sessions` 会话表。时间段倍率在订单创建时与默认/模型倍率合成，并固化到订单快照，修改后台配置不会追溯改变已创建订单。
 
 历史发布曾使用版本 6 `asset_library_folders`，之后合并引入了上述 6/7 顺序冲突。迁移器仅在该历史记录的名称和校验和均精确匹配时选择历史顺序：保留版本 6 的素材目录记录及时间，在版本 7 应用 `resource_playback_variant`，再继续版本 8。新数据库及已采用“6 播放副本、7 素材目录”的数据库保持原顺序；状态检查与启动校验采用同一套识别规则。未知名称、被改动的校验和或冲突的版本 7 记录仍会拒绝迁移，不通过删除、改名或伪造已应用记录绕过检查。
 
@@ -280,7 +302,7 @@ schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_con
 
 账号文件容量只统计 `ready` 资源，并按 Provider、Endpoint、Bucket、ObjectKey 对同一物理对象去重。上传中或失败记录不占用已存储容量。后台每小时检查资源生命周期：超过 1 小时的 `pending/failed` 记录，以及超过 24 小时仍没有任何素材、画布、任务或其他业务引用的 `ready` 记录，会在再次校验引用后删除数据库记录并写入 `resource_deletion_jobs`，由幂等 Worker 清理物理对象。
 
-素材状态为 `archived` 时进入回收站。后台按“资源与请求策略”中的 `recycleBinRetentionDays` 定期扫描过期项；`0` 表示永久保留。自动清理与用户手动彻底删除复用同一 service 引用校验和 `resource_deletion_jobs` Outbox，仍被画布、项目、任务或其他业务记录引用的素材不会被删除。
+素材状态为 `archived` 时进入回收站。后台按“资源与请求策略”中的 `recycleBinRetentionDays` 定期扫描过期项；`0` 表示永久保留。过期回收站素材清理与用户确认的彻底删除沿用现有策略，不受画布、项目、任务或历史引用阻塞；其他素材共享的资源和物理对象仍保留，删除通过 `resource_deletion_jobs` Outbox 异步完成。设置 `CANVAS_DISABLE_AUTOMATIC_RESOURCE_CLEANUP=true` 仅关闭无引用资源的自动清理，不关闭回收站到期清理或删除 Outbox。
 
 ## 画布生成工具
 

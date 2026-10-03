@@ -199,6 +199,22 @@ describe("素材批量删除", () => {
         expect(useAssetStore.getState().assets.map((item) => item.id)).toEqual(["first", "second"]);
     });
 
+    test("本地为空时跨页远端选择仍发送完整批量 ID，失败后可重试", async () => {
+        const remoteIds = ["remote-page-one", "remote-page-two"];
+        const requests: string[][] = [];
+        let fail = true;
+        apiClient.defaults.adapter = async (config) => {
+            const ids = JSON.parse(config.data) as string[];
+            requests.push(ids);
+            return { config, headers: {}, status: 200, statusText: "OK", data: fail ? { code: 500, data: null, msg: "删除失败", reason: "asset_delete_failed" } : { code: 0, data: { ids }, msg: "ok" } };
+        };
+        await expect(deleteAssetsWithRemoteSync(remoteIds)).rejects.toThrow("删除失败");
+        expect(useAssetStore.getState().assets).toHaveLength(0);
+        fail = false;
+        await deleteAssetsWithRemoteSync(remoteIds);
+        expect(requests).toEqual([remoteIds, remoteIds]);
+    });
+
     test("删除响应返回前切换账号，不删除新账号本地素材", async () => {
         useAssetStore.setState({ assets: [asset("same-id")] });
         apiClient.defaults.adapter = async (config) => {
@@ -227,7 +243,10 @@ describe("素材批量删除", () => {
         const page = readFileSync(new URL("../src/pages/assets/index.tsx", import.meta.url), "utf8");
         const picker = readFileSync(new URL("../src/components/assets/asset-library-picker-modal.tsx", import.meta.url), "utf8");
         expect(page).toContain("deleteAssetsWithRemoteSync(trashAssets.map");
-        expect(page).toContain("deleteAssetsWithRemoteSync(selectedAssets.map");
+        expect(page).toContain("deleteAssetsWithRemoteSync(selectedIds)");
+        expect(page).toContain("count={selectedIds.length}");
+        expect(page).toContain("await ensureAssetsInStore(selectedIds)");
+        expect(page).not.toContain("current.filter((id) => existingIds.has(id))");
         expect(picker).toContain("deleteAssetsWithRemoteSync(archivedSelectedIds)");
         expect(picker).toContain("deleteAssetsWithRemoteSync(toDelete.map");
     });

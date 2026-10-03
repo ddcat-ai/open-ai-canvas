@@ -2,13 +2,14 @@
 
 import { conversationTimeFormatter, type CreationMessage } from "./creation-types";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { Copy, Download, FileText, Film, Image as ImageIcon, Maximize2, Music2, Pencil, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Download, FileText, Film, Image as ImageIcon, Maximize2, Music2, Pencil, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
 import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { WorkingDots } from "@/components/ai/working-indicator";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import type { AgentOutputPreference } from "@/services/api/agent";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { type CreationReference, displayCreationPrompt } from "./creation-references";
 import { useUserStore } from "@/stores/use-user-store";
@@ -23,6 +24,9 @@ import { resolveImageUrl } from "@/services/image-storage";
 import { Button } from "antd";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
+import { creationAgentLatestMediaTasks, projectCreationAgentMediaBatches } from "./creation-agent-conversation";
+import { saveAs } from "file-saver";
+import { createCreationImagesZip, creationImageDownloadBaseName, creationImagesZipName, downloadCreationImage } from "./creation-media-download";
 
 export function CreationMessageView({
     item,
@@ -32,6 +36,12 @@ export function CreationMessageView({
     onEditUserMessage,
     onContinueCanvas,
     openingCanvas,
+    agentReview,
+    agentTasks,
+    outputPreference = "detailed",
+    onRetryAgentTask,
+    onCreateAgentTaskVariant,
+    nested = false,
 }: {
     item: CreationMessage;
     shotNumber: number;
@@ -40,13 +50,36 @@ export function CreationMessageView({
     onEditUserMessage: (text: string) => void;
     onContinueCanvas: (ids?: string[]) => void;
     openingCanvas: boolean;
+    agentReview?: ReactNode;
+    agentTasks?: CreationMessage[];
+    outputPreference?: AgentOutputPreference;
+    onRetryAgentTask?: (task: CreationMessage) => void;
+    onCreateAgentTaskVariant?: (task: CreationMessage) => void;
+    nested?: boolean;
 }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    const [replyExpanded, setReplyExpanded] = useState(false);
+    const replyId = useId();
+    useEffect(() => { setReplyExpanded(false); }, [outputPreference, item.id]);
     if (item.role === "user") return <CreationUserMessage item={item} shotNumber={shotNumber} onEditUserMessage={onEditUserMessage} />;
     const mode = item.mode || "text";
-    const stateLabel = item.status === "pending" ? "生成中" : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
+    const compactOutput = mode === "agent" && outputPreference === "concise";
+    const compactStructuredOutput = compactOutput && !item.agentQuestion && Boolean(item.commercePlan || agentTasks?.length);
+    const mediaTasks = creationAgentLatestMediaTasks(agentTasks || []);
+    const agentRunning = item.status === "pending" || item.status === "streaming";
+    const taskSummary = ([
+        ["done", "完成"], ["error", "失败"], ["pending", "生成中"], ["cancelled", "已停止"],
+    ] as const).map(([status, label]) => {
+        const count = mediaTasks.filter((task) => {
+            const taskStatus = agentRunning && task.mode === "image" && task.status === "error" ? "pending" : task.status;
+            return taskStatus === status || (status === "pending" && taskStatus === "streaming");
+        }).length;
+        return count ? `${count} 项${label}` : "";
+    }).filter(Boolean).join("，");
+    const compactSummary = mediaTasks.length ? `${mediaTasks.length} 项交付${taskSummary ? `：${taskSummary}` : "，状态待确认"}。` : `创作方案已准备，共 ${item.commercePlan?.items.length || 0} 项交付。`;
+    const stateLabel = item.status === "pending" ? mode === "agent" ? "思考中" : "生成中" : item.status === "cancelled" ? "已停止" : item.status === "error" ? "生成失败" : "";
     const heading =
-        mode !== "text" ? (
+        mode !== "text" && mode !== "agent" ? (
             <>
                 {shotNumber > 0 ? <span className="creation-shot-badge">镜 {shotNumber}</span> : null}
                 <span className="creation-message-mark">
@@ -60,7 +93,7 @@ export function CreationMessageView({
                 ) : item.status === "done" ? (
                     <span className="creation-message-progress-copy">你的{mode === "video" ? "视频" : "图像"}已创建</span>
                 ) : null}
-                {item.status === "done" ? (
+                {item.status === "done" && !item.agentRunId ? (
                     <button type="button" className="creation-message-variant-action" onClick={onCreateVariant}>
                         <RefreshCw />
                         生成同款
@@ -81,33 +114,57 @@ export function CreationMessageView({
             </>
         );
     const toolStatus: GenerationToolStatus = item.status === "pending" ? "running" : item.status === "error" ? "error" : item.status === "cancelled" ? "cancelled" : "completed";
+    const Container = nested ? "div" : "article";
+    const agentMediaResults = mode === "agent" ? projectCreationAgentMediaBatches(item, mediaTasks).map((task) => {
+        const sources = task.batchId ? mediaTasks.filter((source) => source.agentRunId === item.agentRunId && source.mode === "image") : [task];
+        const failed = !agentRunning && task.status !== "pending" ? sources.filter((source) => source.status === "error") : [];
+        const failureTitles = failed.map((source) => source.content).join("、");
+        const failureReasons = [...new Set(failed.map((source) => generationErrorMessage(source.error || "生成失败")))].join("；");
+        return <div key={task.id} className="creation-agent-media-batch" role="group" aria-label={sources.map((source) => source.content).filter(Boolean).join("、") || "整套媒体生成"}>
+            <CreationMessageView nested item={task} shotNumber={0} onRetryFailure={() => onRetryAgentTask?.(failed[0] || sources[0])} onCreateVariant={() => onCreateAgentTaskVariant?.(sources[0])} onEditUserMessage={onEditUserMessage} onContinueCanvas={onContinueCanvas} openingCanvas={openingCanvas} />
+            {failed.length > 0 && <div className="creation-message-error"><span>{failureTitles}：{failureReasons}</span>{failed.map((source) => <button key={source.id} type="button" aria-label={`重试${source.content}`} onClick={() => onRetryAgentTask?.(source)}><RefreshCw />重试此项</button>)}</div>}
+        </div>;
+    }) : null;
     return (
-        <article className={`creation-assistant-message is-${mode}`}>
-            {mode === "text" ? (
+        <Container className={`creation-assistant-message is-${mode}`}>
+            {mode === "text" || mode === "agent" ? (
                 <>
                     <div className="creation-message-heading">{heading}</div>
-                    {item.reasoning ? (
+                    {item.reasoning && !compactOutput ? (
                         <div className="creation-message-reasoning-wrap">
                             <MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} />
                         </div>
                     ) : null}
                     <div className="creation-message-content">
+                        {compactStructuredOutput ? <p className="creation-agent-output-summary" role="status">{compactSummary}</p> : null}
                         {item.content ? (
-                            <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown>
-                        ) : (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            compactStructuredOutput ? <div className="creation-agent-full-reply"><button type="button" className="creation-agent-plan-toggle" aria-expanded={replyExpanded} aria-controls={replyId} onClick={() => setReplyExpanded((value) => !value)}>{replyExpanded ? "收起完整回复" : "查看完整回复"}{replyExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}</button><div id={replyId} hidden={!replyExpanded}>{replyExpanded ? <AIMessageMarkdown isStreaming={item.status === "streaming"} smoothStreaming>{item.content}</AIMessageMarkdown> : null}</div></div> : <AIMessageMarkdown isStreaming={item.status === "streaming"} smoothStreaming={mode === "agent"}>{item.content}</AIMessageMarkdown>
+                        ) : !item.agentQuestion && (item.status === "streaming" || item.status === "pending") ? (
+                            <span role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                                 <WorkingDots dotSize={5} gap={2} />
-                                <span>正在生成…</span>
+                                <span>{mode === "agent" ? "正在思考…" : "正在生成…"}</span>
                             </span>
-                        )}
+                        ) : null}
                     </div>
+                    {mode === "agent" && item.agentQuestion ? <section className="creation-agent-question" aria-label="待确认的问题">
+                        <h3>需要你确认</h3>
+                        <p>{item.agentQuestion.question}</p>
+                        {item.agentQuestion.fields?.length ? <ul>{item.agentQuestion.fields.map((field, index) => <li key={`${field.title}-${index}`}>
+                            <strong>{field.title}{field.required ? "（必填）" : ""}</strong>
+                            {field.options?.length ? <span>：{field.options.map((option) => `${option.label}${option.detail ? `（${option.detail}）` : ""}`).join("、")}</span> : field.placeholder ? <span>：{field.placeholder}</span> : null}
+                        </li>)}</ul> : item.agentQuestion.options.length ? <ol>{item.agentQuestion.options.map((option, index) => <li key={`${option.label}-${index}`}><strong>{option.label}</strong>{option.detail ? <span> — {option.detail}</span> : null}</li>)}</ol> : null}
+                        <small>{item.agentQuestion.allowFreeform ? "请在输入框回复选项或补充说明。" : "请在输入框回复一个选项。"}</small>
+                    </section> : null}
+                    {compactOutput ? agentMediaResults : null}
+                    {mode === "agent" ? agentReview : null}
+                    {!compactOutput ? agentMediaResults : null}
                 </>
             ) : (
                 <GenerationToolCard status={toolStatus} heading={heading}>
                     <MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onContinueCanvas={onContinueCanvas} openingCanvas={openingCanvas} />
                 </GenerationToolCard>
             )}
-            {item.error && mode === "text" ? (
+            {item.error && (mode === "text" || mode === "agent") ? (
                 <div className="creation-message-error">
                     <span>{generationErrorMessage(item.error)}</span>
                     <button type="button" onClick={onRetryFailure}>
@@ -116,7 +173,7 @@ export function CreationMessageView({
                     </button>
                 </div>
             ) : null}
-        </article>
+        </Container>
     );
 }
 
@@ -211,6 +268,12 @@ export function MediaResult({
 }) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
+    const [batchPreviewOpen, setBatchPreviewOpen] = useState(false);
+    const [batchPreviewIndex, setBatchPreviewIndex] = useState(0);
+    const [batchExpanded, setBatchExpanded] = useState(false);
+    const [downloadingBatch, setDownloadingBatch] = useState(false);
+    const [downloadingImage, setDownloadingImage] = useState<number | null>(null);
+    const [downloadError, setDownloadError] = useState("");
     const assets = useAssetStore((state) => state.assets);
     const storedResultUrls = item.resultUrls || [];
     const resultStorageKeys = item.resultStorageKeys?.length ? item.resultStorageKeys : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
@@ -269,11 +332,15 @@ export function MediaResult({
     }, [item.id, item.mode, resultStorageKeys.join("|"), storedResultUrls.join("|")]);
 
     const alignedResultUrls = resultStorageKeys.length ? resolvedResultUrls : storedResultUrls;
-    const displayResultUrls = alignedResultUrls.filter(Boolean);
+    const downloadImages = alignedResultUrls.map((url, index) => ({ url, storageKey: resultStorageKeys[index], name: item.resultDownloadNames?.[index] || creationImageDownloadBaseName(item.content, index + 1) })).filter((image) => image.url);
+    const displayResultUrls = downloadImages.map((image) => image.url);
+    useEffect(() => {
+        setBatchPreviewIndex((current) => displayResultUrls.length ? Math.min(current, displayResultUrls.length - 1) : 0);
+    }, [displayResultUrls.length]);
     const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
     const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;
     const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
-    if (item.status === "pending") return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} />;
+    if (item.status === "pending" && !displayResultUrls.length) return <CreationMediaPending mode={item.mode || "image"} ratio={item.settings?.ratio} progress={item.batchTotal ? `${item.batchCompletedCount || 0}/${item.batchTotal}${item.batchFailedCount ? `（${item.batchFailedCount} 项未成功）` : ""}` : undefined} />;
     if ((item.status === "error" || item.status === "cancelled") && !expectedResultCount)
         return (
             <div className="creation-media-error">
@@ -294,6 +361,40 @@ export function MediaResult({
             </div>
         );
     const isVideo = item.mode === "video";
+    const activeBatchUrl = displayResultUrls[batchPreviewIndex] || displayResultUrls[0];
+    const stackedUrls = displayResultUrls.length > 1
+        ? Array.from({ length: Math.min(2, displayResultUrls.length - 1) }, (_, offset) => displayResultUrls[(batchPreviewIndex + offset + 1) % displayResultUrls.length])
+        : [];
+    const moveBatchPreview = (direction: -1 | 1) => setBatchPreviewIndex((current) => (current + direction + displayResultUrls.length) % displayResultUrls.length);
+    const downloadImage = async (index: number) => {
+        if (downloadingBatch || downloadingImage !== null) return;
+        setDownloadingImage(index);
+        setDownloadError("");
+        try {
+            const image = downloadImages[index];
+            await downloadCreationImage(image);
+        } catch (error) {
+            setDownloadError(error instanceof Error ? error.message : "图片下载失败，请重试");
+        } finally {
+            setDownloadingImage(null);
+        }
+    };
+    const downloadBatch = async () => {
+        if (downloadingBatch || downloadingImage !== null) return;
+        setDownloadingBatch(true);
+        setDownloadError("");
+        try {
+            saveAs(await createCreationImagesZip(downloadImages), creationImagesZipName(item));
+        } catch (error) {
+            setDownloadError(error instanceof Error ? error.message : "批量下载失败，请重试");
+        } finally {
+            setDownloadingBatch(false);
+        }
+    };
+    const imageResult = (url: string, index: number) => <div key={`${url}-${index}`} className="creation-image-result">
+        <button type="button" className="creation-image-result-preview" onClick={() => { setPreviewType("image"); setPreviewUrl(url); }} aria-label={displayResultUrls.length === 1 ? "预览生成图片" : `预览生成图片 ${index + 1}`}><img src={url} alt={`生成结果 ${index + 1}`} /></button>
+        <button type="button" className="creation-image-result-download" onClick={() => void downloadImage(index)} disabled={downloadingBatch || downloadingImage !== null} aria-label={`下载生成图片 ${index + 1}`} title="下载图片"><Download aria-hidden="true" /></button>
+    </div>;
     return (
         <div className="creation-media-result">
             {isVideo ? (
@@ -312,57 +413,59 @@ export function MediaResult({
                         预览视频
                     </span>
                 </button>
-            ) : (
-                <div className="creation-image-result-grid">
-                    {displayResultUrls.map((url) => (
-                        <button
-                            key={url}
-                            type="button"
-                            className="creation-image-result"
-                            onClick={() => {
-                                setPreviewType("image");
-                                setPreviewUrl(url);
-                            }}
-                            aria-label="预览生成图片"
-                        >
-                            <img src={url} alt="生成结果" />
-                            <span>
-                                <Maximize2 />
-                            </span>
-                        </button>
-                    ))}
+            ) : displayResultUrls.length > 1 ? batchExpanded ? (
+                <div className="creation-image-result-grid creation-image-result-grid-expanded">
+                    {displayResultUrls.map(imageResult)}
                 </div>
+            ) : (
+                <div className="creation-image-result-stack" role="group" aria-label={`第 ${batchPreviewIndex + 1} 张，共 ${displayResultUrls.length} 张生成图片`}>
+                    <span className="creation-image-result-stack-cards">
+                        {stackedUrls.map((url, index) => <img key={`${url}-${index}`} className={`creation-image-result-stack-back is-back-${index + 1}`} src={url} alt="" aria-hidden="true" />)}
+                        <button type="button" className="creation-image-result-stack-front" onClick={() => setBatchPreviewOpen(true)} aria-label={`展开预览第 ${batchPreviewIndex + 1} 张图片`}><img src={activeBatchUrl} alt={`生成结果 ${batchPreviewIndex + 1}`} /></button>
+                    </span>
+                    <span className="creation-image-result-stack-controls" aria-label="切换批次图片">
+                        <button type="button" onClick={() => moveBatchPreview(-1)} aria-label="上一张生成图片" title="上一张"><ChevronLeft aria-hidden="true" /></button>
+                        <button type="button" onClick={() => moveBatchPreview(1)} aria-label="下一张生成图片" title="下一张"><ChevronRight aria-hidden="true" /></button>
+                    </span>
+                    <button type="button" className="creation-image-result-stack-download" onClick={() => void downloadImage(batchPreviewIndex)} disabled={downloadingBatch || downloadingImage !== null} aria-label="下载当前生成图片" title="下载当前图片"><Download aria-hidden="true" /></button>
+                </div>
+            ) : (
+                <div className="creation-image-result-grid is-single">{imageResult(displayResultUrls[0], 0)}</div>
             )}
             <div className="creation-media-actions">
-                <span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片`}</span>
+                <span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片${item.agentRunId && item.batchTotal ? ` · 成功 ${item.batchCompletedCount || 0}/${item.batchTotal}` : ""}`}</span>
                 <Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>
                     添加到画布
                 </Button>
-                {displayResultUrls.map((url, index) => (
-                    <a key={`${url}-download`} href={url} download>
-                        {displayResultUrls.length > 1 ? (
-                            `下载 ${index + 1}`
-                        ) : (
-                            <>
-                                <Download />
-                                下载
-                            </>
-                        )}
-                    </a>
-                ))}
+                {!isVideo && displayResultUrls.length > 1 ? <Button type="link" size="small" onClick={() => setBatchExpanded((expanded) => !expanded)}>{batchExpanded ? "收起" : "展开"}</Button> : null}
+                {isVideo ? <a href={displayResultUrls[0]} download><Download />下载</a> : <Button type="link" size="small" loading={downloadingBatch} disabled={downloadingImage !== null} onClick={() => void downloadBatch()}><Download />批量下载</Button>}
             </div>
+            {downloadError ? <div className="creation-message-error" role="alert">{downloadError}</div> : null}
             <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
+            <AppModal open={batchPreviewOpen} centered destroyOnHidden title={`生成图片（${displayResultUrls.length} 张）`} footer={null} width="min(1120px, calc(100vw - 32px))" onCancel={() => setBatchPreviewOpen(false)} className="creation-image-batch-preview-modal">
+                <div className="creation-image-batch-preview-viewer">
+                    <div className="creation-image-batch-preview-stage">
+                        <button type="button" className="creation-image-batch-preview-nav is-prev" onClick={() => moveBatchPreview(-1)} aria-label="上一张生成图片" title="上一张"><ChevronLeft aria-hidden="true" /></button>
+                        <img src={activeBatchUrl} alt={`生成结果 ${batchPreviewIndex + 1}`} />
+                        <button type="button" className="creation-image-batch-preview-nav is-next" onClick={() => moveBatchPreview(1)} aria-label="下一张生成图片" title="下一张"><ChevronRight aria-hidden="true" /></button>
+                    </div>
+                    <div className="creation-image-batch-preview-thumbs" aria-label="生成图片缩略图">
+                        {displayResultUrls.map((url, index) => <button key={`${url}-${index}`} type="button" className={index === batchPreviewIndex ? "is-active" : undefined} onClick={() => setBatchPreviewIndex(index)} aria-label={`预览第 ${index + 1} 张图片`} aria-current={index === batchPreviewIndex ? "true" : undefined}><img src={url} alt={`生成结果缩略图 ${index + 1}`} /><span>{index + 1}</span></button>)}
+                    </div>
+                </div>
+            </AppModal>
         </div>
     );
 }
 
-export function CreationMediaPending({ mode, ratio }: { mode: CreationMode; ratio?: string }) {
+export function CreationMediaPending({ mode, ratio, progress }: { mode: CreationMode; ratio?: string; progress?: string }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     return (
         <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite">
             <span className="creation-media-pending-icon">
                 <WorkingDots dotSize={7} gap={3} minOpacity={0.3} />
             </span>
+            <span>{brandName}正在生成{mode === "video" ? "视频" : "图像"}{progress ? ` · ${progress}` : ""}</span>
             <span className="sr-only">
                 {brandName}正在生成{mode === "video" ? "视频" : "图像"}
             </span>

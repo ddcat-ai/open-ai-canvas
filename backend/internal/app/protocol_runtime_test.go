@@ -32,7 +32,6 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundledCount := len(bundledWorkflowPluginManifests())
 	packageIDs := make(map[string]bool, len(packages))
 	for _, packagePath := range packages {
 		data, err := os.ReadFile(packagePath)
@@ -45,13 +44,20 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 		}
 		packageIDs[pkg.Manifest.Metadata.ID] = true
 	}
-	for _, manifest := range append(bundledPaymentPluginManifests(), bundledSMSPluginManifests()...) {
-		if !packageIDs[manifest.Metadata.ID] {
-			bundledCount++
-		}
+	expectedIDs := make(map[string]bool, len(packageIDs))
+	for id := range packageIDs {
+		expectedIDs[id] = true
 	}
-	if len(plugins) != len(packages)+bundledCount {
-		t.Fatalf("plugin views = %d, official packages plus bundled plugins = %d", len(plugins), len(packages)+bundledCount)
+	for _, manifest := range append(append(bundledWorkflowPluginManifests(), bundledPaymentPluginManifests()...), bundledSMSPluginManifests()...) {
+		expectedIDs[manifest.Metadata.ID] = true
+	}
+	if len(plugins) != len(expectedIDs) {
+		t.Fatalf("plugin views = %d, distinct official and bundled plugin IDs = %d", len(plugins), len(expectedIDs))
+	}
+	for id := range expectedIDs {
+		if _, ok := pluginsByID[id]; !ok {
+			t.Errorf("fresh runtime did not install expected plugin %q", id)
+		}
 	}
 	for _, packagePath := range packages {
 		data, err := os.ReadFile(packagePath)
@@ -306,7 +312,7 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v1",
 			"id":"test-declarative-video-runtime","version":"1.0.0","name":"Test Declarative Video","author":"Test","documentation":"# Test Declarative Video",
-		"contributes":{"providers":[{"id":"test-declarative-video-runtime","label":"Test Declarative Video","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model","prompt":"request.prompt","seconds":"request.duration"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-declarative-video-runtime","label":"Test Declarative Video","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model","prompt":"request.prompt","seconds":"request.duration"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`)
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -367,7 +373,7 @@ func TestDeclarativeProtocolPollRecoversFromTransientGatewayFailure(t *testing.T
 	adapter, err := protocol.LoadManifest([]byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"test-declarative-video-retry","version":"1.0.0","name":"Test Declarative Video Retry","author":"Test","documentation":"# Test",
-		"contributes":{"providers":[{"id":"test-declarative-video-retry","label":"Test Declarative Video Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-declarative-video-retry","label":"Test Declarative Video Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -415,7 +421,7 @@ func TestDeclarativeProtocolRetriesResultDownloadWithoutRepolling(t *testing.T) 
 	adapter, err := protocol.LoadManifest([]byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"test-declarative-download-retry","version":"1.0.0","name":"Test Declarative Download Retry","author":"Test","documentation":"# Test",
-		"contributes":{"providers":[{"id":"test-declarative-download-retry","label":"Test Declarative Download Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-declarative-download-retry","label":"Test Declarative Download Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -462,7 +468,7 @@ func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"test-idempotency-key-runtime","version":"1.0.0","name":"Test Idempotency Key","author":"Test","documentation":"# Test Idempotency Key",
-		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`)
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -681,7 +687,7 @@ func newDeclarativeNewAPIChannel2TestAdapter(t *testing.T) protocol.Adapter {
 	adapter, err := protocol.LoadManifest([]byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"newapi-channel-2","version":"1.0.0","name":"NewAPI Channel 2","author":"Test","documentation":"# Test",
-		"contributes":{"providers":[{"id":"newapi-channel-2","label":"NewAPI Channel 2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/video/generations","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/video/generations/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"newapi-channel-2","label":"NewAPI Channel 2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/video/generations","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/video/generations/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -694,7 +700,7 @@ func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testin
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v2",
 		"id":"test-declarative-video-recovery","version":"1.0.0","name":"Test Declarative Video Recovery","author":"Test","documentation":"# Test Declarative Video Recovery",
-		"contributes":{"providers":[{"id":"test-declarative-video-recovery","label":"Test Declarative Video Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"result":{"method":"GET","path":"/videos/{{taskId}}/content"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]}}}]}
+		"contributes":{"providers":[{"id":"test-declarative-video-recovery","label":"Test Declarative Video Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"result":{"method":"GET","path":"/videos/{{taskId}}/content"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]}}}]}
 	}`)
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -739,6 +745,54 @@ func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testin
 	}
 	if status != string(protocol.StatusSucceeded) || result["mode"] != "video" || createCalls != 0 || pollCalls != 1 || downloadCalls != 1 {
 		t.Fatalf("recovery result=%#v status=%q calls=create:%d poll:%d download:%d", result, status, createCalls, pollCalls, downloadCalls)
+	}
+}
+
+func TestDeclarativeProtocolRecoveryKeepsVideoURLForStorage(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-declarative-video-url-recovery","version":"1.0.0","name":"Test Declarative Video URL Recovery","author":"Test","documentation":"# Test Declarative Video URL Recovery",
+		"contributes":{"providers":[{"id":"test-declarative-video-url-recovery","label":"Test Declarative Video URL Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]},"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-video-url-recovery.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+
+	downloadCalls := 0
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/videos/existing-task":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"existing-task","status":"completed","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			downloadCalls++
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "test-model", APIFormat: "openai", InterfaceType: "test-declarative-video-url-recovery"}
+	ctx := withProtocolRegistry(context.Background(), center.registrySnapshot())
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !ok {
+		t.Fatal("declarative recovery adapter is unavailable")
+	}
+	result, status, err := queryProtocolAdapterVideoTask(ctx, canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: config}, adapter, "existing-task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	video, _ := result["video"].(map[string]interface{})
+	if status != string(protocol.StatusSucceeded) || video["url"] != server.URL+"/media.mp4" || downloadCalls != 0 {
+		t.Fatalf("recovery result=%#v status=%q download calls=%d", result, status, downloadCalls)
 	}
 }
 

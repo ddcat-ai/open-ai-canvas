@@ -8,6 +8,7 @@ let maxSessions = positiveInt(process.env.MAX_CONCURRENT_SESSIONS, 30, 64);
 const memoryMB = positiveInt(process.env.NODE_MAX_OLD_SPACE_SIZE, 512, 8192);
 const runtimePath = process.env.YINGCE_AGENT_RUNTIME || "/app/agent-runtime/agent-runtime.mjs";
 const port = Number(process.env.PORT || 8081);
+const host = process.env.YINGCE_AGENT_HOST || "0.0.0.0";
 const bodyLimit = 32 * 1024 * 1024;
 
 if (token.length < 32) {
@@ -163,6 +164,9 @@ const server = createServer(async (request, response) => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   };
   request.on("aborted", stop);
+  response.on("close", () => {
+    if (!response.writableEnded) stop();
+  });
   response.writeHead(200, { "content-type": "application/x-ndjson" });
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString("utf8");
@@ -189,7 +193,7 @@ const server = createServer(async (request, response) => {
 server.requestTimeout = 0;
 server.headersTimeout = 0;
 server.timeout = 0;
-server.listen(port, "0.0.0.0", () => {
+server.listen(port, host, () => {
   const address = server.address();
   console.log(`YINGCE_AGENT_READY ${address.port}`);
 });

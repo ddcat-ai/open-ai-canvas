@@ -53,6 +53,7 @@ func cloudAgentApprovalOutput(approval *cloudAgentApproval) *cloudAgentApproval 
 	}
 	copy := *approval
 	copy.Prepared = approval.Prepared.publicView()
+	copy.Batch = nil // The approval preview contains the reviewable set; prepared inputs remain server-side.
 	return &copy
 }
 

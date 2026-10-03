@@ -16,6 +16,7 @@ import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
 import { resolveMediaUrl } from "@/services/file-storage";
+import { scheduleResourceBlobCache } from "@/services/resource-blob-cache";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
@@ -108,6 +109,10 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     useEffect(() => {
         setVideoReady(false);
     }, [url]);
+
+    useEffect(() => {
+        if (mediaActive) scheduleResourceBlobCache(node.metadata?.storageKey || "");
+    }, [mediaActive, node.metadata?.storageKey]);
 
     useEffect(() => {
         const box = playerBoxRef.current;
@@ -206,6 +211,12 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
     const [hydrating, setHydrating] = useState(false);
     const [localPreviewUrl, setLocalPreviewUrl] = useState("");
     const localPreviewUrlRef = useRef("");
+    const [passiveVideoReady, setPassiveVideoReady] = useState(false);
+    const { url: passiveVideoUrl } = useVideoPlaybackUrl(node, nearViewport && !hasPersistedPreview && !localPreviewUrl);
+
+    useEffect(() => {
+        setPassiveVideoReady(false);
+    }, [passiveVideoUrl]);
 
     useEffect(() => {
         const element = previewRef.current;
@@ -282,6 +293,26 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
                 ) : (
                     <img src={localPreviewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" />
                 )}
+                <VideoPreviewPlayButton title={node.title || "视频"} onPlay={onPlay} />
+            </div>
+        );
+    }
+    if (passiveVideoUrl) {
+        return (
+            <div ref={previewRef} className="group/video-preview relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black">
+                <video
+                    className={`pointer-events-none size-full select-none object-contain transition-opacity duration-150 ${passiveVideoReady ? "opacity-100" : "opacity-0"}`}
+                    src={passiveVideoUrl}
+                    muted
+                    playsInline
+                    preload="auto"
+                    onLoadedMetadata={(event) => {
+                        const video = event.currentTarget;
+                        video.currentTime = Math.min(0.001, video.duration / 2);
+                    }}
+                    onCanPlay={() => setPassiveVideoReady(true)}
+                />
+                {!passiveVideoReady ? <InactiveMediaCard icon={<LoaderCircle className="size-7 animate-spin" />} title={node.title || "视频"} hint="正在生成首帧" theme={theme} /> : null}
                 <VideoPreviewPlayButton title={node.title || "视频"} onPlay={onPlay} />
             </div>
         );

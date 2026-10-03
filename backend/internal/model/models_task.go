@@ -14,7 +14,9 @@ type Task struct {
 	CancellationRequestedAt      *time.Time               `json:"cancellationRequestedAt,omitempty"`
 	CreationSubmissionID         *string                  `json:"creationSubmissionId,omitempty" gorm:"size:36;uniqueIndex"`
 	ID                           string                   `json:"id" gorm:"primaryKey;size:36"`
-	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1"`
+	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1;index:idx_tasks_user_idempotency,unique,priority:1"`
+	IdempotencyKey               *string                  `json:"-" gorm:"size:160;index:idx_tasks_user_idempotency,unique,priority:2"`
+	IdempotencyFingerprint       string                   `json:"-" gorm:"size:64"`
 	TraceID                      string                   `json:"-" gorm:"index;size:96"`
 	RequestID                    string                   `json:"-" gorm:"index;size:96"`
 	ProjectID                    string                   `json:"projectId" gorm:"index;size:80;index:idx_tasks_user_project_created,priority:2"`

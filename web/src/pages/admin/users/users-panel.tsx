@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { bulkDisableAdminUsers, deleteAdminUser, disableAdminUser, getAdminUserDeletePreflight, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
@@ -98,7 +98,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     const toggleStatus = useCallback(async (user: AdminUser) => {
         try {
             if (user.status === "active") {
-                await deleteAdminUser(user.id);
+                await disableAdminUser(user.id);
                 replaceUser({ ...user, status: "disabled" });
                 message.success("用户已停用并清除登录状态");
                 return;
@@ -111,13 +111,50 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         }
     }, [message, replaceUser]);
 
+    const deleteUser = useCallback(async (user: AdminUser) => {
+        try {
+            const preflight = await getAdminUserDeletePreflight(user.id);
+            if (!preflight.canDelete) {
+                modal.warning({
+                    title: "暂时无法删除用户",
+                    content: <div className="space-y-2"><p>请先处理以下关联数据，再重新预检：</p><ul className="list-disc pl-5">{preflight.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul></div>,
+                });
+                return;
+            }
+            modal.confirm({
+                title: `永久删除 ${user.displayName || user.username}？`,
+                content: <div className="space-y-2"><p>账号身份、登录凭证和会话将被删除，无法重新启用。</p><p>历史账务与审计记录会保留并去标识化。素材、画布和任务不会自动清理；如有关联，服务器会拒绝删除。</p><p>预检发现账务流水 {preflight.related.ledgerEntries || 0} 条、计费单 {preflight.related.billingOrders || 0} 条、支付订单 {preflight.related.paymentOrders || 0} 条、审计事件 {preflight.related.auditEvents || 0} 条。确认时服务器会再次校验。</p></div>,
+                okText: "确认永久删除",
+                cancelText: "取消",
+                okButtonProps: { danger: true },
+                onOk: async () => {
+                    try {
+                        await deleteAdminUser(user.id);
+                    } catch (error) {
+                        message.error(error instanceof Error ? error.message : "删除用户失败，请重新预检");
+                        throw error;
+                    }
+                    setUsers((items) => items.filter((item) => item.id !== user.id));
+                    setTotal((value) => Math.max(0, value - 1));
+                    setSelectedUserIds((items) => items.filter((id) => id !== user.id));
+                    setDetailUserId((id) => id === user.id ? null : id);
+                    setRetry((value) => value + 1);
+                    message.success("用户身份已删除，保留记录已去标识化");
+                },
+            });
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "删除用户失败");
+        }
+    }, [message, modal]);
+
     const columns = useMemo(() => createUserColumns({
         actorId: actor?.id,
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
         onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+        onDelete: deleteUser,
+    }), [actor?.id, deleteUser, toggleStatus, visibleColumns]);
 
     const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
 

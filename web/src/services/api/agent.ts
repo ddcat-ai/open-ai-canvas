@@ -1,7 +1,8 @@
-import { http, apiBaseURL } from "@/services/api/request";
+import { compactApiParams, http, apiBaseURL } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser } from "@/services/api/task-text-stream";
 
 export type AgentPermissionMode = "read_only" | "auto" | "request_approval";
+export type AgentOutputPreference = "concise" | "detailed";
 export type AgentReasoningMode = "off" | "auto" | "deep";
 export type AgentMediaSettings = {
     logicalModelId?: string;
@@ -10,6 +11,9 @@ export type AgentMediaSettings = {
     size: string;
     quality: string;
 };
+export type AgentModelSelection = { logicalModelId: string; channelId?: never; channelModelKey?: never } | { logicalModelId?: never; channelId: string; channelModelKey: string };
+export type AgentCreationAttachment = { resourceId: string; storageKey: `resource:${string}`; kind: "image" | "video" | "audio"; role: "product" | "reference" | "competitor" | "style" | "source" | "person"; name: string };
+export type AgentMediaChoice = { selection: AgentModelSelection; parameterMode: "auto" | "manual"; size?: string; quality?: string; durationSeconds?: number; count?: number };
 export type AgentProfileScope = "user" | "project" | "canvas";
 
 export type AgentProfileLayer = {
@@ -25,6 +29,26 @@ export type AgentProfileView = {
     revision: string;
     hash: string;
     layers: AgentProfileLayer[];
+};
+
+export type AgentContextSelection = {
+    surface?: string;
+    scopes?: string[];
+    canvasId?: string;
+    projectId?: string;
+};
+
+export type AgentSessionStatus = "active" | string;
+
+export type AgentSession = {
+    id: string;
+    title?: string;
+    surface: string;
+    lastSurface?: string;
+    status: AgentSessionStatus;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type AgentApprovalPreviewOperation = "add_node" | "update_node" | "connect_nodes" | "arrange_nodes" | "generate_media" | "create_storyboard" | "edit_storyboard" | "create_character" | "plan_step";
@@ -63,7 +87,13 @@ export type AgentApproval = {
 
 export type AgentRun = {
     id: string;
+    idempotencyKey?: string;
+    sessionId?: string;
+    userPrompt?: string;
+    parentId?: string;
     canvasId: string;
+    surface?: string;
+    contextSelection?: AgentContextSelection;
     status: "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "rejected";
     permissionMode: AgentPermissionMode;
     revision?: number;
@@ -74,9 +104,14 @@ export type AgentRun = {
     updatedAt: string;
     skills?: Array<{ id: string; name: string; version: string; hash: string }>;
     events?: AgentEvent[];
+    latestSeq?: number;
+    eventSeqBase?: number;
+    eventCount?: number;
+    eventsTruncated?: boolean;
     spentCredits?: number;
     step?: number;
     activeMessage?: { messageId: string; text: string };
+    attachments?: AgentCreationAttachment[];
     approval?: AgentApproval;
 };
 
@@ -105,7 +140,9 @@ export class AgentStreamError extends Error {
 export type CreateAgentRunInput = {
     reasoningMode?: AgentReasoningMode;
     profileRevision?: string;
-    canvasId: string;
+    sessionId?: string;
+    surface?: string;
+    canvasId?: string;
     prompt: string;
     model?: string;
     logicalModelId?: string;
@@ -115,8 +152,32 @@ export type CreateAgentRunInput = {
     focusNodeIds?: string[];
     permissionMode?: AgentPermissionMode;
     contextScope?: string[];
+    contextSelection?: AgentContextSelection;
     budget?: { maxCredits?: number; maxGenerationTasks?: number; maxVideoSeconds?: number; maxSteps?: number };
     idempotencyKey: string;
+    attachments?: AgentCreationAttachment[];
+    attachmentMode?: "replace" | "inherit" | "append";
+    outputPreference?: AgentOutputPreference;
+    mediaSettings?: { image?: AgentMediaChoice; video?: AgentMediaChoice };
+};
+
+export type CreateAgentSessionInput = {
+    title?: string;
+    surface?: string;
+};
+
+export type ListAgentSessionsOptions = {
+    canvasId?: string;
+    surface?: string;
+    status?: string;
+    limit?: number;
+    signal?: AbortSignal;
+};
+
+export type ListAgentSessionRunsOptions = {
+    limit?: number;
+    before?: string;
+    signal?: AbortSignal;
 };
 
 // Only Agent admission endpoints have server-side fingerprint/idempotency protection.
@@ -146,6 +207,34 @@ export async function sendAgentMessage(runId: string, input: CreateAgentRunInput
     return submitAgentRequest(`/agent/runs/${encodeURIComponent(runId)}/messages`, input);
 }
 
+export function listAgentSessions(options: ListAgentSessionsOptions = {}) {
+    return http.get<{ sessions: AgentSession[] }>("/agent/sessions", {
+        params: compactApiParams({ canvasId: options.canvasId, surface: options.surface, status: options.status, limit: options.limit }),
+        signal: options.signal,
+        timeout: 15_000,
+    });
+}
+
+export function createAgentSession(input: CreateAgentSessionInput = {}) {
+    return http.post<{ session: AgentSession }>("/agent/sessions", input, { timeout: 15_000 });
+}
+
+export function getAgentSession(sessionId: string, signal?: AbortSignal) {
+    return http.get<{ session: AgentSession; runs: AgentRun[]; nextRunCursor?: string }>(`/agent/sessions/${encodeURIComponent(sessionId)}`, { signal });
+}
+
+export function deleteAgentSession(sessionId: string) {
+    return http.delete<{ id: string; deleted: boolean }>(`/agent/sessions/${encodeURIComponent(sessionId)}`, { timeout: 15_000 });
+}
+
+export function listAgentSessionRuns(sessionId: string, options: ListAgentSessionRunsOptions = {}) {
+    return http.get<{ runs: AgentRun[]; nextRunCursor?: string }>(`/agent/sessions/${encodeURIComponent(sessionId)}/runs`, {
+        params: compactApiParams({ limit: options.limit, before: options.before }),
+        signal: options.signal,
+        timeout: 15_000,
+    });
+}
+
 export function sendAgentInterjection(runId: string, input: { text: string; messageId: string }) {
     return http.post<{ accepted: boolean; pending: number }>(`/agent/runs/${encodeURIComponent(runId)}/interjections`, input, { timeout: 20_000 });
 }
@@ -167,8 +256,8 @@ export function updateAgentProfile(input: { scope: AgentProfileScope; projectId?
     return http.patch<AgentProfileView>("/agent/profile", input, { timeout: 15_000 });
 }
 
-export function getAgentRun(runId: string, signal?: AbortSignal) {
-    return http.get<{ run: AgentRun }>(`/agent/runs/${encodeURIComponent(runId)}`, { signal });
+export function getAgentRun(runId: string, signal?: AbortSignal, options?: { sinceSeq?: number; eventLimit?: number; fromStart?: boolean }) {
+    return http.get<{ run: AgentRun }>(`/agent/runs/${encodeURIComponent(runId)}`, { signal, params: compactApiParams({ sinceSeq: options?.sinceSeq, eventLimit: options?.eventLimit, fromStart: options?.fromStart ? 1 : undefined }) });
 }
 
 export function cancelAgentRun(runId: string) {
@@ -179,7 +268,7 @@ export function undoAgentCanvasRun(runId: string, input: { stepId?: string; expe
     return http.post<{ accepted: boolean; snapshotHash: string }>(`/agent/runs/${encodeURIComponent(runId)}/undo`, input, { signal });
 }
 
-export async function decideAgentApproval(runId: string, approvalId: string, decision: "approve" | "reject", reason?: string, signal?: AbortSignal, mediaSettings?: AgentMediaSettings) {
+export async function decideAgentApproval(runId: string, approvalId: string, decision: "approve" | "reject" | "refresh", reason?: string, signal?: AbortSignal, mediaSettings?: AgentMediaSettings) {
     return http.post<{ accepted: boolean }>(`/agent/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(approvalId)}/decision`, { decision, reason: reason?.trim() || undefined, ...(mediaSettings ? { mediaSettings } : {}) }, { signal });
 }
 
