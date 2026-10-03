@@ -287,6 +287,10 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
     const videoOperation = generationOperation(options);
     const workflow = resolveGenerationWorkflowExecution(config, mode);
     const logicalModelId = workflow ? "" : logicalModelIDForConfig(config);
+    const batchIndex = typeof metadata?.batchIndex === "number" ? metadata.batchIndex : undefined;
+    const idempotencyKey = options.clientOperationId
+        ? `${options.clientOperationId}${batchIndex === undefined ? "" : `:batch:${batchIndex}`}`
+        : undefined;
     return {
         ...(projectId ? { projectId } : {}),
         type: `canvas_${mode}`,
@@ -295,6 +299,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
         ...(workflow ? { provider: workflow.provider } : {}),
         model: workflow?.taskModel || config.model,
         ...(logicalModelId ? { logicalModelId } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : {}),
         input: {
             mode,
             prompt,

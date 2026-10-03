@@ -48,3 +48,43 @@ func TestFinishApprovedCloudAgentMediaStopsWhenWaitIsCancelled(t *testing.T) {
 		t.Fatalf("cancelled wait mutated run state: mediaTask=%q resumePrompt=%q", decoded.MediaTaskID, decoded.PiResumePrompt)
 	}
 }
+
+func TestApprovedCloudAgentMediaWaiterSettlesWithoutManualAdvance(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	// Explicitly enable the production waiter; transition fixtures keep it off.
+	s.approvedMediaClosed = false
+	run, _ := agentMediaRun(t, s, args, "request_approval", "approved-media-waiter")
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	waiting, err := s.CloudAgentRun("user", run.ID)
+	if err != nil || waiting.Approval == nil {
+		t.Fatalf("missing approval: %v", err)
+	}
+	if err := s.DecideCloudAgentApproval("user", run.ID, waiting.Approval.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	stored, state := agentInterjectionState(t, s, run.ID)
+	taskID := state.MediaTaskID
+	if taskID == "" {
+		t.Fatal("approval did not submit media")
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusFailed, "error": "本地验收失败"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		stored, state = agentInterjectionState(t, s, run.ID)
+		if state.MediaTaskID == "" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if state.MediaTaskID != "" {
+		t.Fatalf("background waiter did not checkpoint terminal media: %s", stored.StateJSON)
+	}
+	var count int64
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("waiter duplicated media submission: count=%d err=%v", count, err)
+	}
+}

@@ -1,0 +1,967 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "grsai-api",
+  "name": "Grsai API Media",
+  "version": "1.2.3",
+  "author": "Grsai / iGO Studio",
+  "description": "Grsai 图片与视频异步生成协议插件。",
+  "documentation": "# Grsai API Media\n\n该目录是 Grsai 图片与视频异步协议插件源码。后端从生成的 `grsai-api.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n当前包含三个独立 Provider profile：\n\n- `grsai-minimax-h3`：MiniMax H3 视频。\n- `grsai-nano-banana-image`：Grsai 私有 Nano Banana 图片协议。\n- `grsai-gpt-image`：Grsai 私有 GPT Image 图片协议。\n\n能力限制：\n\n- `grsai-minimax-h3` 支持 `480p`、`768p`、`1080p`，视频时长为 1–15 秒（1080p 最多 10 秒）；画幅支持 `portrait`、`landscape`、`square`。画布仍可使用通用比例，宿主会先归一化后再请求上游。创建默认使用 `replyType=async`，由宿主通过 `/v1/api/result?id=...` 轮询；接口同时接受 `json` 和 `stream`。\n- `grsai-gpt-image` 支持 `auto`、`low`、`medium`、`high`、`xhigh`、`max`；具体模型允许的档位由后台模型能力配置决定，插件不会覆盖管理员配置。\n- `grsai-nano-banana-image` 的 `imageSize` 只发送 `1K`、`2K` 或 `4K`；统一 `quality` 优先于历史 `resolution`，不会把图片请求的旧 `720` 视频分辨率透传给上游。\n- 图片和视频参考媒体支持 URL 或 Data URL。GPT Image 的 `mask` 与 `background` 通过 `providerOptions.grsai-gpt-image` 映射到上游字段。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Grsai API Media 接口字段\n\n## 协议身份\n\n- 插件 ID：`grsai-api`。\n- 默认 Base URL：`https://grsaiapi.com`。\n- 中国节点：`https://grsai.dakka.com.cn`；可在渠道配置中覆盖 Base URL。\n- 鉴权驱动：`bearer`，请求头为 `Authorization: Bearer <apiKey>`。\n- 创建：`POST /v1/api/generate`。\n- 查询：`GET /v1/api/result?id={{taskId}}`。\n- 生命周期：三个 profile 均为异步创建后查询结果。\n\n该插件把同一 Grsai 中转站下的不同私有协议作为独立 Provider 暴露，避免用模型名猜测协议。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | Grsai API Key。 |\n\n## Provider profile\n\n| Provider ID | 能力 | 适用模型示例 | 专有请求字段 |\n| --- | --- | --- | --- |\n| `grsai-minimax-h3` | video | `minimax-h3` | `aspectRatio`、`images`、`audios`、`seed`、`resolution`、`duration` |\n| `grsai-nano-banana-image` | image | `nano-banana-2`、`nano-banana-pro` | `aspectRatio`、`images`、`imageSize` |\n| `grsai-gpt-image` | image | `gpt-image-2`、`gpt-image-2.5` | `aspectRatio`、`images`、`quality` |\n\n## 能力限制\n\n### MiniMax H3\n\n- 支持分辨率：`480p`、`768p`、`1080p`；不应使用通用视频档位中的 `720p`、`1440p` 或 `2160p`。\n- 上游支持 `portrait`、`landscape`、`square`。画布仍可使用通用比例，宿主会将宽高比自动归类为纵向、横向或方形后再发送。\n- 支持参考图片最多 9 张、参考音频最多 3 个，媒体可用 URL 或 Data URL；视频时长为 1–15 秒，1080p 按 Grsai 规则最多 10 秒。创建默认使用 `replyType=async`，返回任务后通过 `GET /v1/api/result?id={{taskId}}` 查询；接口也支持 `json` 和 `stream`。\n\n### GPT Image\n\n- `quality` 支持：`auto`、`low`、`medium`、`high`、`xhigh`、`max`。\n- GPT Image 的质量档位和尺寸限制按具体模型区分；后台可以为模型自定义可用能力，插件只传递选中的档位，不覆盖后台配置。\n- `mask` 从参考媒体中按 `role=mask` 单独映射；`background` 从 `providerOptions.grsai-gpt-image.background` 映射，当前可传 `transparent`。\n\n### Nano Banana 图片尺寸\n\n- Grsai 上游 `imageSize` 使用字符串档位：`1K`、`2K`、`4K`。\n- 统一请求的 `quality` 优先于历史兼容字段 `resolution`；`1k`/`low`、`2k`/`medium`、`4k`/`high` 会分别规范化为 `1K`、`2K`、`4K`。\n- 未识别的旧视频分辨率（例如 `720`）不会透传到 `imageSize`，避免把视频默认值误发给图片接口。\n\n## 私有图片协议\n\n### Nano Banana 图片\n\n请求体按 Grsai 私有协议发送：\n\n```json\n{\n  \"model\": \"nano-banana-2\",\n  \"prompt\": \"生成一张边牧与古牧正在直播带货的截图\",\n  \"images\": [],\n  \"aspectRatio\": \"1:1\",\n  \"imageSize\": \"1K\",\n  \"replyType\": \"json\"\n}\n```\n\n统一字段映射：\n\n| 统一字段 | 上游字段 |\n| --- | --- |\n| `model` | `model` |\n| `prompt` | `prompt` |\n| `images` | `images` |\n| `aspectRatio` | `aspectRatio` |\n| `resolution` | `imageSize` |\n| `quality` | `imageSize`，优先于 `resolution`，并规范化为 `1K`、`2K` 或 `4K` |\n| `providerOptions.grsai-nano-banana-image.imageSize` | `imageSize`，优先级最高 |\n| `providerOptions.grsai-nano-banana-image.replyType` | `replyType`，默认 `json` |\n\n### GPT Image 图片\n\n请求体按 Grsai 私有协议发送：\n\n```json\n{\n  \"model\": \"gpt-image-2.5\",\n  \"prompt\": \"生成一张边牧与古牧正在直播带货的截图\",\n  \"images\": [],\n  \"aspectRatio\": \"1024x1024\",\n  \"quality\": \"auto\",\n  \"replyType\": \"json\"\n}\n```\n\n统一字段映射：\n\n| 统一字段 | 上游字段 |\n| --- | --- |\n| `model` | `model` |\n| `prompt` | `prompt` |\n| `images` | `images` |\n| `aspectRatio` | `aspectRatio` |\n| `quality` | `quality` |\n| `images` 中 `role=mask` 的媒体 | `mask`，单独从普通参考图中移除 |\n| `providerOptions.grsai-gpt-image.background` | `background` |\n| `providerOptions.grsai-gpt-image.quality` | `quality`，优先于统一 `quality` |\n| `providerOptions.grsai-gpt-image.replyType` | `replyType`，默认 `json` |\n\n## MiniMax H3 视频\n\n请求体按 Grsai 私有视频协议发送：\n\n```json\n{\n  \"prompt\": \"视频提示词\",\n  \"aspectRatio\": \"portrait\",\n  \"images\": [],\n  \"audios\": [],\n  \"seed\": 1000,\n  \"resolution\": \"480p\",\n  \"model\": \"minimax-h3\",\n  \"duration\": 10,\n  \"replyType\": \"async\"\n}\n```\n\n统一字段映射：\n\n| 统一字段 | 上游字段 |\n| --- | --- |\n| `model` | `model` |\n| `prompt` | `prompt` |\n| `images` | `images` |\n| `audios` | `audios` |\n| `aspectRatio` | `aspectRatio` |\n| `resolution` | `resolution` |\n| `duration` | `duration` |\n| `providerOptions.grsai-minimax-h3.seed` | `seed` |\n| `providerOptions.grsai-minimax-h3.replyType` | `replyType`，默认 `async`；可按上游协议改为 `json` 或 `stream` |\n\n## 响应映射\n\n三个 profile 都解析同一种异步响应：\n\n```json\n{\n  \"id\": \"task-id\",\n  \"status\": \"succeeded\",\n  \"results\": [\n    { \"url\": \"https://example.com/result.png\" }\n  ]\n}\n```\n\n- `id` 映射为统一 `taskId`。\n- `status` 映射为统一任务状态；`running` 为处理中，`violation` 和 `failed` 为失败。\n- 顶层 `error` 字符串映射为失败消息，并参与失败状态判断。\n- 视频 profile 把 `results[*].url` 映射为视频结果。\n- 图片 profile 把 `results[*].url` 映射为图片结果。\n- 结果标记为临时 URL，宿主应下载后持久化。\n- 文档没有提供可验证的取消接口，三个 profile 均声明 `nonCancelable`；宿主取消只能停止后续轮询，不能宣称上游任务已撤销。\n\n## 公网媒体要求与兼容边界\n\nGrsai 请求中的 `images` 和 `audios` 支持 URL 与 Data URL。插件不声明 `requiresPublicMediaUrls`，因此宿主可以把本地媒体按 Data URL 发送；调用方已经提供 URL 时则沿用 URL。GPT Image 的 `mask` 也沿用对应媒体值。\n\n本插件只代表上述三个 `/v1/api/generate` profile。其他 Grsai 模型、字段或返回结构应使用独立 Provider profile，不能仅根据品牌名或模型名猜测兼容。\n\n协议来源：Grsai API 的 Nano Banana、GPT Image 与 MiniMax H3 接口页面，以及统一异步结果查询页面。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"grsai-api\",\n  \"name\": \"Grsai API Media\",\n  \"version\": \"1.2.3\",\n  \"author\": \"Grsai / iGO Studio\",\n  \"description\": \"Grsai 图片与视频异步生成协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"grsai-minimax-h3\",\n        \"label\": \"Grsai MiniMax H3 Video\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://grsaiapi.com\",\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"视频模型 ID，例如 minimax-h3。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"视频提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"images\",\n            \"description\": \"参考图片 URL 或 Data URL 数组。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"audios\",\n            \"description\": \"参考音频 URL 或 Data URL 数组。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"aspectRatio\",\n            \"description\": \"统一画布比例；宿主会将其转换为 Grsai 上游支持的 portrait、landscape 或 square。\",\n            \"values\": [\n              \"21:9\",\n              \"16:9\",\n              \"9:16\",\n              \"4:3\",\n              \"3:4\",\n              \"1:1\",\n              \"3:2\",\n              \"2:3\"\n            ]\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"resolution\",\n            \"description\": \"分辨率档位，例如 480p。\",\n            \"values\": [\n              \"480p\",\n              \"768p\",\n              \"1080p\"\n            ]\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": true,\n            \"mapping\": \"duration\",\n            \"description\": \"视频时长，单位秒。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                9\n              ]\n            },\n            \"message\": \"Grsai MiniMax H3 最多支持 9 张参考图片\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.audios\"\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"Grsai MiniMax H3 最多支持 3 个参考音频\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.aspectRatio\"\n                },\n                [\n                  \"portrait\",\n                  \"landscape\",\n                  \"square\"\n                ]\n              ]\n            },\n            \"message\": \"Grsai MiniMax H3 aspectRatio 只能是 portrait、landscape 或 square\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.resolution\"\n                },\n                [\n                  \"480p\",\n                  \"768p\",\n                  \"1080p\"\n                ]\n              ]\n            },\n            \"message\": \"Grsai MiniMax H3 resolution 只能是 480p、768p 或 1080p\"\n          },\n          {\n            \"assert\": {\n              \"$and\": [\n                {\n                  \"$gte\": [\n                    {\n                      \"$ref\": \"request.duration\"\n                    },\n                    1\n                  ]\n                },\n                {\n                  \"$lte\": [\n                    {\n                      \"$ref\": \"request.duration\"\n                    },\n                    15\n                  ]\n                }\n              ]\n            },\n            \"message\": \"Grsai MiniMax H3 duration 必须在 1-15 秒之间\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$ne\": [\n                    {\n                      \"$ref\": \"request.resolution\"\n                    },\n                    \"1080p\"\n                  ]\n                },\n                {\n                  \"$lte\": [\n                    {\n                      \"$ref\": \"request.duration\"\n                    },\n                    10\n                  ]\n                }\n              ]\n            },\n            \"message\": \"Grsai MiniMax H3 使用 1080p 时 duration 最多 10 秒\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/api/generate\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"aspectRatio\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.aspectRatio\"\n              }\n            },\n            \"images\": {\n              \"$omitEmpty\": {\n                \"$map\": {\n                  \"from\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.images\"\n                    }\n                  },\n                  \"as\": \"media\",\n                  \"in\": {\n                    \"$ref\": \"media.value\"\n                  }\n                }\n              }\n            },\n            \"audios\": {\n              \"$omitEmpty\": {\n                \"$map\": {\n                  \"from\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.audios\"\n                    }\n                  },\n                  \"as\": \"media\",\n                  \"in\": {\n                    \"$ref\": \"media.value\"\n                  }\n                }\n              }\n            },\n            \"seed\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.grsai-minimax-h3.seed\"\n              }\n            },\n            \"resolution\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.resolution\"\n              }\n            },\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"duration\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.duration\"\n              }\n            },\n            \"replyType\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.grsai-minimax-h3.replyType\"\n                },\n                \"async\"\n              ]\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/api/result\",\n          \"query\": {\n            \"id\": {\n              \"$ref\": \"taskId\"\n            }\n          }\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.taskId\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.state\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error\"\n              },\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.fail_reason\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$map\": {\n                  \"from\": {\n                    \"$ref\": \"response.results\"\n                  },\n                  \"as\": \"result\",\n                  \"in\": {\n                    \"$ref\": \"result.url\"\n                  }\n                }\n              },\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.videoUrl\"\n              },\n              {\n                \"$ref\": \"response.result_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error\",\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        },\n        \"nonCancelable\": {\n          \"reason\": \"当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。\"\n        }\n      },\n      {\n        \"id\": \"grsai-nano-banana-image\",\n        \"label\": \"Grsai Nano Banana Image\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://grsaiapi.com\",\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"图片模型 ID，例如 nano-banana-2。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"图片提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"images\",\n            \"description\": \"参考图片 URL 或 Data URL 数组。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"aspectRatio\",\n            \"description\": \"画幅比例，例如 1:1。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"imageSize\",\n            \"description\": \"图片尺寸档位，例如 1K。\",\n            \"values\": [\n              \"1K\",\n              \"2K\",\n              \"4K\"\n            ]\n          },\n          {\n            \"name\": \"quality\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"imageSize\",\n            \"description\": \"统一图片分辨率档位；1k/low、2k/medium、4k/high 会规范化为上游要求的 1K、2K、4K。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/api/generate\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"images\": {\n              \"$map\": {\n                \"from\": {\n                  \"$filter\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"where\": {\n                      \"$ne\": [\n                        {\n                          \"$ref\": \"media.role\"\n                        },\n                        \"mask\"\n                      ]\n                    }\n                  }\n                },\n                \"as\": \"media\",\n                \"in\": {\n                  \"$ref\": \"media.value\"\n                }\n              }\n            },\n            \"aspectRatio\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.aspectRatio\"\n              }\n            },\n            \"imageSize\": {\n              \"$omitEmpty\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.grsai-nano-banana-image.imageSize\"\n                  },\n                  {\n                    \"$switch\": {\n                      \"cases\": [\n                        {\n                          \"when\": {\n                            \"$in\": [\n                              {\n                                \"$lower\": {\n                                  \"$ref\": \"request.quality\"\n                                }\n                              },\n                              [\n                                \"1k\",\n                                \"low\"\n                              ]\n                            ]\n                          },\n                          \"then\": \"1K\"\n                        },\n                        {\n                          \"when\": {\n                            \"$in\": [\n                              {\n                                \"$lower\": {\n                                  \"$ref\": \"request.quality\"\n                                }\n                              },\n                              [\n                                \"2k\",\n                                \"medium\"\n                              ]\n                            ]\n                          },\n                          \"then\": \"2K\"\n                        },\n                        {\n                          \"when\": {\n                            \"$in\": [\n                              {\n                                \"$lower\": {\n                                  \"$ref\": \"request.quality\"\n                                }\n                              },\n                              [\n                                \"4k\",\n                                \"high\"\n                              ]\n                            ]\n                          },\n                          \"then\": \"4K\"\n                        }\n                      ],\n                      \"default\": null\n                    }\n                  },\n                  {\n                    \"$switch\": {\n                      \"cases\": [\n                        {\n                          \"when\": {\n                            \"$in\": [\n                              {\n                                \"$lower\": {\n                                  \"$ref\": \"request.resolution\"\n                                }\n                              },\n                              [\n                                \"1k\",\n                                \"low\"\n                              ]\n                            ]\n                          },\n                          \"then\": \"1K\"\n                        },\n                        {\n                          \"when\": {\n                            \"$in\": [\n                              {\n                                \"$lower\": {\n                                  \"$ref\": \"request.resolution\"\n                                }\n                              },\n                              [\n                                \"2k\",\n                                \"medium\"\n                              ]\n                            ]\n                          },\n                          \"then\": \"2K\"\n                        },\n                        {\n                          \"when\": {\n                            \"$in\": [\n                              {\n                                \"$lower\": {\n                                  \"$ref\": \"request.resolution\"\n                                }\n                              },\n                              [\n                                \"4k\",\n                                \"high\"\n                              ]\n                            ]\n                          },\n                          \"then\": \"4K\"\n                        }\n                      ],\n                      \"default\": null\n                    }\n                  }\n                ]\n              }\n            },\n            \"replyType\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.grsai-nano-banana-image.replyType\"\n                },\n                \"json\"\n              ]\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/api/result\",\n          \"query\": {\n            \"id\": {\n              \"$ref\": \"taskId\"\n            }\n          }\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.taskId\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.state\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$ref\": \"response.error\"\n          },\n          \"images\": {\n            \"$coalesce\": [\n              {\n                \"$map\": {\n                  \"from\": {\n                    \"$ref\": \"response.results\"\n                  },\n                  \"as\": \"result\",\n                  \"in\": {\n                    \"$ref\": \"result.url\"\n                  }\n                }\n              },\n              {\n                \"$ref\": \"response.image_url\"\n              },\n              {\n                \"$ref\": \"response.imageUrl\"\n              },\n              {\n                \"$ref\": \"response.result_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error\"\n          ],\n          \"resultEphemeral\": true\n        },\n        \"nonCancelable\": {\n          \"reason\": \"当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。\"\n        }\n      },\n      {\n        \"id\": \"grsai-gpt-image\",\n        \"label\": \"Grsai GPT Image\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://grsaiapi.com\",\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"图片模型 ID，例如 gpt-image-2 或 gpt-image-2.5。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"图片提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"images\",\n            \"description\": \"参考图片 URL 或 Data URL 数组；mask 会单独映射到上游 mask 字段。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"aspectRatio\",\n            \"description\": \"尺寸或画幅比例，例如 1024x1024。\"\n          },\n          {\n            \"name\": \"quality\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"quality\",\n            \"description\": \"质量档位，例如 auto。\",\n            \"values\": [\n              \"auto\",\n              \"low\",\n              \"medium\",\n              \"high\",\n              \"xhigh\",\n              \"max\"\n            ]\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/api/generate\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"images\": {\n              \"$map\": {\n                \"from\": {\n                  \"$filter\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"where\": {\n                      \"$ne\": [\n                        {\n                          \"$ref\": \"media.role\"\n                        },\n                        \"mask\"\n                      ]\n                    }\n                  }\n                },\n                \"as\": \"media\",\n                \"in\": {\n                  \"$ref\": \"media.value\"\n                }\n              }\n            },\n            \"aspectRatio\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.aspectRatio\"\n              }\n            },\n            \"quality\": {\n              \"$omitEmpty\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.grsai-gpt-image.quality\"\n                  },\n                  {\n                    \"$ref\": \"request.quality\"\n                  }\n                ]\n              }\n            },\n            \"mask\": {\n              \"$omitEmpty\": {\n                \"$first\": {\n                  \"$map\": {\n                    \"from\": {\n                      \"$filter\": {\n                        \"from\": {\n                          \"$sortByOrder\": {\n                            \"$ref\": \"request.images\"\n                          }\n                        },\n                        \"as\": \"media\",\n                        \"where\": {\n                          \"$eq\": [\n                            {\n                              \"$ref\": \"media.role\"\n                            },\n                            \"mask\"\n                          ]\n                        }\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"$ref\": \"media.value\"\n                    }\n                  }\n                }\n              }\n            },\n            \"background\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.grsai-gpt-image.background\"\n              }\n            },\n            \"replyType\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.grsai-gpt-image.replyType\"\n                },\n                \"json\"\n              ]\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/api/result\",\n          \"query\": {\n            \"id\": {\n              \"$ref\": \"taskId\"\n            }\n          }\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.taskId\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.state\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$ref\": \"response.error\"\n          },\n          \"images\": {\n            \"$coalesce\": [\n              {\n                \"$map\": {\n                  \"from\": {\n                    \"$ref\": \"response.results\"\n                  },\n                  \"as\": \"result\",\n                  \"in\": {\n                    \"$ref\": \"result.url\"\n                  }\n                }\n              },\n              {\n                \"$ref\": \"response.image_url\"\n              },\n              {\n                \"$ref\": \"response.imageUrl\"\n              },\n              {\n                \"$ref\": \"response.result_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error\"\n          ],\n          \"resultEphemeral\": true\n        },\n        \"nonCancelable\": {\n          \"reason\": \"当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。\"\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "grsai-minimax-h3",
+        "label": "Grsai MiniMax H3 Video",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://grsaiapi.com",
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "视频模型 ID，例如 minimax-h3。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "视频提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "images",
+            "description": "参考图片 URL 或 Data URL 数组。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "audios",
+            "description": "参考音频 URL 或 Data URL 数组。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": true,
+            "mapping": "aspectRatio",
+            "description": "统一画布比例；宿主会将其转换为 Grsai 上游支持的 portrait、landscape 或 square。",
+            "values": [
+              "21:9",
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "1:1",
+              "3:2",
+              "2:3"
+            ]
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": true,
+            "mapping": "resolution",
+            "description": "分辨率档位，例如 480p。",
+            "values": [
+              "480p",
+              "768p",
+              "1080p"
+            ]
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "mapping": "duration",
+            "description": "视频时长，单位秒。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                9
+              ]
+            },
+            "message": "Grsai MiniMax H3 最多支持 9 张参考图片"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.audios"
+                  }
+                },
+                3
+              ]
+            },
+            "message": "Grsai MiniMax H3 最多支持 3 个参考音频"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.aspectRatio"
+                },
+                [
+                  "portrait",
+                  "landscape",
+                  "square"
+                ]
+              ]
+            },
+            "message": "Grsai MiniMax H3 aspectRatio 只能是 portrait、landscape 或 square"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.resolution"
+                },
+                [
+                  "480p",
+                  "768p",
+                  "1080p"
+                ]
+              ]
+            },
+            "message": "Grsai MiniMax H3 resolution 只能是 480p、768p 或 1080p"
+          },
+          {
+            "assert": {
+              "$and": [
+                {
+                  "$gte": [
+                    {
+                      "$ref": "request.duration"
+                    },
+                    1
+                  ]
+                },
+                {
+                  "$lte": [
+                    {
+                      "$ref": "request.duration"
+                    },
+                    15
+                  ]
+                }
+              ]
+            },
+            "message": "Grsai MiniMax H3 duration 必须在 1-15 秒之间"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$ne": [
+                    {
+                      "$ref": "request.resolution"
+                    },
+                    "1080p"
+                  ]
+                },
+                {
+                  "$lte": [
+                    {
+                      "$ref": "request.duration"
+                    },
+                    10
+                  ]
+                }
+              ]
+            },
+            "message": "Grsai MiniMax H3 使用 1080p 时 duration 最多 10 秒"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/api/generate",
+          "contentType": "application/json",
+          "body": {
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "aspectRatio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "images": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.images"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "audios": {
+              "$omitEmpty": {
+                "$map": {
+                  "from": {
+                    "$sortByOrder": {
+                      "$ref": "request.audios"
+                    }
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "seed": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.grsai-minimax-h3.seed"
+              }
+            },
+            "resolution": {
+              "$omitEmpty": {
+                "$ref": "request.resolution"
+              }
+            },
+            "model": {
+              "$ref": "request.model"
+            },
+            "duration": {
+              "$omitEmpty": {
+                "$ref": "request.duration"
+              }
+            },
+            "replyType": {
+              "$coalesce": [
+                {
+                  "$ref": "request.providerOptions.grsai-minimax-h3.replyType"
+                },
+                "async"
+              ]
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/api/result",
+          "query": {
+            "id": {
+              "$ref": "taskId"
+            }
+          }
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error"
+              },
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.fail_reason"
+              }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$map": {
+                  "from": {
+                    "$ref": "response.results"
+                  },
+                  "as": "result",
+                  "in": {
+                    "$ref": "result.url"
+                  }
+                }
+              },
+              {
+                "$ref": "response.video_url"
+              },
+              {
+                "$ref": "response.videoUrl"
+              },
+              {
+                "$ref": "response.result_url"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error",
+            "error.code"
+          ],
+          "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
+        }
+      },
+      {
+        "id": "grsai-nano-banana-image",
+        "label": "Grsai Nano Banana Image",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://grsaiapi.com",
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "图片模型 ID，例如 nano-banana-2。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "图片提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "images",
+            "description": "参考图片 URL 或 Data URL 数组。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "aspectRatio",
+            "description": "画幅比例，例如 1:1。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "imageSize",
+            "description": "图片尺寸档位，例如 1K。",
+            "values": [
+              "1K",
+              "2K",
+              "4K"
+            ]
+          },
+          {
+            "name": "quality",
+            "type": "string",
+            "required": false,
+            "mapping": "imageSize",
+            "description": "统一图片分辨率档位；1k/low、2k/medium、4k/high 会规范化为上游要求的 1K、2K、4K。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/api/generate",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$filter": {
+                    "from": {
+                      "$sortByOrder": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    "as": "media",
+                    "where": {
+                      "$ne": [
+                        {
+                          "$ref": "media.role"
+                        },
+                        "mask"
+                      ]
+                    }
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "aspectRatio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "imageSize": {
+              "$omitEmpty": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.grsai-nano-banana-image.imageSize"
+                  },
+                  {
+                    "$switch": {
+                      "cases": [
+                        {
+                          "when": {
+                            "$in": [
+                              {
+                                "$lower": {
+                                  "$ref": "request.quality"
+                                }
+                              },
+                              [
+                                "1k",
+                                "low"
+                              ]
+                            ]
+                          },
+                          "then": "1K"
+                        },
+                        {
+                          "when": {
+                            "$in": [
+                              {
+                                "$lower": {
+                                  "$ref": "request.quality"
+                                }
+                              },
+                              [
+                                "2k",
+                                "medium"
+                              ]
+                            ]
+                          },
+                          "then": "2K"
+                        },
+                        {
+                          "when": {
+                            "$in": [
+                              {
+                                "$lower": {
+                                  "$ref": "request.quality"
+                                }
+                              },
+                              [
+                                "4k",
+                                "high"
+                              ]
+                            ]
+                          },
+                          "then": "4K"
+                        }
+                      ],
+                      "default": null
+                    }
+                  },
+                  {
+                    "$switch": {
+                      "cases": [
+                        {
+                          "when": {
+                            "$in": [
+                              {
+                                "$lower": {
+                                  "$ref": "request.resolution"
+                                }
+                              },
+                              [
+                                "1k",
+                                "low"
+                              ]
+                            ]
+                          },
+                          "then": "1K"
+                        },
+                        {
+                          "when": {
+                            "$in": [
+                              {
+                                "$lower": {
+                                  "$ref": "request.resolution"
+                                }
+                              },
+                              [
+                                "2k",
+                                "medium"
+                              ]
+                            ]
+                          },
+                          "then": "2K"
+                        },
+                        {
+                          "when": {
+                            "$in": [
+                              {
+                                "$lower": {
+                                  "$ref": "request.resolution"
+                                }
+                              },
+                              [
+                                "4k",
+                                "high"
+                              ]
+                            ]
+                          },
+                          "then": "4K"
+                        }
+                      ],
+                      "default": null
+                    }
+                  }
+                ]
+              }
+            },
+            "replyType": {
+              "$coalesce": [
+                {
+                  "$ref": "request.providerOptions.grsai-nano-banana-image.replyType"
+                },
+                "json"
+              ]
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/api/result",
+          "query": {
+            "id": {
+              "$ref": "taskId"
+            }
+          }
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$ref": "response.error"
+          },
+          "images": {
+            "$coalesce": [
+              {
+                "$map": {
+                  "from": {
+                    "$ref": "response.results"
+                  },
+                  "as": "result",
+                  "in": {
+                    "$ref": "result.url"
+                  }
+                }
+              },
+              {
+                "$ref": "response.image_url"
+              },
+              {
+                "$ref": "response.imageUrl"
+              },
+              {
+                "$ref": "response.result_url"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error"
+          ],
+          "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
+        }
+      },
+      {
+        "id": "grsai-gpt-image",
+        "label": "Grsai GPT Image",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://grsaiapi.com",
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "图片模型 ID，例如 gpt-image-2 或 gpt-image-2.5。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "图片提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "images",
+            "description": "参考图片 URL 或 Data URL 数组；mask 会单独映射到上游 mask 字段。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "aspectRatio",
+            "description": "尺寸或画幅比例，例如 1024x1024。"
+          },
+          {
+            "name": "quality",
+            "type": "string",
+            "required": false,
+            "mapping": "quality",
+            "description": "质量档位，例如 auto。",
+            "values": [
+              "auto",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "插件命名空间内的厂商扩展字段。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/api/generate",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "images": {
+              "$map": {
+                "from": {
+                  "$filter": {
+                    "from": {
+                      "$sortByOrder": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    "as": "media",
+                    "where": {
+                      "$ne": [
+                        {
+                          "$ref": "media.role"
+                        },
+                        "mask"
+                      ]
+                    }
+                  }
+                },
+                "as": "media",
+                "in": {
+                  "$ref": "media.value"
+                }
+              }
+            },
+            "aspectRatio": {
+              "$omitEmpty": {
+                "$ref": "request.aspectRatio"
+              }
+            },
+            "quality": {
+              "$omitEmpty": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.grsai-gpt-image.quality"
+                  },
+                  {
+                    "$ref": "request.quality"
+                  }
+                ]
+              }
+            },
+            "mask": {
+              "$omitEmpty": {
+                "$first": {
+                  "$map": {
+                    "from": {
+                      "$filter": {
+                        "from": {
+                          "$sortByOrder": {
+                            "$ref": "request.images"
+                          }
+                        },
+                        "as": "media",
+                        "where": {
+                          "$eq": [
+                            {
+                              "$ref": "media.role"
+                            },
+                            "mask"
+                          ]
+                        }
+                      }
+                    },
+                    "as": "media",
+                    "in": {
+                      "$ref": "media.value"
+                    }
+                  }
+                }
+              }
+            },
+            "background": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.grsai-gpt-image.background"
+              }
+            },
+            "replyType": {
+              "$coalesce": [
+                {
+                  "$ref": "request.providerOptions.grsai-gpt-image.replyType"
+                },
+                "json"
+              ]
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/api/result",
+          "query": {
+            "id": {
+              "$ref": "taskId"
+            }
+          }
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$ref": "response.error"
+          },
+          "images": {
+            "$coalesce": [
+              {
+                "$map": {
+                  "from": {
+                    "$ref": "response.results"
+                  },
+                  "as": "result",
+                  "in": {
+                    "$ref": "result.url"
+                  }
+                }
+              },
+              {
+                "$ref": "response.image_url"
+              },
+              {
+                "$ref": "response.imageUrl"
+              },
+              {
+                "$ref": "response.result_url"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error"
+          ],
+          "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
+        }
+      }
+    ]
+  }
+}

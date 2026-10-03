@@ -147,7 +147,7 @@ func invalidPasswordResetCode() *AuthError {
 }
 
 func passwordResetEmailBody(brandName string, code string) string {
-	return "你正在重置" + brandName + "账号密码。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件，并确保邮箱账号安全。"
+	return "你正在重置" + brandName + "账号密码。\n\n验证码：" + code + "\n\n若非本人操作，请忽略本邮件，并确保邮箱账号安全。\n\n本验证码有效期为 10 分钟。"
 }
 
 func maskedEmail(email string) string {

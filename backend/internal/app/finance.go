@@ -580,6 +580,13 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 }
 
 func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate, priceTierID string, intents ...ModelRequestIntent) (*model.BillingOrder, error) {
+	return s.newBillingOrderWithPriceTierAt(userID, taskID, idempotencyKey, channelID, modelKey, capability, scene, requestedQuantity, tokenEstimate, priceTierID, time.Now(), intents...)
+}
+
+func (s *Service) newBillingOrderWithPriceTierAt(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate, priceTierID string, pricingAt time.Time, intents ...ModelRequestIntent) (*model.BillingOrder, error) {
+	if pricingAt.IsZero() {
+		return nil, BadAuthRequest("计费时间快照无效")
+	}
 	item, err := s.repo.ChannelModelByKey(channelID, modelKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, BadAuthRequest("当前模型暂时不可用，请重新选择")
@@ -631,6 +638,14 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	if configured := policy.ModelMultiplierBPS[modelKey]; configured > 0 {
 		multiplierBPS = configured
 	}
+	timeMultiplierBPS, err := channelTimePricingMultiplier(tier.TimePricing, pricingAt)
+	if err != nil {
+		return nil, BadAuthRequest(err.Error())
+	}
+	multiplierBPS, err = combineMultiplierBasisPoints(multiplierBPS, timeMultiplierBPS)
+	if err != nil {
+		return nil, err
+	}
 	if tier.BillingMode == "token" {
 		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits}, tokenEstimate, multiplierBPS)
 	} else {
@@ -652,6 +667,7 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
 		VideoFormulaTokens: videoFormulaTokens,
 		Status:             model.BillingStatusReserved,
+		CreatedAt:          pricingAt,
 	}
 	snapshotCreditCost(order, tier, requestedQuantity, tokenEstimate)
 	return order, nil

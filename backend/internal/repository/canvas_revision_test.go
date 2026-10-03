@@ -67,7 +67,10 @@ func TestCanvasRevision(t *testing.T) {
 
 func testCanvasRevision(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	if err := db.AutoMigrate(&model.CanvasProject{}, &model.CanvasUnitLink{}, &model.Project{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.CanvasProject{}, &model.CanvasUnitLink{}, &model.Project{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "owner", Username: "canvas-owner", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
 	repo := New(db)

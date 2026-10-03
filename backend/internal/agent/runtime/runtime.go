@@ -31,24 +31,29 @@ type Bridge struct {
 }
 
 type ProcessRequest struct {
-	BridgeURL     string           `json:"bridgeURL"`
-	BridgeToken   string           `json:"bridgeToken"`
-	SessionJSONL  string           `json:"sessionJSONL,omitempty"`
-	SessionID     string           `json:"sessionId,omitempty"`
-	UserID        string           `json:"userId,omitempty"`
-	CanvasID      string           `json:"canvasId,omitempty"`
-	RunID         string           `json:"runId,omitempty"`
-	Prompt        string           `json:"prompt"`
-	SystemPrompt  string           `json:"systemPrompt"`
-	EnabledSkills []map[string]any `json:"enabledSkills,omitempty"`
-	Profile       map[string]any   `json:"profile,omitempty"`
-	Memory        map[string]any   `json:"memory,omitempty"`
-	Canvas        map[string]any   `json:"canvas,omitempty"`
-	Features      map[string]any   `json:"features,omitempty"`
-	Tools         []map[string]any `json:"tools"`
-	Compaction    map[string]any   `json:"compaction,omitempty"`
-	Permissions   map[string]any   `json:"permissions,omitempty"`
-	Model         map[string]any   `json:"model"`
+	ResumeFromCheckpoint bool             `json:"resumeFromCheckpoint,omitempty"`
+	TurnID               string           `json:"turnId,omitempty"`
+	BridgeURL            string           `json:"bridgeURL"`
+	BridgeToken          string           `json:"bridgeToken"`
+	SessionJSONL         string           `json:"sessionJSONL,omitempty"`
+	RejectedParentRunID  string           `json:"rejectedParentRunId,omitempty"`
+	BootstrapMessages    []map[string]any `json:"bootstrapMessages,omitempty"`
+	TurnContext          string           `json:"turnContext,omitempty"`
+	SessionID            string           `json:"sessionId,omitempty"`
+	UserID               string           `json:"userId,omitempty"`
+	CanvasID             string           `json:"canvasId,omitempty"`
+	RunID                string           `json:"runId,omitempty"`
+	Prompt               string           `json:"prompt"`
+	SystemPrompt         string           `json:"systemPrompt"`
+	EnabledSkills        []map[string]any `json:"enabledSkills,omitempty"`
+	Profile              map[string]any   `json:"profile,omitempty"`
+	Memory               map[string]any   `json:"memory,omitempty"`
+	Canvas               map[string]any   `json:"canvas,omitempty"`
+	Features             map[string]any   `json:"features,omitempty"`
+	Tools                []map[string]any `json:"tools"`
+	Compaction           map[string]any   `json:"compaction,omitempty"`
+	Permissions          map[string]any   `json:"permissions,omitempty"`
+	Model                map[string]any   `json:"model"`
 }
 
 // BridgeServer is the per-run callback endpoint. The Node runtime calls it for
@@ -106,13 +111,14 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	// 正常退出误报为 "file already closed"。
 	lineErr := ReadOutput(stdout)
 	waitErr := cmd.Wait()
+	// 停机取消会终止 Node，不能把缺少 settled 误判成业务失败。
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if lineErr != nil {
 		return lineErr
 	}
 	if waitErr != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
 		return fmt.Errorf("Agent runtime exited: %w", waitErr)
 	}
 	return nil
@@ -157,6 +163,7 @@ func ReadOutput(stdout io.Reader) error {
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), lineLimit)
 	var lastError error
+	settled := false
 	for scanner.Scan() {
 		var event struct {
 			Event   string `json:"event"`
@@ -166,14 +173,29 @@ func ReadOutput(stdout io.Reader) error {
 			lastError = fmt.Errorf("decode Agent runtime event: %w", err)
 			continue
 		}
+		if settled {
+			if lastError == nil {
+				lastError = errors.New("Agent runtime emitted output after settled")
+			}
+			continue
+		}
 		if event.Event == "runtime_error" || event.Event == "bridge_error" {
 			lastError = errors.New(firstNonEmpty(event.Message, "Agent runtime failed"))
+		}
+		if event.Event == "settled" {
+			settled = true
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("read Agent runtime output: %w", err)
 	}
-	return lastError
+	if lastError != nil {
+		return lastError
+	}
+	if !settled {
+		return errors.New("Agent runtime ended before settled")
+	}
+	return nil
 }
 
 func BridgeCall(w http.ResponseWriter, r *http.Request, expectedToken string, handler func(context.Context, map[string]json.RawMessage) (any, error)) {

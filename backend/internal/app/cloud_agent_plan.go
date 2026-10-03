@@ -67,7 +67,7 @@ func attachCloudAgentPlan(canonical *canonicalAgentRequest, plan []cloudAgentPla
 }
 
 func cloudAgentPlanRequiresFirstApproval(state *cloudAgentRuntime, call cloudAgentCall) bool {
-	if state == nil || state.Approval != nil || len(state.Plan) != 0 || state.Request.PermissionMode != "request_approval" {
+	if state == nil || state.Request.Surface == "creation" || state.Approval != nil || len(state.Plan) != 0 || state.Request.PermissionMode != "request_approval" {
 		return false
 	}
 	_, ok := cloudAgentPlanApprovalPreview(call)

@@ -55,14 +55,14 @@ func TestResolveAccessPolicyMatrix(t *testing.T) {
 		{
 			name:     "CDN without supported auth falls back to public origin",
 			resource: testReadyResource("aliyun"),
-			setting:  storage.Settings{Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", CDNBaseURL: "https://media.example.com", AccessKeyID: "id", AccessKeySecret: "secret"},
+			setting:  storage.Settings{Provider: "aliyun", Endpoint: "https://1.1.1.1", CDNBaseURL: "https://media.example.com", AccessKeyID: "id", AccessKeySecret: "secret"},
 			options:  AccessOptions{Purpose: PurposeDisplay},
 			wantMode: DeliveryOrigin, wantReason: "cdn_auth_unconfigured",
 		},
 		{
 			name:     "require CDN rejects incomplete CDN auth",
 			resource: testReadyResource("aliyun"),
-			setting:  storage.Settings{Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", CDNBaseURL: "https://media.example.com", AccessKeyID: "id", AccessKeySecret: "secret", Delivery: storage.DeliverySettings{RequireCDN: true}},
+			setting:  storage.Settings{Provider: "aliyun", Endpoint: "https://1.1.1.1", CDNBaseURL: "https://media.example.com", AccessKeyID: "id", AccessKeySecret: "secret", Delivery: storage.DeliverySettings{RequireCDN: true}},
 			options:  AccessOptions{Purpose: PurposeDisplay},
 			wantErr:  "resource_cdn_unconfigured",
 		},

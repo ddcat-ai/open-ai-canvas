@@ -13,6 +13,7 @@ import (
 
 func TestCompletePaymentOrderGrantsCreditsExactlyOnce(t *testing.T) {
 	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "user-1")
 	repo := New(db)
 	order := model.PaymentOrder{
 		ID: "payment-order-1", UserID: "user-1", IdempotencyKey: "idem-1", MerchantOrderNo: "merchant-order-1",
@@ -111,6 +112,7 @@ func TestCompletePaymentOrderRejectsAmountMismatchWithoutGrant(t *testing.T) {
 
 func TestCompletePaymentOrderScopesTradeNumberUniquenessByProvider(t *testing.T) {
 	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "wechat-user-a", "wechat-user-b", "alipay-user")
 	repo := New(db)
 	orders := []model.PaymentOrder{
 		{
@@ -152,6 +154,7 @@ func TestCompletePaymentOrderScopesTradeNumberUniquenessByProvider(t *testing.T)
 
 func TestCompletePaymentOrderRejectsInconsistentExistingLedger(t *testing.T) {
 	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "user-inconsistent")
 	repo := New(db)
 	order := model.PaymentOrder{
 		ID: "payment-order-inconsistent", UserID: "user-inconsistent", IdempotencyKey: "idem-inconsistent", MerchantOrderNo: "merchant-order-inconsistent",
@@ -190,6 +193,7 @@ func TestCompletePaymentOrderRejectsInconsistentExistingLedger(t *testing.T) {
 
 func TestCompletePaymentOrderRejectsCreditBalanceOverflow(t *testing.T) {
 	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "user-overflow")
 	repo := New(db)
 	order := model.PaymentOrder{
 		ID: "payment-order-overflow", UserID: "user-overflow", IdempotencyKey: "idem-overflow", MerchantOrderNo: "merchant-order-overflow",
@@ -414,10 +418,20 @@ func openPaymentTestDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
+		&model.User{},
 		&model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.TopupProduct{},
 		&model.PaymentProviderConfig{}, &model.PaymentOrder{}, &model.PaymentNotification{},
 	); err != nil {
 		t.Fatal(err)
 	}
 	return db
+}
+
+func createPaymentTestUsers(t *testing.T, db *gorm.DB, ids ...string) {
+	t.Helper()
+	for _, id := range ids {
+		if err := db.Create(&model.User{ID: id, Username: id, Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 }

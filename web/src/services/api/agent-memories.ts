@@ -86,6 +86,7 @@ export type AgentMemorySettingRequest = AgentMemoryCompactRequest & {
 };
 
 export const AGENT_MEMORY_CATEGORIES = [
+    { key: "smart_creation", label: "智能创作" },
     { key: "storyboard", label: "分镜" },
     { key: "video", label: "视频生成" },
     { key: "image", label: "图像生成" },

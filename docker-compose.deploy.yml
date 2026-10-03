@@ -26,6 +26,21 @@ services:
       retries: 10
     restart: unless-stopped
 
+  minio:
+    image: ${CANVAS_MINIO_IMAGE:-quay.io/minio/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?请先运行一键部署脚本生成对象存储账号}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?请先运行一键部署脚本生成对象存储密码}
+    volumes:
+      - ${CANVAS_MINIO_DATA_PATH:-minio-data}:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   migrate:
     image: ${CANVAS_BACKEND_IMAGE:?请先配置 CANVAS_BACKEND_IMAGE（必须包含镜像 digest）}
     entrypoint: ["migrate-schema"]
@@ -107,6 +122,7 @@ services:
 
 volumes:
   backend-data:
+  minio-data:
   postgres-data:
   redis-data:
   web-data:

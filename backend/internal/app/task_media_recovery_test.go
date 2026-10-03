@@ -29,6 +29,11 @@ func newMediaRecoveryTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := database.MigrateSchema(db); err != nil {
 		t.Fatal(err)
 	}
+	for _, userID := range []string{"media-user", "user-1"} {
+		if err := db.Create(&model.User{ID: userID, Username: userID, Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir(), activeCancels: make(map[string]context.CancelFunc)}, db
 }
 

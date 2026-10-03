@@ -3,6 +3,8 @@ package skills
 import (
 	"archive/zip"
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -248,6 +250,104 @@ func TestEnsureSkillPackagesMigratesAndRefreshesBuiltinSkills(t *testing.T) {
 	}
 	if string(body) != "# 内置导演\n\n第一版" {
 		t.Fatalf("legacy package was unexpectedly rewritten: %q", body)
+	}
+}
+
+func TestEnsureSkillPackagesRepairsMatchingOrphanArchive(t *testing.T) {
+	for _, damage := range []string{"missing", "corrupt"} {
+		t.Run(damage, func(t *testing.T) {
+			db, err := gorm.Open(sqlite.Open("file:"+kernel.NewID()+"?mode=memory&cache=shared"), &gorm.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := db.AutoMigrate(&model.Skill{}, &model.SkillVersion{}, &model.SkillFile{}); err != nil {
+				t.Fatal(err)
+			}
+			dataDir := t.TempDir()
+			svc := New(repository.New(db), dataDir, nil)
+			skill := model.Skill{ID: kernel.NewID(), Name: "迁移技能", Description: "迁移后仍可读取", Instruction: "# 迁移技能\n\n正文", Status: skillStatusEnabled, Source: 3}
+			if err := db.Create(&skill).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.EnsureSkillPackages(); err != nil {
+				t.Fatal(err)
+			}
+			var saved model.Skill
+			if err := db.First(&saved, "id = ?", skill.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			version, err := svc.repo.SkillVersion(saved.CurrentVersionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := filepath.Join(dataDir, "skill-packages", filepath.FromSlash(version.PackageKey))
+			orphan := filepath.Join(filepath.Dir(expected), "legacy-package.zip")
+			if err := os.Rename(expected, orphan); err != nil {
+				t.Fatal(err)
+			}
+			if damage == "corrupt" {
+				if err := os.WriteFile(expected, []byte("damaged zip"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := svc.EnsureSkillPackages(); err != nil {
+				t.Fatal(err)
+			}
+			body, err := svc.readSkillArchiveEntry(version, "SKILL.md")
+			if err != nil || string(body) != skill.Instruction {
+				t.Fatalf("restored package unreadable: %v", err)
+			}
+			assertSkillVersionCount(t, db, skill.ID, 1)
+		})
+	}
+}
+
+func TestEnsureSkillPackagesKeepsUnrecoverableMultifileVersion(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "skills.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Skill{}, &model.SkillVersion{}, &model.SkillFile{}); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := t.TempDir()
+	svc := New(repository.New(db), dataDir, nil)
+	archive, err := archiveFromZip(skillZip(t, map[string]string{
+		"SKILL.md":          "---\nname: Saved skill\ndescription: Saved package\n---\n\n# Saved skill\n",
+		"cards/original.md": "Original reference text",
+	}), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const skillID, versionID = "synthetic-multifile", "synthetic-multifile-v1"
+	_, version, files, err := svc.persistSkillArchive(skillID, versionID, archive, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	skill := model.Skill{ID: skillID, Name: "Saved skill", Instruction: "# Legacy field must not replace package", Status: skillStatusEnabled, Source: 3, CurrentVersionID: versionID, ContentHash: archive.ContentHash, FileCount: len(files), TotalBytes: archive.TotalBytes}
+	for _, item := range []any{&skill, version, &files} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	packagePath := filepath.Join(dataDir, "skill-packages", filepath.FromSlash(version.PackageKey))
+	if err := os.WriteFile(packagePath, []byte("synthetic broken ZIP"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc = New(repository.New(db), dataDir, nil)
+	if err := svc.EnsureSkillPackages(); err != nil {
+		t.Fatal(err)
+	}
+	var saved model.Skill
+	if err := db.First(&saved, "id = ?", skillID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.CurrentVersionID != versionID || saved.ContentHash != archive.ContentHash || saved.FileCount != 2 || saved.Instruction != skill.Instruction {
+		t.Fatalf("unrecoverable package rewritten: %+v", saved)
+	}
+	assertSkillVersionCount(t, db, skillID, 1)
+	if _, err := svc.SkillPackageFile("reader", skillID, "cards/original.md"); err == nil {
+		t.Fatal("broken package became readable via legacy fallback")
 	}
 }
 

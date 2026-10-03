@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ModelLabel, ModelPicker } from "../src/components/model-picker";
 import { canvasThemes } from "../src/lib/canvas-theme";
+import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { requestCreditCost } from "../src/lib/model-pricing";
 import type { ModelRequirements } from "../src/lib/model-selection";
 import { createModelChannel, defaultConfig, normalizeConfigSnapshot } from "../src/stores/use-config-store";
@@ -38,6 +39,19 @@ function fixture() {
 }
 
 const requirements: ModelRequirements = { capability: "video", videoSeconds: "5", options: { vquality: "1080p" } };
+
+test("video model descriptions show the duration range for the current resolution", () => {
+    const config = fixture();
+    config.channels[0].scope = "local";
+    const capabilityConfig = defaultModelCapabilityConfig();
+    capabilityConfig.video!.duration = { selection: "range", min: 1, max: 15, step: 1, default: 6 };
+    capabilityConfig.video!.resolutions = ["720p", "1080p"];
+    capabilityConfig.video!.durationByResolution = { "1080p": { selection: "enum", values: [5, 10], default: 5 } };
+    config.channels[0].modelCosts![0].capabilityConfig = capabilityConfig;
+    const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.light} creationVariant showConfiguredModelName={false} requirements={requirements} showPrice={false} showDescription />);
+    expect(markup).toContain("5s/10s · 1080P");
+    expect(markup).not.toContain("1-15s");
+});
 
 test("candidate rows show their configured prices instead of applying the previous model's specifications", () => {
     const config = fixture();

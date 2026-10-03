@@ -105,6 +105,7 @@ type AddedSkillReference struct {
 type SkillCategory struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
+	Count int64  `json:"count"`
 }
 
 type SkillListRequest struct {
@@ -167,6 +168,14 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 	if err != nil {
 		return nil, err
 	}
+	categoryCounts, err := s.repo.PublicSkillCategoryCounts()
+	if err != nil {
+		return nil, err
+	}
+	categories := skillCategories()
+	for i := range categories {
+		categories[i].Count = categoryCounts[categories[i].Value]
+	}
 	nextOffset := req.Page * req.PageSize
 	if int64(nextOffset) >= total {
 		nextOffset = 0
@@ -178,7 +187,7 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 		NextOffset: nextOffset,
 		Page:       req.Page,
 		PageSize:   req.PageSize,
-		Categories: skillCategories(),
+		Categories: categories,
 	}, nil
 }
 

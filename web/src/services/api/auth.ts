@@ -512,6 +512,20 @@ export function deleteAdminUser(id: string) {
     return http.delete<{ ok: boolean }>(`/admin/users/${encodeURIComponent(id)}`);
 }
 
+export type AdminUserDeletePreflight = {
+    canDelete: boolean;
+    blockers: string[];
+    related: Record<string, number>;
+};
+
+export function getAdminUserDeletePreflight(id: string) {
+    return http.get<AdminUserDeletePreflight>(`/admin/users/${encodeURIComponent(id)}/delete-preflight`);
+}
+
+export function disableAdminUser(id: string) {
+    return http.post<{ ok: boolean }>(`/admin/users/${encodeURIComponent(id)}/disable`, {});
+}
+
 export function bulkDisableAdminUsers(userIds: string[]) {
     return http.post<{ users: LocalUser[]; disabledCount: number }>("/admin/users/bulk-disable", { userIds });
 }

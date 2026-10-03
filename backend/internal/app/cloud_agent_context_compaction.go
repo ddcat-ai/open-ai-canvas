@@ -244,6 +244,7 @@ func cloudAgentContextCompactionPrompt(state *cloudAgentRuntime) string {
 // 有它才能保证"压缩调用失败"只是少了一份更好的摘要，而不是整轮没有上下文可用。
 func cloudAgentFallbackCheckpoint(state *cloudAgentRuntime) agentcontext.Checkpoint {
 	checkpoint := agentcontext.Checkpoint{Version: agentcontext.Version}
+	checkpoint.CreationState = cloudAgentCreationCheckpointState(state)
 	if state.ContextCompaction != nil {
 		checkpoint.CompactedTurnCount = state.ContextCompaction.TurnCount
 	}
@@ -307,6 +308,40 @@ func cloudAgentFallbackCheckpoint(state *cloudAgentRuntime) agentcontext.Checkpo
 	return checkpoint
 }
 
+// Source identities and plan content come from the durable run, never from a
+// model summary. Omitted resources are excluded, including after a clear.
+func cloudAgentCreationCheckpointState(state *cloudAgentRuntime) []string {
+	if state == nil || state.Request.Surface != "creation" {
+		return nil
+	}
+	entries := []string{"当前有效素材仅为以下集合；空集合表示已清除，不得从历史轮次恢复旧素材。"}
+	for _, asset := range state.Request.Attachments {
+		entries = append(entries, fmt.Sprintf("素材 id=%s kind=%s role=%s", asset.ResourceID, asset.Kind, asset.Role))
+	}
+	if plan := state.CommercePlan; plan != nil {
+		entries = append(entries, fmt.Sprintf("当前方案 id=%s version=%d hash=%s platform=%s site=%s language=%s variants=%s", plan.PlanID, plan.Version, cloudAgentCommercePlanHash(plan), plan.Platform, plan.Site, plan.Language, strings.Join(plan.LanguageVariants, ",")))
+		entries = append(entries, "整套风格与产品外观约束："+plan.StyleBible)
+		for _, fact := range plan.ProductFacts {
+			entries = append(entries, fmt.Sprintf("事实 id=%s status=%s sources=%s claim=%s", fact.ID, firstNonEmpty(fact.Status, "supported"), strings.Join(fact.SourceIDs, ","), fact.Claim))
+		}
+		for _, item := range plan.Items {
+			entries = append(entries, fmt.Sprintf("交付 id=%s type=%s language=%s purpose=%s targetCopy=%s sources=%s", item.ID, item.Type, firstNonEmpty(item.Language, plan.Language), item.Purpose, item.TargetCopy, strings.Join(item.AttachmentResourceIDs, ",")))
+		}
+	}
+	batch := state.CommerceBatch
+	if state.Approval != nil && state.Approval.Batch != nil {
+		batch = state.Approval.Batch
+		entries = append(entries, fmt.Sprintf("整套审批 id=%s decision=%s；仅服务端记录可授权执行", state.Approval.ID, state.Approval.Decision))
+	}
+	if batch != nil {
+		entries = append(entries, fmt.Sprintf("整套待完成 plan=%s version=%d hash=%s", batch.PlanID, batch.Version, batch.PlanHash))
+		for _, item := range batch.Items {
+			entries = append(entries, fmt.Sprintf("任务 item=%s taskId=%s；先查询状态，不能重发", item.ItemID, item.TaskID))
+		}
+	}
+	return entries
+}
+
 // cloudAgentBoundCheckpoint 把检查点压进固定预算：它是"省上下文"的手段，自己不能变成
 // 新的超预算输入。只截断、不新增事实。
 func cloudAgentBoundCheckpoint(checkpoint agentcontext.Checkpoint) agentcontext.Checkpoint {
@@ -329,6 +364,9 @@ func cloudAgentBoundCheckpoint(checkpoint agentcontext.Checkpoint) agentcontext.
 	checkpoint.Decisions = bound(checkpoint.Decisions, 8, 150)
 	checkpoint.Constraints = bound(checkpoint.Constraints, 8, 150)
 	checkpoint.UserPreferences = bound(checkpoint.UserPreferences, 6, 300)
+	// The plan schema itself caps facts at 60 and items at 20. Keep the full
+	// server-authored identity list while bounding each untrusted prose value.
+	checkpoint.CreationState = bound(checkpoint.CreationState, 120, 220)
 	return checkpoint
 }
 
@@ -426,6 +464,7 @@ func (s *Service) advanceCloudAgentContextCompaction(run *model.CloudAgentExecut
 				// 执行事实只取本轮服务端事件，不采纳模型写的 operation/pending 列表。
 				parsed.OperationHistory = checkpoint.OperationHistory
 				parsed.PendingTasks = checkpoint.PendingTasks
+				parsed.CreationState = checkpoint.CreationState
 				checkpoint, mode, reason = parsed, "model", ""
 			} else {
 				reason = "压缩模型输出不符合检查点合同，已使用服务端保底检查点"

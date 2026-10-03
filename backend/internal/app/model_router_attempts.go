@@ -74,8 +74,14 @@ func (s *Service) beginTaskRouteAttempt(task *model.Task) (*model.RouteAttempt, 
 				return existing, nil
 			}
 			return nil, routeDispatchUncertainError{"上一次提交结果不明确，为避免重复扣费已停止自动重发"}
-		case "rejected_no_job":
+		case "rejected_no_job", "failed_no_output":
 			if task.LogicalModelID == "" {
+				if task.Type == "canvas_image" {
+					next, err := s.switchTaskToNextImageChannel(task, attempts)
+					if err != nil || next != nil {
+						return next, err
+					}
+				}
 				return nil, errors.New("上游已拒绝本次请求，请检查渠道配置后再试")
 			}
 			return s.switchTaskToNextRoute(task, attempts)
@@ -274,7 +280,12 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 			capability = capabilityFromTaskType(task.Type)
 		}
 		priceTierID, _ := config["priceTierId"].(string)
-		replacement, err = s.newBillingOrderWithPriceTier(task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(nextInput, capability), strings.TrimSpace(priceTierID), intent)
+		originalOrder, billingErr := s.repo.BillingOrder(task.BillingOrderID)
+		if billingErr != nil {
+			return nil, billingErr
+		}
+		// 备用线路按首次下单时刻选择时间段，排队和重试不能改变时段。
+		replacement, err = s.newBillingOrderWithPriceTierAt(task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(nextInput, capability), strings.TrimSpace(priceTierID), originalOrder.CreatedAt, intent)
 		if err != nil {
 			return nil, err
 		}
@@ -306,7 +317,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 }
 
 func (s *Service) nextRouteAttemptAfterFailure(task *model.Task, attempt *model.RouteAttempt, taskErr error) (*model.RouteAttempt, error) {
-	if task == nil || task.LogicalModelID == "" || attempt == nil || attempt.DispatchState != "rejected_no_job" {
+	if task == nil || attempt == nil || attempt.DispatchState != "rejected_no_job" && !(task.Type == "canvas_image" && attempt.DispatchState == "failed_no_output") {
 		return nil, nil
 	}
 	if errors.Is(taskErr, context.Canceled) || errors.Is(taskErr, context.DeadlineExceeded) {
@@ -316,6 +327,9 @@ func (s *Service) nextRouteAttemptAfterFailure(task *model.Task, attempt *model.
 	attempts, err := s.repo.RouteAttempts(task.ID, task.RouteRun)
 	if err != nil {
 		return nil, err
+	}
+	if task.LogicalModelID == "" {
+		return s.switchTaskToNextImageChannel(task, attempts)
 	}
 	return s.switchTaskToNextRoute(task, attempts)
 }
@@ -459,9 +473,12 @@ func (s *Service) finishTaskRouteAttempt(attempt *model.RouteAttempt, task *mode
 		attempt.Status = "failed"
 		attempt.FailureMessage = truncateRunes(taskFailureMessage(taskErr), 1000)
 		attempt.FailureCode = routeFailureCode(taskErr)
-		if attempt.ProviderRequestID != "" {
+		var failedImage providerGenerationFailedError
+		if task != nil && task.Type == "canvas_image" && errors.As(taskErr, &failedImage) {
+			attempt.DispatchState = "failed_no_output"
+		} else if attempt.ProviderRequestID != "" {
 			attempt.DispatchState = "accepted"
-		} else if safeRouteRejection(taskErr) {
+		} else if safeRouteRejection(taskErr) || task != nil && task.Type == "canvas_image" && safeImageRouteRejection(taskErr) {
 			attempt.DispatchState = "rejected_no_job"
 		} else {
 			attempt.DispatchState = "submission_unknown"

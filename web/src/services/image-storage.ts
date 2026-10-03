@@ -81,6 +81,10 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
     if (!storageKey) return fallback;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (resourceId) {
+        // Worker/SSR consumers cannot resolve the browser-relative `/api` base URL.
+        // They already carry a usable fallback from the materialized asset and must
+        // not turn a local persistence pass into a network URL parsing failure.
+        if ((typeof window === "undefined" || typeof window.location === "undefined") && typeof document === "undefined") return fallback;
         // 远程资源展示直接使用 OSS/CDN 授权地址，不把媒体内容读进浏览器 Blob。
         return resolveResourceAccessURL((await getResourceAccess(storageKey, "display")).url);
     }

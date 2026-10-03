@@ -280,6 +280,10 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		selector["operation"] = operation
 	}
 	switch normalizeCapability(intent.Capability) {
+	case "text":
+		// 文本模型的价格档统一使用 text_generation；页面和内部流程可能
+		// 分别传入 text、storyboard 或其他文本任务操作，但计价规格相同。
+		selector["operation"] = "text_generation"
 	case "video":
 		// 价格档按实际参考素材归类。供应商执行仍可使用 reference_to_video、extend
 		// 等细分操作；计价时视频参考优先归为视频生视频，其余图片参考无论数量
@@ -312,14 +316,8 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		if quality := normalizeImagePriceQuality(rawQuality, rawSize); quality != "" {
 			selector["quality"] = quality
 		}
-		for _, key := range []string{"quality", "size"} {
-			if key == "quality" && selector["quality"] != "" {
-				continue
-			}
-			text, _ := intent.Options[key].(string)
-			if value := strings.ToLower(strings.TrimSpace(text)); value != "" && value != "auto" && value != "any" {
-				selector[key] = value
-			}
+		if value := strings.ToLower(strings.TrimSpace(rawSize)); value != "" && value != "auto" && value != "any" {
+			selector["size"] = value
 		}
 	}
 	return selector
@@ -327,10 +325,14 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 
 func normalizeImagePriceQuality(rawQuality string, rawSize string) string {
 	quality := strings.ToLower(strings.TrimSpace(rawQuality))
-	if quality != "" && quality != "auto" && quality != "any" {
-		return quality
+	// Legacy quality=1k/2k/4k values describe pixel resolution. Provider
+	// generation quality (low/medium/high/...) never selects a price tier.
+	if strings.HasSuffix(quality, "k") {
+		if tier, err := strconv.Atoi(strings.TrimSuffix(quality, "k")); err == nil && tier > 0 {
+			return quality
+		}
 	}
-	parts := strings.Split(strings.ToLower(strings.TrimSpace(rawSize)), "x")
+	parts := strings.Split(normalizePixelSize(strings.ToLower(strings.TrimSpace(rawSize))), "x")
 	if len(parts) != 2 {
 		return ""
 	}

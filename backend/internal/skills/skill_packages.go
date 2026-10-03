@@ -119,44 +119,34 @@ func (s *Service) EnsureSkillPackages() error {
 	}
 	for index := range skills {
 		skill := &skills[index]
-		version, files, healthErr := s.skillPackageHealth(skill)
-		if healthErr == nil {
-			if err := s.syncSkillPackageMetadata(skill, version, files); err != nil {
-				return fmt.Errorf("同步技能 %s 文件包元数据失败: %w", skill.ID, err)
-			}
-			// User-installed ZIP/GitHub skills are authoritative in skill_files and
-			// must never be replaced by the legacy instruction column at startup.
-			if skill.Source == skillSourceUser || skill.SourceType == "builtin" {
+		if skill.CurrentVersionID != "" {
+			_, _, healthErr := s.skillPackageHealth(skill)
+			if healthErr == nil {
 				continue
 			}
-			if strings.TrimSpace(skill.Instruction) == "" {
-				continue
+			version, err := s.repo.SkillVersion(skill.CurrentVersionID)
+			if err == nil {
+				if restored, restoreErr := s.restoreSkillPackageFile(version); restoreErr == nil && restored {
+					_, _, healthErr = s.skillPackageHealth(skill)
+					if healthErr == nil {
+						continue
+					}
+				} else if restoreErr != nil {
+					healthErr = restoreErr
+				}
 			}
-			archive, archiveErr := archiveFromMarkdown([]byte(skill.Instruction), truncateSkillMetadata(skill.Name, 80), truncateSkillMetadata(skill.Description, 500))
-			if archiveErr != nil {
-				log.Printf("技能 %s 的内置正文无法刷新文件包：%v", skill.ID, archiveErr)
-				continue
-			}
-			if version.ContentHash == archive.ContentHash {
-				continue
-			}
-			if err := s.addSkillArchiveVersion(skill, archive, skillSourceTypeForRepair(skill), skill.SourceURL, skill.SourceRef, skill.SourceSubdir, skill.SourceCommit, skill.AutoUpdate); err != nil {
-				return fmt.Errorf("刷新技能 %s 文件包失败: %w", skill.ID, err)
-			}
+			log.Printf("技能 %s 当前文件包损坏，保留原版本等待诊断：%v", skill.ID, healthErr)
 			continue
 		}
 
-		// A legacy row may contain only skills.instruction. Rebuild that single
-		// entry when package metadata, files, or the archive is missing. If no
-		// source body exists, keep the service available and leave a diagnostic
-		// instead of failing every user request during boot.
+		// Only a row with no version is a legacy single-file package.
 		if strings.TrimSpace(skill.Instruction) == "" {
-			log.Printf("技能 %s 文件包不完整且没有 legacy instruction，跳过自动修复：%v", skill.ID, healthErr)
+			log.Printf("技能 %s 没有版本且没有 legacy instruction，跳过自动修复", skill.ID)
 			continue
 		}
 		archive, archiveErr := archiveFromMarkdown([]byte(skill.Instruction), truncateSkillMetadata(skill.Name, 80), truncateSkillMetadata(skill.Description, 500))
 		if archiveErr != nil {
-			log.Printf("技能 %s 文件包损坏且 legacy instruction 无法重建：%v", skill.ID, archiveErr)
+			log.Printf("技能 %s 的 legacy instruction 无法建包：%v", skill.ID, archiveErr)
 			continue
 		}
 		if err := s.addSkillArchiveVersion(skill, archive, skillSourceTypeForRepair(skill), skill.SourceURL, skill.SourceRef, skill.SourceSubdir, skill.SourceCommit, skill.AutoUpdate); err != nil {
@@ -164,6 +154,57 @@ func (s *Service) EnsureSkillPackages() error {
 		}
 	}
 	return nil
+}
+
+// Restore only a ZIP whose content hash matches the recorded version.
+func (s *Service) restoreSkillPackageFile(version *model.SkillVersion) (bool, error) {
+	expected := filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(version.PackageKey))
+	if data, err := os.ReadFile(expected); err == nil {
+		if archive, parseErr := archiveFromZip(data, ""); parseErr == nil && archive.ContentHash == version.ContentHash {
+			return true, nil
+		}
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+	candidates, err := filepath.Glob(filepath.Join(filepath.Dir(expected), "*.zip"))
+	if err != nil {
+		return false, err
+	}
+	for _, candidate := range candidates {
+		if candidate == expected {
+			continue
+		}
+		data, err := os.ReadFile(candidate)
+		if err != nil {
+			continue
+		}
+		archive, err := archiveFromZip(data, "")
+		if err != nil || archive.ContentHash != version.ContentHash {
+			continue
+		}
+		temporary, err := os.CreateTemp(filepath.Dir(expected), ".skill-restore-*.zip")
+		if err != nil {
+			return false, err
+		}
+		temporaryPath := temporary.Name()
+		defer os.Remove(temporaryPath)
+		if err := temporary.Chmod(0o600); err != nil {
+			_ = temporary.Close()
+			return false, err
+		}
+		if _, err := temporary.Write(data); err != nil {
+			_ = temporary.Close()
+			return false, err
+		}
+		if err := temporary.Close(); err != nil {
+			return false, err
+		}
+		if err := os.Rename(temporaryPath, expected); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (s *Service) InstallSkillUpload(userID string, sourceType string, header *multipart.FileHeader, req SkillInstallRequest) (*SkillItem, error) {

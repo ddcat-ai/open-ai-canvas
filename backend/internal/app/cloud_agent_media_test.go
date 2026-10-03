@@ -14,6 +14,9 @@ import (
 func agentMediaFixture(t *testing.T) (*Service, *gorm.DB, cloudAgentMediaArgs) {
 	t.Helper()
 	s, db, _, _ := creationTestService(t)
+	// These transition tests advance the run explicitly. Do not race their
+	// controlled task/canvas mutations with the production approval waiter.
+	s.closeApprovedCloudAgentMediaWaiters()
 	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceVolcengineArkVideo), "seedance-test")
 	capability.Video.References.PromptMaxChars = 16000
 	for _, row := range []any{

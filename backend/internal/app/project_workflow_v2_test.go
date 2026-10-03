@@ -19,12 +19,16 @@ func newProjectWorkflowV2TestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
+		&model.User{},
 		&model.Project{}, &model.ProjectUnit{}, &model.CanvasProject{}, &model.Asset{}, &model.AssetVersion{}, &model.ProjectAssetLink{}, &model.ProjectAssetCandidate{},
 		&model.AssetRepresentation{}, &model.CharacterVoiceBinding{},
 		&model.Shot{}, &model.ShotRevision{}, &model.ShotArtifact{}, &model.ShotAssetReference{},
 		&model.WorkflowTemplateVersion{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{}, &model.WorkflowStepTask{},
 		&model.ProductionTaskLink{}, &model.Task{}, &model.Resource{},
 	); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "user-1", Username: "workflow-owner", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db)}, db

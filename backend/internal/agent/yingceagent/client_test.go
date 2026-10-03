@@ -50,6 +50,7 @@ if (!response.ok) {
 	cmd.Env = append(os.Environ(),
 		"YINGCE_AGENT_TOKEN="+token,
 		"YINGCE_AGENT_RUNTIME="+runtimePath,
+		"YINGCE_AGENT_HOST=127.0.0.1",
 		"PORT=0",
 		"MAX_CONCURRENT_SESSIONS=2",
 	)

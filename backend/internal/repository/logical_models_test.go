@@ -172,7 +172,10 @@ func TestCreateTaskRejectsArchivedLogicalModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.LogicalModel{}, &model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.LogicalModel{}, &model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "USER_1", Username: "logical-model-user", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
 	repo := New(db)

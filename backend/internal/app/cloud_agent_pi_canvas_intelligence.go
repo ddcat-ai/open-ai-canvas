@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -16,6 +18,13 @@ import (
 type CanvasIntelligence struct {
 	service *Service
 }
+
+const (
+	piCanvasContextNodes  = 48
+	piCanvasFocusNodes    = 8
+	piCanvasRelationships = 128
+	piCanvasContentBytes  = 2048
+)
 
 // NewCanvasIntelligence 创建画布智能层
 func (s *Service) NewCanvasIntelligence() *CanvasIntelligence {
@@ -303,10 +312,30 @@ func (ci *CanvasIntelligence) BuildEnhancedCanvasContext(ctx context.Context, us
 	if err != nil {
 		return nil, fmt.Errorf("parse canvas document: %w", err)
 	}
-	nodes := canvasIntelligenceNodes(canvas, document)
+	allNodes := canvasIntelligenceNodes(canvas, document)
+	nodes := boundedCanvasIntelligenceNodes(allNodes, focusNodeIDs)
+	originalNodes := make(map[string]model.CanvasNode, len(nodes))
+	for _, node := range allNodes {
+		originalNodes[node.ID] = node
+	}
 
 	// 2. 构建结构化快照
+	if len(focusNodeIDs) > piCanvasFocusNodes {
+		focusNodeIDs = focusNodeIDs[:piCanvasFocusNodes]
+	}
 	snapshot := ci.buildSnapshot(nodes, focusNodeIDs, canvasIntelligenceRelationships(document, nodes))
+	snapshot.TotalNodes = len(allNodes)
+	for _, views := range [][]EnhancedNodeView{snapshot.FocusNodes, snapshot.ContextNodes} {
+		for i := range views {
+			original := originalNodes[views[i].ID]
+			views[i].ContentLength = len(original.Content)
+			views[i].ContentHash = hashContentSHA256(original.Content)
+			views[i].HasFullContent = views[i].IsFocus && len(original.Content) <= piCanvasContentBytes
+			if !views[i].HasFullContent {
+				views[i].FullContent = ""
+			}
+		}
+	}
 
 	// 3. 生成智能洞察
 	intelligence := ci.generateIntelligence(nodes, snapshot)
@@ -319,13 +348,64 @@ func (ci *CanvasIntelligence) BuildEnhancedCanvasContext(ctx context.Context, us
 
 	return &EnhancedCanvasContext{
 		ID:            canvasID,
-		Name:          canvas.Title,
-		Description:   stringValue(document["description"]),
+		Name:          truncateCanvasIntelligenceText(canvas.Title, piCanvasContentBytes),
+		Description:   truncateCanvasIntelligenceText(stringValue(document["description"]), piCanvasContentBytes),
 		Snapshot:      snapshot,
 		Intelligence:  intelligence,
 		Capabilities:  capabilities,
 		RealtimeState: realtimeState,
 	}, nil
+}
+
+func truncateCanvasIntelligenceText(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	for limit > 0 && !utf8.RuneStart(value[limit]) {
+		limit--
+	}
+	return value[:limit]
+}
+
+func boundedCanvasIntelligenceNodes(all []model.CanvasNode, focusIDs []string) []model.CanvasNode {
+	byID := make(map[string]model.CanvasNode, len(all))
+	for _, node := range all {
+		byID[node.ID] = node
+	}
+	selected := make([]model.CanvasNode, 0, min(len(all), piCanvasContextNodes))
+	seen := make(map[string]bool, piCanvasContextNodes)
+	add := func(node model.CanvasNode) {
+		if node.ID == "" || seen[node.ID] || len(selected) >= piCanvasContextNodes {
+			return
+		}
+		seen[node.ID] = true
+		selected = append(selected, node)
+	}
+	for _, id := range focusIDs[:min(len(focusIDs), piCanvasFocusNodes)] {
+		if node, ok := byID[id]; ok {
+			add(node)
+		}
+	}
+	for _, node := range all {
+		add(node)
+		if len(selected) == piCanvasContextNodes {
+			break
+		}
+	}
+	for i := range selected {
+		selected[i].Content = truncateCanvasIntelligenceText(selected[i].Content, piCanvasContentBytes)
+		if metadata, err := json.Marshal(selected[i].Metadata); err != nil || len(metadata) > piCanvasContentBytes {
+			selected[i].Metadata = nil
+		}
+		children := make([]string, 0, min(len(selected[i].Children), piCanvasContextNodes))
+		for _, id := range selected[i].Children {
+			if seen[id] {
+				children = append(children, id)
+			}
+		}
+		selected[i].Children = children
+	}
+	return selected
 }
 
 // buildSnapshot 构建画布快照
@@ -355,6 +435,9 @@ func (ci *CanvasIntelligence) buildSnapshot(nodes []model.CanvasNode, focusNodeI
 	relationships := ci.buildRelationships(nodes)
 	if len(explicitRelationships) > 0 {
 		relationships = append(explicitRelationships[0], relationships...)
+	}
+	if len(relationships) > piCanvasRelationships {
+		relationships = relationships[:piCanvasRelationships]
 	}
 
 	// 分析布局
@@ -455,6 +538,9 @@ func canvasIntelligenceRelationships(document map[string]any, nodes []model.Canv
 	}
 	relationships := make([]RelationshipView, 0)
 	for _, edge := range creationMaps(document["connections"]) {
+		if len(relationships) >= piCanvasRelationships {
+			break
+		}
 		from, to := stringValue(edge["fromNodeId"]), stringValue(edge["toNodeId"])
 		if from == "" || to == "" || !known[from] || !known[to] {
 			continue
@@ -464,7 +550,7 @@ func canvasIntelligenceRelationships(document map[string]any, nodes []model.Canv
 			typeName = "flow"
 		}
 		relationships = append(relationships, RelationshipView{
-			From: from, To: to, Type: typeName, Strength: 1, Label: stringValue(edge["label"]),
+			From: from, To: to, Type: truncateCanvasIntelligenceText(typeName, 80), Strength: 1, Label: truncateCanvasIntelligenceText(stringValue(edge["label"]), piCanvasContentBytes),
 		})
 	}
 	return relationships
@@ -475,7 +561,7 @@ func (ci *CanvasIntelligence) buildEnhancedNodeView(node model.CanvasNode, isFoc
 	// 智能内容摘要
 	preview := node.Content
 	if len(preview) > 200 {
-		preview = preview[:200] + "..."
+		preview = truncateCanvasIntelligenceText(preview, 200) + "..."
 	}
 
 	// 提取关键词（简化实现）
@@ -511,7 +597,7 @@ func (ci *CanvasIntelligence) buildEnhancedNodeView(node model.CanvasNode, isFoc
 		Metadata:       node.Metadata,
 	}
 
-	if isFocus {
+	if view.HasFullContent {
 		view.FullContent = node.Content
 	}
 

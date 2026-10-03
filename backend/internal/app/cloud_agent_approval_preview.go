@@ -253,10 +253,12 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	if modelName != "" {
 		details = append(details, "模型："+truncateRunes(modelName, 120))
 	}
-	if len(args.ReferenceNodeIDs) > 0 {
+	if len(args.AttachmentResourceIDs) > 0 {
+		details = append(details, fmt.Sprintf("引用 %d 个上传素材", len(args.AttachmentResourceIDs)))
+	} else if len(args.ReferenceNodeIDs) > 0 {
 		details = append(details, fmt.Sprintf("引用 %d 个画布资产并建立连线", len(args.ReferenceNodeIDs)))
 	} else {
-		details = append(details, "不引用画布媒体资产")
+		details = append(details, "无参考素材")
 	}
 	if len(args.CharacterLabels) > 0 {
 		details = append(details, "使用角色卡："+truncateRunes(strings.Join(args.CharacterLabels, "、"), 200))

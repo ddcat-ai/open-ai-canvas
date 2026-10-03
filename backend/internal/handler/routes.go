@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/service"
@@ -45,9 +46,17 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		req.TraceID = TraceID(c)
 		req.RequestID = RequestID(c)
+		if key := strings.TrimSpace(c.GetHeader("X-Idempotency-Key")); key != "" {
+			req.IdempotencyKey = key
+		}
 		task, err := svc.CreateTask(user.ID, req)
 		if err != nil {
-			fail(c, http.StatusBadRequest, err)
+			var appErr *service.AppError
+			if errors.As(err, &appErr) {
+				failService(c, err)
+			} else {
+				fail(c, http.StatusBadRequest, err)
+			}
 			return
 		}
 		ok(c, task)

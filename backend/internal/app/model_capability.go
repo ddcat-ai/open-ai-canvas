@@ -81,17 +81,18 @@ type ParameterSupport struct {
 }
 
 type VideoCapabilityConfig struct {
-	References        VideoReferenceConfig `json:"references"`
-	Duration          VideoDurationConfig  `json:"duration"`
-	DurationSupported *bool                `json:"durationSupported,omitempty"`
-	Ratios            []string             `json:"ratios"`
-	DefaultRatio      string               `json:"defaultRatio"`
-	Resolutions       []string             `json:"resolutions"`
-	DefaultResolution string               `json:"defaultResolution"`
-	GenerateAudio     VideoBooleanConfig   `json:"generateAudio"`
-	Watermark         VideoBooleanConfig   `json:"watermark"`
-	Operations        []string             `json:"operations"`
-	DefaultOperation  string               `json:"defaultOperation"`
+	References           VideoReferenceConfig           `json:"references"`
+	Duration             VideoDurationConfig            `json:"duration"`
+	DurationByResolution map[string]VideoDurationConfig `json:"durationByResolution,omitempty"`
+	DurationSupported    *bool                          `json:"durationSupported,omitempty"`
+	Ratios               []string                       `json:"ratios"`
+	DefaultRatio         string                         `json:"defaultRatio"`
+	Resolutions          []string                       `json:"resolutions"`
+	DefaultResolution    string                         `json:"defaultResolution"`
+	GenerateAudio        VideoBooleanConfig             `json:"generateAudio"`
+	Watermark            VideoBooleanConfig             `json:"watermark"`
+	Operations           []string                       `json:"operations"`
+	DefaultOperation     string                         `json:"defaultOperation"`
 }
 
 type VideoReferenceConfig struct {
@@ -316,6 +317,23 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		} else {
 			spec.Options["videoSeconds"] = numericRange(float64(video.Duration.Min), float64(video.Duration.Max), float64(video.Duration.Step))
 		}
+		for resolution, duration := range video.DurationByResolution {
+			key := canonicalVideoResolutionKey(resolution) + "p"
+			if key == "p" {
+				continue
+			}
+			if duration.Selection == "enum" {
+				values := make([]any, 0, len(duration.Values))
+				for _, value := range duration.Values {
+					values = append(values, value)
+				}
+				spec.VideoDurationByResolution = ensureVideoDurationMap(spec.VideoDurationByResolution)
+				spec.VideoDurationByResolution[key] = OptionConstraint{Values: values}
+			} else {
+				spec.VideoDurationByResolution = ensureVideoDurationMap(spec.VideoDurationByResolution)
+				spec.VideoDurationByResolution[key] = numericRange(float64(duration.Min), float64(duration.Max), float64(duration.Step))
+			}
+		}
 		spec.Options["size"] = anyValues(video.Ratios)
 		if len(video.Resolutions) > 0 {
 			spec.Options["vquality"] = anyValues(video.Resolutions)
@@ -388,4 +406,11 @@ func addInputConstraint(inputs map[string]InputConstraint, name string, min int,
 		return
 	}
 	inputs[name] = InputConstraint{Min: min, Max: max}
+}
+
+func ensureVideoDurationMap(value map[string]OptionConstraint) map[string]OptionConstraint {
+	if value == nil {
+		return make(map[string]OptionConstraint)
+	}
+	return value
 }

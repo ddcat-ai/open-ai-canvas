@@ -73,6 +73,17 @@ export function CreativeProposalCard({ proposal, onApprove, onModify, onRedirect
         {(!archived || expanded) && <>
         <h3>{proposal.title}</h3>
         <p className="creative-agent-proposal-summary">{proposal.summary}</p>
+        {proposal.styleBible && <div className="creative-agent-style-lock" aria-label="批量图片风格锁定">
+            <div className="creative-agent-card-row"><strong>风格已锁定</strong><Tag>{proposal.styleBible.fingerprint}</Tag></div>
+            <p>{proposal.styleBible.summary}</p>
+            <div className="creative-agent-style-meta">
+                {proposal.styleBible.palette.length ? <span>色彩：{proposal.styleBible.palette.join("、")}</span> : null}
+                {proposal.styleBible.lighting ? <span>光线：{proposal.styleBible.lighting}</span> : null}
+                {proposal.styleBible.camera ? <span>镜头：{proposal.styleBible.camera}</span> : null}
+                {proposal.styleBible.anchorRef ? <span>锚点：{proposal.styleBible.anchorRef}</span> : null}
+            </div>
+            <small>本批图片共享同一风格指纹，先确认锚点图再批量生成。</small>
+        </div>}
         {proposal.deliverables.length > 0 && <ul className="creative-agent-deliverables">{proposal.deliverables.map((item, index) => <li key={index}><span>产物 {index + 1}</span><strong>{item}</strong></li>)}</ul>}
         {!archived && <Button className="creative-agent-detail-toggle" aria-expanded={expanded} aria-controls={detailId} onClick={() => setExpanded(!expanded)}>{expanded ? "收起完整方案" : "查看完整方案"}</Button>}
         {expanded && <div id={detailId} className="creative-agent-detail"><AIMessageMarkdown>{proposal.markdown}</AIMessageMarkdown></div>}

@@ -497,5 +497,5 @@ func randomNumericCode(length int) (string, error) {
 }
 
 func registrationEmailBody(brandName string, code string) string {
-	return "你正在注册" + brandName + "。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
+	return "你正在注册" + brandName + "。\n\n验证码：" + code + "\n\n若非本人操作，请忽略本邮件。\n\n本验证码有效期为 10 分钟。"
 }

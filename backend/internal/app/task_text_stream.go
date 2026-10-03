@@ -15,19 +15,20 @@ const (
 // is an observability and recovery enhancement: persistence failure must not turn
 // an otherwise successful model response into a failed generation task.
 type taskTextStreamPublisher struct {
-	service  *Service
-	userID   string
-	taskID   string
-	mu       sync.Mutex
-	buffer   strings.Builder
-	timer    *time.Timer
-	disabled bool
-	closed   bool
-	sink     func(string) error
+	service       *Service
+	userID        string
+	taskID        string
+	mu            sync.Mutex
+	buffer        strings.Builder
+	timer         *time.Timer
+	flushInterval time.Duration
+	disabled      bool
+	closed        bool
+	sink          func(string) error
 }
 
 func newTaskTextStreamPublisher(service *Service, userID string, taskID string) *taskTextStreamPublisher {
-	return &taskTextStreamPublisher{service: service, userID: userID, taskID: taskID}
+	return &taskTextStreamPublisher{service: service, userID: userID, taskID: taskID, flushInterval: taskTextStreamFlushInterval}
 }
 
 func (p *taskTextStreamPublisher) Publish(delta string) {
@@ -45,7 +46,7 @@ func (p *taskTextStreamPublisher) Publish(delta string) {
 		return
 	}
 	if p.timer == nil {
-		p.timer = time.AfterFunc(taskTextStreamFlushInterval, p.flush)
+		p.timer = time.AfterFunc(p.flushInterval, p.flush)
 	}
 }
 

@@ -16,3 +16,14 @@ test("create empty state keeps the banner and composer in document flow", () => 
     expect(layout).not.toContain("margin: auto auto 20px;");
     expect(layout).not.toContain("margin: 26px auto auto;");
 });
+
+test("create thread keeps the session composer visible beside long results", () => {
+    const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+    const composerStart = styles.indexOf(".creation-home .creation-thread-composer {");
+    const composerEnd = styles.indexOf("}", composerStart);
+    const composer = styles.slice(composerStart, composerEnd);
+
+    expect(composerStart).toBeGreaterThanOrEqual(0);
+    expect(composerEnd).toBeGreaterThan(composerStart);
+    expect(composer).toContain("flex: 0 0 auto;");
+});

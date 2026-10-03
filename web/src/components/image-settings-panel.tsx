@@ -15,6 +15,8 @@ const qualityOptions = [
     { value: "high", label: "高" },
     { value: "medium", label: "中" },
     { value: "low", label: "低" },
+    { value: "xhigh", label: "超高" },
+    { value: "max", label: "最高" },
     { value: "1k", label: "1K" },
     { value: "2k", label: "2K" },
     { value: "4k", label: "4K" },

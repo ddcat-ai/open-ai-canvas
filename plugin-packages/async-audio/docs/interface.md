@@ -304,6 +304,9 @@
           "messagePaths": [
             "error.message"
           ]
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       }
     ]

@@ -3,7 +3,7 @@ import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
-import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, resolveVideoResolutionValue, videoDurationConfigForResolution, videoDurationOptions } from "@/lib/model-capabilities";
 import { formatPriceRange, modelQuoteDescription, modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection } from "@/lib/model-pricing";
 import { compatibleModelInGroup, configuredModelDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { groupModelsForPicker, isDirectSystemModel, modelChannelLabel } from "@/lib/model-picker-groups";
@@ -311,10 +311,12 @@ export function ModelLabel({
     const logicalCost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
     const logicalSpec = logicalCost?.logicalCapabilitySpec;
     const videoProfile = capability === "video" ? modelCapabilityConfigFor(config, model).video : undefined;
+    const videoResolution = videoProfile ? resolveVideoResolutionValue(videoProfile, requirements?.vquality || String(requirements?.options?.vquality || requirements?.options?.resolution || config.vquality || "")) : "";
+    const videoResolutions = videoProfile?.durationByResolution ? [videoResolution] : videoProfile?.resolutions || [];
     const capabilitySummary =
         disabledReason ||
         logicalCost?.description?.trim() ||
-        (isDirectSystemModel(config, model) ? "" : logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? `${formatDurationSummary(videoProfile)} · ${videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
+        (isDirectSystemModel(config, model) ? "" : logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? `${formatDurationSummary(videoProfile, videoResolution)} · ${videoResolutions.map((item) => item.toUpperCase()).join("/")}` : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden py-0">
             <span className="grid size-6 shrink-0 place-items-center rounded-md" style={{ background: theme.toolbar.itemHover }}>
@@ -398,10 +400,11 @@ function publicScalarLabel(value: unknown) {
     return String(value);
 }
 
-function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>) {
-    const values = videoDurationOptions(profile);
-    if (profile.duration.selection === "enum") return values.map((item) => `${item}s`).join("/");
-    return `${profile.duration.min || values[0]}-${profile.duration.max || values[values.length - 1]}s`;
+function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, resolution: string) {
+    const duration = videoDurationConfigForResolution(profile, resolution);
+    const values = videoDurationOptions(profile, resolution);
+    if (duration.selection === "enum") return values.map((item) => `${item}s`).join("/");
+    return `${duration.min || values[0]}-${duration.max || values[values.length - 1]}s`;
 }
 
 type ModelMenuPrice = { kind: "tiers"; label: string; compactLabel: string; title: string } | { kind: "estimate"; label?: string; title?: string } | { kind: "fixed"; value: number; unit: "次" | "秒" };

@@ -5,6 +5,7 @@ import (
 	"log"
 	"log/slog"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -15,12 +16,21 @@ const resourceDeletionLease = 2 * time.Minute
 const incompleteResourceRetention = time.Hour
 const detachedReadyResourceRetention = 24 * time.Hour
 
+func automaticResourceCleanupEnabled() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_DISABLE_AUTOMATIC_RESOURCE_CLEANUP")))
+	return value != "1" && value != "true" && value != "yes" && value != "on"
+}
+
 func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 	s.runWorkerLoop(func(ctx context.Context) {
 		s.drainResourceDeletionJobs(32)
 		s.cleanupStaleAnnouncementImageDrafts()
 		s.cleanupExpiredArchivedAssets()
-		s.cleanupDetachedResources()
+		if automaticResourceCleanupEnabled() {
+			s.cleanupDetachedResources()
+		} else {
+			slog.Info("detached resource cleanup disabled", "env", "CANVAS_DISABLE_AUTOMATIC_RESOURCE_CLEANUP")
+		}
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		lastPeriodicCleanup := time.Now()
@@ -33,7 +43,9 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 				if time.Since(lastPeriodicCleanup) >= time.Hour {
 					s.cleanupStaleAnnouncementImageDrafts()
 					s.cleanupExpiredArchivedAssets()
-					s.cleanupDetachedResources()
+					if automaticResourceCleanupEnabled() {
+						s.cleanupDetachedResources()
+					}
 					lastPeriodicCleanup = time.Now()
 				}
 			}

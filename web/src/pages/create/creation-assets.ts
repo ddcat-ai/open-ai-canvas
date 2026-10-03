@@ -16,8 +16,9 @@ export type CreationDocumentAttachment = {
     bytes: number;
     previewUrl: string;
 };
-export type CreationAttachment = ((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment;
-export type CreationMode = "text" | "image" | "video";
+export type CreationAttachmentRole = "product" | "reference" | "competitor" | "style" | "source" | "person";
+export type CreationAttachment = (((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment) & { role?: CreationAttachmentRole };
+export type CreationMode = "agent" | "text" | "image" | "video";
 export type CreationAttachmentKind = "image" | "video" | "audio" | "file";
 
 const textDocumentExtensions = [".pdf", ".txt", ".md", ".csv", ".json", ".html", ".xml", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"];
@@ -30,14 +31,14 @@ export type CreationAssetIdentity = {
 
 export function creationUploadAccept(mode: CreationMode) {
     if (mode === "video") return "image/*,video/*,audio/*";
-    if (mode === "text") return `image/*,video/*,audio/*,${textDocumentExtensions.join(",")}`;
+    if (mode === "text" || mode === "agent") return `image/*,video/*,audio/*,${textDocumentExtensions.join(",")}`;
     return "image/*";
 }
 
 export function creationFileAccepted(mode: CreationMode, file: Pick<File, "type" | "name">) {
     if (file.type.startsWith("image/")) return true;
     if (mode === "video") return file.type.startsWith("video/") || file.type.startsWith("audio/");
-    if (mode !== "text") return false;
+    if (mode !== "text" && mode !== "agent") return false;
     const name = file.name.toLowerCase();
     return file.type.startsWith("video/") || file.type.startsWith("audio/") || file.type.startsWith("text/") || textDocumentExtensions.some((extension) => name.endsWith(extension));
 }

@@ -30,6 +30,11 @@ export type PriceTierFormValues = {
     costInputTokenPrice: number;
     costOutputTokenPrice: number;
     costCachedTokenPrice: number;
+    timePricingEnabled: boolean;
+    timePricing: {
+        timezone: string;
+        periods: Array<{ startTime: string; endTime: string; multiplier: number }>;
+    };
     priceConfigured: boolean;
     enabled: boolean;
 };
@@ -55,6 +60,8 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         costInputTokenPrice: 0,
         costOutputTokenPrice: 0,
         costCachedTokenPrice: 0,
+        timePricingEnabled: false,
+        timePricing: { timezone: "Asia/Shanghai", periods: [] },
         priceConfigured: true,
         enabled: true,
     };
@@ -62,14 +69,14 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
 
 export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
     const selector = tier.selector || {};
-    const hasSpecificMatch = [selector.operation, selector.quality, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
+    const hasSpecificMatch = [selector.operation, selector.quality, selector.size, selector.videoGenerateAudio].some((value) => value && value !== "*") || Boolean(Number(selector.imageCount || 0) > 0) || Boolean(Number(selector.videoSeconds || tier.videoSeconds || 0) > 0) || (tier.resolution && tier.resolution !== "*");
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
         quality: selector.quality || "*",
         size: selector.size || "*",
         resolution: tier.resolution || "*",
-        videoSeconds: tier.videoSeconds || 0,
+        videoSeconds: Number(selector.videoSeconds || tier.videoSeconds || 0),
         videoGenerateAudio: selector.videoGenerateAudio || "*",
         imageCount: Number(selector.imageCount || 0),
         providerModelKey: tier.providerModelKey || "",
@@ -83,6 +90,11 @@ export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValue
         costInputTokenPrice: (tier.costPricing?.inputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costOutputTokenPrice: (tier.costPricing?.outputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costCachedTokenPrice: (tier.costPricing?.cachedTokenPriceMicrocredits ?? 0) / 1_000_000,
+        timePricingEnabled: Boolean(tier.timePricing?.periods?.length),
+        timePricing: {
+            timezone: tier.timePricing?.timezone || "Asia/Shanghai",
+            periods: tier.timePricing?.periods?.map((period) => ({ ...period })) || [],
+        },
         priceConfigured: tier.priceConfigured,
         enabled: tier.enabled,
     };
@@ -109,6 +121,9 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
     if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
     if (capability === "video") {
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
+        if (tier.videoSeconds > 0) selector.videoSeconds = String(tier.videoSeconds);
+        if (tier.videoGenerateAudio && tier.videoGenerateAudio !== "*") selector.videoGenerateAudio = tier.videoGenerateAudio;
+        if (tier.imageCount > 0) selector.imageCount = String(tier.imageCount);
     }
     if (capability === "image") {
         if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
@@ -122,9 +137,7 @@ export function priceTierResolutionFromForm(capability: ModelCapabilityChoice, t
 }
 
 export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
-    void capability;
-    void tier;
-    return 0;
+    return capability === "video" && tier.matchMode === "advanced" ? Math.max(0, Math.floor(tier.videoSeconds || 0)) : 0;
 }
 
 export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string) {
@@ -139,6 +152,17 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
         inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.inputTokenPrice || 0) * 1_000_000),
         outputTokenPriceMicrocredits: Math.round((tier.outputTokenPrice || 0) * 1_000_000),
         cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cachedTokenPrice || 0) * 1_000_000),
+        timePricing:
+            tier.timePricingEnabled && tier.timePricing?.periods?.length
+                ? {
+                      timezone: tier.timePricing.timezone?.trim() || "Asia/Shanghai",
+                      periods: tier.timePricing.periods.map((period) => ({
+                          startTime: period.startTime,
+                          endTime: period.endTime,
+                          multiplier: period.multiplier,
+                      })),
+                  }
+                : undefined,
         costPricing: {
             configured: tier.costConfigured,
             unitPriceMicrocredits: Math.round(tier.costUnitPrice * 1_000_000),

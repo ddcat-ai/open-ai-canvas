@@ -49,6 +49,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     includeAssetLibrary?: boolean;
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
+    onPasteFiles?: (files: File[]) => void;
     autoLinkEnabled?: boolean;
 };
 
@@ -62,7 +63,7 @@ function shouldSubmitOnEnter(event: { key: string; ctrlKey: boolean; metaKey: bo
 }
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, onPasteFiles, autoLinkEnabled = false, ...props },
     forwardedRef,
 ) {
     const rawTheme = useActiveTheme();
@@ -384,6 +385,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onCompositionEnd?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+                        const clipboardImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+                        if (clipboardImages.length && onPasteFiles) {
+                            event.preventDefault();
+                            onPasteFiles(clipboardImages);
+                            return;
+                        }
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
@@ -526,6 +533,12 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                     composingRef.current = false;
                     syncMention(event.currentTarget.value, event.currentTarget.selectionStart);
                     props.onCompositionEnd?.(event);
+                }}
+                onPaste={(event) => {
+                    const clipboardImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+                    if (!clipboardImages.length || !onPasteFiles) return;
+                    event.preventDefault();
+                    onPasteFiles(clipboardImages);
                 }}
                 onSelect={(event) => {
                     const textarea = event.currentTarget;

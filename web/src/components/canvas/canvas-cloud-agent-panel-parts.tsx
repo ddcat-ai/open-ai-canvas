@@ -154,7 +154,7 @@ export function formatContextBytes(bytes: number | undefined) {
     return `${Math.round(bytes).toLocaleString("zh-CN")} 字节`;
 }
 
-export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
+export function AgentContextRing({ view, surface = "canvas", iconOnly = false }: { view: AgentContextUsageView; surface?: "canvas" | "creation"; iconOnly?: boolean }) {
     const [open, setOpen] = useState(false);
     const marker = view.compactRatio && view.compactRatio > 0 && view.compactRatio < 1 ? view.compactRatio : undefined;
     const percent = view.ratio === undefined ? view.label : `${Math.round(view.ratio * 100)}%`;
@@ -165,7 +165,7 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
     const protocolBytes = formatContextBytes(view.protocolBytes);
     const usedRatio = view.ratio === undefined ? 0 : Math.max(0, Math.min(1, view.ratio));
     const phaseLabel = CONTEXT_PHASE_LABEL[view.phase];
-    const sourceLabel = view.tokenSource === "provider" ? "模型实测校准" : view.estimate ? "本地估算" : "未测量";
+    const sourceLabel = view.tokenSource === "provider" ? "模型实测校准" : view.tokenSource === "estimate" ? "运行时估算" : "未测量";
     const usageHeading = view.ratio !== undefined ? `上下文已用 ${percent}` : view.phase === "idle" ? "上下文用量" : view.phase === "unknown" ? "上下文窗口未知" : `上下文${view.label}`;
 
     return (
@@ -174,9 +174,10 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
             onOpenChange={setOpen}
             trigger="click"
             placement="bottomRight"
+            align={{ overflow: { adjustX: true, adjustY: true, shiftX: true } }}
             arrow={false}
-            overlayClassName="agent-context-popover"
-            getPopupContainer={(trigger) => trigger.closest<HTMLElement>(".canvas-agent-panel") ?? document.body}
+            overlayClassName={`agent-context-popover${surface === "creation" ? " is-creation" : ""}`}
+            getPopupContainer={(trigger) => surface === "canvas" ? trigger.closest<HTMLElement>(".canvas-agent-panel") ?? document.body : document.body}
             content={
                 <div className="agent-context-panel" data-phase={view.phase}>
                     <span className="agent-context-eyebrow">下一次请求 · 上下文窗口占用</span>
@@ -243,7 +244,7 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
                 </div>
             }
         >
-            <button type="button" className={`agent-context-ring is-${view.phase}`} aria-label={`${usageHeading}，${phaseLabel}。点击查看明细`} aria-expanded={open} title="查看上下文用量" onPointerDown={(event) => event.stopPropagation()}>
+            <button type="button" className={`agent-context-ring is-${view.phase}${iconOnly ? " is-icon-only" : ""}`} aria-label={`${usageHeading}，${phaseLabel}。点击查看明细`} aria-expanded={open} title="查看上下文用量" onPointerDown={(event) => event.stopPropagation()}>
                 <span
                     className="agent-context-ring-visual"
                     aria-hidden="true"
@@ -256,10 +257,10 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
                 >
                     {marker ? <span className="agent-context-ring-marker" /> : null}
                 </span>
-                <span className="agent-context-meter-copy">
+                {!iconOnly ? <span className="agent-context-meter-copy">
                     <strong>{meterLabel}</strong>
                     <small>上下文</small>
-                </span>
+                </span> : null}
             </button>
         </Popover>
     );
@@ -466,8 +467,6 @@ export function ComposerControls({
     onSkillsOpenChange: (open: boolean) => void;
     selectedSkillCount: number;
 }) {
-    const permissionVisual = agentPermissionVisual(permissionMode);
-    const PermissionIcon = permissionVisual.icon;
     return (
         <div className="agent-composer-selection flex min-w-0 flex-1 flex-nowrap items-center gap-0.5">
             <ModelPicker
@@ -483,17 +482,7 @@ export function ComposerControls({
                 showOptionPrices
                 placeholder="选择文本模型"
             />
-            <Dropdown trigger={["click"]} placement="topLeft" menu={{ items: agentPermissionMenuItems(permissionMode, onPermissionChange) }}>
-                <button
-                    type="button"
-                    className="grid size-8 shrink-0 place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
-                    style={{ color: theme.node.muted, background: "transparent" }}
-                    aria-label={`执行权限：${agentPermissionLabel(permissionMode)}，点击切换`}
-                    title={`执行权限：${agentPermissionLabel(permissionMode)}，点击切换`}
-                >
-                    <PermissionIcon className="size-3.5" style={{ color: permissionVisual.color }} aria-hidden="true" />
-                </button>
-            </Dropdown>
+            <AgentPermissionControl mode={permissionMode} onChange={onPermissionChange} mutedColor={theme.node.muted} />
             <button
                 type="button"
                 className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
@@ -509,6 +498,16 @@ export function ComposerControls({
             </button>
         </div>
     );
+}
+
+export function AgentPermissionControl({ mode, onChange, mutedColor }: { mode: AgentPermissionMode; onChange: (mode: AgentPermissionMode) => void; mutedColor?: string }) {
+    const visual = agentPermissionVisual(mode);
+    const Icon = visual.icon;
+    return <Dropdown trigger={["click"]} placement="topLeft" menu={{ items: agentPermissionMenuItems(mode, onChange) }}>
+        <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25" style={{ color: mutedColor || "var(--user-ink-muted)", background: "transparent" }} aria-label={`执行权限：${agentPermissionLabel(mode)}，点击切换`} title={`执行权限：${agentPermissionLabel(mode)}，点击切换`}>
+            <Icon className="size-3.5" style={{ color: visual.color }} aria-hidden="true" />
+        </button>
+    </Dropdown>;
 }
 
 export function ApprovalCard({

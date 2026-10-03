@@ -193,7 +193,7 @@ func (s *Service) StartVerification(ctx context.Context, actor *model.User, req 
 			return nil, err
 		}
 		setting = resolveEmailSender(setting, s.host.BrandName())
-		if err := s.deliverEmail(setting, email, setting.FromName+"身份验证码", fmt.Sprintf("您的验证码是：%s\n10 分钟内有效，仅用于本次身份验证。请勿向他人透露验证码。", emailCode)); err != nil {
+		if err := s.deliverEmail(setting, email, setting.FromName+"身份验证码", fmt.Sprintf("您的验证码是：%s\n\n仅用于本次身份验证。请勿向他人透露验证码。\n\n本验证码有效期为 10 分钟。", emailCode)); err != nil {
 			return nil, kernel.NewAppError(503, "邮件发送失败，请稍后重试")
 		}
 	}

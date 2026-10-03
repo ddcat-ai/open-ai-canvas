@@ -41,17 +41,18 @@ type ChannelModelPriceTierRequest struct {
 	CostPricing model.CreditCostPricing `json:"costPricing"`
 	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount、videoGenerateAudio；
 	// operation 可区分文生/图生/视频生，避免同一分辨率下错误复用价格。
-	Selector                     map[string]string `json:"selector"`
-	Resolution                   string            `json:"resolution"`
-	VideoSeconds                 int               `json:"videoSeconds"`
-	ProviderModelKey             string            `json:"providerModelKey"`
-	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
-	PriceConfigured              bool              `json:"priceConfigured"`
-	Enabled                      *bool             `json:"enabled"`
+	Selector                     map[string]string         `json:"selector"`
+	Resolution                   string                    `json:"resolution"`
+	VideoSeconds                 int                       `json:"videoSeconds"`
+	ProviderModelKey             string                    `json:"providerModelKey"`
+	BillingMode                  string                    `json:"billingMode"`
+	UnitPriceMicrocredits        int64                     `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                     `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                     `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                     `json:"cachedTokenPriceMicrocredits"`
+	TimePricing                  *model.ChannelTimePricing `json:"timePricing"`
+	PriceConfigured              bool                      `json:"priceConfigured"`
+	Enabled                      *bool                     `json:"enabled"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。

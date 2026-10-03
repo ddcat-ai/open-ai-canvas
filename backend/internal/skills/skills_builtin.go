@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -41,37 +43,50 @@ type builtinSkillPackage struct {
 	archive skillPackageArchive
 }
 
-// EnsureBuiltinSkills syncs embedded Markdown packages to the catalog and version tables.
-// User relationships remain in their own table and are not changed by catalog updates.
+// EnsureBuiltinSkills initializes only IDs not already present in the catalog.
 func (s *Service) EnsureBuiltinSkills() error {
 	packages, err := loadBuiltinSkillPackages(s.repo)
 	if err != nil {
 		return err
 	}
 	if len(packages) == 0 {
-		return fmt.Errorf("内置技能目录为空")
+		entries, err := builtinSkillFiles.ReadDir(".")
+		if err != nil || len(entries) == 0 {
+			return fmt.Errorf("内置技能目录为空: %v", err)
+		}
+		return nil
 	}
 	if s.repo == nil {
 		return nil
 	}
 
-	rows := make([]model.Skill, 0, len(packages))
 	for _, item := range packages {
-		rows = append(rows, item.skill)
-	}
-	if err := s.repo.UpsertBuiltinSkills(rows); err != nil {
-		return fmt.Errorf("同步内置技能目录失败: %w", err)
-	}
-	for _, item := range packages {
-		current, err := s.repo.Skill(item.skill.ID)
+		exists, err := s.repo.BuiltinSkillExists(item.skill.ID)
 		if err != nil {
-			return fmt.Errorf("读取内置技能 %s 同步结果失败: %w", item.skill.ID, err)
+			return fmt.Errorf("检查内置技能 %s 记录失败: %w", item.skill.ID, err)
 		}
-		if current.ContentHash == item.archive.ContentHash && current.CurrentVersionID != "" {
+		if exists {
 			continue
 		}
-		if err := s.addSkillArchiveVersion(current, item.archive, "builtin", "", "", "", "", false); err != nil {
-			return fmt.Errorf("同步内置技能 %s 文件包失败: %w", item.skill.ID, err)
+		versionID := kernel.NewID()
+		packageKey, version, files, err := s.persistSkillArchive(item.skill.ID, versionID, item.archive, "")
+		if err != nil {
+			return fmt.Errorf("创建内置技能 %s 文件包失败: %w", item.skill.ID, err)
+		}
+		version.VersionLabel = item.archive.Metadata.Version
+		skill := item.skill
+		skill.CurrentVersionID = versionID
+		skill.VersionLabel = version.VersionLabel
+		skill.ContentHash = item.archive.ContentHash
+		skill.FileCount = len(files)
+		skill.TotalBytes = item.archive.TotalBytes
+		skill.SyncStatus = "synced"
+		inserted, err := s.repo.InsertBuiltinSkillWithPackage(&skill, version, files)
+		if !inserted {
+			_ = os.Remove(filepath.Join(s.dataDir, "skill-packages", filepath.FromSlash(packageKey)))
+		}
+		if err != nil {
+			return fmt.Errorf("登记内置技能 %s 文件包失败: %w", item.skill.ID, err)
 		}
 	}
 	return nil

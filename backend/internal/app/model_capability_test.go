@@ -126,10 +126,11 @@ func TestValidateImageTaskEnforcesGPTImage2CustomSizeLimits(t *testing.T) {
 
 func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T) {
 	tests := map[string][]string{
-		"newapi-channel-2":        {"480p", "720p", "1080p", "1440p", "2160p"},
+		"newapi-channel-2":        {"480p", "720p", "768p", "1080p", "1440p", "2160p"},
 		"volcengine-ark-video":    {"480p", "720p", "1080p"},
 		"volcengine-jimeng-video": {"720p"},
 		"gemini-veo":              {"720p", "1080p"},
+		"grsai-minimax-h3":        {"480p", "768p", "1080p"},
 	}
 	for protocol, want := range tests {
 		t.Run(protocol, func(t *testing.T) {
@@ -141,6 +142,55 @@ func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T)
 				t.Fatalf("resolutions = %v, want %v", profile.Video.Resolutions, want)
 			}
 		})
+	}
+}
+
+func TestVideoDurationByResolution(t *testing.T) {
+	profile := &VideoCapabilityConfig{
+		References: VideoReferenceConfig{PromptMaxChars: 8000},
+		Duration:   VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
+		DurationByResolution: map[string]VideoDurationConfig{
+			"1080": {Selection: "range", Min: 1, Max: 10, Step: 1, Default: 6},
+		},
+		Ratios: []string{"16:9"}, DefaultRatio: "16:9",
+		Resolutions: []string{"720p", "1080p"}, DefaultResolution: "720p",
+		Operations: []string{"text_to_video"}, DefaultOperation: "text_to_video",
+	}
+	if err := validateVideoCapabilityConfig(profile); err != nil {
+		t.Fatalf("validateVideoCapabilityConfig() error = %v", err)
+	}
+	base := canvasGenerationInput{Mode: "video", Config: providerConfig{VideoSeconds: "15", VQuality: "720p", Size: "16:9"}}
+	if err := validateVideoTask(profile, base); err != nil {
+		t.Fatalf("720p 15 seconds rejected: %v", err)
+	}
+	limited := base
+	limited.Config.VQuality = "1080p"
+	if err := validateVideoTask(profile, limited); err == nil {
+		t.Fatal("1080p 15 seconds should be rejected")
+	}
+	limited.Config.VideoSeconds = "10"
+	if err := validateVideoTask(profile, limited); err != nil {
+		t.Fatalf("1080p 10 seconds rejected: %v", err)
+	}
+}
+
+func TestGlobalCapabilityDefaultsIncludeStandardVideoAndImageTiers(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("", "")
+	if profile == nil || profile.Video == nil || profile.Image == nil {
+		t.Fatal("global capability profile is incomplete")
+	}
+	if fmt.Sprint(profile.Video.Resolutions) != fmt.Sprint([]string{"480p", "720p", "768p", "1080p", "1440p", "2160p"}) {
+		t.Fatalf("global video resolutions = %v", profile.Video.Resolutions)
+	}
+	if fmt.Sprint(profile.Image.Quality.Values) != fmt.Sprint([]string{"auto", "low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("global image quality = %v", profile.Image.Quality.Values)
+	}
+}
+
+func TestGrsaiImageCapabilityAdvertisesQualityTiers(t *testing.T) {
+	profile := DefaultImageCapabilityConfig("grsai-gpt-image", "gpt-image-2.5")
+	if !profile.Quality.Supported || fmt.Sprint(profile.Quality.Values) != fmt.Sprint([]string{"auto", "low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("Grsai GPT image quality = %#v", profile.Quality)
 	}
 }
 

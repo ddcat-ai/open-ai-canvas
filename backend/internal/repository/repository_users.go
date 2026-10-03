@@ -10,8 +10,33 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"infinite-canvas/backend/internal/model"
 )
+
+// lockOwnedWriteUser keeps a user-owned insert and permanent deletion in one
+// serialization order. SQLite must take its write lock before any read.
+func lockOwnedWriteUser(tx *gorm.DB, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return gorm.ErrRecordNotFound
+	}
+	if tx.Dialector.Name() == "sqlite" {
+		result := tx.Exec("UPDATE users SET updated_at = updated_at WHERE id = ?", userID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	}
+	var user model.User
+	query := tx.Select("id").Where("id = ?", userID)
+	if tx.Dialector.Name() == "postgres" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	return query.First(&user).Error
+}
 
 func (r *Repository) UserCount() (int64, error) {
 	var count int64

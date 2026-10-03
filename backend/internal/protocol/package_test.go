@@ -69,6 +69,22 @@ func TestParsePluginPackageAcceptsTaggedRPCBackend(t *testing.T) {
 	}
 }
 
+func TestParsePluginPackageAcceptsFixtures(t *testing.T) {
+	manifest := []byte(`{
+        "apiVersion":"yingce.plugin/v1",
+        "id":"contract-plugin",
+        "name":"Contract Plugin",
+        "version":"1.0.0",
+        "contributes":{"providers":[{"id":"contract-plugin","label":"Contract Plugin","capabilities":["image"],"scopes":["canvas"],"create":{"method":"POST","path":"/generate"}}]}
+    }`)
+	if _, err := ParsePluginPackage(zipPluginPackage(t, map[string][]byte{
+		"manifest.json":          manifest,
+		"fixtures/contract.json": []byte(`{"status":"queued"}`),
+	})); err != nil {
+		t.Fatalf("fixture package rejected: %v", err)
+	}
+}
+
 // InspectPluginPackage 只解压清单：结构校验与 ParsePluginPackage 相同（路径白名单、运行时入口），
 // 但返回值不携带文件内容，调用方无法把「只校验过结构」的可执行文件写盘。
 func TestInspectPluginPackageValidatesStructureWithoutContents(t *testing.T) {

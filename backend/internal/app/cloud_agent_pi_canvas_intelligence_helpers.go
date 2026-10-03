@@ -63,12 +63,21 @@ func (ci *CanvasIntelligence) isSpatiallyNear(node1, node2 model.CanvasNode) boo
 func (ci *CanvasIntelligence) buildRelationships(nodes []model.CanvasNode) []RelationshipView {
 	relationships := make([]RelationshipView, 0)
 	nodeMap := make(map[string]model.CanvasNode)
+	keywords := make(map[string]map[string]bool, len(nodes))
 
 	for _, node := range nodes {
 		nodeMap[node.ID] = node
+		set := make(map[string]bool)
+		for _, word := range ci.extractKeywords(node.Content) {
+			set[word] = true
+		}
+		keywords[node.ID] = set
 	}
 
 	for _, node := range nodes {
+		if len(relationships) >= piCanvasRelationships {
+			break
+		}
 		// 父子关系
 		if node.ParentID != nil {
 			relationships = append(relationships, RelationshipView{
@@ -83,6 +92,9 @@ func (ci *CanvasIntelligence) buildRelationships(nodes []model.CanvasNode) []Rel
 		// 引用关系（从内容中提取）
 		refs := ci.extractReferences(node.Content)
 		for _, refID := range refs {
+			if len(relationships) >= piCanvasRelationships {
+				break
+			}
 			if _, exists := nodeMap[refID]; exists {
 				relationships = append(relationships, RelationshipView{
 					From:        node.ID,
@@ -96,7 +108,10 @@ func (ci *CanvasIntelligence) buildRelationships(nodes []model.CanvasNode) []Rel
 
 		// 语义相似关系（简化实现）
 		for _, other := range nodes {
-			if node.ID != other.ID && ci.areSemanticallyRelated(node, other) {
+			if len(relationships) >= piCanvasRelationships {
+				break
+			}
+			if node.ID != other.ID && commonCanvasKeywords(keywords[node.ID], keywords[other.ID]) >= 2 {
 				relationships = append(relationships, RelationshipView{
 					From:        node.ID,
 					To:          other.ID,
@@ -109,6 +124,19 @@ func (ci *CanvasIntelligence) buildRelationships(nodes []model.CanvasNode) []Rel
 	}
 
 	return relationships
+}
+
+func commonCanvasKeywords(a, b map[string]bool) int {
+	common := 0
+	for word := range a {
+		if b[word] {
+			common++
+			if common == 2 {
+				return common
+			}
+		}
+	}
+	return common
 }
 
 // extractReferences 从内容中提取引用（简化实现：查找 [[nodeId]] 模式）

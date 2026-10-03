@@ -6,6 +6,15 @@ import { useContext } from "react";
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
 import { assetGridCardMinWidth, assetGridDensityOptions, parseAssetGridDensity } from "@/pages/assets/asset-grid-density";
+import { Select as UnifiedSelect } from "@/components/ui/base/select/select";
+
+test("unified select keeps standard and alias accessibility labels", () => {
+    const options = [{ value: "one", label: "选项" }];
+    const standard = renderToStaticMarkup(<UnifiedSelect aria-label="标准标签" value="one" options={options} />);
+    const alias = renderToStaticMarkup(<UnifiedSelect ariaLabel="别名标签" value="one" options={options} />);
+    expect(standard).toContain('aria-label="标准标签"');
+    expect(alias).toContain('aria-label="别名标签"');
+});
 
 test("density restores all saved choices and defaults invalid preferences to standard", () => {
     for (const value of [6, 8, 10] as const) {

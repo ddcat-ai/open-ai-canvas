@@ -95,9 +95,9 @@ describe("pricing write validation", () => {
         video.priceTiers[0].outputTokenPrice = 0.000001;
         expect(() => validateChannelModelPrices(video)).not.toThrow();
     });
-    test("rejects removed video conditions and accepts visible operation or resolution matches", () => {
-        for (const hiddenCondition of [{ videoGenerateAudio: "false" }, { videoSeconds: 5 }, { imageCount: 2 }]) {
-            expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", ...hiddenCondition }] })).toThrow("匹配条件");
+    test("accepts video condition selectors for duration, audio, and reference count", () => {
+        for (const condition of [{ videoGenerateAudio: "false" }, { videoSeconds: 5 }, { imageCount: 2 }]) {
+            expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), billingMode: "token", ...condition }] })).not.toThrow();
         }
         expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), operation: "image_to_video" }] })).not.toThrow();
         expect(() => validateChannelModelPrices({ ...draft, capability: "video", protocol: "volcengine-ark-video", priceTiers: [{ ...defaultPriceTier("advanced"), resolution: "1080p" }] })).not.toThrow();

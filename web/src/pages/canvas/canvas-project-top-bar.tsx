@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Moon, Pencil, Plus, Redo2, Save, Search, Share2, Sun, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Tooltip } from "antd";
 
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
@@ -44,6 +44,7 @@ type CanvasTopBarProps = {
     onOpenSearch: () => void;
     projectContext?: CanvasContextSummary & { projectId: string; projectName: string };
     onEnterFocusMode: () => void;
+    onToggleTheme: () => void;
     shortDramaGuide?: { progress: CanvasShortDramaProgress; collapsed: boolean; onToggle: () => void };
 };
 
@@ -76,9 +77,11 @@ export function CanvasTopBar({
     onOpenSearch,
     projectContext,
     onEnterFocusMode,
+    onToggleTheme,
     shortDramaGuide,
 }: CanvasTopBarProps) {
-    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
+    const colorTheme = useCanvasThemeStore((state) => state.theme);
+    const theme = canvasThemes[colorTheme];
     const dockStyle = canvasDockStyle(theme, theme.node.text);
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
@@ -218,9 +221,13 @@ export function CanvasTopBar({
                                 ],
                             }}
                         >
-                            <Button type="text" className="canvas-topbar-action canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布">
-                                <span className="hidden lg:inline">导入第三方画布</span>
-                            </Button>
+                            <Button
+                                type="text"
+                                className="canvas-topbar-action canvas-topbar-import-button !h-10 !w-10 !min-w-10 !rounded-xl !p-0"
+                                style={{ color: theme.node.text }}
+                                icon={<CloudDownload className="size-4" />}
+                                aria-label="导入第三方画布"
+                            />
                         </Dropdown>
                     </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="媒体性能模式">
@@ -240,17 +247,27 @@ export function CanvasTopBar({
                             <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" />
                         </Dropdown>
                     </CanvasTopBarTooltip>
+                    <CanvasTopBarTooltip label={colorTheme === "dark" ? "切换到浅色主题" : "切换到深色主题"}>
+                        <Button
+                            type="text"
+                            className="canvas-topbar-action canvas-topbar-theme-button !h-10 !w-10 !min-w-10 !rounded-xl !p-0"
+                            style={{ color: theme.node.text }}
+                            icon={colorTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                            onClick={onToggleTheme}
+                            aria-label={colorTheme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
+                            aria-pressed={colorTheme === "dark"}
+                        />
+                    </CanvasTopBarTooltip>
                     {user && creditsEnabled ? (
                         <CanvasTopBarTooltip label="打开积分中心">
                             <button
                                 type="button"
-                                className="canvas-topbar-action inline-flex h-9 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium tabular-nums"
+                                className="canvas-topbar-action canvas-topbar-credits-button inline-flex !h-10 !w-10 !min-w-10 items-center justify-center !rounded-xl !p-0"
                                 style={{ color: theme.node.text }}
                                 aria-label="打开积分中心"
                                 onClick={() => openWorkspaceWallet()}
                             >
                                 {refreshing && availableMicrocredits === null ? <LoaderCircle className="size-3.5 animate-spin opacity-60" style={{ color: theme.accent.primary }} /> : <WorkspaceCreditGiftMark className="is-compact" />}
-                                <span>{availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}</span>
                             </button>
                         </CanvasTopBarTooltip>
                     ) : null}
@@ -261,29 +278,25 @@ export function CanvasTopBar({
                         <CanvasTopBarTooltip label={shortDramaGuide.collapsed ? "展开短剧流程" : "收起短剧流程"}>
                             <Button
                                 type="text"
-                                className="canvas-topbar-action !h-10 !rounded-xl !px-2.5 !font-medium"
+                                className="canvas-topbar-action canvas-topbar-short-drama-button !h-10 !w-10 !min-w-10 !rounded-xl !p-0"
                                 style={{ color: theme.node.text, background: shortDramaGuide.collapsed ? undefined : theme.toolbar.activeBg }}
                                 icon={<Clapperboard className="size-4" />}
                                 onClick={handleShortDramaGuideToggle}
-                                aria-label="短剧流程"
+                                aria-label={`短剧流程 ${shortDramaGuide.progress.completedCount}/5`}
                                 aria-pressed={!shortDramaGuide.collapsed}
-                            >
-                                <span className="tabular-nums">{shortDramaGuide.progress.completedCount}/5</span>
-                            </Button>
+                            />
                         </CanvasTopBarTooltip>
                     ) : null}
                     <CanvasTopBarTooltip label="版本记录与本地草稿">
                         <Button
                             type="text"
-                            className="canvas-topbar-action canvas-topbar-version-button !h-10 !rounded-xl !px-2.5 !font-medium"
+                            className="canvas-topbar-action canvas-topbar-version-button !h-10 !w-10 !min-w-10 !rounded-xl !p-0"
                             style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.activeBg : undefined }}
                             icon={<History className="size-4" />}
                             aria-label="版本记录"
                             aria-pressed={versionsOpen}
                             onClick={onToggleVersions}
-                        >
-                            版本
-                        </Button>
+                        />
                     </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="分享画布">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" />

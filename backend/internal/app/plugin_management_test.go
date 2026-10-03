@@ -104,6 +104,13 @@ func TestEditorShellIsUserToggleableApplication(t *testing.T) {
 	}
 }
 
+func TestIgoStudioIsUserToggleableOfficialApplication(t *testing.T) {
+	policy := pluginManagement(PluginIgoStudio, PluginOriginOfficial)
+	if policy.Origin != PluginOriginOfficial || policy.Kind != PluginKindApplication || policy.ActivationScope != PluginScopeUser || policy.ConfigurationScope != PluginConfigurationNone {
+		t.Fatalf("影策 policy = %#v", policy)
+	}
+}
+
 func TestEditorShellReportsPlatformAvailableWithoutPlatformState(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

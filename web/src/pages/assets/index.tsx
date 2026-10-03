@@ -123,7 +123,6 @@ export default function AssetsPage() {
     const activeAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status !== "archived"), [allLibraryAssets]);
     const trashAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status === "archived"), [allLibraryAssets]);
     const validAssets = viewMode === "trash" ? trashAssets : activeAssets;
-    const selectedAssets = useMemo(() => validAssets.filter((asset) => selectedIds.includes(asset.id)), [selectedIds, validAssets]);
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
         return validAssets.filter((asset) => {
@@ -183,9 +182,8 @@ export default function AssetsPage() {
     }, [gridDensity]);
 
     useEffect(() => {
-        const existingIds = new Set(validAssets.map((asset) => asset.id));
-        setSelectedIds((current) => current.filter((id) => existingIds.has(id)));
-    }, [validAssets]);
+        setSelectedIds([]);
+    }, [userId]);
 
     const folderSelectOptions = useMemo(() => [
         { label: "未分类", value: "" },
@@ -240,8 +238,8 @@ export default function AssetsPage() {
             await moveRemoteAssetsToFolder(assetIds, folderId);
             assetIds.forEach((id) => updateAsset(id, { folderId: folderId || undefined }));
             await flushAssetStorePersistence();
-            setSelectedIds([]);
             await invalidateAssetLibrary();
+            setSelectedIds([]);
             message.success(`已移动 ${assetIds.length} 个素材`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "移动素材失败");
@@ -462,9 +460,9 @@ export default function AssetsPage() {
             await ensureAssetsInStore(selectedIds);
             for (const id of selectedIds) updateAsset(id, { status: "confirmed" });
             const count = selectedIds.length;
-            setSelectedIds([]);
             await flushAssetStorePersistence();
             await saveRemoteUserDataNow();
+            setSelectedIds([]);
             message.success(`已还原 ${count} 个素材`);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("已在本地还原", error));
@@ -489,9 +487,9 @@ export default function AssetsPage() {
             await ensureAssetsInStore(selectedIds);
             for (const id of selectedIds) updateAsset(id, { status: "archived" });
             const count = selectedIds.length;
-            setSelectedIds([]);
             await flushAssetStorePersistence();
             await saveRemoteUserDataNow();
+            setSelectedIds([]);
             message.success(`已将 ${count} 个素材移入回收站`);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("已移入回收站", error));
@@ -522,15 +520,25 @@ export default function AssetsPage() {
     };
 
     const exportSelectedAssets = async () => {
-        if (!selectedAssets.length) return;
-        await exportAssets(selectedAssets);
+        if (!selectedIds.length) return;
+        try {
+            await ensureAssetsInStore(selectedIds);
+            const selected = selectedIds.flatMap((id) => {
+                const asset = useAssetStore.getState().assets.find((item) => item.id === id);
+                return asset ? [asset] : [];
+            });
+            if (selected.length !== selectedIds.length) throw new Error("部分素材不存在或无权访问，请重新选择素材");
+            await exportAssets(selected);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导出素材失败");
+        }
     };
 
     const confirmBatchDelete = async () => {
-        if (!selectedAssets.length) return;
+        if (!selectedIds.length) return;
         try {
-            await deleteAssetsWithRemoteSync(selectedAssets.map((asset) => asset.id));
-            message.success(`已彻底删除 ${selectedAssets.length} 个素材`);
+            await deleteAssetsWithRemoteSync(selectedIds);
+            message.success(`已彻底删除 ${selectedIds.length} 个素材`);
             setSelectedIds([]);
             setBatchDeleteOpen(false);
         } catch (error) {
@@ -714,9 +722,9 @@ export default function AssetsPage() {
                                     </div>
                                 </div>
                             ) : null}
-                            {selectedAssets.length ? (
+                            {selectedIds.length ? (
                                 <AssetsBatchBar
-                                    count={selectedAssets.length}
+                                    count={selectedIds.length}
                                     isTrash={viewMode === "trash"}
                                     allSelected={allFilteredSelected}
                                     onSelectAll={() => setSelectedIds((current) => Array.from(new Set([...current, ...visibleAssetIds])))}
@@ -727,7 +735,7 @@ export default function AssetsPage() {
                                     onDelete={() => setBatchDeleteOpen(true)}
                                 />
                             ) : null}
-                            {validAssets.length === 0 && totalAssets === 0 ? (
+                            {totalAssets === 0 ? (
                                 viewMode === "trash" ? (
                                     <WorkspaceState icon="assets" compact title="回收站是空的" description="删除画布或手动移入回收站的素材会暂存到这里，可在需要时随时还原。" />
                                 ) : (
@@ -983,7 +991,7 @@ export default function AssetsPage() {
                 okText="移入回收站"
                 cancelText="取消"
             >
-                确定将已选择的 {selectedAssets.length} 个素材移入回收站吗？移入后可随时在回收站批量还原。
+                确定将已选择的 {selectedIds.length} 个素材移入回收站吗？移入后可随时在回收站批量还原。
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
@@ -1007,7 +1015,7 @@ export default function AssetsPage() {
                 okButtonProps={{ danger: true }}
                 cancelText="取消"
             >
-                确定彻底删除已选择的 {selectedAssets.length} 个素材吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
+                确定彻底删除已选择的 {selectedIds.length} 个素材吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
             </Modal>
         </>
     );

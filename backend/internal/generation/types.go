@@ -208,17 +208,18 @@ type ParameterSupport struct {
 }
 
 type VideoCapabilityConfig struct {
-	References        VideoReferenceConfig `json:"references"`
-	Duration          VideoDurationConfig  `json:"duration"`
-	DurationSupported *bool                `json:"durationSupported,omitempty"`
-	Ratios            []string             `json:"ratios"`
-	DefaultRatio      string               `json:"defaultRatio"`
-	Resolutions       []string             `json:"resolutions"`
-	DefaultResolution string               `json:"defaultResolution"`
-	GenerateAudio     VideoBooleanConfig   `json:"generateAudio"`
-	Watermark         VideoBooleanConfig   `json:"watermark"`
-	Operations        []string             `json:"operations"`
-	DefaultOperation  string               `json:"defaultOperation"`
+	References           VideoReferenceConfig           `json:"references"`
+	Duration             VideoDurationConfig            `json:"duration"`
+	DurationByResolution map[string]VideoDurationConfig `json:"durationByResolution,omitempty"`
+	DurationSupported    *bool                          `json:"durationSupported,omitempty"`
+	Ratios               []string                       `json:"ratios"`
+	DefaultRatio         string                         `json:"defaultRatio"`
+	Resolutions          []string                       `json:"resolutions"`
+	DefaultResolution    string                         `json:"defaultResolution"`
+	GenerateAudio        VideoBooleanConfig             `json:"generateAudio"`
+	Watermark            VideoBooleanConfig             `json:"watermark"`
+	Operations           []string                       `json:"operations"`
+	DefaultOperation     string                         `json:"defaultOperation"`
 }
 
 type VideoReferenceConfig struct {

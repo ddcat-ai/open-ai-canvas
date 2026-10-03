@@ -159,6 +159,36 @@ func normalizeVideoSize(value string) string {
 	return "1280x720"
 }
 
+func normalizeGrsaiMiniMaxH3AspectRatio(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(value, "×", "x")))
+	switch normalized {
+	case "portrait", "landscape", "square":
+		return normalized
+	case "", "auto":
+		return ""
+	}
+	separator := ":"
+	if !strings.Contains(normalized, separator) {
+		separator = "x"
+	}
+	parts := strings.Split(normalized, separator)
+	if len(parts) != 2 {
+		return value
+	}
+	width, widthErr := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	height, heightErr := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return value
+	}
+	if width == height {
+		return "square"
+	}
+	if width > height {
+		return "landscape"
+	}
+	return "portrait"
+}
+
 func normalizeVideoResolution(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || value == "auto" || value == "medium" || value == "high" {

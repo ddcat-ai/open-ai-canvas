@@ -20,6 +20,7 @@ func newResourceFallbackTestService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	if err := db.AutoMigrate(
+		&model.User{},
 		&model.Resource{},
 		&model.UserOSSSetting{},
 		&model.SystemSetting{},
@@ -27,6 +28,11 @@ func newResourceFallbackTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.UserDailyActivity{},
 	); err != nil {
 		t.Fatal(err)
+	}
+	for _, userID := range []string{"user-1", "user-2"} {
+		if err := db.Create(&model.User{ID: userID, Username: userID, Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}, db
 }

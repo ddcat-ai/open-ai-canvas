@@ -1,4 +1,5 @@
 import type { Asset } from "@/stores/use-asset-store";
+import type { ComponentType } from "react";
 
 export const PLUGIN_API_VERSION = "yingce.plugin/v1" as const;
 export const PLUGIN_API_VERSION_V2 = "yingce.plugin/v2" as const;
@@ -128,6 +129,54 @@ export type PluginContributions = {
     aiCapabilities?: string[];
     agents?: string[];
     importExport?: string[];
+    homepageCreation?: HomepageCreationContribution;
+    smartCreation?: SmartCreationContribution;
+};
+
+export type HomepageCreationContribution = {
+    entry: string;
+    uninstall: {
+        preserveAssets: boolean;
+        preserveHistory: boolean;
+        namespace: string;
+    };
+};
+
+/**
+ * 智能创作的声明式策略。宿主只执行，不写死业务：规划提示词、工具 schema、计划默认值与执行参数
+ * 都来自插件包 manifest，插件更新即可调整行为，无需改宿主代码。
+ */
+export type SmartCreationContribution = {
+    entry: "smart-creation";
+    /** Composer 模式按钮文案，缺省为“智能创作”。 */
+    label?: string;
+    planner?: SmartCreationPlannerContribution;
+    defaults?: SmartCreationDefaultsContribution;
+    execution?: SmartCreationExecutionContribution;
+};
+
+export type SmartCreationPlannerContribution = {
+    /** 规划 Agent 的系统提示词；数组按行拼接，便于在 manifest 中维护。 */
+    systemPrompt?: string | string[];
+    /** 结构化规划工具；name 与 parameters 必须和宿主计划解析合同兼容。 */
+    tool?: {
+        name: string;
+        description?: string;
+        parameters: Record<string, unknown>;
+    };
+};
+
+export type SmartCreationDefaultsContribution = Partial<import("./smart-creation-contract").SmartCreationPlanDefaults>;
+
+export type SmartCreationExecutionContribution = {
+    /** 单个计划展开后的最大图片数；超出部分会被截断并提示。 */
+    maxTasks?: number;
+    /** 同一批次同时提交的任务数上限；实际窗口还会受账号 activeTaskLimit 约束。 */
+    maxConcurrency?: number;
+    /** 多张图时先生成第一张作为风格锚点，再把它作为参考图提交其余任务。 */
+    anchorFirst?: boolean;
+    /** 账号任务队列已满时等待空位的最长时间（毫秒）。 */
+    capacityWaitMs?: number;
 };
 export type PluginPermission =
     | "canvas.read"
@@ -218,7 +267,7 @@ export type PluginHostServices = {
         text?: PluginAiTextService;
     };
     media?: {
-        resolve: (reference: { url?: string; dataUrl?: string; kind?: string }, signal?: AbortSignal) => Promise<{ dataUrl: string; mimeType: string }>;
+        resolve: (reference: { title?: string; url?: string; dataUrl?: string; storageKey?: string; kind?: string; mimeType?: string }, signal?: AbortSignal) => Promise<{ dataUrl: string; mimeType: string }>;
     };
     usage?: {
         list: (scope?: string) => Promise<ReadonlyArray<Record<string, unknown>>>;
@@ -232,6 +281,22 @@ export type PluginHostContext = {
     config: Readonly<PluginInstallation["config"]>;
     services?: PluginHostServices;
 };
+
+export type HomepageCreationGenerationRequest = {
+    prompt: string;
+    itemId: string;
+    styleFingerprint: string;
+    queuePosition: number;
+    queueSize: number;
+};
+
+export type HomepageCreationAgentProps = {
+    onExecuteGenerationPlan: (requests: HomepageCreationGenerationRequest[]) => Promise<void>;
+    referenceCount?: number;
+    onOpenReferencePicker?: () => void;
+};
+
+export type HomepageCreationAgentFactory = (context: PluginHostContext) => ComponentType<HomepageCreationAgentProps>;
 
 export type PromptOptimizationMode = "expand" | "refine" | "style" | "model-adapt" | "reference";
 
@@ -264,6 +329,21 @@ export type PromptOptimizationResult = {
 
 export type PromptOptimizerProvider = {
     optimize: (input: PromptOptimizationInput, options?: { signal?: AbortSignal; onDelta?: (text: string) => void }) => Promise<PromptOptimizationResult>;
+};
+
+export type SmartCreationAgentInput = {
+    conversation: PluginTextMessage[];
+    generationMode: "image" | "video";
+    targetModel: string;
+    targetProtocol?: string;
+    references: Array<{ title: string; url?: string; dataUrl?: string; storageKey?: string; kind?: string; mimeType?: string; text?: string }>;
+};
+
+export type SmartCreationAgentPlan = import("./smart-creation-contract").SmartCreationPlan;
+export type SmartCreationTaskSettings = import("./smart-creation-contract").SmartCreationTaskSettings;
+
+export type SmartCreationAgentProvider = {
+    plan: (input: SmartCreationAgentInput, options?: { signal?: AbortSignal; onDelta?: (text: string) => void }) => Promise<{ message?: string; plan?: SmartCreationAgentPlan }>;
 };
 
 export type AssetSourceQuery = {
@@ -336,6 +416,8 @@ export type RegisteredPlugin = {
     deactivate?: (context: PluginHostContext) => Promise<void> | void;
     createAssetSource?: (context: PluginHostContext) => AssetSourceProvider;
     createPromptOptimizer?: (context: PluginHostContext) => PromptOptimizerProvider;
+    createSmartCreationAgent?: (context: PluginHostContext) => SmartCreationAgentProvider;
+    createHomepageCreationAgent?: HomepageCreationAgentFactory;
     /** v2 插件由注册器从 manifest 提取的编辑器插槽声明（v1 插件无此字段）。 */
     editorSlots?: EditorSlotContribution[];
     /** v2 插件 UI 插槽的实际渲染函数由插件 activate() 阶段经 registerEditorSlot 提供。 */

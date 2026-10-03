@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yingce://plugin/product-suite-contract/v1",
+  "title": "Product Suite Batch Contract",
+  "type": "object",
+  "required": ["batchId", "product", "items", "retryPolicy", "recovery", "styleLock"],
+  "properties": {
+    "batchId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$" },
+    "status": { "enum": ["queued", "running", "partial_succeeded", "succeeded", "failed", "recovering"] },
+    "product": {
+      "type": "object",
+      "required": ["productId", "sku"],
+      "properties": { "productId": { "type": "string", "minLength": 1 }, "sku": { "type": "string", "minLength": 1 }, "title": { "type": "string" } },
+      "additionalProperties": true
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["itemId", "idempotencyKey", "angle", "scene", "background", "size", "status", "retry"],
+        "properties": {
+          "itemId": { "type": "string", "minLength": 3 },
+          "idempotencyKey": { "type": "string", "minLength": 8 },
+          "angle": { "type": "string", "minLength": 1 },
+          "scene": { "type": "string", "minLength": 1 },
+          "background": { "type": "string", "minLength": 1 },
+          "size": { "type": "string", "pattern": "^[0-9]+x[0-9]+$" },
+          "status": { "enum": ["queued", "running", "succeeded", "failed", "unknown_submitted"] },
+          "retry": { "type": "object", "required": ["allowed", "attempts"], "properties": { "allowed": { "type": "boolean" }, "attempts": { "type": "integer", "minimum": 0 } } },
+          "error": { "type": ["object", "null"] },
+          "asset": { "type": ["object", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "retryPolicy": {
+      "type": "object",
+      "required": ["maxAttempts", "backoffMs", "perItemTimeoutMs", "batchTimeoutMs"],
+      "properties": {
+        "maxAttempts": { "type": "integer", "minimum": 1 },
+        "backoffMs": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+        "perItemTimeoutMs": { "type": "integer", "minimum": 1 },
+        "batchTimeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "required": ["resumeCursor", "replayRequiresSameIdempotencyKey"],
+      "properties": { "resumeCursor": { "type": "string", "minLength": 1 }, "replayRequiresSameIdempotencyKey": { "const": true } }
+    },
+    "styleLock": {
+      "type": "object",
+      "required": ["version", "fingerprint", "globalPrompt", "negativePrompt", "anchorItemId", "sharedPromptPrefix"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "fingerprint": { "type": "string", "pattern": "^style-[a-f0-9]{8}$" },
+        "globalPrompt": { "type": "string", "minLength": 1 },
+        "negativePrompt": { "type": "string" },
+        "anchorItemId": { "type": "string", "minLength": 3 },
+        "sharedPromptPrefix": { "type": "string", "minLength": 1 },
+        "anchorFirst": { "const": true }
+      },
+      "additionalProperties": true
+    }
+  },
+  "redaction": { "sensitivePaths": ["credentials.apiKey", "credentials.secretKey", "headers.authorization"] },
+  "additionalProperties": true
+}

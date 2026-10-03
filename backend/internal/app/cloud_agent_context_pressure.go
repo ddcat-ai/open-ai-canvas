@@ -171,7 +171,7 @@ func cloudAgentContextBreakdownPayload(state *cloudAgentRuntime, actual ...canon
 		}
 	}
 	buckets := []map[string]any{
-		{"key": "system", "label": "系统提示（含画布摘要）", "bytes": len(system), "tokens": systemTokens, "scaledTokens": scaled(systemTokens)},
+		{"key": "system", "label": "系统提示", "bytes": len(system), "tokens": systemTokens, "scaledTokens": scaled(systemTokens)},
 		{"key": "tools", "label": "工具 schema", "bytes": len(tools), "tokens": toolTokens, "scaledTokens": scaled(toolTokens)},
 		{"key": "messages", "label": "会话消息（含工具结果）", "bytes": len(messages), "tokens": messageTokens, "scaledTokens": scaled(messageTokens)},
 	}

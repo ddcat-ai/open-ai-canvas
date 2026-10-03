@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	ErrPaymentOrderStateConflict = errors.New("订单状态已变化，请刷新后重试")
-	ErrPaymentEvidenceMismatch   = errors.New("支付凭证与订单不一致")
-	ErrPaymentTradeNoConflict    = errors.New("该支付流水号已被使用")
-	ErrPaymentCreditOverflow     = errors.New("积分余额超出上限，无法入账")
-	ErrTopupUnavailable          = errors.New("充值商品当前不可购买")
+	ErrPaymentOrderStateConflict  = errors.New("订单状态已变化，请刷新后重试")
+	ErrPaymentEvidenceMismatch    = errors.New("支付凭证与订单不一致")
+	ErrPaymentTradeNoConflict     = errors.New("该支付流水号已被使用")
+	ErrPaymentCreditOverflow      = errors.New("积分余额超出上限，无法入账")
+	ErrTopupUnavailable           = errors.New("充值商品当前不可购买")
+	ErrPaymentIdempotencyConflict = errors.New("支付幂等标识已用于不同的商品或支付渠道")
 )
 
 // Credit balances are serialized to JavaScript clients as JSON numbers.
@@ -105,6 +106,16 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 	var existing model.PaymentOrder
 	created := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var owner model.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&owner, "id = ?", order.UserID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrPaymentOrderStateConflict
+			}
+			return err
+		}
+		if owner.Status != model.UserStatusActive {
+			return ErrPaymentOrderStateConflict
+		}
 		var product model.TopupProduct
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&product, "id = ?", order.ProductID).Error; err != nil {
 			return err
@@ -116,6 +127,9 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 		// 同一幂等键的重试直接返回原订单：不能被下面的限购/库存检查拦下，
 		// 尤其是周期限购已把这笔待付款订单计入名额。
 		if err := tx.First(&existing, "user_id = ? AND idempotency_key = ?", order.UserID, order.IdempotencyKey).Error; err == nil {
+			if existing.ProductID != order.ProductID || existing.ProviderID != order.ProviderID {
+				return ErrPaymentIdempotencyConflict
+			}
 			return nil
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
@@ -151,6 +165,9 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 			}
 			order.StockReserved = true
 		}
+		order.ProductName = product.Name
+		order.AmountFen = product.AmountFen
+		order.CreditsMicrocredits = product.CreditsMicrocredits
 		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}, {Name: "idempotency_key"}}, DoNothing: true}).Create(order)
 		if result.Error != nil {
 			return result.Error
@@ -161,6 +178,9 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 		}
 		if err := tx.First(&existing, "user_id = ? AND idempotency_key = ?", order.UserID, order.IdempotencyKey).Error; err != nil {
 			return err
+		}
+		if existing.ProductID != order.ProductID || existing.ProviderID != order.ProviderID {
+			return ErrPaymentIdempotencyConflict
 		}
 		if order.StockReserved {
 			if err := tx.Model(&model.TopupProduct{}).Where("id = ?", order.ProductID).Updates(map[string]any{"stock_remaining": gorm.Expr("stock_remaining + 1"), "updated_at": now}).Error; err != nil {
@@ -305,6 +325,14 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 				return ErrPaymentEvidenceMismatch
 			}
 			return nil
+		}
+		// 已删除账号的迟到回调不得重新创建积分账户。锁定用户行，与管理员删除事务串行。
+		var owner model.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&owner, "id = ?", order.UserID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrPaymentOrderStateConflict
+			}
+			return err
 		}
 		var duplicate int64
 		if err := tx.Model(&model.PaymentOrder{}).Where("provider_id = ? AND provider_trade_no = ? AND id <> ?", providerID, evidence.ProviderTradeNo, order.ID).Count(&duplicate).Error; err != nil {

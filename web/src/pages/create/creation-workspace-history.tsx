@@ -29,6 +29,7 @@ export const creationBucketLabels: Record<"today" | "yesterday" | "week" | "earl
 
 export function CreationHistoryDrawer({
     open,
+    deleteConfirmOpen = false,
     conversations,
     activeId,
     onNew,
@@ -38,6 +39,7 @@ export function CreationHistoryDrawer({
     onRename,
 }: {
     open: boolean;
+    deleteConfirmOpen?: boolean;
     conversations: CreationConversation[];
     activeId: string;
     onNew: () => void;
@@ -108,6 +110,9 @@ export function CreationHistoryDrawer({
         <AppDrawer
             flush
             open={open}
+            // The confirmation owns focus while open; two independent overlay
+            // focus locks would otherwise pull focus back and forth.
+            focusable={{ trap: !deleteConfirmOpen }}
             onClose={onClose}
             placement="right"
             size="min(440px, 100vw)"
@@ -185,7 +190,7 @@ export function CreationHistoryDrawer({
                                                     <HistoryTypeIcon />
                                                 </span>
                                                 <span className="creation-history-item-text">
-                                                    <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
+                                                    <strong className="creation-history-item-heading"><span className="creation-history-item-title">{conversation.title.trim() || "新创作"}</span>{conversation.agentApproval ? <span className="creation-history-pending-approval">待审批</span> : null}</strong>
                                                     <span className="creation-history-snippet">
                                                         {latest ? (
                                                             <>

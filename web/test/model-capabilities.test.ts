@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // Bun 直接执行 TypeScript 测试时需要保留扩展名；生产 tsconfig 不包含 test/。
-import { DEFAULT_VIDEO_PROMPT_MAX_CHARS, defaultModelCapabilityConfig, normalizeVideoValue } from "../src/lib/model-capabilities.ts";
+import { DEFAULT_VIDEO_PROMPT_MAX_CHARS, defaultModelCapabilityConfig, normalizeVideoValue, videoDurationAllowed } from "../src/lib/model-capabilities.ts";
 
 test("text multimodal capability is not guessed from a model name", () => {
     for (const model of ["gpt-4o", "gemini-2.5-pro", "doubao-seed"]) {
@@ -38,4 +38,16 @@ test("raising the video default leaves text and image limits untouched", () => {
     const profile = defaultModelCapabilityConfig("seedance-videos-compatible", "sd-2.5");
     assert.equal(profile.text!.references.promptMaxChars, 32000);
     assert.equal(profile.image!.references.promptMaxChars, 32000);
+});
+
+test("video duration can be limited independently by resolution and aliases", () => {
+    const profile = defaultModelCapabilityConfig("seedance-videos-compatible", "sd-2.5").video!;
+    profile.duration = { selection: "range", min: 1, max: 15, step: 1, default: 6 };
+    profile.resolutions = ["720p", "1080p"];
+    profile.durationByResolution = { "1080": { selection: "range", min: 1, max: 10, step: 1, default: 6 } };
+
+    assert.equal(videoDurationAllowed(profile, 15, "720"), true);
+    assert.equal(videoDurationAllowed(profile, 15, "1080p"), false);
+    assert.equal(videoDurationAllowed(profile, 10, "1080"), true);
+    assert.deepEqual(normalizeVideoValue(profile, { seconds: "15", ratio: "16:9", resolution: "1080p" }).seconds, "6");
 });

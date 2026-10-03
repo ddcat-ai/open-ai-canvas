@@ -336,7 +336,7 @@ func TestAliyunOSSSettingKeepsCDNBaseURL(t *testing.T) {
 
 func TestQiniuKodoSettingAllowsMissingCDNBaseURL(t *testing.T) {
 	next, err := ossSettingFromRequest(OSSSettingRequest{
-		Enabled: true, Provider: qiniuKodoProvider, Region: "z0", Endpoint: "https://up-z0.qiniup.com",
+		Enabled: true, Provider: qiniuKodoProvider, Region: "z0", Endpoint: "https://1.1.1.1",
 		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
 	}, ossSettingValue{})
 	if err != nil {
@@ -417,7 +417,7 @@ func TestArchivedProviderCredentialsAreEncryptedAtRest(t *testing.T) {
 func TestResourceAccessChecksOwnershipAndSignsOSSResource(t *testing.T) {
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
-		Enabled: true, Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
+		Enabled: true, Provider: "aliyun", Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
 		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
 	})
 	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
@@ -425,7 +425,7 @@ func TestResourceAccessChecksOwnershipAndSignsOSSResource(t *testing.T) {
 	}
 	resource := model.Resource{
 		ID: "resource-direct", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
-		Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
+		Provider: "aliyun", Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
 		ObjectKey: "users/user-1/image/direct.png", MimeType: "image/png",
 	}
 	if err := svc.repo.CreateResource(&resource); err != nil {
@@ -471,10 +471,70 @@ func TestPrepareResourceDeliveryPrefersConfiguredCDN(t *testing.T) {
 	}
 }
 
+func TestPrepareResourceDeliveryUsesCurrentPlatformCDNForHistoricalLocation(t *testing.T) {
+	svc := newResourceTestService(t)
+	historicalJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: s3Provider, Region: "auto", Endpoint: "https://1.1.1.1", Bucket: "test-media",
+		CDNBaseURL: "https://cdn.example.test", AccessKeyID: "historical-id", AccessKeySecret: "historical-secret",
+		PathPrefix: "test-media", S3Preset: "r2", PathStyle: true,
+	})
+	location := &model.StorageLocation{ID: "platform-r2-location", Scope: "platform", Provider: s3Provider, ValueJSON: string(historicalJSON), Active: true}
+	if err := svc.repo.CreateStorageLocation(location); err != nil {
+		t.Fatal(err)
+	}
+	currentJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: s3Provider, Region: "auto", Endpoint: "https://1.1.1.1", Bucket: "test-media",
+		CDNBaseURL: "https://cdn.example.test", AccessKeyID: "current-id", AccessKeySecret: "current-secret",
+		PathPrefix: "test-media", S3Preset: "r2", PathStyle: true,
+		Delivery: storage.DeliverySettings{CDNAuthMode: "public"},
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(currentJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-platform-historical-location", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: s3Provider, Endpoint: "https://1.1.1.1", Bucket: "test-media", StorageSettingID: location.ID,
+		ObjectKey: "test-media/users/user-1/image/historical.png", MimeType: "image/png",
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := svc.ossSettingForResource("user-1", &resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.AccessKeyID != "historical-id" || resolved.AccessKeySecret != "historical-secret" || resolved.Delivery.CDNAuthMode != "public" {
+		t.Fatalf("historical credentials or current delivery policy lost: %#v", resolved)
+	}
+	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://cdn.example.test/test-media/users/user-1/image/historical.png"
+	if delivery.Access == nil || delivery.Access.Delivery != assets.DeliveryCDN || delivery.Access.URL != want {
+		t.Fatalf("PrepareResourceDelivery(platform historical location) = %#v, want CDN %q", delivery, want)
+	}
+	mismatchedJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: s3Provider, Region: "auto", Endpoint: "https://8.8.8.8", Bucket: "test-media",
+		CDNBaseURL: "https://other.example", AccessKeyID: "current-id", AccessKeySecret: "current-secret",
+		Delivery: storage.DeliverySettings{CDNAuthMode: "public"},
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(mismatchedJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err = svc.ossSettingForResource("user-1", &resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.AccessKeyID != "historical-id" || resolved.CDNBaseURL != "https://cdn.example.test" || resolved.Delivery.CDNAuthMode != "" {
+		t.Fatalf("mismatched current storage changed historical credentials or delivery: %#v", resolved)
+	}
+}
+
 func TestPrepareResourceDeliveryFallsBackToOriginWhenCDNAuthIsMissing(t *testing.T) {
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
-		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://s3.amazonaws.com", CDNBaseURL: "https://media.example.com",
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://1.1.1.1", CDNBaseURL: "https://media.example.com",
 		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
 	})
 	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
@@ -482,7 +542,7 @@ func TestPrepareResourceDeliveryFallsBackToOriginWhenCDNAuthIsMissing(t *testing
 	}
 	resource := model.Resource{
 		ID: "resource-cdn-proxy", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
-		Provider: aliyunOSSProvider, Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
+		Provider: aliyunOSSProvider, Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
 		ObjectKey: "users/user-1/image/proxy.png", MimeType: "image/png",
 	}
 	if err := svc.repo.CreateResource(&resource); err != nil {
@@ -689,7 +749,7 @@ func TestHistoricalUserResourceWithoutStorageSettingIDKeepsItsProviderCDN(t *tes
 func TestPrepareResourceDeliveryUsesSignedOriginWithoutCDN(t *testing.T) {
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
-		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
+		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
 		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
 	})
 	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
@@ -697,7 +757,7 @@ func TestPrepareResourceDeliveryUsesSignedOriginWithoutCDN(t *testing.T) {
 	}
 	resource := model.Resource{
 		ID: "resource-origin-direct", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
-		Provider: aliyunOSSProvider, Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
+		Provider: aliyunOSSProvider, Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
 		ObjectKey: "users/user-1/image/direct.png", MimeType: "image/png",
 	}
 	if err := svc.repo.CreateResource(&resource); err != nil {
@@ -707,7 +767,7 @@ func TestPrepareResourceDeliveryUsesSignedOriginWithoutCDN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if delivery.Access == nil || delivery.Access.Delivery != assets.DeliveryOrigin || !strings.Contains(delivery.Access.URL, "private-bucket.s3.amazonaws.com/users/user-1/image/direct.png") || !strings.Contains(delivery.Access.URL, "Signature=") {
+	if delivery.Access == nil || delivery.Access.Delivery != assets.DeliveryOrigin || !strings.Contains(delivery.Access.URL, "1.1.1.1/users/user-1/image/direct.png") || !strings.Contains(delivery.Access.URL, "Signature=") {
 		t.Fatalf("PrepareResourceDelivery(force direct) = %#v", delivery)
 	}
 }
@@ -929,7 +989,10 @@ func newResourceTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "user-1", Username: "resource-user", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}
@@ -1047,6 +1110,159 @@ func TestGeneratedMediaRejectsInvalidDataURL(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("persistGeneratedMediaResult() error = nil, want invalid data URL error")
+	}
+}
+
+func TestPersistGeneratedRemoteMediaStoresResource(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	svc := newResourceTestService(t)
+	video := []byte("video-result")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write(video)
+	}))
+	defer server.Close()
+
+	result, err := svc.persistGeneratedMediaResult("user-1", map[string]interface{}{
+		"mode":  "video",
+		"video": map[string]interface{}{"url": server.URL + "/result.mp4", "mimeType": "video/mp4"},
+	})
+	if err != nil {
+		t.Fatalf("persistGeneratedMediaResult() error = %v", err)
+	}
+	storedVideo, ok := result["video"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("video result = %#v", result["video"])
+	}
+	resourceURL, _ := storedVideo["url"].(string)
+	if !strings.HasPrefix(resourceURL, "/api/resources/") {
+		t.Fatalf("video url = %q, want stored resource URL", resourceURL)
+	}
+	storageKey, _ := storedVideo["storageKey"].(string)
+	resourceID := strings.TrimPrefix(storageKey, "resource:")
+	if resourceID == "" || resourceID == storageKey {
+		t.Fatalf("storage key = %q", storageKey)
+	}
+	resource, err := svc.repo.ResourceForUser("user-1", resourceID)
+	if err != nil {
+		t.Fatalf("ResourceForUser() error = %v", err)
+	}
+	if resource.Status != model.ResourceStatusReady || resource.Provider != "local" {
+		t.Fatalf("resource = %#v", resource)
+	}
+	stored, err := os.ReadFile(filepath.Join(svc.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)))
+	if err != nil {
+		t.Fatalf("read stored video: %v", err)
+	}
+	if !bytes.Equal(stored, video) {
+		t.Fatalf("stored video = %q, want %q", stored, video)
+	}
+}
+
+func TestOpenRemoteGeneratedMediaStreamsResponse(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	video := []byte("video-result")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Content-Length", strconv.Itoa(len(video)))
+		_, _ = w.Write(video)
+	}))
+	defer server.Close()
+
+	stream, err := openRemoteGeneratedMedia(server.URL+"/result.mp4", "video", 1024)
+	if err != nil {
+		t.Fatalf("openRemoteGeneratedMedia() error = %v", err)
+	}
+	defer stream.body.Close()
+	if stream.size != int64(len(video)) || stream.mimeType != "video/mp4" {
+		t.Fatalf("stream metadata = %#v", stream)
+	}
+	data, err := io.ReadAll(stream.body)
+	if err != nil {
+		t.Fatalf("read remote stream: %v", err)
+	}
+	if !bytes.Equal(data, video) {
+		t.Fatalf("stream body = %q, want %q", data, video)
+	}
+}
+
+func TestPersistGeneratedRemoteMediaStreamsToS3(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	var uploaded []byte
+	storageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("storage method = %s, want PUT", r.Method)
+		}
+		var err error
+		uploaded, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read uploaded video: %v", err)
+		}
+		w.Header().Set("ETag", `"r2-etag"`)
+	}))
+	defer storageServer.Close()
+	video := []byte("video-result")
+	providerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Content-Length", strconv.Itoa(len(video)))
+		_, _ = w.Write(video)
+	}))
+	defer providerServer.Close()
+
+	svc, db := newMediaRecoveryTestService(t)
+	setting := `{"provider":"s3","region":"auto","endpoint":"` + storageServer.URL + `","bucket":"test-bucket","accessKeyId":"ak-test","accessKeySecret":"sk-test","pathStyle":true}`
+	if err := db.Create(&model.UserOSSSetting{UserID: "user-1", Enabled: true, ValueJSON: setting}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.SystemSetting{Key: ossSettingKey, ValueJSON: `{"allowUserS3":true}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := svc.persistGeneratedMediaResult("user-1", map[string]interface{}{
+		"mode":  "video",
+		"video": map[string]interface{}{"url": providerServer.URL + "/result.mp4", "mimeType": "video/mp4"},
+	})
+	if err != nil {
+		t.Fatalf("persistGeneratedMediaResult() error = %v", err)
+	}
+	if !bytes.Equal(uploaded, video) {
+		t.Fatalf("uploaded video = %q, want %q", uploaded, video)
+	}
+	storedVideo, _ := result["video"].(map[string]interface{})
+	resourceID, _ := storedVideo["resourceId"].(string)
+	resource, err := svc.repo.ResourceForUser("user-1", resourceID)
+	if err != nil {
+		t.Fatalf("ResourceForUser() error = %v", err)
+	}
+	if resource.Provider != "s3" || resource.Status != model.ResourceStatusReady {
+		t.Fatalf("resource = %#v", resource)
+	}
+}
+
+func TestPersistGeneratedRemoteMediaPreservesOSSUploadFailure(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	svc, db := newMediaRecoveryTestService(t)
+	seedOSSEnabled(t, db, "user-1", "http://127.0.0.1:1")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("video-result"))
+	}))
+	defer server.Close()
+
+	_, err := svc.persistGeneratedMediaResult("user-1", map[string]interface{}{
+		"mode":  "video",
+		"video": map[string]interface{}{"url": server.URL + "/result.mp4", "mimeType": "video/mp4"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "生成内容写入资源存储失败") {
+		t.Fatalf("persistGeneratedMediaResult() error = %v, want OSS upload failure", err)
+	}
+	resources, err := svc.repo.Resources("user-1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources) != 1 || resources[0].Provider == "local" || resources[0].Status == model.ResourceStatusReady {
+		t.Fatalf("resource = %#v, want failed OSS resource", resources)
 	}
 }
 

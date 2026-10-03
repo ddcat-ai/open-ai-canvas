@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -20,6 +21,7 @@ func paymentLimitTestOrder(id, productID string) *model.PaymentOrder {
 // 周期限购必须把未关闭的待付款订单计入名额，否则先建多笔再逐笔付款可以全部入账。
 func TestPeriodicPurchaseLimitCountsUnpaidOrders(t *testing.T) {
 	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "user-1")
 	repo := New(db)
 	product := model.TopupProduct{ID: "weekly", Name: "周卡", AmountFen: 100, CreditsMicrocredits: 100_000_000, Enabled: true, SaleStrategy: model.TopupSaleStrategyPeriodic, PeriodDays: 7, PeriodPurchaseLimit: 1}
 	if err := db.Create(&product).Error; err != nil {
@@ -53,6 +55,7 @@ func TestPeriodicPurchaseLimitCountsUnpaidOrders(t *testing.T) {
 // 商品更新在锁内按最新库存计算，不能把并发下单扣减的库存写回旧值。
 func TestUpdateTopupProductKeepsConcurrentStockReservation(t *testing.T) {
 	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "user-1")
 	repo := New(db)
 	product := model.TopupProduct{ID: "stock", Name: "限量", AmountFen: 100, CreditsMicrocredits: 100_000_000, Enabled: true, SaleStrategy: model.TopupSaleStrategyInventory, StockTotal: 5, StockRemaining: 5}
 	if err := db.Create(&product).Error; err != nil {
@@ -81,5 +84,65 @@ func TestUpdateTopupProductKeepsConcurrentStockReservation(t *testing.T) {
 	}
 	if updated.Name != "限量（改名）" || updated.StockRemaining != 4 {
 		t.Fatalf("updated product = name %q remaining %d, want renamed with remaining 4", updated.Name, updated.StockRemaining)
+	}
+}
+
+func TestCreatePaymentOrderUsesLockedProductSnapshot(t *testing.T) {
+	db := openPaymentTestDB(t)
+	createPaymentTestUsers(t, db, "user-1")
+	repo := New(db)
+	product := model.TopupProduct{ID: "snapshot", Name: "新版商品", AmountFen: 260, CreditsMicrocredits: 260_000_000, Enabled: true}
+	if err := db.Create(&product).Error; err != nil {
+		t.Fatal(err)
+	}
+	order := paymentLimitTestOrder("snapshot-order", product.ID)
+	order.ProductName, order.AmountFen, order.CreditsMicrocredits = "旧版商品", 100, 100_000_000
+	created, fresh, err := repo.CreatePaymentOrderWithProductReservation(order)
+	if err != nil || !fresh {
+		t.Fatalf("create order = %#v fresh=%v err=%v", created, fresh, err)
+	}
+	if created.ProductName != product.Name || created.AmountFen != product.AmountFen || created.CreditsMicrocredits != product.CreditsMicrocredits {
+		t.Fatalf("order snapshot = %#v; want locked product %#v", created, product)
+	}
+}
+
+func TestCreatePaymentOrderRejectsConflictingIdempotencyKey(t *testing.T) {
+	for _, conflictAt := range []string{"existing", "unique-conflict"} {
+		t.Run(conflictAt, func(t *testing.T) {
+			db := openPaymentTestDB(t)
+			createPaymentTestUsers(t, db, "user-1")
+			repo := New(db)
+			product := model.TopupProduct{ID: "inventory", Name: "库存商品", AmountFen: 100, CreditsMicrocredits: 100_000_000, Enabled: true, SaleStrategy: model.TopupSaleStrategyInventory, StockTotal: 2, StockRemaining: 2}
+			if err := db.Create(&product).Error; err != nil {
+				t.Fatal(err)
+			}
+			request := paymentLimitTestOrder("new-order", product.ID)
+			request.IdempotencyKey = "same-idempotency"
+			previous := paymentLimitTestOrder("previous-order", product.ID)
+			previous.IdempotencyKey = request.IdempotencyKey
+			previous.ProviderID = "another-provider"
+			if conflictAt == "existing" {
+				if err := db.Create(previous).Error; err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := db.Callback().Create().Before("gorm:create").Register("inject_competing_payment_order", func(tx *gorm.DB) {
+					if tx.Statement.Schema == nil || tx.Statement.Schema.Name != "PaymentOrder" {
+						return
+					}
+					tx.Exec("INSERT INTO payment_orders (id, user_id, idempotency_key, merchant_order_no, product_id, product_name, provider_id, amount_fen, currency, credits_microcredits, status, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", previous.ID, previous.UserID, previous.IdempotencyKey, previous.MerchantOrderNo, previous.ProductID, previous.ProductName, previous.ProviderID, previous.AmountFen, previous.Currency, previous.CreditsMicrocredits, previous.Status, previous.ExpiresAt)
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, created, err := repo.CreatePaymentOrderWithProductReservation(request)
+			if !errors.Is(err, ErrPaymentIdempotencyConflict) || created {
+				t.Fatalf("conflict created=%v err=%v", created, err)
+			}
+			var current model.TopupProduct
+			if err := db.First(&current, "id = ?", product.ID).Error; err != nil || current.StockRemaining != 2 {
+				t.Fatalf("stock remaining=%d err=%v", current.StockRemaining, err)
+			}
+		})
 	}
 }

@@ -207,6 +207,23 @@ export async function getAccountFileStorageUsage() {
     return data.usage;
 }
 
+/** ZIP exports assemble owned originals without depending on object-store CORS. */
+export async function downloadImageResourceArchive(items: Array<{ resourceId: string; name: string }>) {
+    try {
+        const response = await http.raw<Blob>({ method: "POST", url: "/resources/image-archive", data: items, responseType: "blob" });
+        return response.data;
+    } catch (error) {
+        const transport = error instanceof ApiError ? error.cause as { response?: { data?: unknown } } : undefined;
+        if (error instanceof ApiError && transport?.response?.data instanceof Blob) {
+            try {
+                const body = JSON.parse(await transport.response.data.text());
+                if (typeof body.msg === "string" && body.msg) error.message = body.msg;
+            } catch { /* 保留传输边界的原错误。 */ }
+        }
+        throw error;
+    }
+}
+
 export async function syncResourceToArkPrivateAsset(id: string) {
     const data = await http.post<{ sync: ArkPrivateAssetSync }>(`/resources/${encodeURIComponent(id)}/ark-private-asset`);
     return data.sync;
@@ -422,6 +439,11 @@ export async function getResourceAccess(storageKey: string | undefined, purpose:
 /** 模型上游读取资源使用更长 TTL，但仍走统一资源访问合同。 */
 export async function getResourceInputURL(storageKey?: string) {
     return (await getResourceAccess(storageKey, "provider-input")).url;
+}
+
+/** 浏览器无法读取 CDN 时，给多模态 Agent 一个可由模型上游直接访问的展示签名地址。 */
+export async function getResourceDisplayURL(storageKey?: string) {
+    return resolveResourceAccessURL((await getResourceAccess(storageKey, "display")).url);
 }
 
 /**

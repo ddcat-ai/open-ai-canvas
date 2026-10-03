@@ -104,7 +104,7 @@ func (a manifestAdapter) ParseCreateWithRequest(_ context.Context, request Gener
 	if err != nil {
 		return CreateResult{}, err
 	}
-	return a.parse(payload, PollContext{}), nil
+	return a.parse(payload, PollContext{Request: request}), nil
 }
 
 // streamedJSONAudioCreateResult decodes the chunked JSON response used by
@@ -446,7 +446,7 @@ func normalizeManifestInlineDataURL(value, kind, formatHint string) string {
 func manifestInlineMediaMIME(kind, formatHint string) string {
 	hint := strings.ToLower(strings.TrimSpace(formatHint))
 	switch hint {
-	case "image/png", "image/jpeg", "image/webp", "image/gif", "audio/mpeg", "audio/wav", "audio/ogg", "video/mp4", "video/webm":
+	case "image/png", "image/jpeg", "image/webp", "image/gif", "audio/mpeg", "audio/wav", "audio/pcm", "audio/ogg", "video/mp4", "video/webm":
 		return hint
 	case "image/jpg":
 		return "image/jpeg"

@@ -33,6 +33,20 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"statuses": statuses, "states": states})
 	})
+	// 创作页只需要已生效智能创作插件的声明式策略，不要求插件中心权限。
+	statusRoutes.GET("/smart-creation", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		plugins, err := svc.SmartCreationPluginsForUser(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"plugins": plugins})
+	})
 	adminRoutes := r.Group("/admin/plugins")
 	adminRoutes.GET("", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

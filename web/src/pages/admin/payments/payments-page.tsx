@@ -7,6 +7,7 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { Eye, Plus, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
@@ -35,11 +36,21 @@ import {
     type TopupProduct,
 } from "@/services/api/payments";
 
+import { useAdminContext } from "../admin-context";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
+import CreditOperationsPanel, { type CreditOperation } from "../components/credit-operations-panel";
 import "./payments-page.css";
+import { paymentTypeLabel } from "./payment-method";
 import { Select } from "@/components/ui/base/select";
+
+const paymentTabKeys = ["providers", "products", "orders", "reconciliation", "credit-operations"] as const;
+type PaymentTabKey = (typeof paymentTabKeys)[number];
+
+function normalizePaymentTab(value: string | null): PaymentTabKey {
+    return paymentTabKeys.includes(value as PaymentTabKey) ? (value as PaymentTabKey) : "providers";
+}
 
 type ProviderFormValues = {
     enabled: boolean;
@@ -75,7 +86,7 @@ const reconciliationResult: Record<string, { label: string; tone: "neutral" | "s
     matched: { label: "一致", tone: "success" },
     recovered: { label: "已自动补发", tone: "info" },
     local_order_not_found: { label: "本地订单缺失", tone: "error" },
-    provider_record_missing: { label: "渠道记录缺失", tone: "error" },
+    provider_record_missing: { label: "支付方式记录缺失", tone: "error" },
     amount_mismatch: { label: "金额不一致", tone: "error" },
     trade_no_mismatch: { label: "交易号不一致", tone: "error" },
     credit_failed: { label: "补发失败", tone: "error" },
@@ -83,7 +94,10 @@ const reconciliationResult: Record<string, { label: string; tone: "neutral" | "s
 
 export default function AdminPaymentsPage() {
     const { message, modal } = App.useApp();
-    const [activeTab, setActiveTab] = useState("providers");
+    const { references } = useAdminContext();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState<PaymentTabKey>(() => normalizePaymentTab(searchParams.get("tab")));
+    const [activeOperation, setActiveOperation] = useState<CreditOperation>(null);
     const [providers, setProviders] = useState<AdminPaymentProvider[]>([]);
     const [products, setProducts] = useState<TopupProduct[]>([]);
     const [loading, setLoading] = useState(true);
@@ -137,6 +151,25 @@ export default function AdminPaymentsPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailReady, setDetailReady] = useState(false);
     const detailRequest = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        const nextTab = normalizePaymentTab(searchParams.get("tab"));
+        setActiveTab((current) => (current === nextTab ? current : nextTab));
+    }, [searchParams]);
+
+    const handleTabChange = (key: string) => {
+        const nextTab = normalizePaymentTab(key);
+        setActiveTab(nextTab);
+        setSearchParams(
+            (current) => {
+                const next = new URLSearchParams(current);
+                if (nextTab === "providers") next.delete("tab");
+                else next.set("tab", nextTab);
+                return next;
+            },
+            { replace: true },
+        );
+    };
 
     const orderFilters: PaymentOrderFilters = {
         timeField: orderTimeField,
@@ -252,7 +285,7 @@ export default function AdminPaymentsPage() {
             setProviderDrawer(undefined);
             await loadBase();
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存支付渠道失败");
+            message.error(error instanceof Error ? error.message : "保存支付方式失败");
         } finally {
             setProviderSaving(false);
         }
@@ -316,7 +349,7 @@ export default function AdminPaymentsPage() {
         setOrderActionId(order.id);
         try {
             await queryAdminPaymentOrder(order.id);
-            message.success("已向支付渠道查单");
+            message.success("已向支付方式查单");
             await loadOrders();
         } catch (error) {
             message.error(error instanceof Error ? error.message : "查单失败");
@@ -328,7 +361,7 @@ export default function AdminPaymentsPage() {
     const closeOrder = (order: PaymentOrder) => {
         modal.confirm({
             title: "关闭未支付订单？",
-            content: "系统会先向支付渠道查单；若渠道已支付则立即入账，否则执行关单。",
+            content: "系统会先向支付方式查单；若支付方式已支付则立即入账，否则执行关单。",
             okText: "查单并关单",
             cancelText: "取消",
             onOk: async () => {
@@ -353,7 +386,7 @@ export default function AdminPaymentsPage() {
         try {
             const result = await runAdminPaymentReconciliation({ providerId: billProviderId, billDate: billDate.format("YYYY-MM-DD") });
             if (result.run.status === "running") {
-                message.info("该渠道与账单日期的对账正在执行，请稍后刷新查看结果");
+                message.info("该支付方式与账单日期的对账正在执行，请稍后刷新查看结果");
             } else {
                 message.success(result.run.recoveredItems ? `对账完成，自动补发 ${result.run.recoveredItems} 笔` : "对账完成");
             }
@@ -394,19 +427,20 @@ export default function AdminPaymentsPage() {
 
     const providerColumns: ColumnsType<AdminPaymentProvider> = [
         {
-            title: "支付渠道",
+            title: "支付服务 / 适配器",
             key: "provider",
             render: (_, provider) => (
                 <div className="flex items-center gap-3">
                     <PaymentBrandIcon providerId={provider.id} />
                     <div>
                         <div className="font-medium">{provider.name}</div>
-                        <div className="mt-0.5 font-mono text-xs text-foreground/45">{provider.id}</div>
+                        <div className="mt-0.5 font-mono text-xs text-foreground/45">适配器标识 · {provider.id}</div>
                     </div>
                 </div>
             ),
         },
-        { title: "支付方式", dataIndex: "checkoutMode", width: 120, align: "center", render: (value) => (value === "qr_code" ? "扫码支付" : "网站跳转") },
+        { title: "支付方式", dataIndex: "payType", width: 120, align: "center", render: (value: string) => paymentTypeLabel(value) },
+        { title: "收银形式", dataIndex: "checkoutMode", width: 120, align: "center", render: (value) => (value === "qr_code" ? "扫码支付" : value === "redirect" ? "网站跳转" : "未确定") },
         {
             title: "状态",
             key: "status",
@@ -539,7 +573,7 @@ export default function AdminPaymentsPage() {
             ),
         },
         {
-            title: "渠道",
+            title: "支付服务 / 适配器",
             dataIndex: "providerId",
             width: 150,
             render: (value) => (
@@ -549,6 +583,7 @@ export default function AdminPaymentsPage() {
                 </span>
             ),
         },
+        { title: "支付方式", dataIndex: "payType", width: 105, align: "center", render: (value: string) => paymentTypeLabel(value) },
         {
             title: "金额 / 积分",
             key: "amount",
@@ -592,7 +627,7 @@ export default function AdminPaymentsPage() {
     const runColumns: ColumnsType<PaymentReconciliationRun> = [
         { title: "账单日期", dataIndex: "billDate", width: 120 },
         {
-            title: "渠道",
+            title: "对账适配器",
             dataIndex: "providerId",
             width: 190,
             render: (value) => (
@@ -629,7 +664,7 @@ export default function AdminPaymentsPage() {
     const detailColumns: ColumnsType<PaymentReconciliationItem> = [
         { title: "结果", dataIndex: "result", width: 135, render: (value) => <AdminStatusBadge {...(reconciliationResult[value] || { label: value, tone: "neutral" as const })} /> },
         { title: "商户订单号", dataIndex: "merchantOrderNo", width: 255, render: (value) => <span className="font-mono text-xs">{value}</span> },
-        { title: "渠道交易号", dataIndex: "providerTradeNo", width: 220, render: (value) => (value ? <span className="font-mono text-xs">{value}</span> : "--") },
+        { title: "支付方式交易号", dataIndex: "providerTradeNo", width: 220, render: (value) => (value ? <span className="font-mono text-xs">{value}</span> : "--") },
         { title: "金额", dataIndex: "amountFen", width: 110, align: "right", render: (value, item) => `${item.currency} ${(value / 100).toFixed(2)}` },
         { title: "说明", dataIndex: "detail", render: (value) => value || "账单与本地订单一致" },
     ];
@@ -637,25 +672,37 @@ export default function AdminPaymentsPage() {
     return (
         <AdminPageFrame
             title="支付充值"
-            description="管理系统支付适配器、充值商品、支付订单与 T+1 对账"
+            description="管理系统支付方式配置、充值商品、支付订单与 T+1 对账"
             actions={
-                <Button icon={<RefreshCw className="size-4" />} loading={loading || ordersLoading || runsLoading} onClick={() => void refresh()}>
-                    刷新
-                </Button>
+                <>
+                    {activeTab === "credit-operations" ? (
+                        <>
+                            <Button icon={<Settings2 className="size-4" />} onClick={() => setActiveOperation("policy")}>
+                                积分策略
+                            </Button>
+                            <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setActiveOperation("adjustment")}>
+                                人工调账
+                            </Button>
+                        </>
+                    ) : null}
+                    <Button icon={<RefreshCw className="size-4" />} loading={loading || ordersLoading || runsLoading} onClick={() => void refresh()}>
+                        刷新
+                    </Button>
+                </>
             }
             scroll
         >
             <Callout className="my-4" tone="info" title="平台不提供支付退款">
-                管理端仅提供查单、关单和对账。关单前始终先向渠道查单；对账发现已支付未入账订单时会幂等补发积分。
+                管理端仅提供查单、关单和对账。关单前始终先向支付方式查单；对账发现已支付未入账订单时会幂等补发积分。
             </Callout>
             <Tabs
                 activeKey={activeTab}
-                onChange={setActiveTab}
+                onChange={handleTabChange}
                 items={[
                     {
                         key: "providers",
-                        label: "支付渠道",
-                        children: <AdminDataTable table={{ rowKey: "id", loading, columns: providerColumns, dataSource: providers, pagination: false, scroll: { x: 980 } }} empty={<AdminTableEmpty title="没有发现支付渠道插件" />} />,
+                        label: "支付方式",
+                        children: <AdminDataTable table={{ rowKey: "id", loading, columns: providerColumns, dataSource: providers, pagination: false, scroll: { x: 980 } }} empty={<AdminTableEmpty title="没有发现支付方式插件" />} />,
                     },
                     {
                         key: "products",
@@ -685,7 +732,7 @@ export default function AdminPaymentsPage() {
                                         prefix={<Search className="size-4 text-foreground/40" />}
                                         value={orderKeyword}
                                         placeholder="搜索名称、用户名、邮箱、订单号"
-                                        title="支持名称、用户名、邮箱、订单号、渠道交易号和完整用户 ID"
+                                        title="支持名称、用户名、邮箱、订单号、支付方式交易号和完整用户 ID"
                                         onChange={(event) => setOrderKeyword(event.target.value)}
                                         onPressEnter={() => void loadOrders(1, orderPageSize, orderFilters)}
                                     />
@@ -701,10 +748,10 @@ export default function AdminPaymentsPage() {
                                         />
                                         <Select
                                             className="min-w-44"
-                                            aria-label="订单支付渠道"
+                                            aria-label="订单支付方式"
                                             value={orderProviderFilter}
                                             onChange={setOrderProviderFilter}
-                                            options={[{ value: "all", label: "全部支付渠道" }, ...providers.map((provider) => ({ value: provider.id, label: provider.name }))]}
+                                            options={[{ value: "all", label: "全部支付方式" }, ...providers.map((provider) => ({ value: provider.id, label: provider.name }))]}
                                         />
                                         <Select
                                             className="w-32"
@@ -751,7 +798,7 @@ export default function AdminPaymentsPage() {
                                     <Select
                                         className="min-w-52"
                                         value={billProviderId || undefined}
-                                        placeholder="选择支付渠道"
+                                        placeholder="选择支付方式"
                                         onChange={setBillProviderId}
                                         options={providers.map((provider) => ({ value: provider.id, label: provider.name, disabled: !provider.configured }))}
                                     />
@@ -765,10 +812,10 @@ export default function AdminPaymentsPage() {
                                     toolbar={
                                         <Select
                                             className="w-52"
-                                            aria-label="对账支付渠道"
+                                            aria-label="对账支付方式"
                                             value={runProviderFilter}
                                             onChange={setRunProviderFilter}
-                                            options={[{ value: "all", label: "全部支付渠道" }, ...providers.map((provider) => ({ value: provider.id, label: provider.name }))]}
+                                            options={[{ value: "all", label: "全部支付方式" }, ...providers.map((provider) => ({ value: provider.id, label: provider.name }))]}
                                         />
                                     }
                                     toolbarFilters={
@@ -810,6 +857,11 @@ export default function AdminPaymentsPage() {
                                 />
                             </div>
                         ),
+                    },
+                    {
+                        key: "credit-operations",
+                        label: "积分运营",
+                        children: <CreditOperationsPanel users={references.users} activeOperation={activeOperation} onOperationChange={setActiveOperation} />,
                     },
                 ]}
             />
@@ -860,7 +912,7 @@ export default function AdminPaymentsPage() {
                             },
                             {
                                 key: "trade",
-                                label: "渠道交易号",
+                                label: "支付方式交易号",
                                 children: selectedOrder.providerTradeNo ? (
                                     <Typography.Text copyable className="break-all">
                                         {selectedOrder.providerTradeNo}
@@ -870,7 +922,8 @@ export default function AdminPaymentsPage() {
                                 ),
                             },
                             { key: "product", label: "商品", children: selectedOrder.productName },
-                            { key: "channel", label: "支付渠道", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
+                            { key: "channel", label: "支付服务 / 适配器", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
+                            { key: "payType", label: "支付方式", children: paymentTypeLabel(selectedOrder.payType) },
                             { key: "amount", label: "金额 / 积分", children: `¥ ${(selectedOrder.amountFen / 100).toFixed(2)} / ${formatCredits(selectedOrder.creditsMicrocredits)} 积分` },
                             { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
                             ...(
@@ -889,7 +942,7 @@ export default function AdminPaymentsPage() {
             <AdminUserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
 
             <Drawer
-                title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}
+                title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付方式"}
                 width={620}
                 open={Boolean(providerDrawer)}
                 destroyOnHidden
@@ -905,9 +958,9 @@ export default function AdminPaymentsPage() {
                         <Callout
                             className="mb-4"
                             tone={providerDrawer.pluginEnabled ? "info" : "warning"}
-                            title={providerDrawer.pluginEnabled ? "密钥会加密保存，历史订单固定使用创建时的配置版本。" : "该宿主插件当前已在插件管理中停用；保存配置后仍需开放插件才能接受新订单。"}
+                            title={providerDrawer.pluginEnabled ? "密钥会加密保存，历史订单固定使用创建时的配置版本。" : "该支付方式插件当前已在插件管理中停用；保存配置后仍需开放插件才能接受新订单。"}
                         />
-                        <Form.Item name="enabled" label="渠道配置启用" valuePropName="checked">
+                        <Form.Item name="enabled" label="支付方式配置启用" valuePropName="checked">
                             <Switch />
                         </Form.Item>
                         <Form.Item name="closeAfterMinutes" label="未支付订单自动关闭时间（分钟）" rules={[{ required: true }, { type: "number", min: 5, max: 1440 }]}>

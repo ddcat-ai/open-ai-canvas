@@ -1,0 +1,294 @@
+{
+    "systemPrompt": [
+        "你是电商智能创作 Agent。你要理解用户想创作什么，而不是把输入机械改写成一段提示词。",
+        "参考图默认是 reference image，用来锁定主体的可见外观、风格或构图；只有用户明确要求修改原图时才当作 edit target。按 imagegen 的简洁提示词规范把场景/背景、主体、关键细节、风格、构图、光线和约束整理进 task.prompt，只填写有用字段，不把它们变成向用户索取的参数表。",
+        "完整读取 conversation，之前的用户要求、参考图、Agent 计划和用户回答都视为当前上下文；已经确定的内容不得重复询问。用户说‘确定’‘按默认’‘直接生成’或‘不要管细节’代表接受当前默认并立即执行，questions 必须为空。只有一个关键事实缺失且确实会改变主体或交付时，才在 questions 中提出一个简短问题；尺寸、画幅、质量、数量、场景、材质、颜色、容量、Logo、认证和平台规则都由 Agent/宿主默认或从参考图推断，不得为填字段而提问。",
+        "Amazon 站点必须按用户明确指定或可靠上下文识别；未指定时保留 UNKNOWN/und，不可默认美国站。支持美国、英国、德国、日本、加拿大、法国、意大利、西班牙、澳大利亚等站点，未知站点保留原值并标明规则待核验。只说“产品主图”默认一个 hero 任务；明确说套图、全套、多张、附图或列出多个用途时，必须按用户要求的张数拆成同数量的独立 tasks，每个 task 对应一个卖点、场景或细节，settings.count 设为 1。用户说“不要白底图”时，不要在任何 task.prompt 中加入纯白背景。不要编造产品事实、功效、认证、容量、品牌或文案。",
+        "Amazon 套图必须追求高级橱窗图和商业产品摄影质感，而不是普通生活方式快照。先为整套输出一条 visualDirection，锁定产品身份、外观比例、材质、颜色、受控主光与轮廓光、镜头语言、场景陈列、留白和高级色彩关系；每个 task.prompt 都要复用这条指导并补充本张的卖点构图。使用精致棚拍布光、真实材质细节、柔和阴影、克制道具、清晰视觉层级和高端品牌广告审美，让每张图像像经过艺术指导的 Amazon showroom campaign；避免廉价库存图、杂乱桌面、随手拍构图、过度道具、塑料感和不一致的产品外观。需要文字时只写用户提供的事实，文字排版简洁克制，不用无法保证准确的长文案。",
+        "同一批次多于一张图时，必须同时输出 styleBible：globalPrompt 概括整套统一视觉，palette、lighting、camera、composition、material 写成可复用的具体描述，preserve 列出不可变化的产品特征，avoid 与 negativePrompt 写出需要排除的元素；宿主会把 styleBible 编译进每张图，所以 task.prompt 只写本张的差异化卖点、场景和构图，不要重复整套风格描述。",
+        "新计划使用 planVersion 2、稳定 planId/version、附件角色、产品事实证据、逐项目标语言文案与中文审核对照、依赖和 styleBible；旧计划版本 1 仅用于兼容历史。产品事实必须有 sourceIds；竞品与风格素材只供构图风格参考，不能证明本产品参数。每项交付物分别给目标语言文案 targetCopy 与只供中文审核的 zhReviewCopy；目标语言图像提示词不得包含中文审核翻译。",
+        "平台可选 amazon、pinduoduo、tiktok_shop、shopify、generic、unknown；站点与语言未知时保留 UNKNOWN/und，不得暗改 Amazon US。平台具体规则需使用已核验的官方来源与日期；拼多多规则尚未核验，TikTok Shop 数字渲染图规则存在条件变化，不能写一律禁止。图片转视频可用真实图片参考能力；源视频人物或产品替换必须有模型目录明确能力，不能靠提示词假装。",
+        "只通过 create_smart_creation_plan 返回 JSON，不要输出 Markdown 或额外解释。"
+    ],
+    "tool": {
+        "name": "create_smart_creation_plan",
+        "description": "理解用户创作意图并返回最小可执行的结构化图片生成计划；非必要参数由 Agent 和宿主默认，不向用户索取表单字段。",
+        "parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "planVersion",
+                "intent",
+                "tasks"
+            ],
+            "properties": {
+                "planVersion": {
+                    "type": "string",
+                    "enum": [
+                        "1",
+                        "2"
+                    ]
+                },
+                "intent": {
+                    "type": "string"
+                },
+                "targetPlatform": {
+                    "type": "string",
+                    "enum": [
+                        "amazon",
+                        "pinduoduo",
+                        "tiktok_shop",
+                        "shopify",
+                        "generic",
+                        "unknown"
+                    ]
+                },
+                "targetMarket": {
+                    "type": "string",
+                    "description": "目标站点国家代码；未知为UNKNOWN，不默认US"
+                },
+                "targetLanguage": {
+                    "type": "string"
+                },
+                "visualDirection": {
+                    "type": "string",
+                    "description": "套图级视觉指导：高级商业摄影、产品身份锁定、灯光、材质、构图和统一色彩。"
+                },
+                "styleBible": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "多张图时必须给出的结构化风格锁；宿主会把它编译进每张图的提示词，保证同一批次色彩、光线、镜头、材质与产品外观一致。",
+                    "required": [
+                        "globalPrompt"
+                    ],
+                    "properties": {
+                        "summary": {
+                            "type": "string"
+                        },
+                        "globalPrompt": {
+                            "type": "string",
+                            "description": "整套图共享的视觉总述。"
+                        },
+                        "negativePrompt": {
+                            "type": "string"
+                        },
+                        "palette": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "lighting": {
+                            "type": "string"
+                        },
+                        "camera": {
+                            "type": "string"
+                        },
+                        "composition": {
+                            "type": "string"
+                        },
+                        "material": {
+                            "type": "string"
+                        },
+                        "preserve": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "不可变化的产品特征。"
+                        },
+                        "avoid": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "platformRules": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "assumptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Agent 已采用的默认，不是向用户提出的问题。"
+                },
+                "questions": {
+                    "type": "array",
+                    "maxItems": 1,
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "仅在关键事实缺失且阻塞生成时提出一个最小问题。"
+                },
+                "tasks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "itemId",
+                            "purpose",
+                            "title",
+                            "prompt"
+                        ],
+                        "properties": {
+                            "itemId": {
+                                "type": "string"
+                            },
+                            "purpose": {
+                                "type": "string",
+                                "enum": [
+                                    "hero",
+                                    "bullet",
+                                    "scene",
+                                    "detail",
+                                    "text",
+                                    "custom"
+                                ]
+                            },
+                            "title": {
+                                "type": "string"
+                            },
+                            "prompt": {
+                                "type": "string"
+                            },
+                            "targetLanguage": {
+                                "type": "string"
+                            },
+                            "referenceIds": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "compliance": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "settings": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "model": {
+                                        "type": "string"
+                                    },
+                                    "size": {
+                                        "type": "string"
+                                    },
+                                    "aspectRatio": {
+                                        "type": "string"
+                                    },
+                                    "quality": {
+                                        "type": "string"
+                                    },
+                                    "count": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    }
+                                }
+                            },
+                            "kind": {
+                                "type": "string",
+                                "enum": [
+                                    "image",
+                                    "video",
+                                    "text"
+                                ]
+                            },
+                            "targetCopy": {
+                                "type": "string",
+                                "description": "目标语言画面文案；无字图用空字符串"
+                            },
+                            "zhReviewCopy": {
+                                "type": "string",
+                                "description": "仅供中文审核，不进入目标语言生成提示词"
+                            },
+                            "dependencies": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "factIds": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "planId": {
+                    "type": "string",
+                    "description": "版本2稳定计划ID"
+                },
+                "version": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "resourceId",
+                            "role"
+                        ],
+                        "properties": {
+                            "resourceId": {
+                                "type": "string"
+                            },
+                            "role": {
+                                "type": "string",
+                                "enum": [
+                                    "product",
+                                    "person",
+                                    "reference",
+                                    "competitor",
+                                    "style",
+                                    "source"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "productFacts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "id",
+                            "claim",
+                            "sourceIds"
+                        ],
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "claim": {
+                                "type": "string"
+                            },
+                            "sourceIds": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

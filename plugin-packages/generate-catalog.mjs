@@ -97,6 +97,10 @@ const asyncResponse = (kind, overrides = {}) => ({
   ...overrides
 });
 
+const defaultNonCancelable = {
+  reason: "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
+};
+
 const specs = [];
 
 function add(spec) {
@@ -569,8 +573,14 @@ add({
 
 add({
   id: "doubao-streaming-tts", providerId: "doubao-streaming-tts", name: "豆包音频生成", vendor: "Volcengine", capability: "audio",
-  baseUrl: "https://openspeech.bytedance.com", auth: { type: "header", field: "apiKey", header: "X-Api-Key" }, params: audioParams,
+  baseUrl: "https://openspeech.bytedance.com", auth: { type: "header", field: "apiKey", header: "X-Api-Key" },
+  params: audioParams.map((param) => param[0] === "prompt" ? [param[0], param[1], param[2], "text_prompt", param[4]] : param),
   notes: "火山引擎 seed-audio-1.0 非流式音频生成。POST /api/v3/tts/create。不传 references 为纯文本生成；连接音频时写入 references 的 audio_url 或 audio_data，最多 3 段，参考音频少于 3 段且指定了音色时再追加一个 speaker；连接图片时写入 image_url 或 image_data，最多 1 张。图片和音频不能同时使用。没有参考素材时，speaker 只在用户明确指定音色时发送，且官方仅接受语音合成 2.0 音色或复刻音色。text_prompt 引用参考音频时使用 @Audio1、@Audio2。响应是单个 JSON，audio 为 Base64，url 两小时过期。",
+  validations: [
+    { assert: lte(len(ref("request.images")), 1), message: "豆包音频最多支持 1 张参考图片" },
+    { assert: lte(len(ref("request.audios")), 3), message: "豆包音频最多支持 3 段参考音频" },
+    { assert: { $not: and(gt(len(ref("request.images")), 0), gt(len(ref("request.audios")), 0)) }, message: "豆包音频不能同时使用图片和音频参考素材" }
+  ],
   create: jsonCreate("/api/v3/tts/create", {
     model: ref("request.model"),
     text_prompt: ref("request.prompt"),
@@ -1205,6 +1215,7 @@ for (const [id, name, capability, createPath, pollPath, resultPath] of [
 }
 
 function manifestFor(spec) {
+  const nonCancelable = spec.nonCancelable || (spec.poll && !spec.cancel ? defaultNonCancelable : undefined);
   return {
     apiVersion: "yingce.plugin/v2",
     id: spec.id,
@@ -1230,6 +1241,7 @@ function manifestFor(spec) {
         ...(spec.agent ? { agent: spec.agent } : {}),
         ...(spec.poll ? { poll: spec.poll } : {}),
         ...(spec.cancel ? { cancel: spec.cancel } : {}),
+        ...(nonCancelable ? { nonCancelable } : {}),
         ...(spec.result ? { result: spec.result } : {}),
         response: spec.response,
         ...(spec.agentResponse ? { agentResponse: spec.agentResponse } : {})
@@ -1273,6 +1285,7 @@ function operationFieldRows(operation, label) {
 }
 
 function docsFor(spec) {
+  const cancellationReason = spec.nonCancelable?.reason || defaultNonCancelable.reason;
   const rows = spec.params.map(([name, type, required, mapping, description]) => `| \`${name}\` | ${type} | ${required ? "是" : "否"} | \`${mapping}\` | ${description} |`).join("\n");
   const operationRows = [
     ...operationFieldRows(spec.create, "create"),
@@ -1289,7 +1302,7 @@ function docsFor(spec) {
   const optionRefs = [...new Set([...manifestJSON.matchAll(new RegExp(`request\\.providerOptions\\.${spec.providerId.replaceAll("-", "\\-")}\\.([A-Za-z0-9_.-]+)`, "g"))].map((match) => match[1]))].sort();
   const optionRows = optionRefs.length ? optionRefs.map((name) => `- \`providerOptions.${spec.providerId}.${name}\``).join("\n") : "- 无额外扩展键。";
   const configRows = (spec.configuration || config()).fields.map((field) => `| \`${field.name}\` | ${field.type} | ${field.required ? "是" : "否"} | ${field.label || ""} |`).join("\n");
-  return `# ${spec.name} 接口字段\n\n## 协议身份\n\n- 插件 ID：\`${spec.id}\`。\n- Provider ID：\`${spec.providerId}\`。\n- 能力：\`${spec.capability}\`。\n- 默认 Base URL：\`${spec.baseUrl}\`。\n- 鉴权驱动：\`${spec.auth?.type || "默认"}\`。\n- 创建：\`${spec.create.method} ${spec.create.path || "动态路径"}\`。\n${spec.agent ? `- Agent：\`${spec.agent.method} ${spec.agent.path || "动态路径"}\`。\n` : ""}${spec.poll ? `- 查询：\`${spec.poll.method} ${spec.poll.path}\`。\n` : "- 生命周期：同步响应。\n"}${spec.cancel ? `- 取消：\`${spec.cancel.method} ${spec.cancel.path}\`。\n` : ""}\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n${configRows}\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n${rows}\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n${operationRows || "| `create` | 无请求字段 |"}\n\n## Provider 扩展键\n\n${optionRows}\n\n动态模型或工作流允许使用文档声明的完整 \`parameters/input/extra_body\` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n${mappedResponseRows || "| `response` | 无显式映射 |"}\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n${spec.notes || "该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。"}\n`;
+  return `# ${spec.name} 接口字段\n\n## 协议身份\n\n- 插件 ID：\`${spec.id}\`。\n- Provider ID：\`${spec.providerId}\`。\n- 能力：\`${spec.capability}\`。\n- 默认 Base URL：\`${spec.baseUrl}\`。\n- 鉴权驱动：\`${spec.auth?.type || "默认"}\`。\n- 创建：\`${spec.create.method} ${spec.create.path || "动态路径"}\`。\n${spec.agent ? `- Agent：\`${spec.agent.method} ${spec.agent.path || "动态路径"}\`。\n` : ""}${spec.poll ? `- 查询：\`${spec.poll.method} ${spec.poll.path}\`。\n` : "- 生命周期：同步响应。\n"}${spec.cancel ? `- 取消：\`${spec.cancel.method} ${spec.cancel.path}\`。\n` : spec.poll ? `- 取消语义：${cancellationReason}\n` : ""}\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n${configRows}\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n${rows}\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n${operationRows || "| `create` | 无请求字段 |"}\n\n## Provider 扩展键\n\n${optionRows}\n\n动态模型或工作流允许使用文档声明的完整 \`parameters/input/extra_body\` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n${mappedResponseRows || "| `response` | 无显式映射 |"}\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n${spec.notes || "该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。"}\n`;
 }
 
 const requestedPackageIDs = new Set(process.argv.slice(2).map((value) => value.trim()).filter(Boolean));

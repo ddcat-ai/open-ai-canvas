@@ -84,7 +84,11 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 			taskID = extracted
 		}
 		if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
-			return nil, protocolResultError(created.Message, taskID)
+			err := protocolResultError(created.Message, taskID)
+			if input.Mode == "image" && created.Status == protocol.StatusFailed {
+				err = providerGenerationFailedError{cause: err}
+			}
+			return nil, err
 		}
 		if created.Status == protocol.StatusSucceeded {
 			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
@@ -115,7 +119,11 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 			result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, policy)
 			return videoPollOutcome{Done: err == nil, Result: result}, err
 		case protocol.StatusFailed, protocol.StatusCancelled:
-			return videoPollOutcome{}, protocolResultError(state.Message, taskID)
+			err := protocolResultError(state.Message, taskID)
+			if input.Mode == "image" && state.Status == protocol.StatusFailed {
+				err = providerGenerationFailedError{cause: err}
+			}
+			return videoPollOutcome{}, err
 		}
 		return videoPollOutcome{}, nil
 	})
@@ -162,6 +170,9 @@ func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationIn
 	providerStatus := string(state.Status)
 	switch state.Status {
 	case protocol.StatusSucceeded:
+		if result, ok := preserveProtocolVideoURL(state.Result); ok {
+			return result, providerStatus, nil
+		}
 		result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, defaultVideoPollPolicy())
 		return result, providerStatus, err
 	case protocol.StatusFailed, protocol.StatusCancelled:

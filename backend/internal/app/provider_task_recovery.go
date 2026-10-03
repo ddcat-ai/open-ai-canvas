@@ -89,7 +89,7 @@ func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.Us
 	if task.UserID != log.UserID {
 		return nil, BadAuthRequest("请求与任务归属不一致")
 	}
-	if task.Status == model.TaskStatusSucceeded {
+	if task.Status == model.TaskStatusSucceeded && !taskNeedsProviderMediaRepair(task) {
 		result = &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: "succeeded", Recovered: true, BillingSettled: s.billingSettled(task)}
 		return result, nil
 	}
@@ -316,8 +316,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if task == nil || task.ID == "" {
 		return nil, BadAuthRequest("任务不存在")
 	}
-	if task.Status != model.TaskStatusFailed {
-		return nil, BadAuthRequest("只能人工查询状态为失败的任务")
+	allowSucceededRepair := task.Status == model.TaskStatusSucceeded && taskNeedsProviderMediaRepair(task)
+	if task.Status != model.TaskStatusFailed && !allowSucceededRepair {
+		return nil, BadAuthRequest("只能人工查询失败或结果未保存的视频任务")
 	}
 	if task.MediaRecoveryJSON != "" {
 		return nil, BadAuthRequest("该任务已生成作品，请在任务中心重试保存，无需重新查询生成")
@@ -363,7 +364,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	task.ProviderRequestID = providerRequestID
 
 	owner := "manual-recovery:" + newID()
-	if err := s.repo.ClaimFailedTaskProviderRecovery(task.ID, claimUserID, owner, providerTaskRecoveryLeaseDuration); err != nil {
+	if err := s.repo.ClaimTaskProviderRecovery(task.ID, claimUserID, owner, providerTaskRecoveryLeaseDuration, allowSucceededRepair); err != nil {
 		if errors.Is(err, repository.ErrTaskProviderRecoveryConflict) {
 			return nil, &AuthError{Status: 409, Message: "该任务正在查询上游状态，请稍后再试"}
 		}
@@ -406,6 +407,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	task.Error = ""
 	task.PollStage = strings.ToLower(providerStatus)
 	task.NextPollAt = nil
+	task.MediaStage = "completed"
 	if err := s.saveTaskCompletionWithinStorageQuota(task, resultJSON, nil, false); err != nil {
 		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认上游成功，但任务结果未保存："+err.Error())
 		_ = s.log(task.UserID, task.ID, "error", "人工查询已取得视频，但任务恢复失败", err.Error())
@@ -430,8 +432,20 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		_ = s.log(task.UserID, task.ID, "error", "任务恢复成功但项目产物登记失败", err.Error())
 		return nil, fmt.Errorf("任务已恢复并完成扣费，但项目素材登记失败：%w", err)
 	}
-	_ = s.log(task.UserID, task.ID, "info", "人工查询确认生成成功，任务已恢复、完成结算并登记项目产物", providerStatus)
+	message := "人工查询确认生成成功，任务已恢复、完成结算并登记项目产物"
+	if allowSucceededRepair {
+		message = "人工补拉确认生成成功，视频已重新入库并登记项目产物"
+	}
+	_ = s.log(task.UserID, task.ID, "info", message, providerStatus)
 	return &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: providerStatus, Recovered: true, BillingSettled: billingSettled}, nil
+}
+
+func taskNeedsProviderMediaRepair(task *model.Task) bool {
+	if task == nil || task.Status != model.TaskStatusSucceeded || (!strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_")) {
+		return false
+	}
+	previewURL, _ := taskMediaPreview(task.ResultJSON, task.Type)
+	return canvasResourceID(previewURL) == ""
 }
 
 func providerTaskRecoveryContext(parent context.Context) (context.Context, context.CancelFunc) {

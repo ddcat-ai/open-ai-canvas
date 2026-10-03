@@ -117,6 +117,8 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
     const providerStatus = log.providerStatus?.toLowerCase();
     const processing = ["queued", "pending", "processing", "running", "in_progress"].includes(providerStatus || "");
     const failed = log.status === "failed" || ["failed", "cancelled", "expired"].includes(providerStatus || "");
+    const storedMedia = log.mediaPreviewUrl?.includes("/api/admin/api-logs/") ?? false;
+    const canRepairSucceededTask = log.taskStatus === "succeeded" && !storedMedia;
     const status = failed ? { label: "失败", tone: "error" as const } : processing ? { label: "处理中", tone: "warning" as const } : { label: "成功", tone: "success" as const };
 
     return (
@@ -163,7 +165,7 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                                 <h2>视频任务恢复</h2>
                             </div>
                         </div>
-                        <span className="text-xs text-foreground/45">失败任务可用</span>
+                        <span className="text-xs text-foreground/45">{canRepairSucceededTask ? "成功任务未入库，可补拉" : "失败任务可用"}</span>
                     </div>
                     <div className="api-log-recovery-body">
                         <div className="api-log-recovery-row">
@@ -172,7 +174,7 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                                 <small>默认使用当前记录，可手动覆盖</small>
                             </div>
                             <Input className="api-log-recovery-input" value={providerRequestId} onChange={(event) => onProviderRequestIdChange(event.target.value)} placeholder="输入供应商任务 ID" />
-                            <Button icon={<RefreshCw className="size-3.5" />} loading={querying} onClick={onQuery}>自动查询</Button>
+                            <Button icon={<RefreshCw className="size-3.5" />} loading={querying} onClick={onQuery}>{canRepairSucceededTask ? "补拉并入库" : "自动查询"}</Button>
                             <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={onQuery}>保存并查询</Button>
                         </div>
                         <div className="api-log-recovery-row">

@@ -4,3 +4,4 @@ import "./workflows";
 import "./ai-art-critique";
 import "./media-conversion";
 import "./editor/editor-shell";
+import "./igo-studio";

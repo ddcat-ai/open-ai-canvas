@@ -355,7 +355,7 @@ func TestDeclarativeManifestMapsFieldsAndResponses(t *testing.T) {
 	manifest := []byte(`{
 			"apiVersion":"yingce.plugin/v1",
 			"id":"example-video","version":"1.0.0","name":"Example Video","author":"Example","documentation":"# Example Video",
-		"contributes":{"providers":[{"id":"example-video","label":"Example Video","capabilities":["video"],"scopes":["admin.system-channel","user.custom-channel"],"create":{"method":"POST","path":"/v1/tasks","fields":{"model":"request.model","input.prompt":"request.prompt","input.seconds":"request.duration"}},"poll":{"method":"GET","path":"/v1/tasks/{{taskId}}"},"response":{"taskIdPaths":["id","data.id"],"statusPaths":["status","data.status"],"resultPaths":["result.video_url","data.result.video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"example-video","label":"Example Video","capabilities":["video"],"scopes":["admin.system-channel","user.custom-channel"],"create":{"method":"POST","path":"/v1/tasks","fields":{"model":"request.model","input.prompt":"request.prompt","input.seconds":"request.duration"}},"poll":{"method":"GET","path":"/v1/tasks/{{taskId}}"},"nonCancelable":{"reason":"fixture provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id","data.id"],"statusPaths":["status","data.status"],"resultPaths":["result.video_url","data.result.video_url"],"resultKind":"video"}}]}
 	}`)
 	adapter, err := LoadManifest(manifest)
 	if err != nil {

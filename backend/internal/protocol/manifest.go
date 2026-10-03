@@ -116,6 +116,11 @@ func LoadInstalledProviders(data []byte, resolve AdapterResolver) ([]Adapter, er
 		return []Adapter{metadataAdapter{metadata: manifest.Metadata, delegate: adapter}}, nil
 	}
 	if len(manifest.Contributes.Providers) == 0 {
+		// Application-only packages such as smart creation contribute runtime
+		// policy to the host, but do not expose a provider adapter.
+		if hasNonProviderContribution(manifest.Contributes) {
+			return []Adapter{}, nil
+		}
 		adapter, err := loadDeclarativeManifest(manifest)
 		if err != nil {
 			return nil, err
@@ -277,6 +282,9 @@ func ValidateManifest(manifest Manifest) error {
 	if len(manifest.Contributes.Providers) == 0 && !hasNonProviderContribution(manifest.Contributes) {
 		return fmt.Errorf("plugin must declare at least one contribution")
 	}
+	if err := validateManifestSmartCreation(manifest.Contributes.SmartCreation); err != nil {
+		return err
+	}
 	if backend := strings.TrimSpace(manifest.Runtime.Backend); backend != "" && backend != "declarative" && backend != "rpc" && backend != "wasm" && backend != "trusted-backend" && !strings.HasPrefix(backend, "host:") {
 		return fmt.Errorf("unsupported plugin backend %q", backend)
 	}
@@ -322,11 +330,20 @@ func ValidateManifest(manifest Manifest) error {
 			if err := validateManifestOperation(*provider.Poll); err != nil {
 				return fmt.Errorf("provider %q poll operation: %w", provider.ID, err)
 			}
+			if provider.Cancel == nil && provider.NonCancelable == nil {
+				return fmt.Errorf("provider %q async operation must declare cancel or nonCancelable", provider.ID)
+			}
 		}
 		if provider.Cancel != nil {
+			if provider.NonCancelable != nil {
+				return fmt.Errorf("provider %q cannot declare both cancel and nonCancelable", provider.ID)
+			}
 			if err := validateManifestOperation(*provider.Cancel); err != nil {
 				return fmt.Errorf("provider %q cancel operation: %w", provider.ID, err)
 			}
+		}
+		if provider.NonCancelable != nil && strings.TrimSpace(provider.NonCancelable.Reason) == "" {
+			return fmt.Errorf("provider %q nonCancelable requires a reason", provider.ID)
 		}
 		if provider.Result != nil {
 			if err := validateManifestOperation(*provider.Result); err != nil {
@@ -402,6 +419,10 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Create = operationSummary(provider.Create)
 	manifest.Metadata.Poll = operationSummaryPtr(provider.Poll)
 	manifest.Metadata.Cancel = operationSummaryPtr(provider.Cancel)
+	manifest.Metadata.NonCancelable = provider.NonCancelable != nil
+	if provider.NonCancelable != nil {
+		manifest.Metadata.NonCancelableReason = provider.NonCancelable.Reason
+	}
 	manifest.Metadata.ContentType = provider.Create.ContentType
 	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
 	manifest.Metadata.Execution = manifest.Runtime.Backend
@@ -418,7 +439,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 }
 
 func hasNonProviderContribution(contributes ManifestContributions) bool {
-	if len(contributes.SMSProviders) > 0 {
+	if len(contributes.SMSProviders) > 0 || contributes.SmartCreation != nil {
 		return true
 	}
 	return len(contributes.PaymentProviders) > 0 || len(contributes.Workflows) > 0 || len(contributes.CanvasNodes) > 0 || len(contributes.Transforms) > 0 || len(contributes.Commands) > 0 || len(contributes.AssetSources) > 0 || len(contributes.UsageObservers) > 0 || len(contributes.AICapabilities) > 0 || len(contributes.Agents) > 0 || len(contributes.ImportExport) > 0
@@ -439,6 +460,13 @@ func operationSummaryPtr(operation *ManifestOperation) string {
 
 func validateManifestOperation(operation ManifestOperation) error {
 	method := strings.ToUpper(strings.TrimSpace(operation.Method))
+	// NONE is reserved for declarative-only contracts that describe a batch
+	// capability without providing an HTTP executor. Such packages must still
+	// parse and appear in the catalog, but buildManifestOperation rejects them
+	// before any outbound request can be attempted.
+	if method == "NONE" {
+		return nil
+	}
 	if method != http.MethodGet && method != http.MethodPost && method != http.MethodDelete && method != http.MethodPut {
 		return fmt.Errorf("unsupported HTTP method %q", operation.Method)
 	}

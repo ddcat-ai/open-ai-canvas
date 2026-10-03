@@ -10,6 +10,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,9 +68,8 @@ func (s *Service) startCloudAgentPi(userID, runID string) {
 			s.piRunnerWg.Done()
 		}()
 
-		if err := s.runCloudAgentPiSession(ctx, userID, runID); err != nil && !errors.Is(err, context.Canceled) {
+		if err := s.runOwnedCloudAgent(ctx, userID, runID, func(owned context.Context) error { return s.runCloudAgentPiSession(owned, userID, runID) }); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, repository.ErrCloudAgentOwnerLost) {
 			log.Printf("[Agent] session failed run=%s: %v", runID, err)
-			s.failPiRunner(runID, userID, errors.New(cloudAgentUserFailureMessage(runID, err)))
 		}
 	}()
 }
@@ -152,9 +153,12 @@ func (s *Service) startApprovedCloudAgentMediaWaiter(userID, runID, mediaTaskID 
 			s.approvedMediaWg.Done()
 		}()
 
-		if err := s.finishApprovedCloudAgentMedia(ctx, userID, runID, mediaTaskID); err != nil && !errors.Is(err, context.Canceled) {
+		if err := s.runOwnedCloudAgent(ctx, userID, runID, func(owned context.Context) error {
+			return s.finishApprovedCloudAgentMedia(owned, userID, runID, mediaTaskID)
+		}); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, repository.ErrCloudAgentOwnerLost) {
 			log.Printf("[Agent] approved media resume failed run=%s: %v", runID, err)
-			s.failPiRunner(runID, userID, errors.New(cloudAgentUserFailureMessage(runID, err)))
+		} else if err == nil && ctx.Err() == nil {
+			s.resumeCloudAgentPi(userID, runID)
 		}
 	}()
 }
@@ -177,7 +181,7 @@ func (s *Service) closeApprovedCloudAgentMediaWaiters() {
 	s.approvedMediaWg.Wait()
 }
 
-func (s *Service) failPiRunner(runID, userID string, cause error) {
+func (s *Service) failPiRunner(runID, userID string, cause error, fences ...*model.CloudAgentFence) {
 	if s == nil || s.repo == nil {
 		return
 	}
@@ -186,7 +190,8 @@ func (s *Service) failPiRunner(runID, userID string, cause error) {
 		if err != nil {
 			return
 		}
-		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		cloudAgentBindFence(run, fences)
+		err = s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 			if cloudAgentRunTerminal(current.Status) {
 				return nil
 			}
@@ -267,9 +272,23 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		return nil
 	}
 
-	runtimeState, err := cloudAgentDecode(run)
+	runtimeState, err := cloudAgentDecodeForExecution(run)
 	if err != nil {
 		return fmt.Errorf("decode state: %w", err)
+	}
+	if runtimeState.Approval != nil && runtimeState.Approval.Decision == "approve" {
+		run.ExecutionFence = cloudAgentFence(ctx)
+		if err := s.advanceCloudAgentTool(run, &runtimeState); err != nil {
+			return err
+		}
+		run, err = s.ownedCloudAgent(ctx, userID, runID)
+		if err != nil {
+			return err
+		}
+		runtimeState, err = cloudAgentDecodeForExecution(run)
+		if err != nil {
+			return err
+		}
 	}
 
 	// 2. 解析输入
@@ -302,13 +321,13 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 
 	// 崩溃恢复：最后答案已写进会话快照、运行却没来得及标记完成。这一回合已经结束，
 	// 直接收尾；再启动运行时会对同一提示词再调用一次模型、多扣一次费。
-	if ownSession && cloudAgentPiTurnSettled(sessionJSONL, &runtimeState) {
+	if ownSession && cloudAgentPiTurnSettled(sessionJSONL, &runtimeState) && cloudAgentPiCheckpointMatchesPrompt(sessionJSONL, runID, firstNonEmpty(runtimeState.PiTurnID, runID), firstNonEmpty(runtimeState.PiResumePrompt, state.Request.Prompt)) {
 		if runtimeState.PiResumePrompt != "" {
-			if err := s.saveCloudAgentPiResumePrompt(userID, runID, ""); err != nil {
+			if err := s.saveCloudAgentPiResumePrompt(userID, runID, "", cloudAgentFence(ctx)); err != nil {
 				return err
 			}
 		}
-		return s.completeCloudAgentPiRun(userID, runID)
+		return s.completeCloudAgentPiRun(userID, runID, 0, cloudAgentFence(ctx))
 	}
 
 	// 5. 构建完整的 Pi 请求（核心重构）
@@ -332,22 +351,38 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	if len(sessionJSONL) > 0 {
 		request.Prompt = firstNonEmpty(runtimeState.PiResumePrompt, state.Request.Prompt)
 	}
+	request.TurnID = firstNonEmpty(runtimeState.PiTurnID, runID)
+	if !ownSession && state.Request.Surface == "creation" && runtimeState.ParentID != "" {
+		parent, err := s.repo.CloudAgent(userID, runtimeState.ParentID)
+		if err != nil {
+			return err
+		}
+		if parent.Status == "rejected" && parent.SessionID == state.Request.SessionID {
+			// The child may close the rejected parent's native tool calls with
+			// truthful control results, but cannot execute any of those calls.
+			request.RejectedParentRunID = parent.ID
+		}
+	}
+	request.ResumeFromCheckpoint = ownSession && cloudAgentPiCheckpointMatchesPrompt(sessionJSONL, runID, request.TurnID, request.Prompt)
+	if !request.ResumeFromCheckpoint && runtimeState.PiResumePrompt == "" && runtimeState.Step > 0 && cloudAgentFence(ctx) != nil {
+		return NewAppError(409, "旧运行缺少可证明的模型步骤检查点，需要核对任务记录；未重新提交")
+	}
 
 	// 7. 运行 Pi 会话
 	var pausedForApproval atomic.Bool
 	err = runCloudAgentPi(ctx, request, cloudAgentPiBridge{
 		Model: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
-			return s.cloudAgentPiModel(callCtx, userID, runID, payload)
+			return s.cloudAgentPiModel(context.WithValue(callCtx, cloudAgentOwnerContextKey{}, cloudAgentFence(ctx)), userID, runID, payload)
 		},
 		Tool: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
-			result, err := s.cloudAgentPiTool(callCtx, userID, runID, payload)
+			result, err := s.cloudAgentPiTool(context.WithValue(callCtx, cloudAgentOwnerContextKey{}, cloudAgentFence(ctx)), userID, runID, payload)
 			if paused, ok := result.(map[string]any); ok && paused["pause"] == true {
 				pausedForApproval.Store(true)
 			}
 			return result, err
 		},
 		Event: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
-			return s.cloudAgentPiEvent(callCtx, userID, runID, payload)
+			return s.cloudAgentPiEvent(context.WithValue(callCtx, cloudAgentOwnerContextKey{}, cloudAgentFence(ctx)), userID, runID, payload)
 		},
 	})
 	if err != nil {
@@ -359,16 +394,61 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	if pausedForApproval.Load() {
 		return nil
 	}
+	// ask_user can complete the run while the Pi process is flushing its final
+	// native journal. The flush is now persisted; no further owner-gated update
+	// or model continuation belongs to this terminal turn.
+	latestRun, err := s.repo.CloudAgent(userID, runID)
+	if err != nil {
+		return err
+	}
+	if cloudAgentRunTerminal(latestRun.Status) {
+		return nil
+	}
 
 	// 8. 清理恢复提示词
 	if runtimeState.PiResumePrompt != "" {
-		if err := s.saveCloudAgentPiResumePrompt(userID, runID, ""); err != nil {
+		if err := s.saveCloudAgentPiResumePrompt(userID, runID, "", cloudAgentFence(ctx)); err != nil {
 			return err
 		}
 	}
 
+	// 压缩崩溃恢复可能只补完摘要，不应再生成一次答案；必须证明本轮原生快照已收尾。
+	if request.ResumeFromCheckpoint {
+		latest, err := s.repo.CloudAgent(userID, runID)
+		if err != nil {
+			return err
+		}
+		fresh, err := cloudAgentDecode(latest)
+		if err != nil {
+			return err
+		}
+		saved, err := s.repo.CloudAgentPiSession(userID, runID)
+		if err == nil && cloudAgentPiTurnSettled(saved.SessionJSONL, &fresh) && cloudAgentPiCheckpointMatchesPrompt(saved.SessionJSONL, runID, request.TurnID, request.Prompt) {
+			return s.completeCloudAgentPiRun(userID, runID, 0, cloudAgentFence(ctx))
+		}
+	}
 	// 9. 完成运行
-	return s.completeCloudAgentPiRun(userID, runID)
+	return s.completeCloudAgentPiRun(userID, runID, runtimeState.PiAssistantResponses, cloudAgentFence(ctx))
+}
+
+func cloudAgentPiCheckpointMatchesPrompt(sessionJSONL, runID, turnID, prompt string) bool {
+	hash := sha256.Sum256([]byte(prompt))
+	lines := strings.Split(strings.TrimSpace(sessionJSONL), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		var entry struct {
+			Type       string `json:"type"`
+			CustomType string `json:"customType"`
+			Data       struct {
+				RunID        string `json:"runId"`
+				TurnID       string `json:"turnId"`
+				PromptSHA256 string `json:"promptSHA256"`
+			} `json:"data"`
+		}
+		if json.Unmarshal([]byte(lines[i]), &entry) == nil && entry.Type == "custom" && entry.CustomType == "canvas-model-step" && entry.Data.RunID == runID {
+			return entry.Data.TurnID == turnID && entry.Data.PromptSHA256 == hex.EncodeToString(hash[:])
+		}
+	}
+	return false
 }
 
 // cloudAgentPiTurnSettled 判断本轮是否已在会话里完整结束：本轮已有成功的助手回复，
@@ -384,9 +464,14 @@ func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool
 		return false
 	}
 	lines := strings.Split(strings.TrimRight(sessionJSONL, "\n"), "\n")
+	compactionSaved := false
 	for i := len(lines) - 1; i >= 0; i-- {
 		var entry struct {
-			Type    string `json:"type"`
+			Type       string `json:"type"`
+			CustomType string `json:"customType"`
+			Data       struct {
+				Purpose string `json:"purpose"`
+			} `json:"data"`
 			Message struct {
 				Role       string `json:"role"`
 				StopReason string `json:"stopReason"`
@@ -396,6 +481,12 @@ func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool
 			} `json:"message"`
 		}
 		if err := json.Unmarshal([]byte(lines[i]), &entry); err != nil {
+			return false
+		}
+		if entry.Type == "compaction" {
+			compactionSaved = true
+		}
+		if entry.Type == "custom" && entry.CustomType == "canvas-model-step" && entry.Data.Purpose == "compaction" && !compactionSaved {
 			return false
 		}
 		if entry.Type != "message" {
@@ -415,7 +506,7 @@ func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool
 }
 
 // completeCloudAgentPiRun 完成运行
-func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
+func (s *Service) completeCloudAgentPiRun(userID, runID string, priorAssistantResponses int, fences ...*model.CloudAgentFence) error {
 	for attempt := 0; attempt < 4; attempt++ {
 		run, err := s.repo.CloudAgent(userID, runID)
 		if err != nil {
@@ -436,14 +527,31 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 		if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
 			return nil
 		}
+		if state.CommerceBatch != nil {
+			// A final sentence cannot close a set still generating or awaiting repair.
+			cloudAgentBindFence(run, fences)
+			err := s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				state.PiResumePrompt = cloudAgentCommerceRecoveryInstruction + " 本轮尚未统一收尾，先调用 commerce_plan_wait。"
+				state.PiTurnID = fmt.Sprintf("%s:commerce:%d", runID, state.Step)
+				return cloudAgentSave(current, &state)
+			})
+			if errors.Is(err, repository.ErrCreationConflict) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			return errCloudAgentCommercePending
+		}
 
 		// 验证：必须有真实的助手响应（防止伪装完成）
-		if state.PiAssistantResponses == 0 {
-			return fmt.Errorf("no assistant response, refusing to mark as completed")
+		if state.PiAssistantResponses <= priorAssistantResponses {
+			return fmt.Errorf("no new assistant response, refusing to mark as completed")
 		}
 
 		// 原子更新状态
-		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		cloudAgentBindFence(run, fences)
+		err = s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 			if cloudAgentRunTerminal(current.Status) || current.Status == "waiting_approval" || current.Status == "waiting_user" {
 				return nil
 			}

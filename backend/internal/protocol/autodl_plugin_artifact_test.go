@@ -207,3 +207,44 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAutoDLPluginRetainsAudioWhileUpgradingVideo(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "autodl-comfyui.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkg.Manifest.Metadata.Version != "2.3.0" || pkg.Manifest.Metadata.Vendor != "影策" {
+		t.Fatalf("merged AutoDL metadata = %#v", pkg.Manifest.Metadata)
+	}
+	adapters, err := LoadInstalledProviders(pkg.ManifestRaw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var audio Adapter
+	for _, adapter := range adapters {
+		if adapter.Metadata().ID == "autodl-comfyui-audio" {
+			audio = adapter
+			break
+		}
+	}
+	if audio == nil || !audio.Metadata().NonCancelable || audio.Metadata().NonCancelableReason == "" {
+		t.Fatalf("AutoDL audio provider and cancellation metadata = %#v", audio)
+	}
+	spec, err := audio.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "indextts2-v1", Prompt: "test voice", Audios: []MediaReference{{URL: "https://cdn.example/voice.wav"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Path != "/api/v1/comfyui/comfyui_workflow/indextts2-v1" {
+		t.Fatalf("audio create path = %q", spec.Path)
+	}
+	body, ok := spec.Body.(map[string]any)
+	if !ok || body["prompt_text"] != "test voice" || body["prompt_simple"] != "https://cdn.example/voice.wav" {
+		t.Fatalf("audio create body = %#v", spec.Body)
+	}
+}

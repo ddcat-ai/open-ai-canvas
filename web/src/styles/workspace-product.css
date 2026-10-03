@@ -620,39 +620,9 @@
 .creation-floating-prompt button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
 .creation-floating-prompt button svg { width: 19px; height: 19px; }
 .app-user-workspace .creation-chat-composer.is-thread { display: flex; flex-direction: column; }
-.app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock .creation-mode-tabs {
-    display: grid;
-    width: max-content;
-    height: 32px;
-    flex: 0 0 auto;
-    grid-template-columns: repeat(3, auto);
-    margin: 0;
-    padding: 2px;
-    border-radius: 999px;
-    background: var(--user-surface-muted);
-    transform: none;
-}
-.app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock .creation-mode-button {
-    height: 28px;
-    min-height: 28px;
-    flex-direction: row;
-    gap: 4px;
-    padding: 0 8px;
-    font-size: 11px;
-    font-weight: 620;
-    border-radius: 999px;
-    white-space: nowrap;
-}
-.app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock .creation-mode-button svg { width: 13px; height: 13px; }
-.app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock .creation-mode-indicator { inset: 0; width: auto; height: auto; border-radius: 999px; }
 .app-user-workspace .creation-composer-stage { display: flex; min-width: 0; align-items: stretch; gap: 14px; }
 .app-user-workspace .creation-composer-stage.is-thread-mode { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 14px; }
-.app-user-workspace .creation-composer-stage.is-thread-mode > .creation-mode-tabs { display: grid; width: 76px; grid-template-columns: 1fr; grid-template-rows: repeat(3, minmax(54px, 1fr)); align-self: stretch; margin: 0; padding: 4px; border-radius: 18px; }
-.app-user-workspace .creation-composer-stage.is-thread-mode > .creation-mode-tabs .creation-mode-button { min-width: 0; min-height: 0; flex-direction: column; gap: 3px; padding: 7px 3px; font-size: 11px; }
-.app-user-workspace .creation-composer-stage.is-thread-mode > .creation-mode-tabs .creation-mode-indicator { inset: 0; width: auto; height: auto; transform: none; }
 .app-user-workspace .creation-composer-stage.is-home-mode { display: block; }
-.app-user-workspace .creation-composer-stage.is-home-mode > .creation-mode-tabs { display: grid; width: min(456px, 100%); grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: 1fr; margin: 0 auto 20px; padding: 4px; }
-.app-user-workspace .creation-composer-stage.is-home-mode > .creation-mode-tabs .creation-mode-button { min-height: 46px; flex-direction: row; gap: 6px; padding: 0 8px; font-size: 13px; }
 .app-user-workspace .creation-composer-stage .creation-empty-composer { min-width: 0; flex: 1 1 auto; }
 .app-user-workspace .creation-composer-stage.is-agent-mode .creation-agent-entry { min-width: 0; flex: 1 1 auto; }
 
@@ -661,7 +631,7 @@
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand { width: 100%; }
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-model-pane { border: 0; margin: 0; padding: 0; }
 
-@media (max-width: 720px) { .creation-floating-prompt { top: 8px; width: calc(100% - 24px); min-height: 60px; gap: 10px; padding: 8px 9px 8px 16px; border-radius: 19px; } .creation-floating-prompt input { font-size: 14px; } .creation-floating-prompt button { width: 40px; height: 40px; flex-basis: 40px; } .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-two-pane { grid-template-columns: minmax(0, 1fr); min-height: 0; } .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand-rail { display: none; } .app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock .creation-mode-tabs { height: 30px; } .app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock .creation-mode-button { height: 26px; min-height: 26px; padding: 0 6px; font-size: 10px; } }
+@media (max-width: 720px) { .creation-floating-prompt { top: 8px; width: calc(100% - 24px); min-height: 60px; gap: 10px; padding: 8px 9px 8px 16px; border-radius: 19px; } .creation-floating-prompt input { font-size: 14px; } .creation-floating-prompt button { width: 40px; height: 40px; flex-basis: 40px; } .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-two-pane { grid-template-columns: minmax(0, 1fr); min-height: 0; } .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand-rail { display: none; } }
 
 /* Shared controls: one size system and one state vocabulary. */
 .app-product-workspace :where(.ant-btn, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number),

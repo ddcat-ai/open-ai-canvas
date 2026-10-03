@@ -68,6 +68,16 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 - 物理空间由后台删除队列异步释放，失败保留任务重试；接口成功不代表对象存储已经清理完成。未选中素材使用的资源，以及其他 Resource 行（包括其他用户）复用的物理对象继续保留。
 - 旧画布 / 任务 / 历史快照记录本身保留，但被删媒体链接将失效。此操作不可恢复；没有数据库结构迁移。
 
+## 图片顺序导出
+
+`POST /resources/image-archive` 需要登录，请求体为 `[{"resourceId":"RESOURCE001","name":"01-主图"}]`。服务端按数组顺序读取当前用户已保存的原始图片，返回 `application/zip`；最多 100 张、总计 256 MiB，任一图片越权、缺失或读取失败则整次导出失败。带路径字符或重复的文件名被拒绝，扩展名取实际图片格式。临时 ZIP 不登记为新素材或计入账号文件容量。
+
+## 管理员用户删除
+
+`GET /admin/users/:id/delete-preflight` 返回 `canDelete`、`blockers` 和关联记录数量 `related`，需要有效管理员权限。`DELETE /admin/users/:id` 在事务内重新预检后删除账号和用户业务数据，将需保留的财务与审计记录关联到匿名主体。余额或预留积分、活动任务或支付、自删、最后一个管理员等条件会阻止删除；预检通过不保证并发状态变化后仍能删除。
+
+`POST /admin/users/:id/disable` 继续提供停用及清除登录态的行为。停用与删除在后台分别显示，不用删除接口替代停用。
+
 ## 注册服务协议
 
 `POST /auth/register` 的 JSON 请求必须携带布尔值 `acceptedTerms: true`，首次创建管理员也适用。缺省、`false` 或 `null` 均按未同意处理，在创建用户、消费验证码和创建会话前返回 HTTP 400，提示“请先同意<协议名称>”。原有注册开放、邮箱白名单、验证码与限流校验继续生效。
@@ -144,11 +154,15 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 `intent` 包含 `capability`（`text/image/video/audio`）、`operation`、`inputs`（素材类型到数量的映射）和 `options`（请求规格）。素材数量必须为 0–128 的整数，再按模型能力限制校验。视频规格包括 `vquality`、`size`、`videoSeconds`、布尔值 `videoGenerateAudio`，显式 `false` 必须保留。
 
+视频能力配置支持 `durationByResolution`，用于为每个输出分辨率声明独立的时长范围或固定值；未配置的分辨率回退 `duration`。例如 720p 可配置最大 15 秒、1080p 最大 10 秒。分辨率别名 `1080`/`1080p`、`2K`/`1440p`、`4K`/`2160p` 会按同一档处理，前端选择和后端任务准入使用同一规则。
+
 报价包含 `logicalModelId`（系统渠道直连为空）、`billingMode`、`quantity`、`amountMicrocredits`、`estimated`。视频 Token 报价另有 `videoTokenEstimate`：`formulaTokens`、`reservedTokens`、`outputWidth`、`outputHeight`、`framesPerSecond`、`outputSeconds`、`referenceSeconds`、`referenceDurationEstimated`、`dimensionsEstimated`、`reservationMarginPercent`。
 
 Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考素材数量不包含时长信息，带参考视频时统一按 15 秒估算并返回 `referenceDurationEstimated: true`。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。
 
 ## 管理员积分成本
+
+每个价格档还可配置 `timePricing`：`timezone` 使用 IANA 时区，`periods` 为左闭右开的 `{ startTime, endTime, multiplier }` 列表，支持 `HH:mm` 或 `HH:mm:ss`，`00:00` 作为结束时间表示当天 24:00。时间段不得重叠，跨午夜需拆成两段，倍率范围为 0.01–100 且最多两位小数。订单创建时将时间段倍率与现有默认/模型倍率合成并写入订单快照；预扣、结算、报价和备用线路切换沿用该快照。
 
 `GET/POST /admin/channels/:id/models` 与 `PATCH /admin/channels/:id/models/:modelId` 的 `priceTiers[]` 增加 `costPricing`：`configured`、`unitPriceMicrocredits`、`inputTokenPriceMicrocredits`、`outputTokenPriceMicrocredits`、`cachedTokenPriceMicrocredits`。成本沿用该价格档的计费方式；按次/秒使用单位价，文本 Token 按输入/输出/缓存分别定价，视频 Token 只使用输出价。价格为整数微积分，范围为 0 到 1000000000000；`configured=false` 表示未配置，`true` 且价格为 0 表示显式零成本。
 
@@ -257,6 +271,18 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 模型任务失败的 `run_failed` 事件保留 `taskId`，并提供安全分类 `reason`：`model_connection_reset`、`model_request_timeout`、`model_connection_refused` 或 `model_task_failed`。`text` 不透传原始上游错误，避免泄露地址和凭证；前端用事件类型而非摘要关键词判断工具成功 / 失败。失败不会触发自动付费重试。
 
+### 首页 Agent 与持久会话
+
+`POST /agent/runs` 使用 `surface=creation` 创建首页创作运行，支持 `sessionId`、已授权附件、模型选择和 `read_only|request_approval|auto` 权限模式；首页不创建隐藏画布。续聊仍使用 `/agent/runs/:id/messages`，审批使用既有审批决策接口。`GET /agent/runs/:id/events` 提供 SSE，断开浏览器连接不驱动或终止服务端执行，恢复使用事件游标。
+
+`GET/POST /agent/sessions`、`GET /agent/sessions/:id`、`GET /agent/sessions/:id/runs`、`DELETE /agent/sessions/:id` 均按当前用户隔离。创建正文仅接受 `title`、`surface`；列表可按 `surface`、`status`、`canvasId` 筛选，运行列表用 `limit` 和 `before` 分页。删除仅将会话标记为 `deleted`，保留执行日志、账单和已生成素材；有活动运行、清理未完成或待准入任务时返回冲突。已删除会话不能续聊、重放或被迟到提交重新激活。
+
+### Agent 重启与重复操作
+
+Agent 在数据库中保存运行执行权及固定操作回执。同一工具调用 ID 和相同参数重放原回执；同 ID 不同参数返回冲突。模型步骤恢复复用已有任务结果，不因活动任务指针已释放而再次建单。旧运行缺少可证明的检查点、写入回执或供应商提交结果不明时停止自动重新提交，需要核对原任务。此保护不保证第三方外部执行无条件只发生一次。
+
+支付下单按用户与幂等键查找原订单，同键改商品或支付渠道返回 409；订单金额、积分和名称来自事务锁内的商品快照，下游请求使用该订单快照。
+
 ## 管理员支付订单
 
 `GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`providerId`、`timeField`、`from`、`to`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名称、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；所有筛选同时生效，返回匹配总数和当前页订单。`timeField` 为 `created`（默认创建时间）、`paid`（渠道支付时间）、`credited`（入账时间）。`from`、`to` 为 `YYYY-MM-DD`，包含起止日期，按北京时间转换为左闭右开的时间区间；未填写的边界不限制，倒置日期或无效状态/时间口径返回 400。
@@ -292,6 +318,7 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 ## 用户 Agent 记忆
 
 `GET/POST /api/agent/memories`、`PATCH/DELETE /api/agent/memories/:id`、`POST /api/agent/memories/:id/decide`、`GET /api/agent/memories/export`、`POST /api/agent/memories/import`、`GET/PATCH /api/agent/memories/settings`、`POST /api/agent/memories/compact` 需要登录。记忆按 `author_user_id` 隔离；手动添加直接批准，Agent `remember_lesson` 写入待审，由本人 `decide`。导出 `kind` 为 `agent-memories`。压缩只处理该用户已批准记忆，创建 `canvas_text` 任务 `operation=agent_memory_compact`；worker 仅在 `agent_memory_settings.compact_task_id` 与任务 ID 一致时应用 JSON 计划（merge 保留第一条并删除其余，rewrite 原地更新）。周期为 `off` / `daily` / `weekly` / `monthly`，调度每 5 分钟扫描，每拍最多 3 个用户。
+记忆分类包含 `smart_creation`（显示名“智能创作”）；影策 已确认的创作计划会按当前对话写入这一分类，供后续 Agent 轮次检索和复用。
 
 ## 管理员查看 Agent 记忆
 

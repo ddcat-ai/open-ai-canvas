@@ -271,11 +271,8 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 			t.Fatalf("history decode failed at round %d: %v", round, err)
 		}
 		want := round * 2
-		if want > cloudAgentHistoryKeepRounds*2 {
-			want = cloudAgentHistoryKeepRounds * 2
-		}
 		if len(state.TextHistory) != want {
-			t.Fatalf("history window at round %d: got %d want %d", round, len(state.TextHistory), want)
+			t.Fatalf("complete history at round %d: got %d want %d", round, len(state.TextHistory), want)
 		}
 		if err := db.Model(&model.Task{}).Where("id = ?", run.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"继续创作"}`}).Error; err != nil {
 			t.Fatal(err)
@@ -290,15 +287,22 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	for i := range state.TextHistory {
 		state.TextHistory[i].Content = strings.Repeat("x", 4000)
 	}
-	raw, _ := json.Marshal(state)
-	if err := db.Model(run).Update("state_json", string(raw)).Error; err != nil {
+	for index, message := range state.TextHistory {
+		raw, _ := json.Marshal(message)
+		if err := db.Model(&model.CloudAgentMessageRecord{}).Where("run_id = ? AND user_id = ? AND kind = ? AND sequence = ?", parent, "user", "history", index+1).Update("message_json", string(raw)).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Simulate a legacy run without a native Pi transcript: its complete
+	// pre-migration dialogue must be migrated once, without the old 64KB cut.
+	if err := db.Where("run_id = ? AND user_id = ?", parent, "user").Delete(&model.CloudAgentPiSession{}).Error; err != nil {
 		t.Fatal(err)
 	}
 	req := agentTestRequest()
-	req.IdempotencyKey = "long-conversation-trim-bytes"
+	req.IdempotencyKey = "long-conversation-preserve-bytes"
 	child, err := s.CreateCloudAgentRun("user", req, parent)
 	if err != nil {
-		t.Fatalf("oversize history should trim not fail: %v", err)
+		t.Fatalf("legacy history below 8MB should remain available: %v", err)
 	}
 	childRun, err := s.repo.CloudAgent("user", child.ID)
 	if err != nil {
@@ -308,10 +312,10 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cloudAgentHistoryJSONSize(childState.TextHistory) > cloudAgentHistoryMaxBytes {
-		t.Fatal("trimmed history still over cap")
+	if cloudAgentHistoryJSONSize(childState.TextHistory) <= cloudAgentHistoryMaxBytes {
+		t.Fatalf("legacy history was silently clipped to the old 64KB cap: messages=%d size=%d parent=%d", len(childState.TextHistory), cloudAgentHistoryJSONSize(childState.TextHistory), len(state.TextHistory))
 	}
-	if cloudAgentHistoryUserInstructionCount(childState.TextHistory) < 1 {
-		t.Fatal("trimmed away the conversation")
+	if cloudAgentHistoryUserInstructionCount(childState.TextHistory) < 15 {
+		t.Fatal("legacy history lost older conversation turns")
 	}
 }

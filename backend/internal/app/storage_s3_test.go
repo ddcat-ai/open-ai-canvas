@@ -70,6 +70,31 @@ func TestS3ObjectOperationsUsePathStyleSessionTokenAndNoManagedHeaders(t *testin
 	}
 }
 
+func TestS3ObjectUploadAcceptsNonSeekableStream(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/bucket/video.mp4" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upload body: %v", err)
+		}
+		if string(data) != "video-result" {
+			t.Fatalf("body = %q", data)
+		}
+		w.Header().Set("ETag", `"stream-etag"`)
+	}))
+	defer server.Close()
+
+	setting := ossSettingValue{Provider: s3Provider, Region: "us-east-1", Endpoint: server.URL, Bucket: "bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value"}
+	reader := io.LimitReader(strings.NewReader("video-result"), int64(len("video-result")))
+	etag, err := putS3Object(setting, "video.mp4", "video/mp4", int64(len("video-result")), reader)
+	if err != nil || etag != "stream-etag" {
+		t.Fatalf("putS3Object() = %q, %v", etag, err)
+	}
+}
+
 func TestSignedS3ObjectURLUsesSDKPresignAndSessionToken(t *testing.T) {
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	server := httptest.NewServer(http.NotFoundHandler())

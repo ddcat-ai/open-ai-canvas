@@ -35,18 +35,6 @@ func (s *Service) buildSkillManifests(skills []cloudAgentSkill) []map[string]any
 	return manifests
 }
 
-// buildCompactionStrategy 构建压缩策略
-func (s *Service) buildCompactionStrategy(userID, canvasID string) map[string]any {
-	return map[string]any{
-		"enabled":          true,
-		"strategy":         "balanced", // balanced/aggressive/conservative
-		"reserveTokens":    2048,
-		"prioritizeRecent": true,
-		"keepSystemPrompt": true,
-		"keepToolResults":  true,
-	}
-}
-
 // Utility Functions
 
 // hashContentSHA256 使用 SHA256 计算内容哈希

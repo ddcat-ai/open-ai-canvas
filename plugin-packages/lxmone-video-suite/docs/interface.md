@@ -108,7 +108,7 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
   "id": "lxmone-video-suite",
   "name": "万有引力视频套件",
   "version": "1.0.1",
-  "author": "Yingce / 万有引力",
+  "author": "影策 / 万有引力",
   "description": "万有引力（lxmone.xyz）视频协议套件：Wan 3.0（现有渠道与 S 渠道）、Seedance 2 / 2.5、SD 2.0 / 2.5 / Mini、Grok Imagine、MiniMax H3（Max 与 A-E 独立工作流）。",
   "permissions": [
     "generation.run",
@@ -405,6 +405,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -699,6 +702,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -969,6 +975,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -1239,6 +1248,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -1509,6 +1521,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -1796,6 +1811,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -2094,6 +2112,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       },
       {
@@ -2434,6 +2455,9 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
             "error.code"
           ],
           "resultEphemeral": true
+        },
+        "nonCancelable": {
+          "reason": "当前协议 profile 未提供可验证的上游取消端点；宿主只能停止后续轮询，不能宣称上游任务已取消。"
         }
       }
     ]

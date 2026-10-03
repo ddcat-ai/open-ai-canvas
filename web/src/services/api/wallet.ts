@@ -90,6 +90,14 @@ export type ChannelModelPriceTier = {
     inputTokenPriceMicrocredits: number;
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
+    timePricing?: {
+        timezone: string;
+        periods: Array<{
+            startTime: string;
+            endTime: string;
+            multiplier: number;
+        }>;
+    };
     priceConfigured: boolean;
     enabled: boolean;
     priceVersion: number;

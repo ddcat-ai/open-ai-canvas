@@ -7,6 +7,7 @@ import type { ChannelModelFormValues as FormValues } from "./channel-model-edito
 import { normalizeUpstreamModelKey } from "./channel-model-price-tier-form";
 import { CreditCostFields } from "./credit-cost-fields";
 import { Select } from "@/components/ui/base/select";
+import { billingTimezoneOptions } from "@/lib/billing-timezones";
 
 export function PriceTierFields({
     index,
@@ -33,7 +34,9 @@ export function PriceTierFields({
     const matchMode = Form.useWatch(["priceTiers", index, "matchMode"], form) || "default";
     const priceConfigured = Form.useWatch(["priceTiers", index, "priceConfigured"], form) !== false;
     const tierEnabled = Form.useWatch(["priceTiers", index, "enabled"], form) !== false;
+    const timePricingEnabled = Form.useWatch(["priceTiers", index, "timePricingEnabled"], form) === true;
     const tierUpstream = normalizeUpstreamModelKey(Form.useWatch(["priceTiers", index, "providerModelKey"], form));
+    const timePricingTimezone = Form.useWatch(["priceTiers", index, "timePricing", "timezone"], form) || "Asia/Shanghai";
     // 统一价格档不展示上游键输入，但历史数据可能固化了独立键；它与模型级不一致时会
     // 静默改变实际发往供应商的模型，必须显式提示并允许一键恢复“跟随模型默认”。
     const staleTierUpstream = matchMode === "default" && tierUpstream && modelUpstream && tierUpstream !== modelUpstream ? tierUpstream : "";
@@ -115,6 +118,11 @@ export function PriceTierFields({
                                         <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value }))]} />
                                     </Form.Item>
                                 ) : null}
+                                {isVideo ? (
+                                    <Form.Item className="mb-0" name={[index, "videoSeconds"]} label="视频时长（秒）" tooltip="填写后仅匹配该时长；0 表示任意时长">
+                                        <InputNumber className="w-full" min={0} max={3600} precision={0} placeholder="任意" />
+                                    </Form.Item>
+                                ) : null}
                                 {isImage ? (
                                     <Form.Item className="mb-0" name={[index, "quality"]} label="质量/分辨率" rules={[{ required: true, message: "请选择质量或分辨率" }]}>
                                         <Select
@@ -186,6 +194,61 @@ export function PriceTierFields({
                                 <span>估算：宽 × 高 × 24 帧/秒 ×（输出时长 + 参考视频时长）÷ 1024；优先按上游有效用量结算，无用量时使用公式，授权预留 10% 会在结算后补扣或退回。</span>
                             </div>
                         ) : null}
+                        <section className="admin-price-tier-time-pricing" aria-label="时间段倍率">
+                            <div className="admin-price-tier-panel-heading admin-price-tier-time-pricing-heading">
+                                <div>
+                                    <h3>时间段倍率</h3>
+                                    <p>按订单创建时间对当前价格档叠加倍率，跨时间段的任务沿用创建时价格。</p>
+                                </div>
+                                <Form.Item name={[index, "timePricingEnabled"]} valuePropName="checked" className="mb-0">
+                                    <Switch
+                                        aria-label="启用时间段倍率"
+                                        onChange={(checked) => {
+                                            onDirty();
+                                            if (checked && !(form.getFieldValue(["priceTiers", index, "timePricing", "periods"]) || []).length) {
+                                                form.setFieldValue(["priceTiers", index, "timePricing", "periods"], [{ startTime: "09:00", endTime: "18:00", multiplier: 1.2 }]);
+                                            }
+                                        }}
+                                    />
+                                </Form.Item>
+                            </div>
+                            {timePricingEnabled ? (
+                                <>
+                                    <Form.Item name={[index, "timePricing", "timezone"]} label="计费时区" rules={[{ required: true, message: "请选择计费时区" }]}>
+                                        <Select
+                                            showSearch
+                                            optionFilterProp="label"
+                                            options={billingTimezoneOptions(timePricingTimezone)}
+                                            aria-label="计费时区"
+                                        />
+                                    </Form.Item>
+                                    <Form.List name={[index, "timePricing", "periods"]}>
+                                        {(periodFields, { add, remove }) => (
+                                            <div className="admin-price-tier-time-periods">
+                                                <div className="admin-price-tier-time-periods-header">
+                                                    <span>开始时间</span><span>结束时间</span><span>倍率</span><span />
+                                                </div>
+                                                {periodFields.map((periodField, periodIndex) => (
+                                                    <div className="admin-price-tier-time-period-row" key={periodField.key}>
+                                                        <Form.Item name={[periodField.name, "startTime"]} rules={[{ required: true, message: "请填写开始时间" }]}>
+                                                            <Input type="time" step={60} aria-label={`第 ${periodIndex + 1} 条时间段开始时间`} />
+                                                        </Form.Item>
+                                                        <Form.Item name={[periodField.name, "endTime"]} rules={[{ required: true, message: "请填写结束时间" }]}>
+                                                            <Input type="time" step={60} aria-label={`第 ${periodIndex + 1} 条时间段结束时间`} />
+                                                        </Form.Item>
+                                                        <Form.Item name={[periodField.name, "multiplier"]} rules={[{ required: true, message: "请填写倍率" }, { type: "number", min: 0.01, max: 100, message: "请输入 0.01–100" }]}>
+                                                            <InputNumber className="w-full" min={0.01} max={100} precision={2} step={0.01} aria-label={`第 ${periodIndex + 1} 条时间段倍率`} />
+                                                        </Form.Item>
+                                                        <Button type="text" danger icon={<Trash2 className="size-4" />} aria-label={`删除第 ${periodIndex + 1} 条时间段`} onClick={() => remove(periodField.name)} />
+                                                    </div>
+                                                ))}
+                                                <Button type="dashed" block onClick={() => add({ startTime: "09:00", endTime: "18:00", multiplier: 1.2 })}>添加时间段</Button>
+                                            </div>
+                                        )}
+                                    </Form.List>
+                                </>
+                            ) : null}
+                        </section>
                         <CreditCostFields index={index} form={form} billingMode={billingMode} isVideo={isVideo} />
                     </section>
                 </div>

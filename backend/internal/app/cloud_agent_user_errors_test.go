@@ -21,6 +21,8 @@ func TestUserFacingTaskErrorMatchesCanvasNodeClassification(t *testing.T) {
 		{"rate limit", "HTTP 429", "服务当前繁忙，请稍后重试。"},
 		{"auth", "status 401", "生成服务鉴权失败，请检查渠道配置。"},
 		{"provider json", `接口请求失败：{"error":{"message":"图片尺寸不支持"}}`, "图片尺寸不支持"},
+		{"provider json token URL", `接口请求失败：{"error":{"message":"请求 https://example.invalid/generate?token=example 失败"}}`, taskErrorNetworkMessage},
+		{"provider json internal address", `接口请求失败：{"error":{"message":"上游 10.0.0.7:8080 不可用"}}`, taskErrorNetworkMessage},
 		{"moderation", "sensitive_words_detected", taskErrorModerationMessage},
 		{"storage", "参考图片上传失败：bucket denied", "参考素材上传到对象存储失败，请检查对象存储配置后重试。"},
 		{"readable chinese", "模型服务拒绝了请求，请检查模型和参数", "模型服务拒绝了请求，请检查模型和参数"},

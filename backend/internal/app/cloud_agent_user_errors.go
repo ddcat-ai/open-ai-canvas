@@ -30,6 +30,7 @@ var (
 	taskErrorWrappedStatusPrefix   = regexp.MustCompile(`(?i)^\d{3}(?:\s+(?:Bad Gateway|Service Unavailable|Gateway Timeout|Internal Server Error|Not Found|Unauthorized|Forbidden|Too Many Requests))?\s*[:：-]?\s*`)
 	taskErrorStorageDisabled       = regexp.MustCompile(`(?i)\bUserDisable\b`)
 	taskErrorStorageUpload         = regexp.MustCompile(`(?i)(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云)`)
+	taskErrorAddressPattern        = regexp.MustCompile(`(?i)\b(?:localhost|(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::[0-9]+)?\b|\.internal\b`)
 )
 
 // userFacingTaskError 把任务里保存的原始错误转换成用户能看懂的中文原因。
@@ -77,6 +78,9 @@ func userFacingTaskError(raw string) string {
 		if taskErrorInfrastructurePattern.MatchString(raw) {
 			return taskErrorNetworkMessage
 		}
+	}
+	if safeTaskDiagnosticMessage(display) != truncateRunes(display, 240) || taskErrorAddressPattern.MatchString(display) {
+		return taskErrorNetworkMessage
 	}
 	return truncateRunes(display, 240)
 }

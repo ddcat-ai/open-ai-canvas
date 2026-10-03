@@ -140,6 +140,17 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if err := validateVideoDuration(value.Duration); err != nil {
 		return err
 	}
+	for resolution, duration := range value.DurationByResolution {
+		if strings.TrimSpace(resolution) == "" {
+			return BadAuthRequest("按分辨率配置视频时长时，分辨率不能为空")
+		}
+		if len(value.Resolutions) > 0 && !videoResolutionConfigKeySupported(value.Resolutions, resolution) {
+			return BadAuthRequest("按分辨率配置的视频时长包含未声明的分辨率")
+		}
+		if err := validateVideoDuration(duration); err != nil {
+			return BadAuthRequest(fmt.Sprintf("分辨率 %s 的视频时长配置无效", resolution))
+		}
+	}
 	if len(value.Ratios) == 0 {
 		if strings.TrimSpace(value.DefaultRatio) != "" {
 			return BadAuthRequest("未配置画面比例时不能设置默认比例")
@@ -315,7 +326,8 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 		}
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds))
-	if err != nil || !videoDurationAllowed(profile.Duration, seconds) {
+	duration := videoDurationConfigForResolution(profile, input.Config.VQuality)
+	if err != nil || !videoDurationAllowed(duration, seconds) {
 		return BadAuthRequest("视频时长不在当前模型支持范围内")
 	}
 	if input.Config.Size != "" && !videoRatioAllowed(profile.Ratios, input.Config.Size) {
@@ -473,6 +485,51 @@ func videoDurationAllowed(value VideoDurationConfig, seconds int) bool {
 		return containsInt(value.Values, seconds)
 	}
 	return seconds >= value.Min && seconds <= value.Max && value.Step > 0 && (seconds-value.Min)%value.Step == 0
+}
+
+func videoDurationConfigForResolution(profile *VideoCapabilityConfig, resolution string) VideoDurationConfig {
+	if profile == nil {
+		return VideoDurationConfig{}
+	}
+	requested := canonicalVideoResolutionKey(resolution)
+	if requested != "" {
+		for key, config := range profile.DurationByResolution {
+			if canonicalVideoResolutionKey(key) == requested {
+				return config
+			}
+		}
+	}
+	return profile.Duration
+}
+
+func videoResolutionConfigKeySupported(resolutions []string, key string) bool {
+	wanted := canonicalVideoResolutionKey(key)
+	if wanted == "" {
+		return false
+	}
+	for _, resolution := range resolutions {
+		if canonicalVideoResolutionKey(resolution) == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalVideoResolutionKey(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.TrimSuffix(value, "p")
+	switch value {
+	case "2k":
+		return "1440"
+	case "4k":
+		return "2160"
+	case "low":
+		return "480"
+	}
+	if _, err := strconv.Atoi(value); err == nil {
+		return value
+	}
+	return ""
 }
 
 func videoRatioAllowed(options []string, value string) bool {

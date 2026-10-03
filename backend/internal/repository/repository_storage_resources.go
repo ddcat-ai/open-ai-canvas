@@ -147,7 +147,12 @@ func (r *Repository) DailyUploadBytes(userID string, day string) (int64, error) 
 }
 
 func (r *Repository) CreateResource(resource *model.Resource) error {
-	return r.db.Create(resource).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockOwnedWriteUser(tx, resource.UserID); err != nil {
+			return err
+		}
+		return tx.Create(resource).Error
+	})
 }
 
 func (r *Repository) SaveResource(resource *model.Resource) error {

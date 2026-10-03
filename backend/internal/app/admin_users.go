@@ -5,7 +5,6 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -225,7 +224,8 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 		}
 		user.Email = email
 	}
-	if req.Password != "" {
+	revokeSessions := req.Password != ""
+	if revokeSessions {
 		if err := validatePassword(req.Password); err != nil {
 			return nil, err
 		}
@@ -234,14 +234,11 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 			return nil, err
 		}
 		user.PasswordHash = hash
-		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
-			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
-		}
 	}
 	user.Role = nextRole
 	user.Status = nextStatus
 	user.UpdatedAt = time.Now()
-	if err := s.repo.Save(user); err != nil {
+	if err := s.repo.SaveAdminUserWithGuard(actor.ID, user, revokeSessions); err != nil {
 		return nil, err
 	}
 	if err := s.appendAdminAudit(actor, "user.update", "user", user.ID, "更新用户账号状态或资料", map[string]any{"role": user.Role, "status": user.Status}); err != nil {
@@ -250,39 +247,46 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 	return user, nil
 }
 
+type UserDeletePreflight = repository.UserDeletionPreflight
+
+func (s *Service) UserDeletePreflight(actor *model.User, userID string) (*UserDeletePreflight, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	return s.repo.UserDeletionPreflight(actor.ID, strings.TrimSpace(userID))
+}
+
+func (s *Service) DisableUser(actor *model.User, userID string) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == actor.ID {
+		return BadAuthRequest("不能停用当前登录的管理员账号")
+	}
+	event, err := newAdminAuditEvent(actor, "user.disable", "user", userID, "停用用户并清除登录态", nil)
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.BulkDisableUsers(actor.ID, []string{userID}, []model.AdminAuditEvent{*event}, time.Now())
+	return err
+}
+
 func (s *Service) DeleteUser(actor *model.User, userID string) error {
 	if err := s.RequireAdmin(actor); err != nil {
 		return err
 	}
-	if actor.ID == userID {
-		return BadAuthRequest("不能删除当前登录的管理员账号")
-	}
-	user, err := s.repo.User(userID)
+	preflight, err := s.repo.DeleteUserPermanently(actor.ID, strings.TrimSpace(userID), newID())
 	if err != nil {
 		return err
 	}
-	if user.Role == model.UserRoleAdmin {
-		count, err := s.repo.ActiveAdminCountExcluding(user.ID)
-		if err != nil {
-			return err
+	if preflight == nil || !preflight.CanDelete {
+		if preflight == nil {
+			return BadAuthRequest("删除预检未完成")
 		}
-		if count == 0 {
-			return BadAuthRequest("至少需要保留一个管理员")
-		}
+		return BadAuthRequest(strings.Join(preflight.Blockers, "；"))
 	}
-	if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
-		return err
-	}
-	if err := s.repo.DeleteUserTaskTextDeltas(user.ID); err != nil {
-		return err
-	}
-	// 有资金流水后必须保留用户主体，删除入口改为停用并清除全部登录态。
-	user.Status = model.UserStatusDisabled
-	user.UpdatedAt = time.Now()
-	if err := s.repo.Save(user); err != nil {
-		return err
-	}
-	return s.appendAdminAudit(actor, "user.disable", "user", user.ID, "停用用户并清除登录态", nil)
+	return nil
 }
 
 func (s *Service) BulkDisableUsers(actor *model.User, req BulkDisableUsersRequest) (*BulkDisableUsersResult, error) {

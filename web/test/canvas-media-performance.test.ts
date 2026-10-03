@@ -81,7 +81,9 @@ describe("large canvas media rendering", () => {
         expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
         expect(inactivePreviewSource).toContain("hasPersistedPreview || !nearViewport");
         expect(inactivePreviewSource).toContain("URL.revokeObjectURL(localPreviewUrlRef.current)");
-        expect(inactivePreviewSource).not.toContain("<video");
+        expect(inactivePreviewSource).toContain("useVideoPlaybackUrl(node, nearViewport && !hasPersistedPreview && !localPreviewUrl)");
+        expect(inactivePreviewSource).toContain("if (passiveVideoUrl)");
+        expect(inactivePreviewSource).toContain("if (hasPersistedPreview || localPreviewUrl)");
         expect(inactivePreviewSource).toContain("hydrateCanvasVideoPreview(node, controller.signal)");
         expect(canvasVideoPreviewSource).toContain("captureVideoPoster(source, { signal, maxWidth: 400 })");
         expect(inactivePreviewSource).toContain("hydrated.persisted.then");

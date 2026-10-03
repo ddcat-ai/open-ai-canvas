@@ -1,4 +1,5 @@
 import { rmSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,8 +20,10 @@ const providerID = "infinite-canvas";
 const api = "openai-completions";
 
 async function readRequest() {
-  let raw = "";
-  for await (const chunk of process.stdin) raw += chunk;
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  // JSONL 常跨多个管道 chunk；逐块转字符串会损坏跨边界的中文 UTF-8。
+  const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw.trim()) throw new Error("Agent runtime input is empty");
   return JSON.parse(raw);
 }
@@ -100,6 +103,7 @@ async function run() {
     authPath: join(isolatedDir, "auth.json"),
     modelsPath: join(isolatedDir, "models.json"),
   });
+  let compactionActive = false;
   modelRuntime.registerProvider(providerID, {
     name: "影策模型任务",
     baseUrl: "http://agent-runtime.invalid/v1",
@@ -131,8 +135,22 @@ async function run() {
       void (async () => {
         stream.push({ type: "start", partial });
         try {
+          // Persist the step identity and native pre-model checkpoint before any billed call.
+          await eventChain.current;
+          const stepId = replayStepId || randomUUID();
+          replayStepId = null;
+          sessionManager.appendCustomEntry("canvas-model-step", { runId: request.runId, turnId: request.turnId, stepId, purpose: compactionActive ? "compaction" : "dialogue", promptSHA256: createHash("sha256").update(request.prompt).digest("hex") });
+          await bridge(request, "/event", {
+            type: "session_snapshot",
+            sessionJSONL: [sessionManager.getHeader(), ...sessionManager.getEntries()].map(entry => JSON.stringify(entry)).join("\n") + "\n",
+          }, options?.signal);
           const result = await bridge(request, "/model", {
+            stepId,
             modelId: model.id,
+            purpose: compactionActive ? "compaction" : "dialogue",
+            systemPrompt: compactionActive
+              ? `${context.systemPrompt || ""}\n保留已经确认的商品事实、素材角色、站点与目标语言、目标语言卖点及中文审核对照、统一风格、已完成/待执行任务、用户最新约束。不能把竞品属性当商品事实；不得把审批或收费事实改写成已获授权。`
+              : context.systemPrompt,
             messages: context.messages,
             tools: (context.tools ?? []).map((tool) => ({
               name: tool.name,
@@ -187,6 +205,9 @@ async function run() {
     parameters: Type.Unsafe(tool.parameters ?? { type: "object", properties: {} }),
     executionMode: tool.executionMode || "sequential",
     async execute(toolCallId, params, signal) {
+      // Tool execution may complete the run (ask_user). Deliver all preceding
+      // assistant/tool-start events before that terminal state is committed.
+      await eventChain.current;
       const result = await bridge(request, "/tool", {
         callId: toolCallId,
         name: tool.name,
@@ -216,12 +237,108 @@ async function run() {
   }));
 
   let sessionManager;
+  let replayStepId = null;
+  let resumeCompaction = false;
   if (request.sessionJSONL) {
     const sessionFile = join(sessionDir, "session.jsonl");
     await writeFile(sessionFile, request.sessionJSONL, { mode: 0o600, flag: "wx" });
     sessionManager = SessionManager.open(sessionFile, sessionDir, workDir);
   } else {
     sessionManager = SessionManager.create(workDir, sessionDir);
+  }
+  if (request.resumeFromCheckpoint) {
+    const marker = sessionManager.getBranch().findLast(entry => entry.type === "custom" && entry.customType === "canvas-model-step" && entry.data?.runId === request.runId);
+    if (!marker?.data?.stepId) throw new Error("旧运行缺少可证明的模型步骤检查点，已停止自动恢复；请核对任务记录。");
+    replayStepId = marker.data.stepId;
+    resumeCompaction = marker.data.purpose === "compaction";
+    sessionManager.branch(marker.id);
+  }
+  if (!request.sessionJSONL && request.bootstrapMessages?.length) {
+    // 一次性迁移旧的纯用户/助手历史；从第一次持久快照起只使用 Pi 分支。
+    for (const message of request.bootstrapMessages) {
+      if ((message.role !== "user" && message.role !== "assistant") || typeof message.content !== "string" || message.tool_calls) {
+        throw new Error("旧会话消息不能安全迁移为原生记录，请新建对话并核对已有任务。");
+      }
+      if (message.role === "user") sessionManager.appendMessage({ role: "user", content: message.content, timestamp: Date.now() });
+      else sessionManager.appendMessage(createMessage(model, { text: message.content }));
+    }
+  }
+  // An approval abort may leave a paused tool result and later calls from the
+  // same assistant message unfinished. Restore the real results before a new
+  // user prompt or model request; the provider requires every call ID to pair.
+  if (request.sessionJSONL && !request.resumeFromCheckpoint) {
+    const branch = sessionManager.getBranch();
+    const assistantIndex = branch.findLastIndex(entry => entry.type === "message" && entry.message?.role === "assistant" && entry.message.content?.some(part => part.type === "toolCall"));
+    if (assistantIndex >= 0) {
+      const assistant = branch[assistantIndex];
+      const calls = assistant.message.content.filter(part => part.type === "toolCall");
+      const following = branch.slice(assistantIndex + 1);
+      const results = following.filter(entry => entry.type === "message" && entry.message?.role === "toolResult");
+      const pausedIndex = results.findIndex(entry => entry.message.details?.paused);
+      const retained = pausedIndex < 0 ? results : results.slice(0, pausedIndex);
+      const pending = calls.filter(call => !retained.some(entry => entry.message.toolCallId === call.id));
+      if (pending.length && following.some(entry => entry.type === "message" && entry.message?.role !== "toolResult")) {
+        throw new Error("旧会话存在未闭合工具调用，不能继续提交模型请求；请核对任务记录。");
+      }
+      if (pending.length) {
+        const marker = branch.slice(0, assistantIndex).findLast(entry => entry.type === "custom" && entry.customType === "canvas-model-step");
+        const rejectedParent = request.rejectedParentRunId && marker?.data?.runId === request.rejectedParentRunId && request.rejectedParentRunId !== request.runId;
+        if (marker?.data?.runId !== request.runId && !rejectedParent) {
+          throw new Error("另一运行的工具调用未闭合，不能代它执行；请核对任务记录。");
+        }
+        if (pausedIndex >= 0) sessionManager.branch(retained.at(-1)?.id || assistant.id);
+        let stopped = false;
+        for (const call of pending) {
+          if (rejectedParent) {
+            sessionManager.appendMessage({
+              role: "toolResult", toolCallId: call.id, toolName: call.name,
+              content: [{ type: "text", text: JSON.stringify({ phase: "user_rejected", taskSubmitted: false, charged: false, text: "上一轮方案被用户关闭或修改，本操作及其后续操作未执行；按本轮要求重新规划，不重发旧操作。" }) }],
+              isError: true, timestamp: Date.now(),
+            });
+            continue;
+          }
+          if (!(request.tools ?? []).some(tool => tool.name === call.name)) throw new Error(`未声明的待恢复工具: ${call.name}`);
+          const replayOnly = pausedIndex >= 0 && results[pausedIndex].message.toolCallId === call.id;
+          const result = await bridge(request, "/tool", { callId: call.id, name: call.name, arguments: call.arguments ?? {}, ...(replayOnly ? { replayOnly: true } : {}) });
+          let content = typeof result.content === "string" ? result.content : JSON.stringify(result.content ?? result ?? {});
+          if (!content || content === "null") content = JSON.stringify({ error: "工具没有返回结果" });
+          sessionManager.appendMessage({
+            role: "toolResult", toolCallId: call.id, toolName: call.name,
+            content: [{ type: "text", text: content }], details: result.details,
+            isError: Boolean(result.isError || result.pause), timestamp: Date.now(),
+          });
+          await bridge(request, "/event", {
+            type: "session_snapshot",
+            sessionJSONL: [sessionManager.getHeader(), ...sessionManager.getEntries()].map(entry => JSON.stringify(entry)).join("\n") + "\n",
+          });
+          if (result.pause) {
+            emit("approval_wait", { approvalId: result.approvalId, toolName: call.name, callId: call.id });
+            stopped = true;
+            break;
+          }
+          if (result.terminate) {
+            stopped = true;
+            break;
+          }
+        }
+        if (stopped) {
+          emit("settled", { sessionFile: sessionManager.getSessionFile(), entries: sessionManager.getEntries().length });
+          return;
+        }
+      }
+    }
+  }
+  const turnHash = createHash("sha256").update(request.prompt).digest("hex");
+  const priorTurn = sessionManager.getBranch().findLast(entry => entry.type === "custom_message" && entry.customType === "server-turn-context" && entry.details?.runId === request.runId && entry.details?.turnId === request.turnId && entry.details?.promptSHA256 === turnHash);
+  let resumePendingPrompt = false;
+  let hasTurnPrompt = false;
+  if (priorTurn) {
+    const branch = sessionManager.getBranch();
+    hasTurnPrompt = branch.slice(branch.indexOf(priorTurn)+1).some(entry => entry.type === "message" && entry.message?.role === "user");
+    resumePendingPrompt = hasTurnPrompt && !request.resumeFromCheckpoint;
+  }
+  if (!priorTurn && !request.resumeFromCheckpoint) {
+    sessionManager.appendCustomMessageEntry("server-turn-context", request.turnContext || "服务端本轮检查点。", false, {runId:request.runId,turnId:request.turnId,promptSHA256:turnHash});
   }
   // 严格隔离：不探索文件系统的 packages/skills/extensions/项目配置。
   // 技能由服务端的读取工具提供，这里不再按路径加载；projectTrusted=false 让 SDK
@@ -437,14 +554,38 @@ async function run() {
           contextUsage: session.getContextUsage(),
         });
       });
-    } else if (event.type === "compaction_start" || event.type === "compaction_end") {
-      enqueueEvent({ type: event.type, reason: event.reason, contextUsage: session.getContextUsage() });
+    } else if (event.type === "compaction_start") {
+      compactionActive = true;
+      enqueueEvent({ type: event.type, reason: event.reason, keepRecentTokens: compactionConfig.keepRecentTokens });
+    } else if (event.type === "compaction_end") {
+      compactionActive = false;
+      // appendCompaction 已由 SDK 完成；快照和完成事件一起交给 Go 事务保存。
+      enqueueEvent({
+        type: event.type, reason: event.reason, result: event.result,
+        aborted: event.aborted, errorMessage: event.errorMessage, willRetry: event.willRetry,
+        keepRecentTokens: compactionConfig.keepRecentTokens,
+        sessionJSONL: event.result ? [sessionManager.getHeader(), ...sessionManager.getEntries()].map(entry => JSON.stringify(entry)).join("\n") + "\n" : undefined,
+        contextUsage: session.getContextUsage(),
+      });
     }
   });
 
   try {
     try {
-      await session.prompt(request.prompt);
+      if (request.resumeFromCheckpoint || resumePendingPrompt) {
+        // The public core continuation does not append a second user prompt.
+        // Server-side retries remain authoritative; a resumed overflow fails closed.
+        if (resumeCompaction) {
+          const lastAssistant = sessionManager.getBranch().findLast(entry => entry.type === "message" && entry.message?.role === "assistant")?.message;
+          await session.compact();
+          if (!hasTurnPrompt) await session.prompt(request.prompt);
+          else if (lastAssistant?.stopReason !== "stop") await session.agent.continue();
+        } else {
+          await session.agent.continue();
+        }
+      } else {
+        await session.prompt(request.prompt);
+      }
     } catch (error) {
       if (!pausedForApproval) throw error;
     }

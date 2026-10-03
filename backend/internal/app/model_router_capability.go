@@ -32,12 +32,13 @@ type CapabilityImageSize struct {
 }
 
 type CapabilitySpec struct {
-	Version    int                         `json:"version"`
-	Capability string                      `json:"capability"`
-	Operations []string                    `json:"operations,omitempty"`
-	Inputs     map[string]InputConstraint  `json:"inputs,omitempty"`
-	Options    map[string]OptionConstraint `json:"options,omitempty"`
-	ImageSize  *CapabilityImageSize        `json:"imageSize,omitempty"`
+	Version                   int                         `json:"version"`
+	Capability                string                      `json:"capability"`
+	Operations                []string                    `json:"operations,omitempty"`
+	Inputs                    map[string]InputConstraint  `json:"inputs,omitempty"`
+	Options                   map[string]OptionConstraint `json:"options,omitempty"`
+	VideoDurationByResolution map[string]OptionConstraint `json:"videoDurationByResolution,omitempty"`
+	ImageSize                 *CapabilityImageSize        `json:"imageSize,omitempty"`
 }
 
 type InputConstraint struct {
@@ -254,6 +255,17 @@ func NormalizeCapabilitySpec(spec CapabilitySpec) (CapabilitySpec, error) {
 		normalizedOptions[name] = constraint
 	}
 	spec.Options = normalizedOptions
+	if len(spec.VideoDurationByResolution) > 0 {
+		normalizedDurations := make(map[string]OptionConstraint, len(spec.VideoDurationByResolution))
+		for rawResolution, constraint := range spec.VideoDurationByResolution {
+			key := canonicalVideoResolutionKey(rawResolution)
+			if key == "" {
+				return spec, BadAuthRequest("按分辨率配置的视频时长分辨率无效")
+			}
+			normalizedDurations[key+"p"] = constraint
+		}
+		spec.VideoDurationByResolution = normalizedDurations
+	}
 	return spec, nil
 }
 
@@ -294,7 +306,27 @@ func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityM
 			reasons = append(reasons, fmt.Sprintf("至少需要 %d 个%s", constraint.Min, capabilityInputLabel(inputType)))
 		}
 	}
+	conditionalDuration := false
+	if normalizeCapability(intent.Capability) == "video" {
+		_, hasResolution := intent.Options["vquality"]
+		_, hasDuration := intent.Options["videoSeconds"]
+		if hasResolution && hasDuration && len(spec.VideoDurationByResolution) > 0 {
+			if resolution, ok := intent.Options["vquality"].(string); ok {
+				normalizedResolution := normalizeModelRequestOption("vquality", resolution)
+				resolutionKey := normalizedScalar(normalizedResolution)
+				if constraint, found := spec.VideoDurationByResolution[resolutionKey]; found {
+					if !matchOptionConstraint("videoSeconds", constraint, intent.Options["videoSeconds"]) {
+						reasons = append(reasons, "参数 视频时长超出当前分辨率支持范围")
+					}
+					conditionalDuration = true
+				}
+			}
+		}
+	}
 	for name, value := range intent.Options {
+		if conditionalDuration && canonicalCapabilityOptionName(name) == "videoSeconds" {
+			continue
+		}
 		constraint, declared := spec.Options[canonicalCapabilityOptionName(name)]
 		if !declared {
 			reasons = append(reasons, "不支持参数 "+capabilityOptionLabel(name))

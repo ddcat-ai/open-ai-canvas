@@ -6,7 +6,7 @@ import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedan
 import { isVolcengineArkVideoProtocol } from "@/lib/model-protocols";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDuration, videoDimensionsForRatioAndResolution, videoResolutionComparisonKey, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
-import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationConfigForResolution, videoDurationOptions, videoDurationAllowed, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 
 const sizeOptions = [
@@ -52,7 +52,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 {configuredResolutions.length ? <SettingGroup title="分辨率" color={theme.node.muted}>
                     <div className="grid grid-cols-3 gap-1.5">
                         {configuredResolutions.map((item) => (
-							<OptionPill key={item.value} selected={isVideoResolutionMatch(resolution, item.value)} disabled={!hasPriceTierForVideoSelection(priceTiers, item.value, Number(seconds))} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
+							<OptionPill key={item.value} selected={isVideoResolutionMatch(resolution, item.value)} disabled={!hasPriceTierForVideoSelection(priceTiers, item.value, Number(seconds))} theme={theme} onClick={() => { onConfigChange("vquality", item.value); if (!videoDurationAllowed(profile, Number(seconds), item.value)) onConfigChange("videoSeconds", String(videoDurationConfigForResolution(profile, item.value).default)); }}>
                                 {item.label}
                             </OptionPill>
                         ))}
@@ -81,7 +81,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingGroup> : null}
                 <SettingGroup title="秒数" color={theme.node.muted}>
-					<VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
+					<VideoDurationControl profile={profile} resolution={resolution} value={Number(seconds)} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
                 {profile.generateAudio.supported || profile.watermark.supported ? <SettingGroup title="输出" color={theme.node.muted}><div className="grid grid-cols-2 gap-3 rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>{profile.generateAudio.supported ? <SwitchRow label="生成声音" checked={generateAudio} theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} /> : null}{profile.watermark.supported ? <SwitchRow label="添加水印" checked={watermark} theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} /> : null}</div></SettingGroup> : null}
             </div>
@@ -128,7 +128,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                             const item = { value, label: value.toUpperCase() };
 							const disabled = (item.value === "1080p" && isSeedanceFastModel(model)) || !hasPriceTierForVideoSelection(priceTiers, item.value, duration);
                             return (
-                                <OptionPill key={item.value} selected={resolution === item.value} disabled={disabled} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
+                                <OptionPill key={item.value} selected={resolution === item.value} disabled={disabled} theme={theme} onClick={() => { onConfigChange("vquality", item.value); if (!videoDurationAllowed(profile, duration, item.value)) onConfigChange("videoSeconds", String(videoDurationConfigForResolution(profile, item.value).default)); }}>
                                     {item.label}
                                 </OptionPill>
                             );
@@ -159,7 +159,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                     </div>
                 </SettingGroup>
                 <SettingGroup title="时长" color={theme.node.muted}>
-					<VideoDurationControl profile={profile} value={duration} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
+					<VideoDurationControl profile={profile} resolution={resolution} value={duration} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
                 <SettingGroup title="输出" color={theme.node.muted}>
                     <div className="grid grid-cols-2 gap-3 rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>
@@ -262,16 +262,17 @@ function DurationInput({ value, min, max, theme, onChange }: { value: number; mi
     );
 }
 
-function VideoDurationControl({ profile, value, theme, disabled, onChange }: { profile: VideoCapabilityConfig; value: number; theme: CanvasTheme; disabled?: (value: number) => boolean; onChange: (value: number) => void }) {
-    if (profile.duration.selection === "range") {
-        const min = profile.duration.min || VIDEO_DURATION_MIN;
-        const max = Math.max(min, profile.duration.max || min);
-        const step = Math.max(1, profile.duration.step || 1);
-        const normalized = normalizeDurationValue(value, profile.duration.default, min, max, step);
+function VideoDurationControl({ profile, resolution, value, theme, disabled, onChange }: { profile: VideoCapabilityConfig; resolution?: string; value: number; theme: CanvasTheme; disabled?: (value: number) => boolean; onChange: (value: number) => void }) {
+    const duration = videoDurationConfigForResolution(profile, resolution);
+    if (duration.selection === "range") {
+        const min = duration.min || VIDEO_DURATION_MIN;
+        const max = Math.max(min, duration.max || min);
+        const step = Math.max(1, duration.step || 1);
+        const normalized = normalizeDurationValue(value, duration.default, min, max, step);
 		return <DurationRangeControl value={normalized} min={min} max={max} step={step} theme={theme} onChange={(next) => { if (!disabled?.(next)) onChange(next); }} />;
     }
 
-    const options = videoDurationOptions(profile);
+    const options = videoDurationOptions(profile, resolution);
     return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 4)}, minmax(0, 1fr))` }}>
 		{options.map((option) => <OptionPill key={option} selected={normalizedNumber(value) === option} disabled={disabled?.(option)} theme={theme} onClick={() => onChange(option)}>{option}s</OptionPill>)}
     </div>;

@@ -20,6 +20,7 @@ import { withRemoteUserDataSyncExclusive } from "./user-data-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { creativeVideoSpecificationError } from "@/lib/creation/creative-agent-state";
 import { updateCreativePlan } from "@/lib/creation/creative-plan";
+import { creativeBatchRefs } from "@/lib/creation/creative-style-plan";
 
 export type CreativeCanvasAdapter = { canvasId: string; read: () => CanvasSnapshot; apply: (ops: CanvasOperation[]) => Promise<CanvasSnapshot> };
 export type CreativeControllerView = { run?: CreationRun; state: CreativeAgentState; busy: boolean; hasControl: boolean; error?: string; quote?: CreativeQuote };
@@ -422,7 +423,9 @@ export class CreativeAgentController {
             this.state = { ...this.state, pendingPayment: undefined, messages: [...this.state.messages, { id: nanoid(), role: "assistant", text: "本次产物已生成并保存，可以在会话和画布查看。" }] };
             await this.save("completed"); return;
         }
-        const candidates = this.state.media.filter((media) => media.status === "pending" && proposal.generationItems.find((item) => item.ref === media.ref)?.referenceRefs?.every((ref) => ready.has(ref)) !== false);
+        const pendingRefs = this.state.media.filter((media) => media.status === "pending").map((media) => media.ref);
+        const allowedRefs = new Set(creativeBatchRefs(proposal.styleBible, pendingRefs, ready));
+        const candidates = this.state.media.filter((media) => media.status === "pending" && allowedRefs.has(media.ref) && proposal.generationItems.find((item) => item.ref === media.ref)?.referenceRefs?.every((ref) => ready.has(ref)) !== false);
         const ids: string[] = [];
         for (const media of candidates) {
             const item = proposal.generationItems.find((item) => item.ref === media.ref)!;

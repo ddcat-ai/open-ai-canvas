@@ -337,6 +337,11 @@ function InfiniteCanvasPage() {
         },
         [colorTheme, setTheme],
     );
+    const toggleCanvasTheme = useCallback(() => {
+        const next = colorTheme === "dark" ? "light" : "dark";
+        applyCanvasAppearance(canvasAppearanceForTheme(next, canvasAppearance));
+        setBackgroundMode(DEFAULT_CANVAS_BACKGROUND_MODE);
+    }, [applyCanvasAppearance, canvasAppearance, colorTheme]);
     const saveCanvasAppearanceDefault = useCallback(
         (next: CanvasAppearance) => {
             writeCanvasAppearanceDefault({ appearance: next, backgroundMode });
@@ -2568,6 +2573,7 @@ function InfiniteCanvasPage() {
                                         : undefined
                                 }
                                 onEnterFocusMode={enterFocusMode}
+                                onToggleTheme={toggleCanvasTheme}
                                 shortDramaGuide={shortDramaGuide}
                             />
                         ) : null}

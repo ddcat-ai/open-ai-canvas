@@ -5,6 +5,7 @@ export type PaymentProvider = {
     pluginId: string;
     name: string;
     icon: string;
+    payType: string;
     checkoutMode: "qr_code" | "redirect";
     enabled: boolean;
     pluginEnabled: boolean;
@@ -144,6 +145,7 @@ export function updateAdminTopupProduct(id: string, input: TopupProductInput) {
 }
 
 export type AdminPaymentOrder = PaymentOrder & {
+    payType: string;
     user: { id: string; username: string; displayName: string; email: string } | null;
 };
 

@@ -148,7 +148,7 @@ func validatePluginPackagePath(name string) (string, error) {
 	if name == "" || strings.ContainsRune(name, '\\') || strings.HasPrefix(name, "/") || path.IsAbs(name) || path.Clean(name) != name || strings.HasPrefix(name, "../") || name == ".." {
 		return "", fmt.Errorf("invalid plugin package path %q", name)
 	}
-	if name == "manifest.json" || strings.HasPrefix(name, "web/") || strings.HasPrefix(name, "backend/") || strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "docs/") || name == "README.md" || name == "LICENSE" {
+	if name == "manifest.json" || strings.HasPrefix(name, "web/") || strings.HasPrefix(name, "backend/") || strings.HasPrefix(name, "assets/") || strings.HasPrefix(name, "docs/") || strings.HasPrefix(name, "fixtures/") || name == "README.md" || name == "LICENSE" {
 		return name, nil
 	}
 	return "", fmt.Errorf("plugin package path %q is outside the allowed package roots", name)

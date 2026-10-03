@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"infinite-canvas/backend/internal/model"
 )
 
 // cloudAgentImageInspection 是"让模型真的看一眼画布上的图"的工具结果。
@@ -92,7 +94,39 @@ func (s *Service) cloudAgentVisionEnabled(req CloudAgentRequest) bool {
 }
 
 func (s *Service) cloudAgentVisionReferences(req CloudAgentRequest) (TextReferenceConfig, error) {
-	if s == nil || s.repo == nil || req.ChannelID == "" || req.ChannelModelKey == "" {
+	if s == nil || s.repo == nil {
+		return TextReferenceConfig{}, BadAuthRequest("看图需要指定支持图片输入的渠道模型")
+	}
+	if req.LogicalModelID != "" {
+		graph, err := s.repo.LogicalModelGraph(req.LogicalModelID, false)
+		if err != nil || graph == nil || graph.Model.Capability != "text" || len(graph.Routes) == 0 {
+			return TextReferenceConfig{}, BadAuthRequest("当前逻辑模型没有可用的文本图片输入线路")
+		}
+		byID := make(map[string]model.ChannelModel, len(graph.ChannelModels))
+		for _, channelModel := range graph.ChannelModels {
+			byID[channelModel.ID] = channelModel
+		}
+		var shared TextReferenceConfig
+		for _, route := range graph.Routes {
+			channelModel, exists := byID[route.ChannelModelID]
+			if !exists || !channelModel.Enabled || normalizeCapability(channelModel.Capability) != "text" {
+				return TextReferenceConfig{}, BadAuthRequest("当前逻辑模型的部分线路不支持图片输入")
+			}
+			capability, err := normalizedChannelModelCapability(&channelModel)
+			if err != nil || capability == nil || capability.Text == nil || capability.Text.References.MaxImages <= 0 {
+				return TextReferenceConfig{}, BadAuthRequest("当前逻辑模型的部分线路未声明图片输入能力")
+			}
+			limits := capability.Text.References
+			if shared.MaxImages == 0 || limits.MaxImages < shared.MaxImages {
+				shared.MaxImages = limits.MaxImages
+			}
+			if limits.MaxImageBytes > 0 && (shared.MaxImageBytes == 0 || limits.MaxImageBytes < shared.MaxImageBytes) {
+				shared.MaxImageBytes = limits.MaxImageBytes
+			}
+		}
+		return shared, nil
+	}
+	if req.ChannelID == "" || req.ChannelModelKey == "" {
 		return TextReferenceConfig{}, BadAuthRequest("看图需要指定支持图片输入的渠道模型")
 	}
 	channelModel, err := s.repo.ChannelModelByKey(req.ChannelID, req.ChannelModelKey)

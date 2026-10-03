@@ -166,11 +166,13 @@
 
 .agent-context-popover.ant-popover,
 .agent-context-popover .ant-popover-content,
+.agent-context-popover .ant-popover-container,
 .agent-context-popover .ant-popover-inner {
     box-shadow: none;
 }
 
-.agent-context-popover .ant-popover-inner {
+.agent-context-popover .ant-popover-inner,
+.agent-context-popover .ant-popover-container {
     overflow: hidden;
     padding: 0;
     border: 1px solid color-mix(in srgb, var(--agent-ink) 12%, transparent);

@@ -3,6 +3,7 @@ const RECOVERY_KEY = "canvas:chunk-recovery";
 let recovering = false;
 
 export function installChunkRecovery() {
+    if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
     window.addEventListener("vite:preloadError", handlePreloadError);
 }
 
