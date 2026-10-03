@@ -106,9 +106,60 @@ func TestApplyDefaultOutboundHeaders(t *testing.T) {
 func TestValidateOutboundURLRejectsPrivateHosts(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "false")
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "")
-	for _, rawURL := range []string{"http://127.0.0.1:8080", "http://localhost:8080", "http://169.254.169.254/latest/meta-data"} {
+	for _, rawURL := range []string{"http://127.0.0.1:8080", "http://localhost:8080", "http://169.254.169.254/latest/meta-data", "http://[::ffff:127.0.0.1]:8080"} {
 		if _, err := ValidateOutboundURL(rawURL); err == nil {
 			t.Fatalf("ValidateOutboundURL(%q) should fail", rawURL)
+		}
+	}
+}
+
+func TestValidateOutboundURLRejectsReservedRanges(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "false")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "")
+	for _, rawURL := range []string{
+		"http://100.100.100.200/latest/meta-data",
+		"http://[::ffff:100.100.100.200]/latest/meta-data",
+		"http://0.1.2.3",
+		"http://192.0.0.8",
+		"http://192.0.2.10",
+		"http://198.51.100.10",
+		"http://203.0.113.10",
+		"http://240.0.0.1",
+		"http://[100::1]",
+		"http://[2001:db8::1]",
+	} {
+		if _, err := ValidateOutboundURL(rawURL); err == nil {
+			t.Fatalf("ValidateOutboundURL(%q) should fail", rawURL)
+		}
+	}
+	// 198.18.0.0/15 是 fake-ip DNS 的地址池，通用出站放行；自定义渠道仍拒绝（见下方用例）。
+	for _, rawURL := range []string{"https://8.8.8.8", "https://[::ffff:8.8.8.8]", "https://[2606:4700:4700::1111]", "https://198.18.0.1"} {
+		if _, err := ValidateOutboundURL(rawURL); err != nil {
+			t.Fatalf("ValidateOutboundURL(%q) error = %v", rawURL, err)
+		}
+	}
+}
+
+func TestValidateOutboundURLAllowsOnlyNamedReservedUpstream(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "false")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "100.100.100.200")
+	if _, err := ValidateOutboundURL("http://100.100.100.200"); err != nil {
+		t.Fatalf("ValidateOutboundURL() error = %v", err)
+	}
+	if _, err := ValidateOutboundURL("http://100.100.100.201"); err == nil {
+		t.Fatal("ValidateOutboundURL() should reject an unlisted reserved host")
+	}
+}
+
+func TestBlockedReservedIPUnmapsAndSkipsFakeIPPool(t *testing.T) {
+	for _, value := range []string{"100.100.100.200", "::ffff:100.100.100.200", "192.0.2.10", "2001:db8::1"} {
+		if !blockedReservedIP(net.ParseIP(value)) {
+			t.Fatalf("blockedReservedIP(%q) = false", value)
+		}
+	}
+	for _, value := range []string{"8.8.8.8", "198.18.0.1", "::ffff:198.19.255.254"} {
+		if blockedReservedIP(net.ParseIP(value)) {
+			t.Fatalf("blockedReservedIP(%q) = true", value)
 		}
 	}
 }
@@ -182,6 +233,15 @@ func TestBlockedCustomRelayIPRejectsCarrierGradeNATAndReservedRanges(t *testing.
 	}
 	if blockedCustomRelayIP(net.ParseIP("8.8.8.8")) {
 		t.Fatal("blockedCustomRelayIP() rejected a public address")
+	}
+}
+
+func TestValidateCustomRelayURLRejectsReservedRanges(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "")
+	for _, rawURL := range []string{"https://100.100.100.200/v1/models", "https://198.18.0.1/v1/models", "https://[::ffff:198.18.0.1]/v1/models"} {
+		if _, err := ValidateCustomRelayURL(rawURL); err == nil {
+			t.Fatalf("ValidateCustomRelayURL(%q) should fail", rawURL)
+		}
 	}
 }
 

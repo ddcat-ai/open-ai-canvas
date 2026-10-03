@@ -47,6 +47,9 @@ var (
 		netip.MustParsePrefix("100::/64"),
 		netip.MustParsePrefix("2001:db8::/32"),
 	}
+	// 198.18.0.0/15 是 Clash、mihomo 等 fake-ip DNS 的默认地址池。通用出站若拒绝它，
+	// 这类部署的所有域名都会解析到该网段而无法出站；自定义渠道仍拒绝完整清单。
+	fakeIPPrefix = netip.MustParsePrefix("198.18.0.0/15")
 )
 
 func ValidateOutboundURL(rawURL string) (*url.URL, error) {
@@ -360,6 +363,9 @@ func resolveOutboundHostWithPolicy(ctx context.Context, host string, allowPrivat
 			if blockedOutboundIP(ip) {
 				return nil, BadAuthRequest("不允许访问本机、内网或链路本地地址")
 			}
+			if blockedReservedIP(ip) {
+				return nil, BadAuthRequest("不允许访问保留地址或特殊用途地址")
+			}
 		}
 	}
 	return addresses, nil
@@ -367,6 +373,22 @@ func resolveOutboundHostWithPolicy(ctx context.Context, host string, allowPrivat
 
 func blockedOutboundIP(ip net.IP) bool {
 	return ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
+}
+
+// blockedReservedIP 让通用出站也拒绝保留和特殊用途网段（fake-ip 地址池除外）。
+// 先还原 IPv4-mapped IPv6，避免 ::ffff:100.64.0.1 这类写法绕过 IPv4 网段。
+func blockedReservedIP(ip net.IP) bool {
+	address, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return true
+	}
+	address = address.Unmap()
+	for _, prefix := range blockedCustomRelayPrefixes {
+		if prefix != fakeIPPrefix && prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func blockedCustomRelayIP(ip net.IP) bool {
