@@ -132,6 +132,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const requirements: ModelRequirements = {
         capability: mode,
+        prompt,
         input: {
             textCount: (prompt.trim() ? 1 : 0) + activeReferences.filter((item) => item.kind === "text").length,
             imageCount: activeReferences.filter((item) => item.kind === "image").length,

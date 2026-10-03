@@ -203,7 +203,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     selector: tier.selector || {},
                     resolution: tier.resolution || "*",
                     videoSeconds: tier.videoSeconds || 0,
-                    billingMode: tier.billingMode as "fixed_request" | "per_second" | "token",
+                    billingMode: tier.billingMode as "fixed_request" | "per_second" | "per_character" | "token",
                     unitPriceMicrocredits: tier.unitPriceMicrocredits || 0,
                     inputTokenPriceMicrocredits: tier.inputTokenPriceMicrocredits || 0,
                     outputTokenPriceMicrocredits: tier.outputTokenPriceMicrocredits || 0,

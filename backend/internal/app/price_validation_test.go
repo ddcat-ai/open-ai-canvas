@@ -30,3 +30,18 @@ func TestHasValidPriceUsesChannelProtocolForTokenTiers(t *testing.T) {
 		t.Fatal("JiMeng video Token tier should be valid")
 	}
 }
+
+
+func TestValidateChannelModelPriceSupportsCharacterBillingOnlyForAudio(t *testing.T) {
+	if !ValidateChannelModelPrice("per_character", "audio", "", 1_000_000, 0, 0, 0) {
+		t.Fatal("audio character price should be valid")
+	}
+	for _, capability := range []string{"text", "image", "video"} {
+		if ValidateChannelModelPrice("per_character", capability, "", 1_000_000, 0, 0, 0) {
+			t.Fatalf("%s character price should be invalid", capability)
+		}
+	}
+	if ValidateChannelModelPrice("per_character", "audio", "", -1, 0, 0, 0) {
+		t.Fatal("negative character price should be invalid")
+	}
+}

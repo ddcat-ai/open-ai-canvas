@@ -55,6 +55,7 @@ type OptionConstraint struct {
 type ModelRequestIntent struct {
 	Capability string         `json:"capability"`
 	Operation  string         `json:"operation,omitempty"`
+	Prompt     string         `json:"prompt,omitempty"`
 	Inputs     map[string]int `json:"inputs,omitempty"`
 	Options    map[string]any `json:"options,omitempty"`
 }
@@ -65,7 +66,8 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 	if capability == "" {
 		capability = capabilityFromTaskType(taskType)
 	}
-	intent := ModelRequestIntent{Capability: capability, Operation: strings.TrimSpace(operation), Inputs: map[string]int{}, Options: map[string]any{}}
+	prompt, _ := input["prompt"].(string)
+	intent := ModelRequestIntent{Capability: capability, Operation: strings.TrimSpace(operation), Prompt: strings.TrimSpace(prompt), Inputs: map[string]int{}, Options: map[string]any{}}
 	for inputType, key := range map[string]string{"image": "referenceImages", "video": "referenceVideos", "audio": "referenceAudios"} {
 		if values, ok := input[key].([]any); ok {
 			intent.Inputs[inputType] = len(values)

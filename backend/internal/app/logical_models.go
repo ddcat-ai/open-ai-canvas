@@ -193,7 +193,7 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 		}
 		_, channelOK = systemChannelByID[channelModel.ChannelID]
 		structurallyAvailable := route.Enabled && route.Weight > 0 && channelModel.Enabled && channelOK
-		billingAvailable := item.PricePolicy != "unified" || item.BillingMode != "token" || supportsTokenBilling(item.Capability, channelModel.Protocol)
+		billingAvailable := item.PricePolicy != "unified" || (item.BillingMode != "token" || supportsTokenBilling(item.Capability, channelModel.Protocol)) && (item.BillingMode != "per_character" || supportsCharacterBilling(item.Capability))
 		available := structurallyAvailable && billingAvailable && (item.PricePolicy != "channel" || channelModel.PriceConfigured)
 		admin.Routes = append(admin.Routes, AdminLogicalRoute{ID: route.ID, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, ChannelModelKey: channelModel.ModelKey, ChannelModelName: channelModel.DisplayName, Enabled: route.Enabled, Priority: route.Priority, Weight: route.Weight, Available: available, structurallyAvailable: structurallyAvailable, CapabilitySpec: capabilitySpec})
 	}
@@ -426,11 +426,14 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if pricePolicy == "channel" {
 		billingMode = "fixed_request"
 		req.UnitPriceMicrocredits, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits = 0, 0, 0, 0
-	} else if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
-		return nil, nil, nil, false, BadAuthRequest("前台模型计费方式仅支持按次、按秒或 Token")
+	} else if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "per_character" && billingMode != "token" {
+		return nil, nil, nil, false, BadAuthRequest("前台模型计费方式仅支持按次、按秒、按字符或 Token")
 	}
 	if pricePolicy == "unified" && billingMode == "per_second" && capability != "video" && capability != "audio" {
 		return nil, nil, nil, false, BadAuthRequest("只有视频或音频前台模型可以按秒计费")
+	}
+	if pricePolicy == "unified" && billingMode == "per_character" && !supportsCharacterBilling(capability) {
+		return nil, nil, nil, false, BadAuthRequest("按字符计费仅支持音频前台模型")
 	}
 	if pricePolicy == "unified" && billingMode == "token" {
 		if err := validateTokenPrices(capability, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits); err != nil {
@@ -763,6 +766,10 @@ func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogic
 		price := model.UnitPriceMicrocredits
 		return "unified", &price, "按秒"
 	}
+	if model.BillingMode == "per_character" && model.UnitPriceMicrocredits > 0 {
+		price := model.UnitPriceMicrocredits
+		return "unified", &price, "按万字符"
+	}
 	if model.BillingMode == "token" {
 		// Token 计费显示输入/输出价格
 		if model.InputPriceMicrocredits > 0 || model.OutputPriceMicrocredits > 0 {
@@ -775,7 +782,7 @@ func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogic
 
 // getTierDisplayPrice 获取价格档的展示价格
 func getTierDisplayPrice(tier PublicLogicalModelPriceTier) int64 {
-	if tier.BillingMode == "fixed_request" || tier.BillingMode == "per_second" {
+	if tier.BillingMode == "fixed_request" || tier.BillingMode == "per_second" || tier.BillingMode == "per_character" {
 		return tier.UnitPriceMicrocredits
 	}
 	// Token 计费返回输出价格（如果有）

@@ -4,6 +4,10 @@ import "infinite-canvas/backend/internal/model"
 
 const maxChannelModelTokenPriceMicrocredits = int64(1_000_000) * CreditScale
 
+func supportsCharacterBilling(capability string) bool {
+	return capability == "audio"
+}
+
 func validateTokenPrices(capability string, inputPrice, outputPrice, cachedPrice int64) error {
 	if inputPrice < 0 || outputPrice < 0 || cachedPrice < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
@@ -27,6 +31,8 @@ func ValidateChannelModelPrice(billingMode string, capability string, protocol m
 	case "per_second":
 		// 按秒计费：0 表示免费，负数无效。
 		return unitPrice >= 0
+	case "per_character":
+		return (capability == "" || supportsCharacterBilling(capability)) && unitPrice >= 0
 	case "token":
 		if validateTokenPrices(capability, inputPrice, outputPrice, cachedPrice) != nil {
 			return false

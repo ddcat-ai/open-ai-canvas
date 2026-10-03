@@ -215,11 +215,14 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
 		return err
 	}
-	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
-		return BadAuthRequest("模型计费方式仅支持按次、按秒或 Token")
+	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "per_character" && billingMode != "token" {
+		return BadAuthRequest("模型计费方式仅支持按次、按秒、按字符或 Token")
 	}
 	if billingMode == "per_second" && capability != "video" && capability != "audio" {
 		return BadAuthRequest("只有视频或音频模型可以按秒计费")
+	}
+	if billingMode == "per_character" && capability != "audio" {
+		return BadAuthRequest("按字符计费仅支持音频模型")
 	}
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
 		return BadAuthRequest("Token 计费仅支持文本和视频模型")
