@@ -158,7 +158,7 @@ function AdminShellLayout() {
                 <main id="admin-root" data-admin-root data-admin-density={density} className="admin-shell flex h-full min-h-0 overflow-hidden">
                     <aside className={cn("admin-sidebar hidden shrink-0 flex-col overflow-hidden lg:flex", collapsed && "is-collapsed")}>
                         <div className="admin-sidebar-identity shrink-0">
-                            <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
+                            <AdminTooltip title={collapsed ? (appearance.updates?.enabled ? "查看更新公告" : "查看更新日志") : undefined} placement="right">
                                 <AppChangelogButton
                                     className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
                                     icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}

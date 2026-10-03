@@ -1,7 +1,7 @@
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
 /** 异步阶段只准备结果；提交时按节点身份合并，绝不能用旧文档覆盖当前文档。 */
-export function commitCanvasGenerationResult(current: CanvasNodeData[], before: CanvasNodeData, result: CanvasNodeData, taskId: string): CanvasNodeData[] {
+export function commitCanvasGenerationResult(current: CanvasNodeData[], before: CanvasNodeData, result: CanvasNodeData, taskId: string, additionalNodes: CanvasNodeData[] = []): CanvasNodeData[] {
     const live = current.find((node) => node.id === before.id);
     if (!live) throw new Error("生成结果对应节点已删除，结果仍保留在任务中心");
     if (result.id !== before.id || (live.metadata?.taskId && live.metadata.taskId !== taskId) || (before.metadata?.taskId && !live.metadata?.taskId)) {
@@ -24,9 +24,12 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
         metadata,
     };
     const versionRootId = merged.metadata?.versionOfNodeId;
-    return current.map((node) => {
+    const committed = current.map((node) => {
         if (node.id === merged.id) return versionRootId ? { ...merged, metadata: { ...merged.metadata, versionPrimary: true } } : merged;
         if (!versionRootId || (node.metadata?.versionOfNodeId || node.id) !== versionRootId) return node;
         return { ...node, metadata: { ...node.metadata, versionPrimary: false } };
     });
+    // 同一任务的图片子节点使用稳定 ID；重放只补缺失项，不覆盖用户已移动、改名的图片。
+    const existingIds = new Set(current.map((node) => node.id));
+    return [...committed, ...additionalNodes.filter((node) => !existingIds.has(node.id)).map((node) => ({ ...node, position: { x: node.position.x + merged.position.x - result.position.x, y: node.position.y + merged.position.y - result.position.y } }))];
 }

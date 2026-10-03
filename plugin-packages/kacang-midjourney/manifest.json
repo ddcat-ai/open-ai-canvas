@@ -1,0 +1,1673 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "kacang-midjourney",
+  "name": "卡藏 Midjourney",
+  "version": "1.0.0",
+  "author": "影绘",
+  "description": "适配卡藏特惠、V7特惠与稳定/高速生图，按公开模型合同映射请求并查询、保存全部结果。",
+  "enabled": true,
+  "installable": true,
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "kacang-midjourney-special",
+        "label": "卡藏 Midjourney 特惠 V6/V8",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://newapi.prompt-hubs.com/v1",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "values": [
+              "Midjourney v8.2-特惠",
+              "Midjourney v8.1-特惠",
+              "Midjourney v6.1-特惠",
+              "Midjourney v6-特惠"
+            ],
+            "mapping": "model",
+            "description": "卡藏公开 API 模型 ID，必须与所选协议一致。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "原样保留提示词；上游仅声明不能为空。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "values": [
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "21:9"
+            ],
+            "mapping": "size",
+            "description": "默认 16:9；仅发送已确认的比例，不发送像素或 resolution。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "按显式顺序发送参考图 URL 数组；最多 1 张，不支持蒙版。"
+          },
+          {
+            "name": "imageCount",
+            "type": "integer",
+            "mapping": "n=1",
+            "description": "一次请求固定 n=1，宿主保存所有返回单图及可选四宫格封面。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.model"
+                },
+                [
+                  "Midjourney v8.2-特惠",
+                  "Midjourney v8.1-特惠",
+                  "Midjourney v6.1-特惠",
+                  "Midjourney v6-特惠"
+                ]
+              ]
+            },
+            "message": "模型名与卡藏 Midjourney 协议不匹配。"
+          },
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$len": {
+                    "$trim": {
+                      "$ref": "request.prompt"
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Midjourney 提示词不能为空。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.imageCount"
+                },
+                [
+                  0,
+                  1
+                ]
+              ]
+            },
+            "message": "Midjourney 一次提交只能 n=1，所有返回图片仍会保存。"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                1
+              ]
+            },
+            "message": "当前卡藏 Midjourney 参考图最多 1 张。"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "mask"
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "卡藏 Midjourney 生图协议不支持蒙版。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$coalesce": [
+                    {
+                      "$trim": {
+                        "$ref": "request.aspectRatio"
+                      }
+                    },
+                    "16:9"
+                  ]
+                },
+                [
+                  "1:1",
+                  "3:2",
+                  "2:3",
+                  "4:3",
+                  "3:4",
+                  "5:4",
+                  "4:5",
+                  "16:9",
+                  "9:16",
+                  "21:9"
+                ]
+              ]
+            },
+            "message": "当前卡藏 Midjourney 不支持此比例。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/images/generations",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "size": {
+              "$coalesce": [
+                {
+                  "$trim": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                "16:9"
+              ]
+            },
+            "n": 1,
+            "images": {
+              "$if": {
+                "condition": {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    0
+                  ]
+                },
+                "then": {
+                  "$map": {
+                    "from": {
+                      "$sortByOrder": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    "as": "media",
+                    "in": {
+                      "$ref": "media.value"
+                    }
+                  }
+                },
+                "else": null
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/tasks/{{taskId}}"
+        },
+        "response": {
+          "taskIdPaths": [
+            "data.task_id",
+            "task_id",
+            "id"
+          ],
+          "statusPaths": [
+            "data.status",
+            "status"
+          ],
+          "errorPaths": [
+            "data.error_code",
+            "error_code",
+            "error.code"
+          ],
+          "messagePaths": [
+            "data.error_message",
+            "error_message",
+            "error.message",
+            "message"
+          ],
+          "resultEphemeral": true,
+          "usage": {
+            "$coalesce": [
+              {
+                "$ref": "response.data.usage"
+              },
+              {
+                "$ref": "response.usage"
+              }
+            ]
+          },
+          "images": {
+            "$map": {
+              "from": {
+                "$ref": "response.data"
+              },
+              "as": "item",
+              "in": {
+                "url": {
+                  "$ref": "item.url"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "kacang-midjourney-v7",
+        "label": "卡藏 Midjourney V7 特惠",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://newapi.prompt-hubs.com/v1",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "values": [
+              "Midjourney v7-特惠"
+            ],
+            "mapping": "model",
+            "description": "卡藏公开 API 模型 ID，必须与所选协议一致。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "原样保留提示词；上游仅声明不能为空。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "values": [
+              "auto",
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "21:9",
+              "9:21"
+            ],
+            "mapping": "size",
+            "description": "默认 16:9；仅发送已确认的比例，不发送像素或 resolution。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "按显式顺序发送参考图 URL 数组；最多 1 张，不支持蒙版。"
+          },
+          {
+            "name": "imageCount",
+            "type": "integer",
+            "mapping": "n=1",
+            "description": "一次请求固定 n=1，宿主保存所有返回单图及可选四宫格封面。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.model"
+                },
+                [
+                  "Midjourney v7-特惠"
+                ]
+              ]
+            },
+            "message": "模型名与卡藏 Midjourney 协议不匹配。"
+          },
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$len": {
+                    "$trim": {
+                      "$ref": "request.prompt"
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Midjourney 提示词不能为空。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.imageCount"
+                },
+                [
+                  0,
+                  1
+                ]
+              ]
+            },
+            "message": "Midjourney 一次提交只能 n=1，所有返回图片仍会保存。"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                1
+              ]
+            },
+            "message": "当前卡藏 Midjourney 参考图最多 1 张。"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "mask"
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "卡藏 Midjourney 生图协议不支持蒙版。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$coalesce": [
+                    {
+                      "$trim": {
+                        "$ref": "request.aspectRatio"
+                      }
+                    },
+                    "16:9"
+                  ]
+                },
+                [
+                  "auto",
+                  "1:1",
+                  "3:2",
+                  "2:3",
+                  "4:3",
+                  "3:4",
+                  "5:4",
+                  "4:5",
+                  "16:9",
+                  "9:16",
+                  "21:9",
+                  "9:21"
+                ]
+              ]
+            },
+            "message": "当前卡藏 Midjourney 不支持此比例。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/images/generations",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "size": {
+              "$coalesce": [
+                {
+                  "$trim": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                "16:9"
+              ]
+            },
+            "n": 1,
+            "images": {
+              "$if": {
+                "condition": {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    0
+                  ]
+                },
+                "then": {
+                  "$map": {
+                    "from": {
+                      "$sortByOrder": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    "as": "media",
+                    "in": {
+                      "$ref": "media.value"
+                    }
+                  }
+                },
+                "else": null
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/tasks/{{taskId}}"
+        },
+        "response": {
+          "taskIdPaths": [
+            "data.task_id",
+            "task_id",
+            "id"
+          ],
+          "statusPaths": [
+            "data.status",
+            "status"
+          ],
+          "errorPaths": [
+            "data.error_code",
+            "error_code",
+            "error.code"
+          ],
+          "messagePaths": [
+            "data.error_message",
+            "error_message",
+            "error.message",
+            "message"
+          ],
+          "resultEphemeral": true,
+          "usage": {
+            "$coalesce": [
+              {
+                "$ref": "response.data.usage"
+              },
+              {
+                "$ref": "response.usage"
+              }
+            ]
+          },
+          "images": {
+            "$map": {
+              "from": {
+                "$ref": "response.data"
+              },
+              "as": "item",
+              "in": {
+                "url": {
+                  "$ref": "item.url"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "kacang-midjourney",
+        "label": "卡藏 Midjourney 稳定/高速",
+        "capabilities": [
+          "image"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://newapi.prompt-hubs.com/v1",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "values": [
+              "mj-v8.2",
+              "mj-v8.1",
+              "mj-v6.1",
+              "mj-v7",
+              "mj-niji7",
+              "Midjourney v8.2 高速"
+            ],
+            "mapping": "model",
+            "description": "卡藏公开 API 模型 ID，必须与所选协议一致。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "原样保留提示词；上游仅声明不能为空。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "values": [
+              "auto",
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "21:9",
+              "9:21"
+            ],
+            "mapping": "size",
+            "description": "默认 9:16；仅发送已确认的比例，不发送像素或 resolution。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "mapping": "images",
+            "description": "按显式顺序发送参考图 URL 数组；最多 5 张，不支持蒙版。"
+          },
+          {
+            "name": "imageCount",
+            "type": "integer",
+            "mapping": "n=1",
+            "description": "一次请求固定 n=1，宿主保存所有返回单图及可选四宫格封面。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "mapping": "kacang-midjourney.raw/quality/stylize/chaos/weird/seed/negative_prompt/tile/iw/cref/sref/dref/cw/sw/dw/hd",
+            "description": "默认 raw=false；稳定 mj-* 的数值 quality 默认1，不能将1K/2K分辨率作为quality。高速版仅映射raw。后续action任务不属于本生图插件。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.model"
+                },
+                [
+                  "mj-v8.2",
+                  "mj-v8.1",
+                  "mj-v6.1",
+                  "mj-v7",
+                  "mj-niji7",
+                  "Midjourney v8.2 高速"
+                ]
+              ]
+            },
+            "message": "模型名与卡藏 Midjourney 协议不匹配。"
+          },
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$len": {
+                    "$trim": {
+                      "$ref": "request.prompt"
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Midjourney 提示词不能为空。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.imageCount"
+                },
+                [
+                  0,
+                  1
+                ]
+              ]
+            },
+            "message": "Midjourney 一次提交只能 n=1，所有返回图片仍会保存。"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                5
+              ]
+            },
+            "message": "当前卡藏 Midjourney 参考图最多 5 张。"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "mask"
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "卡藏 Midjourney 生图协议不支持蒙版。"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$coalesce": [
+                    {
+                      "$trim": {
+                        "$ref": "request.aspectRatio"
+                      }
+                    },
+                    "9:16"
+                  ]
+                },
+                [
+                  "auto",
+                  "1:1",
+                  "3:2",
+                  "2:3",
+                  "4:3",
+                  "3:4",
+                  "5:4",
+                  "4:5",
+                  "16:9",
+                  "9:16",
+                  "21:9",
+                  "9:21"
+                ]
+              ]
+            },
+            "message": "当前卡藏 Midjourney 不支持此比例。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$in": [
+                    {
+                      "$toFloat": {
+                        "$coalesce": [
+                          {
+                            "$ref": "request.providerOptions.kacang-midjourney.quality"
+                          },
+                          1
+                        ]
+                      }
+                    },
+                    [
+                      0.25,
+                      0.5,
+                      1,
+                      2
+                    ]
+                  ]
+                }
+              ]
+            },
+            "message": "稳定版 quality 仅支持 0.25、0.5、1、2。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.stylize"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.stylize"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        1000
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "stylize 超出文档规定范围。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.chaos"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.chaos"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        100
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "chaos 超出文档规定范围。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.weird"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.weird"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        3000
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "weird 超出文档规定范围。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.iw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.iw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        3
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "iw 超出文档规定范围。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.cw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.cw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        100
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "cw 超出文档规定范围。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.sw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.sw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        1000
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "sw 超出文档规定范围。"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.dw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$toFloat": {
+                            "$coalesce": [
+                              {
+                                "$ref": "request.providerOptions.kacang-midjourney.dw"
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        100
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "dw 超出文档规定范围。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/midjourney/generations",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "size": {
+              "$coalesce": [
+                {
+                  "$trim": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                "9:16"
+              ]
+            },
+            "n": 1,
+            "images": {
+              "$if": {
+                "condition": {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    0
+                  ]
+                },
+                "then": {
+                  "$map": {
+                    "from": {
+                      "$sortByOrder": {
+                        "$ref": "request.images"
+                      }
+                    },
+                    "as": "media",
+                    "in": {
+                      "$ref": "media.value"
+                    }
+                  }
+                },
+                "else": null
+              }
+            },
+            "raw": {
+              "$toBool": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.kacang-midjourney.raw"
+                  },
+                  false
+                ]
+              }
+            },
+            "seed": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.seed"
+                  }
+                }
+              }
+            },
+            "negative_prompt": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.negative_prompt"
+                  }
+                }
+              }
+            },
+            "tile": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.tile"
+                  }
+                }
+              }
+            },
+            "iw": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.iw"
+                  }
+                }
+              }
+            },
+            "cref": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.cref"
+                  }
+                }
+              }
+            },
+            "sref": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.sref"
+                  }
+                }
+              }
+            },
+            "dref": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.dref"
+                  }
+                }
+              }
+            },
+            "cw": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.cw"
+                  }
+                }
+              }
+            },
+            "sw": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.sw"
+                  }
+                }
+              }
+            },
+            "dw": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.kacang-midjourney.dw"
+                  }
+                }
+              }
+            },
+            "quality": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$toFloat": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.providerOptions.kacang-midjourney.quality"
+                      },
+                      1
+                    ]
+                  }
+                }
+              }
+            },
+            "stylize": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$toFloat": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.providerOptions.kacang-midjourney.stylize"
+                      },
+                      100
+                    ]
+                  }
+                }
+              }
+            },
+            "chaos": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$toFloat": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.providerOptions.kacang-midjourney.chaos"
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            },
+            "weird": {
+              "$if": {
+                "condition": {
+                  "$eq": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    "Midjourney v8.2 高速"
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$toFloat": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.providerOptions.kacang-midjourney.weird"
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            },
+            "hd": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "mj-v8.2",
+                      "mj-v8.1"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$toBool": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.providerOptions.kacang-midjourney.hd"
+                      },
+                      false
+                    ]
+                  }
+                },
+                "else": null
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/tasks/{{taskId}}"
+        },
+        "response": {
+          "taskIdPaths": [
+            "data.task_id",
+            "task_id",
+            "id"
+          ],
+          "statusPaths": [
+            "data.status",
+            "status"
+          ],
+          "errorPaths": [
+            "data.error_code",
+            "error_code",
+            "error.code"
+          ],
+          "messagePaths": [
+            "data.error_message",
+            "error_message",
+            "error.message",
+            "message"
+          ],
+          "resultEphemeral": true,
+          "usage": {
+            "$coalesce": [
+              {
+                "$ref": "response.data.usage"
+              },
+              {
+                "$ref": "response.usage"
+              }
+            ]
+          },
+          "images": {
+            "$concatArrays": [
+              {
+                "$map": {
+                  "from": {
+                    "$coalesce": [
+                      {
+                        "$ref": "response.data.result.data.image_urls"
+                      },
+                      {
+                        "$ref": "response.result.data.image_urls"
+                      }
+                    ]
+                  },
+                  "as": "url",
+                  "in": {
+                    "url": {
+                      "$ref": "url"
+                    }
+                  }
+                }
+              },
+              {
+                "$if": {
+                  "condition": {
+                    "$and": [
+                      {
+                        "$gt": [
+                          {
+                            "$len": {
+                              "$toString": {
+                                "$coalesce": [
+                                  {
+                                    "$ref": "response.data.result.data.grid_image_url"
+                                  },
+                                  {
+                                    "$ref": "response.result.data.grid_image_url"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$coalesce": [
+                                {
+                                  "$ref": "response.data.result.data.grid_image_url"
+                                },
+                                {
+                                  "$ref": "response.result.data.grid_image_url"
+                                }
+                              ]
+                            },
+                            {
+                              "$coalesce": [
+                                {
+                                  "$ref": "response.data.result.data.image_urls"
+                                },
+                                {
+                                  "$ref": "response.result.data.image_urls"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "then": [
+                    {
+                      "url": {
+                        "$coalesce": [
+                          {
+                            "$ref": "response.data.result.data.grid_image_url"
+                          },
+                          {
+                            "$ref": "response.result.data.grid_image_url"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "else": []
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "documentation": "# 卡藏 Midjourney\n\n统一声明式 `yingce.plugin/v2` 插件，提供三个生图协议入口：`kacang-midjourney-special`（V6/V8 特惠）、`kacang-midjourney-v7`（V7 特惠）、`kacang-midjourney`（稳定/高速）。使用宿主鉴权、出站校验、轮询、资源保存和计费合同，不执行额外插件代码。\n\n选择协议后，“能力与参数”自动填入对应比例、默认比例、参考图上限和一次提交。特惠默认 16:9；稳定/高速默认 9:16。V7 特惠与稳定/高速支持 auto 和 9:21。单次 n=1 表示一次提交；所有实际返回的图片均保存，包含上游提供的可选四宫格封面。\n\n稳定/高速使用任务接口，首响应只是受理确认。插件保留公开任务 ID 并查询 `/v1/tasks/{task_id}`，不会将受理当作成功，也不会重新提交收费任务。特惠走标准图片接口。模型 ID 必须填写卡藏公开 API 模型 ID。\n\n完整请求、模型清单、默认参数和结果合同见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# 卡藏 Midjourney 生图接口\n\n## 来源、模型和边界\n\n供应商文档：[文档首页](https://console.prompt-hubs.com/docs)、[V8.2 特惠](https://console.prompt-hubs.com/docs/model/Midjourney%20v8.2-%E7%89%B9%E6%83%A0)、[V7 特惠](https://console.prompt-hubs.com/docs/model/Midjourney%20v7-%E7%89%B9%E6%83%A0)、[V8.2 稳定](https://console.prompt-hubs.com/docs/model/mj-v8.2)、[V8.2 高速](https://console.prompt-hubs.com/docs/model/Midjourney%20v8.2%20%E9%AB%98%E9%80%9F)。以具体参数表为准；页面通用提示可能与某型号的输出说明不同，插件按实际返回保存全部图片，不按文档样例的图片数量截断。\n\n| Provider | 公开模型 ID | 创建 | 查询 |\n| --- | --- | --- | --- |\n| `kacang-midjourney-special` | `Midjourney v8.2-特惠`、`Midjourney v8.1-特惠`、`Midjourney v6.1-特惠`、`Midjourney v6-特惠` | `POST /v1/images/generations` | 如果返回任务 ID，使用 `GET /v1/tasks/{task_id}` |\n| `kacang-midjourney-v7` | `Midjourney v7-特惠` | 同上 | 同上 |\n| `kacang-midjourney` | `mj-v8.2`、`mj-v8.1`、`mj-v6.1`、`mj-v7`、`mj-niji7`、`Midjourney v8.2 高速` | `POST /v1/midjourney/generations` | `GET /v1/tasks/{task_id}` |\n\n默认 Base URL：`https://newapi.prompt-hubs.com/v1`；鉴权：`Authorization: Bearer <API Key>`。API Key 由宿主渠道配置提供，不写入插件包、任务正文或 URL。实际可用模型以该渠道令牌的 `/v1/models` 返回为准，不自动更换模型。\n\n本插件只提供图片生成及参考图生成。供应商后续 `action`、父任务操作和 describe 文本结果需要独立的交互合同，本生图入口不透传这些字段。\n\n## 统一请求与默认能力\n\n| 宿主参数 | 上游映射与约束 |\n| --- | --- |\n| `model` | `model`，严格校验当前协议公开模型列表。 |\n| `prompt` | 原样传递，不能为空；不自动翻译或追加 Midjourney 提示词参数。 |\n| `aspectRatio` | `size`；V6/V8 特惠默认 16:9，允许 1:1、3:2、2:3、4:3、3:4、5:4、4:5、16:9、9:16、21:9。V7 特惠增加 auto、9:21；稳定/高速同样增加这两个值，默认 9:16。 |\n| `images` | 以显式顺序生成 `images` URL 数组；特惠最多 1 张，稳定/高速最多 5 张。宿主将本地资源转换为短期公网 URL。拒绝 mask。 |\n| `imageCount` | 未设置或 1；上游固定 `n=1`，不是返回图片的截断数量。 |\n| `providerOptions.kacang-midjourney.raw` | 稳定/高速 `raw`，默认 false。 |\n| `providerOptions.kacang-midjourney.quality` | 仅稳定 `mj-*`，数值 0.25、0.5、1、2，默认 1。不使用宿主 `quality` 的 1K/2K/4K 值。 |\n| `providerOptions.kacang-midjourney.stylize/chaos/weird` | 仅稳定 `mj-*`，默认 100/0/0，范围分别 0–1000、0–100、0–3000。 |\n| `providerOptions.kacang-midjourney.iw/cw/sw/dw` | 仅稳定 `mj-*`；可选，范围 0–3、0–100、0–1000、0–100。 |\n| `providerOptions.kacang-midjourney.seed/negative_prompt/tile/cref/sref/dref` | 仅稳定 `mj-*`；调用方明确指定时才发送，不设未声明的默认值。 |\n| `providerOptions.kacang-midjourney.hd` | 仅 mj-v8.2 / mj-v8.1，默认 false。 |\n\n特惠不发送 Raw 或稳定版扩展字段；高速只发送 Raw。所有协议均不发送 resolution、透明背景、response_format、output_format、async 或 Prefer 请求头。\n\n“能力与参数”自动配置：参考图上限为 1 或 5，无蒙版，比例选择不可输入自定义像素，单次请求数量 1；不支持的通用输出控件关闭。宿主提示词默认上限 32000 字符、参考图单张 30 MB，属于宿主限制，上游未声明这两个上限。1K 预设只用于宿主比例选择与界面尺寸换算，不承诺实际输出像素。稳定版数值画质与风格参数由插件命名空间映射，不伪装成分辨率选项。\n\n## 响应、失败与保存\n\n- 任务 ID：优先 `data.task_id`，其次 `task_id` / `id`，查询时保留原 task ID。\n- 状态：读取 `data.status` / `status`；submitted / queued 为等待，processing 为进行中，completed 为成功，failed 为失败。\n- 特惠同步结果：遍历 `data[].url`；没有 status 的真实图片结果仍按宿主合同完成。\n- 稳定/高速结果：同时支持 `data.result.data.image_urls` 和 `result.data.image_urls`。可选 `grid_image_url` 一并保存，若它已经在 image_urls 中则不重复。\n- 错误：读取 `data.error_code` / `error_code` / `error.code`，以及对应 error_message / error.message。失败和空结果不会生成伪资源。\n- 返回 URL 标记 `resultEphemeral=true`，宿主立即下载并存入已配置对象存储。跨源下载不携带供应商 API Key。\n- 供应商托管链接有有效期；生成成功不等于转存成功，最终必须以宿主资源 ready 与任务成功为准。已有任务只查询，不重新生成。\n- 取消和独立结果下载端点未声明；供应商未提供适用于本生图入口的相应合同。\n\n请求示例：`{\"model\":\"mj-v8.2\",\"prompt\":\"生成一张氛围感美女照片\",\"size\":\"9:16\",\"raw\":false,\"quality\":1,\"stylize\":100,\"chaos\":0,\"weird\":0,\"hd\":false,\"n\":1}`。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"kacang-midjourney\",\n  \"name\": \"卡藏 Midjourney\",\n  \"version\": \"1.0.0\",\n  \"author\": \"影绘\",\n  \"description\": \"适配卡藏特惠、V7特惠与稳定/高速生图，按公开模型合同映射请求并查询、保存全部结果。\",\n  \"enabled\": true,\n  \"installable\": true,\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"kacang-midjourney-special\",\n        \"label\": \"卡藏 Midjourney 特惠 V6/V8\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://newapi.prompt-hubs.com/v1\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"values\": [\n              \"Midjourney v8.2-特惠\",\n              \"Midjourney v8.1-特惠\",\n              \"Midjourney v6.1-特惠\",\n              \"Midjourney v6-特惠\"\n            ],\n            \"mapping\": \"model\",\n            \"description\": \"卡藏公开 API 模型 ID，必须与所选协议一致。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"原样保留提示词；上游仅声明不能为空。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"values\": [\n              \"1:1\",\n              \"3:2\",\n              \"2:3\",\n              \"4:3\",\n              \"3:4\",\n              \"5:4\",\n              \"4:5\",\n              \"16:9\",\n              \"9:16\",\n              \"21:9\"\n            ],\n            \"mapping\": \"size\",\n            \"description\": \"默认 16:9；仅发送已确认的比例，不发送像素或 resolution。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"mapping\": \"images\",\n            \"description\": \"按显式顺序发送参考图 URL 数组；最多 1 张，不支持蒙版。\"\n          },\n          {\n            \"name\": \"imageCount\",\n            \"type\": \"integer\",\n            \"mapping\": \"n=1\",\n            \"description\": \"一次请求固定 n=1，宿主保存所有返回单图及可选四宫格封面。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.model\"\n                },\n                [\n                  \"Midjourney v8.2-特惠\",\n                  \"Midjourney v8.1-特惠\",\n                  \"Midjourney v6.1-特惠\",\n                  \"Midjourney v6-特惠\"\n                ]\n              ]\n            },\n            \"message\": \"模型名与卡藏 Midjourney 协议不匹配。\"\n          },\n          {\n            \"assert\": {\n              \"$gt\": [\n                {\n                  \"$len\": {\n                    \"$trim\": {\n                      \"$ref\": \"request.prompt\"\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"Midjourney 提示词不能为空。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.imageCount\"\n                },\n                [\n                  0,\n                  1\n                ]\n              ]\n            },\n            \"message\": \"Midjourney 一次提交只能 n=1，所有返回图片仍会保存。\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                1\n              ]\n            },\n            \"message\": \"当前卡藏 Midjourney 参考图最多 1 张。\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"mask\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"卡藏 Midjourney 生图协议不支持蒙版。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$coalesce\": [\n                    {\n                      \"$trim\": {\n                        \"$ref\": \"request.aspectRatio\"\n                      }\n                    },\n                    \"16:9\"\n                  ]\n                },\n                [\n                  \"1:1\",\n                  \"3:2\",\n                  \"2:3\",\n                  \"4:3\",\n                  \"3:4\",\n                  \"5:4\",\n                  \"4:5\",\n                  \"16:9\",\n                  \"9:16\",\n                  \"21:9\"\n                ]\n              ]\n            },\n            \"message\": \"当前卡藏 Midjourney 不支持此比例。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/images/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"size\": {\n              \"$coalesce\": [\n                {\n                  \"$trim\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                \"16:9\"\n              ]\n            },\n            \"n\": 1,\n            \"images\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$gt\": [\n                    {\n                      \"$len\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    0\n                  ]\n                },\n                \"then\": {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"$ref\": \"media.value\"\n                    }\n                  }\n                },\n                \"else\": null\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/tasks/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskIdPaths\": [\n            \"data.task_id\",\n            \"task_id\",\n            \"id\"\n          ],\n          \"statusPaths\": [\n            \"data.status\",\n            \"status\"\n          ],\n          \"errorPaths\": [\n            \"data.error_code\",\n            \"error_code\",\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"data.error_message\",\n            \"error_message\",\n            \"error.message\",\n            \"message\"\n          ],\n          \"resultEphemeral\": true,\n          \"usage\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.data.usage\"\n              },\n              {\n                \"$ref\": \"response.usage\"\n              }\n            ]\n          },\n          \"images\": {\n            \"$map\": {\n              \"from\": {\n                \"$ref\": \"response.data\"\n              },\n              \"as\": \"item\",\n              \"in\": {\n                \"url\": {\n                  \"$ref\": \"item.url\"\n                }\n              }\n            }\n          }\n        }\n      },\n      {\n        \"id\": \"kacang-midjourney-v7\",\n        \"label\": \"卡藏 Midjourney V7 特惠\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://newapi.prompt-hubs.com/v1\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"values\": [\n              \"Midjourney v7-特惠\"\n            ],\n            \"mapping\": \"model\",\n            \"description\": \"卡藏公开 API 模型 ID，必须与所选协议一致。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"原样保留提示词；上游仅声明不能为空。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"values\": [\n              \"auto\",\n              \"1:1\",\n              \"3:2\",\n              \"2:3\",\n              \"4:3\",\n              \"3:4\",\n              \"5:4\",\n              \"4:5\",\n              \"16:9\",\n              \"9:16\",\n              \"21:9\",\n              \"9:21\"\n            ],\n            \"mapping\": \"size\",\n            \"description\": \"默认 16:9；仅发送已确认的比例，不发送像素或 resolution。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"mapping\": \"images\",\n            \"description\": \"按显式顺序发送参考图 URL 数组；最多 1 张，不支持蒙版。\"\n          },\n          {\n            \"name\": \"imageCount\",\n            \"type\": \"integer\",\n            \"mapping\": \"n=1\",\n            \"description\": \"一次请求固定 n=1，宿主保存所有返回单图及可选四宫格封面。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.model\"\n                },\n                [\n                  \"Midjourney v7-特惠\"\n                ]\n              ]\n            },\n            \"message\": \"模型名与卡藏 Midjourney 协议不匹配。\"\n          },\n          {\n            \"assert\": {\n              \"$gt\": [\n                {\n                  \"$len\": {\n                    \"$trim\": {\n                      \"$ref\": \"request.prompt\"\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"Midjourney 提示词不能为空。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.imageCount\"\n                },\n                [\n                  0,\n                  1\n                ]\n              ]\n            },\n            \"message\": \"Midjourney 一次提交只能 n=1，所有返回图片仍会保存。\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                1\n              ]\n            },\n            \"message\": \"当前卡藏 Midjourney 参考图最多 1 张。\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"mask\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"卡藏 Midjourney 生图协议不支持蒙版。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$coalesce\": [\n                    {\n                      \"$trim\": {\n                        \"$ref\": \"request.aspectRatio\"\n                      }\n                    },\n                    \"16:9\"\n                  ]\n                },\n                [\n                  \"auto\",\n                  \"1:1\",\n                  \"3:2\",\n                  \"2:3\",\n                  \"4:3\",\n                  \"3:4\",\n                  \"5:4\",\n                  \"4:5\",\n                  \"16:9\",\n                  \"9:16\",\n                  \"21:9\",\n                  \"9:21\"\n                ]\n              ]\n            },\n            \"message\": \"当前卡藏 Midjourney 不支持此比例。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/images/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"size\": {\n              \"$coalesce\": [\n                {\n                  \"$trim\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                \"16:9\"\n              ]\n            },\n            \"n\": 1,\n            \"images\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$gt\": [\n                    {\n                      \"$len\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    0\n                  ]\n                },\n                \"then\": {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"$ref\": \"media.value\"\n                    }\n                  }\n                },\n                \"else\": null\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/tasks/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskIdPaths\": [\n            \"data.task_id\",\n            \"task_id\",\n            \"id\"\n          ],\n          \"statusPaths\": [\n            \"data.status\",\n            \"status\"\n          ],\n          \"errorPaths\": [\n            \"data.error_code\",\n            \"error_code\",\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"data.error_message\",\n            \"error_message\",\n            \"error.message\",\n            \"message\"\n          ],\n          \"resultEphemeral\": true,\n          \"usage\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.data.usage\"\n              },\n              {\n                \"$ref\": \"response.usage\"\n              }\n            ]\n          },\n          \"images\": {\n            \"$map\": {\n              \"from\": {\n                \"$ref\": \"response.data\"\n              },\n              \"as\": \"item\",\n              \"in\": {\n                \"url\": {\n                  \"$ref\": \"item.url\"\n                }\n              }\n            }\n          }\n        }\n      },\n      {\n        \"id\": \"kacang-midjourney\",\n        \"label\": \"卡藏 Midjourney 稳定/高速\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://newapi.prompt-hubs.com/v1\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"values\": [\n              \"mj-v8.2\",\n              \"mj-v8.1\",\n              \"mj-v6.1\",\n              \"mj-v7\",\n              \"mj-niji7\",\n              \"Midjourney v8.2 高速\"\n            ],\n            \"mapping\": \"model\",\n            \"description\": \"卡藏公开 API 模型 ID，必须与所选协议一致。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"原样保留提示词；上游仅声明不能为空。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"values\": [\n              \"auto\",\n              \"1:1\",\n              \"3:2\",\n              \"2:3\",\n              \"4:3\",\n              \"3:4\",\n              \"5:4\",\n              \"4:5\",\n              \"16:9\",\n              \"9:16\",\n              \"21:9\",\n              \"9:21\"\n            ],\n            \"mapping\": \"size\",\n            \"description\": \"默认 9:16；仅发送已确认的比例，不发送像素或 resolution。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"mapping\": \"images\",\n            \"description\": \"按显式顺序发送参考图 URL 数组；最多 5 张，不支持蒙版。\"\n          },\n          {\n            \"name\": \"imageCount\",\n            \"type\": \"integer\",\n            \"mapping\": \"n=1\",\n            \"description\": \"一次请求固定 n=1，宿主保存所有返回单图及可选四宫格封面。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"mapping\": \"kacang-midjourney.raw/quality/stylize/chaos/weird/seed/negative_prompt/tile/iw/cref/sref/dref/cw/sw/dw/hd\",\n            \"description\": \"默认 raw=false；稳定 mj-* 的数值 quality 默认1，不能将1K/2K分辨率作为quality。高速版仅映射raw。后续action任务不属于本生图插件。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.model\"\n                },\n                [\n                  \"mj-v8.2\",\n                  \"mj-v8.1\",\n                  \"mj-v6.1\",\n                  \"mj-v7\",\n                  \"mj-niji7\",\n                  \"Midjourney v8.2 高速\"\n                ]\n              ]\n            },\n            \"message\": \"模型名与卡藏 Midjourney 协议不匹配。\"\n          },\n          {\n            \"assert\": {\n              \"$gt\": [\n                {\n                  \"$len\": {\n                    \"$trim\": {\n                      \"$ref\": \"request.prompt\"\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"Midjourney 提示词不能为空。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.imageCount\"\n                },\n                [\n                  0,\n                  1\n                ]\n              ]\n            },\n            \"message\": \"Midjourney 一次提交只能 n=1，所有返回图片仍会保存。\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                5\n              ]\n            },\n            \"message\": \"当前卡藏 Midjourney 参考图最多 5 张。\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$ref\": \"request.images\"\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"mask\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"卡藏 Midjourney 生图协议不支持蒙版。\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$coalesce\": [\n                    {\n                      \"$trim\": {\n                        \"$ref\": \"request.aspectRatio\"\n                      }\n                    },\n                    \"9:16\"\n                  ]\n                },\n                [\n                  \"auto\",\n                  \"1:1\",\n                  \"3:2\",\n                  \"2:3\",\n                  \"4:3\",\n                  \"3:4\",\n                  \"5:4\",\n                  \"4:5\",\n                  \"16:9\",\n                  \"9:16\",\n                  \"21:9\",\n                  \"9:21\"\n                ]\n              ]\n            },\n            \"message\": \"当前卡藏 Midjourney 不支持此比例。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$in\": [\n                    {\n                      \"$toFloat\": {\n                        \"$coalesce\": [\n                          {\n                            \"$ref\": \"request.providerOptions.kacang-midjourney.quality\"\n                          },\n                          1\n                        ]\n                      }\n                    },\n                    [\n                      0.25,\n                      0.5,\n                      1,\n                      2\n                    ]\n                  ]\n                }\n              ]\n            },\n            \"message\": \"稳定版 quality 仅支持 0.25、0.5、1、2。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.stylize\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.stylize\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        1000\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"stylize 超出文档规定范围。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.chaos\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.chaos\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        100\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"chaos 超出文档规定范围。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.weird\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.weird\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        3000\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"weird 超出文档规定范围。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.iw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.iw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        3\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"iw 超出文档规定范围。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.cw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.cw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        100\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"cw 超出文档规定范围。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.sw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.sw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        1000\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"sw 超出文档规定范围。\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$gte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.dw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$toFloat\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"request.providerOptions.kacang-midjourney.dw\"\n                              },\n                              0\n                            ]\n                          }\n                        },\n                        100\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"dw 超出文档规定范围。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/midjourney/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"size\": {\n              \"$coalesce\": [\n                {\n                  \"$trim\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                \"9:16\"\n              ]\n            },\n            \"n\": 1,\n            \"images\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$gt\": [\n                    {\n                      \"$len\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    0\n                  ]\n                },\n                \"then\": {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"$ref\": \"media.value\"\n                    }\n                  }\n                },\n                \"else\": null\n              }\n            },\n            \"raw\": {\n              \"$toBool\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.raw\"\n                  },\n                  false\n                ]\n              }\n            },\n            \"seed\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.seed\"\n                  }\n                }\n              }\n            },\n            \"negative_prompt\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.negative_prompt\"\n                  }\n                }\n              }\n            },\n            \"tile\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.tile\"\n                  }\n                }\n              }\n            },\n            \"iw\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.iw\"\n                  }\n                }\n              }\n            },\n            \"cref\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.cref\"\n                  }\n                }\n              }\n            },\n            \"sref\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.sref\"\n                  }\n                }\n              }\n            },\n            \"dref\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.dref\"\n                  }\n                }\n              }\n            },\n            \"cw\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.cw\"\n                  }\n                }\n              }\n            },\n            \"sw\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.sw\"\n                  }\n                }\n              }\n            },\n            \"dw\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.providerOptions.kacang-midjourney.dw\"\n                  }\n                }\n              }\n            },\n            \"quality\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$toFloat\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.providerOptions.kacang-midjourney.quality\"\n                      },\n                      1\n                    ]\n                  }\n                }\n              }\n            },\n            \"stylize\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$toFloat\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.providerOptions.kacang-midjourney.stylize\"\n                      },\n                      100\n                    ]\n                  }\n                }\n              }\n            },\n            \"chaos\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$toFloat\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.providerOptions.kacang-midjourney.chaos\"\n                      },\n                      0\n                    ]\n                  }\n                }\n              }\n            },\n            \"weird\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    \"Midjourney v8.2 高速\"\n                  ]\n                },\n                \"then\": null,\n                \"else\": {\n                  \"$toFloat\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.providerOptions.kacang-midjourney.weird\"\n                      },\n                      0\n                    ]\n                  }\n                }\n              }\n            },\n            \"hd\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$in\": [\n                    {\n                      \"$ref\": \"request.model\"\n                    },\n                    [\n                      \"mj-v8.2\",\n                      \"mj-v8.1\"\n                    ]\n                  ]\n                },\n                \"then\": {\n                  \"$toBool\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.providerOptions.kacang-midjourney.hd\"\n                      },\n                      false\n                    ]\n                  }\n                },\n                \"else\": null\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/tasks/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskIdPaths\": [\n            \"data.task_id\",\n            \"task_id\",\n            \"id\"\n          ],\n          \"statusPaths\": [\n            \"data.status\",\n            \"status\"\n          ],\n          \"errorPaths\": [\n            \"data.error_code\",\n            \"error_code\",\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"data.error_message\",\n            \"error_message\",\n            \"error.message\",\n            \"message\"\n          ],\n          \"resultEphemeral\": true,\n          \"usage\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.data.usage\"\n              },\n              {\n                \"$ref\": \"response.usage\"\n              }\n            ]\n          },\n          \"images\": {\n            \"$concatArrays\": [\n              {\n                \"$map\": {\n                  \"from\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"response.data.result.data.image_urls\"\n                      },\n                      {\n                        \"$ref\": \"response.result.data.image_urls\"\n                      }\n                    ]\n                  },\n                  \"as\": \"url\",\n                  \"in\": {\n                    \"url\": {\n                      \"$ref\": \"url\"\n                    }\n                  }\n                }\n              },\n              {\n                \"$if\": {\n                  \"condition\": {\n                    \"$and\": [\n                      {\n                        \"$gt\": [\n                          {\n                            \"$len\": {\n                              \"$toString\": {\n                                \"$coalesce\": [\n                                  {\n                                    \"$ref\": \"response.data.result.data.grid_image_url\"\n                                  },\n                                  {\n                                    \"$ref\": \"response.result.data.grid_image_url\"\n                                  }\n                                ]\n                              }\n                            }\n                          },\n                          0\n                        ]\n                      },\n                      {\n                        \"$not\": {\n                          \"$in\": [\n                            {\n                              \"$coalesce\": [\n                                {\n                                  \"$ref\": \"response.data.result.data.grid_image_url\"\n                                },\n                                {\n                                  \"$ref\": \"response.result.data.grid_image_url\"\n                                }\n                              ]\n                            },\n                            {\n                              \"$coalesce\": [\n                                {\n                                  \"$ref\": \"response.data.result.data.image_urls\"\n                                },\n                                {\n                                  \"$ref\": \"response.result.data.image_urls\"\n                                }\n                              ]\n                            }\n                          ]\n                        }\n                      }\n                    ]\n                  },\n                  \"then\": [\n                    {\n                      \"url\": {\n                        \"$coalesce\": [\n                          {\n                            \"$ref\": \"response.data.result.data.grid_image_url\"\n                          },\n                          {\n                            \"$ref\": \"response.result.data.grid_image_url\"\n                          }\n                        ]\n                      }\n                    }\n                  ],\n                  \"else\": []\n                }\n              }\n            ]\n          }\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

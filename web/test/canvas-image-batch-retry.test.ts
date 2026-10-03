@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { cancelIncompleteImageBatch, failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild, retireImageBatchChildren } from "../src/lib/canvas/canvas-image-batch-retry";
-import { removeCanvasNodes } from "../src/lib/canvas/canvas-project-domain";
+import { applyBatchPrimaryImage, removeCanvasNodes } from "../src/lib/canvas/canvas-project-domain";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeStatus } from "../src/types/canvas";
 
 function imageNode(id: string, status: CanvasNodeStatus, metadata: Partial<NonNullable<CanvasNodeData["metadata"]>> = {}): CanvasNodeData {
@@ -17,6 +17,12 @@ function imageNode(id: string, status: CanvasNodeStatus, metadata: Partial<NonNu
 }
 
 describe("canvas image batch retry", () => {
+    test("切换主图同时切换素材绑定，未绑定子图清除旧素材避免云端资源配对错误", () => {
+        const root = imageNode("root", "success", { assetId: "old-asset", storageKey: "resource:old" });
+        const primary = imageNode("second", "success", { assetId: "second-asset", storageKey: "resource:second", content: "/second.png" });
+        expect(applyBatchPrimaryImage(root, primary).metadata).toMatchObject({ primaryImageId: "second", assetId: "second-asset", storageKey: "resource:second" });
+        expect(applyBatchPrimaryImage(root, { ...primary, metadata: { ...primary.metadata, assetId: undefined } }).metadata?.assetId).toBeUndefined();
+    });
     test("旧批次索引不能删除属于其他批次的节点", () => {
         const root = imageNode("root", "loading", { isBatchRoot: true, batchChildIds: ["foreign"] });
         const foreign = imageNode("foreign", "loading", { batchRootId: "other-root" });

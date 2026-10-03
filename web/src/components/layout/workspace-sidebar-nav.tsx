@@ -40,7 +40,7 @@ function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
     return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
@@ -51,7 +51,7 @@ function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: Wo
         },
         {
             heading: "资源与工具",
-            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled || isAdmin ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
+            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
         },
         ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "创作历史", icon: HistoryIcon }] }] : []),
     ];
@@ -290,7 +290,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const features = useUserStore((state) => state.features);
     const user = useUserStore((state) => state.user);
     const { handleLogout } = useWorkspaceLogout();
-    const { groups, footer } = useMemo(() => buildNav(features, user?.role === "admin"), [features, user?.role]);
+    const { groups, footer } = useMemo(() => buildNav(features), [features]);
 
     const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");

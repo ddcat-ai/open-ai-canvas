@@ -97,7 +97,7 @@ func cancelAuthorizationFixture(t *testing.T) (*Service, *gorm.DB, *model.Task) 
 	}
 	req := agentTestRequest()
 	profile := cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")}
-	_, policy, err := compileCloudAgentPolicies(req, nil, "", profile)
+	_, policy, err := compileCloudAgentPolicies(req, defaultCanvasAppearance().AgentName, nil, "", profile)
 	if err != nil {
 		t.Fatal(err)
 	}

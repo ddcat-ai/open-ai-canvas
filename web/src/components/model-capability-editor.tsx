@@ -6,7 +6,8 @@ import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
 
 import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
-import type { ModelProtocol } from "@/lib/model-protocols";
+import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import { cleanVideoScreenSpecValues, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 import { Select } from "@/components/ui/base/select";
 
@@ -33,23 +34,28 @@ type Props = {
     protocol?: ModelProtocol;
     capability?: "text" | "image" | "video";
     model?: string;
+    workflows?: ModelProtocolWorkflow[];
     disabled?: boolean;
     section?: "all" | "protocol" | "references";
 };
 
-export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", disabled = false, section = "all" }: Props) {
+export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", workflows = [], disabled = false, section = "all" }: Props) {
     if (capability === "text") {
         return <TextCapabilityEditor value={value} onChange={onChange} protocol={protocol} disabled={disabled} section={section} />;
     }
     if (capability === "image") {
         return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} disabled={disabled} section={section} />;
     }
-    const profile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol)).video!;
+    const workflow = workflows.find((item) => item.id === model.trim().replace(/^models\//, "") && item.providerId === protocol);
+    const storedProfile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol, model)).video!;
+    const autoDL = protocol === "autodl-comfyui";
+    const profile = autoDL ? resolveWorkflowVideoScreenSpec(storedProfile, workflow) : storedProfile;
     const update = (patch: Partial<VideoCapabilityConfig>) => onChange?.({ version: 1, video: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateDuration = (patch: Partial<VideoCapabilityConfig["duration"]>) => update({ duration: { ...profile.duration, ...patch } });
     const durationValues = (profile.duration.values || []).join(",");
     const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
+    const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
 
     if (section === "references") {
         return (
@@ -150,7 +156,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         )}
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="03" title="画面规格" description="控制比例、分辨率及默认输出">
-                        <div className="admin-capability-spec-grid">
+                        {autoDL ? autoDLSpecFields : <div className="admin-capability-spec-grid">
                             <Field label="支持比例">
                                 <Select
                                     mode="multiple"
@@ -185,7 +191,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                                     onChange={(defaultResolution) => update({ defaultResolution })}
                                 />
                             </Field>
-                        </div>
+                        </div>}
                     </ProtocolParameterCard>
                 </div>
             </div>
@@ -262,7 +268,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     )}
                 </CapabilityBlock>
                 <CapabilityBlock title="画面规格">
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    {autoDL ? autoDLSpecFields : <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="画面比例">
                             <Select
                                 mode="multiple"
@@ -297,7 +303,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                                 onChange={(defaultResolution) => update({ defaultResolution })}
                             />
                         </Field>
-                    </div>
+                    </div>}
                 </CapabilityBlock>
                 {section === "all" ? (
                     <CapabilityBlock title="视频引用">
@@ -658,6 +664,27 @@ function ProtocolParameterCard({ step, title, description, children, className =
             </header>
             <div className="admin-capability-protocol-fields">{children}</div>
         </section>
+    );
+}
+
+function AutoDLScreenSpecFields({ profile, workflow, disabled, onChange }: { profile: VideoCapabilityConfig; workflow?: ModelProtocolWorkflow; disabled: boolean; onChange: (profile: VideoCapabilityConfig) => void }) {
+    if (!profile.fixedScreenSpec?.resolutions.length) {
+        return <p className="text-[var(--fs-label)] text-foreground/60">当前插件未声明此工作流的画面规格，请核对上游模型 ID。</p>;
+    }
+    const options = profile.fixedScreenSpec.resolutions;
+    return (
+        <div className="admin-capability-spec-grid">
+            <Field label="输出分辨率">
+                <Select ariaLabel="输出分辨率" mode="multiple" className="admin-capability-tags w-full" disabled={disabled} value={profile.resolutions} placeholder="选择分辨率" options={options.map((item) => ({ label: item, value: item }))} onChange={(values: string[]) => {
+                    const resolutions = cleanVideoScreenSpecValues(values);
+                    const defaultResolution = resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "";
+                    onChange(updateWorkflowVideoScreenSpec(profile, workflow, { resolutions, defaultResolution }));
+                }} />
+            </Field>
+            <Field label="默认分辨率">
+                <Select ariaLabel="默认分辨率" className="w-full" disabled={disabled} value={profile.defaultResolution || undefined} options={profile.resolutions.map((item) => ({ label: item, value: item }))} onChange={(defaultResolution: string) => onChange(updateWorkflowVideoScreenSpec(profile, workflow, { defaultResolution }))} />
+            </Field>
+        </div>
     );
 }
 

@@ -38,7 +38,7 @@ export function PriceTierFields({
     // 静默改变实际发往供应商的模型，必须显式提示并允许一键恢复“跟随模型默认”。
     const staleTierUpstream = matchMode === "default" && tierUpstream && modelUpstream && tierUpstream !== modelUpstream ? tierUpstream : "";
     const video = capabilityConfig?.video;
-    const resolutionOptions = video?.resolutions || [];
+    const resolutionOptions = Array.from(new Set([...(video?.resolutions || []), ...(protocol === "autodl-comfyui" ? video?.fixedScreenSpec?.resolutions || [] : [])]));
     const tokenEnabled = modelProtocolSupportsTokenBilling(capability, protocol);
     const isVideo = capability === "video";
     const isAudio = capability === "audio";

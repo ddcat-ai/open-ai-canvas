@@ -475,7 +475,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	}
 	// The policy prompt is the stable provider-cache prefix. Canvas contents are
 	// dynamic run data and must not be embedded in that prefix.
-	system, policy, err := compileCloudAgentPolicies(req, skillSnapshots, "", profile, creativeAnchor)
+	_, appearance, err := s.readAppearance()
+	if err != nil {
+		return nil, err
+	}
+	system, policy, err := compileCloudAgentPolicies(req, appearance.Canvas.AgentName, skillSnapshots, "", profile, creativeAnchor)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,6 @@
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
+import { imageGenerationChildPosition } from "@/lib/canvas/canvas-generation-layout";
 import { fitNodeSize, nodeSizeFromRatio, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
 import { storeGeneratedAudio } from "@/services/api/audio";
@@ -122,13 +123,13 @@ export function applyGeneratedMediaResultMetadata(node: CanvasNodeData, media: C
     }, fallbackModel);
 }
 
-export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node]): Promise<CanvasNodeData> {
+export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node], outputIndex = 0): Promise<CanvasNodeData> {
     const mode = generationTaskMode(task, node.type === CanvasNodeType.Text ? "text" : node.type === CanvasNodeType.Video ? "video" : node.type === CanvasNodeType.Audio ? "audio" : "image");
     const prompt = node.metadata?.prompt || task.prompt;
     const result = parseBackendGenerationResult(task);
 
     if (mode === "image") {
-        const image = result.images?.[0];
+        const image = result.images?.[outputIndex];
         if (!image?.dataUrl) throw new Error("后端任务没有返回图片");
         let resultDataUrl = image.dataUrl;
         const emotionEdit = node.metadata?.emotionEdit;
@@ -159,7 +160,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             width: imageSize.width,
             height: imageSize.height,
             position: { x: node.position.x + node.width / 2 - imageSize.width / 2, y: node.position.y + node.height / 2 - imageSize.height / 2 },
-            metadata: applyGeneratedMediaResultMetadata(node, imageMetadata(normalizedImage), { prompt, ...completedTaskMetadata(task) }, task.model),
+            metadata: applyGeneratedMediaResultMetadata(node, imageMetadata(normalizedImage), { prompt, ...completedTaskMetadata(task), generationOutputCount: 1 }, task.model),
         };
     }
 
@@ -233,34 +234,40 @@ async function cacheGeneratedRemoteVideo(result: GeneratedVideoResult & { storag
 export async function applyGenerationTaskResultToNodes(nodes: CanvasNodeData[], task: GenerationTask, targetNodeId?: string) {
     const node = findGenerationTaskNode(nodes, task, targetNodeId);
     if (!node) return { nodes, updated: false, nodeId: "", node: null };
-    const updatedNode = await buildGenerationTaskNodeResult(node, task, nodes);
+    const { node: updatedNode, additionalNodes } = await buildGenerationTaskNodeResults(node, task, nodes);
     return {
-        nodes: applySuccessfulVersionSelection(nodes, updatedNode),
+        nodes: commitCanvasGenerationResult(nodes, node, updatedNode, task.id, additionalNodes),
         updated: true,
         nodeId: node.id,
         node: updatedNode,
+        additionalNodes,
     };
 }
 
 export async function applyMaterializedGenerationTaskResultToNodes(nodes: CanvasNodeData[], task: GenerationTask, output: GenerationTaskOutput, effectKey: string, targetNodeId?: string) {
     const node = findGenerationTaskNode(nodes, task, targetNodeId);
     if (!node) return { nodes, updated: false, nodeId: "", node: null };
-    if (generationEffectApplied(node.metadata || {}, effectKey)) {
-        return { nodes, updated: true, nodeId: node.id, node };
+    if (generationEffectApplied(node.metadata || {}, effectKey) && generationTaskOutputsApplied(node, task)) {
+        return { nodes, updated: true, nodeId: node.id, node, additionalNodes: [] };
     }
     const asset = useAssetStore.getState().assets.find((candidate) => candidate.id === output.materializedAssetId);
     if (!asset) throw new Error("生成任务输出素材不存在");
     const result = parseBackendGenerationResult(task);
     if (asset.kind === "image") {
         const images = [...(result.images || [])];
-        images[output.outputIndex] = {
-            dataUrl: asset.data.dataUrl || asset.coverUrl,
-            storageKey: asset.data.storageKey,
-            width: asset.data.width,
-            height: asset.data.height,
-            bytes: asset.data.bytes,
-            mimeType: asset.data.mimeType,
-        };
+        // materialize 已保存整个任务；画布按真实输出序号接收每张图及其素材绑定。
+        for (const item of task.outputs?.length ? task.outputs : [output]) {
+            const imageAsset = useAssetStore.getState().assets.find((candidate) => candidate.id === item.materializedAssetId);
+            if (!imageAsset || imageAsset.kind !== "image") throw new Error("生成任务图片输出素材不存在");
+            images[item.outputIndex] = {
+                dataUrl: imageAsset.data.dataUrl || imageAsset.coverUrl,
+                storageKey: imageAsset.data.storageKey,
+                width: imageAsset.data.width,
+                height: imageAsset.data.height,
+                bytes: imageAsset.data.bytes,
+                mimeType: imageAsset.data.mimeType,
+            };
+        }
         result.images = images;
     } else if (asset.kind === "video") {
         result.video = { dataUrl: asset.data.url, ...asset.data };
@@ -269,28 +276,75 @@ export async function applyMaterializedGenerationTaskResultToNodes(nodes: Canvas
     } else {
         throw new Error("生成任务输出素材类型不支持画布节点");
     }
-    const updatedNode = await buildGenerationTaskNodeResult(node, { ...task, resultJson: JSON.stringify(result) }, nodes);
-    const durableNode = {
-        ...updatedNode,
-        metadata: applyGenerationConsumerEffect({ ...updatedNode.metadata, assetId: asset.id }, effectKey, (metadata) => metadata).value,
-    };
+    const { node: updatedNode, additionalNodes } = await buildGenerationTaskNodeResults(node, { ...task, resultJson: JSON.stringify(result) }, nodes);
+    const stamp = (item: CanvasNodeData) => ({ ...item, metadata: applyGenerationConsumerEffect(item.metadata || {}, effectKey, (metadata) => metadata).value });
+    const durableNode = stamp({ ...updatedNode, metadata: { ...updatedNode.metadata, assetId: updatedNode.metadata?.assetId || asset.id } });
+    const durableChildren = additionalNodes.map(stamp);
     return {
-        nodes: applySuccessfulVersionSelection(nodes, durableNode),
+        nodes: commitCanvasGenerationResult(nodes, node, durableNode, task.id, durableChildren),
         updated: true,
         nodeId: node.id,
         node: durableNode,
+        additionalNodes: durableChildren,
     };
 }
 
-function applySuccessfulVersionSelection(nodes: CanvasNodeData[], updatedNode: CanvasNodeData) {
-    const versionRootId = updatedNode.metadata?.versionOfNodeId;
-    return nodes.map((item) => {
-        if (item.id === updatedNode.id) {
-            return versionRootId ? { ...updatedNode, metadata: { ...updatedNode.metadata, versionPrimary: true } } : updatedNode;
-        }
-        if (!versionRootId || (item.metadata?.versionOfNodeId || item.id) !== versionRootId) return item;
-        return { ...item, metadata: { ...item.metadata, versionPrimary: false } };
-    });
+export function generationTaskOutputsApplied(node: CanvasNodeData, task: GenerationTask) {
+    if (node.metadata?.taskId !== task.id || node.metadata.status !== "success" || !node.metadata.content) return false;
+    if (generationTaskMode(task) !== "image") return true;
+    const count = parseBackendGenerationResult(task).images?.length || 1;
+    return node.metadata.generationOutputCount === count || (count > 1 && (node.metadata.batchChildIds?.length || 0) >= count);
+}
+
+export function shouldRecoverCanvasImageOutputs(node: CanvasNodeData) {
+    return node.type === CanvasNodeType.Image && node.metadata?.status === "success" && Boolean(node.metadata.taskId)
+        && node.metadata.generationOutputCount === undefined && !node.metadata.isBatchRoot && !node.metadata.batchRootId
+        && /(?:midjourney|(?:^|::)mj-)/i.test(node.metadata.producedModel || node.metadata.model || "");
+}
+
+async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[]) {
+    const resultNode = await buildGenerationTaskNodeResult(node, task, nodes);
+    const images = generationTaskMode(task) === "image" ? parseBackendGenerationResult(task).images || [] : [];
+    if (images.length <= 1) return { node: resultNode, additionalNodes: [] as CanvasNodeData[] };
+    const children: CanvasNodeData[] = [];
+    for (let index = 0; index < images.length; index += 1) {
+        const id = `${node.id}:task:${task.id}:image:${index}`;
+        const existing = nodes.find((item) => item.id === id);
+        if (existing) { children.push(existing); continue; }
+        const child = await buildGenerationTaskNodeResult({ ...node, id, title: `${node.title} · ${index + 1}`, parentId: undefined }, task, nodes, index);
+        children.push({
+            ...child,
+            position: imageGenerationChildPosition(resultNode.position, resultNode.width, child, index),
+            metadata: {
+                ...child.metadata,
+                assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
+                isBatchRoot: undefined, batchChildIds: undefined, primaryImageId: undefined, imageBatchExpanded: undefined,
+                batchRootId: node.id, versionOfNodeId: undefined, versionLabel: undefined, versionPrimary: undefined,
+                agentGenerationContinuation: undefined,
+            },
+        });
+    }
+    const primary = children.find((child) => child.id === node.metadata?.primaryImageId) || children[0];
+    return {
+        node: {
+            ...resultNode,
+            metadata: {
+                ...resultNode.metadata,
+                ...imageMetadata({
+                    url: primary.metadata!.content!, storageKey: primary.metadata!.storageKey!,
+                    width: primary.metadata!.naturalWidth!, height: primary.metadata!.naturalHeight!,
+                    bytes: primary.metadata!.bytes || 0, mimeType: primary.metadata!.mimeType || "image/png",
+                }),
+                assetId: primary.metadata?.assetId,
+                isBatchRoot: true,
+                batchChildIds: children.map((child) => child.id),
+                primaryImageId: primary.id,
+                imageBatchExpanded: node.metadata?.imageBatchExpanded ?? false,
+                generationOutputCount: images.length,
+            },
+        },
+        additionalNodes: children,
+    };
 }
 
 export async function syncGenerationTaskToCanvasStore(task: GenerationTask) {
@@ -303,11 +357,11 @@ export async function syncGenerationTaskToCanvasStore(task: GenerationTask) {
     if (!project) return false;
     const node = findGenerationTaskNode(project.nodes, task);
     if (!node) return false;
-    if (node.metadata?.taskId === task.id && node.metadata.status === "success" && node.metadata.content) return false;
-    const updatedNode = await buildGenerationTaskNodeResult(node, task, project.nodes);
+    if (generationTaskOutputsApplied(node, task)) return false;
+    const { node: updatedNode, additionalNodes } = await buildGenerationTaskNodeResults(node, task, project.nodes);
     const latest = useCanvasStore.getState().projects.find((item) => item.id === project.id);
     if (!latest?.nodes.some((item) => item.id === node.id)) return false;
-    useCanvasStore.getState().updateProject(project.id, { nodes: commitCanvasGenerationResult(latest.nodes, node, updatedNode, task.id) });
+    useCanvasStore.getState().updateProject(project.id, { nodes: commitCanvasGenerationResult(latest.nodes, node, updatedNode, task.id, additionalNodes) });
     return true;
 }
 

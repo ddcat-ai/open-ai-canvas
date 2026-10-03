@@ -1,6 +1,24 @@
 import { expect, test } from "bun:test";
 
-type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race";
+type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race" | "canvas-multi-output";
+
+test("一次任务四图经真实消费链路堆叠并保存，刷新和重放保留四个独立资源", async () => {
+    type Node = import("../src/types/canvas").CanvasNodeData;
+    const result = await runScenario<{ edited: boolean; live: Node[]; restored: Node[]; replayed: Node[] }>("canvas-multi-output");
+    expect(result.edited).toBe(true);
+    for (const nodes of [result.live, result.restored, result.replayed]) {
+        expect(nodes).toHaveLength(9);
+        const root = nodes.find((node) => node.id === "node-0")!;
+        expect(root).toMatchObject({ title: "用户改名", position: { x: 700, y: 500 }, metadata: { isBatchRoot: true, imageBatchExpanded: false, generationOutputCount: 4, assetId: "asset-0" } });
+        expect(root.metadata?.batchChildIds).toHaveLength(4);
+        const children = nodes.filter((node) => node.metadata?.batchRootId === root.id);
+        expect(children).toHaveLength(4);
+        expect(children.map((node) => node.metadata?.storageKey)).toEqual([0, 1, 2, 3].map((index) => `resource:image-${index}`));
+        expect(children.map((node) => node.metadata?.assetId)).toEqual([0, 1, 2, 3].map((index) => `asset-${index}`));
+        expect(children.map((node) => node.metadata?.naturalWidth)).toEqual([640, 641, 642, 643]);
+        expect(nodes.filter((node) => node.metadata?.status === "error")).toHaveLength(3);
+    }
+});
 type ScenarioResponse<T> = { ok: true; result: T } | { ok: false; error: string };
 
 test("并发生成结果经真实持久化消费链路及重新读取后保留成功、失败和用户编辑", async () => {

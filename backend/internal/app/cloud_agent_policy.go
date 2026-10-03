@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	cloudAgentCompilerVersion  = "cloud-agent-policy-compiler/v4"
+	cloudAgentCompilerVersion  = "cloud-agent-policy-compiler/v5"
 	cloudAgentDefaultReasoning = "off"
 )
 
@@ -146,7 +146,7 @@ func cloudAgentSkillManifestDescription(description string) string {
 	return strings.TrimSpace(string(runes[:maxRunes])) + "…"
 }
 
-func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
+func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skills []cloudAgentSkill, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
 	system, media, err := prompts.LoadAgentPolicies()
 	if err != nil {
 		return "", cloudAgentPolicySnapshot{}, err
@@ -173,6 +173,7 @@ func compileCloudAgentPolicies(req CloudAgentRequest, skills []cloudAgentSkill, 
 	// Behavior belongs to versioned policies; the compiler only projects facts.
 	context := map[string]any{
 		"source": "server_snapshot", "permissionMode": req.PermissionMode,
+		"agentIdentity": map[string]string{"name": firstNonEmpty(strings.TrimSpace(agentName), defaultCanvasAppearance().AgentName)},
 		"reasoningMode": mode,
 		"budget": map[string]any{
 			"maxCredits": req.Budget.MaxCredits, "maxSteps": cloudAgentStepLimit(req),

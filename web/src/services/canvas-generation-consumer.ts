@@ -123,7 +123,7 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
     throwIfAborted(input.signal);
     const previousNodes = input.nodesRef.current;
-    const nodes = commitCanvasGenerationResult(previousNodes, before, applied.node, input.task.id);
+    const nodes = commitCanvasGenerationResult(previousNodes, before, applied.node, input.task.id, applied.additionalNodes);
     await persistCanvasGenerationEffect({
         projectId: input.projectId,
         effectKey: input.effectKey,
@@ -133,7 +133,7 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     });
     throwIfAborted(input.signal);
     // 持久化已完成；最后一次 await 之后仍按节点合并，保留期间发生的编辑。
-    input.setNodes((current) => commitCanvasGenerationResult(current, before, applied.node!, input.task.id));
+    input.setNodes((current) => commitCanvasGenerationResult(current, before, applied.node!, input.task.id, applied.additionalNodes));
 }
 
 export async function persistCanvasOperationContinuationEffect(input: {

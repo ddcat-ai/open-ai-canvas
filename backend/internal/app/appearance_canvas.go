@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-// CanvasAppearance is presentation-only; no free-form system prompts or tool permissions.
+// CanvasAppearance controls presentation and the Agent's name, never free-form system prompts or tool permissions.
 type CanvasAppearance struct {
 	AgentName          string `json:"agentName"`
 	LauncherLabel      string `json:"launcherLabel"`
