@@ -571,7 +571,11 @@ export function generationTaskMaterializedStorageKeys(task: GenerationTask): str
     const assets = useAssetStore.getState().assets;
     return (task.outputs || []).flatMap((output) => {
         const asset = output.materializedAssetId ? assets.find((candidate) => candidate.id === output.materializedAssetId) : undefined;
-        if (!asset || (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) return [];
-        return asset.data.storageKey ? [asset.data.storageKey] : [];
+        const storageKey = asset && (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio") ? asset.data.storageKey : "";
+        if (storageKey) return [storageKey];
+        // 物化结果复用时（幂等命中、换标签页、素材尚未同步）本地索引里可能没有这条素材，
+        // 结果自己带着稳定的 resource:<id>；丢掉它会把已经生成成功的结果判成无法读取，
+        // 展示地址随后仍由渲染层按需续签。
+        return output.providerArtifactRef ? [output.providerArtifactRef] : [];
     });
 }
