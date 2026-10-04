@@ -32,7 +32,7 @@ var (
 	taskErrorStorageUpload         = regexp.MustCompile(`(?i)(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云)`)
 	taskErrorModelCapability       = regexp.MustCompile(`所选模型不支持当前请求|模型不支持当前请求|不支持操作\s+|能力类型不匹配`)
 	taskErrorModelParameters       = regexp.MustCompile(`不支持参数|超出支持范围|数量需在|至少需要\s+\d+\s+个|暂时无法满足这组输入和参数`)
-	taskErrorTechnicalProvider    = regexp.MustCompile(`(?i)(?:provider request failed|invalid_request_error|internal_server_error|bad_request|unauthorized|forbidden|not_found|upstream_error|request failed with status code|http\s*\d{3})`)
+	taskErrorTechnicalProvider     = regexp.MustCompile(`(?i)(?:provider request failed|invalid_request_error|internal_server_error|bad_request|unauthorized|forbidden|not_found|upstream_error|request failed with status code|http\s*\d{3})`)
 )
 
 // userFacingTaskError 把任务里保存的原始错误转换成用户能看懂的中文原因。

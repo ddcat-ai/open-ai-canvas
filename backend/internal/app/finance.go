@@ -106,12 +106,12 @@ type ResolveBillingBatchResult struct {
 }
 
 type tokenBillingEstimate struct {
-	InputTokens      int64
-	OutputTokens     int64
-	CharacterCount   int64
+	InputTokens       int64
+	OutputTokens      int64
+	CharacterCount    int64
 	CharacterCountErr error
-	Video            *VideoTokenEstimate
-	Err              error
+	Video             *VideoTokenEstimate
+	Err               error
 }
 
 func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletSummary, error) {

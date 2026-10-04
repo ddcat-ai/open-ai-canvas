@@ -3,10 +3,7 @@ import test from "node:test";
 import { generationErrorMessage } from "./generation-error";
 
 test("把模型能力错误转换成用户可执行的提示", () => {
-    assert.equal(
-        generationErrorMessage({ reason: "model_capability_not_supported", message: "所选模型不支持当前请求：不支持操作 reference_to_video" }),
-        "所选模型不支持当前生成方式或输入，请切换模型或调整输入后重试。",
-    );
+    assert.equal(generationErrorMessage({ reason: "model_capability_not_supported", message: "所选模型不支持当前请求：不支持操作 reference_to_video" }), "所选模型不支持当前生成方式或输入，请切换模型或调整输入后重试。");
 });
 
 test("按稳定 reason 显示积分不足和渠道不可用", () => {

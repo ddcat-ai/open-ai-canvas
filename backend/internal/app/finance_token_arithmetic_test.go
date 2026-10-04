@@ -72,7 +72,6 @@ func TestTokenEstimateAmountRejectsInvalidArithmetic(t *testing.T) {
 	}
 }
 
-
 func TestCharacterBillingAmountRoundsByTenThousandCharacters(t *testing.T) {
 	const unitPrice = int64(2_000_000)
 	for _, test := range []struct {

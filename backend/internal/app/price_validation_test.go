@@ -31,7 +31,6 @@ func TestHasValidPriceUsesChannelProtocolForTokenTiers(t *testing.T) {
 	}
 }
 
-
 func TestValidateChannelModelPriceSupportsCharacterBillingOnlyForAudio(t *testing.T) {
 	if !ValidateChannelModelPrice("per_character", "audio", "", 1_000_000, 0, 0, 0) {
 		t.Fatal("audio character price should be valid")

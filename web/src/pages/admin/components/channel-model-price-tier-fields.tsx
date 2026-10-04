@@ -176,7 +176,12 @@ export function PriceTierFields({
                                     </div>
                                 )
                             ) : (
-                                <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "unitPrice"]} label={billingMode === "per_second" ? "每秒消耗积分" : billingMode === "per_character" ? "每万字符消耗积分" : "每次消耗积分"} rules={[{ required: true, message: "请输入积分价格" }]}>
+                                <Form.Item
+                                    className="admin-price-tier-unit-price mb-0"
+                                    name={[index, "unitPrice"]}
+                                    label={billingMode === "per_second" ? "每秒消耗积分" : billingMode === "per_character" ? "每万字符消耗积分" : "每次消耗积分"}
+                                    rules={[{ required: true, message: "请输入积分价格" }]}
+                                >
                                     <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
                                 </Form.Item>
                             )}
