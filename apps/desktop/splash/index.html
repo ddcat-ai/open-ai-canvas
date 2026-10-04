@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>影策</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0a0a;
+        --surface: #171717;
+        --border: rgba(255, 255, 255, 0.1);
+        --fg: #f5f5f5;
+        --muted: #a8a8a8;
+        --faint: #666666;
+        --danger: #ff7875;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        font-size: 14px;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      main {
+        width: 420px;
+        padding: 36px 32px 28px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        text-align: center;
+      }
+
+      .glyph {
+        display: block;
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 18px;
+        color: var(--fg);
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 18px;
+        font-weight: 560;
+        letter-spacing: 0.02em;
+      }
+
+      .stage {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+        min-height: 20px;
+      }
+
+      .track {
+        position: relative;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .track::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 36%;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--fg);
+        animation: slide 1.5s ease-in-out infinite;
+      }
+
+      @keyframes slide {
+        0% {
+          transform: translateX(-110%);
+        }
+        100% {
+          transform: translateX(320%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .track::after {
+          animation: none;
+          width: 100%;
+          opacity: 0.35;
+        }
+      }
+
+      .hint {
+        margin: 16px 0 0;
+        color: var(--faint);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .failure {
+        display: none;
+        margin-top: 18px;
+        padding: 14px;
+        border: 1px solid rgba(255, 120, 117, 0.35);
+        border-radius: 10px;
+        background: rgba(255, 120, 117, 0.08);
+        text-align: left;
+      }
+
+      .failure strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--danger);
+        font-size: 13px;
+        font-weight: 560;
+      }
+
+      .failure p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.7;
+        word-break: break-all;
+      }
+
+      .actions {
+        display: none;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      button {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--fg);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: rgba(255, 255, 255, 0.09);
+      }
+
+      button:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.45);
+        outline-offset: 1px;
+      }
+
+      button.primary {
+        background: var(--fg);
+        color: #111111;
+        border-color: transparent;
+      }
+
+      button.primary:hover {
+        background: #ffffff;
+      }
+
+      footer {
+        margin-top: 22px;
+        color: var(--faint);
+        font-size: 11px;
+      }
+
+      footer a {
+        color: var(--faint);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        cursor: pointer;
+      }
+
+      body.failed .track,
+      body.ready .track {
+        display: none;
+      }
+
+      body.failed .failure,
+      body.failed .actions {
+        display: flex;
+      }
+
+      body.failed .failure {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg class="glyph" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <path
+          d="M6 8H36V16H14V36H28V44H6V8ZM58 20H36V28H50V48H28V56H58V20ZM24 27H40V37H24V27Z"
+          fill="currentColor"
+        />
+      </svg>
+      <h1>影策</h1>
+      <p class="stage" id="stage">正在启动本地服务…</p>
+      <div class="track" aria-hidden="true"></div>
+
+      <div class="failure" role="alert">
+        <strong id="failure-title">本地服务启动失败</strong>
+        <p id="failure-detail"></p>
+        <p id="failure-log" hidden></p>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="primary" id="retry">重试</button>
+        <button type="button" id="open-logs">打开日志</button>
+        <button type="button" id="quit">退出</button>
+      </div>
+
+      <p class="hint" id="hint">首次启动需要初始化本地数据，可能需要多等一会儿。</p>
+      <footer><a id="open-data">打开数据目录</a></footer>
+    </main>
+
+    <script>
+      // 启动页是 Tauri 本地资源，靠 withGlobalTauri 暴露的 __TAURI__ 与壳通信。
+      // 在普通浏览器里打开时不做任何事，避免报错掩盖真实原因。
+      (function () {
+        var tauri = window.__TAURI__;
+        var stage = document.getElementById("stage");
+        var hint = document.getElementById("hint");
+        var detail = document.getElementById("failure-detail");
+        var logLine = document.getElementById("failure-log");
+        var failureTitle = document.getElementById("failure-title");
+
+        function invoke(command, args) {
+          if (!tauri || !tauri.core) return Promise.reject(new Error("no-tauri"));
+          return tauri.core.invoke(command, args);
+        }
+
+        function render(state) {
+          if (!state) return;
+          if (state.phase === "failed") {
+            document.body.classList.add("failed");
+            document.body.classList.remove("ready");
+            stage.textContent = "本地服务没有启动成功";
+            hint.hidden = true;
+            failureTitle.textContent = state.message || "本地服务启动失败";
+            detail.textContent = state.detail || "请在日志中查看完整输出。";
+            if (state.logPath) {
+              logLine.hidden = false;
+              logLine.textContent = "日志：" + state.logPath;
+            }
+            return;
+          }
+          document.body.classList.remove("failed");
+          failureTitle.textContent = "本地服务启动失败";
+          hint.hidden = false;
+          if (state.message) stage.textContent = state.message;
+          if (state.phase === "ready") document.body.classList.add("ready");
+        }
+
+        function reload() {
+          invoke("desktop_startup_state").then(render).catch(function () {});
+        }
+
+        if (tauri && tauri.event) {
+          tauri.event.listen("desktop://startup", function (event) {
+            render(event.payload);
+          });
+        }
+
+        document.getElementById("retry").addEventListener("click", function () {
+          stage.textContent = "正在重新启动本地服务…";
+          document.body.classList.remove("failed");
+          hint.hidden = false;
+          invoke("desktop_retry_startup").catch(function () {});
+        });
+        document.getElementById("open-logs").addEventListener("click", function () {
+          invoke("desktop_open_logs").catch(function () {});
+        });
+        document.getElementById("open-data").addEventListener("click", function () {
+          invoke("desktop_open_data_dir").catch(function () {});
+        });
+        document.getElementById("quit").addEventListener("click", function () {
+          invoke("desktop_quit").catch(function () {});
+        });
+
+        reload();
+        // 壳的启动流程在子进程拉起前后都会更新状态，轮询兜底覆盖错过的事件。
+        setInterval(reload, 1000);
+      })();
+    </script>
+  </body>
+</html>
