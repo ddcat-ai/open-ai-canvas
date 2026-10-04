@@ -159,7 +159,10 @@ func (s *Service) routedModelForTaskSelection(task *model.Task) (*RoutedModel, e
 	if logicalModel.PricePolicy == "channel" && !channelModel.PriceConfigured {
 		return nil, errors.New("任务使用的模型服务价格配置已失效")
 	}
-	if logicalModel.PricePolicy == "unified" && logicalModel.BillingMode == "token" && !supportsTokenBilling(logicalModel.Capability, channelModel.Protocol) {
+	if logicalModel.PricePolicy == "unified" && ((logicalModel.BillingMode == "token" && !supportsTokenBilling(logicalModel.Capability, channelModel.Protocol)) || (logicalModel.BillingMode == "per_character" && !supportsCharacterBilling(logicalModel.Capability))) {
+		if logicalModel.BillingMode == "per_character" {
+			return nil, errors.New("任务使用的模型服务不再支持当前按字符计费配置")
+		}
 		return nil, errors.New("任务使用的模型服务不再支持当前 Token 计费配置")
 	}
 	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: *route, ChannelModel: *channelModel, Defaults: defaults}

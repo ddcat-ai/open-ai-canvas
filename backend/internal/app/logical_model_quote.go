@@ -101,7 +101,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		if routed.PriceTier != nil {
 			priceTierID = routed.PriceTier.ID
 		}
-		order, billingErr := s.newBillingOrderWithPriceTier("", "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID)
+		order, billingErr := s.newBillingOrderWithPriceTier("", "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID, resolvedIntent)
 		if billingErr != nil {
 			return nil, billingErr
 		}
@@ -121,6 +121,18 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")
 		}
 		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, 10_000)
+	case "per_character":
+		if !supportsCharacterBilling(capability) {
+			return nil, BadAuthRequest("按字符计费仅适用于音频生成")
+		}
+		if tokenEstimate.CharacterCountErr != nil {
+			return nil, tokenEstimate.CharacterCountErr
+		}
+		if tokenEstimate.CharacterCount <= 0 {
+			return nil, BadAuthRequest("音频提示词不能为空，无法按字符计费")
+		}
+		quantity = tokenEstimate.CharacterCount
+		amount, err = characterBillingAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, 10_000)
 	case "token":
 		if routed.ChannelModel.Capability != capability || !supportsTokenBilling(capability, routed.ChannelModel.Protocol) {
 			return nil, BadAuthRequest("当前供应线路不支持前台模型的 Token 计费方式")
@@ -163,7 +175,7 @@ func quoteInput(intent ModelRequestIntent, modelKey string) map[string]any {
 		config[key] = value
 	}
 	config["model"] = modelKey
-	input := map[string]any{"mode": intent.Capability, "config": config}
+	input := map[string]any{"mode": intent.Capability, "prompt": intent.Prompt, "config": config}
 	for kind, key := range map[string]string{"image": "referenceImages", "video": "referenceVideos", "audio": "referenceAudios"} {
 		if count := intent.Inputs[kind]; count > 0 {
 			input[key] = make([]any, count)

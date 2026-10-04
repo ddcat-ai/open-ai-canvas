@@ -13,6 +13,7 @@ export type ModelInputSummary = {
 
 export type ModelRequirements = {
     capability?: ModelCapability;
+    prompt?: string;
     input?: ModelInputSummary;
     videoOperation?: string;
     videoSeconds?: string;

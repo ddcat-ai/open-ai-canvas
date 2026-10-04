@@ -12,7 +12,7 @@ export function CreditCostFields({ index, form, billingMode, isVideo }: { index:
                       ["costOutputTokenPrice", "输出 / 百万 Token"],
                       ["costCachedTokenPrice", "缓存 / 百万 Token"],
                   ]
-            : [["costUnitPrice", billingMode === "per_second" ? "积分 / 秒" : "积分 / 次"]];
+            : [["costUnitPrice", billingMode === "per_second" ? "积分 / 秒" : billingMode === "per_character" ? "积分 / 万字符" : "积分 / 次"]];
     return (
         <section className="admin-price-tier-cost-panel" aria-label="积分成本设置">
             <header className="admin-price-tier-cost-header">

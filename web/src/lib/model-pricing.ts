@@ -9,7 +9,7 @@ export type ModelPriceTier = NonNullable<NonNullable<AiConfig["channels"][number
 type ModelCreditCost = {
     model: string;
     pricePolicy?: "channel" | "unified";
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "per_character" | "token";
     unitPriceMicrocredits: number;
     logicalPriceTiers?: ModelPriceTier[];
 };
@@ -23,14 +23,14 @@ export function requestCreditCost(options: { channelMode: string; modelCosts?: M
         const tiers = priceTiersForCurrentSelection(cost.logicalPriceTiers || [], options.capability, options.config, options.requirements);
         if (!tiers.length) return null;
         const first = tiers[0];
-        if (!first || first.billingMode === "token") return null;
+        if (!first || first.billingMode === "token" || (first.billingMode === "per_character" && !options.requirements?.prompt?.trim())) return null;
         // 同一精确规格可能来自多个逻辑路由；只有价格一致时才可在客户端安全展示。
         if (tiers.some((tier) => tier.billingMode !== first.billingMode || tier.unitPriceMicrocredits !== first.unitPriceMicrocredits)) return null;
-        return creditAmount(first.billingMode, first.unitPriceMicrocredits, options.count, options.seconds);
+        return creditAmount(first.billingMode, first.unitPriceMicrocredits, options.count, options.seconds, options.requirements?.prompt);
     }
     // Token 订单由服务端按请求体预授权并在 usage 返回后结算，前端不展示无依据的固定价格。
-    if (cost.billingMode === "token") return null;
-    return creditAmount(cost.billingMode, cost.unitPriceMicrocredits, options.count, options.seconds);
+    if (cost.billingMode === "token" || (cost.billingMode === "per_character" && !options.requirements?.prompt?.trim())) return null;
+    return creditAmount(cost.billingMode, cost.unitPriceMicrocredits, options.count, options.seconds, options.requirements?.prompt);
 }
 
 export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capability: ModelCapability | undefined, config: AiConfig, requirements?: ModelRequirements) {
@@ -60,10 +60,12 @@ export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: Mode
             .filter((value) => Number.isFinite(value) && value >= 0);
     const fixedRequestValues = unitPrices("fixed_request");
     const perSecondValues = unitPrices("per_second");
+    const perCharacterValues = unitPrices("per_character");
     const tokenValues = tiers.filter((tier) => tier.billingMode === "token").map((tier) => tier.outputTokenPriceMicrocredits / 1_000_000).filter((value) => Number.isFinite(value) && value >= 0);
     return [
         fixedRequestValues.length ? formatPriceRange(fixedRequestValues, "积分") : "",
         perSecondValues.length ? formatPriceRange(perSecondValues, "积分/秒") : "",
+        perCharacterValues.length ? formatPriceRange(perCharacterValues, "积分/万字符") : "",
         tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}` : "",
     ].filter(Boolean).join(" · ") || "未配置";
 }
@@ -98,6 +100,7 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
     const input = requirements?.input;
     const intent: ModelRequestIntent = {
         capability,
+        ...(requirements?.prompt !== undefined ? { prompt: requirements.prompt } : {}),
         operation: capability === "image" ? imagePriceOperation(requirements) : capability === "video" && input ? resolveVideoOperation(input, requirements?.videoOperation) : requirements?.videoOperation,
         inputs: {
             image: (input?.imageCount || 0) + (input?.characterCount || 0),
@@ -114,9 +117,14 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
     return cost.logicalModelId ? { logicalModelID: cost.logicalModelId, intent } : { channelId: channel.id, modelKey: modelOptionName(value), intent };
 }
 
-function creditAmount(billingMode: "fixed_request" | "per_second", unitPriceMicrocredits: number, count?: string | number, seconds?: string | number) {
-    const quantity = billingMode === "per_second" ? Math.max(1, Math.floor(Math.abs(Number(seconds)) || 1)) : Math.max(1, Math.floor(Math.abs(Number(count)) || 1));
-    return (unitPriceMicrocredits / 1_000_000) * quantity;
+function creditAmount(billingMode: "fixed_request" | "per_second" | "per_character", unitPriceMicrocredits: number, count?: string | number, seconds?: string | number, prompt?: string) {
+    const quantity = billingMode === "per_second"
+        ? Math.max(1, Math.floor(Math.abs(Number(seconds)) || 1))
+        : billingMode === "per_character"
+            ? Math.max(1, Array.from(prompt?.trim() || "").length)
+            : Math.max(1, Math.floor(Math.abs(Number(count)) || 1));
+    const divisor = billingMode === "per_character" ? 10_000 : 1;
+    return (unitPriceMicrocredits / 1_000_000) * Math.ceil(quantity / divisor);
 }
 
 function priceSelectorForRequest(capability: ModelCapability | undefined, config: AiConfig, requirements?: ModelRequirements) {

@@ -143,6 +143,7 @@ export default function CreatePage() {
     const hasPrompt = Boolean(prompt.trim());
     const modelRequirements = useMemo<ModelRequirements>(() => ({
         capability: mode,
+        prompt,
         input: {
             textCount: hasPrompt ? 1 : 0,
             imageCount: attachments.filter(isImageAttachment).length,
