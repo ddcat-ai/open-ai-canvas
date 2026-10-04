@@ -172,6 +172,8 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	// 这些事件也会推进运行 revision。调度模型步骤是 CAS 写入：冲突时重新读取
 	// 最新状态再调度，而不是把整轮判失败。冲突时事务整体回滚，不会产生任务或扣费。
 	var state cloudAgentRuntime
+	// 本步送达的插话正文，随响应交给运行时 session.steer（见 cloud_agent_interjection_pi.go）。
+	var steeringMessages []string
 	for attempt := 0; attempt < 8; attempt++ {
 		run, err := s.repo.CloudAgent(userID, runID)
 		if err != nil {
@@ -185,6 +187,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			return nil, false, fmt.Errorf("run already terminated")
 		}
 		if cloudAgentStepBudgetExhausted(&state) {
+			// 最终回答之后的插话续步会在这里撞上限；若确实停在最终回答边界，
+			// 按完成收尾而不是把整轮判失败（见 settleCloudAgentPiFinalAnswer）。
+			s.settleCloudAgentPiFinalAnswer(userID, runID)
 			return nil, false, fmt.Errorf("step budget exhausted")
 		}
 		if state.StepLimits, err = s.cloudAgentStepLimits(); err != nil {
@@ -222,8 +227,14 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if len(canonical.Messages) == 0 {
 			return nil, false, fmt.Errorf("no canonical messages")
 		}
+		// 运行时投影回写会洗掉插话来源标记，先补回再送达新插话；送达必须发生在
+		// 入队这次 CAS 写入里（出队、canonical 追加与 delivered 事件同批落库），
+		// 冲突重试时从最新状态重新出队，不会重复送达。压缩摘要请求不参与。
 		if !compactionSummary {
 			state.Canonical = canonical
+			cloudAgentRestoreInterjectionSources(&state)
+			steeringMessages = cloudAgentPiDeliverInterjections(runID, &state)
+			canonical = state.Canonical
 		}
 		if len(correction) > 0 {
 			// 纠偏上下文只用于这一次请求，不写回运行状态，避免下一步重复出现。
@@ -319,7 +330,11 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	} else if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, finishText, finishReasoning, result.ToolCalls); err != nil {
 		return nil, false, err
 	}
-	return map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}, false, nil
+	delivered := map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}
+	if len(steeringMessages) > 0 {
+		delivered["steeringMessages"] = steeringMessages
+	}
+	return delivered, false, nil
 }
 
 // adoptCloudAgentPiModelStep 判断挂着的活动任务能否作为本步结果直接接手。
