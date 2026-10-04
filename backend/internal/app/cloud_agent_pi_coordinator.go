@@ -119,7 +119,7 @@ func (s *Service) closeCloudAgentPiRunners() {
 }
 
 func (s *Service) startApprovedCloudAgentMediaWaiter(userID, runID, mediaTaskID string) {
-	if s == nil || runID == "" || mediaTaskID == "" {
+	if s == nil || s.disablePiRuntime || runID == "" || mediaTaskID == "" {
 		return
 	}
 	key := runID + ":" + mediaTaskID

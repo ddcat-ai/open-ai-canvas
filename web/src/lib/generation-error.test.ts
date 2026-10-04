@@ -15,3 +15,9 @@ test("不把供应商内部英文错误原样展示", () => {
     assert.equal(generationErrorMessage("provider request failed: invalid_request_error"), "模型服务处理失败，请稍后重试或换用其他模型。");
     assert.equal(generationErrorMessage("图片尺寸不支持"), "图片尺寸不支持");
 });
+
+test("保留安全的上游原因并归一化基础设施错误", () => {
+    assert.equal(generationErrorMessage("模型服务暂时不可用（HTTP 500）；上游：Upstream gateway error"), "模型服务暂时不可用（HTTP 500）；上游：Upstream gateway error");
+    assert.equal(generationErrorMessage("HTTP 502 Bad Gateway"), "网络异常。");
+    assert.equal(generationErrorMessage("HTTP 429"), "服务当前繁忙，请稍后重试。");
+});

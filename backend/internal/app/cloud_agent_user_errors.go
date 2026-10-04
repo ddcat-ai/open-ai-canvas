@@ -33,6 +33,7 @@ var (
 	taskErrorModelCapability       = regexp.MustCompile(`所选模型不支持当前请求|模型不支持当前请求|不支持操作\s+|能力类型不匹配`)
 	taskErrorModelParameters       = regexp.MustCompile(`不支持参数|超出支持范围|数量需在|至少需要\s+\d+\s+个|暂时无法满足这组输入和参数`)
 	taskErrorTechnicalProvider     = regexp.MustCompile(`(?i)(?:provider request failed|invalid_request_error|internal_server_error|bad_request|unauthorized|forbidden|not_found|upstream_error|request failed with status code|http\s*\d{3})`)
+	taskErrorHTTP5xx               = regexp.MustCompile(`(?i)\bHTTP\s*5\d{2}\b`)
 )
 
 // userFacingTaskError 把任务里保存的原始错误转换成用户能看懂的中文原因。
@@ -70,27 +71,45 @@ func userFacingTaskError(raw string) string {
 	if taskErrorModelParameters.MatchString(display) {
 		return "当前模型不支持这组参数或参考素材，请调整输入或切换模型后重试。"
 	}
+	if providerMessage == "" && !taskErrorKeepsProviderDetail(display) {
+		switch {
+		case taskErrorHasStatus(raw, "429"):
+			return "服务当前繁忙，请稍后重试。"
+		case taskErrorHasStatus(raw, "401", "403"):
+			return "生成服务鉴权失败，请检查渠道配置。"
+		case taskErrorHasStatus(raw, "404"):
+			return "生成服务地址不可用，请检查渠道配置。"
+		case taskErrorHasStatus(raw, "500", "502", "503", "504"):
+			return taskErrorNetworkMessage
+		}
+	}
+	if taskErrorKeepsProviderDetail(display) {
+		return truncateRunes(display, 240)
+	}
 	if taskErrorTechnicalProvider.MatchString(display) {
 		return "模型服务处理失败，请稍后重试或换用其他模型。"
 	}
 	if providerMessage == "" {
-		if !strings.Contains(display, "；上游：") {
-			switch {
-			case taskErrorHasStatus(raw, "429"):
-				return "服务当前繁忙，请稍后重试。"
-			case taskErrorHasStatus(raw, "401", "403"):
-				return "生成服务鉴权失败，请检查渠道配置。"
-			case taskErrorHasStatus(raw, "404"):
-				return "生成服务地址不可用，请检查渠道配置。"
-			case taskErrorHasStatus(raw, "500", "502", "503", "504"):
-				return taskErrorNetworkMessage
-			}
-		}
 		if taskErrorInfrastructurePattern.MatchString(raw) {
 			return taskErrorNetworkMessage
 		}
 	}
 	return truncateRunes(display, 240)
+}
+
+// 带有安全上游说明的错误已经是面向用户的文案，保留它的诊断信息；
+// 但网关、URL、连接和 5xx 基础设施详情仍必须归一化为网络异常。
+func taskErrorKeepsProviderDetail(value string) bool {
+	const marker = "；上游："
+	index := strings.Index(value, marker)
+	if index < 0 {
+		return false
+	}
+	detail := strings.TrimSpace(value[index+len(marker):])
+	if detail == "" || taskErrorNetworkPattern.MatchString(detail) || taskErrorInfrastructurePattern.MatchString(detail) {
+		return false
+	}
+	return !taskErrorHTTP5xx.MatchString(detail)
 }
 
 // userFacingTaskFailure 给任务失败加上"哪一步失败"的前缀，例如"图片生成失败：网络异常。"

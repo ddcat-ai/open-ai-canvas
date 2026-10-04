@@ -59,17 +59,16 @@ export function generationErrorMessage(error: unknown) {
     const resourceStorageMessage = resourceStorageFailureMessage(raw) || resourceStorageFailureMessage(displayMessage);
     if (resourceStorageMessage) return resourceStorageMessage;
     if (isNetworkFailure(displayMessage)) return NETWORK_ERROR_MESSAGE;
-    if (!providerMessage) {
-        if (!displayMessage.includes("；上游：")) {
-            if (hasHttpStatus(raw, 429)) return "服务当前繁忙，请稍后重试。";
-            if (hasHttpStatus(raw, 401, 403)) return "生成服务鉴权失败，请检查渠道配置。";
-            if (hasHttpStatus(raw, 404)) return "生成服务地址不可用，请检查渠道配置。";
-            if (hasHttpStatus(raw, 500, 502, 503, 504)) return NETWORK_ERROR_MESSAGE;
-        }
+    if (!providerMessage && !keepsProviderDetail(displayMessage)) {
+        if (hasHttpStatus(raw, 429)) return "服务当前繁忙，请稍后重试。";
+        if (hasHttpStatus(raw, 401, 403)) return "生成服务鉴权失败，请检查渠道配置。";
+        if (hasHttpStatus(raw, 404)) return "生成服务地址不可用，请检查渠道配置。";
+        if (hasHttpStatus(raw, 500, 502, 503, 504)) return NETWORK_ERROR_MESSAGE;
         if (containsInfrastructureDetails(raw)) return NETWORK_ERROR_MESSAGE;
     }
     if (isModelCapabilityFailure(displayMessage)) return MODEL_CAPABILITY_ERROR_MESSAGE;
     if (isModelParameterFailure(displayMessage)) return MODEL_PARAMETER_ERROR_MESSAGE;
+    if (keepsProviderDetail(displayMessage)) return displayMessage;
     if (isTechnicalProviderMessage(displayMessage)) return MODEL_SERVICE_ERROR_MESSAGE;
     return displayMessage || DEFAULT_GENERATION_ERROR_MESSAGE;
 }
@@ -141,6 +140,15 @@ function isTechnicalProviderMessage(value: string) {
     if (/(?:provider request failed|invalid_request_error|internal_server_error|bad_request|unauthorized|forbidden|not_found|upstream_error|request failed with status code|http\s*\d{3})/i.test(text)) return true;
     // 纯英文的 SDK/网关错误通常不是面向终端用户的说明；中文供应商原因仍允许展示。
     return !/[\u3400-\u9fff]/.test(text) && /^[\w .,:;_/'"()\-]+$/.test(text) && text.length > 18;
+}
+
+function keepsProviderDetail(value: string) {
+    const marker = "；上游：";
+    const index = value.indexOf(marker);
+    if (index < 0) return false;
+    const detail = value.slice(index + marker.length).trim();
+    if (!detail || isNetworkFailure(detail) || containsInfrastructureDetails(detail)) return false;
+    return !/\bHTTP\s*5\d{2}\b/i.test(detail);
 }
 
 function extractStructuredProviderMessage(raw: string) {

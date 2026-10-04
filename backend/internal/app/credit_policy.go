@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -150,13 +149,7 @@ func (s *Service) publicCreditPolicy(userID string) (PublicCreditPolicy, error) 
 
 // 单价、数量和倍率全程使用整数并向上取整，避免浮点误差造成少扣积分。
 func creditAmount(unitPrice int64, quantity int64, multiplierBPS int64) (int64, error) {
-	return creditAmountByUnit(unitPrice, quantity, 1, multiplierBPS)
-}
-
-// creditAmountByUnit 按“每 unitDivisor 个数量”为一个价格单位计费。
-// 例如按字符计费时，unitDivisor 为 10,000，金额始终向上取整到最小微积分。
-func creditAmountByUnit(unitPrice int64, quantity int64, unitDivisor int64, multiplierBPS int64) (int64, error) {
-	if unitPrice < 0 || quantity <= 0 || unitDivisor <= 0 || multiplierBPS <= 0 {
+	if unitPrice < 0 || quantity <= 0 || multiplierBPS <= 0 {
 		return 0, errors.New("积分计费参数无效")
 	}
 	const maxInt64 = int64(^uint64(0) >> 1)
@@ -168,20 +161,31 @@ func creditAmountByUnit(unitPrice int64, quantity int64, unitDivisor int64, mult
 		return 0, errors.New("积分计费金额溢出")
 	}
 	numerator := base * multiplierBPS
-	if unitDivisor > maxInt64/10_000 {
-		return 0, errors.New("积分计费金额溢出")
-	}
-	denominator := unitDivisor * 10_000
+	const denominator = int64(10_000)
 	if numerator > maxInt64-(denominator-1) {
 		return 0, errors.New("积分计费金额溢出")
 	}
 	amount := (numerator + denominator - 1) / denominator
 	if amount < 0 {
-		return 0, fmt.Errorf("积分计费金额无效：%d", amount)
+		return 0, errors.New("积分计费金额无效")
 	}
 	return amount, nil
 }
 
+// creditAmountByUnit 按“每 unitDivisor 个数量”为一个价格单位计费。
+// 例如按字符计费时，unitDivisor 为 10,000，数量先向上折算成计费单位，
+// 再套用销售倍率，避免把“万字符”误当成微积分分母。
+func creditAmountByUnit(unitPrice int64, quantity int64, unitDivisor int64, multiplierBPS int64) (int64, error) {
+	if unitPrice < 0 || quantity <= 0 || unitDivisor <= 0 || multiplierBPS <= 0 {
+		return 0, errors.New("积分计费参数无效")
+	}
+	const maxInt64 = int64(^uint64(0) >> 1)
+	if quantity > maxInt64-(unitDivisor-1) {
+		return 0, errors.New("积分计费金额溢出")
+	}
+	units := (quantity + unitDivisor - 1) / unitDivisor
+	return creditAmount(unitPrice, units, multiplierBPS)
+}
 func characterBillingAmount(unitPrice int64, characters int64, multiplierBPS int64) (int64, error) {
 	return creditAmountByUnit(unitPrice, characters, 10_000, multiplierBPS)
 }
