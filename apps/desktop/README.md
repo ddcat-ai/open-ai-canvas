@@ -37,7 +37,7 @@ apps/desktop/
 | `bun run tauri dev` | 开发运行（等价 `bunx --bun tauri dev`） |
 | `bun run tauri build` | 打包当前平台产物 |
 | `bun run icons` | 由 `icon-source.svg` 重新生成 `src-tauri/icons/` |
-| `bun run dmg` | macOS 打包链路；本地验证用 `bash scripts/build-dmg.sh --skip-sign` |
+| `bun run dmg` | macOS 打包链路：`tauri build` → 签名 → DMG（内含 `Applications` 拖拽目标）→ 公证。无 Developer ID 时用 `bash scripts/build-dmg.sh --skip-sign`，出 ad-hoc 签名的 DMG |
 
 调用 Tauri CLI 一律走 **bun 运行时**（脚本里已写成 `bunx --bun tauri`）。用 node 执行 CLI 的 shim 会直接失败，实测报错是：
 
@@ -111,22 +111,25 @@ Error: Cannot find native binding. npm has a bug related to optional dependencie
 
 `src-tauri/icons/` 里的文件是从 `icon-source.svg` 生成的**临时资产**，可整体替换：改 `icon-source.svg`（或换成任意 1024×1024 方形 PNG，写入 `icon-source.png`）后跑 `bun run icons`；`tauri.conf.json` 的 `bundle.icon` 只引用其中若干个文件，换图标不需要改配置。
 
-## macOS：未签名版本的安装与放行
+## macOS：安装与放行
 
-当前产物没有 Developer ID，只是 ad-hoc 签名（`codesign -dv` 显示 `flags=0x2(adhoc)`），也没有公证。直接双击从网络上下载来的 `影策.app` / DMG 会被 Gatekeeper 拦下——这是 macOS 的正常行为，不是包坏了。本地构建产物没有隔离标记（只有 `com.apple.provenance`），不会触发这一步。
+`scripts/build-dmg.sh` 出的 DMG 根目录里同时有 `影策.app` 和 `Applications` 快捷方式：挂载后把 `影策.app` 拖到 `Applications` 上就完成安装，不必先拷到别处再拖。
 
-### 1. 去掉下载隔离标记（最主要的一步）
+### 1. 无 Developer ID 时的签名状态
+
+`--skip-sign` 出的包**已经做过完整的 ad-hoc 签名**（先签嵌套的 `canvas-server`，再签外层 bundle），装到 `/Applications` 后可以直接双击，不会报「已损坏，无法打开」。它仍然没有 Developer ID、没有公证，`spctl -a -vv` 会 rejected——ad-hoc 不是可信签名，这是预期的。
+
+从网络下载来的这种包还会带上隔离标记，被 Gatekeeper 拦下也属于正常行为（不是包坏了），去掉标记即可：
 
 ```bash
-# 把 app 拖进 /Applications 后执行
 xattr -dr com.apple.quarantine "/Applications/影策.app"
 ```
 
-然后正常双击打开。如果不方便用终端，也可以在 Finder 里**右键 → 打开 → 仍要打开**（只需一次，之后双击即可）。
+不方便用终端时，也可以在 Finder 里**右键 → 打开 → 仍要打开**（只需一次，之后双击即可）。
 
-### 2. 签名不完整时重做一次 ad-hoc 签名
+### 2. 手工重打包时才需要补签
 
-`tauri build` 直接产出的 bundle 只带链接期签名（`codesign -dv` 显示 `flags=0x20002(adhoc,linker-signed)`、`Sealed Resources=none`），`spctl -a -vv` 会报 `code has no resources but signature indicates they must be present`。如果提示「已损坏，无法打开」，就地对整个 bundle 重新签一次：
+绕开 `build-dmg.sh`、直接用 `bunx --bun tauri build --bundles app` 拿到的 bundle 只有链接期签名（`codesign -dv` 显示 `flags=0x20002(adhoc,linker-signed)`、`Sealed Resources=none`），安装后会报「已损坏，无法打开」。这时就地对整个 bundle 重签一次：
 
 ```bash
 codesign --force --deep --sign - "/Applications/影策.app"

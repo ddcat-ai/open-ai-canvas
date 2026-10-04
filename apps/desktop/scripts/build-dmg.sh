@@ -9,8 +9,8 @@
 #      凭据二选一：APPLE_ID + APPLE_TEAM_ID + APPLE_PASSWORD（App 专用密码），
 #      或预先存好的钥匙串配置 NOTARY_PROFILE。
 # 用法：
-#   APPLE_SIGNING_IDENTITY="..." scripts/build-dmg.sh            # 签名 + DMG + 公证
-#   scripts/build-dmg.sh --skip-sign                            # 只出未签名 DMG，用于本地验证
+#   APPLE_SIGNING_IDENTITY="..." scripts/build-dmg.sh            # Developer ID 签名 + DMG + 公证
+#   scripts/build-dmg.sh --skip-sign                            # 无 Developer ID：ad-hoc 签名 + DMG
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,18 +40,47 @@ if [[ ! -d "${app_path}" ]]; then
   exit 1
 fi
 
-if [[ "${skip_sign}" -eq 1 ]]; then
-  echo "== 跳过签名，只生成 DMG =="
+# ad-hoc 签名：tauri build 直接产出的 bundle 只有链接期签名（linker-signed），
+# 装到 /Applications 后会报「已损坏，无法打开」。先签嵌套可执行文件、再签外层，
+# 得到完整的 ad-hoc bundle 签名，本地使用不必再手工 codesign。
+sign_adhoc() {
+  echo "== ad-hoc 签名嵌套可执行文件 =="
+  while IFS= read -r -d '' nested; do
+    echo "  sign ${nested}"
+    codesign --force --sign - "${nested}"
+  done < <(find "${app_path}/Contents/MacOS" -type f -perm -u+x -print0)
+
+  echo "== ad-hoc 签名 app =="
+  codesign --force --deep --sign - "${app_path}"
+  codesign --verify --deep --strict --verbose=2 "${app_path}"
+}
+
+# DMG 布局：根下同时放 .app 与 /Applications 的软链，挂载后可以直接把 app 拖进去安装。
+make_dmg() {
+  local stage
+  stage="$(mktemp -d)"
+  cp -R "${app_path}" "${stage}/"
+  ln -s /Applications "${stage}/Applications"
+
   mkdir -p "$(dirname "${dmg_path}")"
   rm -f "${dmg_path}"
-  hdiutil create -volname "影策" -srcfolder "${app_path}" -ov -format UDZO "${dmg_path}"
-  echo "未签名 DMG：${dmg_path}"
+  hdiutil create -volname "影策" -srcfolder "${stage}" -ov -format UDZO "${dmg_path}"
+  rm -rf "${stage}"
+}
+
+if [[ "${skip_sign}" -eq 1 ]]; then
+  echo "== 无 Developer ID：ad-hoc 签名 =="
+  sign_adhoc
+
+  echo "== 生成 DMG =="
+  make_dmg
+  echo "ad-hoc 签名 DMG：${dmg_path}"
   exit 0
 fi
 
 identity="${APPLE_SIGNING_IDENTITY:-}"
 if [[ -z "${identity}" ]]; then
-  echo "缺少 APPLE_SIGNING_IDENTITY；只想本地验证请用 --skip-sign" >&2
+  echo "缺少 APPLE_SIGNING_IDENTITY；只想本地安装请用 --skip-sign" >&2
   exit 1
 fi
 
@@ -69,9 +98,7 @@ codesign --force --options runtime --timestamp \
 codesign --verify --deep --strict --verbose=2 "${app_path}"
 
 echo "== 生成 DMG =="
-mkdir -p "$(dirname "${dmg_path}")"
-rm -f "${dmg_path}"
-hdiutil create -volname "影策" -srcfolder "${app_path}" -ov -format UDZO "${dmg_path}"
+make_dmg
 codesign --force --timestamp --sign "${identity}" "${dmg_path}"
 
 echo "== 公证 =="
