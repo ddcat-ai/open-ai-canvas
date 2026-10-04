@@ -350,6 +350,10 @@ func (s *Service) adoptCloudAgentPiModelStep(userID, runID, taskID string) (adop
 
 func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing canonicalAgentRequest) (canonicalAgentRequest, error) {
 	compactionSummaryRequest := cloudAgentPiCompactionSummaryRequest(messages)
+	if !compactionSummaryRequest {
+		// 审批暂停会留下没有结果的并行工具调用，先补齐再转换（见 cloud_agent_pi_unanswered_calls.go）。
+		messages = repairRuntimeUnansweredCalls(messages)
+	}
 	tools, systemPrompt := existing.Tools, existing.SystemPrompt
 	if compactionSummaryRequest {
 		tools, systemPrompt = nil, ""
@@ -365,11 +369,13 @@ func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing ca
 		if len(existing.Messages) == 0 {
 			return canonicalAgentRequest{}, err
 		}
+		existing.Messages = repairCanonicalUnansweredCalls(existing.Messages)
 		return existing, nil
 	}
 	// A projected Pi transcript containing a compaction summary is authoritative,
 	// even though it is shorter than the server's pre-compaction canonical history.
 	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > len(messages) {
+		existing.Messages = repairCanonicalUnansweredCalls(existing.Messages)
 		return existing, nil
 	}
 	canonical.PromptCacheKey = existing.PromptCacheKey
