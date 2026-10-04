@@ -64,6 +64,20 @@ bun run dev
 
 前端默认监听 `0.0.0.0:3000`，Vite 将 `/api` 和 OAuth 回调代理到 `127.0.0.1:8080`。如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
 
+## 桌面壳与本地服务
+
+桌面壳用 Tauri 2 托管本地 Go 服务，位于与 `web/`、`backend/` 平级的 `apps/desktop/`。壳与后端的完整环境变量契约、调试覆盖开关和打包链路见 `docs/plans/desktop-shell-implementation.md`，边界与取舍见 `docs/adr/0010-desktop-shell-tauri-local-service.md`。
+
+后端侧新增以下可选变量，只在壳托管场景使用，默认关闭，容器与 Web 部署不受影响：
+
+| 变量 | 默认 | 作用 |
+| --- | --- | --- |
+| `CANVAS_STATIC_DIR` | 空 | 非空时由后端静态提供前端构建产物，SPA 深链回退 `index.html`；目录缺失或无入口时启动失败。容器与 Web 部署仍由 nginx 承载前端，保持留空 |
+| `CANVAS_EXIT_WITH_PARENT` | `false` | 开启后父进程消失即退出，用于避开壳被强杀时留下孤儿进程；与下一项同时使用 |
+| `CANVAS_PARENT_PID` | 无 | 壳进程号；开启看门狗但未给出合法值时启动失败 |
+
+手工验证静态承载（不经过壳）：先 `cd web && bun run build`，再带 `CANVAS_STATIC_DIR=web/dist` 启动后端，访问 `http://127.0.0.1:8080/` 与任意深链均应返回应用入口，`/api/health/live` 仍返回 JSON。
+
 ## 时间线字幕转写（whisper.cpp）
 
 时间线“字幕转写”由**本地 whisper.cpp server** 执行：后端将片段音频预处理为 16k mono wav 后，POST 到 `CANVAS_WHISPER_BASE_URL/inference`（whisper server 原生接口，`response_format=verbose_json`）。未配置该地址时，转写任务会立即明确失败，提示“撰写失败未配置本地转写服务”。

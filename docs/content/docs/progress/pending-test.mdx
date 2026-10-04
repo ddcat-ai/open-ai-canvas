@@ -2902,3 +2902,38 @@ SSE 现在按 revision 变化发送紧凑快照，无变化只 heartbeat；客�
 仍待真实环境验收：
 
 - [ ] 在管理员后台存储资源页分别输入完整/部分用户名、昵称、邮箱和用户 ID，确认返回同一用户资源；再叠加类型、状态和存储位置筛选，确认分页与清空筛选正常。
+
+
+## 桌面壳：本地服务静态承载与孤儿退出（2026-10-04）
+
+- 已实现：后端新增 `CANVAS_STATIC_DIR`，非空时静态提供前端构建产物，SPA 深链回退 `index.html`，非导航类缺失资源如实 404，`/api` 路由与短代理语义不变；目录缺失或无入口时启动失败而不静默降级。
+- 已实现：后端新增 `CANVAS_EXIT_WITH_PARENT` / `CANVAS_PARENT_PID` 孤儿看门狗，父进程消失时走优雅关闭；缺少合法进程号时启动失败。
+- 自动验证：静态承载与看门狗专项测试通过（含目录穿越、写入方法、`/api` 不被劫持、看门狗仅在父进程退出后触发等用例）；`go vet` 与 `gofmt` 无输出；Windows 交叉编译与 vet 通过。
+- 已实现：新增 `apps/desktop/` Tauri 2 壳（启动页、回环空闲端口、`tauri-plugin-shell` sidecar、`/api/health/startup` 健康门、托盘、单实例、日志与偏好），窗口加载回环地址，不引入令牌身份、不放宽 CORS。
+- 已实现：打包链路 `scripts/stage-assets.sh`（`CGO_ENABLED=1` 构建 sidecar，目标平台与当前系统不一致时明确报错而不是产出假二进制）、`generate-icons.sh`、`build-dmg.sh`。
+- 自动验证：`cargo check --all-targets` 无 error/warning、`cargo test` 14 项通过；`bunx --bun tauri build --bundles app` 从零产出 `影策.app`（内含 1556 个前端 assets 与 65.9M 的 sidecar）；实机启动后壳自选端口 57364，健康门 200、`/projects/42/canvas` 深链 200、日志出现「本地服务已就绪，导航窗口」，结束壳后包内 sidecar 一并退出。
+
+仍待真实环境验收：
+
+- [ ] 用带 Developer ID 的凭据签名后完成公证与 DMG 产出，从 DMG 安装启动：启动页→健康门→主页链路正常，关闭窗口进托盘、重启本地服务、退出后无残留后端进程。
+- [ ] 壳被强制结束（如活动监视器强杀）后，后端应在一秒级内自行退出，不留下占用端口的孤儿进程。
+- [ ] 分享链接在桌面壳下可打开，并确认地址指向本次运行的本地端口。
+- [ ] Windows 平台的构建、sidecar 启动与无控制台窗口行为。
+- [ ] 真机验证前端静态资源的 MIME、缓存头和 wasm/媒体资源的实际加载。
+
+## 桌面壳窗口超出屏幕：按可用工作区自适应（2026-10-04）
+
+- 已修复：`tauri.conf.json` 与 `prefs.rs` 里写死的 1440×900 让窗口宽高都溢出屏幕（2408×1506 Retina 的逻辑桌面只有 1408×881，可用工作区 1408×803）。现在启动与恢复尺寸统一裁到当前显示器可用工作区的 92% 再居中；最小尺寸 960×640 在工作区更小时随之下调；窗口改为裁剪完成后才显示（`visible: false` + `show()`），不再先闪一下超屏窗口。
+- 已修复：ADR-0010 「窗口」一条的原文（「默认 1440×900，最小尺寸按设计文档的桌面断点实测确定」）两处都不成立——`docs/design/workspace-shell-design.mdx` 没有桌面断点，1440×900 是浏览器验收视口尺寸。ADR 已改为自适应口径并留修正记录，实施文档新增「窗口尺寸」小节。
+- 已实现：`prefs::WindowPrefs::fit_to` / `prefs::min_size` 为纯函数（有单测）；`lib.rs::monitor_work_area` 取工作区，拿不到显示器或平台返回 0 时不裁剪、不下调。
+- 已实现：macOS 未签名产物的放行步骤写入 `apps/desktop/README.md` 与根 `README.md`：`xattr -dr com.apple.quarantine` 去下载隔离、`codesign --force --deep --sign -` 重做 ad-hoc 签名，并如实说明 `spctl` 仍为 `rejected`（没有 Developer ID 就不会通过）。
+- 自动验证：`cargo check --all-targets` 无 error/warning、`cargo test` 18 项通过（新增 4 项：小屏裁剪、换屏后恢复受限、极小工作区同步下调下限、工作区缺失或为 0 时不裁剪）。
+- 实测：改完源码后开发会话自动重建重启，壳日志为 `窗口尺寸 1280×800 超出可用工作区 1408×803，调整为 1280×738`；同一数值与独立问 Finder 得到的桌面 `0,0,1408,881`（扣菜单栏与 Dock 后即 1408×803）一致。
+- 实测（macOS 26.5.1）：`xattr -dr com.apple.quarantine` 确实清除隔离属性；`codesign --force --deep --sign -` 把仅链接期签名的 bundle 变为完整 ad-hoc 签名（`Sealed Resources version=2 rules=13 files=1628`，`codesign --verify --deep` 返回 `valid on disk`，标识符从 `yingce_desktop-<hash>` 变为 `ai.ddcat.open-ai-canvas`）。
+
+仍待真实环境验收：
+
+- [ ] 关闭现存 `tauri dev` 会话后，从打包出的 `影策.app` 启动一次，确认窗口尺寸同样落在工作区内（打包产物与 dev 共用同一份配置与代码，但尚未单独看过）。
+- [ ] 在外接大屏上调整窗口尺寸后关闭，拔掉外接屏重启，确认恢复出的窗口不超出小屏（本次只验证了首次启动的裁剪）。
+- [ ] 把 `影策.app` 经压缩包或 AirDrop 传到另一台机器，按 README 步骤去隔离 + 重签名后确认能打开（本次只在本机验证了命令行为）。
+

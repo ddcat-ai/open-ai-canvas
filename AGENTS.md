@@ -13,6 +13,7 @@
 | `web/` | Vite、React 19、TypeScript、React Router、Ant Design、Tailwind、Zustand、TanStack Query | `web/src/application.tsx`、`web/src/router.tsx` | 工作区 UI、画布交互、浏览器缓存、API 调用和模型协议适配 |
 | `backend/` | Go 1.25、Gin、GORM、SQLite/PostgreSQL、Redis 协调 | `backend/cmd/server/main.go` | 登录、权限、业务 API、任务队列、资源、模型中转和后台管理 |
 | `docs/` | Next.js、Fumadocs、MDX | `docs/content/docs/` | 面向用户和开发者的专题文档；构建配置见 `docs/source.config.ts` |
+| `apps/desktop/` | Tauri 2、Rust、bun（只装 `@tauri-apps/cli`） | `apps/desktop/src-tauri/src/main.rs` | 桌面壳：托管本地 Go 服务、启动页与健康门、托盘、单实例、日志与打包链路；边界见 ADR-0010 |
 
 根目录的 `Dockerfile` 构建前端静态镜像；`nginx.conf` 托管 SPA 并代理后端。`docker-compose.dev.yml` 是源码热更新开发编排，`docker-compose.local.yml` 是本地构建运行，`docker-compose.deploy.yml` 是 PostgreSQL + Redis 部署编排。
 
@@ -75,6 +76,13 @@ cd web && bun run dev
 - `backend/cmd/`：可执行入口、迁移和启动配置；启动参数不得绕过数据目录约束。
 
 调用链应保持为：`HTTP -> handler -> service（别名）-> app（组合根）-> 业务域包 -> repository/model -> database/resource`；需要模型上游时由域包或 app 进入 `protocol` / `generation` / `outbound`。跨层调用必须有明确理由并补测试。
+
+### 桌面壳
+
+- `apps/desktop/` 与 `web/`、`backend/` 平级，作为独立构建单元：Rust 工具链与 Tauri 依赖不得进入前端包。
+- 壳只做宿主：选空闲回环端口、以环境变量契约拉起后端 sidecar、轮询健康门后再导航窗口。业务不进壳，前后端不反向 import 壳。
+- 壳与后端之间只有环境变量与健康探针这一条接口，两侧同时改；契约、调试覆盖开关和打包链路见 `docs/plans/desktop-shell-implementation.md`。
+- sidecar 必须带 cgo 构建（SQLite 驱动依赖 cgo），因此跨平台构建需要各自的原生工具链；不要用 `CGO_ENABLED=0` 产物充数。
 
 ### Agent、插件和文档
 
