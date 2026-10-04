@@ -1564,6 +1564,7 @@ components:
                 - forbidden
                 - not_found
                 - conflict
+                - project_name_conflict
                 - failed_precondition
                 - quota_exceeded
                 - rate_limited

@@ -337,6 +337,7 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 | 403 | 403 | `forbidden` | 无权限 |
 | 404 | 404 | `not_found` | 资源不存在 |
 | 409 | 409 | `conflict` | 冲突 |
+| 409 | 409 | `project_name_conflict` | `POST /projects` 同一用户下已有同名项目；客户端可有限更换名称重试 |
 | 429 | 429 | `rate_limited` | 限流（未细分） |
 | 500 | 500 | `internal` | 内部错误 |
 | 502 | 502 | `bad_gateway` | 上游失败 |
@@ -348,7 +349,7 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 模型错误把已有字符串码放进 `reason`（如 `model_capability_not_supported`），`code` 仍为 400。
 
-常量：后端 `service/error_codes.go`，前端 `web/src/services/api/error-codes.ts`。
+常量：后端标准原因定义在 `backend/internal/kernel/error_codes.go`，由 `app` 和 `service` 兼容导出；前端业务模块按 `ApiError.reason` 分支。
 
 ## 技能库分类 API
 
