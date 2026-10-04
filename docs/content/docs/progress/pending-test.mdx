@@ -2986,6 +2986,22 @@ SSE 现在按 revision 变化发送紧凑快照，无变化只 heartbeat；客�
 
 - [ ] 从 `影策.app` 里按新提示走一遍：后台「模型渠道」为 `deepseek-flash` 开启「可供用户使用」并保存 → 回「模型设置」重选系统渠道的 `deepseek-flash`（模型名不带「（渠道名）」后缀的那个）→ 创作页对话入口与画布智能体各发一次消息。首次触发智能体要解包 pi 运行时的十几秒属正常。
 - [ ] 若走个人渠道：在「设置 → 个人渠道 → 模型与能力」里为该模型选一次请求协议，再确认创作页可以提交。
-- [ ] 上述前端文案改动需要重新执行 `bunx --bun tauri build --bundles app` 才会出现在 `影策.app` 里；配置层修好不需要重打包。
+- [x] 上述前端文案改动已在 2026-10-05 的 DMG 重打包中带上：包内 `web/assets` 已命中新文案，旧文案已消失（见下节实测）。
+
+## macOS DMG 的拖拽安装形态（2026-10-05）
+
+背景：需要一份「能直接拖拽安装」的桌面产物。此前 `build-dmg.sh` 出的 DMG 里只有 `影策.app`、没有 `/Applications` 拖拽目标；`--skip-sign` 路径又完全跳过签名，产出的是仅链接期签名（linker-signed）的 bundle，拖进 `/Applications` 后会报「已损坏，无法打开」。
+
+- 已实现（`scripts/build-dmg.sh`）：新增 `make_dmg`，从暂存目录出包，DMG 根下同时放 `影策.app` 与 `Applications -> /Applications` 软链；Developer ID 路径与 `--skip-sign` 路径共用它。
+- 已实现（`sign_adhoc`）：`--skip-sign` 不再交出装完打不开的包——先签 `Contents/MacOS` 下的嵌套可执行文件（`yingce-desktop`、`canvas-server`），再 `codesign --force --deep --sign -` 签外层 bundle，最后 `codesign --verify --deep --strict` 自检。
+- 已实现（`apps/desktop/README.md`）：「macOS：安装与放行」改为先讲从 DMG 拖拽安装；说明 `--skip-sign` 已做完整 ad-hoc 签名，手工重签（原步骤 2）只在绕开脚本直接跑 `tauri build` 时才需要。
+- 实测（`bash scripts/build-dmg.sh --skip-sign` 全链路复跑）：前端 `built in 9.92s`，sidecar 与 `pi-runtime.tar.gz`（39M）与 101 个插件包重新暂存；`影策.app` 310.62 MiB；`影策.dmg` 221M。
+- 实测（镜像布局与签名）：挂载后卷内为 `Applications -> /Applications` 与 `影策.app`；`codesign -dv` 为 `Identifier=ai.ddcat.open-ai-canvas`、`flags=0x2(adhoc)`、`Sealed Resources version=2 rules=13 files=1730`，`codesign --verify --deep --strict` 报 `valid on disk` 与 `satisfies its Designated Requirement`；`xattr -r` 只有 `com.apple.provenance`、无 `com.apple.quarantine`。`spctl -a -vv` 仍会 rejected（ad-hoc 不是可信签名，预期）。
+- 已核实（包内前端是新的）：包内 `web/assets` 命中「创作端不会展示此模型」（`channels-page-*.js`）、「个人渠道 → 模型与能力」（`generation-task-*.js`）、「去开启价格档」（`project-*.js`），旧文案「当前模型未选择可用请求协议」已无命中。02:12 那次打包的产物仍是改动前的旧前端，本轮重打包才带上。
+
+仍待验收：
+
+- [ ] 从 DMG 拖进 `/Applications` 后双击启动，确认真机不出现 Gatekeeper 拦截且窗口能跑到就绪（本轮只验证了镜像布局、签名与包内容，没有真机拖装并启动）。
+- [ ] Developer ID 签名 + 公证路径（`APPLE_SIGNING_IDENTITY` + `notarytool`）本轮未跑，`make_dmg` 在该路径下的改动只在 `--skip-sign` 路径验证过。
 
 
