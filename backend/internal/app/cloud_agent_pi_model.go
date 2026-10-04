@@ -19,20 +19,87 @@ import (
 	"infinite-canvas/backend/internal/repository"
 )
 
+const cloudAgentCompactionSummarySystemPromptPrefix = "You are a context summarization assistant."
+
+type cloudAgentPiModelRequest struct {
+	ModelID       string                    `json:"modelId"`
+	SystemPrompt  string                    `json:"systemPrompt"`
+	Messages      []map[string]any          `json:"messages"`
+	Tools         []map[string]any          `json:"tools"`
+	ThinkingLevel string                    `json:"thinkingLevel"`
+	Purpose       string                    `json:"purpose"`
+	ContextUsage  *cloudAgentPiContextUsage `json:"contextUsage"`
+}
+
+// cloudAgentPiContextUsage 是 Pi SDK 对当前会话上下文的原生读数。
+// tokens/percent 使用指针以保留 Pi 在压缩后返回 null 的语义：没有新读数时，
+// Go 不得用本地估算或旧值冒充当前占用。
+type cloudAgentPiContextUsage struct {
+	Tokens        *int     `json:"tokens"`
+	ContextWindow int      `json:"contextWindow"`
+	Percent       *float64 `json:"percent"`
+}
+
+func (s *Service) validateCloudAgentPiModelRequest(userID, runID string, request cloudAgentPiModelRequest) (bool, error) {
+	compactionSummary := cloudAgentPiCompactionSummaryRequest(request.Messages)
+	purpose := strings.TrimSpace(request.Purpose)
+	switch purpose {
+	case "":
+		if compactionSummary {
+			purpose = "compaction"
+		} else {
+			purpose = "conversation"
+		}
+	case "conversation":
+		if compactionSummary {
+			return false, errors.New("普通 Agent 模型请求不能携带压缩摘要上下文")
+		}
+	case "compaction":
+		if !compactionSummary {
+			return false, errors.New("压缩模型请求缺少压缩摘要系统提示")
+		}
+	default:
+		return false, fmt.Errorf("未知的 Pi 模型请求 purpose: %s", purpose)
+	}
+	if purpose == "compaction" && len(request.Tools) > 0 {
+		return false, errors.New("压缩模型请求不得携带 Agent 工具")
+	}
+	if strings.TrimSpace(request.ModelID) == "" {
+		return compactionSummary, nil
+	}
+	run, err := s.repo.CloudAgent(userID, runID)
+	if err != nil {
+		return false, err
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		return false, err
+	}
+	expected := strings.TrimSpace(firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model))
+	if expected != "" && request.ModelID != expected {
+		return false, fmt.Errorf("Pi 模型标识与运行配置不一致: got %q, want %q", request.ModelID, expected)
+	}
+	return compactionSummary, nil
+}
+
 // cloudAgentPiModel 模型调用桥接
 func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, payload map[string]json.RawMessage) (any, error) {
-	var request struct {
-		Messages      []map[string]any `json:"messages"`
-		Tools         []map[string]any `json:"tools"`
-		ThinkingLevel string           `json:"thinkingLevel"`
-	}
+	var request cloudAgentPiModelRequest
 	if err := decodePiPayload(payload, &request); err != nil {
+		return nil, err
+	}
+	compactionSummary, err := s.validateCloudAgentPiModelRequest(userID, runID, request)
+	if err != nil {
 		return nil, err
 	}
 	if len(request.Messages) == 0 {
 		return nil, fmt.Errorf("no messages")
 	}
-
+	if !compactionSummary {
+		if err := s.broadcastCloudAgentPiContextPressure(userID, runID, request.ContextUsage); err != nil {
+			return nil, err
+		}
+	}
 	// 上游临时故障（5xx、429、超时、连接错误、空回复）自动重试，首次失败后最多再试 3 次，
 	// 指数退避。参数/鉴权类 4xx 重试也不会变好，直接失败。
 	// 模型吐出损坏的工具参数 JSON（截断或多一个括号）时，那次调用并没有被执行：
@@ -65,6 +132,32 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 	return nil, lastErr
 }
 
+// broadcastCloudAgentPiContextPressure 只转发 Pi SDK 的会话读数。
+// 这是上下文占用的唯一对外口径；Go 不估算正文 Token，也不再用 API usage 锚点校准。
+func (s *Service) broadcastCloudAgentPiContextPressure(userID, runID string, usage *cloudAgentPiContextUsage) error {
+	if usage == nil || usage.Tokens == nil || usage.ContextWindow <= 0 {
+		return nil
+	}
+
+	ratio := float64(*usage.Tokens) / float64(usage.ContextWindow)
+	if usage.Percent != nil {
+		ratio = *usage.Percent / 100
+	}
+	payload := map[string]any{
+		"estimatedInputTokens": *usage.Tokens,
+		"contextWindowTokens":  usage.ContextWindow,
+		"usableInputTokens":    usage.ContextWindow,
+		"compactAtTokens":      usage.ContextWindow * 80 / 100,
+		"pressureRatio":        ratio,
+		"modelLimitConfigured": true,
+		"estimate":             true,
+		"tokenSource":          "pi",
+		"estimateMethod":       "pi-sdk",
+		"readingScope":         "pi-session",
+	}
+	return s.broadcastAgentEvent(userID, runID, "context_pressure", payload)
+}
+
 // cloudAgentModelStepRetries 是单步模型调用首次失败后的最大重试次数。
 const cloudAgentModelStepRetries = 3
 
@@ -74,6 +167,7 @@ var errCloudAgentTruncatedToolArguments = errors.New("truncated tool arguments")
 
 // runCloudAgentModelStep 调度并等待一次模型步骤；第二个返回值表示失败是否值得重试。
 func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID string, messages []map[string]any, thinkingLevel string, correction ...map[string]any) (any, bool, error) {
+	compactionSummary := cloudAgentPiCompactionSummaryRequest(messages)
 	// 运行时发起 /model 的同时会并发推送事件（message_start、session_snapshot 等），
 	// 这些事件也会推进运行 revision。调度模型步骤是 CAS 写入：冲突时重新读取
 	// 最新状态再调度，而不是把整轮判失败。冲突时事务整体回滚，不会产生任务或扣费。
@@ -121,19 +215,16 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			continue
 		}
 
-		canonical := canonicalFromRuntimeMessages(messages, state.Canonical.Tools, state.Canonical.SystemPrompt)
-		// A continuation starts a fresh Pi process. If its session snapshot was
-		// unavailable, the runtime transcript is shorter than the server-authored
-		// canonical history. Reuse canonical directly so provider tool_calls are
-		// not accidentally converted as if they were Pi content blocks.
-		if len(state.Canonical.Messages) > len(messages) {
-			canonical = state.Canonical
+		canonical, historyErr := cloudAgentPiCanonicalForModelRequest(messages, state.Canonical)
+		if historyErr != nil {
+			return nil, false, historyErr
 		}
-		canonical.PromptCacheKey = state.Canonical.PromptCacheKey
 		if len(canonical.Messages) == 0 {
 			return nil, false, fmt.Errorf("no canonical messages")
 		}
-		state.Canonical = canonical
+		if !compactionSummary {
+			state.Canonical = canonical
+		}
 		if len(correction) > 0 {
 			// 纠偏上下文只用于这一次请求，不写回运行状态，避免下一步重复出现。
 			canonical.Messages = append(append([]map[string]any(nil), canonical.Messages...), correction...)
@@ -206,7 +297,26 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	if err := json.Unmarshal([]byte(task.ResultJSON), &result); err != nil {
 		return nil, false, fmt.Errorf("decode model result: %w", err)
 	}
-	if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, result.Text, result.Reasoning); err != nil {
+	finishText, finishReasoning := result.Text, result.Reasoning
+	if compactionSummary {
+		finishText, finishReasoning = "", ""
+	}
+	if !compactionSummary {
+		if err := validateCloudAgentCalls(result.ToolCalls); err != nil {
+			// The task itself succeeded, but its protocol result is not executable.
+			// Release the adopted task before returning the hard protocol error so a
+			// restarted run cannot remain stuck behind an invalid active task.
+			if releaseErr := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); releaseErr != nil {
+				return nil, false, releaseErr
+			}
+			return nil, false, fmt.Errorf("invalid Pi tool calls: %w", err)
+		}
+	}
+	if compactionSummary {
+		if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); err != nil {
+			return nil, false, err
+		}
+	} else if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, finishText, finishReasoning, result.ToolCalls); err != nil {
 		return nil, false, err
 	}
 	return map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}, false, nil
@@ -238,6 +348,46 @@ func (s *Service) adoptCloudAgentPiModelStep(userID, runID, taskID string) (adop
 	return false, false, nil
 }
 
+func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing canonicalAgentRequest) (canonicalAgentRequest, error) {
+	compactionSummaryRequest := cloudAgentPiCompactionSummaryRequest(messages)
+	tools, systemPrompt := existing.Tools, existing.SystemPrompt
+	if compactionSummaryRequest {
+		tools, systemPrompt = nil, ""
+	}
+	canonical, conversionErr := canonicalFromRuntimeMessages(messages, tools, systemPrompt)
+	if conversionErr != nil {
+		return canonicalAgentRequest{}, conversionErr
+	}
+	if compactionSummaryRequest {
+		return canonical, nil
+	}
+	if err := validateRuntimeMessagesForModel(messages); err != nil {
+		if len(existing.Messages) == 0 {
+			return canonicalAgentRequest{}, err
+		}
+		return existing, nil
+	}
+	// A projected Pi transcript containing a compaction summary is authoritative,
+	// even though it is shorter than the server's pre-compaction canonical history.
+	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > len(messages) {
+		return existing, nil
+	}
+	canonical.PromptCacheKey = existing.PromptCacheKey
+	return canonical, nil
+}
+
+func cloudAgentPiCompactionSummaryRequest(messages []map[string]any) bool {
+	for _, message := range messages {
+		if stringField(message, "role") != "system" {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(runtimeContentText(message["content"])), cloudAgentCompactionSummarySystemPromptPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // cloudAgentPiThinkingEnabled treats an omitted thinking level the same as Pi's
 // explicit "off" value. Pi omits the field when thinking is disabled, and the
 // Go JSON decoder represents that omitted field as an empty string.
@@ -245,9 +395,36 @@ func cloudAgentPiThinkingEnabled(thinkingLevel string) bool {
 	return thinkingLevel != "" && thinkingLevel != "off"
 }
 
-// cloudAgentModelTaskRetryable 按上游真实 HTTP 状态判断失败是否是临时性的：
-// 5xx、429、408 与没有拿到任何响应的网络错误可以重试；空回复也可以重试。
-// 其余 4xx（参数、鉴权、模型不存在）重试结果不会变，直接失败。
+// cloudAgentTransientModelFailure recognizes providers that returned a business
+// error envelope instead of a useful HTTP status. Some gateways return 200 with
+// codes such as openai_error/api_error; those failures are still safe to retry
+// because the model task has not produced an assistant result yet.
+func cloudAgentTransientModelFailure(call model.ApiCallLog) bool {
+	if call.Status != model.ApiCallStatusFailed {
+		return false
+	}
+	// A permanent HTTP 4xx must win over a generic business-error label. The
+	// caller handles 429 separately as an explicitly retryable rate limit.
+	if call.StatusCode >= 400 && call.StatusCode < 500 {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(call.ErrorCode + " " + call.Error))
+	for _, marker := range []string{"invalid_request", "authentication", "permission", "forbidden", "model_not_found", "insufficient_quota", "content_policy", "sensitive_words", "safety"} {
+		if strings.Contains(text, marker) {
+			return false
+		}
+	}
+	for _, marker := range []string{"openai_error", "api_error", "server_error", "temporarily_unavailable", "service_unavailable", "overloaded", "gateway_error", "rate_limit", "too_many_requests", "upstream_timeout"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// cloudAgentModelTaskRetryable 按上游真实 HTTP 状态和结构化业务错误判断失败是否是临时性的：
+// 5xx、429、408、明确的临时业务错误和没有拿到任何响应的网络错误可以重试；
+// 参数、鉴权、模型不存在和内容审核错误不会重试。
 func (s *Service) cloudAgentModelTaskRetryable(taskID string) bool {
 	task, err := s.repo.Task(taskID)
 	if err != nil || task == nil || task.Status == model.TaskStatusSucceeded || task.Status == model.TaskStatusCancelled {
@@ -256,10 +433,14 @@ func (s *Service) cloudAgentModelTaskRetryable(taskID string) bool {
 	if cloudAgentEmptyModelOutput(task) || cloudAgentStepTimedOut(task) {
 		return true
 	}
-	status, err := s.repo.LatestAPICallStatusForTask(taskID)
+	call, err := s.repo.LatestAPICallForTask(taskID)
 	if err != nil {
 		return false
 	}
+	if cloudAgentTransientModelFailure(call) {
+		return true
+	}
+	status := call.StatusCode
 	switch {
 	case status >= 500, status == 429, status == 408:
 		return true
@@ -271,9 +452,17 @@ func (s *Service) cloudAgentModelTaskRetryable(taskID string) bool {
 	return false
 }
 
-// finishCloudAgentPiModelStep 释放已完成的模型步骤，并把最终正文写入 Agent 事件流。
+// finishCloudAgentPiModelStep 释放已完成的模型步骤，并把模型结果提交到运行检查点。
+// calls 只在普通会话模型调用中传入；压缩摘要调用不应污染普通 canonical 历史、工具批次或步数。
 // 不释放 ActiveTaskID 的话，completeCloudAgentPiRun 会一直认为还有任务在跑。
-func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text, reasoning string) error {
+func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text, reasoning string, callBatches ...[]cloudAgentCall) error {
+	var calls []cloudAgentCall
+	if len(callBatches) > 0 {
+		calls = callBatches[0]
+		if err := validateCloudAgentCalls(calls); err != nil {
+			return err
+		}
+	}
 	for attempt := 0; attempt < 8; attempt++ {
 		run, err := s.repo.CloudAgent(userID, runID)
 		if err != nil {
@@ -292,8 +481,23 @@ func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text, reaso
 			if reasoning != "" {
 				fresh.event(runID, "reasoning_message", map[string]any{"messageId": taskID + ":reasoning", "text": truncateRunes(reasoning, 8000)})
 			}
+			if len(callBatches) > 0 {
+				fresh.Canonical.ToolChoice = "auto"
+				fresh.Calls = append([]cloudAgentCall(nil), calls...)
+				fresh.CallIndex = 0
+				fresh.StepSnapshotHash = cloudAgentCaptureStepSnapshotHash(calls)
+			}
 			if text != "" {
 				fresh.event(runID, "assistant_message", map[string]any{"messageId": taskID, "text": text})
+			}
+			if len(callBatches) > 0 {
+				if len(calls) > 0 {
+					fresh.Canonical.Messages = append(fresh.Canonical.Messages, map[string]any{
+						"role": "assistant", "content": text, "tool_calls": calls,
+					})
+				} else if text != "" {
+					fresh.Canonical.Messages = append(fresh.Canonical.Messages, map[string]any{"role": "assistant", "content": text})
+				}
 			}
 			return cloudAgentSave(current, &fresh)
 		})

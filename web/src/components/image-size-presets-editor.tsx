@@ -58,7 +58,7 @@ export function ImageSizePresetsEditor({ profile, disabled, onChange }: { profil
                             <div className="image-size-preset-heading-label">
                                 <strong id={`${id}-${tier}-title`}>{tier.toUpperCase()}</strong>
                                 <span>{items.length ? `${items.length} 个比例` : "未启用"}</span>
-                                <Switch size="sm" checked={items.length === ratios.length} disabled={disabled} aria-label={`启用 ${tier.toUpperCase()} 规格`} onChange={(enabled) => toggleTier(tier, ratios, enabled)} />
+                                <Switch size="sm" checked={items.length > 0} disabled={disabled} aria-label={`启用 ${tier.toUpperCase()} 规格`} onChange={(enabled) => toggleTier(tier, ratios, enabled)} />
                             </div>
                         </header>
                         <div className="image-size-preset-body">

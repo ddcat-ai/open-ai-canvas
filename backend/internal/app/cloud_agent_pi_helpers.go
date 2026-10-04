@@ -36,14 +36,21 @@ func (s *Service) buildSkillManifests(skills []cloudAgentSkill) []map[string]any
 }
 
 // buildCompactionStrategy 构建压缩策略
-func (s *Service) buildCompactionStrategy(userID, canvasID string) map[string]any {
+func (s *Service) buildCompactionStrategy(userID, canvasID string, budgets ...cloudAgentContextBudget) map[string]any {
+	budget := defaultCloudAgentContextBudget()
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	compactAt := budget.CompactAtTokens
+	if compactAt <= 0 || compactAt >= budget.ContextWindowTokens {
+		compactAt = budget.ContextWindowTokens * 80 / 100
+	}
+	keepRecentTokens := min(20_000, max(1_024, budget.ContextWindowTokens/6))
+	keepRecentTokens = min(keepRecentTokens, max(512, compactAt/2))
 	return map[string]any{
 		"enabled":          true,
-		"strategy":         "balanced", // balanced/aggressive/conservative
-		"reserveTokens":    2048,
-		"prioritizeRecent": true,
-		"keepSystemPrompt": true,
-		"keepToolResults":  true,
+		"reserveTokens":    budget.ContextWindowTokens - compactAt,
+		"keepRecentTokens": keepRecentTokens,
 	}
 }
 

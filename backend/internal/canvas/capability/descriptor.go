@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"infinite-canvas/backend/internal/canvas/contract"
 )
 
 const (
@@ -146,6 +148,23 @@ func (d Descriptor) ApplyPatch(node map[string]any, patch map[string]any) error 
 	}
 	for key, value := range patch {
 		field := d.PatchFields[key]
+		if field.Path == "metadata.generationSpec.prompt" {
+			metadata, ok := node["metadata"].(map[string]any)
+			if !ok {
+				metadata = map[string]any{}
+				node["metadata"] = metadata
+			}
+			if _, ok := metadata["generationSpec"].(map[string]any); !ok {
+				metadata["generationSpec"] = map[string]any{
+					"version":           float64(contract.GenerationVersion),
+					"mode":              d.GenerationMode,
+					"prompt":            "",
+					"options":           map[string]any{},
+					"referenceBindings": []any{},
+					"textInputMode":     "append-sources",
+				}
+			}
+		}
 		parts := strings.Split(field.Path, ".")
 		target := node
 		for _, part := range parts[:len(parts)-1] {

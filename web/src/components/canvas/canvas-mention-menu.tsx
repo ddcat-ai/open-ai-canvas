@@ -174,10 +174,17 @@ export function MentionMenu({
 }
 
 export function MentionReferenceList({ references, activeReferenceId, onSelect }: { references: CanvasResourceReference[]; activeReferenceId?: string; onSelect: (reference: CanvasResourceReference) => void }) {
+    const activeRef = useRef<HTMLButtonElement | null>(null);
+
+    useLayoutEffect(() => {
+        activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, [activeReferenceId]);
+
     if (!references.length) return <div className="canvas-resource-mention-empty">没有匹配的引用</div>;
     return references.map((reference) => (
         <button
             key={reference.id}
+            ref={reference.id === activeReferenceId ? activeRef : null}
             type="button"
             className={`canvas-resource-mention-item ${reference.kind === "skill" ? "is-skill" : ""} ${reference.id === activeReferenceId ? "is-active" : ""}`}
             aria-selected={reference.id === activeReferenceId}

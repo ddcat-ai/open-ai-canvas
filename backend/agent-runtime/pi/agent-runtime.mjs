@@ -18,6 +18,7 @@ setGlobalDispatcher(new Agent({
 const providerID = "infinite-canvas";
 const api = "openai-completions";
 
+
 async function readRequest() {
   let raw = "";
   for await (const chunk of process.stdin) raw += chunk;
@@ -36,6 +37,7 @@ function createMessage(model, result) {
     content.push({
       type: "toolCall",
       id: call.id,
+      ...(call.item_id ? { itemId: call.item_id } : {}),
       name: call.name,
       arguments: call.arguments ?? {},
     });
@@ -96,6 +98,12 @@ async function run() {
   const sessionDir = join(isolatedDir, "sessions");
   await mkdir(workDir, { mode: 0o700 });
   await mkdir(sessionDir, { mode: 0o700 });
+  // Lifecycle state, not prompt wording, identifies SDK summarization calls.
+  // Keep the id through the closing event delivery so the requested/end pair
+  // can always be correlated, while the closing phase no longer labels a
+  // following normal model request as a summary request.
+  let activeCompaction = null;
+  const eventChain = { current: Promise.resolve() };
   const modelRuntime = await ModelRuntime.create({
     authPath: join(isolatedDir, "auth.json"),
     modelsPath: join(isolatedDir, "models.json"),
@@ -131,8 +139,14 @@ async function run() {
       void (async () => {
         stream.push({ type: "start", partial });
         try {
+          const purpose = activeCompaction?.phase === "summarizing" ? "compaction" : "conversation";
+          // Deliver lifecycle events/snapshots before scheduling the next request.
+          // In particular, compaction must be visible before its model call begins.
+          await eventChain.current;
           const result = await bridge(request, "/model", {
             modelId: model.id,
+            purpose,
+            systemPrompt: context.systemPrompt,
             messages: context.messages,
             tools: (context.tools ?? []).map((tool) => ({
               name: tool.name,
@@ -140,6 +154,7 @@ async function run() {
               parameters: tool.parameters,
             })),
             thinkingLevel: options?.reasoning ?? "off",
+            contextUsage: session.getContextUsage(),
           }, options?.signal);
           for (const text of result.steeringMessages ?? []) {
             await session.steer(text);
@@ -308,13 +323,35 @@ async function run() {
     retry: { enabled: false },
   });
 
-  const eventChain = { current: Promise.resolve() };
   let runtimeError = null;
   // 事件链串行执行。已有一次快照在排队时，它执行时读到的已是最新文件，
   // 不必为每条新条目再整份上传一次。
   let snapshotQueued = false;
   const enqueueEvent = (payload) => {
-    eventChain.current = eventChain.current.then(() => bridge(request, "/event", payload));
+    const pending = eventChain.current.then(() => bridge(request, "/event", payload));
+    eventChain.current = pending;
+    return pending;
+  };
+  const enqueueSessionSnapshot = () => {
+    if (snapshotQueued) return;
+    snapshotQueued = true;
+    eventChain.current = eventChain.current.then(async () => {
+      snapshotQueued = false;
+      const sessionFile = sessionManager.getSessionFile();
+      if (!sessionFile) return;
+      let sessionJSONL;
+      try {
+        sessionJSONL = await readFile(sessionFile, "utf8");
+      } catch (error) {
+        if (error?.code === "ENOENT") return;
+        throw error;
+      }
+      return bridge(request, "/event", {
+        type: "session_snapshot",
+        sessionJSONL,
+        contextUsage: session.getContextUsage(),
+      });
+    });
   };
 
   session.subscribe((event) => {
@@ -418,27 +455,36 @@ async function run() {
         approvalId: event.approvalId,
       });
     } else if (event.type === "entry_appended") {
-      if (snapshotQueued) return;
-      snapshotQueued = true;
-      eventChain.current = eventChain.current.then(async () => {
-        snapshotQueued = false;
-        const sessionFile = sessionManager.getSessionFile();
-        if (!sessionFile) return;
-        let sessionJSONL;
-        try {
-          sessionJSONL = await readFile(sessionFile, "utf8");
-        } catch (error) {
-          if (error?.code === "ENOENT") return;
-          throw error;
-        }
-        return bridge(request, "/event", {
-          type: "session_snapshot",
-          sessionJSONL,
-          contextUsage: session.getContextUsage(),
-        });
-      });
+      enqueueSessionSnapshot();
     } else if (event.type === "compaction_start" || event.type === "compaction_end") {
-      enqueueEvent({ type: event.type, reason: event.reason, contextUsage: session.getContextUsage() });
+      // Persist the compaction entry before reporting it to the server. If event
+      // delivery fails, the summary and retained tail are still recoverable.
+      if (event.type === "compaction_start") activeCompaction = { id: crypto.randomUUID(), phase: "summarizing" };
+      const compaction = activeCompaction;
+      if (event.type === "compaction_end" && compaction) compaction.phase = "closing";
+      if (event.type === "compaction_end") enqueueSessionSnapshot();
+      const eventDelivery = enqueueEvent({
+        type: event.type,
+        compactionId: compaction?.id,
+        reason: event.reason,
+        aborted: event.aborted,
+        willRetry: event.willRetry,
+        errorMessage: event.errorMessage,
+        hasResult: Boolean(event.result),
+        tokensBefore: event.result?.tokensBefore,
+        estimatedTokensAfter: event.result?.estimatedTokensAfter,
+        contextUsage: session.getContextUsage(),
+      });
+      if (event.type === "compaction_end" && compaction) {
+        eventDelivery.then(
+          () => {
+            if (activeCompaction === compaction) activeCompaction = null;
+          },
+          () => {
+            if (activeCompaction === compaction) activeCompaction = null;
+          },
+        );
+      }
     }
   });
 

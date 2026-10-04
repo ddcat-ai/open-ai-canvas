@@ -34,5 +34,6 @@ export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undef
     delete next.taskReceiptRecorded;
     delete next.taskCreatedAt;
     delete next.taskUpdatedAt;
+    delete next.generationOutputCount;
     return next;
 }

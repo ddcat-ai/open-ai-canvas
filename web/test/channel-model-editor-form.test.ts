@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "../src/lib/model-protocols";
-import { changeChannelModelCapability, editorSectionForField, initialChannelModelValues, validateChannelModelPrices, validateChannelModelProtocol } from "../src/pages/admin/components/channel-model-editor-form";
+import { changeChannelModelCapability, editorSectionForField, initialChannelModelValues, updateChannelModelUpstreamCapabilities, validateChannelModelPrices, validateChannelModelProtocol } from "../src/pages/admin/components/channel-model-editor-form";
 import { defaultPriceTier } from "../src/pages/admin/components/channel-model-price-tier-form";
 
 const definition = (value: string, capability: ModelProtocolDefinition["capability"], enabled = true): ModelProtocolDefinition => ({ value, capability, enabled, label: value, create: "POST /test", contentType: "application/json", media: "url" });
@@ -42,6 +42,48 @@ describe("channel model editor drafts", () => {
     test("audio does not retain image/video configuration", () => {
         const draft = initialChannelModelValues(null, protocols);
         expect(changeChannelModelCapability({ ...draft, capability: "audio" }, protocols).capabilityConfig).toBeUndefined();
+    });
+    test("switching capability to a Midjourney protocol uses its image defaults without changing prices", () => {
+        const draft = initialChannelModelValues(null, protocols);
+        const next = changeChannelModelCapability({ ...draft, capability: "image", protocol: "cangyuan-midjourney-v7", modelKey: "midjourney-v7" }, [...protocols, definition("cangyuan-midjourney-v7", "image")]);
+        expect(next.capabilityConfig?.image).toMatchObject({ references: { promptMaxChars: 4000, maxImages: 5, maskSupported: false }, maxOutputs: 1 });
+        expect(next.priceTiers[0].unitPrice).toBe(0);
+    });
+    test("Kacang image protocol selection fills capabilities without changing prices", () => {
+        for (const protocol of ["kacang-midjourney-special", "kacang-midjourney-v7", "kacang-midjourney"]) {
+            const draft = initialChannelModelValues(null, protocols);
+            draft.priceTiers[0].unitPrice = 12;
+            const next = changeChannelModelCapability({ ...draft, capability: "image", protocol }, [definition(protocol, "image")]);
+            expect(next.protocol).toBe(protocol);
+            expect(next.capabilityConfig?.image?.maxOutputs).toBe(1);
+            expect(next.capabilityConfig?.image?.references.maxImages).toBe(protocol === "kacang-midjourney" ? 5 : 1);
+            expect(next.priceTiers[0].unitPrice).toBe(12);
+            expect(updateChannelModelUpstreamCapabilities(next)).toBe(next);
+        }
+    });
+    test("V8.2 upstream changes only retier presets and preserve administrator settings", () => {
+        const draft = initialChannelModelValues(null, protocols);
+        const capabilityConfig = defaultModelCapabilityConfig("cangyuan-midjourney-v82", "midjourney-1k");
+        capabilityConfig.image!.references.promptMaxChars = 12000;
+        capabilityConfig.image!.size.default = "6:11";
+        const next = updateChannelModelUpstreamCapabilities({ ...draft, capability: "image", protocol: "cangyuan-midjourney-v82", modelKey: "midjourney-1k", providerModelKey: "midjourney-2k", capabilityConfig });
+        expect(new Set(next.capabilityConfig!.image!.size.presets!.map((preset) => preset.tier))).toEqual(new Set(["2k"]));
+        expect(next.capabilityConfig!.image!.size.values).toEqual(capabilityConfig.image!.size.values);
+        expect(next.capabilityConfig!.image!.size.default).toBe("6:11");
+        expect(next.capabilityConfig!.image!.references.promptMaxChars).toBe(12000);
+        expect(next.priceTiers).toBe(draft.priceTiers);
+        expect(capabilityConfig.image!.size.presets![0].tier).toBe("1k");
+        expect(updateChannelModelUpstreamCapabilities(next)).toBe(next);
+        const back = updateChannelModelUpstreamCapabilities({ ...next, providerModelKey: "midjourney-1k" });
+        expect(back.capabilityConfig!.image!.size.presets![0].tier).toBe("1k");
+    });
+    test("existing model profiles retain saved custom capabilities on reopening", () => {
+        const capabilityConfig = defaultModelCapabilityConfig("cangyuan-midjourney-v7", "midjourney-v7");
+        capabilityConfig.image!.references.maxImages = 2;
+        const item = { modelKey: "midjourney-v7", providerModelKey: "midjourney-v7", capability: "image" as const, protocol: "cangyuan-midjourney-v7", capabilityConfig, enabled: true };
+        const reopened = initialChannelModelValues(item as Parameters<typeof initialChannelModelValues>[0], [definition("cangyuan-midjourney-v7", "image")]);
+        expect(reopened.capabilityConfig?.image?.references.maxImages).toBe(2);
+        expect(updateChannelModelUpstreamCapabilities(reopened)).toBe(reopened);
     });
     test("validation errors map to their mounted tab", () => {
         expect(editorSectionForField(["priceTiers", 2, "unitPrice"])).toBe("pricing");

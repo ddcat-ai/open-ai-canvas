@@ -1,0 +1,258 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "dola-pool",
+  "name": "Dola-pool Seedance Video",
+  "version": "1.0.0",
+  "author": "Dola-pool / 影策",
+  "description": "Dola-pool Seedance 视频生成任务协议。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "dola-pool",
+        "label": "Dola-pool Seedance Video",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://dolasd.xyz",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "模型 ID；按 GET /v1/models 返回的模型配置填写。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "视频提示词。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "mapping": "duration",
+            "description": "必须显式传当前开放的时长档位；开放档位见 GET /v1/models。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "ratio/size",
+            "description": "画幅比例别名或受支持的像素尺寸。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "reference_images",
+            "description": "参考图片；通过公网 URL 或 data URL 发送。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "required": false,
+            "mapping": "provider-specific fields",
+            "description": "Dola-pool 专属扩展字段。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$ref": "request.duration"
+                },
+                0
+              ]
+            },
+            "message": "Dola-pool 视频任务必须显式指定大于 0 的 duration"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos/generations",
+          "contentType": "application/json",
+          "body": {
+            "$merge": [
+              {
+                "model": {
+                  "$ref": "request.model"
+                },
+                "prompt": {
+                  "$ref": "request.prompt"
+                },
+                "duration": {
+                  "$ref": "request.duration"
+                },
+                "ratio": {
+                  "$omitEmpty": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                "size": {
+                  "$omitEmpty": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                "reference_images": {
+                  "$omitEmpty": {
+                    "$map": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.images"
+                        }
+                      },
+                      "as": "media",
+                      "in": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.dola-pool.body"
+                  },
+                  {
+                    "$ref": "request.providerOptions.dola-pool.extra_body"
+                  },
+                  {}
+                ]
+              }
+            ]
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}",
+          "contentType": "application/json"
+        },
+        "result": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}/content",
+          "headers": {
+            "Accept": "video/mp4"
+          }
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.taskId"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.state"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error"
+              },
+              {
+                "$ref": "response.detail"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.fail_reason"
+              }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$ref": "response.video_url"
+              },
+              {
+                "$ref": "response.content.video_url"
+              },
+              {
+                "$ref": "response.videoUrl"
+              },
+              {
+                "$ref": "response.result_url"
+              },
+              {
+                "$ref": "response.url"
+              },
+              {
+                "$ref": "response.data.video_url"
+              },
+              {
+                "$ref": "response.output.url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "detail",
+            "error.code"
+          ],
+          "messagePaths": [
+            "error",
+            "detail",
+            "message"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# Dola-pool Seedance Video\n\n该独立视频协议插件对接 `https://dolasd.xyz` 的 Dola-pool 视频任务 API。\n\n在渠道配置中选择 `Dola-pool Seedance Video`，填写 Dola-pool API Key。任务使用 `/v1/videos/generations` 创建、`/v1/videos/{task_id}` 查询；不要使用 Kling Video 插件，Kling 的轮询 URL 与 Dola-pool 不同。\n\n接口细节见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Dola-pool Seedance Video 接口\n\n## 协议身份\n\n- 插件 ID / Provider ID：`dola-pool`\n- 默认 Base URL：`https://dolasd.xyz`\n- 鉴权：`Authorization: Bearer <API key>`\n- 创建：`POST /v1/videos/generations`\n- 查询：`GET /v1/videos/{task_id}`\n- 下载：`GET /v1/videos/{task_id}/content`\n\n## 创建请求\n\n插件以 JSON 发送 `model`、`prompt` 和 `duration`。时长必须显式提供，不要依赖服务端默认值；只提交 `GET /v1/models` 中该模型当前开放的 `durations`。接口当前示例档位为 `seedance-2.5`、30 秒，开放档位由服务端定价配置控制。\n\n`aspectRatio` 同时映射到 `ratio` 和 `size`，因此可填写比例（如 `16:9`、`9:16`）或接口接受的像素尺寸（如 `720x1280`）。参考图映射至 `reference_images`，支持公网 HTTPS URL 或 `data:image/...;base64,...`。建议优先使用公网 URL，单图不超过 15 MB、最多 30 张，格式限 JPEG、PNG、WEBP。\n\n额外请求字段可通过 `providerOptions.dola-pool.body` 或 `providerOptions.dola-pool.extra_body` 传入；扩展对象与标准字段合并，扩展对象中的同名字段优先。\n\n## 轮询与下载\n\n创建响应中的 `id` 是后续查询使用的任务 ID。状态为 `queued`、`processing`、`completed` 或 `failed`；插件将接口状态映射为平台统一状态。建议每 5 至 10 秒查询一次，至少持续 20 分钟再判定超时。`timeout` 或 `download` 类型失败在退款后仍可能于 20 分钟内补回为成功，期间应继续查询，避免重复提交。\n\n完成后优先使用查询响应的 `video_url`。也可调用 `/v1/videos/{task_id}/content` 获取 `video/mp4` 二进制。视频及对应任务记录约保留 6 小时，请及时下载转存。\n\n## 404 排查\n\nDola-pool 的任务按 API Key 隔离；创建与查询必须使用同一把 Key。任务记录也会在成片保留期结束后清理。Kling Video 插件的轮询路径是 `/v1/videos/generations/{task_id}`，而 Dola-pool 要求 `/v1/videos/{task_id}`，因此两者不能互换。\n\n错误响应使用 `{ \"detail\": \"错误原因\" }`。其他状态码与参数限制以 Dola-pool 接口文档及 `/v1/models` 当前返回为准。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"dola-pool\",\n  \"name\": \"Dola-pool Seedance Video\",\n  \"version\": \"1.0.0\",\n  \"author\": \"Dola-pool / 影策\",\n  \"description\": \"Dola-pool Seedance 视频生成任务协议。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"dola-pool\",\n        \"label\": \"Dola-pool Seedance Video\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://dolasd.xyz\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"模型 ID；按 GET /v1/models 返回的模型配置填写。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"视频提示词。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": true,\n            \"mapping\": \"duration\",\n            \"description\": \"必须显式传当前开放的时长档位；开放档位见 GET /v1/models。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"ratio/size\",\n            \"description\": \"画幅比例别名或受支持的像素尺寸。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"reference_images\",\n            \"description\": \"参考图片；通过公网 URL 或 data URL 发送。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"Dola-pool 专属扩展字段。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$gt\": [\n                {\n                  \"$ref\": \"request.duration\"\n                },\n                0\n              ]\n            },\n            \"message\": \"Dola-pool 视频任务必须显式指定大于 0 的 duration\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/videos/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"$merge\": [\n              {\n                \"model\": {\n                  \"$ref\": \"request.model\"\n                },\n                \"prompt\": {\n                  \"$ref\": \"request.prompt\"\n                },\n                \"duration\": {\n                  \"$ref\": \"request.duration\"\n                },\n                \"ratio\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                \"size\": {\n                  \"$omitEmpty\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                \"reference_images\": {\n                  \"$omitEmpty\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$sortByOrder\": {\n                          \"$ref\": \"request.images\"\n                        }\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"$ref\": \"media.value\"\n                      }\n                    }\n                  }\n                }\n              },\n              {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.providerOptions.dola-pool.body\"\n                  },\n                  {\n                    \"$ref\": \"request.providerOptions.dola-pool.extra_body\"\n                  },\n                  {}\n                ]\n              }\n            ]\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/videos/{{taskId}}\",\n          \"contentType\": \"application/json\"\n        },\n        \"result\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/videos/{{taskId}}/content\",\n          \"headers\": {\n            \"Accept\": \"video/mp4\"\n          }\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.taskId\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.state\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error\"\n              },\n              {\n                \"$ref\": \"response.detail\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.fail_reason\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.content.video_url\"\n              },\n              {\n                \"$ref\": \"response.videoUrl\"\n              },\n              {\n                \"$ref\": \"response.result_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              },\n              {\n                \"$ref\": \"response.data.video_url\"\n              },\n              {\n                \"$ref\": \"response.output.url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"detail\",\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"error\",\n            \"detail\",\n            \"message\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

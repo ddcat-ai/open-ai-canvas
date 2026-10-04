@@ -9989,9 +9989,9 @@ html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"
         font-size: 0.92em;
         font-weight: 500;
         line-height: 1;
-        vertical-align: baseline;
+        vertical-align: middle;
         user-select: none;
-        transform: translateY(var(--canvas-mention-chip-offset-y));
+        transform: translateY(-0.08em);
     }
 
     .canvas-resource-inline-skill-icon {
@@ -18786,12 +18786,13 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     box-shadow: none !important;
 }
 
-.ant-select.app-unified-select .ant-select-arrow {
+.ant-select.app-unified-select .ant-select-suffix {
+    margin-inline-end: 10px !important;
     color: color-mix(in srgb, var(--foreground) 48%, transparent) !important;
     transition: color var(--motion-state, 180ms) ease, transform var(--motion-state, 180ms) ease !important;
 }
 
-.ant-select.app-unified-select.ant-select-open .ant-select-arrow {
+.ant-select.app-unified-select.ant-select-open .ant-select-suffix {
     color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
 }
 

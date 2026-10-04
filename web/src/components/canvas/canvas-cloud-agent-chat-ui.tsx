@@ -12,6 +12,7 @@ import type { Components } from "streamdown";
 import { agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolName, agentToolRetryLabel, agentToolStatus, friendlyAgentToolSummary, type AgentToolCategory } from "@/lib/canvas/agent-tool-presentation";
 import { agentOperationCategory, agentOperationFailed, agentOperationSegmentLabel } from "@/lib/canvas/agent-operation-feed";
 import { agentToolRetry, type AgentToolRetryAttempt } from "@/lib/canvas/agent-tool-retry";
+import { agentErrorContent } from "@/lib/canvas/agent-error-presentation";
 import { AgentImagePreview } from "./canvas-cloud-agent-composer";
 
 // 输入区已拆到 canvas-cloud-agent-composer.tsx；附件类型与引用转换在 canvas-cloud-agent-attachments.ts。
@@ -78,6 +79,8 @@ export type CloudAgentChatMessage = {
     planTerminal?: boolean;
     question?: CloudAgentUserQuestion;
     formAnswer?: CloudAgentFormAnswer;
+    /** 上下文压缩状态；数值只展示 Pi SDK 实际提供的估计值。 */
+    compaction?: { status: "pending" | "completed" | "failed" | "aborted"; compactionId?: string; tokensBefore?: number; estimatedTokensAfter?: number; reason?: string; errorMessage?: string };
     meta?: string;
     detail?: unknown;
     attachments?: CloudAgentChatAttachment[];
@@ -379,9 +382,38 @@ export function AgentChatMessage({
     const markdownComponents = useMemo(() => createAgentMessageMarkdownComponents(references, onFocusNode), [onFocusNode, references]);
     const agentMarkdownText = rewriteAgentNodeLinks(displayedText, references);
     const errorTone = item.errorSeverity === "warning" ? "warning" : "error";
-    const color = item.role === "error" ? (errorTone === "warning" ? "#b45309" : "#ef4444") : theme.node.text;
+    const color = theme.node.text;
     if (item.reasoning) {
         return <AgentReasoningFeed items={[item]} theme={theme} />;
+    }
+    if (item.compaction) {
+        const compactionIcon =
+            item.compaction.status === "pending" ? (
+                <LoaderCircle className="size-3 animate-spin" />
+            ) : item.compaction.status === "completed" ? (
+                <Sparkles className="size-3" />
+            ) : item.compaction.status === "aborted" ? (
+                <XCircle className="size-3" />
+            ) : (
+                <CircleAlert className="size-3" />
+            );
+        return (
+            <div className="agent-status-message agent-status-message--compaction flex items-start gap-2 text-xs">
+                <AgentTimelineMarker theme={theme} tone={item.compaction.status === "failed" ? "warning" : "muted"} icon={compactionIcon} />
+                <div className="min-w-0 flex-1 py-0.5 leading-5" style={{ color: theme.node.muted }}>
+                    {item.compaction.status === "pending" ? (
+                        <>
+                            <span className="font-medium">压缩中</span>
+                            <span className="ml-2 opacity-75">上下文已超过服务端压缩阈值，已暂停本轮执行并压缩历史（保留用户提示摘要、操作记录、未完成任务、当前工作、设计决策、限制和偏好），压完会从压缩后的上下文继续。</span>
+                        </>
+                    ) : item.compaction.status === "completed" ? (
+                        <span className="font-medium">{item.text}</span>
+                    ) : (
+                        <span className="font-medium">{item.text || item.compaction.errorMessage || (item.compaction.status === "aborted" ? "上下文压缩已取消" : "上下文压缩失败")}</span>
+                    )}
+                </div>
+            </div>
+        );
     }
     if (isSystem) {
         return (
@@ -403,23 +435,33 @@ export function AgentChatMessage({
         );
     }
     if (item.role === "error") {
+        const title = item.title || (errorTone === "warning" ? "Agent 正在重试" : "Agent 暂时无法继续");
+        const { description, diagnosticId } = agentErrorContent(item.text, title);
         return (
-            <div className={`agent-status-message agent-status-message--${errorTone} flex items-start gap-2`}>
-                <AgentTimelineMarker theme={theme} tone={errorTone} icon={errorTone === "warning" ? <CircleAlert className="size-3.5" /> : <CircleAlert className="size-3.5" />} />
-                <div className="min-w-0 flex-1 py-0.5 text-[13px] leading-5">
-                    <div className="agent-error-title font-medium" style={{ color }}>
-                        {item.title || (errorTone === "warning" ? "Agent 正在重试" : "Agent 暂时无法继续")}
+            <div className={`agent-status-message agent-status-message--${errorTone} agent-error-message`}>
+                <span className="agent-error-icon" aria-hidden="true">
+                    <CircleAlert className="size-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div role="status">
+                        <div className="agent-error-title">{title}</div>
+                        {description ? <p className="agent-error-detail">{description}</p> : null}
                     </div>
-                    <div className="agent-error-detail whitespace-pre-wrap break-words" style={{ color: theme.node.muted }}>
-                        {item.text}
-                    </div>
-                    {item.meta ? (
-                        <div className="agent-error-meta text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                            {item.meta}
-                        </div>
+                    {item.meta ? <p className="agent-error-meta">{item.meta}</p> : null}
+                    {diagnosticId ? (
+                        <details className="agent-error-diagnostics">
+                            <summary>
+                                <ChevronDown className="size-3" aria-hidden="true" />
+                                诊断信息
+                            </summary>
+                            <div className="agent-error-diagnostics-body">
+                                <p>如反复出现，请将诊断号反馈给管理员。</p>
+                                <code>{diagnosticId}</code>
+                            </div>
+                        </details>
                     ) : null}
                     {onRetry ? (
-                        <Button type="text" size="small" className="mt-1 !h-7 !px-0" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
+                        <Button type="text" size="small" className="agent-error-retry" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
                             {retrying ? "重试中" : "重试本轮"}
                         </Button>
                     ) : null}

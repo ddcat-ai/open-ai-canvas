@@ -68,7 +68,8 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 	features := s.buildFeaturesConfig(params.RuntimeState)
 
 	// 7. 构建压缩策略
-	compaction := s.buildCompactionStrategy(params.UserID, params.CanvasID)
+	contextBudget := s.cloudAgentContextBudgetForRequest(params.RuntimeState.Request)
+	compaction := s.buildCompactionStrategy(params.UserID, params.CanvasID, contextBudget)
 
 	// 8. 构建权限配置
 	permissions := s.buildPermissionsConfig(params.UserID, params.CanvasID)
@@ -238,13 +239,14 @@ func (s *Service) buildPermissionsConfig(userID, canvasID string) map[string]any
 
 // buildModelConfig 构建模型配置
 func (s *Service) buildModelConfig(modelID string, state *cloudAgentRuntime) map[string]any {
+	budget := s.cloudAgentContextBudgetForRequest(state.Request)
 	return map[string]any{
 		"id":            modelID,
 		"name":          modelID,
 		"reasoning":     cloudAgentReasoningEnabled(state.Policy.ReasoningMode),
 		"input":         []string{"text", "image"},
-		"contextWindow": 200000,
-		"maxTokens":     8192,
+		"contextWindow": budget.ContextWindowTokens,
+		"maxTokens":     budget.MaxOutputTokens,
 		"provider":      state.Request.ChannelID,
 		"switchable":    true,
 		"temperature":   0.7,

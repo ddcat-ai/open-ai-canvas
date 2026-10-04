@@ -43,6 +43,13 @@ func TestCloudAgentToolErrorClass(t *testing.T) {
 			ErrorClass:     cloudAgentToolErrorAdmission,
 			RequiredAction: "report_to_user",
 		}, true, cloudAgentToolErrorAdmission, false, "report_to_user"},
+		{"媒体准入临时故障", canvasRequest, call("generate_media"), &cloudAgentMediaAdmissionError{
+			error:          providerHTTPError{StatusCode: 503},
+			Reason:         "media_admission_failed",
+			ErrorClass:     cloudAgentToolErrorAdmission,
+			Retryable:      true,
+			RequiredAction: "retry",
+		}, true, cloudAgentToolErrorAdmission, true, "retry"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -132,5 +139,50 @@ func TestCloudAgentToolResultClassifiesMissingRequiredArguments(t *testing.T) {
 	full.Function.Arguments = `{"nodeId":"node-1"}`
 	if missing := cloudAgentMissingRequiredArguments(state.Canonical.Tools, full); len(missing) != 0 {
 		t.Fatalf("字段齐备却报缺字段：%v", missing)
+	}
+}
+
+func TestCloudAgentMediaAdmissionRetryClassification(t *testing.T) {
+	retryableApp := NewAppError(503, "服务暂时不可用")
+	retryableApp.Retryable = true
+	cases := []struct {
+		name      string
+		err       error
+		wantRetry bool
+		wantAct   string
+	}{
+		{"retryable app error", retryableApp, true, "retry"},
+		{"upstream 503", providerHTTPError{StatusCode: 503}, true, "retry"},
+		{"upstream 400", providerHTTPError{StatusCode: 400}, false, "report_to_user"},
+		{"timeout", context.DeadlineExceeded, true, "retry"},
+		{"deterministic rejection", BadAuthRequest("模型不存在"), false, "report_to_user"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapped := cloudAgentWrapMediaAdmissionError(tc.err)
+			admission, ok := wrapped.(*cloudAgentMediaAdmissionError)
+			if !ok || admission.Retryable != tc.wantRetry || admission.RequiredAction != tc.wantAct {
+				t.Fatalf("wrapped admission = %#v, want retryable=%v action=%q", wrapped, tc.wantRetry, tc.wantAct)
+			}
+		})
+	}
+}
+
+func TestCloudAgentTransientMediaAdmissionUsesRepairBudget(t *testing.T) {
+	state := &cloudAgentRuntime{ToolRepairs: map[string]cloudAgentToolRepair{}}
+	call := cloudAgentCall{ID: "call-1"}
+	call.Function.Name = "generate_media"
+	err := &cloudAgentMediaAdmissionError{
+		error:     providerHTTPError{StatusCode: 503},
+		Reason:    "media_admission_failed",
+		Retryable: true,
+	}
+	for attempt := 1; attempt <= cloudAgentToolAttemptLimit; attempt++ {
+		result := map[string]any{"phase": "admission", "taskSubmitted": false}
+		payload := map[string]any{}
+		exhausted := cloudAgentTrackToolRepair("run-1", state, call, result, err, payload)
+		if exhausted != (attempt == cloudAgentToolAttemptLimit) {
+			t.Fatalf("attempt %d exhausted=%v", attempt, exhausted)
+		}
 	}
 }

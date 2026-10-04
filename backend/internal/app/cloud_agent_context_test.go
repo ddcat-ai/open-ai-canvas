@@ -205,3 +205,48 @@ func TestCloudAgentSkillsLoadOnDemandAndPage(t *testing.T) {
 		t.Fatal("mixed skill version")
 	}
 }
+
+func TestCloudAgentCompactsSupersededCanvasReadWithoutBreakingToolPairs(t *testing.T) {
+	old := cloudAgentCall{ID: "old-read"}
+	old.Function.Name, old.Function.Arguments = "canvas_get_state", `{"offset":0}`
+	current := cloudAgentCall{ID: "current-read"}
+	current.Function.Name, current.Function.Arguments = "canvas_get_state", `{"offset":0}`
+	oldResult, _ := json.Marshal(map[string]any{
+		"snapshotHash": "old-snapshot",
+		"nodes":        []any{map[string]any{"id": "n1", "content": strings.Repeat("正文", 200), "generation": map[string]any{"taskId": "task-1"}}},
+		"connections":  []any{map[string]any{"fromNodeId": "n1", "toNodeId": "n2"}},
+	})
+	currentResult, _ := json.Marshal(map[string]any{
+		"snapshotHash": "new-snapshot",
+		"nodes":        []any{map[string]any{"id": "n1", "content": "最新正文"}},
+	})
+	state := &cloudAgentRuntime{
+		Calls: []cloudAgentCall{current},
+		Canonical: canonicalAgentRequest{Messages: []map[string]any{
+			{"role": "assistant", "content": "", "tool_calls": []cloudAgentCall{old}},
+			{"role": "tool", "tool_call_id": old.ID, "content": string(oldResult)},
+			{"role": "assistant", "content": "", "tool_calls": []cloudAgentCall{current}},
+			{"role": "tool", "tool_call_id": current.ID, "content": string(currentResult)},
+		}},
+	}
+
+	cloudAgentCompactSupersededReadResult(state, current)
+	messages := state.Canonical.Messages
+	if len(messages) != 4 || stringValue(messages[1]["tool_call_id"]) != old.ID || stringValue(messages[3]["tool_call_id"]) != current.ID {
+		t.Fatalf("tool pairing changed: %+v", messages)
+	}
+	var compacted map[string]any
+	if err := json.Unmarshal([]byte(stringValue(messages[1]["content"])), &compacted); err != nil {
+		t.Fatal(err)
+	}
+	if compacted["snapshotHash"] != "old-snapshot" || compacted["nodes"] != nil || compacted["connections"] != nil || compacted["contextCompacted"] != true {
+		t.Fatalf("old canvas body was not compacted safely: %#v", compacted)
+	}
+	facts, ok := compacted["observedFacts"].([]any)
+	if !ok || len(facts) != 1 || facts[0].(map[string]any)["generation"].(map[string]any)["taskId"] != "task-1" {
+		t.Fatalf("execution facts were lost: %#v", compacted["observedFacts"])
+	}
+	if stringValue(messages[3]["content"]) != string(currentResult) {
+		t.Fatal("latest canvas read was compacted")
+	}
+}

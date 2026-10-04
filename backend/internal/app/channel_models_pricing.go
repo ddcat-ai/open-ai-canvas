@@ -22,6 +22,12 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 	for _, resolution := range config.Video.Resolutions {
 		resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
 	}
+	// Keep preset prices when narrowing the selected list; tasks use only selected values.
+	if config.Video.FixedScreenSpec != nil {
+		for _, resolution := range config.Video.FixedScreenSpec.Resolutions {
+			resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
+		}
+	}
 	durationSupported := make(map[int]bool, len(config.Video.Duration.Values))
 	for _, seconds := range config.Video.Duration.Values {
 		durationSupported[seconds] = true

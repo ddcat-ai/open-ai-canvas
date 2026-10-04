@@ -14,6 +14,7 @@ import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { producedModelLabel } from "@/lib/canvas/produced-model";
+import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode, type ViewportTransform } from "@/types/canvas";
@@ -226,7 +227,7 @@ export function CanvasNodeToolbar({
     const isAudio = node.type === CanvasNodeType.Audio;
     const hasImage = isImage && Boolean(node.metadata?.content);
     const copyImagePrompt = (target: CanvasNodeData) => {
-        const prompt = target.metadata?.prompt?.trim();
+        const prompt = nodeGenerationPrompt(target).trim();
         if (!prompt) {
             message.warning("暂无可复制的提示词");
             return;
@@ -588,10 +589,10 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                                 </section>
                             ) : null}
 
-                            {node.metadata?.prompt ? (
+                            {nodeGenerationPrompt(node) ? (
                                 <section className="canvas-node-inspector-section">
                                     <div className="canvas-node-inspector-section-heading"><span>提示词</span></div>
-                                    <div className="canvas-node-inspector-copy canvas-node-inspector-prompt">{node.metadata.prompt}</div>
+                                    <div className="canvas-node-inspector-copy canvas-node-inspector-prompt">{nodeGenerationPrompt(node)}</div>
                                 </section>
                             ) : null}
 

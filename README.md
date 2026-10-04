@@ -17,7 +17,7 @@
 
 > 项目仍在快速开发，数据结构和外部接口可能调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
 
-在线演示：[https://ddcat.pronhubcn.com](https://ddcat.pronhubcn.com)
+在线演示：[https://yingce.tv](https://yingce.tv)
 
 账号/密码：test/test123456
 

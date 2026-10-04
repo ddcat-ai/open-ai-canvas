@@ -159,7 +159,7 @@ export function reconcileImageBatchRoot(root: CanvasNodeData, nodes: CanvasNodeD
     const loading = children.some((node) => node.metadata?.status === "loading");
     const failed = children.find((node) => node.metadata?.status === "error");
     // 批次父节点只是子任务的投影，不能保留上一轮单图任务的身份/终态。
-    const metadata: CanvasNodeMetadata = resetGenerationTaskMetadata(root.metadata, root.metadata?.status);
+    const metadata: CanvasNodeMetadata = root.metadata.generationOutputCount ? { ...root.metadata } : resetGenerationTaskMetadata(root.metadata, root.metadata?.status);
     metadata.batchFailedCount = children.filter((node) => node.metadata?.status === "error").length;
 
     if (primary) {

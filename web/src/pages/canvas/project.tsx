@@ -240,7 +240,8 @@ function InfiniteCanvasPage() {
     const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-    const [agentPrefillPrompt, setAgentPrefillPrompt] = useState("");
+    // 每次发送带递增 id：重复发送同一节点时文本相同，仍需触发一次追加。
+    const [agentPrefillRequest, setAgentPrefillRequest] = useState<{ id: number; text: string } | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
     const [canvasAppearance, setCanvasAppearance] = useState<CanvasAppearance>(() => canvasAppearanceForTheme(colorTheme));
     const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>(DEFAULT_CANVAS_BACKGROUND_MODE);
@@ -417,7 +418,8 @@ function InfiniteCanvasPage() {
             selectedNodeIdsRef.current = selection;
             setSelectedNodeIds(selection);
         }
-        setAgentPrefillPrompt(`${references.map(canvasResourceMentionToken).join(" ")} `);
+        const text = `${references.map(canvasResourceMentionToken).join(" ")} `;
+        setAgentPrefillRequest((current) => ({ id: (current?.id ?? 0) + 1, text }));
         openAgent();
         setContextMenu(null);
     }, [agentMentionReferences, openAgent]);
@@ -2787,7 +2789,7 @@ function InfiniteCanvasPage() {
                             </div>
 
                             <div className={versions.open ? "hidden" : "contents"}>
-                            <CanvasCloudAgentPanel canvasId={projectId} domainProjectId={currentProject?.projectId} canvasNodes={nodes} runningNodeId={runningNodeId} nodeCount={nodes.length} selectedNodeIds={Array.from(selectedNodeIds)} references={agentMentionReferences} prefillPrompt={agentPrefillPrompt} open={assistantOpen} onOpen={openAgent} onCollapse={closeAgent} onFocusNode={(nodeId) => {
+                            <CanvasCloudAgentPanel canvasId={projectId} domainProjectId={currentProject?.projectId} canvasNodes={nodes} runningNodeId={runningNodeId} nodeCount={nodes.length} selectedNodeIds={Array.from(selectedNodeIds)} references={agentMentionReferences} prefillRequest={agentPrefillRequest} open={assistantOpen} onOpen={openAgent} onCollapse={closeAgent} onFocusNode={(nodeId) => {
                                 const currentNodes = nodesRef.current;
                                 const target = currentNodes.find((node) => node.id === nodeId);
                                 if (!target) { message.info("该节点已删除或尚未同步到画布"); return; }

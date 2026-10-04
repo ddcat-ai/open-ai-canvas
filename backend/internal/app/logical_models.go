@@ -655,7 +655,20 @@ func capabilitySpecWithPriceTiers(spec CapabilitySpec, channelModel model.Channe
 		}
 	}
 	if !hasResolutionWildcard && len(resolutions) > 0 {
-		result.Options["vquality"] = OptionConstraint{Values: resolutions}
+		if channelModel.Protocol == "autodl-comfyui" {
+			if declared, ok := spec.Options["vquality"]; ok {
+				allowed := make([]any, 0, len(resolutions))
+				for _, value := range resolutions {
+					if matchOptionConstraint("vquality", declared, value) {
+						allowed = append(allowed, value)
+					}
+				}
+				resolutions = allowed
+			}
+		}
+		if len(resolutions) > 0 {
+			result.Options["vquality"] = OptionConstraint{Values: resolutions}
+		}
 	}
 	if !hasDurationWildcard && len(durations) > 0 {
 		result.Options["videoSeconds"] = OptionConstraint{Values: durations}
@@ -691,7 +704,9 @@ func channelModelDefaultOptions(channelModel model.ChannelModel, spec Capability
 			if config.Video != nil {
 				defaults["videoSeconds"] = config.Video.Duration.Default
 				defaults["vquality"] = normalizeChannelModelTierResolution(config.Video.DefaultResolution)
-				defaults["size"] = config.Video.DefaultRatio
+				if len(config.Video.Ratios) > 0 {
+					defaults["size"] = config.Video.DefaultRatio
+				}
 				if config.Video.GenerateAudio.Supported {
 					defaults["videoGenerateAudio"] = config.Video.GenerateAudio.Default
 				}

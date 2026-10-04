@@ -52,10 +52,12 @@ type agentCanvasOp struct {
 	Patch    map[string]any `json:"patch"`
 	// X/Y 为指针：nil 表示模型没有指定坐标，服务端按画布内容自动落位（不再落到原点重叠）。
 	// 指针语义与 canvas/capability/builtin.go 的 positionPatchFields 一致（坐标是可选的数字）。
-	X          *float64 `json:"x"`
-	Y          *float64 `json:"y"`
-	FromNodeID string   `json:"fromNodeId"`
-	ToNodeID   string   `json:"toNodeId"`
+	X            *float64 `json:"x"`
+	Y            *float64 `json:"y"`
+	FromNodeID   string   `json:"fromNodeId"`
+	ToNodeID     string   `json:"toNodeId"`
+	FromHandleID string   `json:"fromHandleId"`
+	ToHandleID   string   `json:"toHandleId"`
 }
 
 // Explicit node creation and edges only; no generic metadata, media URL or deletion.
@@ -67,6 +69,7 @@ func applyCloudAgentCanvas(repo *repository.Repository, userID, canvasID string,
 	if err = saveCloudAgentDocument(repo, plan.Canvas, plan.Document, policy); err != nil {
 		return nil, err
 	}
+	appliedPreview := cloudAgentCanvasAppliedPreview(plan.Preview)
 	if len(recorder) > 0 && recorder[0] != nil {
 		if err := recorder[0](repo, cloudAgentMutationInput{
 			UserID:             userID,
@@ -76,15 +79,19 @@ func applyCloudAgentCanvas(repo *repository.Repository, userID, canvasID string,
 			BeforeSnapshotHash: plan.BeforeSnapshotHash,
 			AfterSnapshotHash:  cloudAgentCanvasHash(plan.Document),
 			BeforeJSON:         plan.BeforeJSON,
-			Preview:            &plan.Preview,
+			Preview:            &appliedPreview,
 		}); err != nil {
 			return nil, err
 		}
 	}
-	return map[string]any{"canvasId": canvasID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "summary": fmt.Sprintf("已完成 %d 项节点/连线操作", len(plan.Args.Ops)), "preview": plan.Preview}, nil
+	return map[string]any{"canvasId": canvasID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "committed": true, "summary": fmt.Sprintf("已完成 %d 项节点/连线操作", len(plan.Args.Ops)), "preview": appliedPreview}, nil
 }
 
 func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, existingConnections ...[]map[string]any) error {
+	return validateCloudAgentConnectionWithHandles(nodes, fromID, toID, "", "", existingConnections...)
+}
+
+func validateCloudAgentConnectionWithHandles(nodes []map[string]any, fromID, toID, fromHandleID, toHandleID string, existingConnections ...[]map[string]any) error {
 	if err := validateCloudAgentID(fromID, "来源节点 ID", 80); err != nil {
 		return err
 	}
@@ -106,6 +113,12 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 	if from == nil || to == nil {
 		return BadAuthRequest("连线端点不存在")
 	}
+	if err := validateCloudAgentStoryboardHandle(from, fromHandleID, "来源"); err != nil {
+		return err
+	}
+	if err := validateCloudAgentStoryboardHandle(to, toHandleID, "目标"); err != nil {
+		return err
+	}
 	fromCapability, fromKnown := cloudAgentNodeCapabilityForNode(from)
 	toCapability, toKnown := cloudAgentNodeCapabilityForNode(to)
 	if !fromKnown || !toKnown {
@@ -123,7 +136,7 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 		connections = existingConnections[0]
 	}
 	for _, edge := range connections {
-		if stringValue(edge["toNodeId"]) == toID && stringValue(edge["fromNodeId"]) == fromID {
+		if stringValue(edge["toNodeId"]) == toID && stringValue(edge["fromNodeId"]) == fromID && stringValue(edge["fromHandleId"]) == fromHandleID && stringValue(edge["toHandleId"]) == toHandleID {
 			return BadAuthRequest("连线重复")
 		}
 	}
@@ -143,6 +156,30 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 		}
 	}
 	return nil
+}
+
+func validateCloudAgentStoryboardHandle(node map[string]any, handleID, side string) error {
+	if handleID == "" {
+		return nil
+	}
+	if stringValue(node["type"]) != "script" {
+		return BadAuthRequest(fmt.Sprintf("只有分镜脚本节点可以指定%s handle", side))
+	}
+	if handleID == "storyboard:context" {
+		return nil
+	}
+	if !strings.HasPrefix(handleID, "row:") || strings.TrimSpace(strings.TrimPrefix(handleID, "row:")) == "" {
+		return BadAuthRequest(fmt.Sprintf("分镜%s handle 必须是 row:<rowId> 或 storyboard:context", side))
+	}
+	metadata, _ := node["metadata"].(map[string]any)
+	storyboard, _ := metadata["storyboard"].(map[string]any)
+	rowID := strings.TrimPrefix(handleID, "row:")
+	for _, row := range creationMaps(storyboard["rows"]) {
+		if stringValue(row["id"]) == rowID {
+			return nil
+		}
+	}
+	return BadAuthRequest(fmt.Sprintf("分镜%s handle 引用的 rowId 不存在，请先读取最新分镜", side))
 }
 
 func cloudAgentInputKindLabel(kind string) string {

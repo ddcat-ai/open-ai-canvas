@@ -25,6 +25,7 @@ type PluginProviderCatalogItem struct {
 	BaseURL           string                      `json:"baseUrl,omitempty"`
 	Enabled           bool                        `json:"enabled"`
 	UnavailableReason string                      `json:"unavailableReason,omitempty"`
+	Parameters        []protocol.Parameter        `json:"parameters,omitempty"`
 	Workflows         []protocol.ManifestWorkflow `json:"workflows,omitempty"`
 }
 
@@ -39,7 +40,7 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 			if !containsPluginSurface(provider.Scopes, wantScope) || (wantCapability != "" && !containsPluginCapability(provider.Capabilities, wantCapability)) {
 				continue
 			}
-			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID)}
+			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Parameters: provider.Parameters, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID)}
 			item.Create, item.Poll, item.ContentType = operationSummary(provider.Create), operationSummaryPtr(provider.Poll), provider.Create.ContentType
 			// The registry metadata is the canonical provider projection. This keeps
 			// host-backed dispatch paths out of every user-facing catalog consumer.

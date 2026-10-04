@@ -169,6 +169,19 @@ func TestCloudAgentToolsFollowCanvasCapabilityRegistry(t *testing.T) {
 			}
 		}
 	}
+	script := nodeTypeDefinitions["script"]
+	if script == nil || script["canSource"] != true || script["canTarget"] != true || script["canReference"] != false || script["inputKind"] != "text" {
+		t.Fatalf("script capability is incomplete: %#v", script)
+	}
+	updateFields, _ := script["updateFields"].(map[string]any)
+	for _, field := range []string{"title", "x", "y"} {
+		if _, ok := updateFields[field]; !ok {
+			t.Fatalf("script update field %s is missing: %#v", field, script)
+		}
+	}
+	if accepted, _ := script["acceptedInputKinds"].([]string); !reflect.DeepEqual(accepted, []string{"audio", "character", "image", "text", "video"}) {
+		t.Fatalf("script accepted input kinds are incomplete: %#v", script["acceptedInputKinds"])
+	}
 	if got := functions["generate_media"]["properties"].(map[string]any)["mode"].(map[string]any)["enum"]; !reflect.DeepEqual(got, cloudAgentGenerationModeNames()) {
 		t.Fatalf("generation modes differ from implemented adapters: %v", got)
 	}
@@ -253,7 +266,7 @@ func TestCloudAgentAnnotationRenderFeedsControlledTransientReference(t *testing.
 
 func TestCloudAgentPolicyPublishesSkillManifestWithoutInliningSkillBody(t *testing.T) {
 	skill := cloudAgentSkill{ID: "skill-1", Name: "任务技能", Description: "当用户要写短剧剧本时调用", Version: "v1", Hash: agentProfileHash("skill"), Instruction: "PRIVATE_SKILL_BODY", Files: map[string]string{"references/a.md": "A"}}
-	text, _, err := compileCloudAgentPolicies(agentTestRequest(), []cloudAgentSkill{skill}, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, []cloudAgentSkill{skill}, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +278,7 @@ func TestCloudAgentPolicyPublishesSkillManifestWithoutInliningSkillBody(t *testi
 func TestCloudAgentPolicyTruncatesOversizedSkillDescription(t *testing.T) {
 	long := strings.Repeat("描", 600)
 	skill := cloudAgentSkill{ID: "skill-2", Name: "长描述技能", Description: long, Version: "v1", Hash: agentProfileHash("skill2")}
-	text, _, err := compileCloudAgentPolicies(agentTestRequest(), []cloudAgentSkill{skill}, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, []cloudAgentSkill{skill}, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +288,7 @@ func TestCloudAgentPolicyTruncatesOversizedSkillDescription(t *testing.T) {
 }
 
 func TestCloudAgentPolicyPublishesCapabilityRoutingGuide(t *testing.T) {
-	text, _, err := compileCloudAgentPolicies(agentTestRequest(), nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,6 +366,28 @@ func TestCloudAgentProjectionRejectsMissingAdapterAndOpaqueMetadata(t *testing.T
 	}
 }
 
+func TestCloudAgentCanvasStateBoundsDefaultBodyProjection(t *testing.T) {
+	body := strings.Repeat("长正文 ", 999) + "长正文"
+	doc := map[string]any{"nodes": []map[string]any{{"id": "markdown", "type": "markdown", "title": "长文档", "metadata": map[string]any{"content": body}}}, "connections": []map[string]any{}}
+	view, err := cloudAgentCanvasState(nil, "user", "agent-canvas", doc, 0, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := view.(map[string]any)["nodes"].([]any)[0].(map[string]any)
+	content := stringValue(item["content"])
+	if len([]rune(content)) > 323 || item["contentTruncated"] != true {
+		t.Fatalf("default canvas read was not bounded: len=%d item=%v", len([]rune(content)), item)
+	}
+	precise, err := cloudAgentCanvasState(nil, "user", "agent-canvas", doc, 0, []string{"markdown"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preciseItem := precise.(map[string]any)["nodes"].([]any)[0].(map[string]any)
+	if stringValue(preciseItem["content"]) != body || preciseItem["contentTruncated"] != nil {
+		t.Fatalf("precise canvas read lost full content: got=%d want=%d item=%v", len([]rune(stringValue(preciseItem["content"]))), len([]rune(body)), preciseItem)
+	}
+}
+
 func TestCloudAgentCanvasStateDoesNotForwardUnknownObjectFields(t *testing.T) {
 	doc := map[string]any{"nodes": []map[string]any{{
 		"id": "safe", "type": "text", "title": "镜头",
@@ -370,7 +405,7 @@ func TestCloudAgentCanvasStateDoesNotForwardUnknownObjectFields(t *testing.T) {
 }
 
 func TestCloudAgentDurablePolicySnapshotRejectsMissingOrUnsupportedContracts(t *testing.T) {
-	_, snapshot, err := compileCloudAgentPolicies(agentTestRequest(), nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+	_, snapshot, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil || validateCloudAgentPolicySnapshot(snapshot) != nil {
 		t.Fatalf("valid policy snapshot rejected: %v", err)
 	}

@@ -707,27 +707,26 @@ export default function CreatePage() {
                 }));
                 if (requestLifecycle.signal.aborted) throw new DOMException("Aborted", "AbortError");
                 const boundTaskIdList = Array.from(boundTaskIds);
-                const generatedImages = settled.flatMap((entry, batchIndex) => {
+                const generatedTasks = settled.flatMap((entry, batchIndex) => {
                     if (entry.status !== "fulfilled") return [];
-                    return (entry.value.images || []).map((image, resultIndex) => ({
-                        image,
+                    return [{
+                        result: entry.value,
                         taskId: boundTaskIdsByBatchIndex.get(batchIndex) || boundTaskIdList[batchIndex],
                         batchIndex,
-                        resultIndex,
-                    }));
+                    }];
                 });
                 const taskFailures = settled.filter((entry): entry is PromiseRejectedResult => entry.status === "rejected");
-                const storedImages = await Promise.allSettled(generatedImages.map(async ({ image, taskId, batchIndex }) => {
+                const storedImages = await Promise.allSettled(generatedTasks.map(async ({ result, taskId, batchIndex }) => {
                     if (!taskId) throw new Error("生成任务缺少稳定任务标识");
-                    const task = completedCreationGenerationTask(runtime, { taskId, task: boundTasks.get(taskId), mode: "image", prompt: expandedPrompt, result: { mode: "image", images: [image] }, conversationId: activeConversation.id, messageId: assistantMessage.id, batchIndex, batchCount: taskCount });
+                    const task = completedCreationGenerationTask(runtime, { taskId, task: boundTasks.get(taskId), mode: "image", prompt: expandedPrompt, result, conversationId: activeConversation.id, messageId: assistantMessage.id, batchIndex, batchCount: taskCount });
                     const materialized = await runtime.consumeGenerationTaskMessage(task, assistantMessage.id, async ({ resultUrls, resultStorageKeys, effectKey }) => {
                         await updateOriginAssistant((item) => runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, status: "done" as const, content: "图片已生成", ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}), ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}) })).value);
                     }, { signal: requestLifecycle.signal });
-                    const url = runtime.generationTaskMaterializedUrls(materialized)[0];
-                    if (!url) throw new Error("图片结果资源不可用");
-                    return url;
+                    const urls = runtime.generationTaskMaterializedUrls(materialized);
+                    if (!urls.length) throw new Error("图片结果资源不可用");
+                    return urls;
                 }));
-                const resultUrls = storedImages.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
+                const resultUrls = storedImages.flatMap((entry) => entry.status === "fulfilled" ? entry.value : []);
                 const resourceFailures = storedImages.filter((entry) => entry.status === "rejected");
                 const failedCount = taskFailures.length + resourceFailures.length;
                 if (!resultUrls.length) {

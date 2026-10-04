@@ -115,21 +115,6 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 		return err
 	}
 	task.InputJSON = string(raw)
-	// 压力读数只对"模型调用"这一步有意义：媒体任务发的是另一份请求（另一套信封），
-	// 把读数挂到那份信封上会误导消费方。
-	var contextPressure *cloudAgentContextPressure
-	var requestCanonical canonicalAgentRequest
-	if media == nil {
-		if req.Operation != cloudAgentContextCompactionOperation {
-			canonical, ok := canonicalAgentRequestFromInput(input)
-			if !ok {
-				return fmt.Errorf("Agent 模型任务缺少可计量的请求信封")
-			}
-			requestCanonical = canonical
-			value := s.cloudAgentContextPressure(canonical, state.Request.Prompt, state.Request)
-			contextPressure = &value
-		}
-	}
 	if prepare.Order != nil {
 		task.BillingOrderID = prepare.Order.ID
 	}
@@ -202,25 +187,6 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			if state.ContextCompaction != nil && req.Operation == cloudAgentContextCompactionOperation {
 				state.ContextCompaction.Status = "running"
 			} else {
-				if contextPressure != nil {
-					config, _ := input["config"].(map[string]any)
-					model, channelID := stringValue(config["model"]), stringValue(config["channelId"])
-					signature := cloudAgentRequestSignature(state, requestCanonical, channelID, model)
-					cloudAgentExpireTokenAnchorForRequest(run.ID, state, contextPressure.ContextWindowTokens, signature, model, channelID)
-					cloudAgentRecordMemorySegment(&state.Policy, requestCanonical.SystemPrompt)
-					payload := cloudAgentContextPressurePayload(*contextPressure, state, requestCanonical)
-					payload["requestId"] = task.ID
-					cloudAgentNoteContextWindowResolved(run.ID, state, *contextPressure)
-					state.event(run.ID, "context_pressure", payload)
-					state.LastStepTaskID = task.ID
-					state.LastStepOperation = req.Operation
-					state.LastStepEstimate = contextPressure.EstimatedInputTokens
-					state.LastStepSourceBytes = contextPressure.SourceBytes
-					state.LastStepSignature = signature
-					state.LastStepModel = model
-					state.LastStepChannelID = channelID
-					state.LastStepWindowTokens = contextPressure.ContextWindowTokens
-				}
 				state.Step++
 			}
 		}
@@ -261,16 +227,15 @@ func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cl
 		if submitted {
 			state.MediaTaskID = ""
 		}
-		// Only explicitly typed argument errors and a stale canvas snapshot may
-		// continue into another model turn. Every other pre-submission media
-		// failure is a real admission boundary failure; continuing would invite
-		// the model to submit unverified variants of a billed write.
+		// Only explicitly typed argument errors, stale canvas snapshots and known
+		// transient admission failures may continue into another model turn. A
+		// transient failure is safe here because no billable task was submitted.
 		continueAfterAdmissionError := false
 		if phase == "admission" && !submitted {
 			var argumentErr *cloudAgentArgumentError
 			continueAfterAdmissionError = errors.As(err, &argumentErr)
 			var admissionErr *cloudAgentMediaAdmissionError
-			if errors.As(err, &admissionErr) && admissionErr.Reason == "snapshot_conflict" {
+			if errors.As(err, &admissionErr) && (admissionErr.Reason == "snapshot_conflict" || admissionErr.Retryable) {
 				continueAfterAdmissionError = true
 			}
 		}
@@ -625,7 +590,6 @@ func (s *Service) saveCloudAgentPiResumePrompt(userID, id, prompt string) error 
 }
 
 func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error {
-	s.stopCloudAgentPi(id)
 	// Cancellation is a control-plane operation. It must remain available even
 	// when the user-facing runtime blob is damaged, so authenticate/authorize
 	// from the task row first instead of calling CloudAgentRun up front.
@@ -639,6 +603,7 @@ func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error
 	if task.Operation != cloudAgentOperation {
 		return kernel.NotFound("Agent 运行不存在")
 	}
+	s.stopCloudAgentPi(id)
 	run, err := s.repo.CloudAgent(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Legacy root tasks may not have an execution row yet. The normal read

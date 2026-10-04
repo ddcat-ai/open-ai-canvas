@@ -68,10 +68,11 @@ func cloudAgentCreativeAnchorForCanvas(repo *repository.Repository, userID strin
 			continue
 		}
 		meta, _ := node["metadata"].(map[string]any)
+		prompt, _ := cloudAgentMediaPrompt(meta)
 		item := cloudAgentReferenceAnchor{
 			NodeID: stringValue(node["id"]), Type: descriptor.Type,
 			Title:          truncateRunes(stringValue(node["title"]), 300),
-			Prompt:         truncateRunes(firstNonEmpty(stringValue(meta["prompt"]), stringValue(meta["composerContent"])), 1000),
+			Prompt:         truncateRunes(prompt, 1000),
 			VisualIdentity: "unknown", RequiresVisualInspection: true,
 		}
 		if tags, ok := meta["assetTags"].([]any); ok {

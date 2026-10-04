@@ -208,7 +208,7 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 			candidateNodes = append(candidateNodes, node)
 		}
 	}
-	limit := 2000
+	limit := 320
 	if len(ids) > 0 || len(focus) > 0 {
 		limit = 16000
 	}
@@ -440,9 +440,15 @@ func cloudAgentProjectNodeFields(node, meta map[string]any, descriptor capabilit
 			}
 			continue
 		}
-		value, ok := node[key]
-		if !ok {
-			value, ok = meta[key]
+		var value any
+		var ok bool
+		if key == "prompt" && descriptor.GenerationMode != "" {
+			value, ok = cloudAgentMediaPrompt(meta)
+		} else {
+			value, ok = node[key]
+			if !ok {
+				value, ok = meta[key]
+			}
 		}
 		if !ok || (key == "content" && descriptor.GenerationMode != "") {
 			continue
@@ -455,6 +461,21 @@ func cloudAgentProjectNodeFields(node, meta map[string]any, descriptor capabilit
 		}
 	}
 	return projected, nil
+}
+
+func cloudAgentMediaPrompt(meta map[string]any) (string, bool) {
+	if generationSpec, ok := meta["generationSpec"].(map[string]any); ok {
+		if prompt, ok := generationSpec["prompt"].(string); ok {
+			return prompt, true
+		}
+	}
+	if prompt, ok := meta["composerContent"].(string); ok {
+		return prompt, true
+	}
+	if prompt, ok := meta["prompt"].(string); ok {
+		return prompt, true
+	}
+	return "", false
 }
 
 func cloudAgentProjectionValue(node, meta map[string]any, path string) (any, bool) {

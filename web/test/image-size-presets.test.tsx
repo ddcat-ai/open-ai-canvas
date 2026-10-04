@@ -11,6 +11,24 @@ import { resolveImageRequestSize, validateImageSize } from "../src/services/api/
 import { buildGeminiImageGenerationConfig } from "../src/lib/gemini-image";
 
 describe("统一图片分辨率与宽高比", () => {
+    test("管理员档位开关按已有比例启用，部分比例不显示为关闭", () => {
+        for (const model of ["midjourney-1k", "midjourney-2k"]) {
+            const profile = defaultImageCapabilityConfig("cangyuan-midjourney-v82", model);
+            const editor = renderToStaticMarkup(<ImageSizePresetsEditor profile={profile} onChange={() => {}} />);
+            const active = model === "midjourney-2k" ? "2k" : "1k";
+            for (const tier of IMAGE_RESOLUTIONS) {
+                const button = [...editor.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes(`aria-label="启用 ${tier.toUpperCase()} 规格"`));
+                expect(button).toBeDefined();
+                expect(button).toContain(`aria-checked="${tier === active}"`);
+            }
+        }
+        const profile = defaultImageCapabilityConfig();
+        profile.size = imageSizeConfigWithPresets(profile, [imagePresetForRatio("2k", "16:9")]);
+        const editor = renderToStaticMarkup(<ImageSizePresetsEditor profile={profile} onChange={() => {}} />);
+        const button = [...editor.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]).find((tag) => tag.includes('aria-label="启用 2K 规格"'));
+        expect(button).toContain('aria-checked="true"');
+    });
+
     test("默认 Gemini 质量枚举不能把未启用的 1K 显示出来", () => {
         const profile = defaultImageCapabilityConfig("gemini-image", "nano-banana-pro-4k");
         profile.size = imageSizeConfigWithPresets(profile, IMAGE_RATIOS.map((ratio) => imagePresetForRatio("4k", ratio)));

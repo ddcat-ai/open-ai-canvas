@@ -42,6 +42,7 @@ func postStreamingAgent(ctx context.Context, config providerConfig, path string,
 
 type streamingAgentToolCall struct {
 	id        string
+	itemID    string
 	name      string
 	arguments string
 }
@@ -140,7 +141,7 @@ func (p *streamingAgentParser) consumeResponsesEvent(eventName string, payload m
 		item, _ := payload["item"].(map[string]interface{})
 		if stringField(item, "type") == "function_call" {
 			index := intField(payload, "output_index", len(p.toolCalls))
-			p.setToolCall(index, firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id")), stringField(item, "name"), stringField(item, "arguments"))
+			p.setToolCall(index, firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id")), stringField(item, "id"), stringField(item, "name"), stringField(item, "arguments"))
 		}
 	case "response.function_call_arguments.delta":
 		index := p.responseToolCallIndex(payload)
@@ -202,7 +203,7 @@ func (p *streamingAgentParser) consumeClaudeEvent(payload map[string]interface{}
 					arguments = string(encoded)
 				}
 			}
-			p.setToolCall(index, stringField(block, "id"), stringField(block, "name"), arguments)
+			p.setToolCall(index, stringField(block, "id"), "", stringField(block, "name"), arguments)
 		}
 	case "content_block_delta":
 		delta, _ := payload["delta"].(map[string]interface{})
@@ -256,11 +257,14 @@ func (p *streamingAgentParser) toolCall(index int) *streamingAgentToolCall {
 	return p.toolCalls[index]
 }
 
-func (p *streamingAgentParser) setToolCall(index int, id string, name string, arguments string) {
+func (p *streamingAgentParser) setToolCall(index int, id string, itemID string, name string, arguments string) {
 	call := p.toolCall(index)
-	call.id, call.name, call.arguments = id, name, arguments
+	call.id, call.itemID, call.name, call.arguments = id, itemID, name, arguments
 	if id != "" {
 		p.toolCallByID[id] = index
+	}
+	if itemID != "" {
+		p.toolCallByID[itemID] = index
 	}
 }
 
@@ -304,7 +308,11 @@ func (p *streamingAgentParser) result() (map[string]interface{}, error) {
 		if err := json.Unmarshal([]byte(arguments), &parsed); err != nil {
 			return nil, fmt.Errorf("Agent 工具参数不是完整 JSON：%w", err)
 		}
-		calls = append(calls, map[string]interface{}{"id": call.id, "type": "function", "function": map[string]interface{}{"name": call.name, "arguments": arguments}})
+		mapped := map[string]interface{}{"id": call.id, "type": "function", "function": map[string]interface{}{"name": call.name, "arguments": arguments}}
+		if call.itemID != "" {
+			mapped["item_id"] = call.itemID
+		}
+		calls = append(calls, mapped)
 	}
 	result["toolCalls"] = calls
 	if p.text.Len() == 0 && len(calls) == 0 {

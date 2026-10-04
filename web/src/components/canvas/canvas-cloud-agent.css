@@ -419,42 +419,112 @@
 }
 
 .agent-status-message--warning {
-    margin-inline: -4px;
-    border: 1px solid color-mix(in srgb, #f59e0b 26%, transparent);
-    border-radius: 10px;
-    background: color-mix(in srgb, #fef3c7 72%, transparent);
-    padding: 8px 10px;
+    --agent-error-accent: var(--palette-status-warning);
 }
 
 .agent-status-message--error {
-    margin-inline: -4px;
-    border: 1px solid color-mix(in srgb, #ef4444 16%, transparent);
-    border-radius: 10px;
-    background: color-mix(in srgb, #ef4444 5%, transparent);
-    padding: 8px 10px;
+    --agent-error-accent: var(--palette-status-error);
 }
 
-.agent-status-message--warning .agent-timeline-marker,
-.agent-status-message--error .agent-timeline-marker {
-    align-self: flex-start;
-    padding-top: 1px;
+.agent-error-message {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--agent-radius-surface);
+    background: var(--agent-surface-soft);
+    color: var(--agent-ink);
+}
+
+.agent-error-icon {
+    display: grid;
+    flex: 0 0 var(--space-6);
+    width: var(--space-6);
+    height: var(--space-6);
+    place-items: center;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--agent-error-accent) 10%, transparent);
+    color: var(--agent-error-accent);
 }
 
 .agent-error-title {
-    font-size: 13px;
-    line-height: 18px;
+    font-size: var(--fs-body);
+    font-weight: 550;
+    line-height: var(--space-6);
 }
 
 .agent-error-detail {
-    margin-top: 2px;
-    font-size: 12px;
-    line-height: 17px;
+    margin: var(--space-1) 0 0;
+    color: var(--agent-caption);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .agent-error-meta {
-    margin-top: 3px;
-    opacity: 0.72;
-    line-height: 16px;
+    margin: var(--space-1) 0 0;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.agent-error-diagnostics {
+    margin-top: var(--space-2);
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+}
+
+.agent-error-diagnostics > summary {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: var(--space-1);
+    border-radius: var(--r-xs);
+    cursor: pointer;
+    list-style: none;
+}
+
+.agent-error-diagnostics > summary::-webkit-details-marker {
+    display: none;
+}
+
+.agent-error-diagnostics > summary:hover {
+    color: var(--agent-ink);
+}
+
+.agent-error-diagnostics > summary:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 3px;
+}
+
+.agent-error-diagnostics[open] > summary svg {
+    transform: rotate(180deg);
+}
+
+.agent-error-diagnostics-body {
+    margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    background: var(--agent-surface-soft);
+    overflow-wrap: anywhere;
+}
+
+.agent-error-diagnostics-body p {
+    margin: 0 0 var(--space-1);
+}
+
+.agent-error-diagnostics-body code {
+    user-select: all;
+}
+
+.agent-error-retry.ant-btn {
+    height: auto;
+    margin-top: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--fs-label);
 }
 
 .agent-message-user {
@@ -658,6 +728,17 @@
 
 .agent-composer-surface:focus-within {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent-accent, var(--foreground)) 35%, transparent);
+}
+
+/* 底部托盘：外壳与输入卡片同为一张卡，输入卡片嵌在上方，底部条直接落在托盘里；无分隔线、无间距。 */
+.agent-composer-shell[data-has-footer] {
+    border-radius: var(--agent-radius-surface, var(--radius-xl));
+    background: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-material-solid, var(--background)));
+}
+
+/* 整卡模式下输入区焦点环会落在输入区与连接器之间形成一条线，不画焦点环。 */
+.agent-composer-shell[data-has-footer] > .agent-composer-surface:focus-within {
+    box-shadow: none;
 }
 
 .agent-plan-bar {

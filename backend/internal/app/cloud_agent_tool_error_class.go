@@ -28,10 +28,9 @@ const (
 
 // cloudAgentToolErrorClass 返回 (errorClass, retryable, requiredAction)。
 //
-// requiredAction 是给模型/界面看的"下一步该做什么"，取稳定的短标识，不写自然语言：
-// fix_arguments（按 schema 改参数后重试）、reread_canvas（重读画布再试）、
-// use_advertised_tools（只使用本轮工具表里列出的工具）、ask_user（权限被拒，别自己绕）、
-// report_to_user（上游故障，告诉用户）。
+// requiredAction 是给模型/界面看的"下一步该做什么"，取稳定的短标识：
+// fix_arguments（按 schema 改参数后重试）、reread_canvas（重读画布再试）、retry（临时故障自动重试）、
+// use_advertised_tools（只使用本轮工具表里列出的工具）、ask_user（权限被拒，别自己绕）、report_to_user（上游故障，告诉用户）。
 func cloudAgentToolErrorClass(req CloudAgentRequest, call cloudAgentCall, err error, allowed bool) (string, bool, string) {
 	if err == nil {
 		return "", true, ""

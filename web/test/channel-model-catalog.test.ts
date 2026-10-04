@@ -12,6 +12,7 @@ import { defaultModelCapabilityConfig, pluginWorkflowCapabilityConfig } from "..
 import { ChannelModelSettings } from "../src/pages/settings/channel-video-pricing";
 import { fetchChannelModels } from "../src/services/api/image";
 import { apiClient } from "../src/services/api/request";
+import { fetchPluginProviderCatalog } from "../src/services/api/plugin-catalog";
 import { createVideoGenerationTask } from "../src/services/api/video";
 import { createModelChannel, defaultConfig, modelDisplayName, normalizeConfigSnapshot, resolveModelRequestConfig, selectableModelsByCapability, type AiConfig } from "../src/stores/use-config-store";
 
@@ -84,6 +85,34 @@ describe("public channel model catalog", () => {
         expect(profile.resolutions).toEqual(["480p竖", "480p横"]);
         expect(profile.defaultResolution).toBe("480p竖");
         expect(profile.duration).toEqual({ selection: "enum", values: [5], default: 5 });
+    });
+
+    test("preserves declared provider parameters in the protocol catalog", async () => {
+        apiClient.request = (async () => ({
+            data: {
+                code: 0,
+                data: {
+                    providers: [
+                        {
+                            id: "cangyuan-midjourney-v82",
+                            version: "1.0.0",
+                            name: "沧元 Midjourney 1K/2K · V8.2",
+                            vendor: "沧元算力 / 影绘",
+                            categories: ["image"],
+                            scopes: ["admin.system-channel", "user.custom-channel", "canvas"],
+                            enabled: true,
+                            parameters: [{ name: "providerOptions", type: "object", mapping: "cangyuan-midjourney-v82.speed/reference" }],
+                            workflows: [],
+                        },
+                    ],
+                },
+            },
+        })) as typeof apiClient.request;
+
+        const result = await fetchPluginProviderCatalog("admin.system-channel", "image");
+        expect(result).toHaveLength(1);
+        expect(result[0]?.parameters).toEqual([{ name: "providerOptions", type: "object", mapping: "cangyuan-midjourney-v82.speed/reference" }]);
+        expect(result[0]?.workflows).toEqual([]);
     });
 
     test("preserves six public capabilities without expanding compatibility IDs", async () => {

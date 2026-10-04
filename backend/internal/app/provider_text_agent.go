@@ -402,7 +402,12 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 			if stringField(item, "type") != "function_call" {
 				continue
 			}
-			calls = append(calls, map[string]interface{}{"id": firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id")), "type": "function", "function": map[string]interface{}{"name": stringField(item, "name"), "arguments": stringField(item, "arguments")}})
+			callID := firstNonEmptyString(stringField(item, "call_id"), stringField(item, "id"))
+			call := map[string]interface{}{"id": callID, "type": "function", "function": map[string]interface{}{"name": stringField(item, "name"), "arguments": stringField(item, "arguments")}}
+			if itemID := stringField(item, "id"); itemID != "" && stringField(item, "call_id") != "" {
+				call["item_id"] = itemID
+			}
+			calls = append(calls, call)
 		}
 		result["toolCalls"] = calls
 		return result, nil

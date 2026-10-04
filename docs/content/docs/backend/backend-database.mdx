@@ -5,6 +5,10 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 更新公告配置
+
+外观 JSON 合同版本 10 新增 `updates`：`enabled`、`currentVersion`、`releases`。每个版本保存 `id/version/title/date/blocks`，内容块保存 `id/type/text/resourceId/caption/layout`；公共媒体 URL 由服务端按当前引用生成，不保存客户端 URL。关闭开关保留公告和资源引用，只关闭公共展示。不增加数据库表或 schema 迁移。
+
 ## 画布 Agent 外观配置
 
 `system_settings` 的 `appearance` JSON 合同版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`。独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。

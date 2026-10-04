@@ -229,15 +229,21 @@ func (r *Repository) APICallLogUsageForTask(userID, taskID string) (model.ApiCal
 	return log, true, nil
 }
 
+// LatestAPICallForTask 返回任务最近一次非轮询上游调用的失败摘要。
+func (r *Repository) LatestAPICallForTask(taskID string) (model.ApiCallLog, error) {
+	if strings.TrimSpace(taskID) == "" {
+		return model.ApiCallLog{}, nil
+	}
+	var log model.ApiCallLog
+	err := r.db.Select("status,status_code,error_code,error").Where("task_id = ? AND request_kind <> ?", taskID, "poll").
+		Order("created_at DESC").Limit(1).Find(&log).Error
+	return log, err
+}
+
 // LatestAPICallStatusForTask 返回任务最近一次上游调用的 HTTP 状态码；
 // 任务没收到任何上游响应（例如网络错误）时返回 0。
 func (r *Repository) LatestAPICallStatusForTask(taskID string) (int, error) {
-	if strings.TrimSpace(taskID) == "" {
-		return 0, nil
-	}
-	var log model.ApiCallLog
-	err := r.db.Select("status_code").Where("task_id = ? AND request_kind <> ?", taskID, "poll").
-		Order("created_at DESC").Limit(1).Find(&log).Error
+	log, err := r.LatestAPICallForTask(taskID)
 	return log.StatusCode, err
 }
 

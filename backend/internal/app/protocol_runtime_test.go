@@ -180,6 +180,40 @@ func TestBundledProviderCatalogExposesUpstreamOperation(t *testing.T) {
 	t.Fatal("xAI bundled provider missing from administrator catalog")
 }
 
+func TestMidjourneyProviderCatalogExposesDeclaredParameters(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := (&Service{pluginRuntime: center}).PluginProviderCatalog(string(protocol.SurfaceAdminSystemChannel), string(protocol.CapabilityImage), false)
+	want := map[string]string{
+		"cangyuan-midjourney-v82": "providerOptions",
+		"kacang-midjourney":       "providerOptions",
+	}
+	for providerID, parameterName := range want {
+		var item *PluginProviderCatalogItem
+		for index := range catalog {
+			if catalog[index].ID == providerID {
+				item = &catalog[index]
+				break
+			}
+		}
+		if item == nil {
+			t.Fatalf("provider %q missing from administrator catalog", providerID)
+		}
+		found := false
+		for _, parameter := range item.Parameters {
+			if parameter.Name == parameterName && parameter.Mapping != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("provider %q parameters = %#v", providerID, item.Parameters)
+		}
+	}
+}
+
 func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 	dataDir := t.TempDir()
 	center, err := newPluginRuntime(dataDir)

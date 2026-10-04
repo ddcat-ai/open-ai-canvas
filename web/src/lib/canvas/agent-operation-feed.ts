@@ -107,7 +107,11 @@ export function agentOperationSegmentLabel(items: readonly AgentFeedRecord[]): s
  */
 export function buildAgentFeedSegments<T extends AgentFeedRecord>(messages: readonly T[]): AgentFeedSegment<T>[] {
     const segments: AgentFeedSegment<T>[] = [];
+    // 缓存中的失败事件（runId:seq）与终态提示属于同一运行，不重复展示。
+    const terminalErrors = new Set(messages.filter((item) => item.role === "error" && item.id.startsWith("terminal-")).map((item) => item.id));
     for (const item of messages) {
+        const failureRunId = item.role === "error" ? item.id.match(/^(.+):\d+$/)?.[1] : undefined;
+        if (failureRunId && terminalErrors.has(`terminal-${failureRunId}`)) continue;
         if (isAgentCarrierRecord(item)) continue;
         if (isAgentReasoningRecord(item)) {
             const last = segments[segments.length - 1];

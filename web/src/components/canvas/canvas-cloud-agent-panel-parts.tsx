@@ -165,7 +165,7 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
     const protocolBytes = formatContextBytes(view.protocolBytes);
     const usedRatio = view.ratio === undefined ? 0 : Math.max(0, Math.min(1, view.ratio));
     const phaseLabel = CONTEXT_PHASE_LABEL[view.phase];
-    const sourceLabel = view.tokenSource === "provider" ? "模型实测校准" : view.estimate ? "本地估算" : "未测量";
+    const sourceLabel = view.tokenSource === "pi" ? "Pi 会话估算" : "未测量";
     const usageHeading = view.ratio !== undefined ? `上下文已用 ${percent}` : view.phase === "idle" ? "上下文用量" : view.phase === "unknown" ? "上下文窗口未知" : `上下文${view.label}`;
 
     return (
@@ -235,11 +235,17 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
                     <div className="agent-context-panel-foot">
                         <span>
                             {sourceLabel}
-                            {view.estimate ? " · 不是计费 Token" : " · 预计下次请求"}
+                            {view.tokenSource === "pi" ? " · 不是计费 Token" : ""}
                         </span>
                         {view.compactAtTokens ? <span>压缩线 {formatContextCount(view.compactAtTokens)}</span> : null}
                     </div>
-                    {view.lastCompaction ? <p className="agent-context-note">本轮已完成一次上下文压缩，下一次读数会刷新。</p> : null}
+                    {view.compactionError ? (
+                        <p className="agent-context-note" role="status">
+                            {view.compactionError}
+                        </p>
+                    ) : view.lastCompaction ? (
+                        <p className="agent-context-note">本轮已完成一次上下文压缩，下一次读数会刷新。</p>
+                    ) : null}
                 </div>
             }
         >

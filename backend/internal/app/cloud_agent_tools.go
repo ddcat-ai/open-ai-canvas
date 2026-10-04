@@ -232,16 +232,18 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 			"globalPrompt": str("set_global_prompt 使用；非空时覆盖各任务提示词，空字符串清除全局提示词"),
 		}, "snapshotHash", "nodeId", "action")
 		opProperties := map[string]any{
-			"type":       map[string]any{"type": "string", "enum": []string{"add_node", "update_node", "connect_nodes"}, "description": "必填的操作类型；新增节点必须传 add_node，nodeType 不能代替本字段"},
-			"id":         str("节点或连线唯一ID"),
-			"nodeType":   map[string]any{"type": "string", "enum": cloudAgentNodeTypeNames()},
-			"title":      str("标题；更新操作可选"),
-			"content":    str("文本正文或媒体提示词；更新操作可选"),
-			"patch":      cloudAgentPatchSchema(),
-			"fromNodeId": str("连线来源节点ID"),
-			"toNodeId":   str("连线目标节点ID"),
-			"x":          map[string]any{"type": "number"},
-			"y":          map[string]any{"type": "number"},
+			"type":         map[string]any{"type": "string", "enum": []string{"add_node", "update_node", "connect_nodes"}, "description": "必填的操作类型；新增节点必须传 add_node，nodeType 不能代替本字段"},
+			"id":           str("节点或连线唯一ID"),
+			"nodeType":     map[string]any{"type": "string", "enum": cloudAgentNodeTypeNames()},
+			"title":        str("标题；更新操作可选"),
+			"content":      str("文本正文或媒体提示词；更新操作可选"),
+			"patch":        cloudAgentPatchSchema(),
+			"fromNodeId":   str("连线来源节点ID"),
+			"toNodeId":     str("连线目标节点ID"),
+			"fromHandleId": str("分镜来源 handle：row:<rowId> 或 storyboard:context"),
+			"toHandleId":   str("分镜目标 handle：row:<rowId> 或 storyboard:context"),
+			"x":            map[string]any{"type": "number"},
+			"y":            map[string]any{"type": "number"},
 		}
 		opItem := map[string]any{
 			"type":                 "object",
@@ -254,7 +256,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 				{"properties": map[string]any{"type": map[string]any{"const": "connect_nodes"}}, "required": []string{"fromNodeId", "toNodeId"}},
 			},
 		}
-		add("canvas_apply_ops", "创建空白节点、修改提示词或建立引用连线，不提交生成任务、不产生生成费用；先读取画布并传 snapshotHash。提交媒体生成使用 generate_media。每次最多20项，禁止删除、任意 metadata 和媒体 URL。每项都需要 type 和 id：add_node 还需要 nodeType（可给 x/y 指定位置；省略坐标时服务端按画布内容自动落位，不会叠在原点），update_node 还需要按节点能力清单填写 patch（可含 x/y 移动节点），connect_nodes 还需要 fromNodeId 与 toNodeId。连线是生成输入关系，不会改变已提交任务的输入；来源须 canSource，目标须 canTarget 且接受来源 inputKind，能力以注册表为准。批量整理位置用 canvas_arrange_nodes，不要用几十项 update_node 手工算坐标。", map[string]any{"snapshotHash": str("canvas_get_state返回的snapshotHash"), "ops": map[string]any{"type": "array", "maxItems": 20, "items": opItem}}, "snapshotHash", "ops")
+		add("canvas_apply_ops", "创建空白节点、修改提示词或建立引用连线，不提交生成任务、不产生生成费用；先读取画布并传 snapshotHash。提交媒体生成使用 generate_media。每次最多20项，禁止删除、任意 metadata 和媒体 URL。每项都需要 type 和 id：add_node 还需要 nodeType（可给 x/y 指定位置；省略坐标时服务端按画布内容自动落位，不会叠在原点），update_node 还需要按节点能力清单填写 patch（可含 x/y 移动节点），connect_nodes 还需要 fromNodeId 与 toNodeId。分镜脚本的镜头级关联必须把 canvas_get_state 或 canvas_read_storyboard 返回的 rowId 写成 fromHandleId/toHandleId 的 row:<rowId>；整表设定使用 storyboard:context。连线是生成输入关系，不会改变已提交任务的输入；来源须 canSource，目标须 canTarget 且接受来源 inputKind，能力以注册表为准。批量整理位置用 canvas_arrange_nodes，不要用几十项 update_node 手工算坐标。", map[string]any{"snapshotHash": str("canvas_get_state返回的snapshotHash"), "ops": map[string]any{"type": "array", "maxItems": 20, "items": opItem}}, "snapshotHash", "ops")
 		add("canvas_arrange_nodes", "整理画布节点位置：只改坐标，不改内容、不建连线、不增删节点，先读画布并传 snapshotHash。mode 省略即 auto（有连线按依赖分层，否则按媒体类型分区）。groups 为横向分带（label 展示名，可覆盖整组 mode）。nodeIds 省略则整理全部可整理节点（跳过锁定节点、容器、批次子节点与已归属背板者）。align 对齐/等距，dryRun 只预演；一次最多 50 个节点，只挪单个节点用 update_node 的 x/y。", map[string]any{
 			"snapshotHash": str("最近一次画布读取的 snapshotHash"),
 			"nodeIds":      map[string]any{"type": "array", "maxItems": cloudAgentArrangeMaxNodes, "items": str("节点ID；省略=全部可整理")},

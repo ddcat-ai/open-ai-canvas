@@ -32,7 +32,7 @@ func TestCloudAgentReliabilitySchedulerHeadOfLine500(t *testing.T) {
 	now := time.Now().Add(-time.Hour)
 	var tailID, tailUser string
 	profile := cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")}
-	_, policy, err := compileCloudAgentPolicies(agentTestRequest(), nil, "", profile)
+	_, policy, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", profile)
 	if err != nil {
 		t.Fatal(err)
 	}

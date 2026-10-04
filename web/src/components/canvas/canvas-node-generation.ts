@@ -9,11 +9,12 @@ import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/can
 import { isNeutralColorGrade, resolveCanvasColorGradeReference } from "@/lib/canvas/canvas-color-grade";
 import { getNodeGenerationMode, getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { mediaConversionSourceFingerprint } from "@/lib/media-conversion/contracts";
+import { audioFileExtension } from "@/lib/character-voice-formats";
 import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
 import { compileCharacterReferencePrompt, normalizeCharacterImageMentions } from "@/lib/canvas/canvas-character-reference";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
-import { audioFileExtension } from "@/lib/character-voice-formats";
+import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
 import type { Asset } from "@/stores/use-asset-store";
 
@@ -89,7 +90,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const hasConnectedMedia = connectedInputs.some((input) => input.type === "image" || input.type === "video" || input.type === "audio" || input.type === "character");
     // 豆包音频按连线决定纯文本、参考音频或参考图片，不能因为提示词里没有逐个 @ 就丢掉已连接素材。
     const includeConnectedAudioMedia = Boolean(sourceNode && getNodeGenerationMode(sourceNode) === "audio");
-    if ((promptOnly && hasConnectedMedia) || (Boolean(sourceNode?.metadata?.composerContent?.trim()) && (sourceNode?.type === CanvasNodeType.Config || isWorkflowSource)) || hasExplicitResourceMention) {
+    if ((promptOnly && hasConnectedMedia) || (sourceNode ? Boolean(nodeGenerationPrompt(sourceNode).trim()) && (sourceNode.type === CanvasNodeType.Config || isWorkflowSource) : false) || hasExplicitResourceMention) {
         const autoIncludeWorkflowMedia = isWorkflowSource || includeConnectedAudioMedia;
         return buildComposerGenerationContext(
             mentionInputs,
@@ -582,7 +583,7 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
 function readNodeTextInput(node: CanvasNodeData) {
     if (node.type === CanvasNodeType.Text) return node.metadata?.content || node.metadata?.prompt || "";
     if (node.type === CanvasNodeType.Skill) return readSkillInput(node);
-    return node.metadata?.prompt || "";
+    return nodeGenerationPrompt(node);
 }
 
 function readCharacterReference(node: CanvasNodeData): CharacterGenerationReference | null {

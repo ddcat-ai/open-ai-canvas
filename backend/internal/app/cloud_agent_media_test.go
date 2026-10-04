@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -227,6 +228,68 @@ func TestCloudAgentMediaReferenceAndSnapshotGuards(t *testing.T) {
 	}
 	if _, _, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(a)); err == nil {
 		t.Fatal("cross-user asset accepted")
+	}
+}
+
+func TestCloudAgentMediaArgumentFailureContinuesRun(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	args.SourceNodeID = "cat" // Existing media node, invalid as a text source.
+	args.ReferenceNodeIDs = []string{"hero"}
+	run, state := agentMediaRun(t, s, args, "request_approval")
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "running" {
+		t.Fatalf("repairable media argument failure terminated run: status=%s message=%s", stored.Status, stored.FailureMessage)
+	}
+	var failed *CloudAgentEvent
+	for i := range state.Events {
+		if state.Events[i].Type == "tool_failed" {
+			failed = &state.Events[i]
+		}
+		if state.Events[i].Type == "run_failed" {
+			t.Fatalf("argument error emitted run_failed: %+v", state.Events[i])
+		}
+	}
+	if failed == nil {
+		t.Fatal("missing tool_failed event")
+	}
+	result, _ := failed.Payload["result"].(map[string]any)
+	if result["field"] != "sourceNodeId" || result["issue"] != "invalid_value" || result["requiredAction"] != "fix_arguments" {
+		t.Fatalf("missing actionable field feedback: %+v", result)
+	}
+	var tasks int64
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 0 {
+		t.Fatalf("invalid arguments submitted %d media tasks", tasks)
+	}
+}
+
+func TestCloudAgentUnavailableTransientReferenceIsNotRetryable(t *testing.T) {
+	s, _, args := agentMediaFixture(t)
+	args.ReferenceNodeIDs = nil
+	args.ReferenceTransientIDs = []string{"missing-transient"}
+	_, _, _, err := cloudAgentMediaDocument(s.repo, "user", "agent-canvas", args, map[string]cloudAgentTransientReference{})
+	if err == nil {
+		t.Fatal("missing transient reference was accepted")
+	}
+	var argumentErr *cloudAgentArgumentError
+	if errors.As(err, &argumentErr) {
+		t.Fatalf("unavailable transient reference was classified as a model-correctable argument: %v", err)
+	}
+	class, retryable, action := cloudAgentToolErrorClass(agentTestRequest(), agentMediaCall(args), cloudAgentWrapMediaAdmissionError(err), true)
+	if class != cloudAgentToolErrorAdmission || retryable || action != "report_to_user" {
+		t.Fatalf("unavailable transient reference entered correction retry: class=%s retryable=%v action=%s", class, retryable, action)
 	}
 }
 
@@ -900,7 +963,8 @@ func TestCloudAgentCanvasUpdatesExistingVideoDraftThroughCapabilityContract(t *t
 	}
 	updated := updatedNodes["video-1789310237935-mmh3-baby-fullmoon"]
 	metadata := updated["metadata"].(map[string]any)
-	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || metadata["composerContent"] != "下一版舒缓视频提示词" {
+	generationSpec := metadata["generationSpec"].(map[string]any)
+	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || generationSpec["prompt"] != "下一版舒缓视频提示词" {
 		t.Fatalf("video draft was not updated: %#v", updated)
 	}
 	if metadata["prompt"] != "原始已提交提示词" || metadata["status"] != "error" || metadata["referenceIssue"] != "参考资产尚未准备完成" {

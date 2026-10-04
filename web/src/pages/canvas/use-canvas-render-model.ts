@@ -8,6 +8,7 @@ import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buil
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
 import { canvasOverviewMode, resolveCanvasNodeLOD, type CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
+import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { intersectsCanvasBounds, selectCanvasVisibleNodes } from "@/lib/canvas/canvas-node-visibility";
 import type { Skill } from "@/services/api/skills";
 import type { Asset, ImageAsset } from "@/stores/use-asset-store";
@@ -410,7 +411,7 @@ export function useCanvasRenderModel({
     const toolMentionReferencesByNodeId = useMemo(() => {
         const map = new Map<string, ReturnType<typeof buildToolMentionReference>[]>();
         for (const node of semanticNodes) {
-            const text = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
+            const text = nodeGenerationPrompt(node);
             const tokens = parseToolMentionTokens(text);
             if (!tokens.length) continue;
             const seen = new Set<string>();

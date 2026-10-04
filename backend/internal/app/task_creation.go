@@ -445,6 +445,13 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 	if err != nil {
 		return input, InvalidModelSelection("指定的模型能力配置无效，请联系管理员")
 	}
+	if capabilityConfig != nil && capabilityConfig.Video != nil && capabilityConfig.Video.FixedScreenSpec != nil {
+		videoInput := canvasGenerationInput{Config: providerConfig{
+			Size: metadataString(nextConfig, "size"), VQuality: metadataString(nextConfig, "vquality"),
+		}}
+		applyAutoDLVideoScreenSpec(&videoInput, capabilityConfig.Video)
+		nextConfig["size"], nextConfig["vquality"] = videoInput.Config.Size, videoInput.Config.VQuality
+	}
 	// 只有真实能力配置声明过的参数才能进入路由意图。客户端 config 可能保留
 	// 旧模型的质量/分辨率值；若直接重新汇总，会把已关闭的参数误报为“不支持”。
 	var capabilitySpec *CapabilitySpec

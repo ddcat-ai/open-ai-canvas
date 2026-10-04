@@ -3,6 +3,7 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { getNodeDefinition } from "./node-registry";
 import { isPluginEffectivelyEnabled } from "@/stores/use-plugin-store";
 import { inspectStoryboardReadiness } from "./canvas-storyboard-context";
+import { nodeGenerationPrompt } from "./generation-contract";
 
 export type CanvasResourceInsight = {
     nodeId: string;
@@ -68,7 +69,7 @@ export function findCanvasNodes(snapshot: CanvasSnapshot, input: { query?: strin
         if (statuses && !statuses.has(String(metadata.status || "idle"))) return false;
         if (input.resourceOnly && !resourceFromNode(node)) return false;
         if (!query) return true;
-        return [node.id, node.title, metadata.content, metadata.prompt, metadata.composerContent, metadata.assetId, Array.isArray(metadata.assetTags) ? metadata.assetTags.join(" ") : "", metadata.workflowKind, metadata.workflowTitle, metadata.characterName]
+        return [node.id, node.title, metadata.content, nodeGenerationPrompt(node), metadata.assetId, Array.isArray(metadata.assetTags) ? metadata.assetTags.join(" ") : "", metadata.workflowKind, metadata.workflowTitle, metadata.characterName]
             .some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
     return { query: input.query || "", total: nodes.length, truncated: nodes.length > limit, nodes: nodes.slice(0, limit).map(compactNode) };
@@ -248,7 +249,7 @@ function compactNode(node: CanvasNodeData) {
         parentId: node.parentId,
         status: String(metadata.status || "idle"),
         content: preview(metadata.content, 240),
-        prompt: preview(metadata.prompt || metadata.composerContent, 300),
+        prompt: preview(nodeGenerationPrompt(node), 300),
         generation: metadata.generationMode || metadata.workflowKind || metadata.taskId ? { mode: metadata.generationMode, model: metadata.model, workflowKind: metadata.workflowKind, workflowTitle: metadata.workflowTitle, taskId: metadata.taskId, status: metadata.taskStatus || metadata.status, progress: numberValue(metadata.taskProgress ?? metadata.progress), stage: metadata.taskStage, provider: metadata.taskProvider, errorCode: metadata.taskErrorCode || metadata.generationErrorCode } : undefined,
         error: metadata.status === "error" ? preview(metadata.errorDetails || metadata.generationErrorCode, 360) : undefined,
         asset: metadata.assetId || metadata.characterAssetId ? { assetId: metadata.assetId || metadata.characterAssetId, versionId: metadata.characterVersionId, category: metadata.assetCategory, tags: metadata.assetTags, characterName: metadata.characterName } : undefined,

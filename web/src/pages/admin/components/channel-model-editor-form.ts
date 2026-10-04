@@ -1,5 +1,6 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
@@ -64,6 +65,25 @@ export function changeChannelModelCapability(values: ChannelModelFormValues, pro
             videoGenerateAudio: "*",
             imageCount: 0,
         })),
+    };
+}
+
+export function updateChannelModelUpstreamCapabilities(values: ChannelModelFormValues): ChannelModelFormValues {
+    if (values.capability !== "image" || values.protocol !== "cangyuan-midjourney-v82") return values;
+    const defaults = defaultModelCapabilityConfig(values.protocol, values.providerModelKey?.trim() || values.modelKey.trim());
+    const image = values.capabilityConfig?.image;
+    if (!image) return { ...values, capabilityConfig: defaults };
+    if (image.size.parameter !== "aspect_ratio") return values;
+    const tier = defaults.image!.size.presets![0].tier;
+    const presets = imageSizePresets(image);
+    if (presets.length && presets.every((preset) => preset.tier === tier)) return values;
+    const ratios = Array.from(new Set(presets.map((preset) => preset.ratio)));
+    return {
+        ...values,
+        capabilityConfig: {
+            ...values.capabilityConfig!,
+            image: { ...image, size: { ...image.size, presets: ratios.length ? ratios.map((ratio) => imagePresetForRatio(tier, ratio)) : defaults.image!.size.presets } },
+        },
     };
 }
 
