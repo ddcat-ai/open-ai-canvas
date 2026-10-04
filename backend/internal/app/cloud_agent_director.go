@@ -19,11 +19,17 @@ func cloudAgentDirectorSceneRead(repo *repository.Repository, userID, canvasID s
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, cloudAgentJSONArgumentError(err)
 	}
-	if err := validateCloudAgentID(args.SceneID, "导演场景 ID", 80); err != nil {
-		return nil, err
+	// sceneId、shotId 在读取工具里是可选的（省略 sceneId 返回场景目录），
+	// 空值不能进 ID 校验，否则 Agent 永远拿不到任何 sceneId。
+	if args.SceneID != "" {
+		if err := validateCloudAgentID(args.SceneID, "导演场景 ID", 80); err != nil {
+			return nil, err
+		}
 	}
-	if err := validateCloudAgentID(args.ShotID, "导演镜头 ID", 80); err != nil {
-		return nil, err
+	if args.ShotID != "" {
+		if err := validateCloudAgentID(args.ShotID, "导演镜头 ID", 80); err != nil {
+			return nil, err
+		}
 	}
 	if len(args.ObjectIDs) > 16 {
 		return nil, BadAuthRequest("导演对象读取最多包含16个对象 ID")
