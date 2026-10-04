@@ -87,8 +87,9 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
         const fail = (text: string) => {
             throw new Error(`价格档 ${index + 1}：${text}`);
         };
-        if (!["fixed_request", "per_second", "token"].includes(tier.billingMode)) fail("请选择计费方式");
+        if (!["fixed_request", "per_second", "per_character", "token"].includes(tier.billingMode)) fail("请选择计费方式");
         if (tier.billingMode === "per_second" && capability !== "video" && capability !== "audio") fail("按秒计费仅支持视频或音频，请重新选择计费方式并核对价格");
+        if (tier.billingMode === "per_character" && capability !== "audio") fail("按字符计费仅支持音频，请重新选择计费方式并核对价格");
         if (tier.billingMode === "token" && !modelProtocolSupportsTokenBilling(capability, protocol)) fail("当前模型能力不支持 Token 计费，请重新选择计费方式并核对价格");
         if (tier.matchMode === "advanced") {
             if (tier.operation && tier.operation !== "*" && !operations[capability]?.includes(tier.operation)) fail("生成方式与模型能力不匹配");

@@ -71,3 +71,46 @@ func TestTokenEstimateAmountRejectsInvalidArithmetic(t *testing.T) {
 		})
 	}
 }
+
+
+func TestCharacterBillingAmountRoundsByTenThousandCharacters(t *testing.T) {
+	const unitPrice = int64(2_000_000)
+	for _, test := range []struct {
+		name       string
+		characters int64
+		want       int64
+	}{
+		{name: "one character", characters: 1, want: 2_600_000},
+		{name: "one unit", characters: 10_000, want: 2_600_000},
+		{name: "next unit rounds up", characters: 10_001, want: 5_200_000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			amount, err := characterBillingAmount(unitPrice, test.characters, 13_000)
+			if err != nil || amount != test.want {
+				t.Fatalf("characterBillingAmount() = %d, %v; want %d", amount, err, test.want)
+			}
+		})
+	}
+}
+
+func TestAudioBillingEstimateCountsUnicodeCharactersWithoutRejectingEmptyPrompt(t *testing.T) {
+	estimate := estimateTaskBillingTokens(map[string]any{"prompt": "你好，世界"}, "audio")
+	if estimate.CharacterCount != 5 || estimate.CharacterCountErr != nil {
+		t.Fatalf("audio character estimate = %#v; want five characters and no error", estimate)
+	}
+	empty := estimateTaskBillingTokens(map[string]any{}, "audio")
+	if empty.CharacterCount != 0 || empty.CharacterCountErr != nil {
+		t.Fatalf("empty audio character estimate = %#v; want zero characters and no error", empty)
+	}
+}
+
+func TestAudioProxyBillingEstimateUsesInputOrPrompt(t *testing.T) {
+	input := estimateProxyTokens([]byte(`{"input":"你好"}`), "audio")
+	if input.CharacterCount != 2 || input.CharacterCountErr != nil {
+		t.Fatalf("proxy input estimate = %#v; want two characters", input)
+	}
+	prompt := estimateProxyTokens([]byte(`{"prompt":"hello"}`), "audio")
+	if prompt.CharacterCount != 5 || prompt.CharacterCountErr != nil {
+		t.Fatalf("proxy prompt estimate = %#v; want five characters", prompt)
+	}
+}

@@ -60,7 +60,7 @@ export type ChannelModel = {
     icon: string;
     capability: "text" | "image" | "video" | "audio" | "";
     protocol?: import("@/lib/model-protocols").ModelProtocol;
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "per_character" | "token";
     unitPriceMicrocredits: number;
     inputTokenPriceMicrocredits: number;
     outputTokenPriceMicrocredits: number;
@@ -85,7 +85,7 @@ export type ChannelModelPriceTier = {
     resolution: string;
     videoSeconds: number;
     providerModelKey: string;
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "per_character" | "token";
     unitPriceMicrocredits: number;
     inputTokenPriceMicrocredits: number;
     outputTokenPriceMicrocredits: number;
@@ -217,7 +217,7 @@ export type BillingOrder = {
     model: string;
     capability: string;
     scene: string;
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "per_character" | "token";
     unitPriceMicrocredits: number;
     multiplierBasisPoints: number;
     quantity: number;

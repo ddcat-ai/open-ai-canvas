@@ -98,7 +98,7 @@ export type ModelChannel = {
         capability: ModelCapability;
         protocol?: ModelProtocol;
         pricePolicy?: "channel" | "unified";
-        billingMode: "fixed_request" | "per_second" | "token";
+        billingMode: "fixed_request" | "per_second" | "per_character" | "token";
         unitPriceMicrocredits: number;
         inputTokenPriceMicrocredits?: number;
         outputTokenPriceMicrocredits?: number;

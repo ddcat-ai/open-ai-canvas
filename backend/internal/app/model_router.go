@@ -161,7 +161,7 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 			if !ok || !channelModel.Enabled || !enabledSystemChannels[channelModel.ChannelID] {
 				continue
 			}
-			if item.PricePolicy == "unified" && item.BillingMode == "token" && !supportsTokenBilling(item.Capability, channelModel.Protocol) {
+			if item.PricePolicy == "unified" && ((item.BillingMode == "token" && !supportsTokenBilling(item.Capability, channelModel.Protocol)) || (item.BillingMode == "per_character" && !supportsCharacterBilling(item.Capability))) {
 				continue
 			}
 			if item.PricePolicy == "channel" && !channelModelHasActivePriceTier(channelModel) {

@@ -26,6 +26,7 @@ export type CapabilitySpec = {
 
 export type ModelRequestIntent = {
     capability: CapabilitySpec["capability"];
+    prompt?: string;
     operation?: string;
     inputs?: Record<string, number>;
     options?: Record<string, unknown>;
@@ -40,7 +41,7 @@ export type PublicLogicalModel = {
     capability: CapabilitySpec["capability"];
     sortOrder: number;
     pricePolicy: "channel" | "unified";
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "per_character" | "token";
     unitPriceMicrocredits: number;
     inputPriceMicrocredits: number;
     outputPriceMicrocredits: number;
@@ -57,7 +58,7 @@ export type PublicLogicalModelPriceTier = {
     selector: Record<string, string>;
     resolution: string;
     videoSeconds: number;
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "per_character" | "token";
     unitPriceMicrocredits: number;
     inputTokenPriceMicrocredits: number;
     outputTokenPriceMicrocredits: number;

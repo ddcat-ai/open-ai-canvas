@@ -30,6 +30,9 @@ func snapshotCreditCost(order *model.BillingOrder, tier *model.ChannelModelPrice
 	if tier.BillingMode == "per_second" {
 		order.CostQuantity = quantity
 	}
+	if tier.BillingMode == "per_character" {
+		order.CostQuantity = estimate.CharacterCount
+	}
 	if tier.BillingMode == "token" && estimate.Video != nil {
 		order.CostVideoFormulaTokens = estimate.Video.FormulaTokens
 	}
@@ -47,6 +50,8 @@ func billingCreditCost(order model.BillingOrder) (*int64, error) {
 	switch order.CostBillingMode {
 	case "fixed_request", "per_second":
 		amount, err = creditAmount(cost.UnitPriceMicrocredits, order.CostQuantity, 10_000)
+	case "per_character":
+		amount, err = creditAmountByUnit(cost.UnitPriceMicrocredits, order.CostQuantity, 10_000, 10_000)
 	case "token":
 		input, output, cached := order.InputTokens, order.OutputTokens, order.CachedTokens
 		if !order.UsageAvailable {

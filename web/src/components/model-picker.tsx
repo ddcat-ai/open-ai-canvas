@@ -404,7 +404,7 @@ function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapab
     return `${profile.duration.min || values[0]}-${profile.duration.max || values[values.length - 1]}s`;
 }
 
-type ModelMenuPrice = { kind: "tiers"; label: string; compactLabel: string; title: string } | { kind: "estimate"; label?: string; title?: string } | { kind: "fixed"; value: number; unit: "次" | "秒" };
+type ModelMenuPrice = { kind: "tiers"; label: string; compactLabel: string; title: string } | { kind: "estimate"; label?: string; title?: string } | { kind: "fixed"; value: number; unit: "次" | "秒" | "万字符" };
 
 function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapability, summary = false, requirements?: ModelRequirements): ModelMenuPrice | null | undefined {
     if (!model) return undefined;
@@ -424,7 +424,7 @@ function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapab
             ? { kind: "estimate", label: formatPriceRange([rate / 1_000_000], "积分/百万视频 Token"), title: "按视频 Token 单价预估，优先按有效上游用量结算；未返回用量时按视频公式结算" }
             : { kind: "estimate" };
     }
-    return { kind: "fixed", value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : "次" };
+    return { kind: "fixed", value: cost.unitPriceMicrocredits / 1_000_000, unit: cost.billingMode === "per_second" ? "秒" : cost.billingMode === "per_character" ? "万字符" : "次" };
 }
 
 function pickerModelDisplayName(config: AiConfig, model: string, showConfiguredModelName: boolean) {
