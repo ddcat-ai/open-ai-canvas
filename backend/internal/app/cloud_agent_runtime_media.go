@@ -216,6 +216,8 @@ func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cl
 			return cloudAgentSave(current, state)
 		}
 		if phase == "admission" && !submitted {
+			// 工具结果里的原因会脱敏；原始原因只进服务端日志，排查准入失败时以它为准。
+			log.Printf("[Agent] media admission rejected run=%s: %v", run.ID, err)
 			err = cloudAgentWrapMediaAdmissionError(err)
 		}
 		toolName := state.Calls[state.CallIndex].Function.Name
