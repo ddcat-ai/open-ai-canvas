@@ -5,6 +5,10 @@
 > 更新记录（2026-10-04）：桌面壳与前端包分离，新增 `apps/desktop/`（含 `src-tauri/`）承载跨平台应用；本 ADR **推翻并取代** ADR-0001「不引入 Tauri/Electron 壳」一条，见「与 ADR-0001 的关系」。
 >
 > 更新记录（2026-10-04，修正）：原「默认 1440×900」一条是错的，已改为按显示器可用工作区自适应，见下方「窗口」。
+>
+> 更新记录（2026-10-05，补录）：打包形态还依赖一份 Node 运行的 Agent 运行时，本 ADR 原先未提及、第一版打包也未供给，见「后果」末尾的修正记录与 `docs/plans/desktop-shell-implementation.md` §5。
+>
+> 更新记录（2026-10-05，落地）：Agent 运行时改为随包携带 pi 压缩包（`bundle.resources` + `CANVAS_PI_ARCHIVE`）、`node` 由后端按需下载并校验 sha256；壳新增记住并复用上次端口，避免端口变化丢掉浏览器本地模型配置。
 
 ## 背景
 
@@ -50,7 +54,7 @@ Orrery 的桌面形态是「Tauri 2 host 进程 + 被托管的本地 sidecar」�
 
 ### 壳侧职责
 
-- **端口与子进程**：Rust 侧选一个空闲回环端口，通过 `CANVAS_BACKEND_ADDR=127.0.0.1:<port>` 交给子进程，同时设置 `CANVAS_BACKEND_DATA_DIR`（OS 应用数据目录，**不在仓库内**）、`CANVAS_PUBLIC_BASE_URL=http://127.0.0.1:<port>`、`CANVAS_STATIC_DIR`（bundle 内 web 资源目录）。子进程查找顺序：`CANVAS_SERVER_BIN` 环境变量 → bundle 内 sidecar → 开发回退路径；找不到时不拉起，直接报错而不是静默降级。
+- **端口与子进程**：Rust 侧确定监听端口（优先复用上次成功的端口，被占或不可用时才选空闲回环端口），通过 `CANVAS_BACKEND_ADDR=127.0.0.1:<port>` 交给子进程，同时设置 `CANVAS_BACKEND_DATA_DIR`（OS 应用数据目录，**不在仓库内**）、`CANVAS_PUBLIC_BASE_URL=http://127.0.0.1:<port>`、`CANVAS_STATIC_DIR`（bundle 内 web 资源目录）、`CANVAS_PI_ARCHIVE`（bundle 内 Agent 运行时压缩包，缺文件时不注入）。子进程查找顺序：`CANVAS_SERVER_BIN` 环境变量 → bundle 内 sidecar → 开发回退路径；找不到时不拉起，直接报错而不是静默降级。
 - **启动顺序**：先创建窗口加载 app 内打包的启动页（`frontendDist` = `apps/desktop/splash`，显示启动进度），再拉起子进程，轮询 `/api/health/startup`（未就绪 503），就绪后把窗口导航到本地地址；超时或失败在启动页给出原因、日志入口与重试按钮。
 - **生命周期**：单实例插件排首位（第二次启动只聚焦已有窗口）；close-to-tray；窗口关闭不结束进程，托盘退出才结束；`RunEvent::ExitRequested` / `Exit` 杀子进程；Go 侧新增 `CANVAS_EXIT_WITH_PARENT=1` + `CANVAS_PARENT_PID` 孤儿看门狗（父进程消失即退出，POSIX 与 Windows 各一条实现）。
 - **日志**：`<app_data_dir>/logs/canvas-server.log` 与 `.old`（上一轮），托盘提供「打开数据目录」「查看日志」。
@@ -94,6 +98,8 @@ Orrery 的桌面形态是「Tauri 2 host 进程 + 被托管的本地 sidecar」�
 - dev 与发布形态不同：dev 下窗口指向 Vite dev server（3000，`/api` 代理到 8080），发布下指向本地服务地址。壳提供环境变量覆盖，以便在 dev 中演练发布路径；打包产物仍需真实冒烟，静态阅读不能算验证。
 - 桌面数据目录在 OS 应用数据目录，不使用仓库内 `.local/project-workbench-debug`，避免开发账号库被桌面应用读写；同一台机器上桌面应用与开发服务是两份独立数据。
 - 本地服务默认只绑回环，且桌面模式不放宽 `CANVAS_CORS_ORIGINS`。若本地存储签名链接需要服务端取回本机地址，只用 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=127.0.0.1` 精确放行，不使用通配或「允许私网」开关。
-- 桌面模式的 `CANVAS_PUBLIC_BASE_URL` 指向本次随机端口，导出/分享链接只在本次运行内有效；跨重启的持久链接仍应指向真实部署地址。
+- 桌面模式的 `CANVAS_PUBLIC_BASE_URL` 指向本次实际监听的端口，导出/分享链接只在本次运行内有效；跨重启的持久链接仍应指向真实部署地址。为避免端口变化带走浏览器本地的模型配置（前端配置按 origin 存储），壳会记住上次端口并优先复用，被占用时才换端口。
 - 页面内调用 Tauri 命令依赖 `remote.urls` 的端口通配放行；若该能力在实测中不可用，退路是固定端口并精确放行该源（会牺牲「端口不冲突」的健壮性）。
 - 打包差异：Go 单文件 sidecar 比 PyInstaller onedir 简单很多，主要成本转到 macOS 签名/公证顺序与 sidecar 可执行位、DMG 步骤上。
+- 修正记录（2026-10-05）：「唯一子进程是 Go 后端」只描述了壳自己拉起几个进程；后端在跑画布智能体时还会再拉起 `node` 执行 `backend/agent-runtime/pi`。第一版打包只带了 Go sidecar 与 web 产物，既没有随包这份运行时也没有注入其路径，在 `-trimpath` 构建下后端的候选路径也落不到仓库目录，导致打包版里智能体必然启动失败（与用户是否配置模型无关）。已落地的修法：pi 运行时按压缩包随包携带（`bundle.resources` + `CANVAS_PI_ARCHIVE`），`node` 由后端 `internal/agent/runtime` 按需下载并校验官方 sha256；实测记录见 `docs/plans/desktop-shell-implementation.md` §5。
+- 修正记录（2026-10-05，打包版无法启动）：壳拉起后端的进程工作目录是 `/`，而后端把「解析不到官方 `plugin-packages` 目录」当作启动失败（`newPluginRuntime` → `main` 的 `log.Fatal`，退出码 1）。生产容器靠写死的 `/app/plugin-packages` 命中，开发路径靠从仓库目录向上查找命中，只有打包形态三条路全落空。已落地的修法：`plugin-packages/*.yingce-plugin` 随包携带（`bundle.resources` + `CANVAS_OFFICIAL_PLUGIN_DIR`）；实测记录见 `docs/plans/desktop-shell-implementation.md` §7。

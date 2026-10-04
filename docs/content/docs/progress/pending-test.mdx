@@ -2937,3 +2937,55 @@ SSE 现在按 revision 变化发送紧凑快照，无变化只 heartbeat；客�
 - [ ] 在外接大屏上调整窗口尺寸后关闭，拔掉外接屏重启，确认恢复出的窗口不超出小屏（本次只验证了首次启动的裁剪）。
 - [ ] 把 `影策.app` 经压缩包或 AirDrop 传到另一台机器，按 README 步骤去隔离 + 重签名后确认能打开（本次只在本机验证了命令行为）。
 
+## 桌面壳打包版：智能体运行时未随包供给（2026-10-05）
+
+背景：用户反馈「打包后发现桌面版配置好模型后无法使用，创作页与画布智能体都不行，web 端可用」。探针实测后确认两层原因，第二层是壳的供给缺口。
+
+- 已定位（第一层）：桌面实例后端模型库为空（`model_channels` / `channel_models` / `logical_models` 均 0），用户配置的模型是浏览器本地个人渠道（`scope=user`）。Agent 只接受后端受管文本模型，前端对个人渠道回空 `channelId`，`/api/agent/runs` 直接 400「请选择后端受管文本模型」。直发探针复现：HTTP 400、`latency_ms=0~5`，与界面报错一致；换真实个人渠道 ID 得到「指定的渠道不存在」。web 端可用是因为它的后端有受管系统渠道。
+- 已定位（第二层，关键）：即使补上合法的系统渠道与能力配置，`/api/agent/runs` 回到 200、run 也会在 `1~2 秒`后落库为 `failed`（「Agent 执行中断」）。三种探针逐一复现：不设 `CANVAS_PI_RUNTIME_DIR` → `Agent runtime files are missing`；设了但 PATH 取 GUI 默认值 → `exec: "node": executable file not found in $PATH`；两者都补齐 → run 走到真实模型调用（探针渠道用占位 Key，报「模型服务鉴权失败」属预期），链路打通。
+- 已核实（机制）：`stage-assets.sh` 用 `-trimpath` 构建，`internal/agent/runtime` 的三个候选路径在打包产物里都落不到仓库的 `backend/agent-runtime/pi`；`tauri.conf.json` 的 `bundle.resources` 只映射 `resources/web`，壳也不注入 `CANVAS_PI_RUNTIME_DIR`、不随包提供 node。ADR-0010 写的「唯一子进程是 Go 后端」漏掉了后端自己拉起的 node 运行时。
+- 已记录：结论与复现命令效果写入 `docs/plans/desktop-shell-implementation.md` §5。
+- 已决策：运行时供给方式采用「pi 随包 + node 按需下载」。pi 运行时由 `stage-assets.sh` 打成 `resources/pi-runtime.tar.gz`（约 38M）经 `bundle.resources` 随包携带，壳解析出资源路径后注入 `CANVAS_PI_ARCHIVE`；node 由后端从官方 dist 下载并校验 `SHASUMS256.txt` 的 sha256，校验不过即失败。两者都先落到同级临时目录再原子改名，失败不留半成品。
+- 已决策：Agent 的模型来源策略保持现有边界不放宽，改为加引导；浏览器本地个人渠道仍不参与 Agent。
+- 已实现：新增 `backend/internal/agent/runtime` 的供给层（`provision.go` / `node_dist.go` / `download.go` / `extract.go`）：解析优先级为显式 `CANVAS_PI_RUNTIME_DIR` → 解包 `CANVAS_PI_ARCHIVE` → 仓库内 `backend/agent-runtime/pi`；node 依次尝试 `CANVAS_NODE_BIN` → PATH → 下载安装。`Run` 在拉起子进程前调一次 `Ensure`，不再依赖编译期路径。
+- 已实现：壳侧 `config.rs` 解析 `pi-runtime.tar.gz` 资源并写入 `ManagedBoot.pi_archive`，`server.rs` 注入 `CANVAS_PI_ARCHIVE`；同时把上次成功监听的端口记进 `desktop.json`，下次启动优先复用，被占用才另选空闲回环端口——修复了端口漂移导致浏览器本地模型配置与画布缓存换 origin 丢失的问题。
+- 已实现：`cloud_agent.go` 的 400 文案改为直接点明修法（「请选择后端受管文本模型：Agent 在后端执行，不接受浏览器自定义密钥或上游地址；请在「后台管理 → 模型渠道」添加启用文本能力的渠道」）；前端两处引导：发送前拦住无受管渠道的情况并给出可读错误；输入区上方在未配到受管渠道时长期显示一条提示（管理员带「打开模型渠道配置」入口，其他人提示联系管理员），可关闭。
+- 已记录：机制分析、临时绕行与修法写入 `docs/plans/desktop-shell-implementation.md` §5/§6；`apps/desktop/README.md` 新增「Agent 运行时供给」小节。
+- 自动验证：`go test ./internal/agent/runtime/... ./internal/handler/... ./internal/platform/... ./cmd/server/...` 全部 ok；`go vet`、`gofmt -l` 无输出；前端 `bunx --bun tsc --noEmit` 无输出；`cargo check --all-targets` 无 error/warning、`cargo test` 22 项通过；`bunx --bun tauri build --bundles app` 重新产出 `影策.app`（225M，内含 `pi-runtime.tar.gz` 39,771,799 B 与新 sidecar 与新前端）。
+- 实测（打包产物，PATH 里没有 node）：用干净 PATH（`/usr/bin:/bin:/usr/sbin:/sbin`）从包内启动 `canvas-server`，`/api/agent/runs` HTTP 200，日志依次为「首次运行，正在解包 pi 运行时：<包内>/Contents/Resources/pi-runtime.tar.gz」→「pi 运行时已解包：…/runtimes/pi/52a56cc3fffd」→「未找到 node，正在安装 node-v22.22.2-darwin-arm64.tar.gz」→「node 已安装：…/runtimes/node/v22.22.2/bin/node」，随后 run 走到真实模型调用（探针渠道是占位 Key，报「模型服务鉴权失败」属预期）。两层供给缺口均已闭合。
+- 已修复（打包版无法启动，第二处硬缺口）：
+  - 现象：从 Finder/`open` 启动打包产物，壳报「启动失败：本地服务在就绪前退出」，子进程退出码 1，日志只剩一行「未找到官方 plugin-packages 目录；请设置 CANVAS_OFFICIAL_PLUGIN_DIR」。
+  - 根因：壳拉起后端的进程工作目录是 `/`，而后端 `officialPluginPackageDir()` 的候选是 `CANVAS_OFFICIAL_PLUGIN_DIR` → 写死的 `/app/plugin-packages`（生产容器命中）→ 从工作目录逐级向上找 `plugin-packages`；三条路在打包形态下全落空。`newPluginRuntime` 把引导内置协议插件当启动必需，错误经 `main` 的 `log.Fatal` 退出。`tauri dev` 与仓库内跑 sidecar 都从仓库目录启动，能向上找到 `plugin-packages`，所以开发路径一直看不出这个缺口。
+  - 定位实测：包内 sidecar 在 cwd 为 `/`、`/tmp`、`$HOME` 时一律退出码 1；cwd 为仓库时正常；cwd 为 `/tmp` 但显式给 `CANVAS_OFFICIAL_PLUGIN_DIR` 正常；指向一个空目录也能正常启动。
+  - 修法：`stage-assets.sh` 把 `plugin-packages/*.yingce-plugin`（只取顶层包文件）暂存到 `resources/plugin-packages`，经 `bundle.resources` 随包携带；`config.rs` 新增 `resolve_plugin_dir`，`server.rs` 注入 `CANVAS_OFFICIAL_PLUGIN_DIR`。源码方式运行不注入，后端仍从工作目录向上找，行为不变。
+  - 实测（重打包后从窗口启动）：日志依次为「本地服务进程已拉起」→「backend listening」→「本地服务已就绪，导航窗口」，无插件目录警告；`/api/health/ready`、`/`、`/canvas/123` 均 200；`plugin_registry.json` 有 104 条，含 `a6api` / `adobe-firefly` / `agnes-image` / `official-payment-*` 等官方包；窗口就绪后后端记录到来自 127.0.0.1 的 `POST /api/ai/models` 200。
+  - 体积代价：`影策.app` 225M → 310.62 MiB（`plugin-packages` 101 个包 / 86M，其中 `official-payment-*` 五个占 85M 左右）。
+  - 已记录：`docs/plans/desktop-shell-implementation.md` §7、ADR-0010 修正记录、`apps/desktop/README.md` 新增「官方协议插件供给」小节。
+  - 已应验（端口复用）：连续两次启动打包版，第二次日志为「沿用上次端口 50491」，`desktop.json` 里 `port: 50491`。
+
+仍待真实环境验收：
+
+- [ ] 从重打包的 `影策.app`（现已能启动并导航到窗口）在界面里配好系统渠道，创作页对话入口与画布智能体各发一次消息，确认 run 能跑完（供给链路已用包内 `canvas-server` + 干净 PATH 验证过，但还没从窗口点下去跑完整对话）。
+- [x] 端口复用已应验：连续两次启动打包版，第二次日志为「沿用上次端口 50491」，`desktop.json` 里 `port: 50491`。仍待确认的是界面里已配置的模型在重启后是否仍在（这取决于用户是否已在窗口里配过）。
+
+## 受管模型价格档与协议缺失的提示补全（2026-10-05）
+
+背景：用户反馈桌面版「配置好模型后创作页与画布智能体都不能用」，先被判断为运行时/打包缺陷；截图与库内数据比对后确认是配置层，且前端提示不够指向性。
+
+- 已核实（模型未发布到创作端的原因）：`channel_models.price_configured = 0`、`channel_model_price_tiers` 只有一条 `enabled = 0` / `price_configured = 0` 的档；`sanitizeChannelModel` 的 `Available` 取 `len(publicTiers) > 0`，于是系统渠道模型进不了前端受管目录（`systemChannelModelChannels` 只保留 `available`），工作台只能回退到浏览器本地的个人渠道。
+- 已核实（不是价格问题）：`price_validation.go` 明确「0 表示免费」，真正让 `PTIER_000001` 失效的只有 `enabled = 0`。该值是模型导入的默认值（`ImportAdminChannelModels` 落 `Enabled: false, PriceConfigured: false`），只有「积分定价」里的「可供用户使用」开关会把它翻成 1。
+- 已核实（前端协议拦截比后端严，本轮按「只改提示」处理，不放宽拦截）：后端对空 `interfaceType` 是显式放行的（`provider_protocol.go` 返回 nil），文本与图片都还有遗留路径（`provider_text.go` 的 `/responses` → 404 时回退 `/chat/completions`；`provider_image.go` 的 OpenAI Images 遗留分支）。但 `generation-task.ts` 的 `assertBackendRuntimeConfigured` 对「无 `channelId` 且无 `interfaceType`」直接抛错，而用户渠道（`scope=user`）的 `channelId` 恒为空、协议要在「模型与能力」里手点一次，于是 baseUrl/key/模型名都填对了也提交不了。
+- 已实现：`generation-task.ts` 两处报错文案改为点名操作路径（「设置 → 个人渠道 → 模型与能力」中为该模型选择请求协议），不再只说「模型设置」。
+- 已实现：画布智能体引导条（`agent-model-source-hint.tsx`）的管理员分支改成一步到位的操作路径（「后台管理 → 模型渠道」编辑文本模型 →「积分定价」开启价格档的「可供用户使用」，单价 0 即免费），按钮文案改为「去开启价格档」；非管理员分支不变。
+- 已实现：后台模型编辑器「积分定价」页在「模型已启用但没有开启可供用户使用的价格档」时显示告警（`channel-model-editor.tsx`），避免再次出现「以为配好了其实没发布」。
+- 已决策（未采纳的方向）：不为个人渠道的模型自动补标准协议。协议会参与模型能力过滤（`filterModelsByCapability` 优先取协议能力），按模型名推断能力一旦判错会让模型从下拉里消失，代价高于让用户点一次协议。
+- 已决策（智能体边界不放宽）：Agent 的每次模型调用都转成平台文本任务走计费与渠道路由（见 `cloud_agent_pi_model.go` 文件头），预算要落到渠道模型的价格档上结算；个人渠道只有浏览器本地密钥、没有可结算的价格实体，因此继续要求后端受管渠道，只做引导不做兼容。
+- 自动验证：`tsc --noEmit` 退出码 0、`eslint` 对三个改动文件退出码 0、`gofmt -l` / `go build ./...` 通过；全仓 grep 确认没有测试或代码断言被改掉的旧文案。
+
+仍待验收：
+
+- [ ] 从 `影策.app` 里按新提示走一遍：后台「模型渠道」为 `deepseek-flash` 开启「可供用户使用」并保存 → 回「模型设置」重选系统渠道的 `deepseek-flash`（模型名不带「（渠道名）」后缀的那个）→ 创作页对话入口与画布智能体各发一次消息。首次触发智能体要解包 pi 运行时的十几秒属正常。
+- [ ] 若走个人渠道：在「设置 → 个人渠道 → 模型与能力」里为该模型选一次请求协议，再确认创作页可以提交。
+- [ ] 上述前端文案改动需要重新执行 `bunx --bun tauri build --bundles app` 才会出现在 `影策.app` 里；配置层修好不需要重打包。
+
+
