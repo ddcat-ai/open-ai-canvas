@@ -51,6 +51,7 @@ import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
 import { AGENT_SCENE_DEFS, AgentChatComposer, parseCloudAgentFormAnswer, AgentPlanBar, AgentQuestionBar, AgentSceneCapsules, type AgentSceneBucket, type CloudAgentChatMessage } from "./canvas-cloud-agent-chat-ui";
+import { AgentModelSourceHint } from "./agent-model-source-hint";
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
 import { CanvasCloudAgentSettings, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
@@ -79,6 +80,7 @@ type AgentPanelView = "chat" | "history" | "settings";
 
 export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, selectedNodeIds, references, open, prefillRequest, onOpen, onCollapse, onFocusNode, canvasNodes, runningNodeId }: CloudAgentPanelProps) {
     const userId = useUserStore((state) => state.user?.id);
+    const isAdmin = useUserStore((state) => state.user?.role === "admin");
     const theme = canvasThemes[useActiveTheme()];
     const config = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -163,6 +165,12 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         return textModels.includes(preferred) ? preferred : textModels[0] || "";
     }, [config]);
     const installedSkills = useMemo(() => skills.filter((skill) => skill.isAdded), [skills]);
+
+    // 后端只接受受管渠道；这里与发送前的校验用同一个判据，避免提示与实际行为不一致。
+    const agentModelUnmanaged = useMemo(() => {
+        const agentConfig = { ...config, model: selectedModel };
+        return !logicalModelIDForConfig(agentConfig) && !resolveModelRequestConfig(agentConfig, selectedModel).channelId;
+    }, [config, selectedModel]);
     const installedSkillIds = useMemo(() => new Set(installedSkills.map((skill) => skill.skillId)), [installedSkills]);
 
     const [createdSkills, setCreatedSkills] = useState<Skill[]>([]);
@@ -614,6 +622,12 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 const agentConfig = { ...config, model: selectedModel };
                 const requestConfig = resolveModelRequestConfig(agentConfig, selectedModel);
                 const logicalModelId = logicalModelIDForConfig(agentConfig);
+                // 画布智能体在后端执行，只能用后端受管渠道；浏览器本地渠道拿不到模型。
+                // 提前拦下比等到服务端 400 “请选择后端受管文本模型” 更好懂。
+                if (!logicalModelId && !requestConfig.channelId) {
+                    const admin = useUserStore.getState().user?.role === "admin";
+                    throw new Error(admin ? "画布智能体需要后端受管的文本模型渠道：请到「后台管理 → 模型渠道」启用文本能力、并开启该模型价格档的「可供用户使用」，再回来选择该模型" : "画布智能体需要后端受管的文本模型渠道：请联系管理员在后台配置模型渠道");
+                }
                 const input = {
                     canvasId,
                     prompt: value,
@@ -1022,6 +1036,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                                         />
                                     ) : null}
                                     {pendingQuestion ? <AgentQuestionBar question={pendingQuestion} theme={theme} disabled={approvalSubmitting || connectionStatus !== "connected"} onAnswer={(label) => void submit(label)} /> : null}
+                                    {agentModelUnmanaged ? <AgentModelSourceHint isAdmin={isAdmin} /> : null}
                                     <AgentChatComposer
                                         prompt={prompt}
                                         disabled={Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}

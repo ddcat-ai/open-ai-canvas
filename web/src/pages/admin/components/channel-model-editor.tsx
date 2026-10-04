@@ -56,6 +56,8 @@ export function ChannelModelEditor({
     const modelEnabled = Form.useWatch("enabled", form) !== false;
     const priceTiers = Form.useWatch("priceTiers", form) || [];
     const hasDefaultPriceTier = priceTiers.some((tier) => tier.matchMode === "default");
+    // 创作端只认「可供用户使用」的价格档：模型启用但没有可用档位时，公开目录不会发布该模型。
+    const hasUsablePriceTier = priceTiers.some((tier) => tier.priceConfigured !== false && tier.enabled !== false);
     const tiersWithOwnUpstream = priceTiers.filter((tier) => tier.providerModelKey?.trim());
     const modelUpstream = normalizeUpstreamModelKey(providerModelKey || modelKey);
     const busy = saving || testing;
@@ -379,6 +381,7 @@ export function ChannelModelEditor({
                             forceRender: true,
                             children: (
                                 <div className="admin-model-editor-tab-content">
+                                    {modelEnabled && !hasUsablePriceTier && <Alert type="warning" showIcon title="创作端不会展示此模型" description="模型已启用，但没有开启「可供用户使用」的价格档。请至少开启一个价格档，否则创作端和画布智能体都无法选择该模型。" />}
                                     {configurationChanged && <Alert type="warning" showIcon title="请核对定价" description="能力或协议已变更。请重新检查规格条件、计费方式和金额；不会自动转换价格单位。" />}{" "}
                                     <section className="admin-model-editor-section">
                                         <SectionHeading title="用户积分价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
