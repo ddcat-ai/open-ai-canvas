@@ -91,10 +91,17 @@ async fn run_managed(app: &AppHandle, boot: ManagedBoot) -> Result<(), String> {
     let text = shell_i18n::text(&lang);
 
     publish(app, StartupSnapshot::booting(text.phase_selecting_port, log_path.clone()));
-    let port = pick_free_port()?;
+    let preferred = env.prefs().port;
+    let port = select_port(preferred)?;
     let base_url = format!("http://127.0.0.1:{port}");
+    // 端口就是前端 origin：浏览器存储（个人渠道等）按 origin 隔离，能沿用就沿用。
+    let port_note = match preferred {
+        Some(previous) if previous == port => format!("沿用上次端口 {port}"),
+        Some(previous) => format!("上次端口 {previous} 不可用，改用 {port}"),
+        None => format!("首次启动，选用端口 {port}"),
+    };
     env.log.note(&format!(
-        "本地服务端口 {port}；数据目录 {}；前端资源 {}",
+        "{port_note}；数据目录 {}；前端资源 {}",
         boot.data_dir.display(),
         boot.static_dir.display()
     ));
@@ -114,6 +121,16 @@ async fn run_managed(app: &AppHandle, boot: ManagedBoot) -> Result<(), String> {
         // 与 Go 侧孤儿看门狗约定：父进程消失或壳正常退出都不留孤儿服务。
         .env("CANVAS_EXIT_WITH_PARENT", "1")
         .env("CANVAS_PARENT_PID", std::process::id().to_string());
+    // 告诉后端官方协议插件在哪；拿不到时后端回退到从工作目录向上找。
+    let command = match &boot.plugin_dir {
+        Some(dir) => command.env("CANVAS_OFFICIAL_PLUGIN_DIR", dir.to_string_lossy().to_string()),
+        None => command,
+    };
+    // 告诉后端 pi 运行时压缩包在哪；拿不到时后端回退到仓库目录。
+    let command = match &boot.pi_archive {
+        Some(archive) => command.env("CANVAS_PI_ARCHIVE", archive.to_string_lossy().to_string()),
+        None => command,
+    };
     #[cfg(windows)]
     let command = command.creation_flags(CREATE_NO_WINDOW);
 
@@ -139,6 +156,7 @@ async fn run_managed(app: &AppHandle, boot: ManagedBoot) -> Result<(), String> {
     }
 
     env.log.note("本地服务已就绪，导航窗口");
+    remember_port(&env, port);
     publish(app, StartupSnapshot::ready(base_url.clone(), text.phase_ready, log_path));
     navigate(app, &base_url)
 }
@@ -187,7 +205,32 @@ fn navigate(app: &AppHandle, url: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 绑 0 端口让内核挑一个空闲回环端口。释放与子进程监听之间有竞争窗口，
+/// 优先沿用上次的端口：端口变了前端就换了 origin，用户上次配好的模型渠道会看不到。
+/// 上次的端口不可用（被别的进程占着、或落在特权段）时回退到内核分配的空闲端口。
+fn select_port(preferred: Option<u16>) -> Result<u16, String> {
+    if let Some(port) = preferred {
+        if loopback_port_available(port) {
+            return Ok(port);
+        }
+    }
+    pick_free_port()
+}
+
+/// 只检查回环地址：本地服务不监听外部网卡，占用判定也应只看回环。
+fn loopback_port_available(port: u16) -> bool {
+    TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
+/// 记住实际监听的端口，下次启动优先复用。
+fn remember_port(env: &ShellEnv, port: u16) {
+    if env.prefs().port == Some(port) {
+        return;
+    }
+    let mut prefs = env.prefs();
+    prefs.port = Some(port);
+    *lock(&env.prefs) = prefs.clone();
+    env.save_prefs(&prefs);
+}
 /// 桌面壳可接受的失败模式是健康门超时后重试，而不是固定端口带来的启动冲突。
 fn pick_free_port() -> Result<u16, String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|err| format!("选择空闲端口失败：{err}"))?;
@@ -343,6 +386,27 @@ mod tests {
     fn picks_a_loopback_port() {
         let port = pick_free_port().expect("选择端口失败");
         assert!(port > 0);
+    }
+
+    #[test]
+    fn reuses_the_remembered_port_when_free() {
+        let port = pick_free_port().expect("选择端口失败");
+        assert_eq!(select_port(Some(port)).expect("选择端口失败"), port);
+    }
+
+    #[test]
+    fn falls_back_when_the_remembered_port_is_taken() {
+        // 占着内存里的监听器，模拟“上次的端口已被其他进程占用”。
+        let listener = TcpListener::bind("127.0.0.1:0").expect("占用端口失败");
+        let taken = listener.local_addr().expect("读取端口失败").port();
+        let selected = select_port(Some(taken)).expect("选择端口失败");
+        assert_ne!(selected, taken);
+        assert!(selected > 0);
+    }
+
+    #[test]
+    fn selects_a_fresh_port_without_a_remembered_one() {
+        assert!(select_port(None).expect("选择端口失败") > 0);
     }
 
     #[test]

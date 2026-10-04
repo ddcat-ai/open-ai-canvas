@@ -31,7 +31,9 @@
     "category": "Video",
     "externalBin": ["binaries/canvas-server"],
     "resources": {
-      "resources/web": "web"
+      "resources/web": "web",
+      "resources/pi-runtime.tar.gz": "pi-runtime.tar.gz",
+      "resources/plugin-packages": "plugin-packages"
     },
     "icon": [
       "icons/32x32.png",

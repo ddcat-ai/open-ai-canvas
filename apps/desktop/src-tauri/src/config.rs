@@ -10,6 +10,8 @@ pub const DEFAULT_HEALTH_TIMEOUT_SECS: u64 = 60;
 pub const DATA_SUBDIR: &str = "data";
 pub const LOGS_SUBDIR: &str = "logs";
 const WEB_RESOURCE_DIR: &str = "web";
+const PI_ARCHIVE_RESOURCE: &str = "pi-runtime.tar.gz";
+const PLUGIN_PACKAGES_RESOURCE: &str = "plugin-packages";
 
 /// 壳自己的目录（日志、偏好）与注入子进程的数据目录。
 /// 默认都在 OS 应用数据目录下，与仓库内 `.local/` 的开发账号库物理隔离。
@@ -24,6 +26,16 @@ pub struct ManagedBoot {
     pub data_dir: PathBuf,
     pub static_dir: PathBuf,
     pub server_bin: Option<PathBuf>,
+    /// 打包时随包携带的 pi 运行时压缩包（`bundle.resources`）。
+    ///
+    /// 只有这个路径，子进程才知道从哪里解包；源码目录下的候选路径在 `-trimpath`
+    /// 构建后是拿不到的。
+    pub pi_archive: Option<PathBuf>,
+    /// 随包携带的官方协议插件目录（`bundle.resources`）。
+    ///
+    /// 后端把“找不到官方 plugin-packages”当作启动失败；壳的 cwd 是 `/`，
+    /// 靠后端从工作目录向上找是找得到的反面——所以打包形态必须显式给这个路径。
+    pub plugin_dir: Option<PathBuf>,
     pub health_timeout: Duration,
 }
 
@@ -52,6 +64,8 @@ pub fn boot_mode(app: &AppHandle, paths: &AppPaths) -> Result<BootMode, String> 
         data_dir: paths.data_dir.clone(),
         static_dir: resolve_static_dir(app)?,
         server_bin: resolve_server_bin()?,
+        pi_archive: resolve_pi_archive(app),
+        plugin_dir: resolve_plugin_dir(app),
         health_timeout: timeout,
     }))
 }
@@ -127,6 +141,40 @@ fn resolve_server_bin() -> Result<Option<PathBuf>, String> {
         }
         None => Ok(None),
     }
+}
+
+/// pi 运行时压缩包：显式环境变量优先，其次 bundle 资源。
+///
+/// 拿不到不是错误：源码方式运行（`bun run tauri dev`）时压缩包本来就不存在，
+/// 后端会回退到仓库内的 `agent-runtime/pi`。
+fn resolve_pi_archive(app: &AppHandle) -> Option<PathBuf> {
+    if let Some(raw) = env_trim("CANVAS_PI_ARCHIVE") {
+        let path = PathBuf::from(raw);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    app.path()
+        .resolve(PI_ARCHIVE_RESOURCE, BaseDirectory::Resource)
+        .ok()
+        .filter(|path| path.is_file())
+}
+
+/// 官方协议插件目录：显式环境变量优先，其次 bundle 资源。
+///
+/// 拿不到不是错误：源码方式运行（`bun run tauri dev`）时没有这份资源，
+/// 后端会从工作目录向上找到仓库里的 `plugin-packages`。
+fn resolve_plugin_dir(app: &AppHandle) -> Option<PathBuf> {
+    if let Some(raw) = env_trim("CANVAS_OFFICIAL_PLUGIN_DIR") {
+        let dir = PathBuf::from(raw);
+        if dir.is_dir() {
+            return Some(dir);
+        }
+    }
+    app.path()
+        .resolve(PLUGIN_PACKAGES_RESOURCE, BaseDirectory::Resource)
+        .ok()
+        .filter(|path| path.is_dir())
 }
 
 fn health_timeout() -> Result<Duration, String> {

@@ -23,6 +23,11 @@ pub struct Prefs {
     pub lang: String,
     pub keep_awake: bool,
     pub window: WindowPrefs,
+    /// 上次成功监听的本地端口。
+    ///
+    /// 前端配置（个人渠道等）按 origin 存在浏览器存储里，端口一变就等于换了站点，
+    /// 所以下次启动优先复用这个端口；被占用时再退回系统分配的临时端口。
+    pub port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +43,7 @@ impl Default for Prefs {
             lang: shell_i18n::DEFAULT_LANG.to_string(),
             keep_awake: false,
             window: WindowPrefs::default(),
+            port: None,
         }
     }
 }
@@ -141,6 +147,17 @@ mod tests {
         assert_eq!(loaded.lang, shell_i18n::DEFAULT_LANG);
         assert!(loaded.keep_awake);
         assert_eq!(loaded.window.width, MIN_WIDTH);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn keeps_the_remembered_port() {
+        let dir = std::env::temp_dir().join(format!("yingce-desktop-prefs-port-{}", std::process::id()));
+        let mut prefs = Prefs::default();
+        prefs.port = Some(64218);
+        save(&dir, &prefs).expect("写入偏好失败");
+
+        assert_eq!(load(&dir).port, Some(64218));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -73,6 +73,8 @@ Error: Cannot find native binding. npm has a bug related to optional dependencie
 
 壳按应用标识符 `ai.ddcat.open-ai-canvas` 做单实例：**dev 会话与打包出的 `影策.app` 共用这一把锁，也共用同一个应用数据目录**。所以 dev 在跑时再启动打包版，第二个进程会直接退出（窗口不出现、终端无输出），看起来像打包版坏了。测打包版前先关掉 dev。
 
+端口会尽量稳定：壳把上次成功监听的端口记在 `desktop.json`，下次启动若仍空闲就直接复用，只有被占用时才另选一个空闲回环端口。原因是浏览器按 origin（含端口）隔离本地存储，端口一变，用户在界面里配的模型与本地缓存就都换了份。
+
 调试用环境变量：
 
 | 变量 | 作用 |
@@ -146,3 +148,28 @@ spctl -a -vv "/Applications/影策.app"                            # 依然会 r
 ## 尚未接线的部分
 
 ADR-0010 落地顺序第 4 项（选目录、开机自启、外链、更新检查的原生命令与自定义标题栏）不在当前范围内。**Tauri 自更新与后端 host-updater 二选一**：桌面形态下必须关闭或隐藏后端的 `/api/system/update*` 入口，不要同时接两个更新器。
+
+## Agent 运行时供给
+
+后端跑画布智能体时会另行拉起 `node` 执行 `backend/agent-runtime/pi`，这条依赖不在壳的进程表里，必须由打包链路显式供给，否则打包版里智能体必然启动失败（与用户是否配置模型无关）。
+
+现在的做法是「pi 随包、node 按需下载」：
+
+| 产物 | 供给方式 | 落点 |
+| --- | --- | --- |
+| pi 运行时 | `stage-assets.sh` 打成 `resources/pi-runtime.tar.gz`（约 38M），经 `bundle.resources` 随包携带 | 壳解析出资源路径并注入 `CANVAS_PI_ARCHIVE`；后端解包到 `<数据目录>/runtimes/pi/<sha256 前 12 位>/` |
+| node | 后端按需从官方 dist 下载并核对 `SHASUMS256.txt` 的 sha256，校验不过即失败 | `<数据目录>/runtimes/node/<版本>/` |
+
+解包与下载都是先落到同级临时目录、再原子改名，失败不会留下半成品。离线部署可设 `CANVAS_RUNTIME_AUTO_INSTALL=false`，或直接给出 `CANVAS_PI_RUNTIME_DIR` / `CANVAS_NODE_BIN`。变量清单见根目录 `.env.example` 的「Agent 运行时供给」段。
+
+`stage-assets.sh` 用 `-trimpath` 构建 sidecar，编译期路径在打包产物里不可用，所以运行时位置只能靠上面这些变量传递，不能靠相对源码目录推断。
+
+## 官方协议插件供给
+
+后端把「解析不到官方 `plugin-packages` 目录」当作启动失败：`newPluginRuntime` 在引导内置协议插件时直接返回错误，`main` 落成 `log.Fatal`，进程退出码 1。
+
+解析顺序是 `CANVAS_OFFICIAL_PLUGIN_DIR` → 从工作目录向上逐级找 `plugin-packages`（生产容器靠写死的 `/app/plugin-packages` 命中）。双击 `.app` 时壳的工作目录是 `/`，向上找不到，于是第一版打包版其实永远起不来——而 `tauri dev` 和仓库内跑 sidecar 都从仓库目录启动，能向上找到 `plugin-packages`，所以这个缺口在开发路径上一直没暴露。
+
+修法与 pi 运行时一致：`stage-assets.sh` 把 `plugin-packages/*.yingce-plugin` 暂存到 `resources/plugin-packages`（**只取顶层包文件**，后端只读这一种，源码目录复制过去只是白占体积），经 `bundle.resources` 随包携带，壳解析出目录后注入 `CANVAS_OFFICIAL_PLUGIN_DIR`。当前 101 个包约 86M，其中 `official-payment-*` 五个占了大头（支付页 Host 资源，本地单用户实例用不到）。
+
+源码方式运行时不注入这个变量，后端回退到向上查找，行为与以前完全一致。

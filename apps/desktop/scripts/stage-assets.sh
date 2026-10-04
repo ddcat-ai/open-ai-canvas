@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 暂存打包输入：web 构建产物与 Go 单文件 sidecar。
+# 暂存打包输入：web 构建产物、Go 单文件 sidecar、pi 运行时压缩包。
 #
-# 产物落在 src-tauri/ 下（binaries/、resources/web），这两个目录不提交；
+# 产物落在 src-tauri/ 下（binaries/、resources/），这两个目录不提交；
 # 缺任何一项，tauri build 都会在打包阶段失败，因此这个脚本是打包的第一步。
 set -euo pipefail
 
@@ -55,6 +55,31 @@ rm -rf "${desktop_dir}/src-tauri/resources/web"
 mkdir -p "${desktop_dir}/src-tauri/resources/web"
 cp -R "${repo_dir}/web/dist/." "${desktop_dir}/src-tauri/resources/web/"
 
+echo "== 暂存 pi 运行时压缩包 =="
+pi_dir="${repo_dir}/backend/agent-runtime/pi"
+if [[ ! -f "${pi_dir}/agent-runtime.mjs" ]]; then
+  echo "backend/agent-runtime/pi/agent-runtime.mjs 不存在：先执行 (cd backend/agent-runtime/pi && npm install)" >&2
+  exit 1
+fi
+# 内容平铺打包（不带头层目录）：后端按 strip=0 解包，根目录必须直接是 agent-runtime.mjs。
+echo "== 暂存官方协议插件包 =="
+# 后端起不来的一种硬失败：官方 plugin-packages 目录解析不到就直接退出。
+# 后端只读该目录下的 *.yingce-plugin 文件，源码目录一并复制只会白占体积。
+plugin_src="${repo_dir}/plugin-packages"
+plugin_dst="${desktop_dir}/src-tauri/resources/plugin-packages"
+rm -rf "${plugin_dst}"
+mkdir -p "${plugin_dst}"
+if compgen -G "${plugin_src}/*.yingce-plugin" > /dev/null; then
+  cp "${plugin_src}"/*.yingce-plugin "${plugin_dst}/"
+else
+  echo "plugin-packages 下没有 *.yingce-plugin：后端会因找不到官方插件目录而启动失败" >&2
+  exit 1
+fi
+
+archive="${desktop_dir}/src-tauri/resources/pi-runtime.tar.gz"
+rm -f "${archive}"
+tar -C "${pi_dir}" -czf "${archive}" .
+
 if [[ "${skip_go}" -eq 0 ]]; then
   echo "== 构建 Go sidecar（${triple}） =="
   mkdir -p "${desktop_dir}/src-tauri/binaries"
@@ -69,5 +94,7 @@ fi
 
 echo "暂存完成："
 echo "  前端资源  src-tauri/resources/web"
+echo "  官方协议插件  src-tauri/resources/plugin-packages（$(ls "${plugin_dst}" | wc -l | tr -d ' ') 个包，$(du -sh "${plugin_dst}" | cut -f1)）"
 echo "  本地服务  src-tauri/binaries/canvas-server-${triple}"
+echo "  智能体运行时  src-tauri/resources/pi-runtime.tar.gz（$(du -h "${desktop_dir}/src-tauri/resources/pi-runtime.tar.gz" | cut -f1)）"
 echo "下一步：bun run tauri build"
