@@ -229,6 +229,12 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			// 纠偏上下文只用于这一次请求，不写回运行状态，避免下一步重复出现。
 			canonical.Messages = append(append([]map[string]any(nil), canonical.Messages...), correction...)
 		}
+		// 看图后的历史里有 resource: 图片占位，必须随请求带上获准图片清单，
+		// 否则预检以「模型协议引用了未获准的图片」拒绝（见 cloud_agent_pi_image_references.go）。
+		references, refErr := s.cloudAgentPiStepImageReferences(userID, state.Request, &canonical)
+		if refErr != nil {
+			return nil, false, refErr
+		}
 		input := map[string]any{
 			"mode":          "text",
 			"prompt":        state.Request.Prompt,
@@ -243,6 +249,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 				"thinking":        cloudAgentPiThinkingEnabled(thinkingLevel),
 				"maxOutputTokens": cloudAgentStepOutputBudget(state.StepLimits, state.BoostStepOutputBudget),
 			},
+		}
+		if len(references) > 0 {
+			input["referenceImages"] = references
 		}
 		req := CreateTaskRequest{
 			ProjectID: state.Request.CanvasID,
