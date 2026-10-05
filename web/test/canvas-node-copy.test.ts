@@ -43,6 +43,7 @@ describe("canvas generation copy metadata", () => {
                 videoStartFrameNodeId: "reference-start",
                 videoEndFrameNodeId: "reference-end",
                 generationResultPlacement: "new-version",
+                generationEffectKeys: ["attach-node:source-task:source:0"],
             },
         };
 
@@ -53,6 +54,8 @@ describe("canvas generation copy metadata", () => {
         expect(metadata.videoEndFrameNodeId).toBe("reference-end");
         expect(metadata.copiedFromNodeId).toBe("source");
         expect(metadata.generationResultPlacement).toBe("replace-node");
+        expect(metadata.generationEffectKeys).toBeUndefined();
+        expect(source.metadata?.generationEffectKeys).toEqual(["attach-node:source-task:source:0"]);
     });
 
     test("复制到副本的入边继续解析为同一张参考图", () => {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race" | "canvas-multi-output";
+type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race" | "canvas-multi-output" | "canvas-copy-generation";
 
 test("一次任务四图经真实消费链路堆叠并保存，刷新和重放保留四个独立资源", async () => {
     type Node = import("../src/types/canvas").CanvasNodeData;
@@ -20,6 +20,16 @@ test("一次任务四图经真实消费链路堆叠并保存，刷新和重放�
     }
 });
 type ScenarioResponse<T> = { ok: true; result: T } | { ok: false; error: string };
+
+test("已生成图片的副本在普通保存和新生成结果持久化后仍保留，原节点不受影响", async () => {
+    type Node = import("../src/types/canvas").CanvasNodeData;
+    const result = await runScenario<{ beforeGeneration: Node[]; restored: Node[] }>("canvas-copy-generation");
+    expect(result.beforeGeneration.map((node) => node.id)).toEqual(["source", "copy"]);
+    expect(result.beforeGeneration.find((node) => node.id === "copy")?.metadata?.generationEffectKeys).toBeUndefined();
+    expect(result.restored.map((node) => node.id)).toEqual(["source", "copy"]);
+    expect(result.restored.find((node) => node.id === "source")?.metadata).toMatchObject({ content: "original-image", generationEffectKeys: ["attach-node:old-task:source:0"] });
+    expect(result.restored.find((node) => node.id === "copy")?.metadata).toMatchObject({ content: "new-image", status: "success", generationEffectKeys: ["attach-node:new-task:copy:0"] });
+});
 
 test("并发生成结果经真实持久化消费链路及重新读取后保留成功、失败和用户编辑", async () => {
     type Node = import("../src/types/canvas").CanvasNodeData;
