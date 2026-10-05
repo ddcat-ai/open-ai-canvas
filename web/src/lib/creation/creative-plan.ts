@@ -1,5 +1,6 @@
 import type { CreativePlan, CreativePlanStep } from "./creative-agent-contract";
 import type { CreativeAgentState } from "./creative-agent-state";
+import { generationErrorMessage } from "@/lib/generation-error";
 
 export type CreativePlannedStep = {
     id: string;
@@ -58,7 +59,7 @@ export function dynamicCreativePlan(state: CreativeAgentState): CreativePlan | u
                 else if (media.some((item) => item.submissionId)) status = "waiting";
             }
         }
-        return { id: step.id, title: step.title, status, nodeIds, detail: step.phase === "media" ? state.media.filter((item) => step.mediaRefs.includes(item.ref)).map((item) => item.error).filter(Boolean).join("；") || undefined : undefined };
+        return { id: step.id, title: step.title, status, nodeIds, detail: step.phase === "media" ? state.media.filter((item) => step.mediaRefs.includes(item.ref)).map((item) => item.error ? generationErrorMessage(item.error) : "").filter(Boolean).join("；") || undefined : undefined };
     }) };
 }
 
