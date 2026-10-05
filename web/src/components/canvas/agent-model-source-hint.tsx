@@ -27,7 +27,9 @@ export function AgentModelSourceHint({ isAdmin }: { isAdmin: boolean }) {
             <div className="min-w-0 flex-1">
                 <p className="font-semibold text-foreground/85">画布智能体需要后端受管的文本模型渠道</p>
                 <p className="mt-0.5 leading-5 text-foreground/55">
-                    {isAdmin ? "它在后端进程里执行，只认后台受管的渠道模型。请在「后台管理 → 模型渠道」编辑该文本模型，到「积分定价」开启价格档的「可供用户使用」（单价 0 即免费）并保存，再回来选择该模型。" : "它在后端进程里执行，只认管理员在后台配置的模型渠道；浏览器本地保存的个人渠道密钥不会提交给它。"}
+                    {isAdmin
+                        ? "它在后端进程里执行，只认后台受管的渠道模型。请在「后台管理 → 模型渠道」编辑该文本模型，到「积分定价」开启价格档的「可供用户使用」（单价 0 即免费）并保存，再回来选择该模型。"
+                        : "它在后端进程里执行，只认管理员在后台配置的模型渠道；浏览器本地保存的个人渠道密钥不会提交给它。"}
                 </p>
                 {isAdmin ? (
                     <button type="button" className="mt-1.5 inline-flex items-center gap-1 font-semibold text-foreground/80 transition hover:text-foreground" onClick={openAdminChannels}>
