@@ -46,9 +46,16 @@ function copyStoryboardRow(row: StoryboardRow, idMap: ReadonlyMap<string, string
     };
 }
 
-// 副本只能继承内容和用户引用，运行中任务、批次及指向源生成结果的关系必须隔离。
+/**
+ * 副本继承内容和用户引用，但不能继承原节点的任务、批次与结果持久化身份。
+ * @param node 原节点，复制过程不会修改它的元数据。
+ * @param idMap 本次复制的节点 ID 映射，用于更新副本内部引用。
+ * @returns 可独立生成与保存的副本元数据。
+ */
 export function isolateCopiedNodeMetadata(node: CanvasNodeData, idMap: ReadonlyMap<string, string>): CanvasNodeMetadata {
     const metadata = resetGenerationTaskMetadata(node.metadata, node.metadata?.content ? "success" : "idle");
+    // 原节点的提交标记不能证明副本已保存；继承后，普通保存会把新副本误判为未确认结果并排除。
+    delete metadata.generationEffectKeys;
     delete metadata.generationBatches;
     delete metadata.batchRootId;
     delete metadata.batchChildIds;

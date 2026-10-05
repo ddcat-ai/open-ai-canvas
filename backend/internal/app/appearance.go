@@ -48,6 +48,7 @@ const (
 	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
 	defaultAppearancePosterURL = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg"
 	defaultAppearanceHeroTitle = "让一个故事，\n从文字走向银幕。"
+	defaultRedeemPurchaseURL   = "https://wzyp.cn/shop/JPDK4SRD"
 )
 
 type AppearanceSetting struct {
@@ -72,6 +73,7 @@ type AppearanceSetting struct {
 	FooterCopyright           string                `json:"footerCopyright"`
 	ICPFilingEnabled          bool                  `json:"icpFilingEnabled"`
 	ICPFilingNumber           string                `json:"icpFilingNumber"`
+	RedeemPurchaseURL         string                `json:"redeemPurchaseUrl"`
 }
 
 type PublicAppearanceSetting struct {
@@ -96,6 +98,7 @@ type PublicAppearanceSetting struct {
 	FooterCopyright           string              `json:"footerCopyright"`
 	ICPFilingEnabled          bool                `json:"icpFilingEnabled"`
 	ICPFilingNumber           string              `json:"icpFilingNumber"`
+	RedeemPurchaseURL         string              `json:"redeemPurchaseUrl"`
 	LogoConfigured            bool                `json:"logoConfigured"`
 	DarkLogoConfigured        bool                `json:"darkLogoConfigured"`
 	AuthVideoConfigured       bool                `json:"authVideoConfigured"`
@@ -125,6 +128,7 @@ func defaultAppearanceSetting() AppearanceSetting {
 		LogoFrameEnabled:  true,
 		SkinID:            defaultAppearanceSkinID,
 		SkinThemes:        defaultAppearanceSkinThemes(),
+		RedeemPurchaseURL: defaultRedeemPurchaseURL,
 	}
 }
 
@@ -205,6 +209,7 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
+	value.RedeemPurchaseURL = strings.TrimSpace(value.RedeemPurchaseURL)
 	if err := validateAppearanceSetting(value); err != nil {
 		return nil, err
 	}
@@ -443,6 +448,7 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
+	value.RedeemPurchaseURL = strings.TrimSpace(value.RedeemPurchaseURL)
 	return setting, value, nil
 }
 
@@ -520,6 +526,12 @@ func validateAppearanceSetting(value AppearanceSetting) error {
 	}
 	if value.ICPFilingEnabled && value.ICPFilingNumber == "" {
 		return BadAuthRequest("显示备案号前请先填写备案号")
+	}
+	if value.RedeemPurchaseURL != "" {
+		parsed, err := url.Parse(value.RedeemPurchaseURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+			return BadAuthRequest("兑换码购买链接必须是有效的 HTTPS 地址")
+		}
 	}
 	for _, resourceID := range []string{value.LogoResourceID, value.DarkLogoResourceID, value.AuthVideoResourceID, value.AuthVideoPosterResourceID} {
 		if len(resourceID) > 80 {
@@ -704,6 +716,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		FooterCopyright:     effectiveAppearanceCopyright(value),
 		ICPFilingEnabled:    value.ICPFilingEnabled && value.ICPFilingNumber != "",
 		ICPFilingNumber:     value.ICPFilingNumber,
+		RedeemPurchaseURL:   safeAppearancePurchaseURL(value.RedeemPurchaseURL),
 		Configured:          setting != nil,
 		Revision:            revision,
 	}
@@ -741,6 +754,18 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		result.AuthVideoPosterURL = appearanceAssetURL(AppearanceAssetPoster, revision)
 	}
 	return result
+}
+
+func safeAppearancePurchaseURL(value string) string {
+	candidate := strings.TrimSpace(value)
+	if candidate == "" {
+		return ""
+	}
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.String()
 }
 
 func effectiveAppearanceSEOTitle(value AppearanceSetting) string {

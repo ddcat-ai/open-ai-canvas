@@ -4,6 +4,28 @@ export const CONTENT_MODERATION_MESSAGE = "内容审核未通过，本次平台�
 
 const DEFAULT_GENERATION_ERROR_MESSAGE = "生成失败，请稍后重试。";
 const NETWORK_ERROR_MESSAGE = "网络异常。";
+const MODEL_CAPABILITY_ERROR_MESSAGE = "所选模型不支持当前生成方式或输入，请切换模型或调整输入后重试。";
+const MODEL_PARAMETER_ERROR_MESSAGE = "当前模型不支持这组参数或参考素材，请调整输入或切换模型后重试。";
+const MODEL_SERVICE_ERROR_MESSAGE = "模型服务处理失败，请稍后重试或换用其他模型。";
+
+const REASON_MESSAGES: Record<string, string> = {
+    model_price_not_configured: "当前模型暂未配置价格，请换用其他模型或联系管理员。",
+    model_route_unavailable: "当前模型暂时没有可用渠道，请稍后重试或换用其他模型。",
+    provider_request_failed: MODEL_SERVICE_ERROR_MESSAGE,
+    model_catalog_mismatch: "模型配置已更新，请重新选择模型后再试。",
+    invalid_model_selection: "模型选择无效，请重新选择模型后再试。",
+    quota_exceeded: "积分或额度不足，请充值后再试。",
+    rate_limited: "请求过于频繁，请稍后再试。",
+    timeout: "模型服务响应超时，请稍后再试。",
+    bad_gateway: "模型服务暂时不可用，请稍后再试。",
+    unavailable: "模型服务暂时不可用，请稍后再试。",
+    upstream_dns_failed: "模型服务暂时不可用，请稍后再试。",
+    unauthorized: "当前登录状态或权限不足，请重新登录后再试。",
+    forbidden: "当前账号没有执行此操作的权限。",
+    failed_precondition: "当前请求条件不满足，请检查输入或换用其他模型。",
+    conflict: "请求状态已发生变化，请刷新后再试。",
+    internal: "系统暂时无法完成生成，请稍后再试。",
+};
 
 export type GenerationFailureMetadata = {
     errorDetails: string;
@@ -25,21 +47,29 @@ export function generationErrorMessage(error: unknown) {
     const raw = rawGenerationError(error);
     if (isContentModerationError(raw)) return contentModerationMessage(raw);
 
+    const reason = structuredErrorReason(error);
+    if (reason === "model_capability_not_supported") return MODEL_CAPABILITY_ERROR_MESSAGE;
+    if (reason === "invalid_argument" && isModelCapabilityFailure(raw)) return MODEL_CAPABILITY_ERROR_MESSAGE;
+    if (reason === "invalid_argument" && isModelParameterFailure(raw)) return MODEL_PARAMETER_ERROR_MESSAGE;
+    if (reason && REASON_MESSAGES[reason]) return REASON_MESSAGES[reason];
+
     const providerMessage = extractStructuredProviderMessage(raw) || extractWrappedProviderMessage(raw);
     const displayMessage = providerMessage || raw;
     if (isContentModerationError(displayMessage)) return contentModerationMessage(displayMessage);
     const resourceStorageMessage = resourceStorageFailureMessage(raw) || resourceStorageFailureMessage(displayMessage);
     if (resourceStorageMessage) return resourceStorageMessage;
     if (isNetworkFailure(displayMessage)) return NETWORK_ERROR_MESSAGE;
-    if (!providerMessage) {
-        if (!displayMessage.includes("；上游：")) {
-            if (hasHttpStatus(raw, 429)) return "服务当前繁忙，请稍后重试。";
-            if (hasHttpStatus(raw, 401, 403)) return "生成服务鉴权失败，请检查渠道配置。";
-            if (hasHttpStatus(raw, 404)) return "生成服务地址不可用，请检查渠道配置。";
-            if (hasHttpStatus(raw, 500, 502, 503, 504)) return NETWORK_ERROR_MESSAGE;
-        }
+    if (!providerMessage && !keepsProviderDetail(displayMessage)) {
+        if (hasHttpStatus(raw, 429)) return "服务当前繁忙，请稍后重试。";
+        if (hasHttpStatus(raw, 401, 403)) return "生成服务鉴权失败，请检查渠道配置。";
+        if (hasHttpStatus(raw, 404)) return "生成服务地址不可用，请检查渠道配置。";
+        if (hasHttpStatus(raw, 500, 502, 503, 504)) return NETWORK_ERROR_MESSAGE;
         if (containsInfrastructureDetails(raw)) return NETWORK_ERROR_MESSAGE;
     }
+    if (isModelCapabilityFailure(displayMessage)) return MODEL_CAPABILITY_ERROR_MESSAGE;
+    if (isModelParameterFailure(displayMessage)) return MODEL_PARAMETER_ERROR_MESSAGE;
+    if (keepsProviderDetail(displayMessage)) return displayMessage;
+    if (isTechnicalProviderMessage(displayMessage)) return MODEL_SERVICE_ERROR_MESSAGE;
     return displayMessage || DEFAULT_GENERATION_ERROR_MESSAGE;
 }
 
@@ -86,6 +116,39 @@ function rawGenerationError(error: unknown) {
     if (error instanceof Error) return error.message.trim();
     if (typeof error === "string") return error.trim();
     return providerPayloadMessage(error);
+}
+
+function structuredErrorReason(error: unknown): string | undefined {
+    if (!error || typeof error !== "object") return undefined;
+    const record = error as Record<string, unknown>;
+    if (typeof record.reason === "string" && record.reason.trim()) return record.reason.trim().toLowerCase();
+    if (record.cause && record.cause !== error) return structuredErrorReason(record.cause);
+    return undefined;
+}
+
+function isModelCapabilityFailure(value: string) {
+    return /所选模型不支持当前请求|模型不支持当前请求|不支持操作\s+|能力类型不匹配/i.test(value);
+}
+
+function isModelParameterFailure(value: string) {
+    return /不支持参数|超出支持范围|数量需在|至少需要\s+\d+\s+个|暂时无法满足这组输入和参数/i.test(value);
+}
+
+function isTechnicalProviderMessage(value: string) {
+    const text = value.trim();
+    if (!text) return false;
+    if (/(?:provider request failed|invalid_request_error|internal_server_error|bad_request|unauthorized|forbidden|not_found|upstream_error|request failed with status code|http\s*\d{3})/i.test(text)) return true;
+    // 纯英文的 SDK/网关错误通常不是面向终端用户的说明；中文供应商原因仍允许展示。
+    return !/[\u3400-\u9fff]/.test(text) && /^[\w .,:;_/'"()\-]+$/.test(text) && text.length > 18;
+}
+
+function keepsProviderDetail(value: string) {
+    const marker = "；上游：";
+    const index = value.indexOf(marker);
+    if (index < 0) return false;
+    const detail = value.slice(index + marker.length).trim();
+    if (!detail || isNetworkFailure(detail) || containsInfrastructureDetails(detail)) return false;
+    return !/\bHTTP\s*5\d{2}\b/i.test(detail);
 }
 
 function extractStructuredProviderMessage(raw: string) {

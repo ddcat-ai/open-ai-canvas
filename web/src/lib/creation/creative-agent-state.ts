@@ -4,6 +4,7 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { ResponseInputMessage } from "@/services/api/image";
+import { generationErrorMessage } from "@/lib/generation-error";
 import { dynamicCreativePlan, type CreativeDynamicPlan } from "./creative-plan";
 import { normalizeCreativeField } from "./creative-agent-contract";
 import { CREATIVE_SCENARIOS, type CreativeAnswers, type CreativeBrief, type CreativeGenerationItem, type CreativePlan, type CreativeProposal, type CreativeQuestionRequest, type CreativeScenarioId } from "./creative-agent-contract";
@@ -185,6 +186,6 @@ export function creativePlan(state: CreativeAgentState): CreativePlan | undefine
     return { id: state.proposal?.id ?? state.questions!.interactionId, steps: [
         { id: "brief", title: "了解需求", status: state.questions?.status === "pending" ? "waiting" : "completed" },
         { id: "proposal", title: "确认创意方案", status: state.canvasApplied ? "completed" : state.proposal ? "waiting" : "pending" },
-        ...state.media.map((item) => ({ id: item.ref, title: state.proposal?.workflow.nodes.find((node) => node.ref === item.ref)?.title || item.ref, status: item.status === "ready" ? "completed" as const : item.status === "failed" || item.status === "write_failed" ? "failed" as const : item.status === "running" || item.status === "queued" ? "running" as const : item.submissionId ? "waiting" as const : "pending" as const, nodeIds: [item.nodeId], detail: item.error })),
+        ...state.media.map((item) => ({ id: item.ref, title: state.proposal?.workflow.nodes.find((node) => node.ref === item.ref)?.title || item.ref, status: item.status === "ready" ? "completed" as const : item.status === "failed" || item.status === "write_failed" ? "failed" as const : item.status === "running" || item.status === "queued" ? "running" as const : item.submissionId ? "waiting" as const : "pending" as const, nodeIds: [item.nodeId], detail: item.error ? generationErrorMessage(item.error) : undefined })),
     ] };
 }
