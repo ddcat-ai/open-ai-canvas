@@ -161,6 +161,9 @@ func (s *Service) broadcastCloudAgentPiContextPressure(userID, runID string, usa
 // cloudAgentModelStepRetries 是单步模型调用首次失败后的最大重试次数。
 const cloudAgentModelStepRetries = 3
 
+// errCloudAgentAwaitingApproval 运行正在等用户审批，本步模型请求被拒绝（未入队、未计费）。
+var errCloudAgentAwaitingApproval = errors.New("run is waiting for approval")
+
 // errCloudAgentTruncatedToolArguments 标记"模型返回的工具参数不是完整 JSON"：
 // 调用未执行，可以带纠偏上下文重做同一步。
 var errCloudAgentTruncatedToolArguments = errors.New("truncated tool arguments")
@@ -172,6 +175,8 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	// 这些事件也会推进运行 revision。调度模型步骤是 CAS 写入：冲突时重新读取
 	// 最新状态再调度，而不是把整轮判失败。冲突时事务整体回滚，不会产生任务或扣费。
 	var state cloudAgentRuntime
+	// 本步送达的插话正文，随响应交给运行时 session.steer（见 cloud_agent_interjection_pi.go）。
+	var steeringMessages []string
 	for attempt := 0; attempt < 8; attempt++ {
 		run, err := s.repo.CloudAgent(userID, runID)
 		if err != nil {
@@ -184,7 +189,16 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if cloudAgentRunTerminal(run.Status) {
 			return nil, false, fmt.Errorf("run already terminated")
 		}
+		// 等审批期间不接受新的模型步骤。运行时在审批暂停后中止会话是异步的，
+		// 可能抢在中止生效前再请求一步；放它过去会多计一次费，返回的新工具调用
+		// 还会顶掉待审批的调用。这里不入队、不改状态，审批结论照常接管运行。
+		if run.Status == "waiting_approval" && state.Approval != nil {
+			return nil, false, errCloudAgentAwaitingApproval
+		}
 		if cloudAgentStepBudgetExhausted(&state) {
+			// 最终回答之后的插话续步会在这里撞上限；若确实停在最终回答边界，
+			// 按完成收尾而不是把整轮判失败（见 settleCloudAgentPiFinalAnswer）。
+			s.settleCloudAgentPiFinalAnswer(userID, runID)
 			return nil, false, fmt.Errorf("step budget exhausted")
 		}
 		if state.StepLimits, err = s.cloudAgentStepLimits(); err != nil {
@@ -222,12 +236,24 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if len(canonical.Messages) == 0 {
 			return nil, false, fmt.Errorf("no canonical messages")
 		}
+		// 运行时投影回写会洗掉插话来源标记，先补回再送达新插话；送达必须发生在
+		// 入队这次 CAS 写入里（出队、canonical 追加与 delivered 事件同批落库），
+		// 冲突重试时从最新状态重新出队，不会重复送达。压缩摘要请求不参与。
 		if !compactionSummary {
 			state.Canonical = canonical
+			cloudAgentRestoreInterjectionSources(&state)
+			steeringMessages = cloudAgentPiDeliverInterjections(runID, &state)
+			canonical = state.Canonical
 		}
 		if len(correction) > 0 {
 			// 纠偏上下文只用于这一次请求，不写回运行状态，避免下一步重复出现。
 			canonical.Messages = append(append([]map[string]any(nil), canonical.Messages...), correction...)
+		}
+		// 看图后的历史里有 resource: 图片占位，必须随请求带上获准图片清单，
+		// 否则预检以「模型协议引用了未获准的图片」拒绝（见 cloud_agent_pi_image_references.go）。
+		references, refErr := s.cloudAgentPiStepImageReferences(userID, state.Request, &canonical)
+		if refErr != nil {
+			return nil, false, refErr
 		}
 		input := map[string]any{
 			"mode":          "text",
@@ -243,6 +269,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 				"thinking":        cloudAgentPiThinkingEnabled(thinkingLevel),
 				"maxOutputTokens": cloudAgentStepOutputBudget(state.StepLimits, state.BoostStepOutputBudget),
 			},
+		}
+		if len(references) > 0 {
+			input["referenceImages"] = references
 		}
 		req := CreateTaskRequest{
 			ProjectID: state.Request.CanvasID,
@@ -319,7 +348,11 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	} else if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, finishText, finishReasoning, result.ToolCalls); err != nil {
 		return nil, false, err
 	}
-	return map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}, false, nil
+	delivered := map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}
+	if len(steeringMessages) > 0 {
+		delivered["steeringMessages"] = steeringMessages
+	}
+	return delivered, false, nil
 }
 
 // adoptCloudAgentPiModelStep 判断挂着的活动任务能否作为本步结果直接接手。
@@ -350,6 +383,10 @@ func (s *Service) adoptCloudAgentPiModelStep(userID, runID, taskID string) (adop
 
 func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing canonicalAgentRequest) (canonicalAgentRequest, error) {
 	compactionSummaryRequest := cloudAgentPiCompactionSummaryRequest(messages)
+	if !compactionSummaryRequest {
+		// 审批暂停会留下没有结果的并行工具调用，先补齐再转换（见 cloud_agent_pi_unanswered_calls.go）。
+		messages = repairRuntimeUnansweredCalls(messages)
+	}
 	tools, systemPrompt := existing.Tools, existing.SystemPrompt
 	if compactionSummaryRequest {
 		tools, systemPrompt = nil, ""
@@ -365,11 +402,13 @@ func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing ca
 		if len(existing.Messages) == 0 {
 			return canonicalAgentRequest{}, err
 		}
+		existing.Messages = repairCanonicalUnansweredCalls(existing.Messages)
 		return existing, nil
 	}
 	// A projected Pi transcript containing a compaction summary is authoritative,
 	// even though it is shorter than the server's pre-compaction canonical history.
 	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > len(messages) {
+		existing.Messages = repairCanonicalUnansweredCalls(existing.Messages)
 		return existing, nil
 	}
 	canonical.PromptCacheKey = existing.PromptCacheKey

@@ -45,6 +45,7 @@ export default function AppearanceSettingsPage() {
     const [footerCopyright, setFooterCopyright] = useState("");
     const [icpFilingEnabled, setIcpFilingEnabled] = useState(false);
     const [icpFilingNumber, setIcpFilingNumber] = useState("");
+    const [redeemPurchaseUrl, setRedeemPurchaseUrl] = useState("");
     const [files, setFiles] = useState<DraftFiles>(EMPTY_FILES);
     const [resets, setResets] = useState<ResetState>(EMPTY_RESETS);
     const [loading, setLoading] = useState(true);
@@ -79,6 +80,7 @@ export default function AppearanceSettingsPage() {
             normalizeSingleLine(footerCopyright) !== setting?.footerCopyright ||
             icpFilingEnabled !== setting?.icpFilingEnabled ||
             normalizeSingleLine(icpFilingNumber) !== setting?.icpFilingNumber ||
+            normalizeSingleLine(redeemPurchaseUrl) !== setting?.redeemPurchaseUrl ||
             Object.values(files).some(Boolean) ||
             Object.values(resets).some(Boolean));
     const blocker = useBlocker(dirty && !saving && !restoring);
@@ -103,6 +105,7 @@ export default function AppearanceSettingsPage() {
         setFooterCopyright(value.footerCopyright);
         setIcpFilingEnabled(value.icpFilingEnabled);
         setIcpFilingNumber(value.icpFilingNumber);
+        setRedeemPurchaseUrl(value.redeemPurchaseUrl);
         setFiles(EMPTY_FILES);
         setResets(EMPTY_RESETS);
         setLoadError("");
@@ -214,6 +217,7 @@ export default function AppearanceSettingsPage() {
         setFooterCopyright(setting.footerCopyright);
         setIcpFilingEnabled(setting.icpFilingEnabled);
         setIcpFilingNumber(setting.icpFilingNumber);
+        setRedeemPurchaseUrl(setting.redeemPurchaseUrl);
         setFiles(EMPTY_FILES);
         setResets(EMPTY_RESETS);
         Object.values(inputRefs).forEach((ref) => {
@@ -289,6 +293,7 @@ export default function AppearanceSettingsPage() {
         const nextSeoKeywords = normalizeSingleLine(seoKeywords);
         const nextFooterCopyright = normalizeSingleLine(footerCopyright);
         const nextIcpFilingNumber = normalizeSingleLine(icpFilingNumber);
+        const nextRedeemPurchaseUrl = normalizeSingleLine(redeemPurchaseUrl);
         if (!nextBrandName || Array.from(nextBrandName).length > 40) {
             setActiveTab("brand");
             message.error("品牌名称必须为 1 到 40 个字符");
@@ -326,6 +331,16 @@ export default function AppearanceSettingsPage() {
             setActiveTab("footer");
             message.error("显示备案号前请先填写备案号");
             return;
+        }
+        if (nextRedeemPurchaseUrl) {
+            try {
+                const parsed = new URL(nextRedeemPurchaseUrl);
+                if (parsed.protocol !== "https:" || !parsed.host) throw new Error("invalid");
+            } catch {
+                setActiveTab("footer");
+                message.error("兑换码购买链接必须是有效的 HTTPS 地址");
+                return;
+            }
         }
         const skinError = validateSkinDrafts(skinThemes, skinId);
         if (skinError) {
@@ -370,6 +385,7 @@ export default function AppearanceSettingsPage() {
                 footerCopyright: nextFooterCopyright,
                 icpFilingEnabled,
                 icpFilingNumber: nextIcpFilingNumber,
+                redeemPurchaseUrl: nextRedeemPurchaseUrl,
             });
             applySetting(updated);
             commitPublicAppearance(updated.public);
@@ -731,6 +747,9 @@ export default function AppearanceSettingsPage() {
                                                 </Form.Item>
                                                 <Form.Item label="备案号" extra="请填写真实备案号，例如“蜀ICP备XXXXXXXX号”；系统不会替你申请或核验备案。">
                                                     <Input value={icpFilingNumber} maxLength={64} showCount placeholder="例如：蜀ICP备XXXXXXXX号" onChange={(event) => setIcpFilingNumber(event.target.value)} />
+                                                </Form.Item>
+                                                <Form.Item label="兑换码购买链接" extra="填写 HTTPS 购买页面地址；留空则不显示“获取兑换码”入口。">
+                                                    <Input value={redeemPurchaseUrl} maxLength={500} showCount placeholder="例如：https://wzyp.cn/shop/JPDK4SRD" onChange={(event) => setRedeemPurchaseUrl(event.target.value)} />
                                                 </Form.Item>
                                             </Form>
                                             <div className="admin-appearance-logo-frame-option">

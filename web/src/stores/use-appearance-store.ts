@@ -27,6 +27,7 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     footerCopyright: `© ${new Date().getFullYear()} 影策. All rights reserved.`,
     icpFilingEnabled: false,
     icpFilingNumber: "",
+    redeemPurchaseUrl: "",
     logoConfigured: false,
     darkLogoConfigured: false,
     authVideoConfigured: false,
@@ -61,6 +62,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     const seoKeywords = normalizeAppearanceCopy(value?.seoKeywords, "", true);
     const footerCopyright = normalizeAppearanceCopy(value?.footerCopyright, `© ${new Date().getFullYear()} ${resolvedBrandName}. All rights reserved.`);
     const icpFilingNumber = normalizeAppearanceCopy(value?.icpFilingNumber, "", true);
+    const redeemPurchaseUrl = typeof value?.redeemPurchaseUrl === "string" ? safeAppearanceURL(value.redeemPurchaseUrl, "") : "";
     return {
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
@@ -85,6 +87,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         footerCopyright,
         icpFilingEnabled: Boolean(value?.icpFilingEnabled && icpFilingNumber),
         icpFilingNumber,
+        redeemPurchaseUrl,
         logoConfigured: Boolean(value?.logoConfigured),
         darkLogoConfigured: Boolean(value?.darkLogoConfigured),
         authVideoConfigured: customVideo,

@@ -162,7 +162,10 @@ type cloudAgentRuntime struct {
 	PiResumePrompt                 string                                  `json:"piResumePrompt,omitempty"`
 	TransientReferences            map[string]cloudAgentTransientReference `json:"transientReferences,omitempty"`
 	InterjectionIDs                []string                                `json:"interjectionIds,omitempty"`
-	Events                         []CloudAgentEvent                       `json:"events"`
+	// 已送达插话正文的 SHA-256 指纹（有界）。运行时投影回写 canonical 时不带
+	// 来源标记，模型步按指纹补回 user_interjection，见 cloud_agent_interjection_pi.go。
+	DeliveredInterjectionDigests []string          `json:"deliveredInterjectionDigests,omitempty"`
+	Events                       []CloudAgentEvent `json:"events"`
 	// PiAssistantResponses counts successful assistant message_end events from
 	// the Pi runtime. Completion must not be inferred from a clean Node exit:
 	// a provider/session error can otherwise be reported as a successful run.

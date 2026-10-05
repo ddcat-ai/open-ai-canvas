@@ -291,6 +291,10 @@ func cloudAgentWrapMediaAdmissionError(err error) error {
 	if errors.As(err, &admissionErr) {
 		return err
 	}
+	// 能力校验拒绝的参数可以由模型自己改正，见 cloud_agent_media_capability_error.go。
+	if argument := cloudAgentMediaCapabilityArgumentError(err); argument != nil {
+		return argument
+	}
 	retryable := cloudAgentMediaAdmissionRetryable(err)
 	action := "report_to_user"
 	if retryable {

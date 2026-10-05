@@ -20,6 +20,7 @@ import { withRemoteUserDataSyncExclusive } from "./user-data-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { creativeVideoSpecificationError } from "@/lib/creation/creative-agent-state";
 import { updateCreativePlan } from "@/lib/creation/creative-plan";
+import { generationErrorMessage } from "@/lib/generation-error";
 
 export type CreativeCanvasAdapter = { canvasId: string; read: () => CanvasSnapshot; apply: (ops: CanvasOperation[]) => Promise<CanvasSnapshot> };
 export type CreativeControllerView = { run?: CreationRun; state: CreativeAgentState; busy: boolean; hasControl: boolean; error?: string; quote?: CreativeQuote };
@@ -59,7 +60,7 @@ export class CreativeAgentController {
         this.busy = true; this.error = undefined; this.emit();
         try { if (this.run) await this.ensureControl(takeOver); await operation(); }
         catch (error) {
-            if (!this.disposed && !(error instanceof DOMException && error.name === "AbortError")) { this.error = error instanceof Error ? error.message : "操作未完成"; this.emit(); }
+            if (!this.disposed && !(error instanceof DOMException && error.name === "AbortError")) { this.error = generationErrorMessage(error); this.emit(); }
             throw error;
         } finally { this.busy = false; this.emit(); }
     }
@@ -88,7 +89,7 @@ export class CreativeAgentController {
             if (!this.hasControl) {
                 if (!this.busy) void this.ensureControl().then(() => { this.error = undefined; this.emit(); }).catch((error) => {
                     if (this.disposed) return;
-                    this.error = error instanceof Error ? error.message : "连接恢复失败，请重试";
+                    this.error = generationErrorMessage(error);
                     this.emit();
                 });
                 return;
@@ -293,13 +294,13 @@ export class CreativeAgentController {
                 this.upsertSubmission({ ...this.submissions.find((item) => item.id === id)!, taskId: task.id });
                 this.setMedia(media.ref, { taskId: task.id, status: task.status === "succeeded" ? "running" : "queued", error: undefined });
                 await this.save("waiting_task");
-            } catch (error) { this.assertLive(); errors.push(error instanceof Error ? error.message : "提交未确认"); }
+            } catch (error) { this.assertLive(); errors.push(generationErrorMessage(error)); }
         }
         // 等待已提交项，不会因观察失败创建新的任务。
         for (const id of ids) {
             const media = this.state.media.find((item) => item.submissionId === id);
             if (media?.taskId && media.status !== "ready") {
-                try { await this.observeMedia(media); } catch (error) { this.assertLive(); errors.push(error instanceof Error ? error.message : "生成未完成"); }
+                try { await this.observeMedia(media); } catch (error) { this.assertLive(); errors.push(generationErrorMessage(error)); }
             }
         }
         if (errors.length) { await this.save("paused"); throw new Error([...new Set(errors)].join("；")); }
@@ -452,7 +453,7 @@ export class CreativeAgentController {
             task = await this.waitTask(media.taskId!, { signal: this.abort.signal, onTaskUpdate: (task) => { observedStatus = task.status; if (!this.disposed) this.setMedia(media.ref, { status: task.status === "queued" ? "queued" : "running" }); } });
         } catch (error) {
             if (this.abort.signal.aborted) throw error;
-            this.setMedia(media.ref, { status: "failed", failureKind: observedStatus === "failed" || observedStatus === "cancelled" ? "generation" : "observation", error: error instanceof Error ? error.message : "生成失败" }); await this.save("paused"); throw error;
+            this.setMedia(media.ref, { status: "failed", failureKind: observedStatus === "failed" || observedStatus === "cancelled" ? "generation" : "observation", error: generationErrorMessage(error) }); await this.save("paused"); throw error;
         }
         this.guard();
         try {
@@ -473,7 +474,7 @@ export class CreativeAgentController {
                 throw new Error(specificationError);
             }
             this.setMedia(media.ref, { status: "ready", storageKey: output.storageKey, error: undefined }); await this.save("waiting_task");
-        } catch (error) { if (this.abort.signal.aborted) throw error; this.setMedia(media.ref, { status: this.state.media.find((item) => item.ref === media.ref)?.status === "failed" ? "failed" : "write_failed", error: error instanceof Error ? error.message : "资源回写失败" }); await this.save("paused"); throw error; }
+        } catch (error) { if (this.abort.signal.aborted) throw error; this.setMedia(media.ref, { status: this.state.media.find((item) => item.ref === media.ref)?.status === "failed" ? "failed" : "write_failed", error: generationErrorMessage(error) }); await this.save("paused"); throw error; }
     }
     async resume() {
         await this.action(async () => {
@@ -505,7 +506,7 @@ export class CreativeAgentController {
             const errors: string[] = [];
             for (const media of this.state.media) {
                 const submission = this.submissions.find((item) => item.id === media.submissionId);
-                if (submission?.taskId && media.status !== "ready") { this.setMedia(media.ref, { taskId: submission.taskId }); try { await this.observeMedia({ ...media, taskId: submission.taskId }); } catch (error) { this.assertLive(); errors.push(error instanceof Error ? error.message : "生成未完成"); } }
+                if (submission?.taskId && media.status !== "ready") { this.setMedia(media.ref, { taskId: submission.taskId }); try { await this.observeMedia({ ...media, taskId: submission.taskId }); } catch (error) { this.assertLive(); errors.push(generationErrorMessage(error)); } }
             }
             if (errors.length) { await this.save("paused"); throw new Error([...new Set(errors)].join("；")); }
             const approved = this.state.pendingPayment?.filter((id) => this.submissions.some((item) => item.id === id && item.approvedAt));

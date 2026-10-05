@@ -216,6 +216,8 @@ func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cl
 			return cloudAgentSave(current, state)
 		}
 		if phase == "admission" && !submitted {
+			// 工具结果里的原因会脱敏；原始原因只进服务端日志，排查准入失败时以它为准。
+			log.Printf("[Agent] media admission rejected run=%s: %v", run.ID, err)
 			err = cloudAgentWrapMediaAdmissionError(err)
 		}
 		toolName := state.Calls[state.CallIndex].Function.Name
@@ -462,6 +464,7 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 				current.Status = "rejected"
 				current.FailureMessage = ""
 				state.Approval = nil
+				cloudAgentDropInterjections(id, "本轮已结束：已拒绝本次生成", &state)
 				state.event(id, "approval_decided", map[string]any{
 					"approvalId": approvalID,
 					"decision":   decision,
@@ -641,6 +644,7 @@ func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error
 				current.CanvasID, current.ActiveTaskID, current.MediaTaskID = state.Request.CanvasID, state.ActiveTaskID, state.MediaTaskID
 				if firstCancellation {
 					state.event(id, "run_cancelled", map[string]any{"source": "user_request", "activeTaskId": state.ActiveTaskID, "mediaTaskId": state.MediaTaskID, "text": "用户取消接口已接收请求，正在取消关联任务"})
+					cloudAgentDropInterjections(id, "本轮已结束：用户已取消本轮", &state)
 					if saveErr := cloudAgentSave(current, &state); saveErr != nil {
 						// Cancellation must still work if the transcript is oversized.
 						log.Printf("[cloud-agent] cancellation event unavailable for run %s: checkpoint rejected", id)

@@ -26,6 +26,7 @@ export type PublicAppearance = {
     footerCopyright: string;
     icpFilingEnabled: boolean;
     icpFilingNumber: string;
+    redeemPurchaseUrl: string;
     logoConfigured: boolean;
     darkLogoConfigured: boolean;
     authVideoConfigured: boolean;
@@ -57,6 +58,7 @@ export type AdminAppearance = {
     footerCopyright: string;
     icpFilingEnabled: boolean;
     icpFilingNumber: string;
+    redeemPurchaseUrl: string;
     public: PublicAppearance;
     configured: boolean;
     updatedBy?: string;
@@ -107,6 +109,7 @@ export async function updateAdminAppearance(
         | "footerCopyright"
         | "icpFilingEnabled"
         | "icpFilingNumber"
+        | "redeemPurchaseUrl"
     >,
 ) {
     const result = await http.patch<{ setting: AdminAppearance }>("/admin/settings/appearance", input);
