@@ -278,7 +278,9 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 			"mode": map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "prompt": str("完整生成提示词；引用素材时在对应描述中使用 @图片1、@视频1、@音频1，各类型按 referenceNodeIds 中出现顺序独立编号，文本来源不占媒体编号。服务端会为遗漏的已选素材补齐引用标签，不推断素材用途"),
 			"logicalModelId": str("selection.logicalModelId；与channelId/channelModelKey互斥"), "channelId": str("selection.channelId"), "channelModelKey": str("selection.channelModelKey"),
 			"durationSeconds": map[string]any{"type": "integer", "minimum": 0}, "size": str("模型支持的画幅，例如9:16"), "quality": str("目录支持的分辨率或质量"), "videoGenerateAudio": map[string]any{"type": "boolean", "description": "是否生成音频，仅视频可用"},
-			"snapshotHash": str("可省略：省略时用当前画布内容快照"), "nodeId": str("可续用的未提交媒体草稿ID；无草稿时才使用新唯一ID"), "title": str("媒体节点名称"), "sourceNodeId": str("仅文本/镜头提示词节点ID；不要填媒体节点"), "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("画布媒体参考节点ID，按引用顺序")}, "referenceTransientIds": map[string]any{"type": "array", "maxItems": 4, "items": str("由 image_annotation_render 返回的临时参考图ID")},
+			"videoStartFrameNodeId": str("视频首帧图片节点ID，必须同时包含在 referenceNodeIds 中；仅写提示词不会设置首帧"),
+			"videoEndFrameNodeId":   str("视频尾帧图片节点ID，必须同时包含在 referenceNodeIds 中；仅视频可用"),
+			"snapshotHash":          str("可省略：省略时用当前画布内容快照"), "nodeId": str("可续用的未提交媒体草稿ID；无草稿时才使用新唯一ID"), "title": str("媒体节点名称"), "sourceNodeId": str("仅文本/镜头提示词节点ID；不要填媒体节点"), "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("画布媒体参考节点ID，按引用顺序")}, "referenceTransientIds": map[string]any{"type": "array", "maxItems": 4, "items": str("由 image_annotation_render 返回的临时参考图ID")},
 		}, "mode", "prompt", "nodeId", "title", "referenceNodeIds")
 		cloudAgentRequireExplicitMediaModelSelection(tools[len(tools)-1])
 	}

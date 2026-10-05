@@ -222,6 +222,9 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			if err := capability.ApplyPatch(nodes[index], op.Patch); err != nil {
 				return nil, BadAuthRequest(err.Error())
 			}
+			if err := validateCloudAgentVideoFramePatch(nodes[index], nodes, edges, op.Patch); err != nil {
+				return nil, err
+			}
 			afterTitle := cloudAgentApprovalNodeTitle(nodes[index], capability.Label)
 			resultTitle := ""
 			if afterTitle != beforeTitle {
@@ -470,6 +473,12 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	}
 	if args.Size != "" {
 		details = append(details, "画幅："+truncateRunes(args.Size, 40))
+	}
+	if args.VideoStartFrameNodeID != "" {
+		details = append(details, "首帧节点："+truncateRunes(args.VideoStartFrameNodeID, 80))
+	}
+	if args.VideoEndFrameNodeID != "" {
+		details = append(details, "尾帧节点："+truncateRunes(args.VideoEndFrameNodeID, 80))
 	}
 	if args.Quality != "" {
 		details = append(details, "质量："+truncateRunes(args.Quality, 40))

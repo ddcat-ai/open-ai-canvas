@@ -131,16 +131,28 @@ func characterDescriptor() Descriptor {
 	}
 }
 
+// generatedMediaDescriptor 根据节点类型、显示尺寸、生成模式和连接规则创建媒体能力描述。
+// 返回读写字段及创建默认值；首尾帧只对视频开放，避免其他节点接受无效视频参数。
 func generatedMediaDescriptor(nodeType, version, label string, width, height float64, generationMode string, connection ConnectionPolicy) Descriptor {
 	semantics := generatedMediaSemantics(nodeType)
+	fields := editableNodeFields("metadata.generationSpec.prompt", "提示词", "生成合同中的当前提示词；这是 Agent 唯一读写的媒体提示词")
+	readFields := []string{"prompt", "assetTags", "referenceNodeIds"}
+	if generationMode == "video" {
+		for i, frame := range []struct{ key, label string }{
+			{"videoStartFrameNodeId", "首帧"}, {"videoEndFrameNodeId", "尾帧"},
+		} {
+			fields[frame.key] = PatchField{Path: "metadata." + frame.key, Kind: patchKindString, Label: frame.label, Order: 40 + i, MaxRunes: 80, Description: "已连接的图片节点ID；空字符串取消选择，提示词不代替帧选择"}
+			readFields = append(readFields, frame.key)
+		}
+	}
 	return Descriptor{
 		Type: nodeType, Version: version, Label: label, DefaultWidth: width, DefaultHeight: height,
 		Purpose: semantics.Purpose, GoodFor: semantics.GoodFor, NotIdealFor: semantics.NotIdealFor,
 		Tradeoffs: semantics.Tradeoffs, Actions: semantics.Actions,
 		InputKind: nodeType, GenerationMode: generationMode, Connection: connection, CanUpdate: true,
-		SummaryFields:  []string{"prompt", "assetTags", "referenceNodeIds"},
-		DetailFields:   []string{"prompt", "assetTags", "referenceNodeIds"},
-		PatchFields:    editableNodeFields("metadata.generationSpec.prompt", "提示词", "生成合同中的当前提示词；这是 Agent 唯一读写的媒体提示词"),
+		SummaryFields:  readFields,
+		DetailFields:   readFields,
+		PatchFields:    fields,
 		CreateMetadata: func(prompt string) map[string]any { return generatedMetadata(generationMode, prompt) },
 	}
 }
