@@ -138,6 +138,14 @@ async function run() {
       };
       void (async () => {
         stream.push({ type: "start", partial });
+        // 审批暂停时 session.abort() 是异步生效的，SDK 可能在它生效前就开下一轮。
+        // 这一轮不能发给服务端：运行正在等审批，再跑一步会多计一次费，
+        // 新的工具调用还会和待审批的调用对不上，让整轮以检查点校验失败收场。
+        if (pausedForApproval) {
+          stream.push({ type: "error", reason: "aborted", error: { ...partial, stopReason: "aborted", errorMessage: "paused for approval" } });
+          stream.end();
+          return;
+        }
         try {
           const purpose = activeCompaction?.phase === "summarizing" ? "compaction" : "conversation";
           // Deliver lifecycle events/snapshots before scheduling the next request.

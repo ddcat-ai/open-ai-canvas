@@ -351,6 +351,12 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		},
 	})
 	if err != nil {
+		// 已经因审批暂停的会话，收尾阶段再报错不影响运行：状态停在等审批，
+		// 由审批结论接管。把它当失败处理会让用户还没来得及审批就整轮中断。
+		if pausedForApproval.Load() && !errors.Is(err, context.Canceled) {
+			log.Printf("[Agent] session error after approval pause ignored run=%s: %v", runID, err)
+			return nil
+		}
 		return err
 	}
 

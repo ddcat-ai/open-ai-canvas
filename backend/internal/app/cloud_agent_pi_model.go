@@ -161,6 +161,9 @@ func (s *Service) broadcastCloudAgentPiContextPressure(userID, runID string, usa
 // cloudAgentModelStepRetries 是单步模型调用首次失败后的最大重试次数。
 const cloudAgentModelStepRetries = 3
 
+// errCloudAgentAwaitingApproval 运行正在等用户审批，本步模型请求被拒绝（未入队、未计费）。
+var errCloudAgentAwaitingApproval = errors.New("run is waiting for approval")
+
 // errCloudAgentTruncatedToolArguments 标记"模型返回的工具参数不是完整 JSON"：
 // 调用未执行，可以带纠偏上下文重做同一步。
 var errCloudAgentTruncatedToolArguments = errors.New("truncated tool arguments")
@@ -183,6 +186,12 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		}
 		if cloudAgentRunTerminal(run.Status) {
 			return nil, false, fmt.Errorf("run already terminated")
+		}
+		// 等审批期间不接受新的模型步骤。运行时在审批暂停后中止会话是异步的，
+		// 可能抢在中止生效前再请求一步；放它过去会多计一次费，返回的新工具调用
+		// 还会顶掉待审批的调用。这里不入队、不改状态，审批结论照常接管运行。
+		if run.Status == "waiting_approval" && state.Approval != nil {
+			return nil, false, errCloudAgentAwaitingApproval
 		}
 		if cloudAgentStepBudgetExhausted(&state) {
 			return nil, false, fmt.Errorf("step budget exhausted")
