@@ -141,7 +141,7 @@ func generatedMediaDescriptor(nodeType, version, label string, width, height flo
 		for i, frame := range []struct{ key, label string }{
 			{"videoStartFrameNodeId", "首帧"}, {"videoEndFrameNodeId", "尾帧"},
 		} {
-			fields[frame.key] = PatchField{Path: "metadata." + frame.key, Kind: patchKindString, Label: frame.label, Order: 40 + i, MaxRunes: 80, Description: "已连接的图片节点ID；空字符串取消选择，提示词不代替帧选择"}
+			fields[frame.key] = PatchField{Path: "metadata." + frame.key, Kind: patchKindString, Label: frame.label, Order: 40 + i, MaxRunes: 80, Description: "已连接图片ID；空字符串取消"}
 			readFields = append(readFields, frame.key)
 		}
 	}

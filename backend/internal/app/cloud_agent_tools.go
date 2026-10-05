@@ -256,7 +256,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 				{"properties": map[string]any{"type": map[string]any{"const": "connect_nodes"}}, "required": []string{"fromNodeId", "toNodeId"}},
 			},
 		}
-		add("canvas_apply_ops", "创建空白节点、修改提示词或建立引用连线，不提交生成任务、不产生生成费用；先读取画布并传 snapshotHash。提交媒体生成使用 generate_media。每次最多20项，禁止删除、任意 metadata 和媒体 URL。每项都需要 type 和 id：add_node 还需要 nodeType（可给 x/y 指定位置；省略坐标时服务端按画布内容自动落位，不会叠在原点），update_node 还需要按节点能力清单填写 patch（可含 x/y 移动节点），connect_nodes 还需要 fromNodeId 与 toNodeId。分镜脚本的镜头级关联必须把 canvas_get_state 或 canvas_read_storyboard 返回的 rowId 写成 fromHandleId/toHandleId 的 row:<rowId>；整表设定使用 storyboard:context。连线是生成输入关系，不会改变已提交任务的输入；来源须 canSource，目标须 canTarget 且接受来源 inputKind，能力以注册表为准。批量整理位置用 canvas_arrange_nodes，不要用几十项 update_node 手工算坐标。", map[string]any{"snapshotHash": str("canvas_get_state返回的snapshotHash"), "ops": map[string]any{"type": "array", "maxItems": 20, "items": opItem}}, "snapshotHash", "ops")
+		add("canvas_apply_ops", "创建空白节点、编辑或连线，不生成、不收费；先读画布传 snapshotHash。生成用 generate_media。每次最多20项，禁止删除、任意 metadata 和媒体 URL。操作必填字段见 schema；add_node 可用 x/y 定位，省略时自动排位；update_node 按节点能力填写 patch，可用 x/y 移动或设置视频首尾帧。分镜脚本的镜头级关联必须把 canvas_get_state 或 canvas_read_storyboard 返回的 rowId 写成 fromHandleId/toHandleId 的 row:<rowId>；整表设定使用 storyboard:context。连线是生成输入关系，不会改变已提交任务的输入；来源须 canSource，目标须 canTarget 且接受来源 inputKind，能力以注册表为准。批量排位用 canvas_arrange_nodes。", map[string]any{"snapshotHash": str("canvas_get_state返回的snapshotHash"), "ops": map[string]any{"type": "array", "maxItems": 20, "items": opItem}}, "snapshotHash", "ops")
 		add("canvas_arrange_nodes", "整理画布节点位置：只改坐标，不改内容、不建连线、不增删节点，先读画布并传 snapshotHash。mode 省略即 auto（有连线按依赖分层，否则按媒体类型分区）。groups 为横向分带（label 展示名，可覆盖整组 mode）。nodeIds 省略则整理全部可整理节点（跳过锁定节点、容器、批次子节点与已归属背板者）。align 对齐/等距，dryRun 只预演；一次最多 50 个节点，只挪单个节点用 update_node 的 x/y。", map[string]any{
 			"snapshotHash": str("最近一次画布读取的 snapshotHash"),
 			"nodeIds":      map[string]any{"type": "array", "maxItems": cloudAgentArrangeMaxNodes, "items": str("节点ID；省略=全部可整理")},
@@ -278,8 +278,8 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 			"mode": map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "prompt": str("完整生成提示词；引用素材时在对应描述中使用 @图片1、@视频1、@音频1，各类型按 referenceNodeIds 中出现顺序独立编号，文本来源不占媒体编号。服务端会为遗漏的已选素材补齐引用标签，不推断素材用途"),
 			"logicalModelId": str("selection.logicalModelId；与channelId/channelModelKey互斥"), "channelId": str("selection.channelId"), "channelModelKey": str("selection.channelModelKey"),
 			"durationSeconds": map[string]any{"type": "integer", "minimum": 0}, "size": str("模型支持的画幅，例如9:16"), "quality": str("目录支持的分辨率或质量"), "videoGenerateAudio": map[string]any{"type": "boolean", "description": "是否生成音频，仅视频可用"},
-			"videoStartFrameNodeId": str("视频首帧图片节点ID，必须同时包含在 referenceNodeIds 中；仅写提示词不会设置首帧"),
-			"videoEndFrameNodeId":   str("视频尾帧图片节点ID，必须同时包含在 referenceNodeIds 中；仅视频可用"),
+			"videoStartFrameNodeId": str("视频首帧图片ID，须在 referenceNodeIds 中"),
+			"videoEndFrameNodeId":   str("视频尾帧图片ID，须在 referenceNodeIds 中"),
 			"snapshotHash":          str("可省略：省略时用当前画布内容快照"), "nodeId": str("可续用的未提交媒体草稿ID；无草稿时才使用新唯一ID"), "title": str("媒体节点名称"), "sourceNodeId": str("仅文本/镜头提示词节点ID；不要填媒体节点"), "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("画布媒体参考节点ID，按引用顺序")}, "referenceTransientIds": map[string]any{"type": "array", "maxItems": 4, "items": str("由 image_annotation_render 返回的临时参考图ID")},
 		}, "mode", "prompt", "nodeId", "title", "referenceNodeIds")
 		cloudAgentRequireExplicitMediaModelSelection(tools[len(tools)-1])
