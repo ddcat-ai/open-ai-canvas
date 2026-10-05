@@ -27,7 +27,7 @@ func ValidateCustomRelayURL(rawURL string) (*url.URL, error) {
 }
 
 func OutboundHTTPClient(timeout time.Duration) *http.Client {
-	return outbound.OutboundHTTPClient(timeout)
+	return outbound.ModelMediaHTTPClient(timeout)
 }
 
 func ApplyDefaultOutboundHeaders(req *http.Request) {

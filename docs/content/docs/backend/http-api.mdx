@@ -5,6 +5,10 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 系统渠道与媒体下载重定向
+
+系统渠道请求及媒体下载仅允许 GET/HEAD 自动重定向；POST 等写入请求遇到重定向直接失败，避免 307/308 重发请求体。GET/HEAD 跨来源（协议、主机或有效端口不同）时清除全部请求头，防止自定义凭据泄漏；后续跳回原来源也不恢复凭据。同源读取保留请求头，每跳继续执行现有地址校验及次数限制。自定义渠道中转仍拒绝所有重定向。
+
 ## AutoDL 视频画面规格配置
 
 渠道模型的 `capabilityConfig.video.resolutions` 与 `defaultResolution` 直接表示所选完整分辨率与默认值，始终生效；不再使用或返回 `customSizeEnabled`、`customScreenSpec`。AutoDL v2.3.0 未声明独立比例参数，因此 `ratios` 为空、`defaultRatio` 为空字符串，横竖与方形由完整分辨率标签表达。

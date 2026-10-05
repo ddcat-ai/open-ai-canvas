@@ -96,6 +96,16 @@ func ValidateCustomRelayURL(rawURL string) (*url.URL, error) {
 }
 
 func OutboundHTTPClient(timeout time.Duration) *http.Client {
+	return outboundHTTPClient(timeout, false)
+}
+
+// ModelMediaHTTPClient protects provider requests and media downloads without
+// changing the redirect contracts of storage SDKs or login integrations.
+func ModelMediaHTTPClient(timeout time.Duration) *http.Client {
+	return outboundHTTPClient(timeout, true)
+}
+
+func outboundHTTPClient(timeout time.Duration, protectRedirects bool) *http.Client {
 	return &http.Client{
 		Transport: outboundTransport,
 		Timeout:   timeout,
@@ -103,10 +113,38 @@ func OutboundHTTPClient(timeout time.Duration) *http.Client {
 			if len(via) >= maxOutboundRedirects {
 				return errors.New("外部服务重定向次数过多")
 			}
+			if protectRedirects && (len(via) == 0 || (via[0].Method != http.MethodGet && via[0].Method != http.MethodHead)) {
+				return errors.New("外部服务不允许重定向写入请求")
+			}
+			// Go copies the original headers again on each hop. Once the chain
+			// leaves its origin, never restore arbitrary provider credentials,
+			// even if a later redirect returns to the original origin.
+			if protectRedirects {
+				for _, previous := range via {
+					if !sameRedirectOrigin(previous.URL, req.URL) {
+						req.Header = make(http.Header)
+						req.Host = ""
+						break
+					}
+				}
+			}
 			_, err := ValidateOutboundURL(req.URL.String())
 			return err
 		},
 	}
+}
+
+func sameRedirectOrigin(a, b *url.URL) bool {
+	port := func(u *url.URL) string {
+		if p := u.Port(); p != "" {
+			return p
+		}
+		if strings.EqualFold(u.Scheme, "https") {
+			return "443"
+		}
+		return "80"
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Hostname(), b.Hostname()) && port(a) == port(b)
 }
 
 func CustomRelayHTTPClient(timeout time.Duration) *http.Client {
