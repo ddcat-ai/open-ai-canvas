@@ -78,6 +78,16 @@ type CloudAgentPanelProps = {
 };
 type AgentPanelView = "chat" | "history" | "settings";
 
+function approvalStateFromRun(nextRun: AgentRun | null): ApprovalState | null {
+    const approval = nextRun?.approval;
+    if (!approval?.approvalId || approval.decision) return null;
+    return {
+        approvalId: approval.approvalId,
+        detail: approval,
+        reason: approval.reason || "",
+    };
+}
+
 export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, selectedNodeIds, references, open, prefillRequest, onOpen, onCollapse, onFocusNode, canvasNodes, runningNodeId }: CloudAgentPanelProps) {
     const userId = useUserStore((state) => state.user?.id);
     const theme = canvasThemes[useActiveTheme()];
@@ -484,6 +494,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                     setActiveConversationId(current.id);
                     setMessages(current.messages);
                     setRun(current.run);
+                    setApproval(approvalStateFromRun(current.run));
                     setPrompt(current.draft || "");
                     setPermissionMode(current.permissionMode);
                     setSelectedSkillIds(current.skillIds || []);
@@ -588,6 +599,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             const snapshot = (await getAgentRun(activeRun.id, AbortSignal.timeout(10_000))).run;
             if (currentScope.current !== scope) return;
             setRun(snapshot);
+            setApproval(approvalStateFromRun(snapshot));
             if (!snapshot.cleanupPending && ["completed", "failed", "cancelled", "rejected"].includes(snapshot.status)) {
                 setConnectionStatus("connected");
                 setMessages((current) =>
@@ -771,7 +783,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             const snapshot = await getAgentRun(activeRun.id, AbortSignal.timeout(5_000));
             if (currentScope.current === conversationScope) {
                 setRun((current) => (current?.id === activeRun.id ? snapshot.run : current));
-                if (!snapshot.run.approval) setApproval(null);
+                setApproval(approvalStateFromRun(snapshot.run));
                 setConnectionEpoch((value) => value + 1);
             }
         } catch (cause) {
@@ -900,10 +912,10 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         setApprovalSubmitting(false);
         setActiveConversationId(conversation.id);
         setRun(conversation.run);
+        setApproval(approvalStateFromRun(conversation.run));
         setMessages(conversation.messages);
         setPermissionMode(conversation.permissionMode);
         setSelectedSkillIds(conversation.skillIds || []);
-        setApproval(null);
         setPrompt(conversation.draft || "");
         if (conversation.model) setModel(conversation.model);
         setView("chat");
