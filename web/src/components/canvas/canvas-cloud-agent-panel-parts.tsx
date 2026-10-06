@@ -358,6 +358,7 @@ export function AgentConversation({
     approval,
     approvalTargetGenerating,
     approvalSubmitting,
+    approvalBlocked,
     nodeCount,
     onChooseSkill,
     onDraftPrompt,
@@ -373,6 +374,7 @@ export function AgentConversation({
     approval: ApprovalState | null;
     approvalTargetGenerating?: CanvasNodeData;
     approvalSubmitting: boolean;
+    approvalBlocked: boolean;
     nodeCount: number;
     onChooseSkill: () => void;
     onDraftPrompt: (prompt: string) => void;
@@ -438,6 +440,7 @@ export function AgentConversation({
                         approval={approval}
                         theme={theme}
                         submitting={approvalSubmitting}
+                        blocked={approvalBlocked}
                         targetGenerating={approvalTargetGenerating}
                         onFocusNode={onFocusNode}
                         onReasonChange={onApprovalReasonChange}
@@ -521,6 +524,7 @@ export function ApprovalCard({
     approval,
     theme,
     submitting,
+    blocked,
     targetGenerating,
     onFocusNode,
     onReasonChange,
@@ -530,6 +534,8 @@ export function ApprovalCard({
     approval: ApprovalState;
     theme: CanvasTheme;
     submitting: boolean;
+    /** 事件流未连接时不能提交决定，但不应伪装成“正在提交”。 */
+    blocked: boolean;
     /** 目标节点已在画布上直接生成：禁用“同意执行”，等待后端关闭本次审批。 */
     targetGenerating?: CanvasNodeData;
     onFocusNode?: (nodeId: string) => void;
@@ -589,13 +595,18 @@ export function ApprovalCard({
                     你已在节点《{targetGenerating.title || "未命名节点"}》上直接提交了生成，Agent 不会重复提交；本次审批会自动关闭。
                 </p>
             ) : null}
+            {blocked && !submitting ? (
+                <p className="canvas-agent-approval-description" role="status" style={{ color: theme.node.muted }}>
+                    Agent 连接尚未确认，当前不能提交审批；连接恢复后再点击即可。
+                </p>
+            ) : null}
             <div className="canvas-agent-approval-actions">
-                <button type="button" className="canvas-agent-approval-reject" disabled={submitting} onClick={onReject}>
+                <button type="button" className="canvas-agent-approval-reject" disabled={submitting || blocked} onClick={onReject}>
                     暂不执行
                 </button>
-                <button type="button" className="canvas-agent-approval-approve" disabled={submitting || Boolean(targetGenerating)} onClick={() => onApprove(mediaSettings)}>
+                <button type="button" className="canvas-agent-approval-approve" disabled={submitting || blocked || Boolean(targetGenerating)} onClick={() => onApprove(mediaSettings)}>
                     {submitting ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
-                    {submitting ? "正在提交" : targetGenerating ? "已在节点中生成" : "同意执行"}
+                    {submitting ? "正在提交" : blocked ? "等待连接确认" : targetGenerating ? "已在节点中生成" : "同意执行"}
                 </button>
             </div>
         </section>
