@@ -530,6 +530,9 @@ export default function AppearanceSettingsPage() {
                                                         onChange={(event) => setBrandSlug(event.target.value.toLocaleLowerCase().replace(/[^a-z0-9-]/g, ""))}
                                                     />
                                                 </Form.Item>
+                                                <Form.Item label="兑换码购买链接" extra="填写 HTTPS 购买页面地址；留空则不显示“获取兑换码”入口。">
+                                                    <Input value={redeemPurchaseUrl} maxLength={500} showCount placeholder="例如：https://wzyp.cn/shop/xxx" onChange={(event) => setRedeemPurchaseUrl(event.target.value)} />
+                                                </Form.Item>
                                             </Form>
                                             <div className="admin-appearance-brand-logo admin-appearance-logo-stack">
                                                 <AssetPicker
@@ -747,9 +750,6 @@ export default function AppearanceSettingsPage() {
                                                 </Form.Item>
                                                 <Form.Item label="备案号" extra="请填写真实备案号，例如“蜀ICP备XXXXXXXX号”；系统不会替你申请或核验备案。">
                                                     <Input value={icpFilingNumber} maxLength={64} showCount placeholder="例如：蜀ICP备XXXXXXXX号" onChange={(event) => setIcpFilingNumber(event.target.value)} />
-                                                </Form.Item>
-                                                <Form.Item label="兑换码购买链接" extra="填写 HTTPS 购买页面地址；留空则不显示“获取兑换码”入口。">
-                                                    <Input value={redeemPurchaseUrl} maxLength={500} showCount placeholder="例如：https://wzyp.cn/shop/JPDK4SRD" onChange={(event) => setRedeemPurchaseUrl(event.target.value)} />
                                                 </Form.Item>
                                             </Form>
                                             <div className="admin-appearance-logo-frame-option">

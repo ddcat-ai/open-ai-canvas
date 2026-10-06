@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/outbound/outboundtest"
 	"infinite-canvas/backend/internal/repository"
 
 	"gorm.io/driver/sqlite"
@@ -470,6 +471,7 @@ func TestNormalizeAdminChannelModelDeleteIDsRequiresBoundedSelection(t *testing.
 }
 
 func TestResolveProviderConfigMapsSKUToProviderModel(t *testing.T) {
+	outboundtest.PublicDNS(t, "ark.cn-beijing.volces.com")
 	svc, db := newChannelModelTestService(t)
 	svc.dataDir = t.TempDir()
 	channel := model.ModelChannel{

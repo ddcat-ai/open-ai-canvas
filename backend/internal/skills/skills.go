@@ -108,14 +108,17 @@ type SkillCategory struct {
 }
 
 type SkillListRequest struct {
-	Page                 int
-	PageSize             int
-	Scope                string
-	Search               string
-	Tag                  string
-	LibraryCategoryID    string
-	LibraryUncategorized bool
-	Sort                 string
+	PlatformRootID        string
+	PlatformCategoryID    string
+	PlatformUncategorized bool
+	Page                  int
+	PageSize              int
+	Scope                 string
+	Search                string
+	Tag                   string
+	LibraryCategoryID     string
+	LibraryUncategorized  bool
+	Sort                  string
 }
 
 type SkillList struct {
@@ -141,6 +144,14 @@ type SkillMutationRequest struct {
 
 func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error) {
 	req = normalizeSkillListRequest(req)
+	categoryID, uncategorized, err := s.curationFilter(req)
+	if err != nil {
+		return nil, err
+	}
+	rootID, err := s.curationRootFilter(req.PlatformRootID)
+	if err != nil {
+		return nil, err
+	}
 	if req.LibraryCategoryID != "" && req.LibraryUncategorized {
 		return nil, kernel.BadAuthRequest("技能库分类与未分类筛选不能同时使用")
 	}
@@ -150,6 +161,8 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 		}
 	}
 	rows, total, err := s.repo.Skills(repository.SkillListFilter{
+		PlatformRootID:     rootID,
+		PlatformCategoryID: categoryID, PlatformUncategorized: uncategorized,
 		UserID:               userID,
 		Scope:                req.Scope,
 		Search:               req.Search,

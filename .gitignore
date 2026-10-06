@@ -18,6 +18,7 @@ docs/content/docs/plugins/*
 # Keep the task stability runbook versioned without unignoring generated docs.
 !docs/content/docs/backend/
 docs/content/docs/backend/*
+!docs/content/docs/backend/skill-curation.mdx
 !docs/content/docs/backend/task-runtime-stability.mdx
 !docs/content/docs/backend/agent-prompt-policy.mdx
 !docs/content/docs/backend/canvas-agent-appearance.mdx

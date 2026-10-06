@@ -1378,40 +1378,57 @@ func TestRunOpenAIImageTaskUsesMultipartEditContract(t *testing.T) {
 
 func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/images/edits" {
-			t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
-		}
-		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
-			t.Errorf("Content-Type = %q, want application/json", contentType)
-		}
-		var body grokImageRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if body.Model != "grok-imagine-image-quality" || body.N != 1 || body.ResponseFormat != "url" {
-			t.Fatalf("request body = %#v", body)
-		}
-		if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
-			t.Fatalf("image = %#v", body.Image)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.com/result.png"}]}`))
-	}))
-	defer server.Close()
+	// response_format 开关（#692）：支持时请求 b64_json，关闭时回落 url。
+	for _, tc := range []struct {
+		name           string
+		responseFormat bool
+		wantFormat     string
+		reply          string
+		wantDataURL    string
+	}{
+		{name: "b64_json", responseFormat: true, wantFormat: "b64_json", reply: `{"data":[{"b64_json":"aGVsbG8="}]}`, wantDataURL: "data:image/png;base64,aGVsbG8="},
+		{name: "url", responseFormat: false, wantFormat: "url", reply: `{"data":[{"url":"https://example.com/result.png"}]}`, wantDataURL: "https://example.com/result.png"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/images/edits" {
+					t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
+				}
+				if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+					t.Errorf("Content-Type = %q, want application/json", contentType)
+				}
+				var body grokImageRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode request body: %v", err)
+				}
+				if body.Model != "grok-imagine-image-quality" || body.N != 1 || body.ResponseFormat != tc.wantFormat {
+					t.Errorf("request body = %#v", body)
+				}
+				if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
+					t.Errorf("image = %#v", body.Image)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.reply))
+			}))
+			defer server.Close()
 
-	result, err := runImageTask(context.Background(), canvasGenerationInput{
-		Mode:            "image",
-		Prompt:          "edit the reference",
-		Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "grok-imagine-image-quality", InterfaceType: "grok-image"},
-		ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}},
-	})
-	if err != nil {
-		t.Fatalf("runImageTask() error = %v", err)
-	}
-	images, _ := result["images"].([]map[string]string)
-	if len(images) != 1 || images[0]["dataUrl"] != "https://example.com/result.png" {
-		t.Fatalf("images = %#v", result["images"])
+			profile := DefaultImageCapabilityConfig("grok-image", "grok-imagine-image-quality")
+			profile.ResponseFormat.Supported = tc.responseFormat
+			result, err := runImageTask(context.Background(), canvasGenerationInput{
+				Mode:            "image",
+				Prompt:          "edit the reference",
+				Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "grok-imagine-image-quality", InterfaceType: "grok-image"},
+				ImageCapability: profile,
+				ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}},
+			})
+			if err != nil {
+				t.Fatalf("runImageTask() error = %v", err)
+			}
+			images, _ := result["images"].([]map[string]string)
+			if len(images) != 1 || images[0]["dataUrl"] != tc.wantDataURL {
+				t.Fatalf("images = %#v", result["images"])
+			}
+		})
 	}
 }
 

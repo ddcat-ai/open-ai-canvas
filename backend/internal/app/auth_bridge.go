@@ -134,6 +134,10 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Login(req)
 }
 
+func (s *Service) LoginRateLimitSubject(account string) (string, error) {
+	return s.authDomain().LoginRateLimitSubject(account)
+}
+
 func (s *Service) Logout(cookieValue string) error {
 	return s.authDomain().Logout(cookieValue)
 }

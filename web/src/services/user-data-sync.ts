@@ -1,3 +1,5 @@
+import { canonicalize } from "json-canonicalize";
+import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import {
     deleteRemoteAssets,
     deleteRemoteCanvasProject,
@@ -18,14 +20,14 @@ import { appQueryClient } from "@/lib/query-client";
 import { parseAssetRecordList } from "@/lib/asset-record";
 import { assetForRemoteSync } from "@/lib/asset-remote-sync";
 import type { Asset } from "@/stores/use-asset-store";
-import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
+import { flushAssetStorePersistence, getGenerationAssetDefaults, useAssetStore } from "@/stores/use-asset-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { repairMissingCanvasAssets, repairMissingCanvasVideoPreviews, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
-import { applyAgentCanvasPatch, mergeAgentCanvasEditor, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
+import { applyAgentCanvasPatch, mergeAgentCanvasEditor, mergeThreeWayValue, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
 import { collectLocalMediaKeys, ensureRemoteResourceReferences } from "./user-data-sync-media";
 
 export { numberValue } from "./user-data-sync-media";
@@ -790,13 +792,101 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     const dirtyAssets = currentAssets.filter((asset) => !sameEntitySnapshot(acknowledgedAssets.get(asset.id), asset));
     if (!dirtyProjects.length && !dirtyAssets.length) return;
 
+    const adoptedAssetIds = new Set<string>();
+    const mergedAssets = new Map<string, Asset>();
+    const assetSyncEpoch = sessionEpoch;
+    for (const source of dirtyAssets) {
+        const baseline = acknowledgedAssets.get(source.id);
+        if (!baseline) {
+            // 空缓存重建后也可能已有用户编辑；用实际生成默认值三方合并，不能整笔覆盖。
+            let remote: Asset;
+            try {
+                remote = (await getRemoteAsset(source.id)).asset;
+            } catch (error) {
+                if (assetSyncEpoch !== sessionEpoch) throw new Error("账号已切换，已停止保存素材");
+                if (error instanceof ApiError && error.status === 404) continue;
+                throw error;
+            }
+            if (assetSyncEpoch !== sessionEpoch) throw new Error("账号已切换，已停止保存素材");
+            const current = useAssetStore.getState().assets.find((asset) => asset.id === source.id);
+            if (!sameEntitySnapshot(current, source)) throw new Error("素材仍在编辑，请重新同步");
+            const [asset] = parseAssetRecordList([remote]);
+            const defaults = getGenerationAssetDefaults(source.id);
+            let merged: Asset;
+            let edited: boolean;
+            try {
+                const contextKeys = ["clientContext", "conversationId", "messageId", "batchIndex"];
+                // 创建/更新时间是各端记账信息，不属于用户编辑的字段。
+                const content = (value: Asset): Asset => {
+                    let result = { ...value, createdAt: asset.createdAt, updatedAt: asset.updatedAt };
+                    if (!defaults) return result;
+                    // 客户端上下文不是素材编辑；保留 projectIds 等业务元数据参与合并。
+                    const metadata = { ...result.metadata };
+                    for (const key of contextKeys) delete metadata[key];
+                    result = { ...result, metadata };
+                    if (result.kind === "image" || result.kind === "video" || result.kind === "audio") {
+                        const resourceId = resourceIdFromStorageKey(result.data.storageKey);
+                        if (resourceId) {
+                            // 同一不可变资源的授权/缓存 URL 不代表编辑；独立封面仍参与比较。
+                            const url = resourceFileUrl(resourceId);
+                            const displayUrl = result.kind === "image" ? result.data.dataUrl : result.data.url;
+                            const coverUrl = result.coverUrl === displayUrl ? (result.kind === "image" ? url : "") : result.coverUrl;
+                            result = result.kind === "image"
+                                ? { ...result, coverUrl, data: { ...result.data, dataUrl: url } }
+                                : result.kind === "video"
+                                  ? { ...result, coverUrl, data: { ...result.data, url } }
+                                  : { ...result, coverUrl, data: { ...result.data, url } };
+                        }
+                    }
+                    return result;
+                };
+                // 无法证明生成默认值时保持保守；刷新后的旧缓存不能充当编辑基线。
+                const remoteContent = content(asset);
+                const mergedContent = mergeThreeWayValue(content(source), defaults ? content(defaults) : undefined, remoteContent) as Asset;
+                edited = canonicalize(remoteContent) !== canonicalize(mergedContent);
+                // 投影只用于判断编辑；未改字段保留远端原值，改动字段取本机真实 payload。
+                const applyEdits = (stored: unknown, local: unknown, before: unknown, after: unknown): unknown => {
+                    if (canonicalize(before) === canonicalize(after)) return stored;
+                    if (before && after && typeof before === "object" && typeof after === "object" && !Array.isArray(before) && !Array.isArray(after)) {
+                        const result = { ...(stored as Record<string, unknown>) };
+                        for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+                            const value = applyEdits(result[key], (local as Record<string, unknown>)?.[key], (before as Record<string, unknown>)[key], (after as Record<string, unknown>)[key]);
+                            if (value === undefined) delete result[key];
+                            else result[key] = value;
+                        }
+                        return result;
+                    }
+                    return local;
+                };
+                merged = applyEdits(asset, source, remoteContent, mergedContent) as Asset;
+                if (defaults) {
+                    const metadata = { ...merged.metadata };
+                    for (const key of contextKeys) {
+                        if (metadata[key] === undefined && source.metadata?.[key] !== undefined) metadata[key] = source.metadata[key];
+                    }
+                    merged = { ...merged, metadata };
+                }
+            } catch {
+                throw assetRemoteVersionConflict();
+            }
+            acknowledgedAssets.set(source.id, edited ? asset : merged);
+            verifiedAssets.add(source.id);
+            if (!edited) adoptedAssetIds.add(source.id);
+            else {
+                merged = { ...merged, updatedAt: source.updatedAt };
+                mergedAssets.set(source.id, merged);
+            }
+            useAssetStore.setState((state) => ({ assets: state.assets.map((item) => item.id === source.id ? merged : item) }));
+        }
+    }
+
     if (incrementalSession) {
         for (const source of dirtyAssets) {
             const baseline = acknowledgedAssets.get(source.id);
             if (!baseline || verifiedAssets.has(source.id)) continue;
             const { asset } = await getRemoteAsset(source.id);
             if (Date.parse(asset.updatedAt) !== Date.parse(baseline.updatedAt)) {
-                if (!options.force) throw new Error("素材远端版本已变化，已停止覆盖，请重新打开素材库");
+                if (!options.force) throw assetRemoteVersionConflict();
                 // 强制覆盖是用户显式指令：采纳远端版本为新基线后继续用本地内容覆盖。
                 acknowledgedAssets.set(source.id, asset);
             }
@@ -808,7 +898,9 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     // 已确认快照记录的是本次上传所依据的本地实体；上传期间的新编辑会在下一轮继续提交。
     // 素材先于画布提交。这样画布中的 resource: 引用一旦成为远端事实，
     // 对应 Asset 已经存在，刷新或换设备不会出现只占容量、不见素材的窗口。
-    for (const source of dirtyAssets) {
+    for (const dirty of dirtyAssets) {
+        if (adoptedAssetIds.has(dirty.id)) continue;
+        const source = mergedAssets.get(dirty.id) ?? dirty;
         const remotePayload = await ensureRemoteResourceReferences(assetForRemoteSync(source), uploaded);
         await upsertRemoteAsset(remotePayload);
         acknowledgedAssets.set(source.id, source);
@@ -932,6 +1024,10 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     }
     if (errors.length) throw errors[0];
     if (dirtyProjects.length) void appQueryClient.invalidateQueries({ queryKey: ["canvas-library"] });
+}
+
+function assetRemoteVersionConflict() {
+    return new Error("素材远端版本已变化，已停止覆盖，请重新打开素材库");
 }
 
 function requireRemoteUserDataBaseline() {

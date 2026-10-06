@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -423,28 +424,76 @@ func (s *Service) settingsEncryptionKey() ([]byte, error) {
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
+	if err := publishSettingsKey(path, key, os.Link); errors.Is(err, os.ErrExist) {
+		return readExistingSettingsKey(path)
+	} else if err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func readExistingSettingsKey(path string) ([]byte, error) {
+	// An older process or the exclusive-create fallback may still be writing.
+	for attempt := 0; attempt < 11; attempt++ {
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return nil, fmt.Errorf("读取存储加密密钥失败：%w", readErr)
 		}
-		if len(data) != 32 {
-			return nil, errors.New("存储加密密钥长度无效")
+		if len(data) == 32 {
+			return data, nil
 		}
-		return data, nil
+		if attempt < 10 {
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
+	return nil, errors.New("存储加密密钥长度无效")
+}
+
+func publishSettingsKey(path string, key []byte, link func(string, string) error) error {
+	file, err := os.CreateTemp(filepath.Dir(path), ".settings-key-*")
 	if err != nil {
-		return nil, err
+		return err
 	}
+	defer os.Remove(file.Name())
+	defer file.Close()
 	if _, err := file.Write(key); err != nil {
-		_ = file.Close()
-		return nil, err
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
 	}
 	if err := file.Close(); err != nil {
-		return nil, err
+		return err
 	}
-	return key, nil
+	// Link publishes complete bytes without replacing another process's key.
+	if err := link(file.Name(), path); err != nil {
+		if !errors.Is(err, syscall.ENOTSUP) && !errors.Is(err, syscall.EPERM) {
+			return err
+		}
+		// Some filesystems prohibit hard links. O_EXCL still prevents replacement,
+		// but readers may see an incomplete file and a crash may leave it invalid.
+		fallback, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		defer fallback.Close()
+		if _, err := fallback.Write(key); err != nil {
+			return err
+		}
+		if err := fallback.Sync(); err != nil {
+			return err
+		}
+		if err := fallback.Close(); err != nil {
+			return err
+		}
+	}
+	// Persist the published name, not only the inode's contents.
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func (s *Service) protectTaskSecrets(value interface{}) error {

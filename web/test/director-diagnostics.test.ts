@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DIRECTOR_DIAGNOSTIC_CODES, directorDiagnosticObjectKind, formatDirectorDiagnosticCode, isDirectorDiagnosticCode, projectDirectorDiagnostic } from "../src/lib/canvas/director/director-diagnostics";
+import { PREVIS_DIAGNOSTIC_CODES, previsDiagnosticObjectKind, formatPrevisDiagnosticCode, isPrevisDiagnosticCode, projectPrevisDiagnostic } from "../src/lib/canvas/previs/previs-diagnostics";
 
 /** 任何一个都不允许出现在投影输出里。 */
 const LEAK_PROBES = [
@@ -10,7 +10,7 @@ const LEAK_PROBES = [
     "authorization: Bearer secret-token",
     "cookie=session=deadbeef; Path=/",
     "api_key=sk-live-0000",
-    "Error: adopt failed\n    at DirectorModel (director-viewport.tsx:571:29)",
+    "Error: adopt failed\n    at PrevisModel (previs-viewport.tsx:571:29)",
     "演员 1 的镜头意图正文",
     "/Users/someone/secret/path/scene.glb",
 ];
@@ -21,9 +21,9 @@ function serialize(value: unknown) {
 
 describe("code 白名单", () => {
     test("白名单内的 code 全部被接受且有稳定文案与级别", () => {
-        for (const code of DIRECTOR_DIAGNOSTIC_CODES) {
-            expect(isDirectorDiagnosticCode(code)).toBe(true);
-            const event = projectDirectorDiagnostic(code, {});
+        for (const code of PREVIS_DIAGNOSTIC_CODES) {
+            expect(isPrevisDiagnosticCode(code)).toBe(true);
+            const event = projectPrevisDiagnostic(code, {});
             expect(event).not.toBeNull();
             expect(event?.code).toBe(code);
             expect(event?.message.length).toBeGreaterThan(0);
@@ -32,17 +32,17 @@ describe("code 白名单", () => {
     });
 
     test("未知 code 一律拒绝，不透传", () => {
-        const rejected = ["", "director_viewport_render_failed", "DIRECTOR_UNKNOWN", "SOME_OTHER_CODE", "DIRECTOR_VIEWPORT_RENDER_FAILED ", null, undefined, 42, {}, []];
+        const rejected = ["", "previs_viewport_render_failed", "PREVIS_UNKNOWN", "SOME_OTHER_CODE", "PREVIS_VIEWPORT_RENDER_FAILED ", null, undefined, 42, {}, []];
         for (const code of rejected) {
-            expect(isDirectorDiagnosticCode(code)).toBe(false);
-            expect(projectDirectorDiagnostic(code, {})).toBeNull();
+            expect(isPrevisDiagnosticCode(code)).toBe(false);
+            expect(projectPrevisDiagnostic(code, {})).toBeNull();
         }
     });
 });
 
 describe("字段白名单", () => {
     test("未知字段不会出现在输出中", () => {
-        const event = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", {
+        const event = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", {
             objectId: "obj-1",
             sceneName: "演员 1 场景",
             url: "https://cdn.example.com/a.glb",
@@ -60,7 +60,7 @@ describe("字段白名单", () => {
 
     test("伪造的敏感输入无法通过任一字段进入输出", () => {
         for (const probe of LEAK_PROBES) {
-            const event = projectDirectorDiagnostic("DIRECTOR_SAVE_FLUSH_FAILED", {
+            const event = projectPrevisDiagnostic("PREVIS_SAVE_FLUSH_FAILED", {
                 objectId: probe,
                 sceneId: probe,
                 objectKind: probe,
@@ -84,40 +84,40 @@ describe("字段白名单", () => {
     });
 
     test("safe-id 只接受受限字符集", () => {
-        expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectId: "obj-1_a.b:c" })?.fields.objectId).toBe("obj-1_a.b:c");
+        expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectId: "obj-1_a.b:c" })?.fields.objectId).toBe("obj-1_a.b:c");
         for (const bad of ["obj 1", "obj/1", "obj?1", "obj#1", "a".repeat(97), "", "  ", "obj\n1", "obj%201"]) {
-            expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectId: bad })?.fields.objectId).toBeUndefined();
+            expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectId: bad })?.fields.objectId).toBeUndefined();
         }
     });
 
     test("枚举字段只接受白名单值", () => {
-        expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectKind: "actor" })?.fields.objectKind).toBe("actor");
-        expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectKind: "spaceship" })?.fields.objectKind).toBeUndefined();
-        expect(projectDirectorDiagnostic("DIRECTOR_CLOSE_BLOCKED", { saveOutcome: "stay" })?.fields.saveOutcome).toBe("stay");
-        expect(projectDirectorDiagnostic("DIRECTOR_CLOSE_BLOCKED", { saveOutcome: "explode" })?.fields.saveOutcome).toBeUndefined();
+        expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectKind: "actor" })?.fields.objectKind).toBe("actor");
+        expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectKind: "spaceship" })?.fields.objectKind).toBeUndefined();
+        expect(projectPrevisDiagnostic("PREVIS_CLOSE_BLOCKED", { saveOutcome: "stay" })?.fields.saveOutcome).toBe("stay");
+        expect(projectPrevisDiagnostic("PREVIS_CLOSE_BLOCKED", { saveOutcome: "explode" })?.fields.saveOutcome).toBeUndefined();
     });
 
     test("数值字段有界且拒绝非有限值", () => {
-        expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_RETRY", { attempt: 3 })?.fields.attempt).toBe(3);
-        expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_RETRY", { attempt: 2.6 })?.fields.attempt).toBe(3);
+        expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_RETRY", { attempt: 3 })?.fields.attempt).toBe(3);
+        expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_RETRY", { attempt: 2.6 })?.fields.attempt).toBe(3);
         for (const bad of [-1, 1000, Number.NaN, Number.POSITIVE_INFINITY, "3", null]) {
-            expect(projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_RETRY", { attempt: bad })?.fields.attempt).toBeUndefined();
+            expect(projectPrevisDiagnostic("PREVIS_MODEL_LOAD_RETRY", { attempt: bad })?.fields.attempt).toBeUndefined();
         }
-        expect(projectDirectorDiagnostic("DIRECTOR_SAVE_FLUSH_FAILED", { revision: 0 })?.fields.revision).toBe(0);
-        expect(projectDirectorDiagnostic("DIRECTOR_SAVE_FLUSH_FAILED", { revision: -1 })?.fields.revision).toBeUndefined();
+        expect(projectPrevisDiagnostic("PREVIS_SAVE_FLUSH_FAILED", { revision: 0 })?.fields.revision).toBe(0);
+        expect(projectPrevisDiagnostic("PREVIS_SAVE_FLUSH_FAILED", { revision: -1 })?.fields.revision).toBeUndefined();
     });
 
     test("布尔字段只接受真布尔", () => {
-        expect(projectDirectorDiagnostic("DIRECTOR_SAVE_RETRY_FAILED", { draftStored: false })?.fields.draftStored).toBe(false);
-        expect(projectDirectorDiagnostic("DIRECTOR_SAVE_RETRY_FAILED", { draftStored: true })?.fields.draftStored).toBe(true);
+        expect(projectPrevisDiagnostic("PREVIS_SAVE_RETRY_FAILED", { draftStored: false })?.fields.draftStored).toBe(false);
+        expect(projectPrevisDiagnostic("PREVIS_SAVE_RETRY_FAILED", { draftStored: true })?.fields.draftStored).toBe(true);
         for (const bad of ["true", 1, 0, null, {}]) {
-            expect(projectDirectorDiagnostic("DIRECTOR_SAVE_RETRY_FAILED", { draftStored: bad })?.fields.draftStored).toBeUndefined();
+            expect(projectPrevisDiagnostic("PREVIS_SAVE_RETRY_FAILED", { draftStored: bad })?.fields.draftStored).toBeUndefined();
         }
     });
 
     test("非对象 fields 不抛错且产出空字段", () => {
         for (const fields of [null, undefined, 42, "objectId=1", [1, 2, 3]]) {
-            const event = projectDirectorDiagnostic("DIRECTOR_VIEWPORT_CONTEXT_LOST", fields);
+            const event = projectPrevisDiagnostic("PREVIS_VIEWPORT_CONTEXT_LOST", fields);
             expect(event?.fields).toEqual({});
         }
     });
@@ -125,40 +125,40 @@ describe("字段白名单", () => {
 
 describe("稳定码格式化", () => {
     test("只拼接安全枚举与数值", () => {
-        const event = projectDirectorDiagnostic("DIRECTOR_SAVE_RETRY_FAILED", { sceneId: "scene-1", revision: 4, draftStored: true, userInitiated: true });
+        const event = projectPrevisDiagnostic("PREVIS_SAVE_RETRY_FAILED", { sceneId: "scene-1", revision: 4, draftStored: true, userInitiated: true });
         expect(event).not.toBeNull();
         if (!event) return;
-        const formatted = formatDirectorDiagnosticCode(event);
-        expect(formatted).toBe("DIRECTOR_SAVE_RETRY_FAILED scene=scene-1 revision=4 draft=1 user=1");
+        const formatted = formatPrevisDiagnosticCode(event);
+        expect(formatted).toBe("PREVIS_SAVE_RETRY_FAILED scene=scene-1 revision=4 draft=1 user=1");
         // scene/object 后缀只可能是 safe-id 投影后的值。
-        expect(formatted.startsWith("DIRECTOR_")).toBe(true);
+        expect(formatted.startsWith("PREVIS_")).toBe(true);
     });
 
     test("scene 与 object 后缀都进入 code，顺序确定", () => {
-        const event = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { sceneId: "scene-1", objectId: "obj-9", objectKind: "model", attempt: 2 });
+        const event = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { sceneId: "scene-1", objectId: "obj-9", objectKind: "model", attempt: 2 });
         expect(event).not.toBeNull();
         if (!event) return;
-        expect(formatDirectorDiagnosticCode(event)).toBe("DIRECTOR_MODEL_LOAD_FAILED scene=scene-1 object=obj-9 kind=model attempt=2");
+        expect(formatPrevisDiagnosticCode(event)).toBe("PREVIS_MODEL_LOAD_FAILED scene=scene-1 object=obj-9 kind=model attempt=2");
     });
 
     test("不同 objectId / sceneId 产出不同签名", () => {
-        const a = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectId: "obj-1" });
-        const b = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectId: "obj-2" });
-        const c = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { sceneId: "scene-1" });
-        const d = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { sceneId: "scene-2" });
+        const a = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectId: "obj-1" });
+        const b = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectId: "obj-2" });
+        const c = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { sceneId: "scene-1" });
+        const d = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { sceneId: "scene-2" });
         expect(a && b && c && d).toBeTruthy();
         if (!a || !b || !c || !d) return;
-        const signatures = [a, b, c, d].map(formatDirectorDiagnosticCode);
+        const signatures = [a, b, c, d].map(formatPrevisDiagnosticCode);
         expect(new Set(signatures).size).toBe(4);
     });
 
     test("非法 id 不进入 code 后缀", () => {
         for (const bad of ["https://cdn.example.com/a.glb?token=abc", "obj 1", "obj/1", "a".repeat(97)]) {
-            const event = projectDirectorDiagnostic("DIRECTOR_MODEL_LOAD_FAILED", { objectId: bad, sceneId: bad });
+            const event = projectPrevisDiagnostic("PREVIS_MODEL_LOAD_FAILED", { objectId: bad, sceneId: bad });
             expect(event).not.toBeNull();
             if (!event) continue;
-            const formatted = formatDirectorDiagnosticCode(event);
-            expect(formatted).toBe("DIRECTOR_MODEL_LOAD_FAILED");
+            const formatted = formatPrevisDiagnosticCode(event);
+            expect(formatted).toBe("PREVIS_MODEL_LOAD_FAILED");
             expect(formatted).not.toContain("scene=");
             expect(formatted).not.toContain("object=");
             expect(formatted).not.toContain("cdn.example.com");
@@ -166,21 +166,21 @@ describe("稳定码格式化", () => {
     });
 
     test("无字段时只有 code 本身", () => {
-        const event = projectDirectorDiagnostic("DIRECTOR_VIEWPORT_RENDER_FAILED", {});
+        const event = projectPrevisDiagnostic("PREVIS_VIEWPORT_RENDER_FAILED", {});
         expect(event).not.toBeNull();
         if (!event) return;
-        expect(formatDirectorDiagnosticCode(event)).toBe("DIRECTOR_VIEWPORT_RENDER_FAILED");
+        expect(formatPrevisDiagnosticCode(event)).toBe("PREVIS_VIEWPORT_RENDER_FAILED");
     });
 });
 
 describe("对象种类推导", () => {
     test("按形态映射，不读取名称或地址", () => {
-        expect(directorDiagnosticObjectKind({ kind: "actor" })).toBe("actor");
-        expect(directorDiagnosticObjectKind({ kind: "model" })).toBe("model");
-        expect(directorDiagnosticObjectKind({ kind: "billboard" })).toBe("billboard");
-        expect(directorDiagnosticObjectKind({ primitive: "box" })).toBe("primitive");
-        expect(directorDiagnosticObjectKind({})).toBe("unknown");
-        expect(directorDiagnosticObjectKind(null)).toBe("unknown");
-        expect(directorDiagnosticObjectKind(undefined)).toBe("unknown");
+        expect(previsDiagnosticObjectKind({ kind: "actor" })).toBe("actor");
+        expect(previsDiagnosticObjectKind({ kind: "model" })).toBe("model");
+        expect(previsDiagnosticObjectKind({ kind: "billboard" })).toBe("billboard");
+        expect(previsDiagnosticObjectKind({ primitive: "box" })).toBe("primitive");
+        expect(previsDiagnosticObjectKind({})).toBe("unknown");
+        expect(previsDiagnosticObjectKind(null)).toBe("unknown");
+        expect(previsDiagnosticObjectKind(undefined)).toBe("unknown");
     });
 });

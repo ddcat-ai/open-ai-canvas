@@ -883,29 +883,29 @@
     --cn-spatial-elevated: var(--color-neutral-0);
     --cn-spatial-toolbar-border: var(--color-neutral-200);
 
-    --director-sequencer-surface: var(--color-neutral-900);
-    --director-sequencer-surface-raised: var(--color-neutral-800);
-    --director-sequencer-border: rgba(255, 255, 255, 0.11);
-    --director-sequencer-muted: rgba(255, 255, 255, 0.48);
-    --director-sequencer-grid: rgba(255, 255, 255, 0.055);
-    --director-dock-surface: rgba(17, 19, 21, 0.92);
-    --director-dock-fg: rgba(255, 255, 255, 0.62);
-    --director-dock-fg-strong: rgba(255, 255, 255, 0.96);
-    --director-dock-active-surface: rgba(255, 255, 255, 0.14);
-    --director-control-hover: rgba(255, 255, 255, 0.09);
-    --director-swatch-inset: rgba(0, 0, 0, 0.18);
+    --previs-sequencer-surface: var(--color-neutral-900);
+    --previs-sequencer-surface-raised: var(--color-neutral-800);
+    --previs-sequencer-border: rgba(255, 255, 255, 0.11);
+    --previs-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --previs-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --previs-dock-surface: rgba(17, 19, 21, 0.92);
+    --previs-dock-fg: rgba(255, 255, 255, 0.62);
+    --previs-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --previs-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --previs-control-hover: rgba(255, 255, 255, 0.09);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.18);
 
     /* 编辑器工作台：圆角浮卡舞台底色 + 常亮强调色（明暗两主题同值，避免 workspace-accent 黑白反转）*/
-    --director-workspace-bg: #0b0d0f;
-    --director-accent: #4f8cff;
-    --director-accent-hover: #6ba0ff;
-    --director-on-accent: #ffffff;
-    --director-success: #34d399;
-    --director-warning: #fbbf24;
-    --director-danger: #f87171;
-    --director-success-soft: rgba(52, 211, 153, 0.14);
-    --director-warning-soft: rgba(251, 191, 36, 0.14);
-    --director-danger-soft: rgba(248, 113, 113, 0.14);
+    --previs-workspace-bg: #0b0d0f;
+    --previs-accent: #4f8cff;
+    --previs-accent-hover: #6ba0ff;
+    --previs-on-accent: #ffffff;
+    --previs-success: #34d399;
+    --previs-warning: #fbbf24;
+    --previs-danger: #f87171;
+    --previs-success-soft: rgba(52, 211, 153, 0.14);
+    --previs-warning-soft: rgba(251, 191, 36, 0.14);
+    --previs-danger-soft: rgba(248, 113, 113, 0.14);
 
     /* 节点类型色（引用 Primitive 节点色板，对应 #97 决策1 色带方案）*/
     --cn-type-image: var(--palette-node-image);
@@ -1062,67 +1062,67 @@
     --cn-spatial-elevated: var(--color-neutral-900);
     --cn-spatial-toolbar-border: rgba(255, 255, 255, 0.1);
 
-    --director-sequencer-surface: #111315;
-    --director-sequencer-surface-raised: #191c1f;
-    --director-sequencer-border: rgba(255, 255, 255, 0.11);
-    --director-sequencer-muted: rgba(255, 255, 255, 0.48);
-    --director-sequencer-grid: rgba(255, 255, 255, 0.055);
-    --director-dock-surface: rgba(17, 19, 21, 0.92);
-    --director-dock-fg: rgba(255, 255, 255, 0.62);
-    --director-dock-fg-strong: rgba(255, 255, 255, 0.96);
-    --director-dock-active-surface: rgba(255, 255, 255, 0.14);
-    --director-control-hover: rgba(255, 255, 255, 0.09);
-    --director-swatch-inset: rgba(0, 0, 0, 0.18);
+    --previs-sequencer-surface: #111315;
+    --previs-sequencer-surface-raised: #191c1f;
+    --previs-sequencer-border: rgba(255, 255, 255, 0.11);
+    --previs-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --previs-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --previs-dock-surface: rgba(17, 19, 21, 0.92);
+    --previs-dock-fg: rgba(255, 255, 255, 0.62);
+    --previs-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --previs-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --previs-control-hover: rgba(255, 255, 255, 0.09);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.18);
 
     /* 编辑器工作台：圆角浮卡舞台底色 + 常亮强调色（明暗两主题同值，避免 workspace-accent 黑白反转）*/
-    --director-workspace-bg: #0b0d0f;
-    --director-accent: #4f8cff;
-    --director-accent-hover: #6ba0ff;
-    --director-on-accent: #ffffff;
-    --director-success: #34d399;
-    --director-warning: #fbbf24;
-    --director-danger: #f87171;
-    --director-success-soft: rgba(52, 211, 153, 0.14);
-    --director-warning-soft: rgba(251, 191, 36, 0.14);
-    --director-danger-soft: rgba(248, 113, 113, 0.14);
+    --previs-workspace-bg: #0b0d0f;
+    --previs-accent: #4f8cff;
+    --previs-accent-hover: #6ba0ff;
+    --previs-on-accent: #ffffff;
+    --previs-success: #34d399;
+    --previs-warning: #fbbf24;
+    --previs-danger: #f87171;
+    --previs-success-soft: rgba(52, 211, 153, 0.14);
+    --previs-warning-soft: rgba(251, 191, 36, 0.14);
+    --previs-danger-soft: rgba(248, 113, 113, 0.14);
 }
 
 
-/* 剪辑工作台：跟随明暗主题的表面（作用域覆盖 director 常暗 token；canvas 导演工作台全局值不受影响）*/
+/* 剪辑工作台：跟随明暗主题的表面（作用域覆盖 previs 常暗 token；canvas 导演工作台全局值不受影响）*/
 .editor-workbench {
-    --director-sequencer-surface: #fbfcfe;
-    --director-sequencer-surface-raised: #f1f4f7;
-    --director-sequencer-border: rgba(15, 23, 42, 0.12);
-    --director-sequencer-muted: rgba(15, 23, 42, 0.5);
-    --director-sequencer-grid: rgba(15, 23, 42, 0.07);
-    --director-dock-surface: rgba(255, 255, 255, 0.96);
-    --director-dock-fg: rgba(15, 23, 42, 0.62);
-    --director-dock-fg-strong: rgba(15, 23, 42, 0.94);
-    --director-dock-active-surface: rgba(15, 23, 42, 0.12);
-    --director-control-hover: rgba(15, 23, 42, 0.06);
-    --director-swatch-inset: rgba(0, 0, 0, 0.12);
-    --director-workspace-bg: #e9edf2;
+    --previs-sequencer-surface: #fbfcfe;
+    --previs-sequencer-surface-raised: #f1f4f7;
+    --previs-sequencer-border: rgba(15, 23, 42, 0.12);
+    --previs-sequencer-muted: rgba(15, 23, 42, 0.5);
+    --previs-sequencer-grid: rgba(15, 23, 42, 0.07);
+    --previs-dock-surface: rgba(255, 255, 255, 0.96);
+    --previs-dock-fg: rgba(15, 23, 42, 0.62);
+    --previs-dock-fg-strong: rgba(15, 23, 42, 0.94);
+    --previs-dock-active-surface: rgba(15, 23, 42, 0.12);
+    --previs-control-hover: rgba(15, 23, 42, 0.06);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.12);
+    --previs-workspace-bg: #e9edf2;
 }
 .dark .editor-workbench {
-    --director-sequencer-surface: #111315;
-    --director-sequencer-surface-raised: #191c1f;
-    --director-sequencer-border: rgba(255, 255, 255, 0.11);
-    --director-sequencer-muted: rgba(255, 255, 255, 0.48);
-    --director-sequencer-grid: rgba(255, 255, 255, 0.055);
-    --director-dock-surface: rgba(17, 19, 21, 0.92);
-    --director-dock-fg: rgba(255, 255, 255, 0.62);
-    --director-dock-fg-strong: rgba(255, 255, 255, 0.96);
-    --director-dock-active-surface: rgba(255, 255, 255, 0.14);
-    --director-control-hover: rgba(255, 255, 255, 0.09);
-    --director-swatch-inset: rgba(0, 0, 0, 0.18);
-    --director-workspace-bg: #0b0d0f;
+    --previs-sequencer-surface: #111315;
+    --previs-sequencer-surface-raised: #191c1f;
+    --previs-sequencer-border: rgba(255, 255, 255, 0.11);
+    --previs-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --previs-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --previs-dock-surface: rgba(17, 19, 21, 0.92);
+    --previs-dock-fg: rgba(255, 255, 255, 0.62);
+    --previs-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --previs-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --previs-control-hover: rgba(255, 255, 255, 0.09);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.18);
+    --previs-workspace-bg: #0b0d0f;
 }
 
 /* 全屏编辑：workbench 全屏时铺满视口（背景沿用工作区底色） */
 .editor-workbench:fullscreen {
     width: 100vw;
     height: 100vh;
-    background: var(--director-workspace-bg);
+    background: var(--previs-workspace-bg);
 }
 
 
@@ -1307,16 +1307,16 @@
     --panel-radius-wide-tight: var(--r-wide-tight);
     --loader-z: var(--z-loader);
 
-    /* Director workbench / Sequencer */
-    --director-sequencer-min-height: 180px;
-    --director-sequencer-label-width: 208px;
-    --director-sequencer-row-height: 30px;
-    --director-sequencer-base-width: 860px;
-    --director-sequencer-shot-select-width: 144px;
-    --director-dock-button-size: var(--space-8);
-    --director-dock-bottom: var(--space-2);
-    --director-pose-button-height: var(--space-8);
-    --director-color-swatch-size: var(--space-6);
+    /* Previs workbench / Sequencer */
+    --previs-sequencer-min-height: 180px;
+    --previs-sequencer-label-width: 208px;
+    --previs-sequencer-row-height: 30px;
+    --previs-sequencer-base-width: 860px;
+    --previs-sequencer-shot-select-width: 144px;
+    --previs-dock-button-size: var(--space-8);
+    --previs-dock-bottom: var(--space-2);
+    --previs-pose-button-height: var(--space-8);
+    --previs-color-swatch-size: var(--space-6);
 
     /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
     --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
@@ -10962,34 +10962,34 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 
 /* 创作入口与空间导航在同一块画布上，避免视觉断层。 */
 
-.director-sequencer {
+.previs-sequencer {
     position: relative;
     color: rgba(255, 255, 255, 0.86);
     font-size: var(--fs-caption);
 }
 
-.director-viewport-shell {
+.previs-viewport-shell {
     position: relative;
     width: 100%;
     height: 100%;
     min-height: 0;
 }
 
-.director-viewport-notice {
+.previs-viewport-notice {
     position: absolute;
     /* 可恢复故障必须压过右上角的新手引导，否则真实点击会被引导卡片截获。 */
     z-index: var(--z-toast);
     display: grid;
     gap: var(--space-2);
     padding: var(--space-4);
-    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border: var(--stroke-1) solid var(--previs-sequencer-border);
     border-radius: var(--r-lg);
-    background: var(--director-dock-surface);
+    background: var(--previs-dock-surface);
     box-shadow: var(--shadow-xl);
-    color: var(--director-dock-fg-strong);
+    color: var(--previs-dock-fg-strong);
 }
 
-.director-viewport-notice.is-cover {
+.previs-viewport-notice.is-cover {
     inset: 50% auto auto 50%;
     max-width: 320px;
     justify-items: start;
@@ -10997,44 +10997,44 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transform: translate(-50%, -50%);
 }
 
-.director-viewport-notice.is-corner {
+.previs-viewport-notice.is-corner {
     top: var(--space-3);
     right: var(--space-3);
     max-width: 280px;
 }
 
-.director-viewport-notice-title {
+.previs-viewport-notice-title {
     font-size: var(--fs-label);
     font-weight: 600;
 }
 
-.director-viewport-notice-text {
+.previs-viewport-notice-text {
     margin: 0;
-    color: var(--director-dock-fg);
+    color: var(--previs-dock-fg);
     font-size: var(--fs-tiny);
     line-height: 1.5;
 }
 
-.director-viewport-notice-action {
+.previs-viewport-notice-action {
     height: var(--space-8);
     padding: 0 var(--space-3);
     justify-self: start;
-    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border: var(--stroke-1) solid var(--previs-sequencer-border);
     border-radius: var(--r-sm);
-    background: var(--director-dock-active-surface);
-    color: var(--director-dock-fg-strong);
+    background: var(--previs-dock-active-surface);
+    color: var(--previs-dock-fg-strong);
     font-size: var(--fs-tiny);
     transition: background var(--motion-dur-fast) var(--motion-ease-out);
 }
 
-.director-viewport-notice-action:hover {
-    background: var(--director-control-hover);
+.previs-viewport-notice-action:hover {
+    background: var(--previs-control-hover);
 }
 
-.director-viewport-dock {
+.previs-viewport-dock {
     position: absolute;
     z-index: var(--z-toolbar);
-    bottom: var(--director-dock-bottom);
+    bottom: var(--previs-dock-bottom);
     left: 50%;
     display: flex;
     max-width: calc(100% - var(--space-6));
@@ -11042,64 +11042,64 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     gap: var(--space-half);
     padding: var(--space-1);
     overflow-x: auto;
-    border: var(--stroke-1) solid var(--director-sequencer-border);
+    border: var(--stroke-1) solid var(--previs-sequencer-border);
     border-radius: var(--r-lg);
-    background: var(--director-dock-surface);
+    background: var(--previs-dock-surface);
     box-shadow: var(--shadow-xl);
-    color: var(--director-dock-fg);
+    color: var(--previs-dock-fg);
     transform: translateX(-50%);
     backdrop-filter: blur(var(--space-4));
 }
 
-.director-viewport-dock-button {
+.previs-viewport-dock-button {
     display: grid;
-    width: var(--director-dock-button-size);
-    height: var(--director-dock-button-size);
-    flex: 0 0 var(--director-dock-button-size);
+    width: var(--previs-dock-button-size);
+    height: var(--previs-dock-button-size);
+    flex: 0 0 var(--previs-dock-button-size);
     place-items: center;
     border-radius: var(--r-md);
     transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out), transform var(--motion-dur-fast) var(--motion-ease-out);
 }
 
-.director-viewport-dock-button > svg {
+.previs-viewport-dock-button > svg {
     width: var(--space-4);
     height: var(--space-4);
 }
 
-.director-viewport-dock-button:hover {
-    background: var(--director-control-hover);
-    color: var(--director-dock-fg-strong);
+.previs-viewport-dock-button:hover {
+    background: var(--previs-control-hover);
+    color: var(--previs-dock-fg-strong);
 }
 
-.director-viewport-dock-button:active {
+.previs-viewport-dock-button:active {
     transform: translateY(1px);
 }
 
-.director-viewport-dock-button.is-active {
-    background: var(--director-dock-active-surface);
-    color: var(--director-dock-fg-strong);
-    box-shadow: inset 0 0 0 var(--stroke-1) var(--director-sequencer-border);
+.previs-viewport-dock-button.is-active {
+    background: var(--previs-dock-active-surface);
+    color: var(--previs-dock-fg-strong);
+    box-shadow: inset 0 0 0 var(--stroke-1) var(--previs-sequencer-border);
 }
 
-.director-viewport-dock-divider {
+.previs-viewport-dock-divider {
     width: var(--stroke-1);
     height: var(--space-5);
     flex: 0 0 var(--stroke-1);
     margin: 0 var(--space-half);
-    background: var(--director-sequencer-border);
+    background: var(--previs-sequencer-border);
 }
 
 /* 一级模式切换。位于工作台顶栏（跟随明暗主题），因此用主题感知的语义 token，
-   不能用 --director-dock-* 那套常暗色，否则亮色主题下会看不见。
+   不能用 --previs-dock-* 那套常暗色，否则亮色主题下会看不见。
    选中态用 control-selected 角色，而不是主操作色：它表达「当前视图」而非主要命令。 */
-.director-mode-switch {
+.previs-mode-switch {
     display: flex;
     min-width: 0;
     align-items: center;
     gap: var(--space-half);
 }
 
-.director-mode-switch-button {
+.previs-mode-switch-button {
     height: var(--space-6);
     padding: 0 var(--space-2);
     border: var(--stroke-1) solid transparent;
@@ -11110,12 +11110,12 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: background var(--motion-dur-fast-calc) var(--motion-ease-out), opacity var(--motion-dur-fast-calc) var(--motion-ease-out);
 }
 
-.director-mode-switch-button:hover {
+.previs-mode-switch-button:hover {
     background: var(--surface-card-hover);
     opacity: 1;
 }
 
-.director-mode-switch-button.is-active {
+.previs-mode-switch-button.is-active {
     border-color: var(--control-selected-border);
     background: var(--control-selected-bg);
     color: var(--control-selected-fg);
@@ -11123,19 +11123,19 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     opacity: 1;
 }
 
-.director-mode-switch-button:focus-visible {
+.previs-mode-switch-button:focus-visible {
     outline: var(--stroke-2) solid var(--control-focus-ring);
     outline-offset: 1px;
 }
 
 /* 模板选择卡片。位于 Modal 内（跟随明暗主题），同样只用主题感知语义 token。 */
-.director-template-grid {
+.previs-template-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-2);
 }
 
-.director-template-card {
+.previs-template-card {
     display: flex;
     min-width: 0;
     flex-direction: column;
@@ -11150,60 +11150,60 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: background var(--motion-dur-fast-calc) var(--motion-ease-out);
 }
 
-.director-template-card:hover {
+.previs-template-card:hover {
     border-color: var(--control-selected-border);
     background: var(--card-surface-hover);
 }
 
-.director-template-card:focus-visible {
+.previs-template-card:focus-visible {
     outline: var(--stroke-2) solid var(--control-focus-ring);
     outline-offset: 1px;
 }
 
-.director-template-card-name {
+.previs-template-card-name {
     font-size: var(--fs-body);
     font-weight: 500;
 }
 
-.director-template-card-summary {
+.previs-template-card-summary {
     color: var(--control-selected-fg);
     font-size: var(--fs-micro);
     opacity: 0.72;
 }
 
-.director-template-card-description {
+.previs-template-card-description {
     font-size: var(--fs-tiny);
     line-height: 1.5;
     opacity: 0.6;
 }
 
-.director-actor-colors {
+.previs-actor-colors {
     display: flex;
     min-width: 0;
     align-items: center;
     gap: var(--space-1-half);
 }
 
-.director-actor-color {
-    width: var(--director-color-swatch-size);
-    height: var(--director-color-swatch-size);
-    flex: 0 0 var(--director-color-swatch-size);
-    border: var(--stroke-1) solid var(--director-sequencer-border);
+.previs-actor-color {
+    width: var(--previs-color-swatch-size);
+    height: var(--previs-color-swatch-size);
+    flex: 0 0 var(--previs-color-swatch-size);
+    border: var(--stroke-1) solid var(--previs-sequencer-border);
     border-radius: var(--r-full);
-    box-shadow: inset 0 0 0 var(--stroke-1) var(--director-swatch-inset);
+    box-shadow: inset 0 0 0 var(--stroke-1) var(--previs-swatch-inset);
 }
 
-.director-actor-color.is-active {
+.previs-actor-color.is-active {
     outline: var(--stroke-2) solid var(--workspace-accent);
     outline-offset: var(--space-half);
 }
 
-.director-pose-section {
+.previs-pose-section {
     display: grid;
     gap: var(--space-2);
 }
 
-.director-inspector-section-title {
+.previs-inspector-section-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -11211,19 +11211,19 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     font-size: var(--fs-label);
 }
 
-.director-inspector-section-title > span:last-child {
+.previs-inspector-section-title > span:last-child {
     color: var(--workspace-accent);
 }
 
-.director-pose-grid {
+.previs-pose-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-1);
 }
 
-.director-pose-button {
+.previs-pose-button {
     min-width: 0;
-    height: var(--director-pose-button-height);
+    height: var(--previs-pose-button-height);
     padding: 0 var(--space-1);
     overflow: hidden;
     border: var(--stroke-1) solid var(--cn-stroke);
@@ -11235,26 +11235,26 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: border-color var(--motion-dur-fast) var(--motion-ease-out), background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
 }
 
-.director-pose-button:hover {
+.previs-pose-button:hover {
     border-color: var(--workspace-accent);
     color: var(--cn-text);
 }
 
-.director-pose-button.is-active {
+.previs-pose-button.is-active {
     border-color: var(--workspace-accent);
     background: var(--workspace-accent-soft);
     color: var(--workspace-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .director-viewport-dock-button,
-    .director-viewport-notice-action,
-    .director-pose-button {
+    .previs-viewport-dock-button,
+    .previs-viewport-notice-action,
+    .previs-pose-button {
         transition: none;
     }
 }
 
-.director-sequencer-resizer {
+.previs-sequencer-resizer {
     position: absolute;
     z-index: 2;
     inset: -4px 0 auto;
@@ -11262,7 +11262,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     cursor: ns-resize;
 }
 
-.director-sequencer-resizer::after {
+.previs-sequencer-resizer::after {
     content: "";
     position: absolute;
     top: 3px;
@@ -11276,35 +11276,35 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: opacity var(--motion-dur-fast) var(--motion-ease-out);
 }
 
-.director-sequencer:hover .director-sequencer-resizer::after,
-.director-sequencer-resizer:focus-visible::after {
+.previs-sequencer:hover .previs-sequencer-resizer::after,
+.previs-sequencer-resizer:focus-visible::after {
     opacity: 1;
 }
 
-.director-sequencer-body {
+.previs-sequencer-body {
     position: relative;
     height: calc(100% - 40px);
     min-height: 0;
 }
 
-.director-sequencer-grid {
+.previs-sequencer-grid {
     position: relative;
     display: grid;
-    min-width: calc(var(--director-sequencer-base-width) * var(--director-sequencer-track-scale, 1));
-    grid-template-columns: var(--director-sequencer-label-width) minmax(640px, 1fr);
+    min-width: calc(var(--previs-sequencer-base-width) * var(--previs-sequencer-track-scale, 1));
+    grid-template-columns: var(--previs-sequencer-label-width) minmax(640px, 1fr);
 }
 
-.director-sequencer-global-playhead {
+.previs-sequencer-global-playhead {
     position: absolute;
     z-index: 1;
     top: 28px;
     bottom: 0;
     right: 0;
-    left: var(--director-sequencer-label-width);
+    left: var(--previs-sequencer-label-width);
     pointer-events: none;
 }
 
-.director-sequencer-global-playhead > i {
+.previs-sequencer-global-playhead > i {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -11312,22 +11312,22 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     background: #f0b36a;
 }
 
-.director-sequencer-label,
-.director-sequencer-track {
+.previs-sequencer-label,
+.previs-sequencer-track {
     min-width: 0;
-    height: var(--director-sequencer-row-height);
-    border-bottom: 1px solid var(--director-sequencer-border);
+    height: var(--previs-sequencer-row-height);
+    border-bottom: 1px solid var(--previs-sequencer-border);
 }
 
-.director-sequencer-row {
+.previs-sequencer-row {
     display: contents;
 }
 
-.director-sequencer-label {
+.previs-sequencer-label {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    width: var(--director-sequencer-label-width);
+    width: var(--previs-sequencer-label-width);
     padding: 0 var(--space-3);
     color: rgba(255, 255, 255, 0.64);
     text-align: left;
@@ -11335,25 +11335,25 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
 }
 
-.director-sequencer-label:hover,
-.director-sequencer-row.is-selected > .director-sequencer-label {
+.previs-sequencer-label:hover,
+.previs-sequencer-row.is-selected > .previs-sequencer-label {
     background: rgba(255, 255, 255, 0.075);
     color: rgba(255, 255, 255, 0.96);
 }
 
-.director-sequencer-label.is-indent {
+.previs-sequencer-label.is-indent {
     padding-left: var(--space-6);
     color: rgba(255, 255, 255, 0.46);
 }
 
-.director-sequencer-ruler-label,
-.director-sequencer-ruler {
+.previs-sequencer-ruler-label,
+.previs-sequencer-ruler {
     height: 28px;
-    border-bottom-color: var(--director-sequencer-border);
-    background: var(--director-sequencer-surface-raised);
+    border-bottom-color: var(--previs-sequencer-border);
+    background: var(--previs-sequencer-surface-raised);
 }
 
-.director-sequencer-ruler-label {
+.previs-sequencer-ruler-label {
     padding-left: var(--space-3);
     color: rgba(255, 255, 255, 0.42);
     font-size: var(--fs-micro);
@@ -11361,13 +11361,13 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     text-transform: uppercase;
 }
 
-.director-sequencer-ruler {
+.previs-sequencer-ruler {
     position: relative;
     cursor: ew-resize;
-    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(20% - 1px), var(--director-sequencer-grid) 20%);
+    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(20% - 1px), var(--previs-sequencer-grid) 20%);
 }
 
-.director-sequencer-tick {
+.previs-sequencer-tick {
     position: absolute;
     top: var(--space-2);
     color: rgba(255, 255, 255, 0.38);
@@ -11375,7 +11375,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transform: translateX(-50%);
 }
 
-.director-sequencer-playhead {
+.previs-sequencer-playhead {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -11384,18 +11384,18 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     pointer-events: none;
 }
 
-.director-sequencer-track {
+.previs-sequencer-track {
     position: relative;
     overflow: hidden;
-    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(20% - 1px), var(--director-sequencer-grid) 20%);
+    background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(20% - 1px), var(--previs-sequencer-grid) 20%);
 }
 
-.director-sequencer-track-content {
+.previs-sequencer-track-content {
     position: absolute;
     inset: 0;
 }
 
-.director-sequencer-key {
+.previs-sequencer-key {
     position: absolute;
     top: 50%;
     width: 8px;
@@ -11408,7 +11408,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 /* 可删除关键帧：8px 菱形本体太小，用透明外框把命中区扩到 18px，保留视觉尺寸。
    hover / focus 都走 outline，不覆写 box-shadow —— 基础规则的 hairline 保持原样。
    focus-visible 与 hover 同特异性，靠源码顺序让焦点环压过悬停环。 */
-.director-sequencer-key.is-actionable {
+.previs-sequencer-key.is-actionable {
     padding: 0;
     border: 0;
     outline-offset: 2px;
@@ -11416,26 +11416,26 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: outline-color var(--motion-dur-fast-calc) var(--motion-ease-out);
 }
 
-.director-sequencer-key.is-actionable::after {
+.previs-sequencer-key.is-actionable::after {
     position: absolute;
     inset: -5px;
     content: "";
 }
 
-.director-sequencer-key.is-actionable:hover {
+.previs-sequencer-key.is-actionable:hover {
     outline: var(--stroke-2) solid color-mix(in srgb, var(--control-focus-ring) 55%, transparent);
 }
 
-.director-sequencer-key.is-actionable:focus-visible {
+.previs-sequencer-key.is-actionable:focus-visible {
     outline: var(--stroke-2) solid var(--control-focus-ring);
 }
 
-.director-sequencer-key.is-actionable.is-selected {
+.previs-sequencer-key.is-actionable.is-selected {
     outline: var(--stroke-2) solid var(--control-focus-ring);
     outline-offset: 2px;
 }
 
-.director-sequencer-clip {
+.previs-sequencer-clip {
     position: absolute;
     top: 5px;
     bottom: 5px;
@@ -11449,9 +11449,9 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     font-size: var(--fs-micro);
 }
 
-.director-sequencer-transport,
-.director-sequencer-icon,
-.director-sequencer-tool {
+.previs-sequencer-transport,
+.previs-sequencer-icon,
+.previs-sequencer-tool {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -11461,36 +11461,36 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
 }
 
-.director-sequencer-transport,
-.director-sequencer-icon {
+.previs-sequencer-transport,
+.previs-sequencer-icon {
     width: var(--space-8);
 }
 
-.director-sequencer-tool {
+.previs-sequencer-tool {
     gap: var(--space-1);
     padding: 0 var(--space-2);
     font-size: var(--fs-micro);
 }
 
-.director-sequencer-shot-select {
-    width: var(--director-sequencer-shot-select-width);
+.previs-sequencer-shot-select {
+    width: var(--previs-sequencer-shot-select-width);
     height: var(--space-8);
     padding: 0 var(--space-2);
     overflow: hidden;
-    border: 1px solid var(--director-sequencer-border);
+    border: 1px solid var(--previs-sequencer-border);
     border-radius: var(--r-sm);
-    background: var(--director-sequencer-surface-raised);
+    background: var(--previs-sequencer-surface-raised);
     color: rgba(255, 255, 255, 0.72);
     font-size: var(--fs-micro);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.director-sequencer-transport:hover,
-.director-sequencer-icon:hover,
-.director-sequencer-tool:hover,
-.director-sequencer-icon.is-active,
-.director-sequencer-tool.is-active {
+.previs-sequencer-transport:hover,
+.previs-sequencer-icon:hover,
+.previs-sequencer-tool:hover,
+.previs-sequencer-icon.is-active,
+.previs-sequencer-tool.is-active {
     background: rgba(255, 255, 255, 0.1);
     color: #ffffff;
 }

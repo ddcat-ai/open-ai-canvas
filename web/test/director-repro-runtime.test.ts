@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { projectDirectorWebgl, readDirectorReproRuntime, releaseProbeContext, safeReproText } from "../src/lib/canvas/director/director-repro-runtime";
-import { DIRECTOR_REPRO_LOCAL_MODEL_URL, DIRECTOR_REPRO_MATRIX, DIRECTOR_REPRO_MISSING_MODEL_URL, createDirectorReproScene, directorReproSceneIsOffline, injectDirectorReproModel } from "../src/lib/canvas/director/director-repro-fixture";
-import { DIRECTOR_PLACEMENT_MARGIN, directorObjectFootprint } from "../src/lib/canvas/director/director-placement";
-import type { DirectorObject } from "../src/types/director";
+import { projectPrevisWebgl, readPrevisReproRuntime, releaseProbeContext, safeReproText } from "../src/lib/canvas/previs/previs-repro-runtime";
+import { PREVIS_REPRO_LOCAL_MODEL_URL, PREVIS_REPRO_MATRIX, PREVIS_REPRO_MISSING_MODEL_URL, createPrevisReproScene, previsReproSceneIsOffline, injectPrevisReproModel } from "../src/lib/canvas/previs/previs-repro-fixture";
+import { PREVIS_PLACEMENT_MARGIN, previsObjectFootprint } from "../src/lib/canvas/previs/previs-placement";
+import type { PrevisObject } from "../src/types/previs";
 
 const LEAK_PROBES = [
     "https://cdn.example.com/actor.glb?token=abc123#frag",
@@ -16,12 +16,12 @@ const LEAK_PROBES = [
 ];
 
 /** XZ 占位是否相交（含 margin）；Y 完全不参与，与放置模块同一判据。 */
-function overlapsInjectedXZ(a: DirectorObject, b: DirectorObject) {
-    const fa = directorObjectFootprint(a);
-    const fb = directorObjectFootprint(b);
+function overlapsInjectedXZ(a: PrevisObject, b: PrevisObject) {
+    const fa = previsObjectFootprint(a);
+    const fb = previsObjectFootprint(b);
     const dx = Math.abs(a.transform.position[0] - b.transform.position[0]);
     const dz = Math.abs(a.transform.position[2] - b.transform.position[2]);
-    return dx < (fa.width + fb.width) / 2 + DIRECTOR_PLACEMENT_MARGIN && dz < (fa.depth + fb.depth) / 2 + DIRECTOR_PLACEMENT_MARGIN;
+    return dx < (fa.width + fb.width) / 2 + PREVIS_PLACEMENT_MARGIN && dz < (fa.depth + fb.depth) / 2 + PREVIS_PLACEMENT_MARGIN;
 }
 
 /** 构造一个可控的 WebGL 双替身：参数常量用小整数便于断言。 */
@@ -105,7 +105,7 @@ describe("safeReproText", () => {
 
 describe("runtime 投影", () => {
     test("字段齐全且 DPR 有界", () => {
-        const runtime = readDirectorReproRuntime();
+        const runtime = readPrevisReproRuntime();
         expect(typeof runtime.appVersion).toBe("string");
         expect(typeof runtime.buildCommit).toBe("string");
         expect(typeof runtime.browser).toBe("string");
@@ -116,7 +116,7 @@ describe("runtime 投影", () => {
     });
 
     test("所有字符串都已限长", () => {
-        const runtime = readDirectorReproRuntime();
+        const runtime = readPrevisReproRuntime();
         expect(runtime.appVersion.length).toBeLessThanOrEqual(48);
         expect(runtime.buildCommit.length).toBeLessThanOrEqual(48);
         expect(runtime.browser.length).toBeLessThanOrEqual(160);
@@ -127,7 +127,7 @@ describe("runtime 投影", () => {
 
 describe("WebGL 投影", () => {
     test("可用上下文产出安全能力数值", () => {
-        const webgl = projectDirectorWebgl(makeGl());
+        const webgl = projectPrevisWebgl(makeGl());
         expect(webgl.available).toBe(true);
         if (!webgl.available) return;
         expect(webgl.version).toContain("WebGL 2.0");
@@ -140,7 +140,7 @@ describe("WebGL 投影", () => {
 
     test("缺失上下文稳定降级为 unsupported", () => {
         for (const bad of [null, undefined, 42, "webgl", {}]) {
-            expect(projectDirectorWebgl(bad)).toEqual({ available: false, reason: "unsupported" });
+            expect(projectPrevisWebgl(bad)).toEqual({ available: false, reason: "unsupported" });
         }
     });
 
@@ -150,8 +150,8 @@ describe("WebGL 投影", () => {
                 throw new Error("context lost");
             },
         });
-        expect(() => projectDirectorWebgl(gl)).not.toThrow();
-        expect(projectDirectorWebgl(gl)).toEqual({ available: false, reason: "context-failed" });
+        expect(() => projectPrevisWebgl(gl)).not.toThrow();
+        expect(projectPrevisWebgl(gl)).toEqual({ available: false, reason: "context-failed" });
     });
 
     test("getExtension 抛错不影响整体可用性", () => {
@@ -160,7 +160,7 @@ describe("WebGL 投影", () => {
                 throw new Error("no extension");
             },
         });
-        const webgl = projectDirectorWebgl(gl);
+        const webgl = projectPrevisWebgl(gl);
         expect(webgl.available).toBe(true);
         if (!webgl.available) return;
         expect(webgl.vendor).toContain("Google");
@@ -172,7 +172,7 @@ describe("WebGL 投影", () => {
             getExtension: () => ({ UNMASKED_VENDOR_WEBGL: 7, UNMASKED_RENDERER_WEBGL: 8 }),
             getParameter: (name: number) => (name in values ? values[name] : makeGl().getParameter(name)),
         });
-        const webgl = projectDirectorWebgl(gl);
+        const webgl = projectPrevisWebgl(gl);
         expect(webgl.available).toBe(true);
         if (!webgl.available) return;
         expect(webgl.vendor).toBe("Apple");
@@ -184,7 +184,7 @@ describe("WebGL 投影", () => {
         const gl = makeGl({
             getParameter: (name: number) => (name === 4 ? Number.NaN : name === 5 ? Number.POSITIVE_INFINITY : name === 6 ? "not-an-array" : makeGl().getParameter(name)),
         });
-        const webgl = projectDirectorWebgl(gl);
+        const webgl = projectPrevisWebgl(gl);
         expect(webgl.available).toBe(true);
         if (!webgl.available) return;
         // 非有限一律当「未知」记 0，而不是编造一个驱动从未声明的能力上限。
@@ -200,7 +200,7 @@ describe("WebGL 投影", () => {
         const gl = makeGl({
             getParameter: (name: number) => (name === 4 ? 9_999_999 : name === 6 ? [9_999_999, -5] : makeGl().getParameter(name)),
         });
-        const webgl = projectDirectorWebgl(gl);
+        const webgl = projectPrevisWebgl(gl);
         expect(webgl.available).toBe(true);
         if (!webgl.available) return;
         expect(webgl.maxTextureSize).toBe(1_048_576);
@@ -212,7 +212,7 @@ describe("WebGL 投影", () => {
     test("伪造的敏感 vendor/renderer 不会原样进入输出", () => {
         for (const probe of LEAK_PROBES) {
             const gl = makeGl({ getParameter: (name: number) => (name === 2 || name === 3 ? probe : makeGl().getParameter(name)) });
-            const webgl = projectDirectorWebgl(gl);
+            const webgl = projectPrevisWebgl(gl);
             expect(webgl.available).toBe(true);
             if (!webgl.available) continue;
             const text = webgl.vendor + " " + webgl.renderer;
@@ -264,21 +264,21 @@ describe("WebGL 投影", () => {
 
 describe("fixture 确定性与离线性", () => {
     test("两次构造结构完全一致", () => {
-        expect(createDirectorReproScene()).toEqual(createDirectorReproScene());
+        expect(createPrevisReproScene()).toEqual(createPrevisReproScene());
     });
 
     test("返回全新对象，改写不影响后续构造", () => {
-        const first = createDirectorReproScene();
+        const first = createPrevisReproScene();
         first.objects[0].transform.position[0] = 99;
         first.title = "被改写";
-        const second = createDirectorReproScene();
+        const second = createPrevisReproScene();
         expect(second.objects[0].transform.position[0]).toBe(0);
         expect(second.title).toBe("P0 复现场景");
     });
 
     test("不含任何远端资产：无 url / storageKey / assetId", () => {
-        const scene = createDirectorReproScene();
-        expect(directorReproSceneIsOffline(scene)).toBe(true);
+        const scene = createPrevisReproScene();
+        expect(previsReproSceneIsOffline(scene)).toBe(true);
         const serialized = JSON.stringify(scene);
         expect(serialized).not.toContain("http");
         expect(serialized).not.toContain(".glb");
@@ -286,7 +286,7 @@ describe("fixture 确定性与离线性", () => {
     });
 
     test("场景结构可操作：有对象、摄影机、灯光、镜头且 activeShotId 自洽", () => {
-        const scene = createDirectorReproScene();
+        const scene = createPrevisReproScene();
         expect(scene.objects.length).toBeGreaterThanOrEqual(3);
         expect(scene.cameras.length).toBeGreaterThanOrEqual(1);
         expect(scene.lights.length).toBeGreaterThanOrEqual(1);
@@ -297,13 +297,13 @@ describe("fixture 确定性与离线性", () => {
     });
 
     test("对象初始不重叠，便于复现连续新增语义", () => {
-        const scene = createDirectorReproScene();
+        const scene = createPrevisReproScene();
         const xs = scene.objects.map((object) => object.transform.position[0]);
         expect(new Set(xs).size).toBe(xs.length);
     });
 
     test("复现矩阵覆盖全部 P0 场景且 id 唯一", () => {
-        const ids = DIRECTOR_REPRO_MATRIX.map((item) => item.id);
+        const ids = PREVIS_REPRO_MATRIX.map((item) => item.id);
         expect(new Set(ids).size).toBe(ids.length);
         for (const required of [
             "empty-click",
@@ -324,30 +324,30 @@ describe("fixture 确定性与离线性", () => {
         ]) {
             expect(ids).toContain(required);
         }
-        for (const item of DIRECTOR_REPRO_MATRIX) {
+        for (const item of PREVIS_REPRO_MATRIX) {
             expect(item.title.length).toBeGreaterThan(0);
             expect(item.steps.length).toBeGreaterThan(0);
             expect(item.expected.length).toBeGreaterThan(0);
         }
     });
     test("矩阵模型两行是可执行步骤，不再是待办", () => {
-        const rows = DIRECTOR_REPRO_MATRIX.filter((item) => item.id === "delete-while-loading" || item.id === "model-load-failed");
+        const rows = PREVIS_REPRO_MATRIX.filter((item) => item.id === "delete-while-loading" || item.id === "model-load-failed");
         expect(rows).toHaveLength(2);
         for (const row of rows) {
             expect(row.steps).not.toContain("需注入");
             expect(row.steps).not.toContain("Stage D");
         }
-        expect(DIRECTOR_REPRO_MATRIX.find((item) => item.id === "delete-while-loading")?.steps).toContain("注入本地模型");
-        expect(DIRECTOR_REPRO_MATRIX.find((item) => item.id === "model-load-failed")?.steps).toContain("注入缺失模型");
+        expect(PREVIS_REPRO_MATRIX.find((item) => item.id === "delete-while-loading")?.steps).toContain("注入本地模型");
+        expect(PREVIS_REPRO_MATRIX.find((item) => item.id === "model-load-failed")?.steps).toContain("注入缺失模型");
     });
 });
 
 describe("模型注入", () => {
     test("local 变体使用本地 public 资产地址", () => {
-        const scene = injectDirectorReproModel(createDirectorReproScene(), "local");
+        const scene = injectPrevisReproModel(createPrevisReproScene(), "local");
         const model = scene.objects.find((object) => object.id === "repro-model-local");
-        expect(model?.url).toBe(DIRECTOR_REPRO_LOCAL_MODEL_URL);
-        expect(model?.url).toBe("/canvas/models/director-repro-triangle.gltf");
+        expect(model?.url).toBe(PREVIS_REPRO_LOCAL_MODEL_URL);
+        expect(model?.url).toBe("/canvas/models/previs-repro-triangle.gltf");
         expect(model?.mimeType).toBe("model/gltf+json");
         expect(model?.name).toBe("本地模型 repro triangle");
         // 无压缩扩展/无纹理，因此不需要 KTX2Loader 或 DRACOLoader。
@@ -355,10 +355,10 @@ describe("模型注入", () => {
     });
 
     test("missing 变体使用同源不可达地址", () => {
-        const scene = injectDirectorReproModel(createDirectorReproScene(), "missing");
+        const scene = injectPrevisReproModel(createPrevisReproScene(), "missing");
         const model = scene.objects.find((object) => object.id === "repro-model-missing");
-        expect(model?.url).toBe(DIRECTOR_REPRO_MISSING_MODEL_URL);
-        expect(model?.url).toBe("/__director-repro-missing.glb");
+        expect(model?.url).toBe(PREVIS_REPRO_MISSING_MODEL_URL);
+        expect(model?.url).toBe("/__previs-repro-missing.glb");
         // 同源相对路径，不依赖外网可达性。
         expect(model?.url?.startsWith("/")).toBe(true);
     });
@@ -368,7 +368,7 @@ describe("模型注入", () => {
             ["local", "repro-model-local"],
             ["missing", "repro-model-missing"],
         ] as const) {
-            const scene = injectDirectorReproModel(createDirectorReproScene(), variant);
+            const scene = injectPrevisReproModel(createPrevisReproScene(), variant);
             const model = scene.objects.find((object) => object.id === id);
             expect(model).toBeDefined();
             expect(model?.kind).toBe("model");
@@ -378,7 +378,7 @@ describe("模型注入", () => {
 
     test("模型 Y 保持 0（贴地），只改 XZ", () => {
         for (const variant of ["local", "missing"] as const) {
-            const scene = injectDirectorReproModel(createDirectorReproScene(), variant);
+            const scene = injectPrevisReproModel(createPrevisReproScene(), variant);
             const model = scene.objects.find((object) => object.kind === "model");
             expect(model?.transform.position[1]).toBe(0);
             expect(model?.transform.position.every((value) => Number.isFinite(value))).toBe(true);
@@ -386,25 +386,25 @@ describe("模型注入", () => {
     });
 
     test("纯函数：不改写入参 scene", () => {
-        const original = createDirectorReproScene();
+        const original = createPrevisReproScene();
         const before = JSON.stringify(original);
-        injectDirectorReproModel(original, "local");
-        injectDirectorReproModel(original, "missing");
+        injectPrevisReproModel(original, "local");
+        injectPrevisReproModel(original, "missing");
         expect(JSON.stringify(original)).toBe(before);
         expect(original.objects.some((object) => object.kind === "model")).toBe(false);
     });
 
     test("重复注入同一变体只保留一个对象", () => {
-        let scene = injectDirectorReproModel(createDirectorReproScene(), "local");
+        let scene = injectPrevisReproModel(createPrevisReproScene(), "local");
         const afterFirst = scene.objects.length;
-        scene = injectDirectorReproModel(scene, "local");
-        scene = injectDirectorReproModel(scene, "local");
+        scene = injectPrevisReproModel(scene, "local");
+        scene = injectPrevisReproModel(scene, "local");
         expect(scene.objects.filter((object) => object.id === "repro-model-local")).toHaveLength(1);
         expect(scene.objects.length).toBe(afterFirst);
     });
 
     test("先 local 再 missing：两个都在且位置不相交", () => {
-        const scene = injectDirectorReproModel(injectDirectorReproModel(createDirectorReproScene(), "local"), "missing");
+        const scene = injectPrevisReproModel(injectPrevisReproModel(createPrevisReproScene(), "local"), "missing");
         const local = scene.objects.find((object) => object.id === "repro-model-local");
         const missing = scene.objects.find((object) => object.id === "repro-model-missing");
         expect(local).toBeDefined();
@@ -419,7 +419,7 @@ describe("模型注入", () => {
     });
 
     test("注入不与初始 primitive 重叠", () => {
-        const scene = injectDirectorReproModel(createDirectorReproScene(), "local");
+        const scene = injectPrevisReproModel(createPrevisReproScene(), "local");
         const model = scene.objects.find((object) => object.id === "repro-model-local");
         expect(model).toBeDefined();
         if (!model) return;
@@ -429,20 +429,20 @@ describe("模型注入", () => {
     });
 
     test("初始 fixture 离线，注入后不再声称离线", () => {
-        const base = createDirectorReproScene();
-        expect(directorReproSceneIsOffline(base)).toBe(true);
-        expect(directorReproSceneIsOffline(injectDirectorReproModel(base, "local"))).toBe(false);
-        expect(directorReproSceneIsOffline(injectDirectorReproModel(base, "missing"))).toBe(false);
+        const base = createPrevisReproScene();
+        expect(previsReproSceneIsOffline(base)).toBe(true);
+        expect(previsReproSceneIsOffline(injectPrevisReproModel(base, "local"))).toBe(false);
+        expect(previsReproSceneIsOffline(injectPrevisReproModel(base, "missing"))).toBe(false);
     });
 
     test("注入会推进 updatedAt，使保存链路视为真实变化", () => {
-        const base = createDirectorReproScene();
-        const injected = injectDirectorReproModel(base, "local");
+        const base = createPrevisReproScene();
+        const injected = injectPrevisReproModel(base, "local");
         expect(injected.updatedAt >= base.updatedAt).toBe(true);
         expect(injected.id).toBe(base.id);
     });
 
     test("矩阵条数不因注入功能变化", () => {
-        expect(DIRECTOR_REPRO_MATRIX).toHaveLength(15);
+        expect(PREVIS_REPRO_MATRIX).toHaveLength(15);
     });
 });

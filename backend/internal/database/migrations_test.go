@@ -36,6 +36,9 @@ func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	if !status.Ready || status.Current != CurrentSchemaVersion {
 		t.Fatalf("unexpected schema status: %#v", status)
 	}
+	if !db.Migrator().HasTable(&model.UploadReservation{}) {
+		t.Fatal("upload reservation migration missing")
+	}
 	if !db.Migrator().HasIndex(&schemaMigration{}, "idx_schema_migrations_applied_at") {
 		t.Fatal("schema migration v2 did not create the applied_at index")
 	}

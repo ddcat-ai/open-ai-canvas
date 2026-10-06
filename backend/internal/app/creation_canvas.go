@@ -163,7 +163,7 @@ func (s *Service) CreateRunCanvas(userID, id string, req CreationRequest) (map[s
 		}
 		now := time.Now()
 		cid := newID()
-		doc := map[string]any{"id": cid, "title": "智能创作", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano), "nodes": []any{}, "connections": []any{}, "chatSessions": []any{}, "activeChatId": nil, "backgroundMode": "dots", "showImageInfo": true, "viewport": map[string]any{"x": 0, "y": 0, "k": 1}, "directorScenes": []any{}}
+		doc := map[string]any{"id": cid, "title": "智能创作", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano), "nodes": []any{}, "connections": []any{}, "chatSessions": []any{}, "activeChatId": nil, "backgroundMode": "dots", "showImageInfo": true, "viewport": map[string]any{"x": 0, "y": 0, "k": 1}, "previsScenes": []any{}}
 		raw, _ := json.Marshal(doc)
 		canvas := model.CanvasProject{ID: cid, UserID: userID, Title: "智能创作", PayloadJSON: string(raw), CreatedAt: now, UpdatedAt: now}
 		policy, err := s.RuntimePolicy()

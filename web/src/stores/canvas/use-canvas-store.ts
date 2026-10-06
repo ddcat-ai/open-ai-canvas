@@ -10,7 +10,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 import { DEFAULT_CANVAS_COLOR_THEME, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasStarterMode } from "@/lib/canvas/canvas-starter";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
-import type { DirectorScene } from "@/types/director";
+import type { PrevisScene } from "@/types/previs";
 import type { TimelineProject } from "@/types/timeline";
 
 export type CanvasProject = {
@@ -30,7 +30,7 @@ export type CanvasProject = {
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
     viewport: ViewportTransform;
-    directorScenes: DirectorScene[];
+    previsScenes: PrevisScene[];
     timeline?: TimelineProject;
 };
 
@@ -43,7 +43,7 @@ type CanvasStore = {
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
     replaceProjects: (projects: CanvasProject[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "starterMode" | "appearance" | "backgroundMode" | "showImageInfo" | "viewport" | "directorScenes" | "timeline">>) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "starterMode" | "appearance" | "backgroundMode" | "showImageInfo" | "viewport" | "previsScenes" | "timeline">>) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
@@ -465,7 +465,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     backgroundMode: appearanceDefault?.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE,
                     showImageInfo: false,
                     viewport: initialViewport,
-                    directorScenes: [],
+                    previsScenes: [],
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return id;
@@ -488,7 +488,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     backgroundMode: source.backgroundMode || DEFAULT_CANVAS_BACKGROUND_MODE,
                     showImageInfo: source.showImageInfo || false,
                     viewport: source.viewport || initialViewport,
-                    directorScenes: source.directorScenes || [],
+                    previsScenes: source.previsScenes || [],
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return project.id;

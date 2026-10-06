@@ -1,37 +1,37 @@
 import { describe, expect, test } from "bun:test";
 
-import { createDirectorTransaction } from "../src/lib/canvas/director/director-gesture-transaction";
-import { isDirectorOutputSnapshotCurrent, mergeDirectorOutputPreview, shouldReinitializeDirectorSession, upsertDirectorSceneById } from "../src/lib/canvas/director/director-session";
-import { createDirectorScene } from "../src/lib/canvas/director/director-scene";
-import type { DirectorScene } from "../src/types/director";
+import { createPrevisTransaction } from "../src/lib/canvas/previs/previs-gesture-transaction";
+import { isPrevisOutputSnapshotCurrent, mergePrevisOutputPreview, shouldReinitializePrevisSession, upsertPrevisSceneById } from "../src/lib/canvas/previs/previs-session";
+import { createPrevisScene } from "../src/lib/canvas/previs/previs-scene";
+import type { PrevisScene } from "../src/types/previs";
 
-function scene(id: string, title = id): DirectorScene {
-    return { ...createDirectorScene(title), id };
+function scene(id: string, title = id): PrevisScene {
+    return { ...createPrevisScene(title), id };
 }
 
 describe("会话初始化判定：只认 scene id（A1 回归）", () => {
     test("首次挂载会初始化", () => {
-        expect(shouldReinitializeDirectorSession({ initializedSceneId: null, nextSceneId: "s1" })).toBe(true);
+        expect(shouldReinitializePrevisSession({ initializedSceneId: null, nextSceneId: "s1" })).toBe(true);
     });
 
     test("同 id 的父级镜像回流不重建会话", () => {
-        expect(shouldReinitializeDirectorSession({ initializedSceneId: "s1", nextSceneId: "s1" })).toBe(false);
+        expect(shouldReinitializePrevisSession({ initializedSceneId: "s1", nextSceneId: "s1" })).toBe(false);
     });
 
     test("切换到不同 scene id 才重建", () => {
-        expect(shouldReinitializeDirectorSession({ initializedSceneId: "s1", nextSceneId: "s2" })).toBe(true);
+        expect(shouldReinitializePrevisSession({ initializedSceneId: "s1", nextSceneId: "s2" })).toBe(true);
     });
 
     test("没有 scene 时不初始化", () => {
-        expect(shouldReinitializeDirectorSession({ initializedSceneId: "s1", nextSceneId: null })).toBe(false);
-        expect(shouldReinitializeDirectorSession({ initializedSceneId: null, nextSceneId: null })).toBe(false);
+        expect(shouldReinitializePrevisSession({ initializedSceneId: "s1", nextSceneId: null })).toBe(false);
+        expect(shouldReinitializePrevisSession({ initializedSceneId: null, nextSceneId: null })).toBe(false);
     });
 
     test("镜像回流序列中只有 id 变化的那一次会重建", () => {
         let initialized: string | null = null;
         const rebuilds: string[] = [];
         ["s1", "s1", "s1", "s2", "s2"].forEach((nextSceneId) => {
-            if (!shouldReinitializeDirectorSession({ initializedSceneId: initialized, nextSceneId })) return;
+            if (!shouldReinitializePrevisSession({ initializedSceneId: initialized, nextSceneId })) return;
             initialized = nextSceneId;
             rebuilds.push(nextSceneId);
         });
@@ -39,26 +39,26 @@ describe("会话初始化判定：只认 scene id（A1 回归）", () => {
     });
 });
 
-describe("upsertDirectorSceneById：连续保存不丢 scene（A6 回归）", () => {
+describe("upsertPrevisSceneById：连续保存不丢 scene（A6 回归）", () => {
     test("连续保存 A/B 后两者都在", () => {
         const a = scene("a");
         const b = scene("b");
-        const afterA = upsertDirectorSceneById([], a);
-        const afterB = upsertDirectorSceneById(afterA, b);
+        const afterA = upsertPrevisSceneById([], a);
+        const afterB = upsertPrevisSceneById(afterA, b);
         expect(afterB.map((item) => item.id)).toEqual(["a", "b"]);
     });
 
     test("同 id 是替换而不是追加", () => {
         const first = scene("a", "旧标题");
         const second = { ...first, title: "新标题" };
-        const next = upsertDirectorSceneById([first], second);
+        const next = upsertPrevisSceneById([first], second);
         expect(next).toHaveLength(1);
         expect(next[0].title).toBe("新标题");
     });
 
     test("替换时不影响其他 scene 的顺序与内容", () => {
         const list = [scene("a"), scene("b"), scene("c")];
-        const next = upsertDirectorSceneById(list, { ...list[1], title: "改过的 b" });
+        const next = upsertPrevisSceneById(list, { ...list[1], title: "改过的 b" });
         expect(next.map((item) => item.id)).toEqual(["a", "b", "c"]);
         expect(next[0]).toBe(list[0]);
         expect(next[2]).toBe(list[2]);
@@ -69,10 +69,10 @@ describe("upsertDirectorSceneById：连续保存不丢 scene（A6 回归）", ()
         // 模拟缺陷：第二次保存若以「第一次之前的数组」为基准，就会丢掉 a。
         const a = scene("a");
         const b = scene("b");
-        const stale: DirectorScene[] = [];
-        const authoritative = upsertDirectorSceneById(stale, a);
-        expect(upsertDirectorSceneById(stale, b).map((item) => item.id)).toEqual(["b"]);
-        expect(upsertDirectorSceneById(authoritative, b).map((item) => item.id)).toEqual(["a", "b"]);
+        const stale: PrevisScene[] = [];
+        const authoritative = upsertPrevisSceneById(stale, a);
+        expect(upsertPrevisSceneById(stale, b).map((item) => item.id)).toEqual(["b"]);
+        expect(upsertPrevisSceneById(authoritative, b).map((item) => item.id)).toEqual(["a", "b"]);
     });
 });
 
@@ -81,7 +81,7 @@ describe("异步输出只合并预览引用，不覆盖最新场景", () => {
         const latest = scene("s1", "上传期间改过的标题");
         const shotId = latest.shots[0].id;
         latest.shots[0] = { ...latest.shots[0], name: "上传期间改过的镜头" };
-        const merged = mergeDirectorOutputPreview(latest, { sceneId: latest.id, shotId, previewNodeId: "preview-1" });
+        const merged = mergePrevisOutputPreview(latest, { sceneId: latest.id, shotId, previewNodeId: "preview-1" });
         expect(merged?.title).toBe("上传期间改过的标题");
         expect(merged?.shots[0].name).toBe("上传期间改过的镜头");
         expect(merged?.shots[0].previewNodeId).toBe("preview-1");
@@ -91,8 +91,8 @@ describe("异步输出只合并预览引用，不覆盖最新场景", () => {
 
     test("场景或镜头已经切换/删除时拒绝合并", () => {
         const latest = scene("s1");
-        expect(mergeDirectorOutputPreview(latest, { sceneId: "other", shotId: latest.shots[0].id, previewNodeId: "preview" })).toBeNull();
-        expect(mergeDirectorOutputPreview(latest, { sceneId: latest.id, shotId: "missing", previewNodeId: "preview" })).toBeNull();
+        expect(mergePrevisOutputPreview(latest, { sceneId: "other", shotId: latest.shots[0].id, previewNodeId: "preview" })).toBeNull();
+        expect(mergePrevisOutputPreview(latest, { sceneId: latest.id, shotId: "missing", previewNodeId: "preview" })).toBeNull();
     });
 });
 
@@ -100,9 +100,9 @@ describe("截图与录制绑定开始时的场景快照", () => {
     test("同一场景快照引用与同一活动镜头才允许继续", () => {
         const current = scene("s1");
         const expected = { scene: current, shotId: current.shots[0].id };
-        expect(isDirectorOutputSnapshotCurrent(current, expected)).toBe(true);
-        expect(isDirectorOutputSnapshotCurrent({ ...current }, expected)).toBe(false);
-        expect(isDirectorOutputSnapshotCurrent(null, expected)).toBe(false);
+        expect(isPrevisOutputSnapshotCurrent(current, expected)).toBe(true);
+        expect(isPrevisOutputSnapshotCurrent({ ...current }, expected)).toBe(false);
+        expect(isPrevisOutputSnapshotCurrent(null, expected)).toBe(false);
     });
 
     test("活动镜头切换时拒绝继续，即使原镜头仍存在", () => {
@@ -110,19 +110,19 @@ describe("截图与录制绑定开始时的场景快照", () => {
         const originalShot = current.shots[0];
         const otherShot = { ...originalShot, id: "shot-2", name: "镜头 2" };
         const withOtherActive = { ...current, shots: [originalShot, otherShot], activeShotId: otherShot.id };
-        expect(isDirectorOutputSnapshotCurrent(withOtherActive, { scene: withOtherActive, shotId: originalShot.id })).toBe(false);
+        expect(isPrevisOutputSnapshotCurrent(withOtherActive, { scene: withOtherActive, shotId: originalShot.id })).toBe(false);
     });
 });
 
 describe("预览与持久变更的发布边界（A2/A3/A4 回归）", () => {
     /** 最小 session controller：与 workbench 的接线同构，但不依赖 React 挂载。 */
-    function harness(initial: DirectorScene) {
-        const published: DirectorScene[] = [];
-        const history: DirectorScene[] = [];
+    function harness(initial: PrevisScene) {
+        const published: PrevisScene[] = [];
+        const history: PrevisScene[] = [];
         const flushes: number[] = [];
         let draft = initial;
         const publish = () => published.push(draft);
-        const staged = createDirectorTransaction<DirectorScene>({
+        const staged = createPrevisTransaction<PrevisScene>({
             read: () => draft,
             restore: (snapshot) => {
                 draft = snapshot;
@@ -138,14 +138,14 @@ describe("预览与持久变更的发布边界（A2/A3/A4 回归）", () => {
             history,
             current: () => draft,
             /** 普通持久提交：先终结暂存手势，再发布。 */
-            commit: (next: DirectorScene) => {
+            commit: (next: PrevisScene) => {
                 staged.end("commit");
                 history.push(draft);
                 draft = next;
                 publish();
             },
             /** 进行中预览：写草稿但不发布。 */
-            stage: (next: DirectorScene) => {
+            stage: (next: PrevisScene) => {
                 staged.begin();
                 draft = next;
             },

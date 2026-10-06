@@ -138,6 +138,10 @@ export type StoryboardRow = {
     videoNodeId?: string;
     status?: CanvasNodeStatus;
     errorDetails?: string;
+    /** 与该分镜行关联的预演台场景 ID。由 Agent 或用户创建预演后写入。 */
+    previsSceneId?: string;
+    /** 最后一次生成白膜预演后的缩略图 URL，用于在分镜行内展示预览图。 */
+    previsSnapshotUrl?: string;
 };
 
 export type StoryboardData = {
@@ -414,12 +418,12 @@ export type CanvasNodeMetadata = {
     versionPrimary?: boolean;
     copiedFromNodeId?: string;
     generationResultPlacement?: "replace-node" | "new-version";
-    directorSceneId?: string;
-    directorShotId?: string;
-    directorPreviewNodeId?: string;
-    directorDepthNodeId?: string;
-    directorNormalNodeId?: string;
-    directorClayVideoNodeId?: string;
+    previsSceneId?: string;
+    previsShotId?: string;
+    previsPreviewNodeId?: string;
+    previsDepthNodeId?: string;
+    previsNormalNodeId?: string;
+    previsClayVideoNodeId?: string;
     subtitleEntries?: SrtEntry[];
     subtitleHighlights?: SubtitleHighlight[];
     subtitleStyle?: SubtitleStyle;

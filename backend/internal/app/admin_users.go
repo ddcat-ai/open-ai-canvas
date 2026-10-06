@@ -238,6 +238,11 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
 		}
 	}
+	if nextStatus == model.UserStatusDisabled {
+		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
+			return nil, err
+		}
+	}
 	user.Role = nextRole
 	user.Status = nextStatus
 	user.UpdatedAt = time.Now()

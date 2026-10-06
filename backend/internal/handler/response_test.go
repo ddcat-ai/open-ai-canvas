@@ -41,6 +41,19 @@ func TestFailServiceProjectsAppError(t *testing.T) {
 	}
 }
 
+func TestFailServiceProjectsProjectNameConflictReason(t *testing.T) {
+	recorder, context := responseTestContext()
+	err := service.NewAppError(http.StatusConflict, "项目名称已存在")
+	err.Reason = service.ReasonProjectNameConflict
+
+	failService(context, err)
+
+	response := decodeFailureEnvelope(t, recorder)
+	if recorder.Code != http.StatusConflict || response.Code != service.CodeConflict || response.Reason != string(service.ReasonProjectNameConflict) || response.Msg != err.Message {
+		t.Fatalf("project name conflict response: status=%d body=%#v", recorder.Code, response)
+	}
+}
+
 func TestFailServiceProjectsDNSFailureWithoutTransportDetails(t *testing.T) {
 	recorder, context := responseTestContext()
 	err := service.WrapAppError(http.StatusBadGateway, "外部服务域名解析失败，请检查渠道域名和后端 DNS 配置", errors.New("private-sentinel resolver failure"))

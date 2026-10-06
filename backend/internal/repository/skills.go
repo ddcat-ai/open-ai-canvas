@@ -11,15 +11,18 @@ import (
 )
 
 type SkillListFilter struct {
-	UserID               string
-	Scope                string
-	Search               string
-	Tag                  string
-	LibraryCategoryID    string
-	LibraryUncategorized bool
-	Sort                 string
-	Limit                int
-	Offset               int
+	PlatformRootID        string
+	PlatformCategoryID    string
+	PlatformUncategorized bool
+	UserID                string
+	Scope                 string
+	Search                string
+	Tag                   string
+	LibraryCategoryID     string
+	LibraryUncategorized  bool
+	Sort                  string
+	Limit                 int
+	Offset                int
 }
 
 type SkillMetrics struct {
@@ -77,6 +80,15 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 	if filter.Tag != "" {
 		query = query.Where("skills.tag = ?", filter.Tag)
 	}
+	if filter.PlatformRootID != "" {
+		query = query.Where(effectiveCurationRoot+" = ?", filter.PlatformRootID)
+	}
+	if filter.PlatformCategoryID != "" {
+		query = query.Where("EXISTS ("+effectiveCurationCategory+" AND c.id = ?)", filter.PlatformCategoryID)
+	}
+	if filter.PlatformUncategorized {
+		query = query.Where("NOT EXISTS (" + effectiveCurationCategory + ")")
+	}
 	if filter.LibraryCategoryID != "" {
 		query = query.Where("user_skill_states.library_category_id = ?", filter.LibraryCategoryID)
 	} else if filter.LibraryUncategorized {
@@ -132,6 +144,16 @@ func (r *Repository) CreateSkill(skill *model.Skill, ownerState *model.UserSkill
 
 func (r *Repository) DeleteSkill(id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var locked model.Skill
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.SkillCurationAssignment{}, "skill_id = ?", id).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.SkillCurationRootAssignment{}, "skill_id = ?", id).Error; err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.UserSkillState{}, "skill_id = ?", id).Error; err != nil {
 			return err
 		}

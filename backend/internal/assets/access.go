@@ -140,6 +140,10 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	}
 	if resource.Provider == "local" {
 		access.Delivery = DeliveryLocal
+	} else if !InlineMediaType(resource.MimeType) {
+		// A redirect cannot enforce our attachment and sandbox response headers.
+		access.Delivery = DeliveryProxy
+		access.FallbackReason = "attachment_required"
 	} else if options.Purpose == PurposeDownload {
 		// Cross-origin `a[download]` is only advisory. A real browser download must
 		// therefore be enforced by the object store response itself. Downloads use

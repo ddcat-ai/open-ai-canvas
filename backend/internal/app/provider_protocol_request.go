@@ -91,6 +91,14 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 			}
 		}
 	}
+	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
+		options := make(map[string]any)
+		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {
+			options[name] = value
+		}
+		options["response_format"] = grokImageResponseFormat(input.ImageCapability)
+		request.ProviderOptions[input.Config.InterfaceType] = options
+	}
 	return request
 }
 

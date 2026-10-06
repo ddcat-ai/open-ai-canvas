@@ -48,6 +48,7 @@ export type AuthSessionPayload = {
 export type RuntimeLimits = {
     activeTaskLimit: number;
     resourceUploadMB: number;
+    storedFileGB: number;
     recycleBinRetentionDays?: number;
 };
 

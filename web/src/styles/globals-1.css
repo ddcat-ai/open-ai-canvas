@@ -1,0 +1,2988 @@
+/* =========================================================================
+   Design Token System — 三层架构 (Primitive → Semantic → Component)
+   详见 Wayfinder #96: https://github.com/ddcat-ai/open-ai-canvas/issues/96
+   规范：禁止在组件中新增裸 text-[Npx]/rounded-[Npx]/z-[N]，必须使用 token
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Layer 1: Primitive — 纯值，无语义，不随主题变（所有维度的基础）
+   ------------------------------------------------------------------------- */
+:root {
+
+    /* --- 0. 字体（composio：Inter + 开源等宽；@theme inline 自引用解析点）--- */
+    --font-sans: "Inter Variable", "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --font-heading: "Inter Variable", "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    /* --- 1. 色彩（oklch 色板）--- */
+    --color-neutral-0: oklch(1 0 0);
+    --color-neutral-50: oklch(0.985 0 0);
+    --color-neutral-100: oklch(0.97 0 0);
+    --color-neutral-200: oklch(0.922 0 0);
+    --color-neutral-300: oklch(0.87 0 0);
+    --color-neutral-400: oklch(0.708 0 0);
+    --color-neutral-500: oklch(0.556 0 0);
+    --color-neutral-600: oklch(0.439 0 0);
+    --color-neutral-700: oklch(0.371 0 0);
+    --color-neutral-800: oklch(0.269 0 0);
+    --color-neutral-900: oklch(0.205 0 0);
+    --color-neutral-950: oklch(0.145 0 0);
+
+    /* 节点类型语义色板（对应 #97 色带+图标徽章方案）
+       注意：用 --palette- 前缀避免与 @theme 的 --color-* 命名空间冲突导致循环引用 */
+    --palette-node-image: oklch(0.75 0.15 75);        /* 琥珀 300 — 图片 */
+    --palette-node-video: oklch(0.65 0.22 350);        /* 品红 400 — 视频 */
+    --palette-node-text: oklch(0.45 0.02 250);         /* 中性蓝灰 700 — 文本 */
+    --palette-node-audio: oklch(0.7 0.13 220);         /* 青蓝 400 — 音频 */
+    --palette-node-config: oklch(0.55 0.04 250);       /* 灰蓝 500 — 配置 */
+    --palette-node-script: oklch(0.6 0.18 300);        /* 紫色 400 — 脚本 */
+    --palette-node-drawing: oklch(0.65 0.12 55);       /* 赭石 400 — 绘图 */
+    --palette-node-frame: oklch(0.7 0.15 155);         /* 翠绿 400 — 帧 */
+    --palette-node-character: oklch(0.78 0.13 20);     /* 桃红 300 — 角色引用 */
+    --palette-node-skill: oklch(0.7 0.17 55);          /* 橙色 400 — 技能 */
+
+    /* 状态色（用 --palette- 前缀避免循环引用）*/
+    --palette-status-success: #16a34a;
+    --palette-status-error: #dc2626;
+    --palette-status-loading: #2563eb;
+    --palette-status-warning: #d97706;
+
+    /* 顶部常驻通知条主题色：按「通知类型」区分底色（类型定义见 lib/announcements/banner-notice）
+       两档取值都由白字对比度反推——light 档 ≥ 4.5:1（WCAG AA 正文），dark 档约 8.5:1（压暗避免刺眼）*/
+    --palette-banner-notice-500: #5c67e2; /* 公告 · 白字 4.67:1 */
+    --palette-banner-notice-700: #3f4590; /* 白字 8.52:1 */
+    --palette-banner-activity-500: #da2470; /* 活动 · 白字 4.70:1 */
+    --palette-banner-activity-700: #7b3552; /* 白字 8.49:1 */
+    --palette-banner-update-500: #138279; /* 更新 · 白字 4.67:1 */
+    --palette-banner-update-700: #235450; /* 白字 8.55:1 */
+    --palette-banner-warning-500: #b55b0c; /* 警告 · 白字 4.70:1 */
+    --palette-banner-warning-700: #6a4424; /* 白字 8.52:1 */
+
+    /* --- 2. 间距（4px 栅格 + 半距）--- */
+    --space-0: 0px;
+    --space-half: 2px;
+    --space-1: 4px;
+    --space-1-half: 6px;
+    --space-2: 8px;
+    --space-2-half: 10px;
+    --space-3: 12px;
+    --space-3-half: 14px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --space-20: 80px;
+    --space-24: 96px;
+
+    /* --- 3. 字号（10 档）--- */
+    --fs-nano: 7px;         /* 纳米标注（角标计数、节点预览、% 后缀）*/
+    --fs-micro: 9px;        /* 极小标注（分镜行号辅助）*/
+    --fs-tiny: 10px;        /* 小标注（徽章、tag）*/
+    --fs-label: 11px;       /* 标签文字 */
+    --fs-caption: 12px;     /* 说明文字 */
+    --fs-body: 14px;        /* 正文（基准）*/
+    --fs-body-lg: 15px;     /* 大正文 */
+    --fs-heading: 16px;     /* 小标题 */
+    --fs-heading-lg: 18px;  /* 大标题 */
+    --fs-title: 22px;       /* 页面标题 */
+    --fs-display: 36px;     /* 展示标题 */
+
+    /* --- 3b. composio 排版语义（tokens.json typography 14 档；字号变量，行高/字重/字距见 utilities .typ-* 类）--- */
+    --typ-display-mega: 72px;  /* display-mega */
+    --typ-display-xl: 56px;    /* display-xl */
+    --typ-display-lg: 44px;    /* display-lg */
+    --typ-display-md: 32px;    /* display-md */
+    --typ-display-sm: 24px;    /* display-sm */
+    --typ-title-md: 18px;      /* title-md */
+    --typ-title-sm: 16px;      /* title-sm */
+    --typ-body-md: 16px;       /* body-md */
+    --typ-body-sm: 14px;       /* body-sm */
+    --typ-caption: 13px;       /* caption */
+    --typ-caption-uppercase: 11px; /* caption-uppercase */
+    --typ-code: 13px;          /* code */
+    --typ-button: 14px;        /* button */
+    --typ-nav-link: 14px;      /* nav-link */
+
+    /* --- 4. 圆角（10 档）--- */
+    --r-xs: 4px;
+    --r-sm: 6px;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 14px;
+    --r-2xl: 16px;
+    --r-3xl: 20px;
+    --r-4xl: 24px;
+    --r-tight: 15px;
+    --r-dock-compact: 13px;
+    --r-wide-tight: 22px;
+    --r-5xl: 32px;
+    --r-full: 9999px;
+
+    /* --- 5. 阴影（含 glow）--- */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.12);
+    --shadow-2xl: 0 24px 60px rgba(0, 0, 0, 0.16);
+    --shadow-glow-sm: 0 0 12px rgba(125, 162, 255, 0.2);
+    --shadow-glow-md: 0 0 24px rgba(125, 162, 255, 0.3);
+    --shadow-glow-lg: 0 0 40px rgba(125, 162, 255, 0.4);
+
+    /* --- 5b. 抬升（overlay / card）---
+       --shadow-* 在暗色下会翻成白影，浮层用会发光刺眼。以下 token 两个主题都用黑影，
+       靠 hairline（内描边）而不是发光来交代层级，浮层与卡片统一引用这里。 */
+    /* 亮色下卡片浮在白底上，hairline 要比暗色更实才看得见边界（暗色靠影，亮色靠线）。 */
+    --elevation-hairline: inset 0 0 0 1px rgba(17, 17, 17, 0.13);
+    --elevation-card: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --elevation-card-hover: 0 10px 26px rgba(0, 0, 0, 0.1), 0 2px 5px rgba(0, 0, 0, 0.05);
+    --elevation-overlay: 0 24px 60px rgba(0, 0, 0, 0.2), 0 3px 10px rgba(0, 0, 0, 0.09);
+    --elevation-panel: -18px 0 52px rgba(0, 0, 0, 0.16);
+    --focus-ring-soft: 0 0 0 3px color-mix(in srgb, var(--ring) 28%, transparent);
+
+    /* 卡片表面：亮色需要一点灰底把卡片从白页面里托出来，暗色则是提亮。 */
+    --surface-card: rgba(17, 17, 17, 0.028);
+    --surface-card-hover: rgba(17, 17, 17, 0.055);
+    /* 项目列表卡是高频入口，不能沿用过轻的通用 surface。 */
+    --project-library-surface: #f5f5f5;
+    --project-library-cover-surface: #ececec;
+    --project-library-icon-surface: #ffffff;
+    --project-library-shadow: none;
+
+    /* === 新卡片系统 Token（对应 docs/ui-design-system.md）=== */
+    /* 卡片表面通过明度分层，普通卡片不依赖描边和投影。 */
+    --card-surface: #f7f7f7;
+    --card-surface-hover: #f0f0f0;
+    --card-surface-raised: #ececec;
+
+    --card-border: transparent;
+    --card-border-hover: transparent;
+
+    --card-elevation: none;
+    --card-elevation-hover: none;
+
+    /* 画布卡片封面区 - 浅灰衬托内容 */
+    --canvas-cover-surface: #f5f5f5;
+    --canvas-icon-surface: #ffffff;
+    --canvas-icon-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+
+    /* 画布文件夹：由现有画布语义色派生，封面样式不脱离主题合同。 */
+    --canvas-folder-surface: color-mix(in srgb, var(--background) 76%, transparent);
+    --canvas-folder-surface-strong: color-mix(in srgb, var(--background) 90%, transparent);
+    --canvas-folder-edge: color-mix(in srgb, var(--background) 72%, var(--foreground) 28%);
+    --canvas-folder-ink: var(--foreground);
+    --canvas-folder-muted: color-mix(in srgb, var(--foreground) 52%, transparent);
+    --canvas-folder-action-bg: var(--btn-solid-bg);
+    --canvas-folder-action-fg: var(--btn-solid-fg);
+    --canvas-folder-shadow: var(--elevation-overlay);
+
+    /* 媒体区背景 */
+    --media-surface: #f5f5f5;
+
+    /* 骨架屏 */
+    --skeleton-surface: linear-gradient(
+        90deg,
+        rgba(17, 17, 17, 0.04) 0%,
+        rgba(17, 17, 17, 0.06) 50%,
+        rgba(17, 17, 17, 0.04) 100%
+    );
+
+    /* 交互状态必须成对定义背景和前景。主操作、普通选择、勾选和 Switch
+       是四种不同角色，禁止再把反相主按钮颜色直接复用到普通选中态。 */
+    --btn-solid-bg: #171717;
+    --btn-solid-hover-bg: #303030;
+    --btn-solid-active-bg: #404040;
+    --btn-solid-fg: #ffffff;
+    --btn-outline-border: color-mix(in srgb, var(--foreground) 16%, transparent);
+    --btn-outline-hover-border: color-mix(in srgb, var(--foreground) 28%, transparent);
+    --btn-outline-hover-bg: color-mix(in srgb, var(--foreground) 6%, transparent);
+    --btn-outline-active-bg: color-mix(in srgb, var(--foreground) 9%, transparent);
+    --control-selected-bg: rgba(17, 17, 17, 0.09);
+    --control-selected-hover-bg: rgba(17, 17, 17, 0.13);
+    --control-selected-fg: #171717;
+    --control-selected-border: rgba(17, 17, 17, 0.18);
+    --control-check-bg: #171717;
+    --control-check-fg: #ffffff;
+    --control-switch-checked-bg: #16a34a;
+    --control-switch-checked-hover-bg: #15803d;
+    --control-switch-checked-handle: #ffffff;
+    --control-switch-off-bg: #b8b8b8;
+    --control-switch-off-hover-bg: #9f9f9f;
+    --control-switch-off-handle: #ffffff;
+    --destructive-hover: #b91c1c;
+    --destructive-active: #991b1b;
+    --destructive-foreground: #ffffff;
+    --control-disabled-bg: rgba(17, 17, 17, 0.05);
+    --control-disabled-fg: rgba(17, 17, 17, 0.36);
+    --control-focus-ring: color-mix(in srgb, var(--ring) 72%, transparent);
+
+    /* --- 6. Elevation（z-index 14 档，按视觉层划分，见 ADR-001）--- */
+    --z-canvas: 0;              /* L0 画布底 */
+    --z-canvas-overlay: 5;      /* L1 画布覆盖（网格、连线）*/
+    --z-node: 10;               /* L2 节点层（未选中）*/
+    --z-node-active: 20;        /* L3 激活节点（选中/拖拽）*/
+    --z-toolbar: 30;            /* L4 浮动工具栏（顶栏、dock、zoom）*/
+    --z-node-toolbar: 50;       /* L5 节点工具栏（click 触发）*/
+    --z-panel: 60;              /* L6 侧边面板（侧栏、素材托盘）*/
+    --z-panel-floating: 80;     /* L7 浮动面板（助手/agent/活动任务）*/
+    --z-modal: 100;             /* L8 对话框 */
+    --z-modal-overlay: 110;     /* L9 遮罩 */
+    --z-canvas-overlay-active: 150; /* 画布浮层：最后交互的面板 */
+    --z-popover: 200;           /* L10 弹出层 */
+    --z-toast: 500;             /* L11 通知 */
+    --z-tooltip: 1000;          /* L12 提示 */
+    --z-dialog-popover: 1100;   /* AntD Modal 之上的设置浮层 */
+    --z-loader: 1200;           /* 全屏加载遮罩 */
+    --z-max: 2000;              /* L13 最高（紧急通知）*/
+
+    /* --- 6b. Canvas 浮层定位 inset（画布安全区，对应审计 D2/P0-2）--- */
+    --canvas-inset-x: 16px;             /* 浮层水平安全区（dock inset、顶栏 px）*/
+    --canvas-inset-y: 16px;             /* 浮层垂直安全区（dock 底部）*/
+    --canvas-topbar-h: 64px;            /* 顶部栏高度 */
+    --canvas-topbar-offset: calc(var(--canvas-topbar-h) + 8px); /* 顶栏下方浮层顶部偏移 */
+    --canvas-dock-popover-offset: 50px; /* dock 弹出面板底部偏移 */
+
+    /* --- 7. 动效（对应 #99 动效 token）--- */
+    /* duration */
+    --motion-dur-instant: 80ms;
+    --motion-dur-fast: 150ms;
+    --motion-dur-base: 250ms;
+    --motion-dur-slow: 400ms;
+    --motion-dur-emphasize: 600ms;
+    /* easing */
+    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+    --motion-ease-in-out: cubic-bezier(0.64, 0, 0.36, 1);
+    --motion-ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --motion-ease-linear: linear;
+    /* delay */
+    --motion-delay-none: 0ms;
+    --motion-delay-xs: 30ms;
+    --motion-delay-sm: 60ms;
+    --motion-delay-md: 100ms;
+    --motion-delay-lg: 150ms;
+    /* motion-scale（联动 prefers-reduced-motion）*/
+    --motion-scale: 1;
+
+    /* --- 8. 描边宽度 --- */
+    --stroke-0: 0px;
+    --stroke-1: 1px;
+    --stroke-2: 2px;
+    --stroke-3: 3px;
+
+    /* --- 9. 不透明度（6 档）--- */
+    --opa-hide: 0.08;
+    --opa-faint: 0.2;
+    --opa-muted: 0.45;
+    --opa-subtle: 0.55;
+    --opa-medium: 0.72;
+    --opa-full: 1;
+
+    /* 毛玻璃参数：收敛浮层玻璃质感，避免组件散落字面 blur/saturate */
+    --glass-blur: 10px;
+    --glass-saturate: 112%;
+    --glass-alpha: 0.94;
+    --glass-alpha-strong: 0.97;
+    --glass-border-alpha: 0.78;
+
+    /* 登录表单跟随全局明暗主题；品牌影片保留独立深色舞台。 */
+    --auth-page-bg: #ffffff;
+    --auth-panel-bg: #f7f7f7;
+    --auth-card-bg: #ffffff;
+    --auth-accent: #2563eb;
+    --auth-muted: #737373;
+    /* 协议勾选框的填充色与对勾色。必须成对维护：两者相近会在某一主题下
+       退化成看不见的勾选态。深色主题下这里与 --foreground 的白色相反。 */
+    --auth-check-bg: #171717;
+    --auth-check-fg: #ffffff;
+
+    /* 可配置皮肤的组件入口。经典主题保持这些项目原始值；自定义主题在
+       React 启动前由公开外观配置覆盖，页面和组件只消费这些语义变量。 */
+    --icon-foreground: #3f3f46;
+    --icon-muted: #a1a1aa;
+    --icon-active: #171717;
+    --control-radius: 6px;
+    --button-radius: 6px;
+    --input-radius: 6px;
+    --card-radius: 12px;
+    --overlay-radius: 12px;
+    --menu-radius: 8px;
+    --checkbox-radius: 4px;
+    --control-border-width: 1px;
+    --focus-ring-width: 2px;
+    --icon-size: 16px;
+    --theme-hover-lift: 1px;
+}
+
+/* prefers-reduced-motion 降级（对应 #99 三级降级策略 L1）*/
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-scale: 0.3;
+    }
+}
+
+/* 用户在应用内选择"无动效"时，JS 添加 .no-motion 类（L2 禁用）*/
+.no-motion {
+    --motion-scale: 0;
+}
+
+/* infinite 装饰动画在 reduced-motion / no-motion 下降级（对应 #99 三级降级）*/
+@media (prefers-reduced-motion: reduce) {
+    .canvas-connection-flow,
+    .canvas-connection-comet,
+    .canvas-connection-draft,
+    .canvas-task-progress-shimmer,
+    .ai-title-aurora,
+    .creation-intro-mark,
+    .creation-intro-word,
+    .creation-intro-signal {
+        animation-duration: 0.01ms;
+        animation-iteration-count: 1;
+    }
+}
+.no-motion .canvas-connection-flow,
+.no-motion .canvas-connection-comet,
+.no-motion .canvas-connection-draft,
+.no-motion .canvas-task-progress-shimmer,
+.no-motion .ai-title-aurora,
+.no-motion .creation-intro-mark,
+.no-motion .creation-intro-word,
+.no-motion .creation-intro-signal {
+    animation: none;
+}
+
+.auth-scene {
+    background: var(--auth-page-bg);
+    color: var(--foreground);
+}
+
+.auth-scene-hero {
+    background: var(--auth-panel-bg);
+    color: var(--foreground);
+}
+
+.auth-scene-hero-overlay {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--auth-panel-bg) 40%, transparent),
+        transparent 42%,
+        color-mix(in srgb, var(--auth-panel-bg) 76%, transparent)
+    );
+    pointer-events: none;
+}
+
+.auth-scene-brand,
+.auth-scene-brand:hover {
+    color: inherit;
+}
+
+.auth-scene-hero-control {
+    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+    background: color-mix(in srgb, var(--auth-panel-bg) 78%, transparent);
+    color: color-mix(in srgb, var(--foreground) 82%, transparent);
+}
+
+.auth-scene-hero-control:hover {
+    background: color-mix(in srgb, var(--auth-panel-bg) 92%, transparent);
+}
+
+.auth-scene-hero-muted {
+    color: color-mix(in srgb, var(--foreground) 64%, transparent);
+}
+
+.auth-scene-hero-title {
+    color: var(--foreground);
+}
+
+.auth-scene-form-pane {
+    background: var(--auth-panel-bg);
+}
+
+.auth-scene-video-blend {
+    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--auth-panel-bg) 68%, transparent) 58%, var(--auth-panel-bg) 100%);
+}
+
+.auth-scene-card {
+    background: var(--auth-card-bg);
+    box-shadow: var(--elevation-card-hover);
+}
+
+.auth-scene-eyebrow {
+    color: var(--auth-accent);
+}
+
+.auth-scene-muted {
+    color: var(--auth-muted);
+}
+
+.auth-scene-label {
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+}
+
+.auth-scene-icon {
+    color: var(--auth-muted);
+}
+
+.auth-scene-link {
+    color: var(--auth-accent);
+}
+
+.auth-scene-link:hover {
+    color: var(--foreground);
+}
+
+.auth-scene-link:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 3px;
+}
+
+.auth-scene-divider.ant-divider {
+    border-color: var(--border);
+    color: var(--auth-muted);
+}
+
+.auth-scene-notice {
+    --auth-notice-color: var(--palette-status-warning);
+    border-color: color-mix(in srgb, var(--auth-notice-color) 24%, transparent);
+    background: color-mix(in srgb, var(--auth-notice-color) 6%, transparent);
+    color: var(--foreground);
+}
+
+.auth-scene-notice[data-tone="blue"] {
+    --auth-notice-color: var(--palette-status-loading);
+}
+
+.auth-scene-notice > span:first-child {
+    color: var(--auth-notice-color);
+}
+
+.auth-scene-return {
+    border: var(--control-border-width) solid var(--border);
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    color: var(--auth-muted);
+}
+
+.auth-scene-return:hover {
+    border-color: var(--input);
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: var(--foreground);
+}
+
+/* --- 注册页协议同意行 ---------------------------------------------------------
+   勾选热区必须覆盖“文字 + 协议名”整段，但协议名同时是可点击的阅读入口，
+   因此热区由 label 承担，协议名按钮用 stopPropagation 之外的方式独立可点：
+   这里只做视觉与排布，行为仍由 React 侧控制。 */
+.auth-agreement-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: var(--control-border-width) solid transparent;
+    border-radius: var(--r-sm);
+    color: var(--auth-muted);
+    font-size: var(--fs-label);
+    line-height: 1.65;
+    transition:
+        border-color var(--motion-instant) ease-out,
+        background-color var(--motion-instant) ease-out,
+        color var(--motion-instant) ease-out;
+}
+
+.auth-agreement-row:hover {
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+/* 已勾选时用极轻的强调底色标记“这一步已完成”，不做成第二主色。 */
+.auth-agreement-row[data-accepted="true"] {
+    border-color: color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: color-mix(in srgb, var(--foreground) 4.5%, transparent);
+    color: color-mix(in srgb, var(--foreground) 78%, transparent);
+}
+
+/* 未勾选时给协议名一个克制的提示底色，指向“这里还没有同意”。 */
+.auth-agreement-row[data-accepted="false"] .auth-agreement-link {
+    text-decoration-line: underline;
+    text-decoration-color: color-mix(in srgb, var(--auth-accent) 42%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.auth-agreement-row .ant-checkbox-wrapper {
+    flex: 0 0 auto;
+    margin-inline-end: 0;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+/* AntD 默认把 checkbox 行高 22px 与文案首行错开 1px 左右，这里统一到首行。 */
+.auth-agreement-row .ant-checkbox {
+    align-self: flex-start;
+    top: 0.1em;
+}
+
+.auth-agreement-row .ant-checkbox + span {
+    padding-inline-start: var(--space-2);
+    padding-inline-end: 0;
+}
+
+.auth-agreement-label {
+    color: inherit;
+}
+
+.auth-agreement-link {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--auth-accent);
+    font: inherit;
+    line-height: inherit;
+    text-align: start;
+    transition: color var(--motion-instant) ease-out;
+}
+
+.auth-agreement-link:hover {
+    color: var(--foreground);
+}
+
+.auth-agreement-link:focus-visible {
+    border-radius: 3px;
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 3px;
+}
+
+/* --- 协议阅读弹窗 -------------------------------------------------------------
+   长条款需要稳定的阅读列宽和可预期的滚动边界；正文段落之间用间距而不是
+   空行撑开，避免后台多段文本被渲染成松散的空洞。 */
+.auth-agreement-modal .ant-modal-container {
+    border-radius: var(--r-lg);
+}
+
+.auth-agreement-modal .ant-modal-header {
+    margin-bottom: var(--space-1);
+}
+
+.auth-agreement-modal .ant-modal-title {
+    font-size: var(--fs-title-sm, 16px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+}
+
+.auth-agreement-body {
+    max-height: min(56vh, 460px);
+    overflow-y: auto;
+    padding-inline-end: var(--space-3);
+    overscroll-behavior: contain;
+    color: color-mix(in srgb, var(--foreground) 74%, transparent);
+    font-size: var(--fs-body, 13px);
+    line-height: 1.85;
+}
+
+.auth-agreement-body p {
+    margin: 0;
+}
+
+.auth-agreement-body p + p {
+    margin-top: var(--space-4);
+}
+
+/* 启用“一、二、三”式条目标题时，标题段单独加重，正文段保持常规字重。 */
+.auth-agreement-body p[data-role="heading"] {
+    margin-top: var(--space-5);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.auth-agreement-body p[data-role="heading"]:first-child {
+    margin-top: 0;
+}
+
+.auth-agreement-empty {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-3);
+    border: var(--control-border-width) dashed color-mix(in srgb, var(--foreground) 16%, transparent);
+    border-radius: var(--r-md);
+    color: var(--auth-muted);
+    font-size: var(--fs-label);
+    justify-content: center;
+}
+
+.auth-agreement-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: var(--control-border-width) solid var(--border);
+    color: var(--auth-muted);
+    font-size: var(--fs-micro, 11px);
+    letter-spacing: 0.01em;
+}
+
+.site-compliance-footer {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+    text-align: center;
+}
+
+.site-compliance-footer > span {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.site-compliance-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: inherit;
+    text-decoration: none;
+    transition: color var(--motion-instant) ease-out;
+}
+
+.site-compliance-footer a:hover,
+.site-compliance-footer a:focus-visible {
+    color: var(--foreground);
+}
+
+.site-compliance-footer a:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--ring) 68%, transparent);
+    outline-offset: 3px;
+}
+
+.site-compliance-footer svg {
+    width: 11px;
+    height: 11px;
+}
+
+.site-compliance-footer.is-auth {
+    min-height: 54px;
+    border-top: var(--control-border-width) solid var(--border);
+    background: color-mix(in srgb, var(--auth-panel-bg) 88%, transparent);
+    color: var(--auth-muted);
+    backdrop-filter: blur(14px);
+}
+
+.site-compliance-footer.is-auth a:hover,
+.site-compliance-footer.is-auth a:focus-visible {
+    color: var(--foreground);
+}
+
+@media (max-width: 640px) {
+    .site-compliance-footer {
+        flex-direction: column;
+        gap: var(--space-1);
+    }
+}
+
+/* 动效计算函数（实际 duration = base * motion-scale）*/
+:root {
+    --motion-dur-instant-calc: calc(var(--motion-dur-instant) * var(--motion-scale));
+    --motion-dur-fast-calc: calc(var(--motion-dur-fast) * var(--motion-scale));
+    --motion-dur-base-calc: calc(var(--motion-dur-base) * var(--motion-scale));
+    --motion-dur-slow-calc: calc(var(--motion-dur-slow) * var(--motion-scale));
+    --motion-dur-emphasize-calc: calc(var(--motion-dur-emphasize) * var(--motion-scale));
+}
+
+@theme inline {
+    /* 响应式断点（对应 #99 四断点体系：mobile/tablet/desktop/wide）*/
+    --breakpoint-tablet: 768px;
+    --breakpoint-desktop: 1024px;
+    --breakpoint-wide: 1440px;
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-border: var(--border);
+    --color-ring: var(--ring);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --font-heading: var(--font-sans);
+    --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-input: var(--input);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* === Design Token System 映射（对应 #96 三层架构）=== */
+    /* 色彩 — 节点类型色（可用 text-node-image / bg-node-video 等）*/
+    --color-node-image: var(--cn-type-image);
+    --color-node-video: var(--cn-type-video);
+    --color-node-text: var(--cn-type-text);
+    --color-node-audio: var(--cn-type-audio);
+    --color-node-config: var(--cn-type-config);
+    --color-node-script: var(--cn-type-script);
+    --color-node-drawing: var(--cn-type-drawing);
+    --color-node-frame: var(--cn-type-frame);
+    --color-node-character: var(--cn-type-character);
+    --color-node-skill: var(--cn-type-skill);
+
+    /* 色彩 — 状态色（可用 text-status-success / bg-status-error 等）*/
+    --color-status-success: var(--status-success);
+    --color-status-error: var(--status-error);
+    --color-status-loading: var(--status-loading);
+    --color-status-warning: var(--status-warning);
+    --color-surface: var(--surface);
+    --color-surface-hover: var(--surface-hover);
+    --color-surface-active: var(--surface-active);
+    --color-surface-secondary: var(--bg-secondary);
+    --color-surface-tertiary: var(--bg-tertiary);
+    --color-surface-strong: var(--workspace-surface-strong);
+    --color-workspace-glass: var(--workspace-glass-surface);
+
+    /* 色彩 — Canvas 语义色 */
+    --color-cn-text: var(--cn-text);
+    --color-cn-muted: var(--cn-muted);
+    --color-cn-faint: var(--cn-faint);
+    --color-cn-stroke: var(--cn-stroke);
+    --color-cn-fill: var(--cn-fill);
+
+    /* 字号
+       注意：Tailwind v4 的字号命名空间是 --text-*，--font-size-* 不被识别，
+       因此下面这组声明不会生成 text-micro / text-caption 之类的工具类。
+       组件请沿用既有惯例直接引用 Primitive：text-[var(--fs-label)]、text-[var(--fs-caption)] 等。 */
+    --font-size-micro: var(--fs-micro);
+    --font-size-tiny: var(--fs-tiny);
+    --font-size-label: var(--fs-label);
+    --font-size-caption: var(--fs-caption);
+    --font-size-body: var(--fs-body);
+    --font-size-body-lg: var(--fs-body-lg);
+    --font-size-heading: var(--fs-heading);
+    --font-size-heading-lg: var(--fs-heading-lg);
+    --font-size-title: var(--fs-title);
+    --font-size-display: var(--fs-display);
+}
+
+:root {
+    --radius: 0.5rem;
+    --motion-instant: 120ms;
+    --motion-state: 180ms;
+    --motion-panel: 240ms;
+    --ease-aceternity: var(--motion-ease-out);
+    --ease-product-enter: cubic-bezier(0.16, 1, 0.3, 1);
+    --workspace-canvas: var(--background);
+    /* 页面、导航和内容区共用同一底色；卡片/浮层才允许使用 surface token。 */
+    --workspace-page: var(--workspace-canvas);
+    --workspace-navigation: var(--workspace-page);
+    --workspace-content: var(--workspace-page);
+    --workspace-surface: #ffffff;
+    --workspace-surface-strong: #ffffff;
+    --workspace-border: rgba(17, 17, 17, 0.14);
+    --workspace-border-strong: rgba(17, 17, 17, 0.22);
+    --workspace-grid-line: rgba(17, 17, 17, 0.045);
+    --workspace-nav: var(--workspace-navigation);
+    --workspace-sidebar: var(--workspace-navigation);
+    --workspace-accent: #171717;
+    --workspace-accent-soft: rgba(17, 17, 17, 0.07);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 12%, transparent);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 16%, transparent);
+    --workspace-sidebar-width: 250px;        /* 侧栏展开宽度：较 208px 加宽 20% */
+    --workspace-sidebar-nav-width: 250px;    /* 展开态导航内容宽度 */
+    --workspace-sidebar-collapsed-width: 67px; /* 折叠态保留可发现的图标菜单轨 */
+
+    --workspace-shell-gutter: 6px;        /* 工作区外壳画布留白与卡片间隙（组件 token）*/
+
+    --workspace-card-gap: 4px;       /* 侧边栏与主区卡片之间间隙（组件 token）*/
+
+    /* --- Semantic 层（引用 Primitive，随主题切换）--- */
+    /* 通用语义色（引用 Primitive neutral 色板）*/
+    --bg: var(--color-neutral-0);
+    --fg: var(--color-neutral-950);
+    --border-semantic: var(--color-neutral-200);
+    --bg-secondary: var(--color-neutral-50);
+    --bg-tertiary: var(--color-neutral-100);
+    --surface: var(--color-neutral-0);
+    --surface-hover: rgba(17, 17, 17, 0.05);
+    --surface-active: rgba(17, 17, 17, 0.09);
+
+    /* composio 文字层级（light 自推导；dark 值见 .dark 同区）*/
+    --workspace-text-body: var(--color-neutral-600);  /* body 角色 */
+    --workspace-text-muted: var(--color-neutral-500); /* muted 角色 */
+    --workspace-text-faint: var(--color-neutral-400); /* muted-soft 角色 */
+    --workspace-canvas-deep: var(--color-neutral-0);  /* canvas-deep 角色（light 无更深处）*/
+    --workspace-glass-surface: color-mix(in srgb, var(--workspace-surface) calc(var(--glass-alpha) * 100%), transparent);
+    --workspace-glass-border: color-mix(in srgb, var(--workspace-border) calc(var(--glass-border-alpha) * 100%), transparent);
+    --accent: var(--workspace-accent);
+    --accent-soft: var(--workspace-accent-soft);
+    --muted: var(--color-neutral-100);
+
+    /* 顶部常驻通知条（Layer 3 组件引用；文字恒为白）
+       四个 --notice-banner-surface-<type> 与通知类型一一对应，dark 覆盖见 .dark 语义覆盖区；
+       --notice-banner-surface 是「公告」的别名，供不区分类型的引用使用。*/
+    --notice-banner-surface-notice: var(--palette-banner-notice-500);
+    --notice-banner-surface-activity: var(--palette-banner-activity-500);
+    --notice-banner-surface-update: var(--palette-banner-update-500);
+    --notice-banner-surface-warning: var(--palette-banner-warning-500);
+    --notice-banner-surface: var(--notice-banner-surface-notice);
+
+    /* Canvas Theme 语义（从 CSS 变量反序列化到 TS 主题对象，对应 #96 决策3）*/
+    --cn-text: var(--color-neutral-950);
+    --cn-muted: var(--color-neutral-500);
+    --cn-faint: var(--color-neutral-400);
+    --cn-stroke: var(--color-neutral-200);
+    --cn-fill: var(--color-neutral-50);
+    --cn-active-stroke: var(--workspace-accent);
+    --cn-active-stroke-soft: var(--workspace-accent-soft);
+
+    /* Aceternity spatial 语义（对应 #96 决策3：CSS→TS 单向同步）*/
+    --cn-spatial-surface: var(--workspace-surface);
+    --cn-spatial-surface-strong: var(--workspace-surface-strong);
+    --cn-spatial-shadow: rgba(0, 0, 0, 0.12);
+    --cn-spatial-glow: rgba(125, 162, 255, 0.2);
+    --cn-spatial-glow-strong: rgba(125, 162, 255, 0.35);
+    --cn-spatial-elevated: var(--color-neutral-0);
+    --cn-spatial-toolbar-border: var(--color-neutral-200);
+
+    --previs-sequencer-surface: var(--color-neutral-900);
+    --previs-sequencer-surface-raised: var(--color-neutral-800);
+    --previs-sequencer-border: rgba(255, 255, 255, 0.11);
+    --previs-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --previs-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --previs-dock-surface: rgba(17, 19, 21, 0.92);
+    --previs-dock-fg: rgba(255, 255, 255, 0.62);
+    --previs-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --previs-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --previs-control-hover: rgba(255, 255, 255, 0.09);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.18);
+
+    /* 编辑器工作台：圆角浮卡舞台底色 + 常亮强调色（明暗两主题同值，避免 workspace-accent 黑白反转）*/
+    --previs-workspace-bg: #0b0d0f;
+    --previs-accent: #4f8cff;
+    --previs-accent-hover: #6ba0ff;
+    --previs-on-accent: #ffffff;
+    --previs-success: #34d399;
+    --previs-warning: #fbbf24;
+    --previs-danger: #f87171;
+    --previs-success-soft: rgba(52, 211, 153, 0.14);
+    --previs-warning-soft: rgba(251, 191, 36, 0.14);
+    --previs-danger-soft: rgba(248, 113, 113, 0.14);
+
+    /* 节点类型色（引用 Primitive 节点色板，对应 #97 决策1 色带方案）*/
+    --cn-type-image: var(--palette-node-image);
+    --cn-type-video: var(--palette-node-video);
+    --cn-type-text: var(--palette-node-text);
+    --cn-type-audio: var(--palette-node-audio);
+    --cn-type-config: var(--palette-node-config);
+    --cn-type-script: var(--palette-node-script);
+    --cn-type-drawing: var(--palette-node-drawing);
+    --cn-type-frame: var(--palette-node-frame);
+    --cn-type-character: var(--palette-node-character);
+    --cn-type-skill: var(--palette-node-skill);
+
+    /* 状态语义色 */
+    --status-success: var(--palette-status-success);
+    --status-error: var(--palette-status-error);
+    --status-loading: var(--palette-status-loading);
+    --status-warning: var(--palette-status-warning);
+
+    --border: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: #dc2626;
+    --input: oklch(0.922 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: var(--btn-solid-bg);
+    --sidebar-primary-foreground: var(--btn-solid-fg);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+    --background: #0f0f0f;
+    --auth-page-bg: #08090c;
+    --auth-panel-bg: #0b0c10;
+    --auth-card-bg: #121318;
+    --auth-accent: #93c5fd;
+    --auth-muted: #8a8b91;
+    /* 深色主题下勾选框用浅底 + 深勾，与浅色主题的深底 + 白勾形成互补；
+       直接复用 --foreground 会得到白底白勾。 */
+    --auth-check-bg: #e5e5e5;
+    --auth-check-fg: #171717;
+    --foreground: #ffffff;
+    --border: #222222;
+    --ring: oklch(0.556 0 0);
+    --card: #181818;
+    --card-foreground: #ffffff;
+    --popover: #222222;
+    --popover-foreground: #ffffff;
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: #a8a8a8;
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: #ff4d4d;
+    --destructive-hover: #ff6b6b;
+    --destructive-active: #e63939;
+    --destructive-foreground: #2b0808;
+    --palette-status-success: #33d17a;
+    --palette-status-error: #ff4d4d;
+    --palette-status-loading: #60a5fa;
+    --palette-status-warning: #fbbf24;
+    --input: rgba(255, 255, 255, 0.15);
+    --workspace-canvas: var(--background);
+    --workspace-page: var(--workspace-canvas);
+    --workspace-navigation: var(--workspace-page);
+    --workspace-content: var(--workspace-page);
+    --workspace-surface: #181818;
+    --workspace-surface-strong: #2a2a2a; /* composio surface-strong（原 #222222 并入 elevated 语义）*/
+    --workspace-border: #222222;
+    --workspace-border-strong: #333333;
+    --workspace-grid-line: rgba(255, 255, 255, 0.038);
+    --workspace-nav: var(--workspace-navigation);
+    --workspace-sidebar: var(--workspace-navigation);
+    --workspace-accent: #f5f5f5;
+    --workspace-accent-soft: rgba(255, 255, 255, 0.09);
+    --workspace-nav-active-bg: color-mix(in srgb, var(--workspace-accent) 13%, transparent);
+    --workspace-nav-active-hover-bg: color-mix(in srgb, var(--workspace-accent) 18%, transparent);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: var(--btn-solid-bg);
+    --sidebar-primary-foreground: var(--btn-solid-fg);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+
+    /* --- Semantic 层 dark 覆盖 --- */
+    --bg: var(--color-neutral-950);
+    --fg: var(--color-neutral-50);
+    --border-semantic: var(--color-neutral-800);
+    --bg-secondary: #141414;
+    --bg-tertiary: #181818;
+    --surface: #1f1f1f;
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --surface-active: rgba(255, 255, 255, 0.12);
+    --muted: var(--color-neutral-900);
+
+    /* 顶部常驻通知条：暗色下四种类型统一压暗，白字对比度约 8.5:1 */
+    --notice-banner-surface-notice: var(--palette-banner-notice-700);
+    --notice-banner-surface-activity: var(--palette-banner-activity-700);
+    --notice-banner-surface-update: var(--palette-banner-update-700);
+    --notice-banner-surface-warning: var(--palette-banner-warning-700);
+    --notice-banner-surface: var(--notice-banner-surface-notice);
+
+    /* composio 文字层级（dark 直取）*/
+    --workspace-text-body: #a8a8a8;  /* body（tokens.json text/body）*/
+    --workspace-text-muted: #888888; /* muted（tokens.json text/muted）*/
+    --workspace-text-faint: #666666; /* muted-soft（tokens.json text/muted-soft）*/
+    --workspace-canvas-deep: #000000; /* canvas-deep（tokens.json color/canvas-deep）*/
+
+    --cn-text: var(--color-neutral-50);
+    --cn-muted: var(--color-neutral-400);
+    --cn-faint: var(--color-neutral-500);
+    --cn-stroke: rgba(255, 255, 255, 0.1);
+    --cn-fill: rgba(255, 255, 255, 0.04);
+    --cn-active-stroke: var(--workspace-accent);
+    --cn-active-stroke-soft: var(--workspace-accent-soft);
+
+    --cn-spatial-surface: var(--workspace-surface);
+    --cn-spatial-surface-strong: var(--workspace-surface-strong);
+    --cn-spatial-shadow: rgba(0, 0, 0, 0.4);
+    --cn-spatial-glow: rgba(125, 162, 255, 0.15);
+    --cn-spatial-glow-strong: rgba(125, 162, 255, 0.25);
+    --cn-spatial-elevated: var(--color-neutral-900);
+    --cn-spatial-toolbar-border: rgba(255, 255, 255, 0.1);
+
+    --previs-sequencer-surface: #111315;
+    --previs-sequencer-surface-raised: #191c1f;
+    --previs-sequencer-border: rgba(255, 255, 255, 0.11);
+    --previs-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --previs-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --previs-dock-surface: rgba(17, 19, 21, 0.92);
+    --previs-dock-fg: rgba(255, 255, 255, 0.62);
+    --previs-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --previs-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --previs-control-hover: rgba(255, 255, 255, 0.09);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.18);
+
+    /* 编辑器工作台：圆角浮卡舞台底色 + 常亮强调色（明暗两主题同值，避免 workspace-accent 黑白反转）*/
+    --previs-workspace-bg: #0b0d0f;
+    --previs-accent: #4f8cff;
+    --previs-accent-hover: #6ba0ff;
+    --previs-on-accent: #ffffff;
+    --previs-success: #34d399;
+    --previs-warning: #fbbf24;
+    --previs-danger: #f87171;
+    --previs-success-soft: rgba(52, 211, 153, 0.14);
+    --previs-warning-soft: rgba(251, 191, 36, 0.14);
+    --previs-danger-soft: rgba(248, 113, 113, 0.14);
+}
+
+
+/* 剪辑工作台：跟随明暗主题的表面（作用域覆盖 previs 常暗 token；canvas 导演工作台全局值不受影响）*/
+.editor-workbench {
+    --previs-sequencer-surface: #fbfcfe;
+    --previs-sequencer-surface-raised: #f1f4f7;
+    --previs-sequencer-border: rgba(15, 23, 42, 0.12);
+    --previs-sequencer-muted: rgba(15, 23, 42, 0.5);
+    --previs-sequencer-grid: rgba(15, 23, 42, 0.07);
+    --previs-dock-surface: rgba(255, 255, 255, 0.96);
+    --previs-dock-fg: rgba(15, 23, 42, 0.62);
+    --previs-dock-fg-strong: rgba(15, 23, 42, 0.94);
+    --previs-dock-active-surface: rgba(15, 23, 42, 0.12);
+    --previs-control-hover: rgba(15, 23, 42, 0.06);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.12);
+    --previs-workspace-bg: #e9edf2;
+}
+.dark .editor-workbench {
+    --previs-sequencer-surface: #111315;
+    --previs-sequencer-surface-raised: #191c1f;
+    --previs-sequencer-border: rgba(255, 255, 255, 0.11);
+    --previs-sequencer-muted: rgba(255, 255, 255, 0.48);
+    --previs-sequencer-grid: rgba(255, 255, 255, 0.055);
+    --previs-dock-surface: rgba(17, 19, 21, 0.92);
+    --previs-dock-fg: rgba(255, 255, 255, 0.62);
+    --previs-dock-fg-strong: rgba(255, 255, 255, 0.96);
+    --previs-dock-active-surface: rgba(255, 255, 255, 0.14);
+    --previs-control-hover: rgba(255, 255, 255, 0.09);
+    --previs-swatch-inset: rgba(0, 0, 0, 0.18);
+    --previs-workspace-bg: #0b0d0f;
+}
+
+/* 全屏编辑：workbench 全屏时铺满视口（背景沿用工作区底色） */
+.editor-workbench:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    background: var(--previs-workspace-bg);
+}
+
+
+.dark {
+
+    /* --- Shadow dark 覆盖（暗色下黑影不可见，改用白色微影制造抬升感，审计 D4/P2-D2）---
+       组件 token（--node-shadow/--dock-shadow/--panel-shadow/--modal-shadow）均引用
+       var(--shadow-*)，此处覆盖自动级联。--cn-spatial-shadow（内联 boxShadow 用）已有
+       暗色变体(0.4)，保留不动。 */
+    --shadow-xs: 0 1px 2px rgba(255, 255, 255, 0.04);
+    --shadow-sm: 0 2px 4px rgba(255, 255, 255, 0.05);
+    --shadow-md: 0 4px 12px rgba(255, 255, 255, 0.06);
+    --shadow-lg: 0 8px 24px rgba(255, 255, 255, 0.07);
+    --shadow-xl: 0 16px 40px rgba(255, 255, 255, 0.08);
+    --shadow-2xl: 0 24px 60px rgba(255, 255, 255, 0.1);
+
+    /* 抬升 token：暗色下继续用黑影压深，只把 hairline 换成浅色描边。 */
+    --elevation-hairline: inset 0 0 0 1px rgba(255, 255, 255, 0.085);
+    --elevation-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --elevation-card-hover: 0 12px 30px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.32);
+    --elevation-overlay: 0 28px 72px rgba(0, 0, 0, 0.62), 0 4px 14px rgba(0, 0, 0, 0.4);
+    --elevation-panel: -20px 0 60px rgba(0, 0, 0, 0.56);
+
+    --surface-card: rgba(255, 255, 255, 0.035);
+    --surface-card-hover: rgba(255, 255, 255, 0.062);
+    --project-library-surface: #151515;
+    --project-library-cover-surface: #1c1c1c;
+    --project-library-icon-surface: #0d0d0d;
+    --project-library-shadow: none;
+
+    /* === 新卡片系统 Token - Dark（对应 docs/ui-design-system.md）=== */
+    --card-surface: #171717;
+    --card-surface-hover: #1e1e1e;
+    --card-surface-raised: #252525;
+
+    --card-border: transparent;
+    --card-border-hover: transparent;
+
+    --card-elevation: none;
+    --card-elevation-hover: none;
+
+    --canvas-cover-surface: #171717;
+    --canvas-icon-surface: #0d0d0d;
+    --canvas-icon-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+    --canvas-folder-surface: color-mix(in srgb, var(--workspace-surface-strong) 78%, transparent);
+    --canvas-folder-surface-strong: color-mix(in srgb, var(--workspace-surface-strong) 92%, transparent);
+    --canvas-folder-edge: color-mix(in srgb, var(--foreground) 22%, transparent);
+    --canvas-folder-ink: var(--foreground);
+    --canvas-folder-muted: color-mix(in srgb, var(--foreground) 54%, transparent);
+    --canvas-folder-action-bg: var(--primary);
+    --canvas-folder-action-fg: var(--primary-foreground);
+
+    --media-surface: #171717;
+
+    --skeleton-surface: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.08) 50%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+
+    --btn-solid-bg: #f5f5f5;
+    --btn-solid-hover-bg: #ffffff;
+    --btn-solid-active-bg: #e5e5e5;
+    --btn-solid-fg: #131313;
+    --control-selected-bg: rgba(255, 255, 255, 0.12);
+    --control-selected-hover-bg: rgba(255, 255, 255, 0.16);
+    --control-selected-fg: #f5f5f5;
+    --control-selected-border: rgba(255, 255, 255, 0.18);
+    --control-check-bg: #f5f5f5;
+    --control-check-fg: #131313;
+    --control-switch-checked-bg: #22c55e;
+    --control-switch-checked-hover-bg: #4ade80;
+    --control-switch-checked-handle: #071a0f;
+    --control-switch-off-bg: #525252;
+    --control-switch-off-hover-bg: #686868;
+    --control-switch-off-handle: #f5f5f5;
+    --control-disabled-bg: rgba(255, 255, 255, 0.06);
+    --control-disabled-fg: rgba(255, 255, 255, 0.38);
+}
+
+/* -------------------------------------------------------------------------
+   Layer 3: Component — 引用 Semantic，某组件专属
+   ------------------------------------------------------------------------- */
+:root {
+    /* 插件页也消费统一的主题开关合同，不再维护一套脱离主题的固定色。 */
+    --plugin-switch-checked-bg: var(--control-switch-checked-bg);
+    --plugin-switch-checked-hover-bg: var(--control-switch-checked-hover-bg);
+    --plugin-switch-checked-handle: var(--control-switch-checked-handle);
+    --plugin-switch-off-bg: var(--control-switch-off-bg);
+    --plugin-switch-off-hover-bg: var(--control-switch-off-hover-bg);
+    --plugin-switch-off-handle: var(--control-switch-off-handle);
+
+    /* Library 卡片组件：所有作品库共用同一表面和状态合同。 */
+    --library-surface: var(--card-surface);
+    --library-surface-hover: var(--card-surface-hover);
+    --library-cover-surface: var(--card-surface-raised);
+    --library-selected-stroke: var(--control-selected-border);
+    --library-hover-offset: -2px;
+    --library-active-offset: -1px;
+
+    /* Dock 组件（FloatingDock、悬停工具栏，对应 #95 工具栏方案）*/
+    --dock-radius: var(--r-xl);            /* 14px */
+    --dock-padding: var(--space-2);       /* 8px */
+    --dock-icon-size: 32px;
+    --dock-icon-size-labeled: 36px;
+    --dock-label-fs: var(--fs-label);     /* 11px */
+    --dock-blur: 24px;
+    --dock-surface: var(--cn-spatial-surface);
+    --dock-border: transparent;
+    --dock-item-radius: var(--r-md);      /* 8px */
+    --dock-item-radius-labeled: var(--r-lg); /* 12px */
+    --dock-radius-tight: var(--r-tight);
+    --dock-radius-compact: var(--r-dock-compact);
+    --dock-tooltip-z: 140;
+    --dock-precision-width: var(--space-12);
+    --dock-z-popover: 30;                 /* dock 子面板在 toolbar 根 stacking context 内的层级（见 ADR-001）*/
+    --dock-switch-track: #000000;         /* 抓手/框选胶囊轨道：纯黑，和工具栏表面分开 */
+    --dock-switch-thumb: #ffffff;
+    --dock-switch-thumb-text: #000000;    /* 选中图标落在白圆上，用纯黑描边避免发灰 */
+
+    /* 页面顶部栏（PageHeader / 工作台头部）*/
+    --page-topbar-h: 64px;
+    --page-topbar-px: var(--space-4);
+    --page-topbar-surface: var(--bg-secondary);
+    --page-topbar-border: var(--workspace-border);
+    --canvas-topbar-surface: var(--workspace-glass-surface);
+    /* Canvas 创建菜单：固定行高保证图标、徽标和单行标签互不挤占 */
+    --canvas-create-node-height: var(--space-16);
+    --canvas-create-resource-height: var(--space-8);
+
+    /* Node 组件：节点首先是内容容器，常态不使用卡片投影或发光。 */
+    --node-radius: var(--r-lg);           /* 12px */
+    --node-header-height: 24px;
+    --node-title-fs: var(--fs-label);     /* 11px */
+    --node-badge-fs: var(--fs-tiny);      /* 10px */
+    --node-type-strip-width: 3px;         /* 色带宽度 */
+    --node-type-badge-size: 20px;         /* 图标徽章尺寸 */
+    --node-z-content: 30;                 /* 节点遮罩层（stacking context 内，见 ADR-001）*/
+    --node-z-overlay: 40;                 /* 节点角标/按钮层 */
+    --node-z-handle: 50;                  /* 节点 resize handle 层 */
+
+    /* 节点上下文生成器：一层浮动表面，内部仅靠明度和间距组织信息。 */
+    --canvas-composer-radius: var(--r-lg);
+    --canvas-composer-surface: var(--workspace-surface-strong);
+    --canvas-composer-control-surface: color-mix(in srgb, var(--foreground) 5%, transparent);
+    --canvas-composer-control-hover: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --canvas-composer-shadow: var(--elevation-card);
+    --canvas-composer-settings-width: 138px;
+    --canvas-mention-menu-max-height: 320px;
+    --canvas-mention-search-height: 38px;
+    --canvas-mention-item-height: 38px;
+    --canvas-mention-chip-height: 22px;
+    --canvas-mention-chip-preview-size: 18px;
+    --canvas-mention-chip-gap: 0.12em;
+    --canvas-mention-chip-padding-inline: 0.16em;
+    --canvas-mention-chip-offset-y: 0.14em;
+    --canvas-reference-chip-size: 44px;
+
+    /* Modal 组件（对话框，对应 #98 面板层级）*/
+    --modal-radius: var(--r-lg);
+    --modal-width-compact: 480px;
+    --modal-width-standard: 640px;
+    --modal-width-wide: 920px;
+    --modal-overlay-opacity: 0.5;
+    --modal-shadow: var(--shadow-2xl);
+    --modal-padding: var(--space-5);      /* 20px */
+
+    /* Style Center / Editor */
+    --style-center-height: min(780px, 84dvh);
+    --style-editor-mobile-preview-height: 220px;
+    --style-center-sidebar-width: 184px;
+    --style-center-search-width: 320px;
+
+    /* Panel 组件（侧边面板，对应 #98 五层体系 L2）*/
+    --panel-radius: var(--r-2xl);         /* 16px */
+    --panel-padding: var(--space-4);      /* 16px */
+    --panel-shadow: var(--shadow-lg);
+    --panel-section-gap: var(--space-3);  /* 12px */
+    --panel-width-compact: 320px;
+    --panel-radius-wide-tight: var(--r-wide-tight);
+    --loader-z: var(--z-loader);
+
+    /* Previs workbench / Sequencer */
+    --previs-sequencer-min-height: 180px;
+    --previs-sequencer-label-width: 208px;
+    --previs-sequencer-row-height: 30px;
+    --previs-sequencer-base-width: 860px;
+    --previs-sequencer-shot-select-width: 144px;
+    --previs-dock-button-size: var(--space-8);
+    --previs-dock-bottom: var(--space-2);
+    --previs-pose-button-height: var(--space-8);
+    --previs-color-swatch-size: var(--space-6);
+
+    /* Canvas 布局（画布页浮层定位，对应审计 P0-8.1/P1-2.1）*/
+    --canvas-sidebar-width: 232px;        /* 项目侧栏宽度（短剧模式）*/
+    --canvas-panel-width: min(332px, calc(100vw - 24px)); /* 浮动面板默认宽度（活动任务等）*/
+    --video-segment-preview-max-height: min(46vh, 480px);
+
+    /* Prompt 面板（对应 #98 决策2 渐进式三区）*/
+    --prompt-panel-max-height: min(70vh, 640px);
+    --prompt-panel-section-fs: var(--fs-body);     /* 14px A区 */
+    --prompt-panel-caption-fs: var(--fs-caption);  /* 12px B区 */
+    --prompt-panel-label-fs: var(--fs-label);      /* 11px 标签 */
+    --settings-model-option-min-height: 76px;
+    --prompt-panel-heading-fs: var(--fs-heading);  /* 16px 区标题 */
+    --creation-media-pending-max-width: 320px;
+
+    /* 进度条（对应 #98 决策3 任务进度）*/
+    --progress-bar-height: 6px;
+    --progress-bar-radius: var(--r-xs);   /* 3px */
+    --progress-bar-fill: var(--status-loading);
+    --progress-bar-fill-success: var(--status-success);
+    --progress-bar-fill-error: var(--status-error);
+
+    /* 缩放控制（对应 #95 决策5）*/
+    --zoom-control-min: 0.05;
+    --zoom-control-max: 2;
+    --zoom-control-step: 0.1;
+
+    /* 短剧流程引导步骤（里程碑节点 + 状态轨道）*/
+    --flow-step-node: var(--space-5);             /* 20px 完成/待办节点直径 */
+    --flow-step-node-current: var(--space-6);     /* 24px 当前节点直径 */
+    --flow-step-gap: var(--space-1);              /* 4px 节点与标签间距 */
+    --flow-step-track-height: var(--stroke-2);    /* 2px 状态轨道高 */
+    --flow-step-track-width: var(--space-5);      /* 20px 轨道段长 */
+    --flow-step-current-glow: 0 0 0 4px var(--cn-active-stroke-soft); /* 当前节点光晕 */
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+    html,
+    body,
+    #root,
+    .ant-app {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+        background: var(--workspace-page);
+    }
+    body {
+        background: var(--workspace-page);
+        color: var(--foreground);
+    }
+    #root {
+        position: fixed;
+        inset: 0;
+        isolation: isolate;
+        overflow: hidden;
+    }
+    textarea {
+        resize: none;
+    }
+    textarea::-webkit-resizer {
+        display: none;
+    }
+    html {
+        @apply font-sans;
+    }
+}
+
+/* CodeMirror 使用运行时注入样式，需在全局覆盖中绑定项目主题 token。 */
+.prompt-code-editor,
+.prompt-code-editor .cm-editor {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.prompt-code-editor .cm-editor {
+    background: var(--workspace-surface-strong) !important;
+    color: var(--foreground);
+    font-size: var(--fs-caption);
+}
+
+.prompt-code-editor .cm-editor.cm-focused {
+    outline: 2px solid color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+    outline-offset: -2px;
+}
+
+.prompt-code-editor .cm-scroller {
+    overflow: auto;
+    overflow-x: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    line-height: 1.65;
+}
+
+.prompt-code-editor .cm-content {
+    padding-block: var(--space-3);
+    color: var(--foreground) !important;
+    caret-color: var(--foreground);
+}
+
+.prompt-code-editor .cm-line {
+    padding-inline: var(--space-3);
+    overflow-wrap: anywhere;
+}
+
+.prompt-code-editor .cm-gutters {
+    border-right: 1px solid var(--workspace-border) !important;
+    background: color-mix(in srgb, var(--workspace-surface-strong) 92%, var(--foreground) 8%) !important;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent) !important;
+}
+
+.prompt-code-editor .cm-activeLine,
+.prompt-code-editor .cm-activeLineGutter {
+    background: color-mix(in srgb, var(--workspace-accent) 7%, transparent) !important;
+}
+
+.prompt-code-editor .cm-selectionBackground,
+.prompt-code-editor .cm-content ::selection {
+    background: color-mix(in srgb, var(--workspace-accent) 24%, transparent) !important;
+}
+
+@layer utilities {
+
+    /* --- composio 排版语义类（tokens.json typography 14 档；abcDiatype → Inter，code → JetBrains Mono）--- */
+    .typ-display-mega { font-family: var(--font-sans); font-size: var(--typ-display-mega); line-height: 1.05; font-weight: 500; letter-spacing: -2.16px; }
+    .typ-display-xl { font-family: var(--font-sans); font-size: var(--typ-display-xl); line-height: 1.05; font-weight: 500; letter-spacing: -1.68px; }
+    .typ-display-lg { font-family: var(--font-sans); font-size: var(--typ-display-lg); line-height: 1.1; font-weight: 500; letter-spacing: -1.32px; }
+    .typ-display-md { font-family: var(--font-sans); font-size: var(--typ-display-md); line-height: 1.15; font-weight: 500; letter-spacing: -0.96px; }
+    .typ-display-sm { font-family: var(--font-sans); font-size: var(--typ-display-sm); line-height: 1.25; font-weight: 500; letter-spacing: -0.5px; }
+    .typ-title-md { font-family: var(--font-sans); font-size: var(--typ-title-md); line-height: 1.4; font-weight: 600; letter-spacing: 0; }
+    .typ-title-sm { font-family: var(--font-sans); font-size: var(--typ-title-sm); line-height: 1.4; font-weight: 600; letter-spacing: 0; }
+    .typ-body-md { font-family: var(--font-sans); font-size: var(--typ-body-md); line-height: 1.5; font-weight: 400; letter-spacing: 0; }
+    .typ-body-sm { font-family: var(--font-sans); font-size: var(--typ-body-sm); line-height: 1.5; font-weight: 400; letter-spacing: 0; }
+    .typ-caption { font-family: var(--font-sans); font-size: var(--typ-caption); line-height: 1.4; font-weight: 400; letter-spacing: 0; }
+    .typ-caption-uppercase { font-family: var(--font-sans); font-size: var(--typ-caption-uppercase); line-height: 1.4; font-weight: 600; letter-spacing: 0.88px; text-transform: uppercase; }
+    .typ-code { font-family: var(--font-mono); font-size: var(--typ-code); line-height: 1.5; font-weight: 400; letter-spacing: 0; }
+    .typ-button { font-family: var(--font-sans); font-size: var(--typ-button); line-height: 1; font-weight: 500; letter-spacing: 0; }
+    .typ-nav-link { font-family: var(--font-sans); font-size: var(--typ-nav-link); line-height: 1.4; font-weight: 500; letter-spacing: 0; }
+    .app-spatial-workspace {
+        --workspace-canvas: var(--background);
+        --workspace-page: var(--workspace-canvas);
+        --workspace-navigation: var(--workspace-page);
+        --workspace-content: var(--workspace-page);
+        --workspace-surface: rgba(255, 255, 255, 0.74);
+        --workspace-surface-strong: rgba(255, 255, 255, 1);
+        --workspace-border: rgba(17, 17, 17, 0.1);
+        --workspace-border-strong: rgba(17, 17, 17, 0.2);
+        --workspace-grid-line: rgba(17, 17, 17, 0.035);
+        --workspace-nav: var(--workspace-navigation);
+        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-accent: #171717;
+        --workspace-accent-soft: rgba(17, 17, 17, 0.065);
+        background-color: var(--workspace-canvas);
+        background-image:
+            linear-gradient(var(--workspace-grid-line) 1px, transparent 1px),
+            linear-gradient(90deg, var(--workspace-grid-line) 1px, transparent 1px);
+        background-size: 34px 34px;
+    }
+
+    .dark .app-spatial-workspace {
+        --workspace-canvas: var(--background);
+        --workspace-page: var(--workspace-canvas);
+        --workspace-navigation: var(--workspace-page);
+        --workspace-content: var(--workspace-page);
+        --workspace-surface: rgba(18, 18, 18, 0.76);
+        --workspace-surface-strong: rgba(22, 22, 22, 1);
+        --workspace-border: rgba(255, 255, 255, 0.09);
+        --workspace-border-strong: rgba(255, 255, 255, 0.18);
+        --workspace-grid-line: rgba(255, 255, 255, 0.026);
+        --workspace-nav: var(--workspace-navigation);
+        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-accent: #f5f5f5;
+        --workspace-accent-soft: rgba(255, 255, 255, 0.08);
+    }
+
+
+    .app-workspace-sidebar-scrim {
+        position: absolute;
+        z-index: 30;
+        inset: 0;
+        border: 0;
+        background: rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(2px);
+    }
+
+
+    /* 侧栏导航子项展开引导线：替代每组子项自行维护的分割线 */
+    .app-workspace-nav-guide-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        border-left: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+        pointer-events: none;
+    }
+
+    /* 分组标题：小号大写标签，弱化但可读；有标题的分组支持折叠，padding/间距由折叠按钮接管 */
+    .app-workspace-nav-group-label {
+        display: block;
+        font-size: var(--fs-label);
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--foreground) 36%, transparent);
+        transition: color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 8px;
+        border-radius: var(--r-sm);
+        text-align: left;
+        color: inherit;
+        transition: background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-nav-group-toggle:hover,
+    .app-workspace-nav-group-toggle:focus-visible {
+        background: var(--surface-hover);
+    }
+
+    .app-workspace-nav-group-toggle:hover .app-workspace-nav-group-label,
+    .app-workspace-nav-group-toggle:focus-visible .app-workspace-nav-group-label {
+        color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    }
+
+    .app-workspace-nav-group-toggle:hover svg,
+    .app-workspace-nav-group-toggle:focus-visible svg {
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
+    }
+
+    /* 工作区切换器下拉浮层 */
+    .app-workspace-nav-popover {
+        box-shadow: none;
+    }
+
+    body.app-spatial-overlays {
+        --workspace-overlay-bg: rgba(244, 244, 245, 1);
+        --workspace-overlay-bg-strong: rgba(250, 250, 250, 1);
+        --workspace-overlay-border: rgba(17, 17, 17, 0.22);
+        --workspace-overlay-divider: rgba(17, 17, 17, 0.1);
+        --workspace-overlay-highlight: rgba(255, 255, 255, 0.86);
+        --workspace-overlay-hover: rgba(17, 17, 17, 0.065);
+        --workspace-overlay-selected: rgba(17, 17, 17, 0.1);
+        --workspace-overlay-shadow: 0 26px 72px rgba(15, 23, 42, 0.18), 0 4px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .dark body.app-spatial-overlays {
+        --workspace-overlay-bg: rgba(10, 10, 11, 1);
+        --workspace-overlay-bg-strong: rgba(15, 15, 16, 1);
+        --workspace-overlay-border: rgba(255, 255, 255, 0.22);
+        --workspace-overlay-divider: rgba(255, 255, 255, 0.105);
+        --workspace-overlay-highlight: rgba(255, 255, 255, 0.2);
+        --workspace-overlay-hover: rgba(255, 255, 255, 0.075);
+        --workspace-overlay-selected: rgba(255, 255, 255, 0.115);
+        --workspace-overlay-shadow: 0 30px 84px rgba(0, 0, 0, 0.62), 0 8px 24px rgba(0, 0, 0, 0.34);
+    }
+
+    /* 全局轻量通知与消息提示框 */
+    .ant-message-notice .ant-message-notice-content,
+    :where(.dark, [data-theme="dark"]) .ant-message-notice .ant-message-notice-content {
+        color: var(--foreground) !important;
+        background: var(--color-surface, var(--workspace-overlay-bg-strong, #ffffff)) !important;
+        border: 1px solid var(--color-border, var(--workspace-overlay-border, rgba(0, 0, 0, 0.12))) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18) !important;
+    }
+
+    .dark .ant-message-notice .ant-message-notice-content,
+    .dark body .ant-message-notice-content,
+    [data-theme="dark"] .ant-message-notice .ant-message-notice-content,
+    .dark .ant-message-custom-content,
+    .dark .ant-message-notice {
+        color: #f4f4f5 !important;
+        background: #1e1e20 !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55) !important;
+    }
+
+    .dark .ant-message-notice-content span,
+    .dark .ant-message-custom-content span {
+        color: #f4f4f5 !important;
+    }
+
+    .ant-notification-notice {
+        color: var(--foreground) !important;
+        background: var(--color-surface, var(--workspace-overlay-bg-strong, #ffffff)) !important;
+        border: 1px solid var(--color-border, var(--workspace-overlay-border, rgba(0, 0, 0, 0.12))) !important;
+    }
+
+    .dark .ant-notification-notice,
+    .dark body .ant-notification-notice {
+        color: #f4f4f5 !important;
+        background: #1e1e20 !important;
+        border-color: rgba(255, 255, 255, 0.16) !important;
+    }
+
+    .dark .ant-tooltip .ant-tooltip-inner {
+        color: #f4f4f5 !important;
+        background: #1e1e20 !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-popover-container,
+        .ant-picker-dropdown .ant-picker-panel-container,
+        .ant-cascader-menus,
+        .ant-mentions-dropdown,
+        .ant-tooltip-inner,
+        .ant-modal-content,
+        .ant-drawer-content,
+        .ant-message-notice-content,
+        .ant-notification-notice
+    ) {
+        border: 1px solid var(--workspace-overlay-border) !important;
+        background: var(--workspace-overlay-bg-strong) !important;
+        box-shadow: var(--workspace-overlay-shadow) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-modal-content, .ant-drawer-content, .ant-notification-notice) {
+        background: var(--workspace-overlay-bg-strong) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-popover-container, .ant-cascader-menus, .ant-mentions-dropdown) {
+        border-radius: 8px !important;
+    }
+
+    /* 下拉层用背景和柔和阴影建立层次，不再用亮色描边圈住选项。 */
+    body.app-spatial-overlays :where(.ant-dropdown-menu, .ant-select-dropdown, .ant-cascader-menus, .ant-mentions-dropdown) {
+        border: 0 !important;
+        background: var(--workspace-overlay-bg-strong) !important;
+        box-shadow: var(--elevation-overlay) !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled),
+        .ant-dropdown-menu-submenu-title:not(.ant-dropdown-menu-item-disabled),
+        .ant-select-item-option:not(.ant-select-item-option-disabled),
+        .ant-cascader-menu-item:not(.ant-cascader-menu-item-disabled),
+        .ant-mentions-dropdown-menu-item
+    ) {
+        border-radius: 5px;
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):hover,
+        .ant-dropdown-menu-submenu-title:not(.ant-dropdown-menu-item-disabled):hover,
+        .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+        .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled),
+        .ant-mentions-dropdown-menu-item-active
+    ) {
+        background: var(--workspace-overlay-hover) !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item-selected,
+        .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+        .ant-cascader-menu-item-active
+    ) {
+        background: var(--workspace-overlay-selected) !important;
+        color: var(--foreground) !important;
+    }
+
+    body.app-spatial-overlays :where(
+        .ant-dropdown-menu-item-divider,
+        .ant-popover-content > .border-b,
+        .ant-popover-content > .border-y,
+        .ant-modal-header,
+        .ant-modal-footer,
+        .ant-drawer-header
+    ) {
+        border-color: var(--workspace-overlay-divider) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-popover-arrow::before, .ant-tooltip-arrow::before) {
+        border: 1px solid var(--workspace-overlay-border);
+        background: var(--workspace-overlay-bg-strong) !important;
+    }
+
+    body.app-spatial-overlays :where(.ant-modal-mask, .ant-drawer-mask) {
+        background: rgba(0, 0, 0, 0.48) !important;
+        backdrop-filter: blur(7px);
+        -webkit-backdrop-filter: blur(7px);
+    }
+
+
+    .app-workspace-shell.is-spatial .app-workspace-brand-mark {
+        border: 1px solid color-mix(in srgb, var(--workspace-accent) 36%, transparent);
+        background: var(--workspace-accent);
+        color: color-mix(in srgb, var(--workspace-canvas) 92%, black);
+        box-shadow: 0 8px 24px color-mix(in srgb, var(--workspace-accent) 18%, transparent);
+    }
+
+    .brand-logo-frame[data-logo-frame-enabled="false"] > :is(img, svg) {
+        width: 100%;
+        height: 100%;
+    }
+
+
+
+    /* 工作区保留滚轮与触控板滚动，只隐藏会形成额外竖向分割的浏览器轨道。 */
+    .app-spatial-workspace .app-workspace-scroll {
+        scrollbar-width: none;
+    }
+
+    .app-spatial-workspace .app-workspace-scroll::-webkit-scrollbar {
+        display: none;
+    }
+
+    .app-spatial-workspace .app-page-header {
+        border-color: var(--workspace-border);
+    }
+
+    .app-spatial-workspace .app-page-header h1 {
+        letter-spacing: 0;
+        text-wrap: balance;
+    }
+
+    .app-spatial-workspace .app-workspace-surface,
+    .app-spatial-workspace .app-collection-card {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface);
+        box-shadow:
+            0 18px 50px color-mix(in srgb, var(--workspace-canvas) 54%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+        backdrop-filter: blur(18px) saturate(118%);
+    }
+
+    .app-spatial-workspace .app-collection-card:hover,
+    .app-spatial-workspace .app-collection-card:focus-within {
+        border-color: var(--workspace-border-strong);
+        background: color-mix(in srgb, var(--workspace-surface-strong) 96%, var(--workspace-accent) 4%);
+        box-shadow: 0 18px 42px color-mix(in srgb, var(--workspace-accent) 7%, transparent);
+    }
+
+    .app-spatial-workspace .app-table-surface {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface-strong);
+        box-shadow:
+            0 20px 54px color-mix(in srgb, var(--workspace-canvas) 58%, transparent),
+            inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
+    }
+
+    .app-spatial-workspace .app-data-table .ant-table,
+    .app-spatial-workspace .app-data-table .ant-table-container {
+        background: transparent;
+    }
+
+    .app-spatial-workspace .app-list-search:focus-within {
+        filter: drop-shadow(0 0 16px color-mix(in srgb, var(--workspace-accent) 10%, transparent));
+    }
+
+    .app-spatial-workspace .app-pagination-bar {
+        border-color: var(--workspace-border);
+        background: transparent;
+    }
+
+    .app-spatial-workspace .workspace-signal-icon path {
+        stroke: var(--workspace-accent) !important;
+    }
+
+    .app-spatial-workspace .workspace-signal-icon circle {
+        fill: color-mix(in srgb, var(--workspace-accent) 62%, transparent) !important;
+    }
+
+    .app-spatial-workspace .project-overview-focus,
+    .app-spatial-workspace .project-pipeline-surface {
+        border-color: var(--workspace-border);
+        background: var(--workspace-surface-strong);
+        box-shadow: none;
+    }
+
+    .app-spatial-workspace .project-overview-status {
+        background: color-mix(in srgb, var(--workspace-surface) 82%, var(--workspace-accent) 3%);
+    }
+
+    .app-spatial-workspace .project-workbench-header {
+        border-color: var(--workspace-border);
+        background: color-mix(in srgb, var(--workspace-nav) 92%, transparent);
+        box-shadow: none;
+        backdrop-filter: blur(22px) saturate(120%);
+    }
+
+    .app-spatial-workspace .project-pipeline-surface > div > a:hover {
+        background: color-mix(in srgb, var(--workspace-accent) 5%, transparent);
+    }
+
+    @media (max-width: 639px) {
+
+        /* 窄屏下侧栏常驻，收缩到图标主轨，避免遮挡主内容 */
+        .app-workspace-shell.is-spatial .app-workspace-sidebar.is-collapsed {
+            width: 0 !important;
+        }
+    }
+
+    @media (max-width: 1023px) {
+        .app-workspace-sidebar-scrim {
+            left: 0;
+        }
+
+        .app-workspace-shell .app-workspace-sidebar {
+            width: 0 !important;
+            border: 0 !important;
+            transition: width var(--motion-state) var(--ease-aceternity);
+        }
+
+        .app-workspace-shell .app-workspace-sidebar.is-mobile-expanded {
+            position: absolute;
+            z-index: 40;
+            inset: 6px auto 6px 6px;
+            width: min(264px, calc(100vw - 58px)) !important;
+            border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+            border-radius: var(--r-xl);
+            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
+        }
+    }
+
+    .app-user-workspace {
+        /* 用户端工作区：浅灰画布 + 白色内容面，弱化后台式分隔线。 */
+        --workspace-canvas: #f4f4f5;
+        --workspace-page: var(--workspace-canvas);
+        --workspace-navigation: #efeff0;
+        --workspace-content: #f8f8f9;
+        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-surface: #ffffff;
+        --workspace-surface-strong: #ffffff;
+        --workspace-border: rgba(17, 17, 17, 0.08);
+        --workspace-border-strong: rgba(17, 17, 17, 0.14);
+        --workspace-nav: var(--workspace-navigation);
+        --workspace-accent: #171717;
+        --workspace-accent-soft: rgba(17, 17, 17, 0.06);
+        --workspace-nav-active-bg: rgba(17, 17, 17, 0.075);
+        --workspace-nav-active-hover-bg: rgba(17, 17, 17, 0.11);
+        --workspace-sidebar-width: 200px;
+        --workspace-sidebar-nav-width: 200px;
+        --workspace-sidebar-collapsed-width: 64px;
+        --workspace-shell-gutter: 0px;
+        --workspace-card-gap: 0px;
+        --workspace-topbar-height: 56px;
+        background-color: var(--workspace-page);
+    }
+
+    .dark .app-user-workspace {
+        --workspace-canvas: #101011;
+        --workspace-page: var(--workspace-canvas);
+        --workspace-navigation: #171718;
+        --workspace-content: #121213;
+        --workspace-sidebar: var(--workspace-navigation);
+        --workspace-surface: #1b1b1d;
+        --workspace-surface-strong: #222224;
+        --workspace-border: rgba(255, 255, 255, 0.09);
+        --workspace-border-strong: rgba(255, 255, 255, 0.16);
+        --workspace-nav: var(--workspace-navigation);
+        --workspace-accent: #f5f5f5;
+        --workspace-accent-soft: rgba(255, 255, 255, 0.08);
+        --workspace-nav-active-bg: rgba(255, 255, 255, 0.09);
+        --workspace-nav-active-hover-bg: rgba(255, 255, 255, 0.13);
+    }
+
+    /* 画布编辑器保持独立的全屏工作区，但沿用用户端的安全区和控件密度。 */
+    .app-user-workspace.app-spatial-workspace {
+        --canvas-topbar-h: 56px;
+        --canvas-inset-x: 12px;
+        --canvas-inset-y: 12px;
+        --canvas-dock-popover-offset: 46px;
+    }
+
+    /* 画布编辑器和管理后台不继承用户端的圆角卡片外壳。 */
+    .app-user-workspace .app-workspace-sidebar {
+        background: var(--workspace-sidebar);
+    }
+
+    .app-user-workspace .app-workspace-stage {
+        background: var(--workspace-content);
+    }
+
+    .app-user-workspace .app-workspace-sidebar-search > button {
+        min-height: 40px;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    }
+
+    .app-user-workspace .app-workspace-sidebar-search > button:hover,
+    .app-user-workspace .app-workspace-sidebar-search > button:focus-visible {
+        background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    }
+
+    .app-user-workspace .app-workspace-nav-link {
+        min-height: 40px;
+        border-radius: 14px;
+        padding-inline: 12px;
+        color: color-mix(in srgb, var(--foreground) 62%, transparent);
+        transition:
+            background-color var(--motion-instant) var(--ease-product-enter),
+            color var(--motion-instant) var(--ease-product-enter),
+            transform var(--motion-instant) var(--ease-product-enter);
+    }
+
+    .app-user-workspace .app-workspace-nav-link:hover:not(.is-active) {
+        background: color-mix(in srgb, var(--foreground) 5%, transparent);
+        color: var(--foreground);
+    }
+
+    .app-user-workspace .app-workspace-nav-link:active,
+    .app-user-workspace .app-workspace-topbar-icon-button:active,
+    .app-user-workspace .app-workspace-sidebar-search > button:active {
+        transform: scale(0.985);
+    }
+
+    .app-user-workspace .app-workspace-nav-link:focus-visible,
+    .app-user-workspace .app-workspace-sidebar-search > button:focus-visible,
+    .app-user-workspace .app-workspace-sidebar-rail-button:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+        outline-offset: 2px;
+    }
+
+    .app-workspace-shell {
+        position: relative;
+        padding: var(--workspace-shell-gutter);
+        background: var(--workspace-page);
+    }
+
+    /* 画布编辑器与运营后台（hideChrome 契约）：保持全屏连体，不套圆角卡片 */
+    .app-workspace-shell:not(.is-spatial) {
+        padding: 0;
+    }
+
+    .app-workspace-shell:not(.is-spatial) .app-workspace-stage {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    /* 工作区外壳通过表面明度与间距分层，避免边框和内高光叠加造成线条感。 */
+    .app-workspace-sidebar,
+    .app-workspace-stage {
+        border: 0;
+        border-radius: var(--r-xl);
+        box-shadow: none;
+    }
+
+    .app-workspace-sidebar {
+        width: var(--workspace-sidebar-width, 208px);
+        background: color-mix(in srgb, var(--workspace-sidebar) 96%, var(--foreground) 4%);
+        transition: width var(--motion-state) var(--ease-aceternity);
+    }
+
+    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
+        width: var(--workspace-sidebar-collapsed-width) !important;
+    }
+
+    .app-workspace-sidebar-nav {
+        width: var(--workspace-sidebar-nav-width);
+        transition: width var(--motion-state) var(--ease-aceternity);
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed {
+        width: var(--workspace-sidebar-collapsed-width);
+    }
+
+    .app-workspace-sidebar-rail-header {
+        display: grid;
+        min-height: 56px;
+        padding: 10px;
+        place-items: center;
+    }
+
+    .app-workspace-sidebar-rail-button {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: var(--r-sm);
+        color: color-mix(in srgb, var(--foreground) 66%, transparent);
+        transition: color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-sidebar-rail-button:hover,
+    .app-workspace-sidebar-rail-button:focus-visible {
+        background: var(--surface-hover);
+        color: var(--foreground);
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search {
+        padding: 0 10px 4px;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search > button,
+    .app-workspace-nav-link.is-collapsed {
+        justify-content: center;
+        gap: 0;
+        padding-inline: 0;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-label,
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-shortcut,
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-title,
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-meta {
+        display: none;
+    }
+
+    .app-workspace-nav-link.is-collapsed .app-workspace-nav-main {
+        gap: 0;
+    }
+
+    .app-workspace-sidebar-scroll-area.is-collapsed {
+        gap: 6px;
+        padding: 4px 10px 8px;
+    }
+
+    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-footer {
+        padding: 8px 10px 10px;
+    }
+
+
+    .app-workspace-sidebar .app-workspace-sidebar-scroll-area {
+        scrollbar-width: none;
+    }
+
+    .app-workspace-sidebar .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
+        display: none;
+    }
+
+    .app-workspace-stage,
+    .app-user-content,
+    .app-workspace-grid {
+        background: var(--workspace-content);
+    }
+
+
+    .app-workspace-page {
+        background: var(--workspace-content);
+    }
+
+    .app-workspace-navigation {
+        background: var(--workspace-navigation);
+    }
+
+    .app-page-header {
+        position: sticky;
+        top: 0;
+        z-index: var(--z-toolbar);
+        min-height: var(--page-topbar-h);
+        padding-top: 10px;
+        padding-bottom: 10px;
+        background: var(--workspace-content);
+        border-bottom: 0;
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+
+    .app-page-header-title {
+        font-size: var(--fs-title);
+        letter-spacing: -0.01em;
+    }
+
+    .canvas-topbar {
+        background: transparent;
+        border-bottom: 0;
+        backdrop-filter: none;
+    }
+
+    .canvas-topbar-cluster {
+        min-height: var(--space-10);
+        border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+        border-radius: var(--r-2xl);
+        background: color-mix(in srgb, var(--dock-surface) 72%, transparent) !important;
+        padding: var(--space-half) var(--space-2);
+        box-shadow: 0 10px 28px color-mix(in srgb, black 16%, transparent);
+        -webkit-backdrop-filter: blur(22px) saturate(140%);
+        backdrop-filter: blur(22px) saturate(140%);
+    }
+
+    /* 顶部操作区复用底部 FloatingDock 的命令状态，保持两组浮层在不同主题下有同一套反馈。 */
+    .canvas-topbar-action {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+        transition:
+            background-color var(--motion-instant) ease-out,
+            color var(--motion-instant) ease-out,
+            opacity var(--motion-instant) ease-out;
+    }
+
+    .canvas-topbar-action:hover:not(:disabled) {
+        background: var(--dock-command-hover) !important;
+    }
+
+    .canvas-topbar-action:hover:not(:disabled) .app-workspace-credit-gift {
+        transform: translateY(-1px) rotate(-8deg);
+    }
+
+    .canvas-topbar-project-cluster {
+        width: max-content;
+        max-width: min(360px, calc(50vw - 88px));
+    }
+
+    /* 右侧命令组在窄屏保持可达，不挤压项目标题，也不制造横向溢出。 */
+    .canvas-topbar > .canvas-topbar-cluster:last-child {
+        min-width: 0;
+        max-width: min(52vw, 620px);
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .canvas-topbar > .canvas-topbar-cluster:last-child::-webkit-scrollbar {
+        display: none;
+    }
+
+    .canvas-topbar-title-block,
+    .canvas-topbar-title-row,
+    .canvas-topbar-project-context {
+        max-width: 100%;
+    }
+
+    .canvas-topbar-title-row {
+        width: fit-content;
+    }
+
+    @media (max-width: 767px) {
+        .app-user-workspace.app-spatial-workspace {
+            --canvas-topbar-h: 56px;
+            --canvas-inset-x: 12px;
+            --canvas-inset-y: max(12px, env(safe-area-inset-bottom));
+            --canvas-dock-popover-offset: 48px;
+        }
+
+        .canvas-topbar {
+            padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+        }
+
+        .canvas-topbar-project-cluster {
+            max-width: min(260px, calc(100vw - 132px));
+        }
+
+        .canvas-topbar > .canvas-topbar-cluster:last-child {
+            max-width: calc(50vw - 12px);
+        }
+
+        .canvas-topbar-project-context {
+            display: none;
+        }
+    }
+
+    /* 画布项目侧栏：把章节、画风和资产入口收敛成低干扰的创作导航。 */
+    .canvas-project-sidebar {
+        --canvas-sidebar-surface: color-mix(in srgb, var(--background) 94%, var(--foreground) 6%);
+        width: var(--canvas-sidebar-width);
+        border-color: color-mix(in srgb, var(--foreground) 9%, transparent) !important;
+        background: var(--canvas-sidebar-surface) !important;
+        box-shadow: inset -1px 0 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+
+    .canvas-project-sidebar.is-collapsed {
+        width: 48px;
+        background: color-mix(in srgb, var(--canvas-sidebar-surface) 96%, var(--foreground) 4%) !important;
+    }
+
+    .canvas-project-sidebar-header {
+        min-height: 56px;
+        border-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
+        padding-inline: 12px;
+    }
+
+    .canvas-project-sidebar-header a,
+    .canvas-project-sidebar-header button,
+    .canvas-project-sidebar-back-link {
+        transition:
+            background-color var(--motion-instant) var(--ease-product-enter),
+            color var(--motion-instant) var(--ease-product-enter),
+            transform var(--motion-instant) var(--ease-product-enter);
+    }
+
+    .canvas-project-sidebar-header a:hover,
+    .canvas-project-sidebar-header button:hover,
+    .canvas-project-sidebar-back-link:hover {
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+        color: var(--foreground);
+    }
+
+    .canvas-project-sidebar-header a:active,
+    .canvas-project-sidebar-header button:active,
+    .canvas-project-sidebar-back-link:active,
+    .canvas-project-sidebar-assets-button:active {
+        transform: scale(0.985);
+    }
+
+    .canvas-project-sidebar-header a:focus-visible,
+    .canvas-project-sidebar-header button:focus-visible,
+    .canvas-project-sidebar-back-link:focus-visible,
+    .canvas-project-sidebar-assets-button:focus-visible,
+    .canvas-project-sidebar-chapter-row button:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 42%, transparent);
+        outline-offset: 2px;
+    }
+
+    .canvas-project-sidebar-style,
+    .canvas-project-sidebar-assets {
+        border-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
+    }
+
+    .canvas-project-sidebar-style-button {
+        min-height: 44px;
+        border-radius: var(--r-md);
+        transition:
+            background-color var(--motion-instant) var(--ease-product-enter),
+            color var(--motion-instant) var(--ease-product-enter),
+            transform var(--motion-instant) var(--ease-product-enter);
+    }
+
+    .canvas-project-sidebar-style-button:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    }
+
+    .canvas-project-sidebar-style-button img,
+    .canvas-project-sidebar-style-button > span:first-of-type {
+        border-radius: var(--r-sm);
+    }
+
+    .canvas-project-sidebar-section-heading {
+        color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    }
+
+    .canvas-project-sidebar-search {
+        min-height: 34px;
+        border-color: color-mix(in srgb, var(--foreground) 10%, transparent) !important;
+        background: color-mix(in srgb, var(--foreground) 3%, transparent) !important;
+        transition:
+            border-color var(--motion-instant) var(--ease-product-enter),
+            background-color var(--motion-instant) var(--ease-product-enter),
+            box-shadow var(--motion-instant) var(--ease-product-enter);
+    }
+
+    .canvas-project-sidebar-search:focus-within {
+        border-color: color-mix(in srgb, var(--workspace-accent) 42%, transparent) !important;
+        background: var(--background) !important;
+        box-shadow: none;
+    }
+
+    .canvas-project-sidebar-chapter-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: color-mix(in srgb, var(--foreground) 12%, transparent) transparent;
+    }
+
+    .canvas-project-sidebar-chapter-row {
+        border-radius: var(--r-md);
+        color: color-mix(in srgb, var(--foreground) 70%, transparent);
+        transition:
+            background-color var(--motion-instant) var(--ease-product-enter),
+            color var(--motion-instant) var(--ease-product-enter),
+            transform var(--motion-instant) var(--ease-product-enter);
+    }
+
+    .canvas-project-sidebar-chapter-row:hover {
+        background: color-mix(in srgb, var(--foreground) 5%, transparent) !important;
+        color: var(--foreground);
+    }
+
+
+    .canvas-project-sidebar-chapter-row.bg-surface-active {
+        background: color-mix(in srgb, var(--workspace-accent) 9%, transparent) !important;
+        color: var(--foreground);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workspace-accent) 12%, transparent);
+    }
+
+    .canvas-project-sidebar-assets-button {
+        min-height: 40px;
+        border-color: color-mix(in srgb, var(--foreground) 10%, transparent) !important;
+        border-radius: var(--r-md);
+        background: color-mix(in srgb, var(--background) 74%, var(--foreground) 3%);
+        transition:
+            background-color var(--motion-instant) var(--ease-product-enter),
+            border-color var(--motion-instant) var(--ease-product-enter),
+            color var(--motion-instant) var(--ease-product-enter),
+            transform var(--motion-instant) var(--ease-product-enter);
+    }
+
+    .canvas-project-sidebar-assets-button:hover {
+        border-color: color-mix(in srgb, var(--workspace-accent) 30%, transparent) !important;
+        background: color-mix(in srgb, var(--workspace-accent) 7%, var(--background));
+        color: var(--foreground);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-project-sidebar-header a,
+        .canvas-project-sidebar-header button,
+        .canvas-project-sidebar-back-link,
+        .canvas-project-sidebar-style-button,
+        .canvas-project-sidebar-search,
+        .canvas-project-sidebar-chapter-row,
+        .canvas-project-sidebar-assets-button {
+            transition: none;
+        }
+    }
+
+    .app-workspace-main-row {
+        display: flex;
+        gap: var(--workspace-card-gap);
+        min-height: 0;
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+
+    .app-workspace-topbar {
+        position: relative;
+        z-index: var(--z-toolbar);
+        height: var(--workspace-topbar-height, 56px);
+        border: 0;
+        border-bottom: 1px solid var(--workspace-border);
+        border-radius: 0;
+        background: color-mix(in srgb, var(--workspace-content) 94%, transparent);
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    .app-workspace-topbar.has-extension {
+        border-bottom: 1px solid var(--workspace-border);
+        background: color-mix(in srgb, var(--workspace-nav) 92%, transparent);
+        backdrop-filter: blur(22px) saturate(120%);
+        -webkit-backdrop-filter: blur(22px) saturate(120%);
+    }
+
+    .app-workspace-topbar-icon-button {
+        display: inline-flex;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--r-md);
+        color: color-mix(in srgb, var(--foreground) 58%, transparent);
+        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-topbar-icon-button > svg,
+    .app-workspace-topbar-icon-button > span > svg {
+        width: 18px;
+        height: 18px;
+        stroke-width: 1.8;
+    }
+
+    /* 账户触发按钮为身份标识，占位图标默认不弱化（与其他工具图标区分） */
+    .app-workspace-account-trigger > span > svg {
+        color: var(--foreground);
+    }
+
+    .app-workspace-topbar-icon-button:hover {
+        background: var(--surface-hover);
+        color: var(--foreground);
+    }
+
+    .app-workspace-topbar-icon-button:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 46%, transparent);
+        outline-offset: -2px;
+    }
+
+    /* 品牌字标：弱化但可读，hover 加深 */
+    .app-workspace-brand-wordmark {
+        color: color-mix(in srgb, var(--foreground) 78%, transparent);
+        letter-spacing: 0.01em;
+        transition: color var(--motion-instant) ease-out;
+    }
+    .app-workspace-nav-link {
+        position: relative;
+    }
+
+    /* 侧栏激活项只保留底色高亮，不使用左侧竖条（用户决策：选中不画竖线）。 */
+    .app-workspace-nav-link.is-active {
+        background: var(--workspace-nav-active-bg);
+        color: var(--foreground);
+        box-shadow: none;
+    }
+
+
+    .app-workspace-nav-link.is-active:hover {
+        background: var(--workspace-nav-active-hover-bg);
+    }
+
+
+
+    .app-workspace-icon-button {
+        display: inline-flex;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        color: color-mix(in srgb, var(--foreground) 58%, transparent);
+        transition: color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
+    }
+
+    .app-workspace-icon-button:hover {
+        background: var(--surface-hover);
+        color: var(--foreground);
+    }
+
+    /* Sidebar custom scrollbar - 隐身融入设计 */
+    .app-workspace-sidebar-scroll-area {
+        position: relative; /* 为渐变遮罩定位 */
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent; /* 默认完全隐藏 */
+        transition: scrollbar-color var(--motion-state) ease-in-out;
+    }
+
+    .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
+        width: 4px;
+        background: transparent; /* 默认轨道透明 */
+    }
+
+    .app-workspace-sidebar-scroll-area::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb {
+        background: transparent; /* 默认滑块透明 */
+        border-radius: 9999px;
+        transition: background-color var(--motion-state) ease-in-out;
+    }
+
+    /* Hover state - 显示滚动条 */
+    .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area,
+    .app-workspace-sidebar-scroll-area:hover {
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+
+    .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb,
+    .app-workspace-sidebar-scroll-area:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Dark mode scrollbar */
+    .dark .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area,
+    .dark .app-workspace-sidebar-scroll-area:hover {
+        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .dark .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb,
+    .dark .app-workspace-sidebar-scroll-area:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Scroll fade gradients - 光影提示设计 */
+    .app-workspace-sidebar-scroll-area.has-top-fade::before,
+    .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 12px;
+        pointer-events: none; /* 不阻塞点击事件 */
+        z-index: 10;
+    }
+
+    .app-workspace-sidebar-scroll-area.has-top-fade::before {
+        top: 0;
+        background: linear-gradient(to bottom, var(--workspace-sidebar), transparent);
+    }
+
+    .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
+        bottom: 0;
+        background: linear-gradient(to top, var(--workspace-sidebar), transparent);
+    }
+
+    .workspace-signal-icon {
+        filter: drop-shadow(0 7px 16px color-mix(in srgb, var(--workspace-accent) 14%, transparent));
+    }
+
+    .workspace-state {
+        animation: workspace-state-enter var(--motion-panel) var(--ease-product-enter) both;
+    }
+
+    .workspace-loading-state .ant-skeleton-title,
+    .workspace-loading-state .ant-skeleton-paragraph > li {
+        border-radius: 4px;
+    }
+
+    /* 全屏仅用于应用启动；骨架延续真实工作区结构，路由加载只占内容舞台。 */
+    .full-screen-loader {
+        position: fixed;
+        inset: 0;
+        z-index: var(--loader-z);
+        min-height: 100dvh;
+        overflow: hidden;
+        background: var(--workspace-page);
+        color: var(--foreground);
+        animation: loader-surface-enter var(--motion-panel) var(--motion-ease-out) both;
+    }
+
+    .full-screen-loader-shell {
+        display: flex;
+        width: 100%;
+        height: 100dvh;
+        flex-direction: column;
+    }
+
+    .full-screen-loader-topbar {
+        display: flex;
+        height: var(--page-topbar-h);
+        flex: 0 0 var(--page-topbar-h);
+        align-items: center;
+        justify-content: space-between;
+        padding-inline: var(--space-5);
+        background: var(--workspace-navigation);
+    }
+
+    .full-screen-loader-topbar-group {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .loader-placeholder {
+        display: block;
+        background: color-mix(in srgb, var(--foreground) 6%, transparent);
+    }
+
+    .loader-placeholder-control,
+    .loader-placeholder-mark,
+    .loader-placeholder-rail-item {
+        border-radius: var(--r-md);
+    }
+
+    .loader-placeholder-control { width: 36px; height: 36px; }
+    .loader-placeholder-mark { width: 28px; height: 28px; }
+    .loader-placeholder-wordmark { width: 40px; height: 10px; border-radius: var(--r-full); }
+    .loader-placeholder-action { width: 88px; height: 32px; border-radius: var(--r-md); }
+
+    .full-screen-loader-main {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+    }
+
+    .full-screen-loader-rail {
+        display: flex;
+        width: 64px;
+        flex: 0 0 64px;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-2);
+        padding-top: calc(var(--space-12) + var(--space-3));
+        background: var(--workspace-navigation);
+    }
+
+    .loader-placeholder-rail-item { width: 40px; height: 40px; }
+
+    .full-screen-loader-stage {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        padding: var(--space-8);
+        background: var(--workspace-content);
+    }
+
+    .full-screen-loader-stage-header {
+        display: flex;
+        min-height: var(--space-10);
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+    }
+
+    .full-screen-loader-status,
+    .workspace-route-loader-content {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        color: color-mix(in srgb, var(--foreground) 54%, transparent);
+        font-size: var(--fs-caption);
+    }
+
+    .loading-signal {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 20px;
+        border: 2px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+        border-top-color: color-mix(in srgb, var(--foreground) 72%, transparent);
+        border-radius: var(--r-full);
+        animation: loading-signal-spin 900ms linear infinite;
+    }
+
+    .full-screen-loader-stage-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--space-4);
+        margin-top: var(--space-6);
+    }
+
+    .full-screen-loader-surface { min-width: 0; }
+    .loader-placeholder-media { aspect-ratio: 16 / 10; border-radius: var(--r-lg); }
+    .loader-placeholder-title { width: 58%; height: 10px; margin-top: var(--space-3); border-radius: var(--r-full); }
+    .loader-placeholder-meta { width: 34%; height: 8px; margin-top: var(--space-2); border-radius: var(--r-full); opacity: 0.72; }
+
+    .workspace-route-loader {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        min-height: 100%;
+        place-items: center;
+        background: var(--workspace-page);
+        color: var(--foreground);
+        opacity: 0;
+        transition: opacity var(--motion-instant) ease-out;
+    }
+
+    .workspace-route-loader.is-visible { opacity: 1; }
+    .workspace-route-loader-content { justify-content: center; }
+
+    @keyframes loader-surface-enter {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes loading-signal-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 1023px) {
+        .full-screen-loader-rail { display: none; }
+        .full-screen-loader-stage { padding: var(--space-6); }
+        .full-screen-loader-stage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 639px) {
+        .full-screen-loader-topbar { padding-inline: var(--space-4); }
+        .full-screen-loader-topbar-group:last-child .loader-placeholder-control:not(:last-child) { display: none; }
+        .full-screen-loader-stage { padding: var(--space-5) var(--space-4); }
+        .full-screen-loader-stage-grid { grid-template-columns: 1fr; }
+        .full-screen-loader-stage-grid .full-screen-loader-surface:nth-child(n + 3) { display: none; }
+        .loader-placeholder-action { width: var(--space-10); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .full-screen-loader { animation: none; }
+        .loading-signal { animation: none; }
+        .workspace-route-loader { transition: none; }
+    }
+
+    /* 启动页以品牌标记和创作流程为视觉中心，不模拟尚未出现的工作区骨架。 */
+    .full-screen-loader {
+        display: grid;
+        place-items: center;
+        background-color: var(--workspace-page);
+        background-image:
+            linear-gradient(color-mix(in srgb, var(--foreground) 3.5%, transparent) 1px, transparent 1px),
+            linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3.5%, transparent) 1px, transparent 1px);
+        background-size: 32px 32px;
+    }
+
+    .full-screen-loader::before {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at center, color-mix(in srgb, var(--workspace-accent) 8%, transparent), transparent 34%);
+        content: "";
+        pointer-events: none;
+    }
+
+    .full-screen-loader-scene {
+        position: relative;
+        width: min(300px, 72vw);
+        aspect-ratio: 1;
+        color: var(--foreground);
+    }
+
+    .full-screen-loader-logo {
+        position: absolute;
+        z-index: 3;
+        top: 50%;
+        left: 50%;
+        display: grid;
+        width: 72px;
+        height: 72px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+        border-radius: var(--r-xl);
+        background: color-mix(in srgb, var(--workspace-navigation) 92%, transparent);
+        box-shadow: 0 20px 60px color-mix(in srgb, var(--workspace-accent) 12%, transparent);
+        transform: translate(-50%, -50%);
+        animation: loader-logo-breathe 2.8s ease-in-out infinite;
+    }
+
+    .full-screen-loader-logo-image { width: 38px; height: 38px; }
+    .full-screen-loader-logo-fallback { display: block; width: 36px; height: 36px; background: currentColor; mask: url('/logo.svg') center / contain no-repeat; -webkit-mask: url('/logo.svg') center / contain no-repeat; }
+    .workspace-route-loader-logo .full-screen-loader-logo-fallback { width: 16px; height: 16px; }
+
+    .full-screen-loader-orbit {
+        position: absolute;
+        z-index: 2;
+        inset: 65px;
+        border: 1px solid color-mix(in srgb, var(--workspace-accent) 30%, transparent);
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: loader-orbit-spin 5.5s linear infinite;
+    }
+
+    .full-screen-loader-orbit::before,
+    .full-screen-loader-orbit::after {
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--workspace-accent);
+        box-shadow: 0 0 18px color-mix(in srgb, var(--workspace-accent) 72%, transparent);
+        content: "";
+    }
+    .full-screen-loader-orbit::before { top: 17px; right: 17px; }
+    .full-screen-loader-orbit::after { bottom: 17px; left: 17px; opacity: .45; }
+
+    .full-screen-loader-guide { position: absolute; z-index: 0; opacity: .45; }
+    .full-screen-loader-guide.is-horizontal { top: 50%; right: 0; left: 0; border-top: 1px dashed color-mix(in srgb, var(--foreground) 14%, transparent); }
+    .full-screen-loader-guide.is-vertical { top: 0; bottom: 0; left: 50%; border-left: 1px dashed color-mix(in srgb, var(--foreground) 14%, transparent); }
+
+    .full-screen-loader-frame,
+    .full-screen-loader-script,
+    .full-screen-loader-timeline {
+        position: absolute;
+        z-index: 1;
+        border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+        background: color-mix(in srgb, var(--workspace-navigation) 78%, transparent);
+        box-shadow: 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+    }
+
+    .full-screen-loader-frame { top: 38px; display: grid; width: 70px; height: 46px; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 5px; border-radius: var(--r-sm); }
+    .full-screen-loader-frame.is-left { left: 10px; transform: rotate(-7deg); animation: loader-frame-float 3.2s ease-in-out infinite; }
+    .full-screen-loader-frame.is-right { right: 10px; transform: rotate(7deg); animation: loader-frame-float 3.2s .8s ease-in-out infinite reverse; }
+    .full-screen-loader-frame i { border-radius: 2px; background: color-mix(in srgb, var(--workspace-accent) 16%, var(--workspace-content)); }
+
+    .full-screen-loader-script { bottom: 34px; left: 24px; width: 78px; height: 54px; border-radius: var(--r-sm); padding: 10px; transform: rotate(5deg); animation: loader-frame-float 3.6s .35s ease-in-out infinite; }
+    .full-screen-loader-script i { display: block; width: 78%; height: 2px; margin-bottom: 7px; background: color-mix(in srgb, var(--foreground) 25%, transparent); }
+    .full-screen-loader-script i:nth-child(2) { width: 100%; }
+    .full-screen-loader-script i:nth-child(3) { width: 56%; }
+    .full-screen-loader-script b { position: absolute; right: 9px; bottom: 8px; width: 1px; height: 12px; background: var(--workspace-accent); animation: loader-caret 900ms steps(1) infinite; }
+
+    .full-screen-loader-timeline { right: 18px; bottom: 38px; display: flex; width: 88px; height: 44px; align-items: flex-end; gap: 3px; border-radius: var(--r-sm); padding: 8px; transform: rotate(-4deg); animation: loader-frame-float 3.4s 1.1s ease-in-out infinite; }
+    .full-screen-loader-timeline i { width: 14px; background: color-mix(in srgb, var(--workspace-accent) 18%, var(--workspace-content)); }
+    .full-screen-loader-timeline i:nth-child(1) { height: 16px; }
+    .full-screen-loader-timeline i:nth-child(2) { height: 27px; }
+    .full-screen-loader-timeline i:nth-child(3) { height: 20px; }
+    .full-screen-loader-timeline i:nth-child(4) { height: 24px; }
+    .full-screen-loader-timeline b { position: absolute; right: 8px; bottom: 6px; left: 8px; height: 1px; background: var(--workspace-accent); transform-origin: left; animation: loader-timeline-progress 2.2s ease-in-out infinite; }
+
+    .full-screen-loader-copy { position: absolute; top: calc(50% + 176px); left: 50%; display: flex; min-width: 240px; flex-direction: column; align-items: center; gap: var(--space-1); color: var(--foreground); text-align: center; transform: translateX(-50%); }
+    .full-screen-loader-copy strong { font-size: var(--fs-body); font-weight: 620; letter-spacing: .01em; }
+    .full-screen-loader-copy > span:not(.loading-signal) { color: color-mix(in srgb, var(--foreground) 48%, transparent); font-size: var(--fs-label); }
+
+    .loading-signal {
+        display: flex;
+        width: auto;
+        height: 12px;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 4px;
+        margin-top: var(--space-2);
+        border: 0;
+        border-radius: 0;
+        animation: none;
+    }
+    .loading-signal i { width: 4px; height: 4px; border-radius: 50%; background: color-mix(in srgb, var(--workspace-accent) 76%, var(--foreground)); animation: loader-signal-pulse 1.25s ease-in-out infinite; }
+    .loading-signal i:nth-child(2) { animation-delay: 140ms; }
+    .loading-signal i:nth-child(3) { animation-delay: 280ms; }
+
+    .workspace-route-loader-content { flex-direction: column; gap: var(--space-2); }
+    .workspace-route-loader-content .loading-signal { margin-top: 0; }
+    .workspace-route-loader-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent); border-radius: var(--r-md); background: var(--workspace-navigation); }
+    .workspace-route-loader-logo { display: grid; place-items: center; color: var(--foreground); }
+
+    @keyframes loader-orbit-spin { to { transform: rotate(360deg); } }
+    @keyframes loader-logo-breathe { 0%, 100% { transform: translate(-50%, -50%) scale(.97); } 50% { transform: translate(-50%, -50%) scale(1.035); } }
+    @keyframes loader-frame-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+    @keyframes loader-caret { 0%, 48% { opacity: 1; } 49%, 100% { opacity: 0; } }
+    @keyframes loader-timeline-progress { 0% { transform: scaleX(.15); opacity: .5; } 55% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+    @keyframes loader-signal-pulse { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
+
+    @media (max-width: 639px) {
+        .full-screen-loader-scene { width: min(260px, 76vw); }
+        .full-screen-loader-copy { top: calc(50% + 154px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .full-screen-loader-logo,
+        .full-screen-loader-orbit,
+        .full-screen-loader-frame,
+        .full-screen-loader-script,
+        .full-screen-loader-timeline,
+        .full-screen-loader-script b,
+        .full-screen-loader-timeline b,
+        .loading-signal i { animation: none; }
+    }
+
+    :where(.ant-btn) {
+        letter-spacing: 0;
+        transition:
+            color var(--motion-instant) ease-out,
+            background-color var(--motion-instant) ease-out,
+            border-color var(--motion-instant) ease-out,
+            box-shadow var(--motion-instant) ease-out,
+            transform 90ms ease-out;
+    }
+
+    :where(.ant-btn:not(:disabled)):active {
+        transform: scale(0.98);
+    }
+
+    /* aria-pressed 表示持久选择，不是主操作。即使调用方仍传 primary，
+       也统一降为软选中态，避免暗色主题出现成排白色按钮。 */
+    :where(.ant-btn[aria-pressed="true"]) {
+        border-color: var(--control-selected-border) !important;
+        background: var(--control-selected-bg) !important;
+        color: var(--control-selected-fg) !important;
+        box-shadow: none !important;
+    }
+
+    :where(.ant-btn[aria-pressed="true"]:not(:disabled)):hover {
+        background: var(--control-selected-hover-bg) !important;
+        color: var(--control-selected-fg) !important;
+    }
+
+    /* AntD Switch 只有一个 handleBg token，无法分别表达开/关滑块颜色。
+       这里是全应用唯一的状态配对层，确保任何容器和 Portal 中都保持对比。 */
+    :where(.ant-switch.ant-switch-checked) {
+        background: var(--control-switch-checked-bg) !important;
+        box-shadow:
+            inset 0 0 0 1px color-mix(in srgb, var(--control-switch-checked-bg) 70%, var(--foreground)),
+            0 0 0 2px color-mix(in srgb, var(--control-switch-checked-bg) 15%, transparent);
+    }
+
+    :where(.ant-switch.ant-switch-checked:not(.ant-switch-disabled)):hover {
+        background: var(--control-switch-checked-hover-bg) !important;
+    }
+
+    :where(.ant-switch.ant-switch-checked) .ant-switch-handle::before {
+        background: var(--control-switch-checked-handle) !important;
+    }
+
+    :where(.ant-switch:not(.ant-switch-checked)) {
+        background: var(--control-switch-off-bg) !important;
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 18%, transparent);
+    }
+
+    :where(.ant-switch:not(.ant-switch-checked):not(.ant-switch-disabled)):hover {
+        background: var(--control-switch-off-hover-bg) !important;
+    }
+
+    :where(.ant-switch:not(.ant-switch-checked)) .ant-switch-handle::before {
+        background: var(--control-switch-off-handle) !important;
+    }
+
+    /* 自研 Switch（data-state on/off）上下文语义覆盖：插件开关保持绿/中性双态。 */
+    :where([data-slot="switch"].plugin-state-switch[data-state="on"]) {
+        background: var(--plugin-switch-checked-bg) !important;
+    }
+
+    :where([data-slot="switch"].plugin-state-switch[data-state="on"]:not(:disabled)):hover {
+        background: var(--plugin-switch-checked-hover-bg) !important;
+    }
+
+    :where([data-slot="switch"].plugin-state-switch[data-state="off"]) {
+        background: var(--plugin-switch-off-bg) !important;
+    }
+
+    :where([data-slot="switch"].plugin-state-switch[data-state="off"]:not(:disabled)):hover {
+        background: var(--plugin-switch-off-hover-bg) !important;
+    }
+
+    :where(.ant-switch):focus-visible {
+        outline: 2px solid var(--control-focus-ring);
+        outline-offset: 2px;
+    }
+
+    :where(.ant-select-item-option-content) {
+        min-width: 0;
+    }
+
+    .creation-home {
+        --creation-accent: var(--workspace-accent);
+        --creation-bg: var(--workspace-page);
+        --creation-surface: rgba(255, 255, 255, .68);
+        --creation-surface-muted: rgba(238, 241, 245, .68);
+        --creation-surface-hover: rgba(228, 232, 237, .7);
+        --creation-surface-selected: rgba(218, 223, 229, .72);
+        --creation-border: rgba(179, 188, 199, .34);
+        --creation-border-strong: rgba(123, 136, 151, .42);
+        --creation-text: #17191d;
+        --creation-muted: #929aa5;
+        --creation-faint: #b5bbc3;
+        isolation: isolate;
+        background: var(--creation-bg);
+        color: var(--creation-text);
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+
+    .dark .creation-home {
+        --creation-accent: var(--workspace-accent);
+        --creation-bg: var(--workspace-page);
+        --creation-surface: rgba(27, 29, 34, .72);
+        --creation-surface-muted: rgba(35, 38, 44, .68);
+        --creation-surface-hover: rgba(47, 50, 58, .72);
+        --creation-surface-selected: rgba(57, 61, 70, .74);
+        --creation-border: rgba(104, 111, 124, .24);
+        --creation-border-strong: rgba(137, 146, 160, .36);
+        --creation-text: #f2f4f6;
+        --creation-muted: #737b86;
+        --creation-faint: #565d67;
+    }
+
+    .creation-new-button {
+        position: absolute;
+        z-index: 30;
+        top: 24px;
+        right: 28px;
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border: 1px solid var(--creation-border);
+        border-radius: 9px;
+        background: var(--creation-surface);
+        color: var(--creation-muted);
+        box-shadow: 0 8px 24px rgba(31, 37, 45, .06), inset 0 1px 0 color-mix(in srgb, white 58%, transparent);
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+    }
+
+    .creation-new-button:hover {
+        border-color: var(--creation-border-strong);
+        background: var(--creation-surface-hover);
+        color: var(--creation-text);
+    }
+
+    .creation-empty-workspace {
+        display: flex;
+        width: min(1000px, calc(100% - 64px));
+        min-height: 100%;
+        flex: 1 0 auto;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        padding: 0 0 20px;
+    }
+
+    .creation-empty-composer {
+        width: 100%;
+        animation: creation-workbench-enter var(--motion-dur-slow-calc) var(--motion-ease-out) both;
+    }
+
+    .creation-composer {
+        position: relative;
+        width: 100%;
+        min-width: 0;
+        border: 1px solid var(--creation-border);
+        border-radius: 16px;
+        background: var(--creation-surface);
+        box-shadow: 0 22px 72px rgba(27, 33, 42, .065), inset 0 1px 0 color-mix(in srgb, white 76%, transparent);
+        overflow: hidden;
+        backdrop-filter: blur(26px) saturate(128%);
+        -webkit-backdrop-filter: blur(26px) saturate(128%);
+        transition: border-color 180ms ease, box-shadow 180ms ease;
+    }

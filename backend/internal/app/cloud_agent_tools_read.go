@@ -22,7 +22,7 @@ import (
 )
 
 func cloudAgentWrite(name string) bool {
-	return name == "canvas_apply_ops" || name == "canvas_arrange_nodes" || name == "generate_media" || name == "image_layer_split" || name == "canvas_create_storyboard" || name == "canvas_edit_storyboard" || name == "canvas_edit_batch_table" || name == "canvas_create_character"
+	return name == "canvas_apply_ops" || name == "canvas_arrange_nodes" || name == "generate_media" || name == "image_layer_split" || name == "canvas_create_storyboard" || name == "canvas_edit_storyboard" || name == "canvas_edit_batch_table" || name == "canvas_create_character" || name == "previs_scene_create" || name == "previs_apply_patch"
 }
 
 // 同参缓存只能拦住“原样重复”的读取。模型也可能不断修改 offset、nodeIds 或
@@ -32,7 +32,7 @@ const cloudAgentMaxReadToolCallsPerRun = 32
 
 func cloudAgentReadToolCacheable(name string) bool {
 	switch name {
-	case "agent_profile_read", "canvas_get_state", "canvas_read_storyboard", "director_scene_read", "skill_read_file", "model_list":
+	case "agent_profile_read", "canvas_get_state", "canvas_read_storyboard", "previs_scene_read", "skill_read_file", "model_list":
 		return true
 	default:
 		return false
@@ -45,7 +45,7 @@ func cloudAgentReadToolCacheable(name string) bool {
 // and search results are allowed to change between calls.
 func cloudAgentReadToolReadOnly(name string) bool {
 	switch name {
-	case "agent_profile_read", "canvas_get_state", "canvas_read_storyboard", "director_scene_read", "canvas_read_batch_table", "canvas_list_node_types", "skill_read_file", "skill_search", "model_list", "recall_lessons", "task_get":
+	case "agent_profile_read", "canvas_get_state", "canvas_read_storyboard", "previs_scene_read", "canvas_read_batch_table", "canvas_list_node_types", "skill_read_file", "skill_search", "model_list", "recall_lessons", "task_get":
 		return true
 	default:
 		return false
@@ -85,7 +85,7 @@ func cloudAgentReadCacheKeyForState(repo *repository.Repository, userID string, 
 		return key
 	}
 	switch call.Function.Name {
-	case "canvas_get_state", "canvas_read_storyboard", "director_scene_read":
+	case "canvas_get_state", "canvas_read_storyboard", "previs_scene_read":
 		if repo != nil {
 			if canvas, err := repo.CanvasProjectForUser(userID, state.Request.CanvasID); err == nil && canvas != nil {
 				return fmt.Sprintf("%s:canvas-revision:%d", key, canvas.Revision)
@@ -243,10 +243,10 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		return cloudAgentRecallLessons(repo, userID, call)
 	case "remember_lesson":
 		return cloudAgentRememberLesson(repo, userID, state, call)
-	case "director_scene_read":
-		return cloudAgentDirectorSceneRead(repo, userID, state.Request.CanvasID, call)
-	case "director_preview":
-		return cloudAgentDirectorPreview(repo, userID, state.Request.CanvasID, call)
+	case "previs_scene_read":
+		return cloudAgentPrevisSceneRead(repo, userID, state.Request.CanvasID, call)
+	case "previs_preview":
+		return cloudAgentPrevisPreview(repo, userID, state.Request.CanvasID, call)
 	case "canvas_list_node_types":
 		if err := decodeCloudAgentJSONObject(call.Function.Arguments, &struct{}{}); err != nil {
 			return nil, cloudAgentJSONArgumentError(err)

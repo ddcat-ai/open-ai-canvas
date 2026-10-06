@@ -278,12 +278,13 @@ export function applyAgentEvent(
         setMessages((current) => mergeAgentToolRetry(current, message));
         if (event.type === "tool_failed") return;
     }
-    if (event.type === "tool_completed" && payload.toolName === "director_preview") {
+    if (event.type === "tool_completed" && payload.toolName === "previs_preview") {
         const result = payload.result && typeof payload.result === "object" ? (payload.result as Record<string, unknown>) : {};
         window.dispatchEvent(
-            new CustomEvent("director:preview-requested", {
+            new CustomEvent("previs:preview-requested", {
                 detail: {
                     sceneId: String(result.sceneId || ""),
+                    canvasId: String(result.canvasId || ""),
                     shotId: String(result.shotId || ""),
                     duration: Number(result.duration || 0),
                     fps: Number(result.fps || 0),
@@ -295,8 +296,8 @@ export function applyAgentEvent(
             appendUniqueMessage(current, {
                 id: event.eventId,
                 role: "tool",
-                title: "director_preview",
-                text: text || "已请求导演台生成白模预演",
+                title: "previs_preview",
+                text: text || "已请求预演台生成白模预演",
                 detail: { ...payload, eventType: event.type },
             }),
         );

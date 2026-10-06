@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { AnimationClip, AnimationMixer, BoxGeometry, Group, Mesh, MeshStandardMaterial, Object3D, SkeletonHelper, Texture } from "three";
 import { SkeletonUtils } from "three-stdlib";
 
-import { disposeDirectorAdoptionFailure, disposeDirectorHelper, disposeDirectorMaterials, disposeDirectorMixer, disposeDirectorModelResources, disposeDirectorObject3D, resolveDirectorLoadOwnership } from "../src/lib/canvas/director/director-resources";
+import { disposePrevisAdoptionFailure, disposePrevisHelper, disposePrevisMaterials, disposePrevisMixer, disposePrevisModelResources, disposePrevisObject3D, resolvePrevisLoadOwnership } from "../src/lib/canvas/previs/previs-resources";
 
 /** 统计 dispose 调用次数，用真实 Three 对象验证「同一资源只释放一次」。 */
 function counted<T extends { dispose: () => void }>(target: T) {
@@ -27,7 +27,7 @@ describe("共享资源只释放一次（C 回归）", () => {
         root.add(meshWith(geometry.target, material.target));
         root.add(meshWith(geometry.target, material.target));
         root.add(meshWith(geometry.target, material.target));
-        disposeDirectorObject3D(root);
+        disposePrevisObject3D(root);
         expect(geometry.calls.count).toBe(1);
         expect(material.calls.count).toBe(1);
     });
@@ -41,7 +41,7 @@ describe("共享资源只释放一次（C 回归）", () => {
         const root = new Group();
         root.add(meshWith(new BoxGeometry(1, 1, 1), first));
         root.add(meshWith(new BoxGeometry(1, 1, 1), second));
-        disposeDirectorObject3D(root);
+        disposePrevisObject3D(root);
         expect(texture.calls.count).toBe(1);
     });
 
@@ -54,7 +54,7 @@ describe("共享资源只释放一次（C 回归）", () => {
         b.target.normalMap = textureB.target;
         const root = new Group();
         root.add(meshWith(new BoxGeometry(1, 1, 1), [a.target, b.target]));
-        disposeDirectorObject3D(root);
+        disposePrevisObject3D(root);
         expect(a.calls.count).toBe(1);
         expect(b.calls.count).toBe(1);
         expect(textureA.calls.count).toBe(1);
@@ -69,15 +69,15 @@ describe("共享资源只释放一次（C 回归）", () => {
         material.emissiveMap = slots[2].target;
         const root = new Group();
         root.add(meshWith(new BoxGeometry(1, 1, 1), material));
-        disposeDirectorObject3D(root);
+        disposePrevisObject3D(root);
         slots.forEach((slot) => expect(slot.calls.count).toBe(1));
     });
 
     test("空输入是安全的", () => {
-        expect(() => disposeDirectorObject3D(null)).not.toThrow();
-        expect(() => disposeDirectorObject3D(undefined)).not.toThrow();
-        expect(() => disposeDirectorHelper(null)).not.toThrow();
-        expect(() => disposeDirectorMixer(null)).not.toThrow();
+        expect(() => disposePrevisObject3D(null)).not.toThrow();
+        expect(() => disposePrevisObject3D(undefined)).not.toThrow();
+        expect(() => disposePrevisHelper(null)).not.toThrow();
+        expect(() => disposePrevisMixer(null)).not.toThrow();
     });
 });
 
@@ -86,7 +86,7 @@ describe("SkeletonHelper / mixer / 组合释放", () => {
         const helper = new SkeletonHelper(new Object3D());
         const geometry = counted(helper.geometry);
         const material = counted(helper.material as MeshStandardMaterial);
-        disposeDirectorHelper(helper);
+        disposePrevisHelper(helper);
         expect(geometry.calls.count).toBe(1);
         expect(material.calls.count).toBe(1);
     });
@@ -107,7 +107,7 @@ describe("SkeletonHelper / mixer / 组合释放", () => {
             uncached.push(target as Object3D);
             return originalUncache(target);
         };
-        disposeDirectorMixer(mixer, root);
+        disposePrevisMixer(mixer, root);
         expect(stopped.count).toBe(1);
         expect(uncached).toEqual([root]);
     });
@@ -126,7 +126,7 @@ describe("SkeletonHelper / mixer / 组合释放", () => {
             stopped.count += 1;
             return originalStop();
         };
-        disposeDirectorModelResources({ model, helper, mixer });
+        disposePrevisModelResources({ model, helper, mixer });
         expect(geometry.calls.count).toBe(1);
         expect(material.calls.count).toBe(1);
         expect(helperGeometry.calls.count).toBe(1);
@@ -138,7 +138,7 @@ describe("SkeletonHelper / mixer / 组合释放", () => {
         const originalTexture = counted(new Texture());
         original.target.map = originalTexture.target;
         const replacement = counted(new MeshStandardMaterial());
-        disposeDirectorMaterials([original.target]);
+        disposePrevisMaterials([original.target]);
         expect(original.calls.count).toBe(1);
         expect(originalTexture.calls.count).toBe(1);
         expect(replacement.calls.count).toBe(0);
@@ -146,7 +146,7 @@ describe("SkeletonHelper / mixer / 组合释放", () => {
 
     test("重复出现在列表中的材质只释放一次", () => {
         const material = counted(new MeshStandardMaterial());
-        disposeDirectorMaterials([material.target, material.target, null, undefined]);
+        disposePrevisMaterials([material.target, material.target, null, undefined]);
         expect(material.calls.count).toBe(1);
     });
 });
@@ -168,7 +168,7 @@ describe("GLTF clone 的 GPU 所有权（#1 回归）", () => {
 
     test("active adopt 不释放 source 的共享资源", () => {
         const source = sourceScene();
-        const ownership = resolveDirectorLoadOwnership({ active: true, generation: 3, currentGeneration: 3 });
+        const ownership = resolvePrevisLoadOwnership({ active: true, generation: 3, currentGeneration: 3 });
         expect(ownership).toEqual({ adopt: true, disposeSource: false });
         // 采纳路径：只 clone，不 dispose source。
         const clone = SkeletonUtils.clone(source.root);
@@ -186,19 +186,19 @@ describe("GLTF clone 的 GPU 所有权（#1 回归）", () => {
         const clone = SkeletonUtils.clone(source.root);
         const mixer = new AnimationMixer(clone);
         const helper = new SkeletonHelper(clone);
-        disposeDirectorModelResources({ model: clone, helper, mixer });
+        disposePrevisModelResources({ model: clone, helper, mixer });
         expect(source.geometry.calls.count).toBe(1);
         expect(source.material.calls.count).toBe(1);
         expect(source.texture.calls.count).toBe(1);
     });
 
     test("stale / 未采纳的晚到 source 会被释放", () => {
-        const stale = resolveDirectorLoadOwnership({ active: true, generation: 1, currentGeneration: 2 });
+        const stale = resolvePrevisLoadOwnership({ active: true, generation: 1, currentGeneration: 2 });
         expect(stale).toEqual({ adopt: false, disposeSource: true });
-        const unmounted = resolveDirectorLoadOwnership({ active: false, generation: 2, currentGeneration: 2 });
+        const unmounted = resolvePrevisLoadOwnership({ active: false, generation: 2, currentGeneration: 2 });
         expect(unmounted).toEqual({ adopt: false, disposeSource: true });
         const orphan = sourceScene();
-        disposeDirectorObject3D(orphan.root);
+        disposePrevisObject3D(orphan.root);
         expect(orphan.geometry.calls.count).toBe(1);
         expect(orphan.material.calls.count).toBe(1);
         expect(orphan.texture.calls.count).toBe(1);
@@ -208,7 +208,7 @@ describe("GLTF clone 的 GPU 所有权（#1 回归）", () => {
         const source = sourceScene();
         const clone = SkeletonUtils.clone(source.root);
         // 只释放 owned clone（当前实现的语义），source 层级交给 GC。
-        disposeDirectorModelResources({ model: clone, mixer: new AnimationMixer(clone) });
+        disposePrevisModelResources({ model: clone, mixer: new AnimationMixer(clone) });
         expect(source.geometry.calls.count).toBe(1);
         expect(source.material.calls.count).toBe(1);
         expect(source.texture.calls.count).toBe(1);
@@ -227,7 +227,7 @@ describe("纹理识别必须基于 isTexture（#8 回归）", () => {
         (material as unknown as Record<string, unknown>).map = impostor;
         const root = new Group();
         root.add(meshWith(new BoxGeometry(1, 1, 1), material));
-        disposeDirectorObject3D(root);
+        disposePrevisObject3D(root);
         expect(impostorCalls).toBe(0);
     });
 
@@ -241,7 +241,7 @@ describe("纹理识别必须基于 isTexture（#8 回归）", () => {
         const root = new Group();
         root.add(meshWith(new BoxGeometry(1, 1, 1), first));
         root.add(meshWith(new BoxGeometry(1, 1, 1), second));
-        disposeDirectorObject3D(root);
+        disposePrevisObject3D(root);
         expect(texture.calls.count).toBe(1);
     });
 });
@@ -269,7 +269,7 @@ describe("采纳中途抛错的精确清理（#3 回归）", () => {
             stopped += 1;
             return mixer;
         }) as typeof mixer.stopAllAction;
-        disposeDirectorAdoptionFailure({ clone, mixer, source: source.root });
+        disposePrevisAdoptionFailure({ clone, mixer, source: source.root });
         expect(stopped).toBe(1);
         // clone 与 source 共享这三个资源：必须恰好 1 次，不能因为同时传了 source 变成 2 次。
         expect(source.geometry.calls.count).toBe(1);
@@ -279,7 +279,7 @@ describe("采纳中途抛错的精确清理（#3 回归）", () => {
 
     test("clone 尚未建成时释放未采纳的 source", () => {
         const source = sourceScene();
-        disposeDirectorAdoptionFailure({ clone: null, mixer: null, source: source.root });
+        disposePrevisAdoptionFailure({ clone: null, mixer: null, source: source.root });
         expect(source.geometry.calls.count).toBe(1);
         expect(source.material.calls.count).toBe(1);
         expect(source.texture.calls.count).toBe(1);
@@ -293,23 +293,23 @@ describe("采纳中途抛错的精确清理（#3 回归）", () => {
             stopped += 1;
             return orphanMixer;
         }) as typeof orphanMixer.stopAllAction;
-        disposeDirectorAdoptionFailure({ clone: null, mixer: orphanMixer, source: source.root });
+        disposePrevisAdoptionFailure({ clone: null, mixer: orphanMixer, source: source.root });
         expect(stopped).toBe(1);
         expect(source.geometry.calls.count).toBe(1);
     });
 
     test("全空输入是安全空操作", () => {
-        expect(() => disposeDirectorAdoptionFailure({ clone: null, mixer: null, source: null })).not.toThrow();
+        expect(() => disposePrevisAdoptionFailure({ clone: null, mixer: null, source: null })).not.toThrow();
     });
 
     test("重复调用不 double-dispose 同一批资源", () => {
         const source = sourceScene();
         const clone = SkeletonUtils.clone(source.root);
-        disposeDirectorAdoptionFailure({ clone, mixer: null, source: source.root });
+        disposePrevisAdoptionFailure({ clone, mixer: null, source: source.root });
         const afterFirst = source.geometry.calls.count;
         // 生产在 catch 里已经把 ownedRef 摘空，effect cleanup 不会再传同一个 clone；
         // 这里断言 helper 自身对「已释放的 clone」再调用也不会把计数推高到危险值。
-        disposeDirectorAdoptionFailure({ clone: null, mixer: null, source: null });
+        disposePrevisAdoptionFailure({ clone: null, mixer: null, source: null });
         expect(source.geometry.calls.count).toBe(afterFirst);
     });
 });

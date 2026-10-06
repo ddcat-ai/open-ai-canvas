@@ -1,0 +1,43 @@
+---
+title: 平台技能策展
+description: 可选的后台一级分类和子分类维护
+---
+
+平台策展模式在“后台 → 技能分类”中开启，默认关闭。关闭时原有 `/skills` JSON、固定五类、个人技能库分类保持不变，新增筛选参数被忽略。分类设置可以在开启前准备。
+
+管理员可以新增、改名、排序、停用子分类，并给公开且启用的技能设置同根的多个子分类。停用不删除指派或个人加入状态，恢复后重新生效。技能 tag 改变时旧跨根指派不再生效；删除技能同时清理指派。无有效指派的技能进入“未细分”。
+
+## API
+
+- `GET /api/skills/curation`：登录后读取分类及公开有效技能指派；关闭时返回空集合。
+- `GET /api/admin/skill-curation`：管理员读取设置、revision、含停用的子分类及公开技能指派。
+- `PUT /api/admin/skill-curation`：管理员提交 `expectedRevision`，及 `enabled`、完整 `category`、完整 `assignment` 三者之一。category 含 id（新建为空）、rootTag、name、sortOrder、enabled。assignment 含 skillId、categoryIds；空数组清除，null 拒绝。
+- `GET /api/skills` 新增 `platformCategoryId` 或 `platformUncategorized=true`，仅开启时生效；与原有 scope、搜索、排序、个人分类组合，分页前筛选，不改变响应字段。
+
+写请求上限 64 KiB、单技能最多 32 类；拒绝未知字段、重复指派、跨根、私人技能、过期版本。409 后重新加载核对修改。管理员身份在业务层和事务内检查，revision CAS、修改和 AdminAuditEvent 同事务。审计只记录分类元数据，不记录技能正文。分类不是使用技能的授权。
+
+## 数据库
+
+迁移 46 `skill_curation`，checksum `sha256:skill-curation-v46-20261005`：
+
+| 表 | 用途 |
+| --- | --- |
+| skill_curation_settings | 单例 id=1，enabled 默认 false，revision 用于并发写入 |
+| skill_curation_categories | 稳定 id、root_tag、名称及规范化名称、sort_order、enabled；同根名称唯一 |
+| skill_curation_assignments | skill_id + category_id 联合主键 |
+
+迁移只建表及默认关闭的设置，不导入技能或分类内容。44、45 由独立变更保留；完整迁移程序支持缺号补跑。停用开关不是数据库降版；回退旧程序需要匹配的数据库备份。
+
+## 待验证
+
+SQLite 及 HTTP recorder 可在无网络环境验证。PostgreSQL、前端构建、浏览器中的明暗主题、键盘操作和分页交互需要单独验证。
+
+## 一级分类维护
+
+迁移 47 `skill_curation_roots`，checksum `sha256:skill-curation-roots-v47-20261005`，依赖迁移 46。新增 `skill_curation_roots`（id、name、normalized_name 唯一索引、icon_key、sort_order、enabled）及 `skill_curation_root_assignments`（skill_id 主键、root_id 索引）。仅创建原目录的五个中性根，保持 U39 的 rootTag 引用，不导入任何技能指派。
+
+管理员在同一页面维护一级分类；PUT 增加 `root` 命令，含 id（新建为空）、name、iconKey、sortOrder、enabled。图示只接受空值或 shapes／film／shopping-bag／megaphone／landmark／palette／users／wrench，客户端未知值使用 Shapes。根表为空时回落原五类；第一次编辑时将回落值保存入表。读取或数据库错误不冒充空表。
+
+`assignment` 可带 `rootId`，空字符串清除指定；改根必须同时提交完整 categoryIds，跨根则整笔回滚。原 tag、技能内容、版本和安装状态不变。未指定时按原 tag 对应稳定根 ID；指定优先，目标停用或不存在时进入派生桶 `__unassigned__`（未归入启用分类），此桶不可编辑或指派。根停用不删除子分类、指派或已挂载技能。
+
+策展快照开启时增加 roots／rootAssignments；公开读取隐藏停用根及其子分类，不公开私人技能指派。`GET /api/skills?platformRootId=...` 在原有可见性和分页查询前筛选；关闭时忽略该参数，原响应结构和五类不变。后台界面和市场／技能库根导览、分组、图示均读取同一快照。场景预设来源及 scene 仍不变。

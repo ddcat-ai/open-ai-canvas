@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"log"
 	"path"
 	"strconv"
 	"strings"
@@ -80,7 +81,13 @@ func (s *Service) EnsureBuiltinSkills() error {
 func loadBuiltinSkillPackages(tombstones interface {
 	BuiltinSkillTombstoned(string) (bool, error)
 }) ([]builtinSkillPackage, error) {
-	entries, err := builtinSkillFiles.ReadDir(".")
+	return loadBuiltinSkillPackagesFromFS(builtinSkillFiles, tombstones)
+}
+
+func loadBuiltinSkillPackagesFromFS(filesystem fs.FS, tombstones interface {
+	BuiltinSkillTombstoned(string) (bool, error)
+}) ([]builtinSkillPackage, error) {
+	entries, err := fs.ReadDir(filesystem, ".")
 	if err != nil {
 		return nil, fmt.Errorf("读取内置技能目录失败: %w", err)
 	}
@@ -100,7 +107,7 @@ func loadBuiltinSkillPackages(tombstones interface {
 		seen[skillID] = struct{}{}
 
 		base := skillID
-		body, err := builtinSkillFiles.ReadFile(path.Join(base, "SKILL.md"))
+		body, err := fs.ReadFile(filesystem, path.Join(base, "SKILL.md"))
 		if err != nil {
 			return nil, fmt.Errorf("读取内置技能 %s 入口文件失败: %w", skillID, err)
 		}
@@ -135,7 +142,7 @@ func loadBuiltinSkillPackages(tombstones interface {
 		}
 
 		files := make(map[string][]byte)
-		if err := fs.WalkDir(builtinSkillFiles, base, func(filePath string, item fs.DirEntry, walkErr error) error {
+		if err := fs.WalkDir(filesystem, base, func(filePath string, item fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
@@ -147,7 +154,7 @@ func loadBuiltinSkillPackages(tombstones interface {
 			if err != nil {
 				return err
 			}
-			content, err := builtinSkillFiles.ReadFile(path.Join(base, relative))
+			content, err := fs.ReadFile(filesystem, path.Join(base, relative))
 			if err != nil {
 				return err
 			}
@@ -161,11 +168,10 @@ func loadBuiltinSkillPackages(tombstones interface {
 			return nil, fmt.Errorf("内置技能 %s 文件包无效: %w", skillID, err)
 		}
 
-		showcaseMedia := []SkillShowcaseMedia{}
-		if metadata.ShowcaseMediaRaw != "" {
-			if err := json.Unmarshal([]byte(metadata.ShowcaseMediaRaw), &showcaseMedia); err != nil {
-				return nil, fmt.Errorf("内置技能 %s 展示媒体无效: %w", skillID, err)
-			}
+		showcaseMedia, err := parseBuiltinShowcaseMedia(metadata.ShowcaseMediaRaw)
+		if err != nil {
+			log.Printf("内置技能 %s 展示媒体无效，跳过加载: %v", skillID, err)
+			continue
 		}
 		mediaJSON, err := json.Marshal(showcaseMedia)
 		if err != nil {
@@ -184,6 +190,53 @@ func loadBuiltinSkillPackages(tombstones interface {
 		})
 	}
 	return packages, nil
+}
+
+func parseBuiltinShowcaseMedia(raw string) ([]SkillShowcaseMedia, error) {
+	items := []SkillShowcaseMedia{}
+	if strings.TrimSpace(raw) == "" {
+		return items, nil
+	}
+	if !strings.HasPrefix(strings.TrimSpace(raw), "[") {
+		return nil, fmt.Errorf("showcaseMedia 必须是数组")
+	}
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+		return nil, err
+	}
+	for index, entry := range entries {
+		for _, field := range []struct{ snake, camel string }{
+			{"showcase_uri", "showcaseUri"}, {"showcase_url", "showcaseUrl"},
+		} {
+			legacy, exists := entry[field.snake]
+			if !exists {
+				continue
+			}
+			if current, exists := entry[field.camel]; exists {
+				var a, b string
+				if err := json.Unmarshal(legacy, &a); err != nil {
+					return nil, err
+				}
+				if err := json.Unmarshal(current, &b); err != nil {
+					return nil, err
+				}
+				if a != b {
+					return nil, fmt.Errorf("showcaseMedia[%d] 的 %s 与 %s 冲突", index, field.snake, field.camel)
+				}
+			}
+			entry[field.camel] = legacy
+		}
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return nil, err
+		}
+		var item SkillShowcaseMedia
+		if err := json.Unmarshal(data, &item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 func normalizeBuiltinSkillMetadata(skillID string, metadata builtinSkillMetadata) (builtinSkillMetadata, error) {

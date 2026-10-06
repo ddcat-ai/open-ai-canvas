@@ -1,0 +1,54 @@
+.admin-skill-curation-section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--admin-divider);
+    padding-bottom: 10px;
+}
+
+.admin-skill-curation-section-heading h3 {
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 20px;
+}
+
+.admin-skill-curation-section-heading p {
+    margin: 2px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 17px;
+}
+
+.admin-skill-curation-fields-root {
+    grid-template-columns: minmax(180px, 1.4fr) minmax(180px, 1fr) 96px 110px;
+}
+
+.admin-skill-curation-icon-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-skill-curation-subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 8px;
+    border-top: 1px solid var(--admin-divider);
+    padding-top: 18px;
+}
+
+@media (max-width: 1199px) {
+    .admin-skill-curation-fields-root {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 639px) {
+    .admin-skill-curation-fields-root {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

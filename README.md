@@ -37,6 +37,32 @@
 | <img src="assets/xmzm.png" alt="喜马抓马" width="160"> | 团队 | 喜马抓马 | 中国AI视听先锋厂牌/AI 视听全链路综合服务平台 | [himadrama.com](https://himadrama.com) |
 | <img src="assets/yuyutech.jpg" alt="羽宇科技" width="160"> | 企业 | 羽宇科技 | 一站式AI应用平台。提供模型算力入口、AI短剧视频制作（Studio）、企业数字员工（Agent）及内容出海（OPC）全栈解决方案。 | 暂无 |
 
+### 3D 预演台赞助用户
+
+感谢以下用户赞助 3D 预演台的开发：
+
+<p>
+  <a href="https://github.com/TripsCoder"><img src="https://github.com/TripsCoder.png?size=64" width="48" height="48" alt="TripsCoder"></a>
+  <a href="https://github.com/sugtex"><img src="https://github.com/sugtex.png?size=64" width="48" height="48" alt="sugtex"></a>
+  <a href="https://github.com/Leyi813"><img src="https://github.com/Leyi813.png?size=64" width="48" height="48" alt="Leyi813"></a>
+  <a href="https://github.com/daoge05178"><img src="https://github.com/daoge05178.png?size=64" width="48" height="48" alt="daoge05178"></a>
+  <a href="https://github.com/AetherNo2332"><img src="https://github.com/AetherNo2332.png?size=64" width="48" height="48" alt="AetherNo2332"></a>
+</p>
+
+GitHub 用户：[@TripsCoder](https://github.com/TripsCoder) · [@sugtex](https://github.com/sugtex) · [@Leyi813](https://github.com/Leyi813) · [@daoge05178](https://github.com/daoge05178) · [@AetherNo2332](https://github.com/AetherNo2332)
+
+| 赞助用户 | 联系方式 |
+| --- | --- |
+| vv | 2838033228@qq.com |
+| 克里斯 | [artbox.top](https://artbox.top) |
+| 宇熙 | 53121904@qq.com |
+| 落羽 | luoyyv66@gmail.com |
+| 今夕何在 | 809321478@qq.com |
+| Alpha-M·Break | 15739564793@qq.com |
+| 不吃鸭梨 | elio02519@gmail.com |
+| 九月 | 563641352@qq.com |
+| A | jaiboxuan1205@gmail.com |
+
 ## 核心能力
 
 - **自由画布**：节点、连线、框选、缩放、小地图、撤销重做、导入导出和只读分享。

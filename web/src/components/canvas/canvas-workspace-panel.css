@@ -77,7 +77,7 @@
 .canvas-main-with-workspace .canvas-editor-shell {
     z-index: 0;
 }
-.canvas-main-with-workspace .canvas-editor-shell:has([data-canvas-director-workbench]) {
+.canvas-main-with-workspace .canvas-editor-shell:has([data-canvas-previs-workbench]) {
     z-index: var(--z-toast);
 }
 .canvas-main-with-workspace .canvas-topbar {

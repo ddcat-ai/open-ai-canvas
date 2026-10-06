@@ -68,6 +68,7 @@ const (
 	ReasonBadGateway                   = app.ReasonBadGateway
 	ReasonUpstreamDNSFailed            = app.ReasonUpstreamDNSFailed
 	ReasonConflict                     = app.ReasonConflict
+	ReasonProjectNameConflict          = app.ReasonProjectNameConflict
 	ReasonFailedPrecondition           = app.ReasonFailedPrecondition
 	ReasonForbidden                    = app.ReasonForbidden
 	ReasonInternal                     = app.ReasonInternal
