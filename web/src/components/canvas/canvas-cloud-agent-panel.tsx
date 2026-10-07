@@ -6,6 +6,7 @@ import { saveAs } from "file-saver";
 import { buildAgentDebugExport } from "@/lib/canvas/agent-debug-export";
 import { agentPlanVisible, latestAgentPlanItems, latestAgentPlanTerminal, pendingAgentQuestion } from "@/lib/canvas/cloud-agent-plan";
 import { emptyAgentContextUsage, presentAgentContextUsage, reduceAgentContextUsage, type AgentContextUsage } from "@/lib/canvas/agent-context-usage";
+import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { nanoid } from "nanoid";
 
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -345,6 +346,19 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
     useEffect(() => {
         void reloadProfile();
     }, [reloadProfile]);
+
+    // 新建画布的首次落库会晚于助手打开：画布还没同步到云端时 /agent/profile 读不到画布，
+    // 面板会把这次失败锁在 profileError 上，之后即使画布已经存好也发不出消息，用户只能手工
+    // 重试。这里在画布同步完成后补读一次偏好快照，让助手自己恢复。每张画布只补一次，
+    // 避免读取持续失败时空转。
+    const canvasSyncPhase = useSyncProgressStore((state) => state.syncingProjects[canvasId]?.phase);
+    const profileSyncRetryRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (canvasSyncPhase !== "done" || profileLoading || profileView) return;
+        if (profileSyncRetryRef.current === canvasId) return;
+        profileSyncRetryRef.current = canvasId;
+        void reloadProfile();
+    }, [canvasId, canvasSyncPhase, profileLoading, profileView, reloadProfile]);
 
     const saveProfile = async (input: { scope: AgentProfileScope; projectId?: string; canvasId?: string; content: string; revision: number }) => {
         setProfileSaving(true);
