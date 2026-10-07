@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -599,12 +600,77 @@ func cloudAgentLastToolReceipt(state *cloudAgentRuntime) (string, bool) {
 		if cloudAgentToolContentIsError(content) {
 			return "", false
 		}
-		if utf8.RuneCountInString(content) > 1600 {
-			content = truncateRunes(content, 1600) + "…（已截断；完整状态请用读取工具获取）"
-		}
-		return content, true
+		return cloudAgentReceiptSummary(content), true
 	}
 	return "", false
+}
+
+const (
+	// 单个长字段（预览、行数据等描述内容）截断后保留的长度；关键标识字段
+	// （snapshotHash、nodeId、状态等）天然短于此值，整体保留。
+	cloudAgentReceiptFieldLimit = 240
+	// 回执摘要的总预算，防止大结果把恢复提示撑爆。
+	cloudAgentReceiptTotalLimit = 1600
+)
+
+// cloudAgentReceiptSummary 生成保留关键标识的工具结果摘要。
+//
+// 不能对结果 JSON 做朴素前缀截断：字段顺序不保证 snapshotHash / nodeId 排在前面
+// （批量画布操作的 preview、rows 可能很长，序列化时把快照挤出截断窗口），而恢复
+// 提示恰恰要求模型基于回执里的最新快照继续——快照被截掉等于引导它带着旧快照撞锁。
+// 摘要按字段组装：短字段（对象标识、执行状态、快照）无条件保留，长字段逐个截断；
+// 总预算不够时按字典序丢弃长字段（并在 truncatedFields 里说明），关键标识永远在内。
+// 非 JSON 的纯文本结果退化为整体截断。
+func cloudAgentReceiptSummary(content string) string {
+	var decoded map[string]any
+	if json.Unmarshal([]byte(content), &decoded) != nil {
+		return cloudAgentReceiptClip(content)
+	}
+	summary := make(map[string]any, len(decoded))
+	var longKeys []string
+	for key, value := range decoded {
+		text, err := json.Marshal(value)
+		if err == nil && utf8.RuneCountInString(string(text)) <= cloudAgentReceiptFieldLimit {
+			summary[key] = value
+		} else {
+			longKeys = append(longKeys, key)
+		}
+	}
+	sort.Strings(longKeys)
+	var truncated []string
+	for _, key := range longKeys {
+		if raw, err := json.Marshal(summary); err == nil &&
+			utf8.RuneCountInString(string(raw))+utf8.RuneCountInString(key)+cloudAgentReceiptFieldLimit+48 > cloudAgentReceiptTotalLimit {
+			truncated = append(truncated, key)
+			continue
+		}
+		var text string
+		if value, ok := decoded[key].(string); ok {
+			text = value
+		} else if raw, err := json.Marshal(decoded[key]); err == nil {
+			text = string(raw)
+		}
+		summary[key] = truncateRunes(text, cloudAgentReceiptFieldLimit) + "…（已截断；完整内容请用读取工具获取）"
+	}
+	if len(truncated) > 0 {
+		summary["truncatedFields"] = strings.Join(truncated, ",") + "（完整内容请用读取工具获取）"
+	}
+	raw, err := json.Marshal(summary)
+	if err != nil {
+		return cloudAgentReceiptClip(content)
+	}
+	if utf8.RuneCountInString(string(raw)) > cloudAgentReceiptTotalLimit {
+		// 字段数量本身过多：整体截断兜底，提示模型自行重读。
+		return cloudAgentReceiptClip(string(raw))
+	}
+	return string(raw)
+}
+
+func cloudAgentReceiptClip(content string) string {
+	if utf8.RuneCountInString(content) <= cloudAgentReceiptTotalLimit {
+		return content
+	}
+	return truncateRunes(content, cloudAgentReceiptTotalLimit) + "…（已截断；完整状态请用读取工具获取）"
 }
 
 func (s *Service) resumeCloudAgentAfterApproval(userID, id string, state *cloudAgentRuntime) error {

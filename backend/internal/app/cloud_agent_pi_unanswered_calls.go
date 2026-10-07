@@ -13,7 +13,10 @@ package app
 //
 // 结果体用与真实工具失败一致的结构化 JSON（errorClass=approval_deferred）而不是纯文本，
 // 让模型/界面/诊断都能按码识别"这是审批暂停的副作用，不是调用本身出错"。
-const cloudAgentPiUnansweredCallText = `{"error":"该工具调用未被执行：同一步里排在前面的操作进入了用户审批（或本轮被中断），它从未运行。如仍需要它的结果，请原样重新调用。","errorClass":"approval_deferred","errorClassLabel":"审批暂停未执行","requiredAction":"resend"}`
+// 重发指引不能说"原样重发"：同批若有两个调用改同一对象，排在审批后面的那个执行时快照
+// 已被前面的写入改变，原样重发必然撞锁——必须让它按恢复提示回执里的最新 snapshotHash
+// 更新参数，没有回执可用时先重新读取目标对象。
+const cloudAgentPiUnansweredCallText = `{"error":"该工具调用未被执行：同一步里排在前面的操作进入了用户审批（或本轮被中断），它从未运行。如仍需要它的结果，请重新调用；若它携带 snapshotHash 且同批已有操作执行，先用恢复提示回执里的最新 snapshotHash 更新参数，没有回执时先重新读取目标对象再改。","errorClass":"approval_deferred","errorClassLabel":"审批暂停未执行","requiredAction":"resend"}`
 
 // repairRuntimeUnansweredCalls 返回补齐后的消息序列；没有缺失时原样返回同一个切片。
 // 调用 ID 解析不了的条目不在这里处理，留给后面的校验报出原始错误。
