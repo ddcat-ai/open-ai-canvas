@@ -130,9 +130,10 @@ func TestCloudAgentLastToolReceiptKeepsSnapshotBehindLargeFields(t *testing.T) {
 	}
 }
 
-// 回归（评审 P2）：占位指引不能要求"原样重发"。同批两个调用修改同一对象时，
-// 排在审批后面那个执行时快照已被前面的写入改变，原样重发必然撞 state_conflict——
-// 指引必须让模型按回执里的最新 snapshotHash 更新参数，没有回执时先重读。
+// 回归（评审 P2 二轮）：重发指引必须按对象区分。分镜等工具的 snapshotHash 是节点级的：
+// 同批第一个调用只改变自己目标对象的快照——同对象的剩余调用要用回执最新快照更新参数；
+// 其他对象的调用原快照仍有效，按原参数重发即可。指引若不限定"同一对象"，模型把 A 的
+// 快照填进 B 的调用反而必然撞锁。
 func TestUnansweredCallPlaceholderAdvisesSnapshotUpdate(t *testing.T) {
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(cloudAgentPiUnansweredCallText), &decoded); err != nil {
@@ -140,12 +141,16 @@ func TestUnansweredCallPlaceholderAdvisesSnapshotUpdate(t *testing.T) {
 	}
 	message, _ := decoded["error"].(string)
 	if strings.Contains(message, "原样重新调用") {
-		t.Fatal("占位指引不应要求原样重发（同批写同一对象会撞锁）")
+		t.Fatal("占位指引不应笼统要求原样重发（同批写同一对象会撞锁）")
 	}
-	for _, needle := range []string{"最新 snapshotHash", "重新读取"} {
+	for _, needle := range []string{"同一对象", "最新 snapshotHash", "按原参数重发", "重新读取"} {
 		if !strings.Contains(message, needle) {
 			t.Fatalf("占位指引应包含 %q：\n%s", needle, message)
 		}
+	}
+	// 指引的三条分支必须互斥可判：同对象→用回执快照；跨对象/无回执→原参数；被拒→重读。
+	if !strings.Contains(message, "目标对象不同或没有回执时，按原参数重发") {
+		t.Fatal("跨对象分支必须明确指示按原参数重发")
 	}
 }
 
