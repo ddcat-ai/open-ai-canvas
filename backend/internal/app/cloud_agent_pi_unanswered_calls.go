@@ -10,7 +10,10 @@ package app
 //
 // 这里在转换前给这些调用补一条明确的「未执行」结果：历史恢复合法，模型也知道
 // 那一步没做过，需要时会自己重新调用。只补缺失的，不改已有的结果。
-const cloudAgentPiUnansweredCallText = "该工具调用未被执行：本轮在它之前暂停（同一步里排在前面的操作进入了用户审批）或被中断。如仍需要它的结果，请重新调用。"
+//
+// 结果体用与真实工具失败一致的结构化 JSON（errorClass=approval_deferred）而不是纯文本，
+// 让模型/界面/诊断都能按码识别"这是审批暂停的副作用，不是调用本身出错"。
+const cloudAgentPiUnansweredCallText = `{"error":"该工具调用未被执行：同一步里排在前面的操作进入了用户审批（或本轮被中断），它从未运行。如仍需要它的结果，请原样重新调用。","errorClass":"approval_deferred","errorClassLabel":"审批暂停未执行","requiredAction":"resend"}`
 
 // repairRuntimeUnansweredCalls 返回补齐后的消息序列；没有缺失时原样返回同一个切片。
 // 调用 ID 解析不了的条目不在这里处理，留给后面的校验报出原始错误。

@@ -23,6 +23,7 @@ const (
 	cloudAgentToolErrorPermission         = "permission_violation"
 	cloudAgentToolErrorUpstream           = "upstream_failure"
 	cloudAgentToolErrorAdmission          = "admission_failure"
+	cloudAgentToolErrorApprovalDeferred   = "approval_deferred"
 	cloudAgentToolErrorUnknown            = "tool_error"
 )
 
@@ -115,6 +116,8 @@ func cloudAgentToolErrorLabel(class string) string {
 		return "上游故障"
 	case cloudAgentToolErrorAdmission:
 		return "媒体生成准入失败"
+	case cloudAgentToolErrorApprovalDeferred:
+		return "审批暂停未执行"
 	default:
 		return "工具执行失败"
 	}

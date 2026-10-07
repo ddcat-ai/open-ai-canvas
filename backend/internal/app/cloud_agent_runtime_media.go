@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 	"infinite-canvas/backend/internal/kernel"
@@ -559,9 +561,55 @@ func (s *Service) finishApprovedCloudAgentMedia(ctx context.Context, userID, id,
 	return s.resumeCloudAgentAfterApproval(userID, id, &state)
 }
 
+// cloudAgentApprovalResumePrompt 构造审批恢复后的续跑提示。
+//
+// 线上评测（run ag7317ce5c seq 28→31）暴露的关键缺口：审批等待期间，模型历史里该调用
+// 停留在「操作正在等待用户审批」占位上；批准后执行器虽已写入并追加了真实结果，但恢复
+// 提示只有一句"已执行一次"——模型看不到结果里的新 snapshotHash / 节点状态，只会合理地
+// 重发同参数调用，随后撞上自己第一次执行改变的快照（state_conflict）。把执行结果摘要
+// 直接装进恢复提示，模型就有了继续操作所需的最新状态；同批排在审批之后被中止的调用也
+// 一并说明，避免恢复后发出空回合。
+func cloudAgentApprovalResumePrompt(state *cloudAgentRuntime) string {
+	if receipt, ok := cloudAgentLastToolReceipt(state); ok {
+		prompt := "用户已批准刚才等待审批的操作，已执行完成，结果如下：\n" + receipt +
+			"\n该操作不要重复调用。结果里是目标对象的最新状态（含 snapshotHash）；继续写同一对象必须基于它，否则会因快照过期被拒绝。"
+		if state.CallIndex < len(state.Calls) {
+			prompt += " 你上一步同批发出的其余调用未被执行（每个审批周期只放行一个操作），仍需要请重发。"
+		}
+		return prompt
+	}
+	return "用户已批准刚才等待审批的操作。业务执行器已执行一次；请根据最新工具结果继续，不要重复调用该操作。"
+}
+
+// cloudAgentLastToolReceipt 取 canonical 历史末尾最近一条工具结果的可读摘要。
+// 批准执行完成后它就是被批准调用的真实结果；拿不到时返回 false，调用方回退通用提示。
+func cloudAgentLastToolReceipt(state *cloudAgentRuntime) (string, bool) {
+	if state == nil {
+		return "", false
+	}
+	for i := len(state.Canonical.Messages) - 1; i >= 0; i-- {
+		message := state.Canonical.Messages[i]
+		if stringField(message, "role") != "tool" {
+			return "", false
+		}
+		content := strings.TrimSpace(stringField(message, "content"))
+		if content == "" {
+			continue
+		}
+		if cloudAgentToolContentIsError(content) {
+			return "", false
+		}
+		if utf8.RuneCountInString(content) > 1600 {
+			content = truncateRunes(content, 1600) + "…（已截断；完整状态请用读取工具获取）"
+		}
+		return content, true
+	}
+	return "", false
+}
+
 func (s *Service) resumeCloudAgentAfterApproval(userID, id string, state *cloudAgentRuntime) error {
 	if state.PiResumePrompt == "" {
-		state.PiResumePrompt = "用户已批准刚才等待审批的操作。业务执行器已执行一次；请根据最新工具结果继续，不要重复调用该操作。"
+		state.PiResumePrompt = cloudAgentApprovalResumePrompt(state)
 	}
 	if err := s.saveCloudAgentPiResumePrompt(userID, id, state.PiResumePrompt); err != nil {
 		return err
