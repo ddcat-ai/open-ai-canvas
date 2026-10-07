@@ -331,12 +331,16 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		finishText, finishReasoning = "", ""
 	}
 	if !compactionSummary {
-		invalid := cloudAgentBatchInvalidCalls(result.ToolCalls)
-		if len(invalid) > 0 && state.InvalidArgumentSteps >= cloudAgentInvalidArgumentStepLimit {
-			// 连续多批参数无效：模型无法自我修正，保持既有硬失败语义，
+		invalid, structural := cloudAgentBatchInvalidCalls(result.ToolCalls)
+		if len(invalid) > 0 && (structural || state.InvalidArgumentSteps >= cloudAgentInvalidArgumentStepLimit) {
+			// 结构类问题（ID 无效/重复、工具名无效）按 ID 配对纠偏会产生歧义，连续多批
+			// 参数无效说明模型无法自我修正：两者都保持既有整步拒绝语义，
 			// 释放任务避免重启后的 run 卡在无效 active task 上。
 			if releaseErr := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); releaseErr != nil {
 				return nil, false, releaseErr
+			}
+			if structural {
+				return nil, false, fmt.Errorf("invalid Pi tool calls: %w", validateCloudAgentCalls(result.ToolCalls))
 			}
 			return nil, false, fmt.Errorf("invalid Pi tool calls: 模型连续 %d 批工具调用未通过参数校验", cloudAgentInvalidArgumentStepLimit)
 		}

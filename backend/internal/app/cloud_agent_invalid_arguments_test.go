@@ -35,26 +35,85 @@ func TestCloudAgentBatchInvalidCalls(t *testing.T) {
 	big := oversizedCall("call_big", "canvas_apply_ops")
 	ok := validCall("call_ok", "canvas_get_state")
 
-	invalid := cloudAgentBatchInvalidCalls([]cloudAgentCall{big, ok})
+	invalid, structural := cloudAgentBatchInvalidCalls([]cloudAgentCall{big, ok})
 	if len(invalid) != 1 {
 		t.Fatalf("应只有超限调用无效：got %v", invalid)
+	}
+	if structural {
+		t.Fatal("参数超限不是结构类问题，不应整步拒绝")
 	}
 	if !strings.Contains(invalid[0], "32000") {
 		t.Fatalf("超限原因应说明字节上限：%s", invalid[0])
 	}
 
-	// 非法 JSON、ID 重复各自可判；重复 ID 的第二个调用即使参数有效也不放行。
+	// 非法 JSON、ID 重复各自可判；重复 ID 的第二个调用即使参数有效也不放行，
+	// 且重复 ID 属结构类问题——按 ID 配对纠偏有歧义，必须整步拒绝。
 	broken := cloudAgentCall{ID: "call_broken", Function: struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
 	}{Name: "canvas_apply_ops", Arguments: `{"ops":`}}
 	dup := validCall("call_ok", "canvas_get_state")
-	invalid = cloudAgentBatchInvalidCalls([]cloudAgentCall{broken, ok, dup})
+	invalid, structural = cloudAgentBatchInvalidCalls([]cloudAgentCall{broken, ok, dup})
 	if len(invalid) != 2 {
 		t.Fatalf("非法 JSON 与重复 ID 都应判无效：got %v", invalid)
 	}
+	if !structural {
+		t.Fatal("重复 ID 应标记为结构类问题")
+	}
 	if _, argumentProblem := cloudAgentInvalidCallReason(broken, map[string]bool{}); !argumentProblem {
 		t.Fatal("非法 JSON 应归类为参数问题")
+	}
+}
+
+// 回归（评审）：Pi 恢复后重放超限调用时，/tool 桥接的参数校验发生在回执回放之前，
+// 模型只能拿到一句泛化的 invalid Agent tool arguments，拿不到纠偏提交预写的
+// 「拆分重试」结构化回执——Pi 会话与服务端 canonical 各记一份不同结果，下一轮模型
+// 请求按历史长度二选一。校验失败时必须先回放已保存回执，两边保持一致。
+func TestCloudAgentPiToolReplaysSavedReceiptForInvalidArguments(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	if sqlDB, err := db.DB(); err == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+	req := agentTestRequest()
+	root, err := s.CreateCloudAgentRun("user", req, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	big := oversizedCall("call_big", "canvas_apply_ops")
+	receipt := `{"error":"该工具调用未通过参数校验：参数超过 32000 字节上限。","errorClass":"invalid_model_output","requiredAction":"fix_arguments"}`
+	state.Canonical.Messages = append(state.Canonical.Messages,
+		map[string]any{"role": "assistant", "content": "落大纲", "tool_calls": []cloudAgentCall{big}},
+		map[string]any{"role": "tool", "tool_call_id": "call_big", "content": receipt},
+	)
+	if err = s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := map[string]json.RawMessage{
+		"callId":    json.RawMessage(`"call_big"`),
+		"name":      json.RawMessage(`"canvas_apply_ops"`),
+		"arguments": json.RawMessage(big.Function.Arguments),
+	}
+	got, toolErr := s.cloudAgentPiTool(t.Context(), "user", run.ID, payload)
+	if toolErr != nil {
+		t.Fatalf("已保存回执的无效调用应回放回执而不是报校验错误：%v", toolErr)
+	}
+	result, _ := got.(map[string]any)
+	if result == nil {
+		t.Fatalf("应返回工具结果形态：%v", got)
+	}
+	if content, _ := result["content"].(string); !strings.Contains(content, "32000") || !strings.Contains(content, "fix_arguments") {
+		t.Fatalf("回放结果应是预写的结构化回执：%v", content)
 	}
 }
 
@@ -86,7 +145,10 @@ func TestFinishCloudAgentPiModelStepWithInvalidCalls(t *testing.T) {
 
 	big := oversizedCall("call_big", "canvas_apply_ops")
 	ok := validCall("call_ok", "canvas_get_state")
-	invalid := cloudAgentBatchInvalidCalls([]cloudAgentCall{big, ok})
+	invalid, structural := cloudAgentBatchInvalidCalls([]cloudAgentCall{big, ok})
+	if structural {
+		t.Fatal("测试前提不成立：超限应属参数类问题")
+	}
 	if len(invalid) != 1 {
 		t.Fatalf("测试前提不成立：应恰好一个无效调用，got %v", invalid)
 	}

@@ -507,18 +507,29 @@ func validateCloudAgentCalls(calls []cloudAgentCall) error {
 // 连续多少批模型调用含无效参数后放弃纠偏、回到硬失败路径。
 const cloudAgentInvalidArgumentStepLimit = 3
 
-// cloudAgentBatchInvalidCalls 找出一批调用里所有无效项，返回 index → 原因。
-// 无效调用也登记 seen，避免同批后续调用复用无效调用的 ID 被放行。
-func cloudAgentBatchInvalidCalls(calls []cloudAgentCall) map[int]string {
+// cloudAgentBatchInvalidCalls 找出一批调用里所有无效项，返回 index → 原因，以及
+// 是否存在结构类问题（ID 无效/重复、工具名无效——非参数类）。无效调用也登记 seen，
+// 避免同批后续调用复用无效调用的 ID 被放行。
+//
+// 结构类问题不能按参数问题逐调用纠偏：重复 ID 的调用与回执按 ID 配对会产生歧义
+// （第二条同 ID 调用的拒绝回执可能被当作第一条有效调用的结果），历史配对校验也会
+// 失败——保持整步拒绝的既有语义。参数类（超限/JSON 非法）才走逐调用纠偏。
+func cloudAgentBatchInvalidCalls(calls []cloudAgentCall) (map[int]string, bool) {
 	seen := make(map[string]bool, len(calls))
 	invalid := map[int]string{}
+	structural := false
 	for index, call := range calls {
-		if reason, _ := cloudAgentInvalidCallReason(call, seen); reason != "" {
-			invalid[index] = reason
-			seen[call.ID] = true
+		reason, argumentProblem := cloudAgentInvalidCallReason(call, seen)
+		if reason == "" {
+			continue
+		}
+		invalid[index] = reason
+		seen[call.ID] = true
+		if !argumentProblem {
+			structural = true
 		}
 	}
-	return invalid
+	return invalid, structural
 }
 
 // cloudAgentInvalidCallReason 返回单个调用未通过校验的原因与是否属于参数问题；
