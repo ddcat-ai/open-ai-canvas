@@ -152,6 +152,7 @@ type cloudAgentRuntime struct {
 	DecisionPreparedHashes         map[string]string                       `json:"decisionPreparedHashes,omitempty"`
 	ActionNudged                   bool                                    `json:"actionNudged,omitempty"`
 	EmptyOutputNudged              int                                     `json:"emptyOutputNudged,omitempty"`
+	InvalidArgumentSteps           int                                     `json:"invalidArgumentSteps,omitempty"`
 	StepSnapshotHash               string                                  `json:"stepSnapshotHash,omitempty"`
 	StoryboardTaskID               string                                  `json:"storyboardTaskId,omitempty"`
 	Plan                           []cloudAgentPlanItem                    `json:"plan,omitempty"`

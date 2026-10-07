@@ -331,21 +331,23 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		finishText, finishReasoning = "", ""
 	}
 	if !compactionSummary {
-		if err := validateCloudAgentCalls(result.ToolCalls); err != nil {
-			// The task itself succeeded, but its protocol result is not executable.
-			// Release the adopted task before returning the hard protocol error so a
-			// restarted run cannot remain stuck behind an invalid active task.
+		invalid := cloudAgentBatchInvalidCalls(result.ToolCalls)
+		if len(invalid) > 0 && state.InvalidArgumentSteps >= cloudAgentInvalidArgumentStepLimit {
+			// 连续多批参数无效：模型无法自我修正，保持既有硬失败语义，
+			// 释放任务避免重启后的 run 卡在无效 active task 上。
 			if releaseErr := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); releaseErr != nil {
 				return nil, false, releaseErr
 			}
-			return nil, false, fmt.Errorf("invalid Pi tool calls: %w", err)
+			return nil, false, fmt.Errorf("invalid Pi tool calls: 模型连续 %d 批工具调用未通过参数校验", cloudAgentInvalidArgumentStepLimit)
 		}
-	}
-	if compactionSummary {
-		if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); err != nil {
+		if len(invalid) > 0 {
+			if err := s.finishCloudAgentPiModelStepWithInvalidCalls(userID, runID, task.ID, finishText, finishReasoning, result.ToolCalls, invalid); err != nil {
+				return nil, false, err
+			}
+		} else if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, finishText, finishReasoning, result.ToolCalls); err != nil {
 			return nil, false, err
 		}
-	} else if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, finishText, finishReasoning, result.ToolCalls); err != nil {
+	} else if err := s.finishCloudAgentPiModelStep(userID, runID, task.ID, "", ""); err != nil {
 		return nil, false, err
 	}
 	delivered := map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}
@@ -517,6 +519,10 @@ func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text, reaso
 			}
 			fresh.ActiveTaskID = ""
 			fresh.ActiveTextDraft = ""
+			if len(callBatches) > 0 {
+				// 一批全部有效的调用意味着模型回到了正常输出轨道，参数纠偏计数清零。
+				fresh.InvalidArgumentSteps = 0
+			}
 			if reasoning != "" {
 				fresh.event(runID, "reasoning_message", map[string]any{"messageId": taskID + ":reasoning", "text": truncateRunes(reasoning, 8000)})
 			}
@@ -538,6 +544,80 @@ func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text, reaso
 					fresh.Canonical.Messages = append(fresh.Canonical.Messages, map[string]any{"role": "assistant", "content": text})
 				}
 			}
+			return cloudAgentSave(current, &fresh)
+		})
+		if !errors.Is(err, repository.ErrCreationConflict) {
+			return err
+		}
+	}
+	return repository.ErrCreationConflict
+}
+
+// finishCloudAgentPiModelStepWithInvalidCalls 提交一个含无效调用的模型步骤（参数纠偏轮）。
+//
+// 模型一步里可能混发有效与无效调用——线上 run ag3580aca 就是把整份剧本大纲塞进
+// canvas_apply_ops 的参数超过字节上限，此前整批被当致命协议错误判死成「Agent 执行中断」。
+// 参数超限是模型输出问题而非运行时故障：无效调用立即以结构化错误回执（invalid_model_output，
+// 指引拆分重试），有效调用照常进入执行批次；assistant 消息保留全部调用，canonical 的
+// 调用/结果配对保持完整。连续 cloudAgentInvalidArgumentStepLimit 批无效才回到硬失败。
+func (s *Service) finishCloudAgentPiModelStepWithInvalidCalls(userID, runID, taskID, text, reasoning string, calls []cloudAgentCall, invalid map[int]string) error {
+	valid := make([]cloudAgentCall, 0, len(calls))
+	for index, call := range calls {
+		if _, rejected := invalid[index]; !rejected {
+			valid = append(valid, call)
+		}
+	}
+	for attempt := 0; attempt < 8; attempt++ {
+		run, err := s.repo.CloudAgent(userID, runID)
+		if err != nil {
+			return err
+		}
+		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+			fresh, err := cloudAgentDecode(current)
+			if err != nil {
+				return err
+			}
+			if fresh.ActiveTaskID != taskID {
+				return nil
+			}
+			fresh.ActiveTaskID = ""
+			fresh.ActiveTextDraft = ""
+			fresh.InvalidArgumentSteps++
+			if reasoning != "" {
+				fresh.event(runID, "reasoning_message", map[string]any{"messageId": taskID + ":reasoning", "text": truncateRunes(reasoning, 8000)})
+			}
+			fresh.Canonical.ToolChoice = "auto"
+			fresh.Calls = valid
+			fresh.CallIndex = 0
+			fresh.StepSnapshotHash = cloudAgentCaptureStepSnapshotHash(valid)
+			if text != "" {
+				fresh.event(runID, "assistant_message", map[string]any{"messageId": taskID, "text": text})
+			}
+			fresh.Canonical.Messages = append(fresh.Canonical.Messages, map[string]any{
+				"role": "assistant", "content": text, "tool_calls": calls,
+			})
+			rejected := make([]string, 0, len(invalid))
+			for index, call := range calls {
+				reason, ok := invalid[index]
+				if !ok {
+					continue
+				}
+				receipt, _ := json.Marshal(map[string]any{
+					"error":           "该工具调用未通过参数校验：" + reason + "。本次调用没有执行，其余同批调用不受影响。",
+					"errorClass":      cloudAgentToolErrorInvalidModelOutput,
+					"errorClassLabel": cloudAgentToolErrorLabel(cloudAgentToolErrorInvalidModelOutput),
+					"requiredAction":  "fix_arguments",
+				})
+				fresh.Canonical.Messages = append(fresh.Canonical.Messages, map[string]any{
+					"role": "tool", "tool_call_id": call.ID, "content": string(receipt),
+				})
+				rejected = append(rejected, call.Function.Name)
+			}
+			fresh.event(runID, "tool_arguments_rejected", map[string]any{
+				"toolNames": rejected, "attempt": fresh.InvalidArgumentSteps,
+				"maxAttempts": cloudAgentInvalidArgumentStepLimit,
+				"text":        "模型工具调用参数未通过校验，已回执要求修正后重试",
+			})
 			return cloudAgentSave(current, &fresh)
 		})
 		if !errors.Is(err, repository.ErrCreationConflict) {
