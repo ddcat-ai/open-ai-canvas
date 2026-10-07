@@ -61,7 +61,7 @@ GitHub 用户：[@TripsCoder](https://github.com/TripsCoder) · [@sugtex](https:
 | Alpha-M·Break | 15739564793@qq.com |
 | 不吃鸭梨 | elio02519@gmail.com |
 | 九月 | 563641352@qq.com |
-| A | jaiboxuan1205@gmail.com |
+| A | jiaboxuan1205@gmail.com |
 
 ## 核心能力
 
