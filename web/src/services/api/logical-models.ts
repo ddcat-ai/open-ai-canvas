@@ -181,6 +181,23 @@ export type PublicChannelModel = {
     displayPrice?: number;
     priceLabel: string;
     available: boolean;
+    availability?: PublicChannelModelAvailability;
+};
+
+export type PublicChannelModelAvailability = {
+    rate24h: number | null;
+    sampleCount24h: number;
+    trend7d: PublicChannelModelAvailabilityDay[];
+    dataState: "ready" | "insufficient" | "no_data";
+    computedAt: string;
+    dataThrough?: string;
+};
+
+export type PublicChannelModelAvailabilityDay = {
+    day: string;
+    rate: number | null;
+    sampleCount: number;
+    dataState: "ready" | "insufficient" | "no_data";
 };
 
 export type PublicChannelModelPriceTier = {

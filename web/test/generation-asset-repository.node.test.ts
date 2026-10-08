@@ -279,7 +279,7 @@ test("browser generation asset writes use the storage-level Web Locks boundary",
 
     try {
         await withGenerationAssetStorageLock("account-A", async () => undefined);
-        assert.deepEqual(lockNames, ["infinite-canvas:generation-asset-storage-lock:account-A"]);
+        assert.deepEqual(lockNames, ["yingce:generation-asset-storage-lock:account-A"]);
     } finally {
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });

@@ -3,7 +3,7 @@ package repository
 import (
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 type ProjectOverviewMetrics struct {

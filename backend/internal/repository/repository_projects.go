@@ -3,14 +3,18 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
+
+// ErrProjectNameConflict 表示同一用户下的项目名称已被占用。
+var ErrProjectNameConflict = errors.New("project name conflict")
 
 func (r *Repository) Projects(userID string) ([]model.Project, error) {
 	var projects []model.Project
@@ -40,7 +44,18 @@ func (r *Repository) ProjectForUser(userID string, id string) (*model.Project, e
 }
 
 func (r *Repository) CreateProject(project *model.Project) error {
-	return r.db.Create(project).Error
+	// 只忽略用户与名称这一业务唯一索引；主键等其他冲突仍按数据库错误返回。
+	result := r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "name"}},
+		DoNothing: true,
+	}).Create(project)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrProjectNameConflict
+	}
+	return nil
 }
 
 func (r *Repository) UpdateProject(project *model.Project) error {

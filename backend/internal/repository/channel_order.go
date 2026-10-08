@@ -4,9 +4,9 @@ import (
 	"errors"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
 	"slices"
 	"time"
+	"yingce/backend/internal/model"
 )
 
 var ErrChannelOrderChanged = errors.New("列表已发生变化，请重新打开排序后再保存")

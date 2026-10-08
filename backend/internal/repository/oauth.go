@@ -3,7 +3,7 @@ package repository
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -50,6 +50,12 @@ func (r *Repository) ConsumeOAuthState(provider string, stateHash string) (*mode
 
 func (r *Repository) CreateOAuthUser(user *model.User, identity *model.UserIdentity) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockRegistrationEmail(tx, user.Email); err != nil {
+			return err
+		}
+		if err := New(tx).CheckEmailAvailable(user.Email, ""); err != nil {
+			return err
+		}
 		if err := tx.Create(user).Error; err != nil {
 			return err
 		}

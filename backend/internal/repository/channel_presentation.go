@@ -3,7 +3,7 @@ package repository
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )

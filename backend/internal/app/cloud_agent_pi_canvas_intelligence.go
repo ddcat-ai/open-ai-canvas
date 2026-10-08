@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // Canvas Intelligence Layer - 让 Agent 深度理解画布

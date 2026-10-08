@@ -1,6 +1,6 @@
 package repository
 
-import "infinite-canvas/backend/internal/model"
+import "yingce/backend/internal/model"
 
 func billingChargeLimitApplies(order model.BillingOrder) bool {
 	return order.ChargeLimitSet || order.ChargeLimitMicrocredits > 0

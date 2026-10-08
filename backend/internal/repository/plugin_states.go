@@ -3,7 +3,7 @@ package repository
 import (
 	"errors"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

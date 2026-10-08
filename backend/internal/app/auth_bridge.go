@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"infinite-canvas/backend/internal/auth"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/auth"
+	"yingce/backend/internal/model"
 )
 
 const SessionCookieName = auth.SessionCookieName
@@ -132,6 +132,10 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Login(req)
+}
+
+func (s *Service) LoginRateLimitSubject(account string) (string, error) {
+	return s.authDomain().LoginRateLimitSubject(account)
 }
 
 func (s *Service) Logout(cookieValue string) error {

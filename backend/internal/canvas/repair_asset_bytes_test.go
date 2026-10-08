@@ -11,7 +11,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestRepairAssetBytes(t *testing.T) {

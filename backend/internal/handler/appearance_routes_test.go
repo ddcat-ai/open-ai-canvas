@@ -9,11 +9,11 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/app"
-	"infinite-canvas/backend/internal/database"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/app"
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

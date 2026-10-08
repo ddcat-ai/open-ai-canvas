@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 自研（2026-09-15）：部署改了策略或能力集后，旧轮次的 policy 快照与当前二进制不一致，

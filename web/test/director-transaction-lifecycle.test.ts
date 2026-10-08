@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { createDirectorTransaction, installDirectorTerminalListeners, type DirectorListenerTarget } from "../src/lib/canvas/director/director-gesture-transaction";
+import { createPrevisTransaction, installPrevisTerminalListeners, type PrevisListenerTarget } from "../src/lib/canvas/previs/previs-gesture-transaction";
 
 type Recorded = { commits: Array<[number, number]>; restores: number[]; active: boolean[]; terminated: number };
 
 function harness(initial = 0) {
     const log: Recorded = { commits: [], restores: [], active: [], terminated: 0 };
     let value = initial;
-    const transaction = createDirectorTransaction<number>({
+    const transaction = createPrevisTransaction<number>({
         read: () => value,
         restore: (snapshot) => {
             value = snapshot;
@@ -31,7 +31,7 @@ function harness(initial = 0) {
 
 function fakeTarget() {
     const listeners = new Map<string, Array<(event: Event) => void>>();
-    const target: DirectorListenerTarget = {
+    const target: PrevisListenerTarget = {
         addEventListener: (type, listener) => {
             listeners.set(type, [...(listeners.get(type) || []), listener]);
         },
@@ -51,7 +51,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const win = fakeTarget();
         const doc = fakeTarget();
         // 关键顺序：先安装监听，此时并没有活跃手势。
-        installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
+        installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
         expect(win.count() + doc.count()).toBeGreaterThan(0);
         transaction.begin();
         set(9);
@@ -63,7 +63,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const { log, transaction, set, get } = harness(1);
         const win = fakeTarget();
         const doc = fakeTarget();
-        installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
+        installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
         transaction.begin();
         set(42);
         win.emit("keydown", { key: "Escape" } as unknown as Event);
@@ -76,7 +76,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const { log, transaction, set, get } = harness(2);
         const win = fakeTarget();
         const doc = fakeTarget();
-        installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
+        installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
         transaction.begin();
         set(77);
         win.emit("blur");
@@ -93,7 +93,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const { log, transaction, set, get } = harness(3);
         const win = fakeTarget();
         const doc = fakeTarget();
-        installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => true });
+        installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => true });
         transaction.begin();
         set(88);
         doc.emit("visibilitychange");
@@ -108,7 +108,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const { log, transaction, set, get } = harness(2);
         const win = fakeTarget();
         const doc = fakeTarget();
-        installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
+        installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
         transaction.begin();
         set(77);
         win.emit("pointercancel");
@@ -121,7 +121,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const { log, transaction, set } = harness(4);
         const win = fakeTarget();
         const doc = fakeTarget();
-        installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
+        installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
         transaction.begin();
         set(6);
         doc.emit("visibilitychange");
@@ -135,7 +135,7 @@ describe("终止监听的安装生命周期（#1 回归）", () => {
         const { log, transaction, set } = harness(0);
         const win = fakeTarget();
         const doc = fakeTarget();
-        const dispose = installDirectorTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
+        const dispose = installPrevisTerminalListeners(transaction, { window: win.target, document: doc.target, isHidden: () => false });
         dispose();
         expect(win.count() + doc.count()).toBe(0);
         transaction.begin();
@@ -207,7 +207,7 @@ describe("终态幂等与陈旧 base 防护（#4 回归）", () => {
 
     test("read 返回 null 时不进入手势，终止也不提交", () => {
         const log: Array<[number, number]> = [];
-        const transaction = createDirectorTransaction<number>({
+        const transaction = createPrevisTransaction<number>({
             read: () => null,
             restore: () => undefined,
             commit: (from, to) => log.push([from, to]),

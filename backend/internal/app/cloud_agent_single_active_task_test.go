@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 线上复现："invalid Agent checkpoint (runtime validation): Agent runtime has multiple active tasks"。

@@ -12,7 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/service"
 )
 
 // 静态资源由 Go 亲自解析 MIME，不依赖镜像里的 /etc/mime.types：一旦 wasm 退回

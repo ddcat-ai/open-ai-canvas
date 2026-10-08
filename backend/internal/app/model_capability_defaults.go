@@ -5,7 +5,7 @@ package app
 import (
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func DefaultModelCapabilityConfig(protocol string) *ModelCapabilityConfig {

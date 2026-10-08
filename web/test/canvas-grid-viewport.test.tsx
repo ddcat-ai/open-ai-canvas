@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { InfiniteCanvas } from "../src/components/canvas/infinite-canvas";
+import { CanvasViewport } from "../src/components/canvas/canvas-viewport";
 import { canvasAppearanceForTheme } from "../src/lib/canvas/canvas-appearance";
 import { applyCanvasLiveViewport, CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, CANVAS_VIEWPORT_PREVIEW_EVENT } from "../src/lib/canvas/canvas-live-viewport";
 import type { CanvasBackgroundMode } from "../src/lib/canvas-theme";
@@ -20,9 +20,9 @@ const viewports: ViewportTransform[] = [
 
 function renderGrid(mode: CanvasBackgroundMode, viewport: ViewportTransform, theme: "light" | "dark" = "dark") {
     const markup = renderToStaticMarkup(
-        <InfiniteCanvas containerRef={createRef<HTMLDivElement>()} viewport={viewport} onViewportChange={() => {}} backgroundMode={mode} appearance={canvasAppearanceForTheme(theme)}>
+        <CanvasViewport containerRef={createRef<HTMLDivElement>()} viewport={viewport} onViewportChange={() => {}} backgroundMode={mode} appearance={canvasAppearanceForTheme(theme)}>
             <div data-test-node />
-        </InfiniteCanvas>,
+        </CanvasViewport>,
     );
     return markup.match(/<div data-canvas-grid-layer[^>]*>/)?.[0] ?? null;
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // clientAssetPayload 把数据库里的素材记录补齐为前端素材合同可消费的 JSON。

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"github.com/volcengine/volc-sdk-golang/base"
 	"gorm.io/gorm"

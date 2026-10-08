@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // Canvas Tool Handlers - 工具处理器实现

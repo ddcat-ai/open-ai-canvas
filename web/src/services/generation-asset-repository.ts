@@ -11,8 +11,8 @@ type GenerationStorageLockOptions = {
     requireCrossRealmLock?: boolean;
 };
 
-const ASSET_STORAGE_LOCK_PREFIX = "infinite-canvas:generation-asset-storage-lock:";
-const ARTIFACT_COMMIT_LOCK_PREFIX = "infinite-canvas:generation-artifact-commit-lock:";
+const ASSET_STORAGE_LOCK_PREFIX = "yingce:generation-asset-storage-lock:";
+const ARTIFACT_COMMIT_LOCK_PREFIX = "yingce:generation-artifact-commit-lock:";
 const assetStorageTails = new Map<string, Promise<void>>();
 const artifactCommitTails = new Map<string, Promise<void>>();
 

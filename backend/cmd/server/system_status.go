@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"infinite-canvas/backend/internal/buildinfo"
-	"infinite-canvas/backend/internal/database"
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/buildinfo"
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

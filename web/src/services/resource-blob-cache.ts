@@ -13,8 +13,8 @@ type ResourceCacheMeta = {
     lastAccessedAt: number;
 };
 
-const blobStore = localforage.createInstance({ name: "infinite-canvas", storeName: "resource_blobs" });
-const metaStore = localforage.createInstance({ name: "infinite-canvas", storeName: "resource_blob_meta" });
+const blobStore = localforage.createInstance({ name: "yingce", storeName: "resource_blobs" });
+const metaStore = localforage.createInstance({ name: "yingce", storeName: "resource_blob_meta" });
 const objectUrls = new Map<string, string>();
 const sessionBlobs = new Map<string, Blob>();
 const inFlight = new Map<string, Promise<string>>();

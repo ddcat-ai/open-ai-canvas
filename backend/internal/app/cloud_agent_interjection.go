@@ -6,8 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 自研（2026-09-17）：运行中插话。

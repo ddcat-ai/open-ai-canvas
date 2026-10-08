@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestCloudAgentToolRepairBudgetAndSafety(t *testing.T) {

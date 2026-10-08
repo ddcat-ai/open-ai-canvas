@@ -1,8 +1,8 @@
 package app
 
 import (
-	"infinite-canvas/backend/internal/model"
 	"testing"
+	"yingce/backend/internal/model"
 )
 
 func TestVisualChannelOrderAtomicSnapshotAndPermissions(t *testing.T) {

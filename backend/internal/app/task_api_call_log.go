@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // ensureFailedProviderAttemptLogged fills the task-level audit gap only when no

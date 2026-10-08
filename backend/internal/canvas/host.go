@@ -1,9 +1,9 @@
 package canvas
 
 import (
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // Host 由组合根注入，避免 canvas → service 回环。

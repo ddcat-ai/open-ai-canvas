@@ -1,6 +1,6 @@
 package app
 
-import "infinite-canvas/backend/internal/kernel"
+import "yingce/backend/internal/kernel"
 
 // AppError 是 service 层对外公开的结构化错误；实现已迁到 kernel。
 type AppError = kernel.AppError

@@ -1,6 +1,6 @@
 package app
 
-import "infinite-canvas/backend/internal/model"
+import "yingce/backend/internal/model"
 
 type AnalyticsFinance struct {
 	SettledOrders       int      `json:"settledOrders"`

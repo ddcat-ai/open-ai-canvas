@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (r *Repository) UpsertCloudAgentResourceLeases(userID, runID, ownerID string, resourceIDs []string, expiresAt time.Time) error {

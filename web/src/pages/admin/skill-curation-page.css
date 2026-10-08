@@ -1,0 +1,1100 @@
+.admin-skill-curation {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 24px;
+}
+
+.admin-skill-curation-policy {
+    display: flex;
+    min-width: 0;
+    min-height: 112px;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--r-lg);
+    background: var(--admin-layer-1);
+    padding: 18px 20px;
+    box-shadow: var(--admin-card-shadow);
+}
+
+.admin-skill-curation-policy-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: 9px;
+    background: var(--admin-layer-2);
+    color: var(--admin-text-secondary);
+}
+
+.admin-skill-curation-policy-copy {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.admin-skill-curation-policy-title {
+    color: var(--admin-text-primary);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.admin-skill-curation-policy-copy p {
+    max-width: 980px;
+    margin: 6px 0 0;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.admin-skill-curation-policy-control {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.admin-skill-curation-workspace {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+}
+
+.admin-skill-curation-detail-column {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-skill-curation-tree-panel,
+.admin-skill-curation-editor-panel,
+.admin-skill-curation-assignment-panel {
+    min-width: 0;
+}
+
+.admin-skill-curation-tree-toolbar {
+    display: flex;
+    min-height: 54px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--admin-divider);
+    padding: 10px 16px;
+}
+
+.admin-skill-curation-tree-toolbar-label {
+    min-width: 0;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-skill-curation-tree-list {
+    max-height: min(660px, calc(100dvh - 340px));
+    overflow: auto;
+    padding: 8px;
+}
+
+.admin-skill-curation-tree-loading {
+    display: grid;
+    min-height: 220px;
+    place-items: center;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-skill-curation-tree-branch {
+    min-width: 0;
+}
+
+.admin-skill-curation-tree-node-row {
+    display: flex;
+    min-width: 0;
+    align-items: stretch;
+    gap: 4px;
+}
+
+.admin-skill-curation-tree-node {
+    display: flex;
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md, 8px);
+    background: transparent;
+    color: var(--admin-text-primary);
+    padding: 8px 10px;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.admin-skill-curation-tree-node:hover {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.admin-skill-curation-tree-node:focus-visible,
+.admin-skill-curation-tree-node-add:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary) 70%, transparent);
+    outline-offset: 1px;
+}
+
+.admin-skill-curation-tree-node.is-active {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--primary) 9%, var(--admin-layer-1));
+    color: var(--admin-text-primary);
+}
+
+.admin-skill-curation-tree-node-child {
+    min-height: 40px;
+    padding-block: 7px;
+}
+
+.admin-skill-curation-tree-node-child.is-disabled {
+    color: var(--admin-text-muted);
+}
+
+.admin-skill-curation-tree-node-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: 7px;
+    background: var(--admin-layer-2);
+    color: var(--admin-text-secondary);
+}
+
+.admin-skill-curation-tree-node.is-active .admin-skill-curation-tree-node-icon {
+    border-color: color-mix(in srgb, var(--primary) 24%, transparent);
+    color: var(--primary);
+}
+
+.admin-skill-curation-tree-node-marker {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--admin-text-muted) 72%, transparent);
+}
+
+.admin-skill-curation-tree-node.is-active .admin-skill-curation-tree-node-marker {
+    background: var(--primary);
+}
+
+.admin-skill-curation-tree-node-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-skill-curation-tree-node-name {
+    overflow-wrap: anywhere;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 17px;
+}
+
+.admin-skill-curation-tree-node-meta {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 15px;
+}
+
+.admin-skill-curation-tree-node-chevron {
+    flex: 0 0 auto;
+    color: var(--admin-text-muted);
+}
+
+.admin-skill-curation-tree-node-add {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    align-self: center;
+    color: var(--admin-text-muted);
+}
+
+.admin-skill-curation-tree-node-add:hover {
+    color: var(--primary);
+}
+
+.admin-skill-curation-tree-children {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 4px 24px;
+    border-left: 1px solid var(--admin-divider);
+    padding: 3px 0 3px 10px;
+}
+
+.admin-skill-curation-tree-orphans {
+    display: grid;
+    gap: 2px;
+    margin-top: 10px;
+    border-top: 1px solid var(--admin-divider);
+    padding-top: 10px;
+}
+
+.admin-skill-curation-tree-orphans-title {
+    padding: 2px 10px 6px;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+}
+
+.admin-skill-curation-form,
+.admin-skill-curation-assignment-form {
+    min-width: 0;
+    padding: 20px;
+}
+
+.admin-skill-curation-editor-context {
+    display: grid;
+    gap: 4px;
+    border: 1px solid var(--admin-divider);
+    border-radius: var(--r-md, 8px);
+    background: var(--admin-layer-2);
+    padding: 12px 14px;
+}
+
+.admin-skill-curation-editor-context strong {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 20px;
+}
+
+.admin-skill-curation-editor-context > span:last-child {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 17px;
+}
+
+.admin-skill-curation-editor-kicker {
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.admin-skill-curation-editor-empty {
+    display: grid;
+    min-height: 260px;
+    place-items: center;
+    padding: 16px;
+}
+
+.admin-skill-curation-assignment-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 18px;
+}
+
+.admin-skill-curation-fields {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 18px;
+    padding-top: 16px;
+}
+
+.admin-skill-curation-fields-root {
+    grid-template-columns: minmax(220px, 1fr) 112px 132px;
+}
+
+.admin-skill-curation-fields-category {
+    grid-template-columns: minmax(150px, 1.2fr) minmax(180px, 1.4fr) 96px 110px;
+}
+
+.admin-skill-curation-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-skill-curation-field > span {
+    line-height: 18px;
+}
+
+.admin-skill-curation-field :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-select) {
+    width: 100%;
+}
+
+.admin-skill-curation-control {
+    width: 100%;
+}
+
+.admin-skill-curation-field.is-switch {
+    justify-content: flex-start;
+}
+
+.admin-skill-curation-switch-row {
+    display: flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 8px;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.admin-skill-curation-form-actions,
+.admin-skill-curation-assignment-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 18px;
+    border-top: 1px solid var(--admin-divider);
+    padding-top: 14px;
+}
+
+.admin-skill-curation-assignment-footer {
+    grid-column: 1 / -1;
+    margin-top: 0;
+}
+
+.admin-skill-curation-hint {
+    min-width: 0;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.admin-skill-curation-action-buttons {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.admin-skill-curation-icon-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-skill-curation-multi-select {
+    min-height: 32px;
+}
+
+@media (max-width: 1199px) {
+    .admin-skill-curation-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-skill-curation-tree-list {
+        max-height: none;
+    }
+
+    .admin-skill-curation-fields-root,
+    .admin-skill-curation-fields-category {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .admin-skill-curation-policy {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .admin-skill-curation-policy-copy {
+        flex-basis: calc(100% - 56px);
+    }
+
+    .admin-skill-curation-policy-control {
+        width: 100%;
+        justify-content: flex-start;
+        padding-left: 52px;
+    }
+}
+
+@media (max-width: 639px) {
+    .admin-skill-curation-policy,
+    .admin-skill-curation-form,
+    .admin-skill-curation-assignment-form {
+        padding-inline: 16px;
+    }
+
+    .admin-skill-curation-tree-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+        padding-inline: 16px;
+    }
+
+    .admin-skill-curation-tree-list {
+        padding-inline: 8px;
+    }
+
+    .admin-skill-curation-fields,
+    .admin-skill-curation-fields-root,
+    .admin-skill-curation-fields-category,
+    .admin-skill-curation-assignment-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-skill-curation-assignment-footer {
+        grid-column: auto;
+    }
+
+    .admin-skill-curation-form-actions,
+    .admin-skill-curation-assignment-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-skill-curation-action-buttons {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .admin-skill-curation-policy-copy {
+        flex-basis: calc(100% - 52px);
+    }
+
+    .admin-skill-curation-policy-control {
+        padding-left: 0;
+    }
+}
+
+/* Direct, always-visible choices for the curation workspace. */
+.admin-skill-curation-policy {
+    min-height: 96px;
+    border-color: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-card-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--admin-layer-1) 94%, var(--admin-layer-2));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--admin-accent) 5%, transparent), 0 12px 30px color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.admin-skill-curation-workspace {
+    grid-template-columns: minmax(300px, 0.34fr) minmax(0, 1fr);
+    gap: 20px;
+}
+
+.admin-skill-curation-tree-panel,
+.admin-skill-curation-editor-panel,
+.admin-skill-curation-assignment-panel {
+    border: 1px solid var(--admin-card-border);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.admin-skill-curation-tree-panel .admin-settings-section-summary,
+.admin-skill-curation-editor-panel .admin-settings-section-summary,
+.admin-skill-curation-assignment-panel .admin-settings-section-summary {
+    border-bottom: 1px solid var(--admin-divider);
+    background: color-mix(in srgb, var(--admin-layer-2) 68%, var(--admin-layer-1));
+}
+
+.admin-skill-curation-tree-toolbar {
+    min-height: 58px;
+    border-bottom-color: var(--admin-divider);
+    padding: 12px 16px;
+}
+
+.admin-skill-curation-tree-toolbar-label {
+    color: var(--admin-text-primary);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.admin-skill-curation-tree-list {
+    max-height: none;
+    overflow: visible;
+    padding: 12px;
+}
+
+.admin-skill-curation-tree-branch {
+    padding-bottom: 6px;
+}
+
+.admin-skill-curation-tree-node-row {
+    gap: 6px;
+}
+
+.admin-skill-curation-tree-node {
+    min-height: 52px;
+    gap: 12px;
+    border-color: transparent;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--admin-layer-2) 44%, transparent);
+    padding: 10px 12px;
+    transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), border-color 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-skill-curation-tree-node:hover {
+    border-color: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-card-border));
+    background: var(--admin-row-hover);
+}
+
+.admin-skill-curation-tree-node:active {
+    transform: none;
+}
+
+.admin-skill-curation-tree-node.is-active {
+    border-color: color-mix(in srgb, var(--admin-accent) 28%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-accent) 9%, var(--admin-layer-1));
+    box-shadow: none;
+}
+
+.admin-skill-curation-tree-node-child {
+    min-height: 46px;
+    border-radius: 8px;
+    background: transparent;
+    padding-block: 8px;
+}
+
+.admin-skill-curation-tree-node-child:hover {
+    background: color-mix(in srgb, var(--admin-accent) 5%, var(--admin-layer-1));
+}
+
+.admin-skill-curation-tree-node-icon,
+.admin-skill-curation-direct-choice-icon {
+    width: 32px;
+    height: 32px;
+    border-color: color-mix(in srgb, var(--admin-accent) 14%, var(--admin-card-border));
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--admin-layer-1) 66%, var(--admin-layer-2));
+}
+
+.admin-skill-curation-tree-node.is-active .admin-skill-curation-tree-node-icon,
+.admin-skill-curation-direct-choice.is-selected .admin-skill-curation-direct-choice-icon {
+    border-color: color-mix(in srgb, var(--admin-accent) 30%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-accent) 10%, var(--admin-layer-1));
+    color: var(--admin-accent);
+}
+
+.admin-skill-curation-tree-node-name {
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 18px;
+}
+
+.admin-skill-curation-tree-node-meta {
+    gap: 8px;
+    font-size: 10px;
+}
+
+.admin-skill-curation-tree-node-chevron {
+    color: color-mix(in srgb, var(--admin-text-muted) 75%, transparent);
+    transition: transform 160ms ease, color 160ms ease;
+}
+
+.admin-skill-curation-tree-node:hover .admin-skill-curation-tree-node-chevron,
+.admin-skill-curation-tree-node.is-active .admin-skill-curation-tree-node-chevron {
+    color: var(--admin-accent);
+}
+
+.admin-skill-curation-tree-node-add {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+}
+
+.admin-skill-curation-tree-node-add:hover {
+    border-color: color-mix(in srgb, var(--admin-accent) 20%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-accent) 8%, transparent);
+}
+
+.admin-skill-curation-tree-children {
+    gap: 3px;
+    margin: 4px 0 8px;
+    border-left: 0;
+    padding: 0;
+}
+
+.admin-skill-curation-tree-node-marker {
+    display: none;
+}
+
+.admin-skill-curation-tree-orphans {
+    gap: 4px;
+    margin-top: 14px;
+    border-top-color: var(--admin-divider);
+    padding-top: 14px;
+}
+
+.admin-skill-curation-tree-orphans-title {
+    padding: 2px 12px 7px;
+    color: var(--admin-text-secondary);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.admin-skill-curation-form,
+.admin-skill-curation-assignment-form {
+    padding: 24px;
+}
+
+.admin-skill-curation-editor-context {
+    gap: 5px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+}
+
+.admin-skill-curation-editor-context strong {
+    font-size: 14px;
+    line-height: 21px;
+}
+
+.admin-skill-curation-editor-context > span:last-child {
+    max-width: 720px;
+    font-size: 11px;
+}
+
+.admin-skill-curation-fields {
+    gap: 20px 18px;
+    padding-top: 20px;
+}
+
+.admin-skill-curation-field {
+    gap: 8px;
+}
+
+.admin-skill-curation-field > span,
+.admin-skill-curation-field-heading > span {
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+}
+
+.admin-skill-curation-icon-field {
+    grid-column: 1 / -1;
+}
+
+.admin-skill-curation-icon-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-skill-curation-icon-choice,
+.admin-skill-curation-direct-choice,
+.admin-skill-curation-skill-choice,
+.admin-skill-curation-category-choice {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--admin-layer-2) 42%, transparent);
+    color: var(--admin-text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1), transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-skill-curation-icon-choice {
+    width: auto;
+    min-height: 36px;
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
+.admin-skill-curation-icon-choice:hover,
+.admin-skill-curation-icon-choice:active {
+    transform: none;
+}
+
+.admin-skill-curation-icon-choice > span {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.admin-skill-curation-icon-choice.is-selected {
+    border-color: color-mix(in srgb, var(--admin-accent) 55%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-layer-1));
+    box-shadow: none;
+    color: var(--admin-text-primary);
+}
+
+.admin-skill-curation-icon-choice:hover,
+.admin-skill-curation-direct-choice:hover,
+.admin-skill-curation-skill-choice:hover,
+.admin-skill-curation-category-choice:hover {
+    border-color: color-mix(in srgb, var(--admin-accent) 22%, var(--admin-card-border));
+    background: var(--admin-row-hover);
+    transform: translateY(-1px);
+}
+
+.admin-skill-curation-icon-choice:active,
+.admin-skill-curation-direct-choice:active,
+.admin-skill-curation-skill-choice:active,
+.admin-skill-curation-category-choice:active {
+    transform: translateY(0) scale(0.995);
+}
+
+.admin-skill-curation-icon-choice.is-selected,
+.admin-skill-curation-direct-choice.is-selected,
+.admin-skill-curation-skill-choice.is-selected,
+.admin-skill-curation-category-choice.is-selected {
+    border-color: color-mix(in srgb, var(--admin-accent) 28%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-accent) 8%, var(--admin-layer-1));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--admin-accent) 12%, transparent);
+}
+
+.admin-skill-curation-icon-choice:focus-visible,
+.admin-skill-curation-direct-choice:focus-visible,
+.admin-skill-curation-skill-choice:focus-visible,
+.admin-skill-curation-category-choice:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+.admin-skill-curation-icon-choice:disabled,
+.admin-skill-curation-direct-choice:disabled,
+.admin-skill-curation-skill-choice:disabled,
+.admin-skill-curation-category-choice:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+    transform: none;
+}
+
+.admin-skill-curation-icon-choice-mark {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 7px;
+    background: var(--admin-layer-1);
+    color: var(--admin-text-secondary);
+}
+
+.admin-skill-curation-icon-choice.is-selected .admin-skill-curation-icon-choice-mark {
+    border-color: color-mix(in srgb, var(--admin-accent) 24%, var(--admin-card-border));
+    color: var(--admin-accent);
+}
+
+.admin-skill-curation-icon-choice > span:last-of-type,
+.admin-skill-curation-direct-choice-copy strong,
+.admin-skill-curation-skill-choice-copy strong,
+.admin-skill-curation-category-choice-copy strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 17px;
+}
+
+.admin-skill-curation-choice-check {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--admin-accent);
+}
+
+.admin-skill-curation-direct-list,
+.admin-skill-curation-skill-list,
+.admin-skill-curation-category-list {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+}
+
+.admin-skill-curation-direct-choice {
+    min-height: 52px;
+    padding: 9px 11px;
+}
+
+.admin-skill-curation-direct-choice-copy,
+.admin-skill-curation-skill-choice-copy,
+.admin-skill-curation-category-choice-copy {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 2px;
+}
+
+.admin-skill-curation-direct-choice-copy small,
+.admin-skill-curation-skill-choice-copy small,
+.admin-skill-curation-category-choice-copy small,
+.admin-skill-curation-field-heading small {
+    overflow-wrap: anywhere;
+    color: var(--admin-text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 15px;
+}
+
+.admin-skill-curation-direct-empty {
+    display: grid;
+    min-height: 48px;
+    place-items: center;
+    border: 1px dashed color-mix(in srgb, var(--admin-text-muted) 34%, var(--admin-card-border));
+    border-radius: 9px;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 17px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.admin-skill-curation-field-heading {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-skill-curation-field-heading small {
+    min-width: 0;
+    text-align: right;
+}
+
+.admin-skill-curation-assignment-search,
+.admin-skill-curation-skill-field,
+.admin-skill-curation-assignment-root-field,
+.admin-skill-curation-assignment-category-field {
+    grid-column: 1 / -1;
+}
+
+.admin-skill-curation-skill-list {
+    display: grid;
+    max-height: 240px;
+    grid-auto-rows: 36px;
+    gap: 2px;
+    overflow: auto;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: transparent;
+    padding: 4px;
+}
+
+.admin-skill-curation-skill-row {
+    display: grid;
+    min-width: 0;
+    height: 36px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--admin-text-primary);
+    padding: 0 10px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-skill-curation-skill-row strong,
+.admin-skill-curation-skill-row em {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-skill-curation-skill-row strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-skill-curation-skill-row em {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    font-style: normal;
+}
+
+.admin-skill-curation-skill-row svg {
+    color: var(--admin-text-primary);
+}
+
+.admin-skill-curation-skill-row:hover {
+    background: var(--admin-row-hover);
+}
+
+.admin-skill-curation-skill-row.is-selected {
+    background: color-mix(in srgb, var(--admin-accent) 10%, var(--admin-layer-1));
+}
+
+.admin-skill-curation-skill-row:focus-visible,
+.admin-skill-curation-assign-chip:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 1px;
+}
+
+.admin-skill-curation-assign-chips {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-skill-curation-assign-chips.is-disabled {
+    opacity: 0.62;
+}
+
+.admin-skill-curation-assign-chip {
+    display: inline-flex;
+    min-height: 36px;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--admin-text-primary);
+    padding: 0 12px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.admin-skill-curation-assign-chip span {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.admin-skill-curation-assign-chip:hover:not(:disabled) {
+    background: var(--admin-row-hover);
+}
+
+.admin-skill-curation-assign-chip.is-selected {
+    border-color: color-mix(in srgb, var(--admin-accent) 55%, var(--admin-card-border));
+    background: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-layer-1));
+}
+
+.admin-skill-curation-assign-chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.admin-skill-curation-skill-choice {
+    min-height: 48px;
+    border-color: transparent;
+    background: transparent;
+    padding: 9px 10px;
+}
+
+.admin-skill-curation-skill-choice:hover {
+    border-color: var(--admin-card-border);
+}
+
+.admin-skill-curation-skill-choice-chevron {
+    flex: 0 0 auto;
+    color: var(--admin-text-muted);
+}
+
+.admin-skill-curation-assignment-root-field,
+.admin-skill-curation-assignment-category-field {
+    min-width: 0;
+}
+
+.admin-skill-curation-category-list {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+
+.admin-skill-curation-category-choice {
+    min-height: 50px;
+    padding: 9px 10px;
+}
+
+.admin-skill-curation-category-choice-check {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--admin-text-muted) 44%, var(--admin-card-border));
+    border-radius: 6px;
+    color: var(--admin-accent-fg);
+}
+
+.admin-skill-curation-category-choice.is-selected .admin-skill-curation-category-choice-check {
+    border-color: var(--admin-accent);
+    background: var(--admin-accent);
+}
+
+.admin-skill-curation-category-list.is-disabled {
+    opacity: 0.62;
+}
+
+.admin-skill-curation-form-actions,
+.admin-skill-curation-assignment-footer {
+    margin-top: 22px;
+    padding-top: 16px;
+}
+
+.admin-skill-curation-action-buttons {
+    gap: 8px;
+}
+
+@media (max-width: 1199px) {
+    .admin-skill-curation-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-skill-curation-tree-list {
+        max-height: none;
+    }
+}
+
+@media (max-width: 639px) {
+    .admin-skill-curation-form,
+    .admin-skill-curation-assignment-form {
+        padding: 20px 16px;
+    }
+
+    .admin-skill-curation-icon-grid {
+        display: flex;
+    }
+
+    .admin-skill-curation-category-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-skill-curation-skill-list {
+        max-height: 260px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-skill-curation-tree-node,
+    .admin-skill-curation-tree-node-chevron,
+    .admin-skill-curation-icon-choice,
+    .admin-skill-curation-direct-choice,
+    .admin-skill-curation-skill-choice,
+    .admin-skill-curation-category-choice {
+        transition: none;
+    }
+}

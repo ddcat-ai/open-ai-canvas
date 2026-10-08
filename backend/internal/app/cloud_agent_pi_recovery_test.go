@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 重启恢复：上一个运行时进程已为这一步建好模型任务、任务也已成功，但结果没交回。

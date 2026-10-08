@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func cloudAgentUsageEvent(runID, kind, tool string, payload map[string]any) CloudAgentEvent {

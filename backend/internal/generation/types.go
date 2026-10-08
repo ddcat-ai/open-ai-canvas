@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"infinite-canvas/backend/internal/outbound"
+	"yingce/backend/internal/outbound"
 )
 
 // Input 是画布生成任务的统一输入合同。

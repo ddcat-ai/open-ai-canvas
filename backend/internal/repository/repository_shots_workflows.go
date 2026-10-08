@@ -14,7 +14,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (r *Repository) ProjectShots(projectID string) ([]model.Shot, error) {

@@ -20,8 +20,8 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 )
 
 const (

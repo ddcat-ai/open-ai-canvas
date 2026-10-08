@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // cloudAgentInterjectionContent 插话进入对话的正文格式：前缀是给模型看的结构

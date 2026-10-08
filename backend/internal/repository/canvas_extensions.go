@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // Canvas 数据访问层扩展

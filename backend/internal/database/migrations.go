@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 43
+const CurrentSchemaVersion int64 = 47
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -55,6 +55,7 @@ type migration struct {
 }
 
 var schemaMigrations = []migration{
+	// 44 and 45 are reserved for independent migrations.
 	{version: 1, name: "baseline_gorm_schema", checksum: baselineSchemaChecksum, apply: migrateSchemaV1},
 	{version: 2, name: "schema_migrations_applied_at_index", checksum: schemaMigrationAppliedAtIndexChecksum, apply: migrateSchemaV2},
 	{version: 3, name: "asset_taxonomy_candidate_identity", checksum: assetTaxonomyCandidateIdentityChecksum, apply: migrateSchemaV3},
@@ -145,6 +146,11 @@ var schemaMigrations = []migration{
 	{version: 43, name: "topup_sale_strategies", checksum: "sha256:topup-sale-strategies-v43-20260929", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.TopupProduct{}, &model.PaymentOrder{})
 	}},
+	{version: 45, name: "upload_reservations", checksum: "sha256:upload-reservations-v45-20261005", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.UploadReservation{})
+	}},
+	{version: 46, name: "skill_curation", checksum: "sha256:skill-curation-v46-20261005", apply: migrateSkillCuration},
+	{version: 47, name: "skill_curation_roots", checksum: "sha256:skill-curation-roots-v47-20261005", apply: migrateSkillCurationRoots},
 }
 
 func migratePrefixedIDSequenceReconcile(tx *gorm.DB) error {

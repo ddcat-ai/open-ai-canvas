@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // cloudAgentApprovalSuperseded 是审批的第三种决定：用户没有点 Agent 卡片里的

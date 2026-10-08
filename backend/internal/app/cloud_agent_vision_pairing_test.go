@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 这组用例钉死一条上游请求合同：assistant 消息声明的**每一个** tool_call_id，

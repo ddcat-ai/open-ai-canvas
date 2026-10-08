@@ -5,8 +5,8 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // Publish upstream deltas to the same durable, revisioned transcript used by

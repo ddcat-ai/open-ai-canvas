@@ -9,10 +9,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/canvas/capability"
-	"infinite-canvas/backend/internal/canvas/layout"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/canvas/capability"
+	"yingce/backend/internal/canvas/layout"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // cloudAgentApprovalPreview is server-authored explanatory data. It never
@@ -221,6 +221,9 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			fields := cloudAgentApprovalPatchLabels(capability.PatchFields, op.Patch)
 			if err := capability.ApplyPatch(nodes[index], op.Patch); err != nil {
 				return nil, BadAuthRequest(err.Error())
+			}
+			if err := validateCloudAgentVideoFramePatch(nodes[index], nodes, edges, op.Patch); err != nil {
+				return nil, err
 			}
 			afterTitle := cloudAgentApprovalNodeTitle(nodes[index], capability.Label)
 			resultTitle := ""
@@ -470,6 +473,12 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	}
 	if args.Size != "" {
 		details = append(details, "画幅："+truncateRunes(args.Size, 40))
+	}
+	if args.VideoStartFrameNodeID != "" {
+		details = append(details, "首帧节点："+truncateRunes(args.VideoStartFrameNodeID, 80))
+	}
+	if args.VideoEndFrameNodeID != "" {
+		details = append(details, "尾帧节点："+truncateRunes(args.VideoEndFrameNodeID, 80))
 	}
 	if args.Quality != "" {
 		details = append(details, "质量："+truncateRunes(args.Quality, 40))

@@ -3,7 +3,7 @@ package app
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/storage"
+	"yingce/backend/internal/storage"
 )
 
 type ossSettingValue = storage.Settings

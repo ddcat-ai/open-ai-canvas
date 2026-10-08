@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -21,6 +21,7 @@ func newResourceFallbackTestService(t *testing.T) (*Service, *gorm.DB) {
 	}
 	if err := db.AutoMigrate(
 		&model.Resource{},
+		&model.UploadReservation{},
 		&model.UserOSSSetting{},
 		&model.SystemSetting{},
 		&model.StorageLocation{},

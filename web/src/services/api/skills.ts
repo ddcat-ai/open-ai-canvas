@@ -109,6 +109,9 @@ export type SkillList = {
 };
 
 export type ListSkillsInput = {
+    platformRootId?: string;
+    platformCategoryId?: string;
+    platformUncategorized?: boolean;
     page?: number;
     pageSize?: number;
     scope?: SkillScope;

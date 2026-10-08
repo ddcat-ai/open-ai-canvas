@@ -6,8 +6,8 @@ import { withCanvasStorePersistenceLock, type CanvasProject } from "@/stores/can
 import { withGenerationArtifactCommitLock } from "@/services/generation-asset-repository";
 
 export type CanvasSyncDraft = { id: string; savedAt: string; project: CanvasProject };
-const draftKey = (projectId: string) => `infinite-canvas:sync-drafts:${projectId}`;
-const draftIndexKey = "infinite-canvas:sync-draft-index";
+const draftKey = (projectId: string) => `yingce:sync-drafts:${projectId}`;
+const draftIndexKey = "yingce:sync-draft-index";
 
 export async function readAllCanvasSyncDrafts(scope = getActiveUserScope()) {
     const raw = await localForageStorageForScope(scope).getItem(draftIndexKey);

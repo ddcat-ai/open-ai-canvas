@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

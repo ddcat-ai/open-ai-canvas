@@ -70,7 +70,7 @@ describe("storyboard target materializer", () => {
     it("combines stable bindings and produces position mention tokens", () => {
         const references = storyboardRowReferenceNodeIds(script, row, nodes, connections, true);
         expect(references).toEqual(["project-style", "prop", "character", "manual", "first-frame"]);
-        expect(storyboardComposerContent("快速跟拍", references, nodes)).toBe("参考资产：@图片1 @图片2 @角色1 @视频1 @图片3\n快速跟拍");
+        expect(storyboardComposerContent("快速跟拍", references, nodes)).toBe("参考资产：@图片1 @图片2 @角色3 @视频1 @图片4\n快速跟拍");
 
         const withDirectManualInput = storyboardRowReferenceNodeIds(script, row, nodes, [...connections, { id: "direct", fromNodeId: "direct-manual", toNodeId: "target" }], false, "target");
         expect(withDirectManualInput).toContain("direct-manual");

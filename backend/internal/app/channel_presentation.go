@@ -3,7 +3,7 @@ package app
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (req ChannelRequest) presentationOnly() bool {

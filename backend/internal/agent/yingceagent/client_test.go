@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	agentruntime "infinite-canvas/backend/internal/agent/runtime"
+	agentruntime "yingce/backend/internal/agent/runtime"
 )
 
 func TestRemoteRunCallsBridgeAndRejectsBadToken(t *testing.T) {

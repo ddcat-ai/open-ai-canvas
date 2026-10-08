@@ -93,7 +93,7 @@ test("editor rail and expanded panel share one restrained glass surface without 
     const page = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
     const panel = component("canvas-workspace-panel.tsx");
     const styles = component("canvas-workspace-panel.css");
-    expect(page).toContain('<InfiniteCanvas');
+    expect(page).toContain('<CanvasViewport');
     expect(page).not.toContain("canvas-workspace-backdrop");
     expect(page).toContain("canvas-main-with-workspace");
     expect(styles).toContain(".canvas-main-with-workspace .canvas-editor-shell {\n    z-index: 0;");

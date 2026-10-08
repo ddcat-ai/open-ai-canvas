@@ -24,6 +24,7 @@ type VideoPlayerProps = {
     hasAudio?: boolean;
     onCanPlay?: MediaPlayerProps["onCanPlay"];
     onPlay?: MediaPlayerProps["onPlay"];
+    onError?: MediaPlayerProps["onError"];
 };
 
 const zhCNTranslations = {
@@ -74,7 +75,7 @@ const supportedVideoMimeTypes = new Set<VideoMimeType>(["video/mp4", "video/webm
  * 统一视频播放表面，保留原生媒体 URL 契约，同时提供可访问的完整控件布局。
  * 画布节点需要隔离播放器手势，避免拖动进度条时被误判为拖动画布。
  */
-export function VideoPlayer({ src, mimeType, title = "视频", className, brandColor = "#f5f5f5", preload = "metadata", autoPlay = false, dataCanvasNoZoom = false, compactControls = false, hasAudio, onCanPlay, onPlay }: VideoPlayerProps) {
+export function VideoPlayer({ src, mimeType, title = "视频", className, brandColor = "#f5f5f5", preload = "metadata", autoPlay = false, dataCanvasNoZoom = false, compactControls = false, hasAudio, onCanPlay, onPlay, onError }: VideoPlayerProps) {
     const [detectedHasAudio, setDetectedHasAudio] = useState<boolean | undefined>(undefined);
     const autoPlayAttemptedRef = useRef(false);
     const audioProbeGenerationRef = useRef(0);
@@ -188,6 +189,7 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
             style={{ "--video-brand": brandColor }}
             onCanPlay={handleCanPlay}
             onPlay={onPlay}
+            onError={onError}
             onLoadedMetadata={(event) => {
                 const provider = event.target.provider;
                 const media = isVideoProvider(provider) ? provider.media : undefined;

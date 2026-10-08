@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func (s *Service) RequireAdmin(user *model.User) error {
@@ -236,6 +236,11 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 		user.PasswordHash = hash
 		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
 			return nil, fmt.Errorf("清理旧登录会话失败，密码未更新：%w", err)
+		}
+	}
+	if nextStatus == model.UserStatusDisabled {
+		if err := s.repo.DeleteUserAuthSessions(user.ID); err != nil {
+			return nil, err
 		}
 	}
 	user.Role = nextRole

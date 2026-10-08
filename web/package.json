@@ -1,5 +1,5 @@
 {
-    "name": "infinite-canvas",
+    "name": "yingce",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -10,7 +10,7 @@
         "typecheck": "tsc --noEmit",
         "test:canvas": "bun test test/canvas-media-performance.test.ts test/canvas-node-title-interaction.test.ts test/canvas-spatial-index.test.ts",
         "test": "bun test",
-        "test:director:e2e": "bun scripts/director-p0-chrome-e2e.mjs",
+        "test:previs:e2e": "bun scripts/previs-p0-chrome-e2e.mjs",
         "start": "vite preview --host 0.0.0.0 --port 3000",
         "format": "prettier --write .",
         "format:check": "prettier --check .",

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 线上复现：recall_lessons 经运行时工具桥执行后，交回模型的 tool 消息是 "null"，

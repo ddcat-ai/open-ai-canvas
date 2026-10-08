@@ -1,6 +1,6 @@
 package app
 
-import "infinite-canvas/backend/internal/kernel"
+import "yingce/backend/internal/kernel"
 
 // 错误码和原因已迁到 kernel；此处保留兼容别名。
 const (
@@ -23,19 +23,20 @@ const (
 type ErrorReason = kernel.ErrorReason
 
 const (
-	ReasonInvalidArgument    = kernel.ReasonInvalidArgument
-	ReasonUnauthorized       = kernel.ReasonUnauthorized
-	ReasonForbidden          = kernel.ReasonForbidden
-	ReasonNotFound           = kernel.ReasonNotFound
-	ReasonConflict           = kernel.ReasonConflict
-	ReasonFailedPrecondition = kernel.ReasonFailedPrecondition
-	ReasonQuotaExceeded      = kernel.ReasonQuotaExceeded
-	ReasonRateLimited        = kernel.ReasonRateLimited
-	ReasonUnavailable        = kernel.ReasonUnavailable
-	ReasonTimeout            = kernel.ReasonTimeout
-	ReasonInternal           = kernel.ReasonInternal
-	ReasonBadGateway         = kernel.ReasonBadGateway
-	ReasonUpstreamDNSFailed  = kernel.ReasonUpstreamDNSFailed
+	ReasonInvalidArgument     = kernel.ReasonInvalidArgument
+	ReasonUnauthorized        = kernel.ReasonUnauthorized
+	ReasonForbidden           = kernel.ReasonForbidden
+	ReasonNotFound            = kernel.ReasonNotFound
+	ReasonConflict            = kernel.ReasonConflict
+	ReasonProjectNameConflict = kernel.ReasonProjectNameConflict
+	ReasonFailedPrecondition  = kernel.ReasonFailedPrecondition
+	ReasonQuotaExceeded       = kernel.ReasonQuotaExceeded
+	ReasonRateLimited         = kernel.ReasonRateLimited
+	ReasonUnavailable         = kernel.ReasonUnavailable
+	ReasonTimeout             = kernel.ReasonTimeout
+	ReasonInternal            = kernel.ReasonInternal
+	ReasonBadGateway          = kernel.ReasonBadGateway
+	ReasonUpstreamDNSFailed   = kernel.ReasonUpstreamDNSFailed
 )
 
 func ReasonForStatus(status int) ErrorReason {

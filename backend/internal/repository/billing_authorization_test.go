@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestAgentRouteReplacementCannotExpandApprovedCharge(t *testing.T) {

@@ -1,28 +1,11 @@
 Open AI Canvas
-Copyright (C) 2026 ddcat
+Copyright (C) 2026 ddcat and contributors
 
-This program is licensed under the MIT License.
+This project is licensed under the MIT License.
 The complete license text is provided in LICENSE.
 
-This project is a derivative work based on:
+This distribution includes third-party and inherited material under permissive open-source licenses. Required copyright and license notices are retained in LICENSE files and in the corresponding package directories.
 
-  Infinite Canvas
-  https://github.com/basketikun/infinite-canvas
-  Base version: v0.5.0
-  Base commit: 568f0f1838df8de31fe885a4e130e2f346dd14ab
+Material changes in this repository are maintained by the Open AI Canvas contributors. They include a multi-user Go backend, task processing and analytics, private resource storage, canvas sharing, film-production workflows, canvas UI refactoring, and cloud Agent integrations.
 
-The upstream project is maintained under the basketikun account. The base
-commit is authored by HouYunFei. Upstream authors and contributors retain
-their copyright and attribution for their respective contributions. The
-upstream project was relicensed to MIT in commit
-890ba95858bbb13496d23978003716656109abb2; its copyright and permission notice
-are preserved in LICENSE.
-
-Material changes in this repository are maintained by ddcat. They include a
-multi-user Go backend, task processing and analytics, private resource
-storage, canvas sharing, film-production workflows, canvas UI refactoring,
-and cloud Agent integrations.
-
-Third-party packages remain subject to the licenses declared by their
-respective authors. Product names and logos under web/public/icons are the
-property of their respective owners and do not imply endorsement.
+Third-party packages remain subject to the licenses declared by their respective authors. Product names and logos under web/public/icons are the property of their respective owners and do not imply endorsement.

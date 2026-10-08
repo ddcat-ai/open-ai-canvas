@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/volcengine/volc-sdk-golang/base"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 func applyProtocolAuth(req *http.Request, config providerConfig, auth protocol.ManifestAuth) error {

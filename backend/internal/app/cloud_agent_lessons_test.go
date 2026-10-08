@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func agentLessonTestRepo(t *testing.T) *repository.Repository {
@@ -734,5 +734,112 @@ func TestAdminAgentLessonsFiltersByUser(t *testing.T) {
 	all, err := s.AdminAgentLessons("", "", "", 20)
 	if err != nil || len(all) != 2 {
 		t.Fatalf("不筛选时应看到全部：%d（%v）", len(all), err)
+	}
+}
+
+func TestRememberLessonGateSurvivesEventWindowAndCheckpoint(t *testing.T) {
+	state := &cloudAgentRuntime{LessonEligibleToolSuccesses: 1}
+	for i := 0; i < repository.CloudAgentJournalWindow; i++ {
+		state.Events = append(state.Events, CloudAgentEvent{Type: "message_delta"})
+	}
+	if got := cloudAgentLessonEligibleSuccesses(state); got != 1 {
+		t.Fatalf("delta 窗口不得抹掉已记录的合格成功数：got %d", got)
+	}
+
+	state.Events = nil
+	run := &model.CloudAgentExecution{}
+	if err := cloudAgentSave(run, state); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.LessonEligibleToolSuccesses != 1 || cloudAgentLessonEligibleSuccesses(&restored) != 1 {
+		t.Fatalf("checkpoint 恢复后写入门禁必须保持：%+v", restored)
+	}
+}
+
+func TestPendingAgentLessonsExpireWithoutTouchingApproved(t *testing.T) {
+	repo := agentLessonTestRepo(t)
+	now := time.Now()
+	old := now.Add(-cloudAgentPendingLessonTTL - time.Hour)
+	entries := []*model.AgentLesson{
+		{ID: newID(), Topic: "old-pending", Status: model.AgentLessonStatusPending, AuthorUserID: "user-a", CreatedAt: old, UpdatedAt: old},
+		{ID: newID(), Topic: "fresh-pending", Status: model.AgentLessonStatusPending, AuthorUserID: "user-a", CreatedAt: now, UpdatedAt: now},
+		{ID: newID(), Topic: "old-approved", Status: model.AgentLessonStatusApproved, AuthorUserID: "user-a", CreatedAt: old, UpdatedAt: old},
+	}
+	for _, entry := range entries {
+		if err := repo.Create(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	changed, err := repo.ExpirePendingAgentLessons("", now.Add(-cloudAgentPendingLessonTTL), now, 500)
+	if err != nil || changed != 1 {
+		t.Fatalf("应只过期一条旧 pending：changed=%d err=%v", changed, err)
+	}
+	for _, want := range []struct{ id, status string }{
+		{entries[0].ID, model.AgentLessonStatusRejected},
+		{entries[1].ID, model.AgentLessonStatusPending},
+		{entries[2].ID, model.AgentLessonStatusApproved},
+	} {
+		got, findErr := repo.AgentLessonForUser("user-a", want.id)
+		if findErr != nil || got.Status != want.status {
+			t.Fatalf("记忆 %s 状态不符：got=%+v err=%v", want.id, got, findErr)
+		}
+	}
+}
+
+func TestRememberLessonExpiresOldPendingBeforeApplyingLimit(t *testing.T) {
+	repo := agentLessonTestRepo(t)
+	now := time.Now()
+	old := now.Add(-cloudAgentPendingLessonTTL - time.Hour)
+	for index := 0; index < cloudAgentRememberLessonPendingPerUser; index++ {
+		created := now
+		if index == 0 {
+			created = old
+		}
+		entry := &model.AgentLesson{ID: newID(), Topic: "pending", Status: model.AgentLessonStatusPending, AuthorUserID: "user-a", CreatedAt: created, UpdatedAt: created}
+		if err := repo.Create(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := &cloudAgentRuntime{
+		Request:                     CloudAgentRequest{PermissionMode: "auto"},
+		LessonEligibleToolSuccesses: 1,
+	}
+	call := rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`)
+	if _, err := cloudAgentRememberLesson(repo, "user-a", state, call); err != nil {
+		t.Fatalf("过期一条后应可新建待审记忆：%v", err)
+	}
+	pending, err := repo.CountAgentLessonsByAuthor("user-a", model.AgentLessonStatusPending)
+	if err != nil || pending != cloudAgentRememberLessonPendingPerUser {
+		t.Fatalf("新写入后待审数应回到上限：%d (%v)", pending, err)
+	}
+}
+
+func TestRememberLessonPendingLimitErrorShowsCountAndSettings(t *testing.T) {
+	repo := agentLessonTestRepo(t)
+	now := time.Now()
+	for index := 0; index < cloudAgentRememberLessonPendingPerUser; index++ {
+		entry := &model.AgentLesson{ID: newID(), Topic: "pending", Status: model.AgentLessonStatusPending, AuthorUserID: "user-a", CreatedAt: now, UpdatedAt: now}
+		if err := repo.Create(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{PermissionMode: "auto"}, LessonEligibleToolSuccesses: 1}
+	_, err := cloudAgentRememberLesson(repo, "user-a", state, rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`))
+	if err == nil || !strings.Contains(err.Error(), "50") || !strings.Contains(err.Error(), "设置 → Agent 记忆") {
+		t.Fatalf("拒绝信息应包含待审数量和处理入口：%v", err)
+	}
+}
+
+func TestLessonIndexRanksTaskRelevanceBeforeHitsAndMatchesTwoHanRunes(t *testing.T) {
+	now := time.Now()
+	unrelated := model.AgentLesson{ID: "unrelated", Topic: "video.duration", Situation: "竖屏视频生成时长", Hits: 9000, UpdatedAt: now}
+	relevant := model.AgentLesson{ID: "relevant", Topic: "对象绑定", Situation: "预演对象绑定角色时", Hits: 0, UpdatedAt: now.Add(-time.Hour)}
+	index, matched := cloudAgentPickLessonIndex([]model.AgentLesson{unrelated, relevant}, "请处理对象绑定", 20)
+	if matched != 1 || len(index) != 2 || index[0].ID != "relevant" {
+		t.Fatalf("任务相关记忆应先于高频无关记忆，且两字短语应命中：matched=%d index=%+v", matched, index)
 	}
 }

@@ -3,7 +3,7 @@ package app
 import (
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // cloudAgentParentCanBeSuperseded 判断上一轮能否因执行合同变更直接接新轮。

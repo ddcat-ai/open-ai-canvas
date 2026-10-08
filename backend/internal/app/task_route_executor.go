@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // taskRouteExecutor 负责一次任务执行中的路由提交与失败切换策略。

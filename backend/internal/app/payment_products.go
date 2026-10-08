@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error) {

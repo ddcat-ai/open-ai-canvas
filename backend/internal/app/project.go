@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -254,6 +255,12 @@ func (s *Service) CreateProject(userID string, req CreateProjectRequest) (model.
 	}
 	project := model.Project{ID: newID(), UserID: userID, Name: name, Type: projectType, AspectRatio: aspectRatio, SourceType: sourceType, Description: strings.TrimSpace(req.Description), StylePresetID: stylePresetID, StyleProfileJSON: styleProfileJSON, DefaultImageModel: defaultImageModel, DefaultVideoModel: defaultVideoModel, Status: model.ProjectStatusActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateProject(&project); err != nil {
+		if errors.Is(err, repository.ErrProjectNameConflict) {
+			// 项目名称冲突需要明确返回 409，页面才能按已有逻辑换一个名称重试。
+			conflict := NewAppError(http.StatusConflict, "项目名称已存在")
+			conflict.Reason = ReasonProjectNameConflict
+			return model.Project{}, conflict
+		}
 		return model.Project{}, err
 	}
 	if _, err := s.createProjectWorkflow(project.ID, "", "project"); err != nil {

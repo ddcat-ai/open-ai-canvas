@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"infinite-canvas/backend/internal/payment"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/payment"
+	"yingce/backend/internal/protocol"
 )
 
 func TestBundledPaymentPluginsMatchHostProviders(t *testing.T) {

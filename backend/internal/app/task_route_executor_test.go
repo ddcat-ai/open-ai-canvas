@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 type taskRouteExecutionPortStub struct {

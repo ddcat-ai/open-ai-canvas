@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	"infinite-canvas/backend/internal/generation"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/generation"
+	"yingce/backend/internal/protocol"
 )
 
 // 协议注册表运行时已迁到 internal/generation；此处保留未导出包装以兼容 service 内大量调用点。

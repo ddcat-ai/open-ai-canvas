@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func live2DTestFiles(t *testing.T) map[string][]byte {

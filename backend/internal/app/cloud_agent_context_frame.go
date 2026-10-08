@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // ContextFrame is a fresh projection of durable task facts, never authorization.

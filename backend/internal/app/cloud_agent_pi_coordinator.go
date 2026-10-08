@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // startCloudAgentPi 是唯一的生产入口

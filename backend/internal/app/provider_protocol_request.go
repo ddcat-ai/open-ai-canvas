@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
@@ -90,6 +90,14 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 				request.ProviderOptions[strings.TrimSpace(namespace)] = options
 			}
 		}
+	}
+	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
+		options := make(map[string]any)
+		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {
+			options[name] = value
+		}
+		options["response_format"] = grokImageResponseFormat(input.ImageCapability)
+		request.ProviderOptions[input.Config.InterfaceType] = options
 	}
 	return request
 }

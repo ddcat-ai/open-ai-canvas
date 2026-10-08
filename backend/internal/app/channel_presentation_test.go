@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestChannelPresentationUsesModelLabelsAndPublicOrder(t *testing.T) {

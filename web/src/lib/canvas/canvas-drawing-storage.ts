@@ -32,9 +32,9 @@ export type CanvasDrawingRender = CanvasDrawingRenderDraft & {
     updatedAt: string;
 };
 
-const drawingStore = localforage.createInstance({ name: "infinite-canvas", storeName: "drawing_documents" });
-const drawingPreviewStore = localforage.createInstance({ name: "infinite-canvas", storeName: "drawing_previews" });
-const drawingRenderStore = localforage.createInstance({ name: "infinite-canvas", storeName: "drawing_generation_renders" });
+const drawingStore = localforage.createInstance({ name: "yingce", storeName: "drawing_documents" });
+const drawingPreviewStore = localforage.createInstance({ name: "yingce", storeName: "drawing_previews" });
+const drawingRenderStore = localforage.createInstance({ name: "yingce", storeName: "drawing_generation_renders" });
 const INITIAL_DRAWING_RENDER_MAX_DIMENSION = 2048;
 const INITIAL_DRAWING_RENDER_PADDING = 24;
 

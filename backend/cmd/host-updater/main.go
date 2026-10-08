@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"infinite-canvas/backend/internal/hostupdate"
+	"yingce/backend/internal/hostupdate"
 )
 
 func main() {

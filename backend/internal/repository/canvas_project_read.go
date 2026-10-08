@@ -1,6 +1,6 @@
 package repository
 
-import "infinite-canvas/backend/internal/model"
+import "yingce/backend/internal/model"
 
 // CanvasProjectMetadataForUser reads only fields needed to validate a cached
 // canvas representation, avoiding the large JSON body when the caller's ETag

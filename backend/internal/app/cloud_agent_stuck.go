@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 const cloudAgentStuckAfter = 5 * time.Minute

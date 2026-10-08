@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (r *Repository) CloudAgentPiSession(userID, runID string) (*model.CloudAgentPiSession, error) {
@@ -314,8 +315,9 @@ func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func
 
 // sameJSONDocument compares event records by JSON meaning rather than source
 // bytes. Event payloads may contain json.RawMessage (for example tool arguments),
-// so decode/re-encode can legally normalize whitespace or object key order while
-// preserving the immutable event contract.
+// so decode/re-encode can legally normalize whitespace, object key order, or
+// numeric spellings such as 0.0 and 0 while preserving the immutable event
+// contract.
 func sameJSONDocument(left, right string) bool {
 	decode := func(raw string) (any, error) {
 		decoder := json.NewDecoder(bytes.NewReader([]byte(raw)))
@@ -328,7 +330,7 @@ func sameJSONDocument(left, right string) bool {
 		if err := decoder.Decode(&extra); err == nil {
 			return nil, fmt.Errorf("multiple JSON documents")
 		}
-		return value, nil
+		return canonicalJSONValue(value), nil
 	}
 	leftValue, leftErr := decode(left)
 	rightValue, rightErr := decode(right)
@@ -338,6 +340,25 @@ func sameJSONDocument(left, right string) bool {
 	leftCanonical, leftErr := json.Marshal(leftValue)
 	rightCanonical, rightErr := json.Marshal(rightValue)
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftCanonical, rightCanonical)
+}
+
+func canonicalJSONValue(value any) any {
+	switch typed := value.(type) {
+	case json.Number:
+		if rational, ok := new(big.Rat).SetString(typed.String()); ok {
+			return rational.RatString()
+		}
+		return typed.String()
+	case []any:
+		for index := range typed {
+			typed[index] = canonicalJSONValue(typed[index])
+		}
+	case map[string]any:
+		for key, nested := range typed {
+			typed[key] = canonicalJSONValue(nested)
+		}
+	}
+	return value
 }
 
 func (r *Repository) CreateCloudAgentCanvasMutation(mutation *model.CloudAgentCanvasMutation) error {

@@ -2,9 +2,9 @@ package canvas
 
 import (
 	"encoding/json"
-	"infinite-canvas/backend/internal/kernel"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
 )
 
 func (s *Service) UserAssetsByIDs(userID string, ids []string) ([]json.RawMessage, error) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/prompts"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/prompts"
 )
 
 func agentCanvasPatchForOperation(t *testing.T, state cloudAgentRuntime, operation string) map[string]any {

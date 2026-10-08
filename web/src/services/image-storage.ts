@@ -23,7 +23,7 @@ export type UploadedImage = {
     remoteUploadError?: string;
 };
 
-const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
+const store = localforage.createInstance({ name: "yingce", storeName: "image_files" });
 const objectUrls = new Map<string, string>();
 
 export async function uploadImage(input: string | Blob, onProgress?: (uploadedBytes: number, totalBytes: number) => void): Promise<UploadedImage> {

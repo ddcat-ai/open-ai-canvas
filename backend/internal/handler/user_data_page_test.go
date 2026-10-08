@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

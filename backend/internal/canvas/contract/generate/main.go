@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"infinite-canvas/backend/internal/canvas/contract"
+	"yingce/backend/internal/canvas/contract"
 )
 
 func main() {

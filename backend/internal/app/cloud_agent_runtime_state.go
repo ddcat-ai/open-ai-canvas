@@ -15,8 +15,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/prompts"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/prompts"
 )
 
 func cloudAgentDecode(run *model.CloudAgentExecution) (cloudAgentRuntime, error) {
@@ -141,6 +141,9 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	}
 	if state.Step < 0 || state.Generations < 0 || state.VideoSeconds < 0 {
 		return errors.New("Agent runtime budget or step is invalid")
+	}
+	if state.LessonEligibleToolSuccesses < 0 || state.RememberLessonSuccesses < 0 {
+		return errors.New("Agent lesson success counters are invalid")
 	}
 	if state.ConfirmationRounds < 0 || state.ConfirmationRounds > cloudAgentMaxConfirmationRounds {
 		return errors.New("Agent runtime confirmation round is invalid")

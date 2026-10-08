@@ -1,102 +1,59 @@
-import { useEffect, useState } from "react";
-import { Button, InputNumber, Modal } from "antd";
-import { Grid2x2 } from "lucide-react";
-
-import { readImageMeta } from "@/lib/image-utils";
-import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
+import { useState } from "react";
+import { InputNumber } from "antd";
+import { AppModal } from "@/components/ui/product/app-modal";
+import { MAX_IMAGE_GRID, planImageTiles, type ImageSplitParams } from "@/lib/canvas/image-operation-plan";
+import { useImageToolSource } from "./use-image-tool-source";
 
 export type CanvasImageSplitParams = ImageSplitParams;
+type SplitDialogProps = { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (params: CanvasImageSplitParams) => void };
 
-const defaultParams: CanvasImageSplitParams = { rows: 2, columns: 2 };
-const maxGridSize = 12;
+export function CanvasNodeSplitDialog(props: SplitDialogProps) {
+    return props.open && props.dataUrl ? <SplitEditor key={props.dataUrl} {...props} /> : null;
+}
 
-export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (params: CanvasImageSplitParams) => void }) {
-    const [params, setParams] = useState(defaultParams);
-    const [image, setImage] = useState<{ width: number; height: number } | null>(null);
-    const total = params.rows * params.columns;
-    const pieceSize = image ? { width: Math.max(1, Math.floor(image.width / params.columns)), height: Math.max(1, Math.floor(image.height / params.rows)) } : null;
-
-    useEffect(() => {
-        if (!open) return;
-        setParams(defaultParams);
-        setImage(null);
-    }, [dataUrl, open]);
-
-    useEffect(() => {
-        if (!open) return;
-        void readImageMeta(dataUrl).then(setImage);
-    }, [dataUrl, open]);
-
-    const update = (key: keyof CanvasImageSplitParams, value: string | number | null) => {
-        setParams((current) => ({ ...current, [key]: clampGrid(value ?? current[key]) }));
+function SplitEditor({ dataUrl, onClose, onConfirm }: SplitDialogProps) {
+    const [grid, setGrid] = useState<ImageSplitParams>({ rows: 2, columns: 2 });
+    const { size, error } = useImageToolSource(dataUrl);
+    const valid = size !== null && size.width >= grid.columns && size.height >= grid.rows;
+    const tiles = valid ? planImageTiles(size, grid) : [];
+    const previewSize = tiles[0];
+    const updateCount = (axis: keyof ImageSplitParams, value: number | null) => {
+        if (value === null || !Number.isFinite(value)) return;
+        setGrid((previous) => ({ ...previous, [axis]: Math.min(MAX_IMAGE_GRID, Math.max(1, Math.round(value))) }));
     };
-
     return (
-        <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={780} centered destroyOnHidden>
-            <div className="space-y-5">
-                <div>
-                    <h2 className="text-xl font-semibold">宫格切分</h2>
-                    <p className="mt-1 text-sm opacity-60">生成 {total} 个图片子节点，并按原图网格排列到画布右侧</p>
-                </div>
-                <div className="grid gap-6 md:grid-cols-[minmax(260px,1fr)_280px]">
-                    <div className="rounded-xl border p-4">
-                        <div className="grid min-h-[300px] place-items-center rounded-lg bg-black/5">
-                            <div className="relative inline-block max-w-full overflow-hidden rounded-lg bg-black shadow-xl">
-                                <img src={dataUrl} alt="" className="block max-h-[340px] max-w-full object-contain opacity-95" draggable={false} />
-                                <SplitGrid rows={params.rows} columns={params.columns} />
-                            </div>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-sm">
-                            <span className="opacity-60">原图</span>
-                            <span className="font-semibold">{image ? `${image.width} x ${image.height} px` : "读取中"}</span>
-                        </div>
+        <AppModal open title="宫格切分" width={780} centered onCancel={onClose} okText={`生成 ${grid.rows * grid.columns} 个子节点`} onOk={() => valid && onConfirm(grid)} okButtonProps={{ disabled: !valid }}>
+            <p className="mb-4 text-sm text-muted-foreground">按行、列拆分原图，子节点保持网格顺序。</p>
+            <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+                <figure className="m-0 flex min-w-0 flex-col items-center gap-3 rounded-lg border border-border bg-surface-active p-3">
+                    <div className="relative max-w-full overflow-hidden">
+                        <img alt="待切分图片" src={dataUrl} draggable={false} className="block max-h-[340px] max-w-full object-contain" />
+                        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                            {Array.from({ length: grid.columns - 1 }, (_, i) => (
+                                <line key={`v${i}`} x1={(100 * (i + 1)) / grid.columns} x2={(100 * (i + 1)) / grid.columns} y1={0} y2={100} stroke="white" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                            ))}
+                            {Array.from({ length: grid.rows - 1 }, (_, i) => (
+                                <line key={`h${i}`} y1={(100 * (i + 1)) / grid.rows} y2={(100 * (i + 1)) / grid.rows} x1={0} x2={100} stroke="white" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                            ))}
+                        </svg>
                     </div>
-                    <div className="space-y-5 py-2">
-                        <NumberField label="行数" value={params.rows} onChange={(value) => update("rows", value)} />
-                        <NumberField label="列数" value={params.columns} onChange={(value) => update("columns", value)} />
-                        <div className="rounded-xl border px-4 py-3 text-sm">
-                            <div className="flex items-center justify-between">
-                                <span className="opacity-60">子节点</span>
-                                <span className="font-semibold">{total} 个</span>
-                            </div>
-                            <div className="mt-2 flex items-center justify-between">
-                                <span className="opacity-60">单块约</span>
-                                <span className="font-semibold">{pieceSize ? `${pieceSize.width} x ${pieceSize.height}` : "未知"}</span>
-                            </div>
-                        </div>
-                        <Button type="primary" size="large" className="w-full" icon={<Grid2x2 className="size-4" />} onClick={() => onConfirm(params)}>
-                            生成子节点
-                        </Button>
-                    </div>
+                    <figcaption className="text-sm text-muted-foreground">{size ? `${size.width} × ${size.height} px` : error || "正在读取图片…"}</figcaption>
+                </figure>
+                <div className="flex flex-col gap-4">
+                    {(["rows", "columns"] as const).map((axis) => (
+                        <label key={axis} className="flex flex-col gap-2 text-sm">
+                            {axis === "rows" ? "行数" : "列数"}
+                            <InputNumber aria-label={axis === "rows" ? "切分行数" : "切分列数"} min={1} max={MAX_IMAGE_GRID} precision={0} value={grid[axis]} onChange={(value) => updateCount(axis, value)} />
+                        </label>
+                    ))}
+                    <output className="text-sm text-muted-foreground">{previewSize ? `每块约 ${previewSize.width} × ${previewSize.height} px；边缘像素会完整保留。` : "等待有效图片尺寸"}</output>
+                    {error || (size && !valid) ? (
+                        <p role="alert" className="text-sm text-destructive">
+                            {error || "行列数超过图片像素尺寸，请减少切分数量"}
+                        </p>
+                    ) : null}
                 </div>
             </div>
-        </Modal>
+        </AppModal>
     );
-}
-
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: string | number | null) => void }) {
-    return (
-        <label className="block space-y-2">
-            <span className="font-medium opacity-75">{label}</span>
-            <InputNumber className="w-full" min={1} max={maxGridSize} precision={0} value={value} onChange={onChange} />
-        </label>
-    );
-}
-
-function SplitGrid({ rows, columns }: CanvasImageSplitParams) {
-    return (
-        <div className="pointer-events-none absolute inset-0">
-            {Array.from({ length: columns - 1 }).map((_, index) => (
-                <div key={`column-${index}`} className="absolute inset-y-0 border-l border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,.35)]" style={{ left: `${((index + 1) / columns) * 100}%` }} />
-            ))}
-            {Array.from({ length: rows - 1 }).map((_, index) => (
-                <div key={`row-${index}`} className="absolute inset-x-0 border-t border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,.35)]" style={{ top: `${((index + 1) / rows) * 100}%` }} />
-            ))}
-        </div>
-    );
-}
-
-function clampGrid(value: string | number) {
-    const numberValue = Number(value);
-    return Math.min(maxGridSize, Math.max(1, Math.round(Number.isFinite(numberValue) ? numberValue : 1)));
 }

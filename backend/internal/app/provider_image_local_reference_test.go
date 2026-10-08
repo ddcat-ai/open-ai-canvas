@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func TestOpenAIImageLocalReferencesWithoutPublicURL(t *testing.T) {

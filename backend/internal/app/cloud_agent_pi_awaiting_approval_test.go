@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // approvalPauseRoot 建立 Pi 模式的运行（root 任务不占活动任务位，模型步走 /model 桥）。

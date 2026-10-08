@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -123,6 +123,28 @@ func (r *Repository) CountAgentLessonsByAuthor(userID, status string) (int64, er
 	var count int64
 	err := query.Count(&count).Error
 	return count, err
+}
+
+func (r *Repository) ExpirePendingAgentLessons(userID string, createdBefore, updatedAt time.Time, limit int) (int64, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 500
+	}
+	query := r.db.Model(&model.AgentLesson{}).Select("id").
+		Where("status = ? AND created_at <= ?", model.AgentLessonStatusPending, createdBefore)
+	if userID = strings.TrimSpace(userID); userID != "" {
+		query = query.Where("author_user_id = ?", userID)
+	}
+	var ids []string
+	if err := query.Order("created_at ASC").Limit(limit).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	update := r.db.Model(&model.AgentLesson{}).
+		Where("id IN ? AND status = ?", ids, model.AgentLessonStatusPending).
+		Updates(map[string]any{"status": model.AgentLessonStatusRejected, "updated_at": updatedAt})
+	return update.RowsAffected, update.Error
 }
 
 func (r *Repository) AdminAgentLessons(status, userID, keyword string, limit int) ([]model.AgentLesson, error) {

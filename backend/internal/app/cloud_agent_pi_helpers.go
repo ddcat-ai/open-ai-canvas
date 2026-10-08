@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // Skills Configuration Builders

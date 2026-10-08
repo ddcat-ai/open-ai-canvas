@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 func TestPaymentRuntimeCacheUsesCompletePackageDigest(t *testing.T) {

@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 const (

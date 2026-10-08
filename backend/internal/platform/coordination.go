@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"infinite-canvas/backend/internal/kernel"
 	"log"
 	"math/rand/v2"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"yingce/backend/internal/kernel"
 
 	"github.com/redis/go-redis/v9"
 )

@@ -38,7 +38,7 @@ description: 从产品功能快速定位主要代码入口
 | 技能库 | `web/src/pages/skills/` | `services/api/skills.ts`、`services/skill-runtime.ts`、`components/skills/skill-runtime-picker.tsx` |
 | 画布列表 | `web/src/pages/canvas/index.tsx` | `stores/canvas/use-canvas-store.ts` |
 | 画布编辑器 | `web/src/pages/canvas/project.tsx` | `pages/canvas/canvas-project-*`、`pages/canvas/use-canvas-*`、`components/canvas/`、`lib/canvas/`、`stores/canvas/` |
-| 公开分享 | `web/src/pages/canvas/shared.tsx` | `components/canvas/infinite-canvas.tsx`、`services/api/canvas-share.ts` |
+| 公开分享 | `web/src/pages/canvas/shared.tsx` | `components/canvas/canvas-viewport.tsx`、`services/api/canvas-share.ts` |
 | 管理后台 | `web/src/pages/admin/`、`router.tsx` | `admin-context.tsx`、`users/`、`channels/`、`logs/`、`storyboard-prompts/`、`settings/`、`components/agent-lessons-panel.tsx` |
 | 支付 CSV 导出 | `web/src/pages/admin/payments/payments-page.tsx` | `services/api/payments.ts`、`AdminExportButton`；后端 `handler/payment_export.go`、`app/payment_export.go`、`repository/payment_export.go`（共享筛选、只读快照） |
 
@@ -63,7 +63,7 @@ description: 从产品功能快速定位主要代码入口
 | 派生渲染模型和画布分层 | `web/src/pages/canvas/use-canvas-render-model.ts`、`canvas-project-world-layers.tsx`、`canvas-project-context-menu.tsx`、`canvas-project-status-dialogs.tsx` |
 | 顶栏、反馈和 screen-space 浮层 | `web/src/pages/canvas/canvas-project-top-bar.tsx`、`canvas-project-feedback.tsx`、`canvas-project-selection-toolbar.tsx`、`components/canvas/canvas-workspace-overlays.tsx` |
 | 媒体弹窗装配 | `web/src/pages/canvas/canvas-project-media-dialogs.tsx` |
-| 画布视口、拖拽、缩放和框选 | `web/src/components/canvas/infinite-canvas.tsx`、`web/src/lib/canvas/canvas-live-viewport.ts` |
+| 画布视口、拖拽、缩放和框选 | `web/src/components/canvas/canvas-viewport.tsx`、`web/src/lib/canvas/canvas-live-viewport.ts` |
 | 节点渲染与节点工具 | `web/src/components/canvas/canvas-node.tsx`、`canvas-node-hover-toolbar.tsx`、`canvas-node-toolbar.tsx` |
 | 图片多角度、宫格切分与多选框 | `canvas-node-angle-dialog.tsx`、`canvas-angle-scene.tsx`、`canvas-grid-split-picker.tsx`、`web/src/lib/canvas/canvas-grid-split.ts`、`canvas-selection.ts` |
 | 生成 Composer | `web/src/components/canvas/canvas-node-prompt-panel.tsx`、`canvas-config-composer.tsx` |
@@ -166,3 +166,18 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 - 任务入队 `internal/app/task_creation.go` 与生成执行 `internal/app/provider.go` 共用严格 token 解析。
 - 前端 `canvas-tool-presentation.ts` 共享轻量展示配置，`canvas-resource-references.ts` 统一 token；节点提示词与工具面板共用同一持久状态，不复制到 metadata 风格字段。
 - `canvas-workspace-panel.tsx` 提供常驻左侧菜单，按需挂载节点、资产、工具、任务和历史面板；资产面板复用素材分页服务与画布插入合同；主分支项目章节侧栏与工作区互斥。
+
+## 技能策展
+
+`internal/skills/skill_curation.go` 负责校验，`internal/repository/skill_curation.go` 负责分类持久化与 CAS 审计交易，handler／app bridge 接入原有技能域。
+
+`skill_curation_roots.go` 扩展动态根维护、有效根查询和空表回落；数据库迁移 47 接续 46。
+
+## 创作首页纵深画廊与灵感库
+
+- `web/src/pages/create/creation-inspiration-tunnel.tsx`、`creation-inspiration-tunnel.css`：纵深画廊的排布、随机取样、封面就绪门控与样式。
+- `web/src/pages/inspirations/`：灵感页（`index.tsx`）、详情弹窗、编辑弹窗与 `inspirations.css`。
+- `web/src/lib/inspirations/catalog.ts`、`resolve.ts`、`source-revisions.ts`：来源登记表、条目类型与解析、原创条目、上游版本号。
+- `web/src/services/inspiration-catalog.ts`：全量目录与画廊池的运行时加载、内存缓存与失败退回。
+- `web/src/stores/use-inspiration-store.ts`：自建／覆盖／隐藏／收藏的本地持久化与导入导出。
+- `web/scripts/import-inspirations.mjs`：外部来源同步、等距抽取、缩略图生成与画廊池落盘；产物在 `web/public/inspirations/` 与 `web/public/inspiration-thumbs/`。

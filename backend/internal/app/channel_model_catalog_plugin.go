@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"infinite-canvas/backend/internal/provider"
-	"infinite-canvas/backend/internal/provider/bailian"
+	"yingce/backend/internal/provider"
+	"yingce/backend/internal/provider/bailian"
 )
 
 var pluginsInitOnce sync.Once

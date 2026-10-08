@@ -5,15 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/repository"
 	"log"
 	"net/mail"
 	"regexp"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/repository"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -199,9 +199,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		return nil, err
 	}
 	if email != "" {
-		if _, err := s.repo.UserByEmail(email); err == nil {
-			return nil, kernel.BadAuthRequest("邮箱已被注册")
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := s.repo.CheckEmailAvailable(email, ""); err != nil {
 			return nil, err
 		}
 	}
@@ -243,13 +241,26 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		if err := s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now()); err != nil {
 			return nil, err
 		}
-	} else if err := s.repo.Create(&user); err != nil {
+	} else if err := s.repo.CreateRegisteredUser(&user); err != nil {
 		return nil, err
 	}
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
 	return s.createAuthSession(&user)
+}
+
+// LoginRateLimitSubject uses the same account lookup as password authentication.
+func (s *Service) LoginRateLimitSubject(account string) (string, error) {
+	account = strings.TrimSpace(account)
+	user, err := s.repo.UserByAccount(account)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "input:" + strings.ToLower(account), nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return "user:" + user.ID, nil
 }
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
@@ -270,7 +281,7 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	now := time.Now()
 	user.LastLoginAt = &now
 	user.UpdatedAt = now
-	if err := s.repo.Save(user); err != nil {
+	if err := s.repo.UpdateUserLoginTime(user.ID, now); err != nil {
 		return nil, err
 	}
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {

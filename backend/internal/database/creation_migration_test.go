@@ -3,8 +3,8 @@ package database
 import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
 	"testing"
+	"yingce/backend/internal/model"
 )
 
 func TestCreationMigrationKeepsLegacyTasksNullableAndEnforcesSubmissionUnique(t *testing.T) {

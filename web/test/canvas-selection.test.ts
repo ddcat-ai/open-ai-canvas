@@ -92,7 +92,7 @@ describe("canvas selection semantics", () => {
     test("uses region selection as the page default and commits selection outside pointer-move", async () => {
         const projectSource = await Promise.resolve(moduleGroupSource("pages/canvas/project.tsx"));
         const controllerSource = await Bun.file(new URL("../src/pages/canvas/use-canvas-selection-controller.ts", import.meta.url)).text();
-        const canvasSource = await Bun.file(new URL("../src/components/canvas/infinite-canvas.tsx", import.meta.url)).text();
+        const canvasSource = await Bun.file(new URL("../src/components/canvas/canvas-viewport.tsx", import.meta.url)).text();
         const graphicsSource = await Bun.file(new URL("../src/components/canvas/canvas-leafer-graphics-layer.tsx", import.meta.url)).text();
         const globalStyles = await Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text();
 

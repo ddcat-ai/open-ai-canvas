@@ -1,7 +1,7 @@
 package app
 
 import (
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 const (

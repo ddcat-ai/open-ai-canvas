@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/kernel"
+	"yingce/backend/internal/kernel"
 )
 
 func TestOutboundDNSFailurePreservesCauseWithoutExposingHost(t *testing.T) {

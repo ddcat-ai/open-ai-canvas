@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // waitingAgentMediaApproval 把 Agent 推进到“等待生成审批”，返回运行和审批 ID。

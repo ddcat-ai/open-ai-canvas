@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // ToolWithFavorite 列表查询结果：工具 + 当前用户收藏状态。

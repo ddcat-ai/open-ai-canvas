@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
 import { getProject, getProjectUnit, type ProjectDetail, type ProjectUnit } from "@/services/api/projects";
 
-export const CANVAS_PROJECT_CHAPTER_DND_TYPE = "application/x-infinite-canvas-project-chapter";
+export const CANVAS_PROJECT_CHAPTER_DND_TYPE = "application/x-yingce-project-chapter";
 export type CanvasProjectChapterPayload = Pick<ProjectUnit, "id" | "title" | "position"> & { projectId: string; sourceText?: string };
 
 const CHAPTER_ROW_HEIGHT = 36;

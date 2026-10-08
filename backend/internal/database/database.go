@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"infinite-canvas/backend/internal/logging"
+	"yingce/backend/internal/logging"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"

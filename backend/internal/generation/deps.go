@@ -3,7 +3,7 @@ package generation
 import (
 	"context"
 
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 // MediaResolver 水合参考媒体（资源 URL / data URL），由组合根注入，避免 generation → service 回环。

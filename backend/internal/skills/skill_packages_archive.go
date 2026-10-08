@@ -18,8 +18,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 )
 
 func readSkillArchiveEntries(dataDir string, packageKey string) (map[string][]byte, error) {

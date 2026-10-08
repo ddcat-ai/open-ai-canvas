@@ -12,12 +12,15 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // image_layer_split deliberately reuses the canonical media admission path.
@@ -559,9 +562,120 @@ func (s *Service) finishApprovedCloudAgentMedia(ctx context.Context, userID, id,
 	return s.resumeCloudAgentAfterApproval(userID, id, &state)
 }
 
+// cloudAgentApprovalResumePrompt 构造审批恢复后的续跑提示。
+//
+// 线上评测（run ag7317ce5c seq 28→31）暴露的关键缺口：审批等待期间，模型历史里该调用
+// 停留在「操作正在等待用户审批」占位上；批准后执行器虽已写入并追加了真实结果，但恢复
+// 提示只有一句"已执行一次"——模型看不到结果里的新 snapshotHash / 节点状态，只会合理地
+// 重发同参数调用，随后撞上自己第一次执行改变的快照（state_conflict）。把执行结果摘要
+// 直接装进恢复提示，模型就有了继续操作所需的最新状态；同批排在审批之后被中止的调用也
+// 一并说明，避免恢复后发出空回合。
+func cloudAgentApprovalResumePrompt(state *cloudAgentRuntime) string {
+	if receipt, ok := cloudAgentLastToolReceipt(state); ok {
+		prompt := "用户已批准刚才等待审批的操作，已执行完成，结果如下：\n" + receipt +
+			"\n该操作不要重复调用。结果里是目标对象的最新状态（含 snapshotHash）；继续写同一对象必须基于它，否则会因快照过期被拒绝。"
+		if state.CallIndex < len(state.Calls) {
+			prompt += " 你上一步同批发出的其余调用未被执行（每个审批周期只放行一个操作），仍需要请重发。"
+		}
+		return prompt
+	}
+	return "用户已批准刚才等待审批的操作。业务执行器已执行一次；请根据最新工具结果继续，不要重复调用该操作。"
+}
+
+// cloudAgentLastToolReceipt 取 canonical 历史末尾最近一条工具结果的可读摘要。
+// 批准执行完成后它就是被批准调用的真实结果；拿不到时返回 false，调用方回退通用提示。
+func cloudAgentLastToolReceipt(state *cloudAgentRuntime) (string, bool) {
+	if state == nil {
+		return "", false
+	}
+	for i := len(state.Canonical.Messages) - 1; i >= 0; i-- {
+		message := state.Canonical.Messages[i]
+		if stringField(message, "role") != "tool" {
+			return "", false
+		}
+		content := strings.TrimSpace(stringField(message, "content"))
+		if content == "" {
+			continue
+		}
+		if cloudAgentToolContentIsError(content) {
+			return "", false
+		}
+		return cloudAgentReceiptSummary(content), true
+	}
+	return "", false
+}
+
+const (
+	// 单个长字段（预览、行数据等描述内容）截断后保留的长度；关键标识字段
+	// （snapshotHash、nodeId、状态等）天然短于此值，整体保留。
+	cloudAgentReceiptFieldLimit = 240
+	// 回执摘要的总预算，防止大结果把恢复提示撑爆。
+	cloudAgentReceiptTotalLimit = 1600
+)
+
+// cloudAgentReceiptSummary 生成保留关键标识的工具结果摘要。
+//
+// 不能对结果 JSON 做朴素前缀截断：字段顺序不保证 snapshotHash / nodeId 排在前面
+// （批量画布操作的 preview、rows 可能很长，序列化时把快照挤出截断窗口），而恢复
+// 提示恰恰要求模型基于回执里的最新快照继续——快照被截掉等于引导它带着旧快照撞锁。
+// 摘要按字段组装：短字段（对象标识、执行状态、快照）无条件保留，长字段逐个截断；
+// 总预算不够时按字典序丢弃长字段（并在 truncatedFields 里说明），关键标识永远在内。
+// 非 JSON 的纯文本结果退化为整体截断。
+func cloudAgentReceiptSummary(content string) string {
+	var decoded map[string]any
+	if json.Unmarshal([]byte(content), &decoded) != nil {
+		return cloudAgentReceiptClip(content)
+	}
+	summary := make(map[string]any, len(decoded))
+	var longKeys []string
+	for key, value := range decoded {
+		text, err := json.Marshal(value)
+		if err == nil && utf8.RuneCountInString(string(text)) <= cloudAgentReceiptFieldLimit {
+			summary[key] = value
+		} else {
+			longKeys = append(longKeys, key)
+		}
+	}
+	sort.Strings(longKeys)
+	var truncated []string
+	for _, key := range longKeys {
+		if raw, err := json.Marshal(summary); err == nil &&
+			utf8.RuneCountInString(string(raw))+utf8.RuneCountInString(key)+cloudAgentReceiptFieldLimit+48 > cloudAgentReceiptTotalLimit {
+			truncated = append(truncated, key)
+			continue
+		}
+		var text string
+		if value, ok := decoded[key].(string); ok {
+			text = value
+		} else if raw, err := json.Marshal(decoded[key]); err == nil {
+			text = string(raw)
+		}
+		summary[key] = truncateRunes(text, cloudAgentReceiptFieldLimit) + "…（已截断；完整内容请用读取工具获取）"
+	}
+	if len(truncated) > 0 {
+		summary["truncatedFields"] = strings.Join(truncated, ",") + "（完整内容请用读取工具获取）"
+	}
+	raw, err := json.Marshal(summary)
+	if err != nil {
+		return cloudAgentReceiptClip(content)
+	}
+	if utf8.RuneCountInString(string(raw)) > cloudAgentReceiptTotalLimit {
+		// 字段数量本身过多：整体截断兜底，提示模型自行重读。
+		return cloudAgentReceiptClip(string(raw))
+	}
+	return string(raw)
+}
+
+func cloudAgentReceiptClip(content string) string {
+	if utf8.RuneCountInString(content) <= cloudAgentReceiptTotalLimit {
+		return content
+	}
+	return truncateRunes(content, cloudAgentReceiptTotalLimit) + "…（已截断；完整状态请用读取工具获取）"
+}
+
 func (s *Service) resumeCloudAgentAfterApproval(userID, id string, state *cloudAgentRuntime) error {
 	if state.PiResumePrompt == "" {
-		state.PiResumePrompt = "用户已批准刚才等待审批的操作。业务执行器已执行一次；请根据最新工具结果继续，不要重复调用该操作。"
+		state.PiResumePrompt = cloudAgentApprovalResumePrompt(state)
 	}
 	if err := s.saveCloudAgentPiResumePrompt(userID, id, state.PiResumePrompt); err != nil {
 		return err

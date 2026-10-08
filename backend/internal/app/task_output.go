@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 )
 
 // TaskSummary 是任务列表/会话详情的读模型，不直接复用数据库 Task，避免把

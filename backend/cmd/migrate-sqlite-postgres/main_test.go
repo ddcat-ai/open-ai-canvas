@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"infinite-canvas/backend/internal/database"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"

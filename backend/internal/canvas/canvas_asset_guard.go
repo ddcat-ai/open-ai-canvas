@@ -2,13 +2,13 @@ package canvas
 
 import (
 	"encoding/json"
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/kernel"
 	"net/http"
 	"strconv"
 	"strings"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 type MediaAssetReference struct {

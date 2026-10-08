@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/payment"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/payment"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/gorm"
 )

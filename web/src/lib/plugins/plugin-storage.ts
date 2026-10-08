@@ -1,7 +1,7 @@
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import type { PluginStorage } from "./plugin-types";
 
-const PLUGIN_STORAGE_PREFIX = "infinite-canvas:plugin-storage:";
+const PLUGIN_STORAGE_PREFIX = "yingce:plugin-storage:";
 
 export function pluginStorageFor(pluginId: string): PluginStorage {
     const storage = localForageStorageForScope();

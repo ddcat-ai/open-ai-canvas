@@ -115,6 +115,6 @@ function toCanvasProject(canvas: { id: string; title: string; createdAt: string;
         backgroundMode: "dots",
         showImageInfo: true,
         viewport: { x: 0, y: 0, k: 1 },
-        directorScenes: [],
+        previsScenes: [],
     };
 }

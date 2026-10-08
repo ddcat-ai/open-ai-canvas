@@ -1,6 +1,6 @@
 package app
 
-import "infinite-canvas/backend/internal/assets"
+import "yingce/backend/internal/assets"
 
 func resourceFileURL(id string) string {
 	return assets.FileURL(id)

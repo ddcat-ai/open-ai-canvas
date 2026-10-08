@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"infinite-canvas/backend/internal/canvas/layout"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/canvas/layout"
+	"yingce/backend/internal/model"
 )
 
 // layoutFixture 造一张用于整理测试的画布：文本 / 图片 / 视频三类节点挤在同一个角落。

@@ -1,6 +1,6 @@
 package app
 
-import "infinite-canvas/backend/internal/model"
+import "yingce/backend/internal/model"
 
 const maxChannelModelTokenPriceMicrocredits = int64(1_000_000) * CreditScale
 

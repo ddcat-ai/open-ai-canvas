@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // CleanupPending is the durable hand-off between orchestration and task/canvas

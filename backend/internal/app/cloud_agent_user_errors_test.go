@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 线上真实报错逐条回放：用户只能看到中文、可操作的原因，看不到地址、IP 或 Go 原始报错；

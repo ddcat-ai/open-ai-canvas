@@ -380,7 +380,7 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `web/src/lib/canvas/canvas-appearance.ts`：自定义外观归一化、解析和本机账号默认值。
 - `web/src/components/canvas/canvas-toolbar.tsx`：画布外观面板入口。
 - `web/src/components/canvas/canvas-appearance-controls.tsx`：主题、颜色、明亮度和网格控件。
-- `web/src/components/canvas/infinite-canvas.tsx`：应用主题背景并保持网格渲染参数。
+- `web/src/components/canvas/canvas-viewport.tsx`：应用主题背景并保持网格渲染参数。
 
 ## 画布节点自动整理
 
@@ -448,3 +448,29 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 ## 画布生成工具（待本地验收）
 
 画布支持风格、运镜、九宫格提示词工具及自定义特效工具，提供收藏和私有自定义工具。工具仅加入提示词或创建待生成子节点，选择工具不自动发起生成。画布左侧提供主页、折叠、节点、资产、任务和历史菜单，不再提供独立工具菜单，展开面板沿用主分支主题。资产支持分类、搜索、分页和直接插入，复用现有素材服务及插入合同；任务和历史独立，历史明确展示最近 30 条。图片节点直接展示风格和预设，不再展示提示词模板入口；其他节点的提示词模板保持不变。
+
+## 平台技能策展
+
+后台可选开启子分类维护，市场和技能库支持子分类浏览；默认关闭，保留原行为。
+
+开启时一级分类也可在后台新增、改名、排序、停用和选择图示，未归入技能仍有默认入口。
+
+## 创作首页纵深画廊与灵感库
+
+创作页空态是直线纵深图片画廊：11 张横版卡片沿 Z 轴前后排队，当前一张在最前、最大，其余依次后退缩小并左右对称。滚轮、两侧按钮和自动轮播都能切换，切换只动 `transform` 与 `opacity`。卡片带玻璃描边、圆角和投影，底部是「行动点 / 标题 / 描述」三段信息，只有最前那张露出。队列跟随输入框的创作类型：选图片只排图片灵感，选视频只排视频灵感，选文本用本项目原创条目。每次进场和每次换类型都重新随机抽一批，并记住最近出现过哪些，走完一轮自动换批。
+
+工作区左侧「创作」下方新增灵感页 `/inspirations`，展示全部提示词，按来源、分类和创作类型筛选，支持搜索、收藏、视图切换和分页；自建灵感支持新建、编辑、删除和 JSON 导入导出，改动只存在本地。
+
+外部提示词由 `web/scripts/import-inspirations.mjs` 同步：`awesome-seedance`、好好学 AI 提示词库、YouMind 的两个姊妹库。脚本同时为画廊池生成本地缩略图（560px、webp、约 35KB 一张）。上游封面平均 400KB～700KB，直接引用一屏 11 张要拉 5MB 以上，换成本地缩略图后约 400KB。
+
+画廊池走 `public/inspirations/gallery-pool.json` 运行时拉取，不打进首屏 JS：几百条提示词正文压在包里是白背的，而这份数据只服务画廊一处。池子按来源等距抽取以横跨各分类，并且只收描述非空的条目，保证卡片三行版式不缺角；这些条目仍留在全量目录里供灵感页展示。
+
+### 相关实现
+
+- `web/src/pages/create/creation-inspiration-tunnel.tsx`、`creation-inspiration-tunnel.css`：纵深画廊组件与样式。
+- `web/src/pages/inspirations/`：灵感页、详情弹窗、编辑弹窗与样式。
+- `web/src/lib/inspirations/`：来源登记表、条目类型与解析、原创条目、上游版本号（`catalog.ts`、`resolve.ts`、`source-revisions.ts`）。
+- `web/src/services/inspiration-catalog.ts`：全量目录与画廊池的运行时加载和内存缓存。
+- `web/src/stores/use-inspiration-store.ts`：自建、覆盖、隐藏与收藏的本地持久化。
+- `web/scripts/import-inspirations.mjs`：外部来源同步、缩略图生成与画廊池落盘。
+- `web/public/inspirations/`、`web/public/inspiration-thumbs/`：全量目录、画廊池与本地缩略图。

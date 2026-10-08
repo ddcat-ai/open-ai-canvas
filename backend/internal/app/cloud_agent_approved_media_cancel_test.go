@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 停机时审批后的媒体等待会被取消。此时不能继续回写结果、也不能恢复运行时：

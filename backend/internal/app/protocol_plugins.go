@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"infinite-canvas/backend/internal/payment"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/payment"
+	"yingce/backend/internal/protocol"
 )
 
 const (

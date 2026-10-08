@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/platform"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 )
 
 func postGeminiJSON(ctx context.Context, config providerConfig, path string, body interface{}, target interface{}) error {

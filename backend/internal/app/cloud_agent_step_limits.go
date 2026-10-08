@@ -3,7 +3,7 @@ package app
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/platform"
+	"yingce/backend/internal/platform"
 )
 
 // 画布 Agent 单步的执行边界：一次模型调用最多输出多少 token、最多等多久。

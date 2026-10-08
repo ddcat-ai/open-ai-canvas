@@ -1,5 +1,5 @@
 {
-  "name": "@infinite-canvas/pi-agent-runtime",
+  "name": "@yingce/pi-agent-runtime",
   "private": true,
   "type": "module",
   "engines": {

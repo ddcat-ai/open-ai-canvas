@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

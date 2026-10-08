@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // processTask 是任务执行阶段唯一的类型分派入口。

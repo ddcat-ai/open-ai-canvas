@@ -143,7 +143,7 @@ export function getAntThemeConfig(dark: boolean, skinID: unknown = "classic"): T
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-        cssVar: { key: `infinite-canvas-${normalizeSkinID(skinID)}-${dark ? "dark" : "light"}` },
+        cssVar: { key: `yingce-${normalizeSkinID(skinID)}-${dark ? "dark" : "light"}` },
         token: {
             colorPrimary: color.solidBg,
             colorPrimaryHover: color.solidHoverBg,

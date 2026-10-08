@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/protocol"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
+	"yingce/backend/internal/repository"
 )
 
 type ChannelModelRequest struct {

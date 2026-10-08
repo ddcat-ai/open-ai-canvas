@@ -1,8 +1,8 @@
 package payment
 
 import (
-	"infinite-canvas/backend/internal/protocol"
-	paymentsdk "infinite-canvas/backend/payment-sdk"
+	"yingce/backend/internal/protocol"
+	paymentsdk "yingce/backend/payment-sdk"
 )
 
 type Config = paymentsdk.Config

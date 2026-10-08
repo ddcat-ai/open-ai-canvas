@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"time"
 
-	"infinite-canvas/backend/internal/outbound"
+	"yingce/backend/internal/outbound"
 )
 
 // Outbound 符号从 internal/outbound 再导出，保持 service/handler 调用面稳定。

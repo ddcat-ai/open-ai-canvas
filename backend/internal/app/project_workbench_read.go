@@ -1,7 +1,7 @@
 package app
 
 import (
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"golang.org/x/sync/errgroup"
 )

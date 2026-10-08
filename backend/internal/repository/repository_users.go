@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (r *Repository) UserCount() (int64, error) {
@@ -25,6 +25,12 @@ func (r *Repository) User(id string) (*model.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// UpdateUserLoginTime preserves concurrent changes to status and profile fields.
+func (r *Repository) UpdateUserLoginTime(userID string, now time.Time) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).
+		Updates(map[string]any{"last_login_at": now, "updated_at": now}).Error
 }
 
 func (r *Repository) UserByAccount(account string) (*model.User, error) {
@@ -134,6 +140,12 @@ func (r *Repository) DeleteEmailVerificationCode(id string) error {
 
 func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificationCodeID string, usedAt time.Time) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockRegistrationEmail(tx, user.Email); err != nil {
+			return err
+		}
+		if err := New(tx).CheckEmailAvailable(user.Email, ""); err != nil {
+			return err
+		}
 		result := tx.Model(&model.EmailVerificationCode{}).Where("id = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, usedAt).Update("used_at", usedAt)
 		if result.Error != nil {
 			return result.Error

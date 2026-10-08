@@ -12,6 +12,7 @@ import { mediaConversionSourceFingerprint } from "@/lib/media-conversion/contrac
 import { audioFileExtension } from "@/lib/character-voice-formats";
 import { resolveCanvasDrawingReference } from "@/lib/canvas/canvas-drawing-reference";
 import { compileCharacterReferencePrompt, normalizeCharacterImageMentions } from "@/lib/canvas/canvas-character-reference";
+import { createCanvasReferenceLabeler } from "@/lib/canvas/canvas-reference-slots";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
@@ -42,6 +43,8 @@ export type NodeGenerationContext = {
     referenceImages: ReferenceImage[];
     referenceVideos: ReferenceVideo[];
     referenceAudios: ReferenceAudio[];
+    /** 图片和角色卡主图在最终 image URL 列表中的槽位顺序。 */
+    referenceImageSlots: Array<{ nodeId: string; kind: "image" | "character"; imageId?: string }>;
     characterReferences: CharacterGenerationReference[];
     resolvedCharacterVersions: Array<{ assetId: string; versionId: string }>;
     resolvedCharacterVoices: ResolvedCharacterVoice[];
@@ -97,7 +100,6 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
             prompt,
             // 工作流节点由字段映射接收全部连线媒体；视频节点的历史首尾帧字段不能再额外追加参考图。
             autoIncludeWorkflowMedia || (promptOnly && hasConnectedMedia) ? [] : [sourceNode?.metadata?.videoStartFrameNodeId, sourceNode?.metadata?.videoEndFrameNodeId].filter((id): id is string => Boolean(id)),
-            promptOnly,
             autoIncludeWorkflowMedia || (promptOnly && hasConnectedMedia),
             connectedInputs,
         );
@@ -114,12 +116,14 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const referenceImages = connectedInputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
     const referenceVideos = connectedInputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
     const referenceAudios = connectedInputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
+    const referenceImageSlots = generationImageSlots(connectedInputs);
 
     return {
         prompt: promptOnly ? prompt : upstreamText ? `${basePrompt}\n\n${upstreamText}` : basePrompt,
         referenceImages,
         referenceVideos,
         referenceAudios,
+        referenceImageSlots,
         characterReferences,
         resolvedCharacterVersions: [],
         resolvedCharacterVoices: [],
@@ -186,7 +190,6 @@ function buildComposerGenerationContext(
     inputs: NodeGenerationInput[],
     prompt: string,
     videoFrameNodeIds: string[] = [],
-    promptOnly = false,
     autoIncludeWorkflowMedia = false,
     workflowMediaInputs: NodeGenerationInput[] = [],
 ): NodeGenerationContext {
@@ -194,102 +197,50 @@ function buildComposerGenerationContext(
     const slotInputByToken = new Map(generationSlotEntries(inputs).map(({ token, input }) => [token, input]));
     const assetInputById = new Map(inputs.filter((input) => input.nodeId.startsWith("asset:")).map((input) => [input.nodeId.slice("asset:".length), input]));
     const nodeInputById = new Map(inputs.filter((input) => !input.nodeId.startsWith("asset:")).map((input) => [input.nodeId, input]));
-    const selectedInputs: NodeGenerationInput[] = [];
-    const labelByNodeId = new Map<string, string>();
-    const textBlocks: string[] = [];
-    const counts = { image: 0, drawing: 0, video: 0, audio: 0, text: 0, character: 0 };
-    let hasToken = false;
+    const mentions = [...normalizedPrompt.matchAll(GENERATION_MENTION_PATTERN)].map((match) => ({
+        match,
+        input: resolveGenerationMention(normalizedPrompt, match, slotInputByToken, nodeInputById, assetInputById),
+    }));
+    const selectedIds = new Set(mentions.flatMap(({ input }) => input ? [input.nodeId] : []));
+    if (autoIncludeWorkflowMedia) workflowMediaInputs.forEach((input) => {
+        if (input.type !== "text") selectedIds.add(input.nodeId);
+    });
+    videoFrameNodeIds.forEach((id) => {
+        if (nodeInputById.get(id)?.image) selectedIds.add(id);
+    });
+    // 始终先按槽位选定资源，再一次性编译提示词；提及先后不能改变 URL 顺序。
+    const selected = inputs.filter((input) => selectedIds.has(input.nodeId));
+    const selectedInputs = selected.filter((input) => input.type !== "text");
+    const nextLabel = createCanvasReferenceLabeler();
+    const providerLabels = new Map(selected.map((input) => [input.nodeId, nextLabel(input.type === "character" ? "image" : input.type)]));
+    const textBlocks = selected.filter((input) => input.type === "text").map((input) => `【${providerLabels.get(input.nodeId)}】\n${input.text || ""}`);
     let lastIndex = 0;
     let nextPrompt = "";
-
-    if (autoIncludeWorkflowMedia) {
-        // 先固定“图片1/视频1”等提示词标签的顺序，和工作流槽位保持一致；
-        // 用户先 @ 第二张图时，提示词也不会把它误标成第一张。
-        workflowMediaInputs.forEach((input) => {
-            if (input.type === "text" || labelByNodeId.has(input.nodeId)) return;
-            const labelKind = input.sourceKind === "drawing" ? "drawing" : input.type;
-            labelByNodeId.set(input.nodeId, generationLabel(labelKind, counts[labelKind]++));
-        });
+    for (const { match, input } of mentions) {
+        const index = match.index!;
+        nextPrompt += normalizedPrompt.slice(lastIndex, index);
+        const label = input ? providerLabels.get(input.nodeId) : undefined;
+        nextPrompt += label ? input?.type === "text" ? `【${label}】` : `@${label}` : match[0];
+        lastIndex = index + match[0].length;
     }
-
-    for (const match of normalizedPrompt.matchAll(GENERATION_MENTION_PATTERN)) {
-        if (match.index === undefined) continue;
-        nextPrompt += normalizedPrompt.slice(lastIndex, match.index);
-        const input = resolveGenerationMention(normalizedPrompt, match, slotInputByToken, nodeInputById, assetInputById);
-        if (input) {
-            hasToken = true;
-            let label = labelByNodeId.get(input.nodeId);
-            if (!label) {
-                const labelKind = input.sourceKind === "drawing" ? "drawing" : input.type;
-                label = generationLabel(labelKind, counts[labelKind]++);
-                labelByNodeId.set(input.nodeId, label);
-                if (input.type === "text") textBlocks.push(`【${label}】\n${input.text || ""}`);
-                else selectedInputs.push(input);
-            }
-            nextPrompt += input.type === "text" ? `【${label}】` : `@${label}`;
-        } else nextPrompt += match[0];
-        lastIndex = match.index + match[0].length;
-    }
-
     nextPrompt += normalizedPrompt.slice(lastIndex);
-    // 显式 @文本 引用是用户写进输入框的内容，必须内联真实文本；promptOnly 只拦自动上游文本。
     if (textBlocks.length) nextPrompt = `${nextPrompt.trim()}\n\n${textBlocks.join("\n\n")}`;
-    if (autoIncludeWorkflowMedia) {
-        // RunningHub/ComfyUI 工作流按保存的字段槽位接收图片、视频和音频；
-        // 配置节点不能因为提示词里没有逐个 @ 就丢失已连接媒体。
-        // 先按连线顺序放入媒体，避免用户在提示词里 @图片2 后改变工作流槽位的索引；
-        // 素材库中的显式 @ 引用仍保留在后面，不会被自动模式吞掉。
-        const explicitInputs = selectedInputs.splice(0);
-        const selectedNodeIds = new Set<string>();
-        workflowMediaInputs.forEach((input) => {
-            if (input.type === "text" || selectedNodeIds.has(input.nodeId)) return;
-            selectedInputs.push(input);
-            selectedNodeIds.add(input.nodeId);
-        });
-        explicitInputs.forEach((input) => {
-            if (selectedNodeIds.has(input.nodeId)) return;
-            selectedInputs.push(input);
-            selectedNodeIds.add(input.nodeId);
-        });
-    }
-    // 首尾帧是结构化生成参数，不受提示词中的 @ 引用筛选影响。
-    const selectedNodeIds = new Set(selectedInputs.map((input) => input.nodeId));
-    videoFrameNodeIds.forEach((nodeId) => {
-        const input = nodeInputById.get(nodeId);
-        if (!input?.image || selectedNodeIds.has(nodeId)) return;
-        selectedInputs.push(input);
-        selectedNodeIds.add(nodeId);
-    });
     const referenceImages = selectedInputs.map((input) => input.image).filter((image): image is ReferenceImage => Boolean(image));
     const referenceVideos = selectedInputs.map((input) => input.video).filter((video): video is ReferenceVideo => Boolean(video));
     const referenceAudios = selectedInputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
     const characterReferences = selectedInputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
-
-    if (!hasToken && !textBlocks.length && !selectedInputs.length) {
-        return {
-            prompt,
-            referenceImages: [],
-            referenceVideos: [],
-            referenceAudios: [],
-            characterReferences: [],
-            resolvedCharacterVersions: [],
-            resolvedCharacterVoices: [],
-            textCount: 0,
-            imageCount: 0,
-            videoCount: 0,
-            audioCount: 0,
-        };
-    }
+    const referenceImageSlots = generationImageSlots(selectedInputs);
 
     return {
         prompt: nextPrompt,
         referenceImages,
         referenceVideos,
         referenceAudios,
+        referenceImageSlots,
         characterReferences,
         resolvedCharacterVersions: [],
         resolvedCharacterVoices: [],
-        textCount: counts.text,
+        textCount: textBlocks.length,
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
         audioCount: referenceAudios.length,
@@ -310,6 +261,7 @@ export function normalizeGenerationNodeMentionTokens(prompt: string, inputs: Nod
         const label = labelByNodeId.get(nodeId);
         return label ? `@${label}` : token;
     });
+    // 仅保留无普通图片时的既有别名；混合引用不能猜测旧的独立编号。
     return normalizeCharacterImageMentions(normalized, slots.filter(({ input }) => input.type === "image").length, slots.filter(({ input }) => input.type === "character").map(({ label }) => label));
 }
 
@@ -342,13 +294,18 @@ function inspectGenerationMentions(prompt: string, inputs: NodeGenerationInput[]
 }
 
 function generationSlotEntries(inputs: NodeGenerationInput[]) {
-    const counts = { image: 0, drawing: 0, video: 0, audio: 0, text: 0, character: 0 };
+    const nextLabel = createCanvasReferenceLabeler();
     return inputs.flatMap((input) => {
         if (input.nodeId.startsWith("asset:")) return [];
-        const kind = input.sourceKind === "drawing" ? "drawing" : input.type;
-        const label = generationLabel(kind, counts[kind]++);
+        const label = nextLabel(input.sourceKind === "drawing" ? "drawing" : input.type);
         return [{ input, label, token: `@${label}` }];
     });
+}
+
+function generationImageSlots(inputs: NodeGenerationInput[]): NodeGenerationContext["referenceImageSlots"] {
+    return inputs.flatMap((input): NodeGenerationContext["referenceImageSlots"] => input.character
+        ? [{ nodeId: input.nodeId, kind: "character" }]
+        : input.image ? [{ nodeId: input.nodeId, kind: "image", imageId: input.image.id }] : []);
 }
 
 function resolveGenerationMention(
@@ -369,7 +326,8 @@ function resolveGenerationMention(
 
 function hasMentionBoundary(value: string, index: number) {
     const char = value[index];
-    return !char || /\s|[,.!?;:，。！？；：、)\]}】）]/.test(char);
+    // 与编辑器一致：编号可紧邻中文或下一个引用，不能截断更长的数字。
+    return !char || !/[0-9]/.test(char);
 }
 
 export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {
@@ -500,27 +458,71 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
     const { getResource, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
     const details = await Promise.all(context.characterReferences.map((reference) => getCharacter(reference.assetId)));
     const remainingBudget = Math.max(0, (referenceLimits?.maxImages ?? 9) - referenceImages.length);
-    const selected = details.flatMap((detail) => {
+    const selectedEntries = details.flatMap((detail, index) => {
+        const reference = context.characterReferences[index];
+        if (reference.requestedVersionId && reference.requestedVersionId !== detail.character.versionId) throw new Error(`角色「${detail.asset.title}」的固定版本已变化，请重新选择角色后生成`);
         const representation = preferredCharacterRepresentation(detail.character.representations);
-        return representation ? [representation] : [];
+        if (!representation && mode !== "audio" && mode !== "text") throw new Error(`角色「${detail.asset.title}」缺少可用的主参考图，请补充形象后再生成`);
+        return representation ? [{ nodeId: reference.nodeId, representation }] : [];
     });
-    if (selected.length > remainingBudget) throw new Error(`当前模型参考图容量不足：角色至少需要 ${selected.length} 张主参考图`);
-    const usedResourceIds = new Set(selected.map((item) => item.resourceId));
-    const supplements = details.flatMap((detail) => detail.character.representations.filter((item) => {
-        if (!["front", "side", "back", "turnaround_sheet"].includes(item.role) || usedResourceIds.has(item.resourceId)) return false;
-        usedResourceIds.add(item.resourceId);
-        return true;
-    }));
-    const characterImages = [...selected, ...supplements].slice(0, Math.max(0, remainingBudget)).map((representation, index) => ({
+    if (selectedEntries.length > remainingBudget) throw new Error(`当前模型参考图容量不足：角色至少需要 ${selectedEntries.length} 张主参考图`);
+    const usedResourceIds = new Set(selectedEntries.map((item) => item.representation.resourceId));
+    const supplementEntries = details.flatMap((detail, index) => {
+        const reference = context.characterReferences[index];
+        if (!reference) return [];
+        return detail.character.representations.flatMap((representation) => {
+            if (!["front", "side", "back", "turnaround_sheet"].includes(representation.role) || !representation.resourceId || usedResourceIds.has(representation.resourceId)) return [];
+            usedResourceIds.add(representation.resourceId);
+            return [{ nodeId: reference.nodeId, representation }];
+        });
+    });
+    const imageEntries = [...selectedEntries, ...supplementEntries].slice(0, Math.max(0, remainingBudget));
+    const characterImages = imageEntries.map((entry, index) => ({
         id: `character-reference-${index + 1}`,
         name: `character-reference-${index + 1}.png`,
         type: "image/png",
         dataUrl: "",
-        storageKey: resourceStorageKey(representation.resourceId),
+        storageKey: resourceStorageKey(entry.representation.resourceId),
     } satisfies ReferenceImage));
     const hydratedCharacterImages = await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })));
-    referenceImages = [...referenceImages, ...hydratedCharacterImages];
-    const characterBlocks = details.map((detail) => compileCharacterReferencePrompt(detail.asset.title, detail.character.definition));
+    const primaryByNodeId = new Map<string, ReferenceImage>();
+    selectedEntries.forEach((entry, index) => {
+        const image = hydratedCharacterImages[index];
+        if (image) primaryByNodeId.set(entry.nodeId, image);
+    });
+    const regularById = new Map(referenceImages.map((image) => [image.id, image]));
+    const orderedIndexByNodeId = new Map<string, number>();
+    const providerMentionBySlot = new Map<string, string>();
+    const orderedImages: ReferenceImage[] = [];
+    context.referenceImageSlots.forEach((slot, index) => {
+        const image = slot.kind === "character" ? primaryByNodeId.get(slot.nodeId) : regularById.get(slot.imageId || slot.nodeId);
+        if (!image) {
+            const characterIndex = context.characterReferences.findIndex((reference) => reference.nodeId === slot.nodeId);
+            const detail = details[characterIndex];
+            if (slot.kind !== "character" || !detail || (mode !== "text" && mode !== "audio")) throw new Error("参考图片槽位无法解析，请重新选择引用后生成");
+            providerMentionBySlot.set(`@图片${index + 1}`, detail.asset.title.replaceAll("@", "＠"));
+            return;
+        }
+        orderedImages.push(image);
+        orderedIndexByNodeId.set(slot.nodeId, orderedImages.length);
+        providerMentionBySlot.set(`@图片${index + 1}`, `@图片${orderedImages.length}`);
+    });
+    const compiledPrompt = context.prompt.replace(/@图片[1-9]\d*/g, (token, offset: number) => hasMentionBoundary(context.prompt, offset + token.length) ? providerMentionBySlot.get(token) || token : token);
+    const supplementLabelsByNodeId = new Map<string, string[]>();
+    supplementEntries.slice(0, Math.max(0, remainingBudget - selectedEntries.length)).forEach((entry, index) => {
+        const label = imageReferenceLabel(orderedImages.length + index);
+        supplementLabelsByNodeId.set(entry.nodeId, [...(supplementLabelsByNodeId.get(entry.nodeId) || []), `@${label}`]);
+    });
+    const supplementImages = hydratedCharacterImages.slice(selectedEntries.length);
+    referenceImages = [...orderedImages, ...supplementImages];
+    const characterBlocks = details.map((detail, index) => {
+        const nodeId = context.characterReferences[index]?.nodeId;
+        const primaryLabel = nodeId ? orderedIndexByNodeId.get(nodeId) : undefined;
+        const supplementLabels = nodeId ? supplementLabelsByNodeId.get(nodeId) || [] : [];
+        const referenceLine = primaryLabel ? `参考图片：@${imageReferenceLabel(primaryLabel - 1)}${supplementLabels.length ? `；补充视角：${supplementLabels.join("、")}` : ""}` : "";
+        const heading = includeCharacterPrompt ? compileCharacterReferencePrompt(detail.asset.title, detail.character.definition) : `【角色卡：${detail.asset.title}】`;
+        return [heading, referenceLine].filter(Boolean).join("\n");
+    });
     const resolvedCharacterVersions = details.map((detail) => ({ assetId: detail.asset.id, versionId: detail.character.versionId }));
     const resolvedCharacterVoices = details.flatMap((detail): ResolvedCharacterVoice[] => {
         const voice = detail.character.voice;
@@ -567,10 +569,17 @@ export async function hydrateNodeGenerationContext(context: NodeGenerationContex
         } satisfies ReferenceAudio;
     }));
     const referenceAudios = [...context.referenceAudios, ...characterVoiceAudios];
-    const voiceBlocks = mode === "video" ? resolvedCharacterVoices.map(compileResolvedVoicePrompt) : [];
+    const voiceBlocks = mode === "video" ? resolvedCharacterVoices.flatMap((voice) => {
+        const sampleIndex = voice.sampleResourceId ? referenceAudios.findIndex((audio) => resourceIdFromStorageKey(audio.storageKey) === voice.sampleResourceId) : -1;
+        if (sampleIndex < 0 && !includeCharacterPrompt) return [];
+        return [[
+            includeCharacterPrompt ? compileResolvedVoicePrompt(voice) : `【角色声音：${voice.characterName}】`,
+            sampleIndex >= 0 ? `声音参考：@音频${sampleIndex + 1}` : "",
+        ].filter(Boolean).join("\n")];
+    }) : [];
     return {
         ...context,
-        prompt: includeCharacterPrompt ? [context.prompt.trim(), ...characterBlocks, ...voiceBlocks].filter(Boolean).join("\n\n") : context.prompt,
+        prompt: [compiledPrompt.trim(), ...characterBlocks, ...voiceBlocks].filter(Boolean).join("\n\n"),
         referenceImages,
         referenceAudios,
         resolvedCharacterVersions,
@@ -592,7 +601,7 @@ function readCharacterReference(node: CanvasNodeData): CharacterGenerationRefere
 }
 
 function preferredCharacterRepresentation(representations: Array<{ id: string; resourceId: string; role: string }>) {
-    return ["turnaround_sheet", "primary", "front", "side", "back"].map((role) => representations.find((item) => item.role === role)).find(Boolean);
+    return ["turnaround_sheet", "primary", "front", "side", "back"].map((role) => representations.find((item) => item.role === role && item.resourceId.trim())).find(Boolean);
 }
 
 function compileResolvedVoicePrompt(voice: ResolvedCharacterVoice) {

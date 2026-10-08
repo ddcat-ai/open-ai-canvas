@@ -16,6 +16,9 @@ const canvasAudioPlayerSource = readFileSync(resolve(import.meta.dir, "../src/co
 const canvasMentionSource = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
 const canvasNodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
 const canvasVideoPreviewSource = readFileSync(resolve(import.meta.dir, "../src/services/canvas-video-preview.ts"), "utf8");
+const fileStorageSource = readFileSync(resolve(import.meta.dir, "../src/services/file-storage.ts"), "utf8");
+const canvasGenerationTaskSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/canvas-generation-task-sync.ts"), "utf8");
+const canvasProjectGenerationSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/canvas-project-generation.ts"), "utf8");
 const browserDownloadSource = readFileSync(resolve(import.meta.dir, "../src/services/browser-download.ts"), "utf8");
 const canvasNodeEditorSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-node-editor.ts"), "utf8");
 const assetLibrarySource = moduleGroupSource("pages/assets/index.tsx");
@@ -90,7 +93,20 @@ describe("large canvas media rendering", () => {
         expect(canvasNodeContentSource).toContain("useVideoPlaybackUrl(node, mediaActive)");
         expect(canvasNodeContentSource).toContain("onMediaPlayRequest?.(node.id)");
         expect(canvasNodeContentSource).toMatch(/autoPlay\s+preload="metadata"/);
-        expect(canvasNodeContentSource).toContain("resolveMediaUrl(storageKey, fallback)");
+        expect(canvasNodeContentSource).toContain("resolveVideoMediaUrl(storageKey, fallback)");
+        expect(canvasNodeContentSource).toContain("refreshResource(resourceId)");
+        expect(canvasNodeContentSource).toContain('getResourceAccess(storageKey, "display", "playback", "", { forceRefresh: true })');
+        expect(canvasNodeContentSource).toContain('status === "none" || status === "failed"');
+    });
+
+    test("routes resource-backed video playback through a browser-compatible variant", () => {
+        expect(fileStorageSource).toContain('getResourceAccess(storageKey, "display", variant)');
+        expect(fileStorageSource).toContain('return resolveMediaUrl(storageKey, fallback, "playback");');
+        expect(canvasNodeContentSource).toContain("resolveVideoMediaUrl(node.metadata?.storageKey, fallback)");
+        expect(canvasNodeContentSource).toContain("resolveVideoMediaUrl(storageKey, fallback)");
+        expect(canvasVideoPreviewSource).toContain('resolveVideoMediaUrl(node.metadata?.storageKey, node.metadata?.content || "")');
+        expect(canvasGenerationTaskSource).toContain('resolveVideoMediaUrl(result.storageKey, result.dataUrl || "")');
+        expect(canvasProjectGenerationSource).toContain("node.type === CanvasNodeType.Video ? await resolveVideoMediaUrl");
     });
 
     test("downloads OSS media by browser navigation without fetching it into a Blob", () => {

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 续租必须比"这条任务的执行时限"活得更久：否则父 context 到点时，续租请求会被自己的

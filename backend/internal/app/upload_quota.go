@@ -6,7 +6,8 @@ import (
 	"log"
 	"time"
 
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // 上传额度在写文件或 OSS 前原子预留，避免并发请求同时通过日限额检查。
@@ -18,14 +19,49 @@ func (s *Service) reserveUserUploadQuota(userID string, size int64) (string, err
 	return s.reserveUserStoredFileQuota(userID, size, megabytes(policy.Resource.ResourceUploadMB), megabytes(policy.Resource.DailyUploadMB), gigabytes(policy.Resource.StoredFileGB), fmt.Sprintf("单个上传文件必须小于 %dMB", policy.Resource.ResourceUploadMB))
 }
 
-// reserveChunkedUploadQuota 用于分片上传完成时预留额度：单文件上限对分片会话不适用（每片已独立校验），
-// 仅受“今日上传”与“账号存储总量”约束；singleFileLimit 传 size+1 使单文件上限永不命中。
+// 分片和普通上传使用相同的单文件上限。
 func (s *Service) reserveChunkedUploadQuota(userID string, size int64) (string, error) {
+	return s.reserveUserUploadQuota(userID, size)
+}
+
+func (s *Service) ReserveChunkUploadSession(userID, id string, size int64, expires time.Time, maxSessions int) error {
 	policy, err := s.RuntimePolicy()
 	if err != nil {
-		return "", err
+		return err
 	}
-	return s.reserveUserStoredFileQuota(userID, size, size+1, megabytes(policy.Resource.DailyUploadMB), gigabytes(policy.Resource.StoredFileGB), "")
+	if size <= 0 || size >= megabytes(policy.Resource.ResourceUploadMB) {
+		return BadAuthRequest(fmt.Sprintf("单个上传文件必须小于 %dMB", policy.Resource.ResourceUploadMB))
+	}
+	if !expires.After(time.Now()) || maxSessions <= 0 {
+		return BadAuthRequest("上传会话参数无效")
+	}
+	err = s.repo.ReserveUploadSession(&model.UploadReservation{ID: id, UserID: userID, Size: size, Day: time.Now().UTC().Format("2006-01-02"), ExpiresAt: expires}, megabytes(policy.Resource.DailyUploadMB), gigabytes(policy.Resource.StoredFileGB), maxSessions)
+	return uploadReservationError(err)
+}
+
+func (s *Service) ReleaseChunkUploadSession(userID, id string) error {
+	return s.repo.ReleaseUploadSession(userID, id)
+}
+
+func uploadReservationError(err error) error {
+	if errors.Is(err, repository.ErrUploadSessionLimit) {
+		return NewAppError(429, err.Error())
+	}
+	if errors.Is(err, repository.ErrUploadStorageLimit) || errors.Is(err, repository.ErrDailyUploadLimitExceeded) {
+		return QuotaExceeded(err.Error())
+	}
+	if errors.Is(err, repository.ErrUploadReservationExpired) {
+		return BadAuthRequest(err.Error())
+	}
+	return err
+}
+
+func (s *Service) saveResourceWithinStorageLimit(resource *model.Resource, reservationID string) error {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return err
+	}
+	return uploadReservationError(s.repo.SaveResourceWithinStorageLimit(resource, gigabytes(policy.Resource.StoredFileGB), megabytes(policy.Resource.DailyUploadMB), reservationID))
 }
 
 func (s *Service) reserveGeneratedResourceQuota(userID string, size int64) (string, error) {

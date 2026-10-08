@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) error {

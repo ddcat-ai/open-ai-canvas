@@ -3,165 +3,114 @@ import { normalizeVideoDuration, VIDEO_DURATION_OPTIONS } from "@/lib/video-gene
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-export const SEEDANCE_REFERENCE_LIMITS = {
-    images: 9,
-    videos: 3,
-    audios: 3,
-    imageMaxBytes: 30 * 1024 * 1024,
-    videoMaxBytes: 50 * 1024 * 1024,
-    audioMaxBytes: 15 * 1024 * 1024,
-};
-
+// Existing channel contract values; these are not a claim about every provider's current limits.
+export const SEEDANCE_REFERENCE_LIMITS = { images: 9, videos: 3, audios: 3, imageMaxBytes: 30 * 1048576, videoMaxBytes: 50 * 1048576, audioMaxBytes: 15 * 1048576 };
 export const seedanceResolutionOptions = [
-    { value: "480p", label: "480P" },
-    { value: "720p", label: "720P" },
-    { value: "1080p", label: "1080P" },
+    { label: "480P", value: "480p" },
+    { label: "720P", value: "720p" },
+    { label: "1080P", value: "1080p" },
 ] as const;
-
 export const seedanceRatioOptions = [
-    { value: "16:9", label: "横屏" },
-    { value: "9:16", label: "竖屏" },
-    { value: "1:1", label: "方形" },
-    { value: "4:3", label: "标准横屏" },
-    { value: "3:4", label: "标准竖屏" },
-    { value: "21:9", label: "宽银幕" },
-    { value: "adaptive", label: "自适应" },
+    { label: "横屏", value: "16:9" },
+    { label: "竖屏", value: "9:16" },
+    { label: "方形", value: "1:1" },
+    { label: "标准横屏", value: "4:3" },
+    { label: "标准竖屏", value: "3:4" },
+    { label: "宽银幕", value: "21:9" },
+    { label: "自适应", value: "adaptive" },
 ] as const;
-
 export const seedanceDurationOptions = VIDEO_DURATION_OPTIONS;
 
-const seedancePixels = {
-    "480p": {
-        "16:9": "864x496",
-        "4:3": "752x560",
-        "1:1": "640x640",
-        "3:4": "560x752",
-        "9:16": "496x864",
-        "21:9": "992x432",
-    },
-    "720p": {
-        "16:9": "1280x720",
-        "4:3": "1112x834",
-        "1:1": "960x960",
-        "3:4": "834x1112",
-        "9:16": "720x1280",
-        "21:9": "1470x630",
-    },
-    "1080p": {
-        "16:9": "1920x1080",
-        "4:3": "1664x1248",
-        "1:1": "1440x1440",
-        "3:4": "1248x1664",
-        "9:16": "1080x1920",
-        "21:9": "2206x946",
-    },
-} as const;
+const rasterRows: Record<string, readonly string[]> = {
+    "16:9": ["864x496", "1280x720", "1920x1080"],
+    "4:3": ["752x560", "1112x834", "1664x1248"],
+    "1:1": ["640x640", "960x960", "1440x1440"],
+    "3:4": ["560x752", "834x1112", "1248x1664"],
+    "9:16": ["496x864", "720x1280", "1080x1920"],
+    "21:9": ["992x432", "1470x630", "2206x946"],
+};
+const ratios = Object.keys(rasterRows).map((label) => {
+    const [w, h] = label.split(":").map(Number);
+    return { label, ratio: w / h };
+});
 
-export function isSeedanceVideoConfig(config: AiConfig | Pick<AiConfig, "model" | "videoModel" | "baseUrl">) {
-    const requestConfig = "channels" in config ? resolveModelRequestConfig(config, config.model || config.videoModel) : config;
-    // Agent Plan 图片与视频共用 /api/plan/v3；按协议排除图片，避免 Seedream 误判为 Seedance。
-    if ("interfaceType" in requestConfig) {
-        const interfaceType = requestConfig.interfaceType;
-        if (interfaceType === "volcengine-ark-image" || interfaceType === "volcengine-ark-agent-plan-image") return false;
+export function isSeedanceVideoModel(model: string): boolean {
+    return /seedance/i.test(model);
+}
+export function isSeedanceFastModel(model: string): boolean {
+    return isSeedanceVideoModel(model) && /fast/i.test(model);
+}
+export function isArkPlanBaseUrl(baseUrl: string): boolean {
+    return /\/api\/plan\/v3/i.test(baseUrl);
+}
+
+export function isSeedanceVideoConfig(config: AiConfig | Pick<AiConfig, "model" | "videoModel" | "baseUrl">): boolean {
+    const request = "channels" in config ? resolveModelRequestConfig(config, config.model || config.videoModel) : config;
+    if ("interfaceType" in request && ["volcengine-ark-image", "volcengine-ark-agent-plan-image"].includes(String(request.interfaceType))) return false;
+    return isArkPlanBaseUrl(request.baseUrl || "") || isSeedanceVideoModel(modelOptionName(request.model || request.videoModel));
+}
+
+export function normalizeResolutionToken(value: string): string {
+    const token = String(value || "").toLowerCase();
+    const aliases: Record<string, string> = { low: "480p", auto: "720p", high: "720p", medium: "720p", "4k": "2160p", "": "720p" };
+    return aliases[token] || `${token.replace(/p$/, "")}p`;
+}
+export function normalizeSeedanceResolution(value: string, model = ""): string {
+    const requested = normalizeResolutionToken(value);
+    const supported = isSeedanceFastModel(model) ? ["480p", "720p"] : ["480p", "720p", "1080p", "2160p"];
+    return supported.includes(requested) ? requested : "720p";
+}
+export function normalizeSeedanceDuration(value: string): number {
+    return +normalizeVideoDuration(value);
+}
+
+export function normalizeSeedanceRatio(value: string): string {
+    if (Object.hasOwn(rasterRows, value)) return value;
+    const size = /^(\d+)x(\d+)$/.exec(value);
+    if (!size || +size[1] === 0 || +size[2] === 0) return "adaptive";
+    const requested = +size[1] / +size[2];
+    let nearest = ratios[0];
+    let distance = Infinity;
+    for (const entry of ratios) {
+        const next = Math.abs(entry.ratio - requested);
+        if (next < distance) {
+            distance = next;
+            nearest = entry;
+        }
     }
-    return isSeedanceVideoModel(modelOptionName(requestConfig.model || requestConfig.videoModel)) || isArkPlanBaseUrl(requestConfig.baseUrl || "");
+    return nearest.label;
 }
 
-export function isSeedanceVideoModel(model: string) {
-    const value = model.toLowerCase();
-    return value.includes("seedance") || value.includes("doubao-seedance");
+export function seedancePixelLabel(resolution: string, ratio: string): string {
+    const aspect = normalizeSeedanceRatio(ratio);
+    if (aspect === "adaptive") return "自动匹配";
+    const column = ["480p", "720p", "1080p"].indexOf(normalizeSeedanceResolution(resolution));
+    return column < 0 ? "" : rasterRows[aspect]?.[column] || "";
 }
-
-export function isSeedanceFastModel(model: string) {
-    const value = model.toLowerCase();
-    return isSeedanceVideoModel(value) && value.includes("fast");
+export function boolConfig(value: string | undefined, fallback: boolean): boolean {
+    return value === "true" || (value !== "false" && fallback);
 }
-
-export function isArkPlanBaseUrl(baseUrl: string) {
-    return baseUrl.toLowerCase().includes("ark.cn-beijing.volces.com/api/plan/v3") || baseUrl.toLowerCase().includes("/api/plan/v3");
+export function seedanceReferenceLabel(kind: "image" | "video" | "audio", index: number): string {
+    return `${{ image: "图片", video: "视频", audio: "音频" }[kind]}${index + 1}`;
 }
-
-export function normalizeSeedanceResolution(value: string, model = "") {
-    const normalized = normalizeResolutionToken(value);
-    if (isSeedanceFastModel(model) && (normalized === "1080p" || normalized === "2160p")) return "720p";
-    return normalized === "2160p" || seedanceResolutionOptions.some((item) => item.value === normalized) ? normalized : "720p";
-}
-
-export function normalizeResolutionToken(value: string) {
-    if (value === "low") return "480p";
-    if (value === "auto" || value === "high" || value === "medium") return "720p";
-    if (value.toLowerCase() === "4k") return "2160p";
-    const resolution = String(value || "").replace(/p$/i, "") || "720";
-    return `${resolution}p`;
-}
-
-export function normalizeSeedanceDuration(value: string) {
-    return Number(normalizeVideoDuration(value));
-}
-
-export function normalizeSeedanceRatio(value: string) {
-    if (!value || value === "auto" || value === "adaptive") return "adaptive";
-    if (seedanceRatioOptions.some((item) => item.value === value)) return value;
-    const match = value.match(/^(\d+)x(\d+)$/);
-    if (!match) return "adaptive";
-    const width = Number(match[1]);
-    const height = Number(match[2]);
-    if (!width || !height) return "adaptive";
-    const ratio = width / height;
-    const options = [
-        ["16:9", 16 / 9],
-        ["4:3", 4 / 3],
-        ["1:1", 1],
-        ["3:4", 3 / 4],
-        ["9:16", 9 / 16],
-        ["21:9", 21 / 9],
-    ] as const;
-    return options.reduce((best, item) => (Math.abs(item[1] - ratio) < Math.abs(best[1] - ratio) ? item : best), options[0])[0];
-}
-
-export function seedancePixelLabel(resolution: string, ratio: string) {
-    const normalizedResolution = normalizeSeedanceResolution(resolution) as keyof typeof seedancePixels;
-    const normalizedRatio = normalizeSeedanceRatio(ratio) as keyof (typeof seedancePixels)[typeof normalizedResolution] | "adaptive";
-    if (normalizedRatio === "adaptive") return "自动匹配";
-    return seedancePixels[normalizedResolution][normalizedRatio] || "";
-}
-
-export function boolConfig(value: string | undefined, fallback: boolean) {
-    if (value === "true") return true;
-    if (value === "false") return false;
-    return fallback;
-}
-
-export function seedanceReferenceLabel(kind: "image" | "video" | "audio", index: number) {
-    if (kind === "image") return `图片${index + 1}`;
-    if (kind === "video") return `视频${index + 1}`;
-    return `音频${index + 1}`;
-}
-
-export function buildSeedancePromptText(prompt: string, _images: ReferenceImage[], _videos: ReferenceVideo[], _audios: ReferenceAudio[]) {
+export function buildSeedancePromptText(prompt: string, _images: ReferenceImage[], _videos: ReferenceVideo[], _audios: ReferenceAudio[]): string {
     return prompt.trim();
 }
 
-export function seedanceVideoReferenceError(videos: ReferenceVideo[]) {
-    let totalDurationMs = 0;
-    for (let index = 0; index < videos.length; index += 1) {
-        const video = videos[index];
-        const label = seedanceReferenceLabel("video", index);
-        if (video.bytes && video.bytes > SEEDANCE_REFERENCE_LIMITS.videoMaxBytes) return `${label} 超过 50MB，请压缩后再上传`;
-        if (video.durationMs) {
-            if (video.durationMs < 2000 || video.durationMs > 15000) return `${label} 时长需要在 2-15 秒之间`;
-            totalDurationMs += video.durationMs;
-        }
-        if (video.width && video.height) {
-            if (video.width < 300 || video.width > 6000 || video.height < 300 || video.height > 6000) return `${label} 宽高需要在 300-6000px 之间`;
-            const ratio = video.width / video.height;
-            if (ratio < 0.4 || ratio > 2.5) return `${label} 宽高比需要在 0.4-2.5 之间`;
-            const pixels = video.width * video.height;
-            if (pixels < 640 * 640 || pixels > 2206 * 946) return `${label} 像素总量不符合 Seedance 要求，请转成 480p/720p/1080p 后再上传`;
-        }
+type VideoRule = { valid: (video: ReferenceVideo) => boolean; message: string };
+const videoRules: VideoRule[] = [
+    { valid: (v) => !v.bytes || v.bytes <= SEEDANCE_REFERENCE_LIMITS.videoMaxBytes, message: "超过 50MB，请压缩后再上传" },
+    { valid: (v) => !v.durationMs || (v.durationMs >= 2000 && v.durationMs <= 15000), message: "时长需要在 2-15 秒之间" },
+    { valid: (v) => !v.width || !v.height || [v.width, v.height].every((edge) => edge >= 300 && edge <= 6000), message: "宽高需要在 300-6000px 之间" },
+    { valid: (v) => !v.width || !v.height || (v.width / v.height >= 0.4 && v.width / v.height <= 2.5), message: "宽高比需要在 0.4-2.5 之间" },
+    { valid: (v) => !v.width || !v.height || (v.width * v.height >= 409600 && v.width * v.height <= 2086876), message: "像素总量不符合 Seedance 要求，请转成 480p/720p/1080p 后再上传" },
+];
+export function seedanceVideoReferenceError(videos: ReferenceVideo[]): string {
+    for (const [index, video] of videos.entries()) {
+        const failed = videoRules.find((rule) => !rule.valid(video));
+        if (failed) return `${seedanceReferenceLabel("video", index)} ${failed.message}`;
     }
-    if (totalDurationMs > 15000) return "Seedance 参考视频总时长不能超过 15 秒";
-    return "";
+    const duration = videos.reduce((total, video) => total + (video.durationMs || 0), 0);
+    return duration > 15000 ? "Seedance 参考视频总时长不能超过 15 秒" : "";
 }
-
 export const seedanceVideoReferenceHint = "参考视频需为 mp4/mov，H.264/H.265，FPS 24-60；含真人人脸素材请使用火山授权 asset:// 素材。";

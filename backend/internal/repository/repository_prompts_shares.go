@@ -4,7 +4,7 @@ package repository
 
 import (
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func (r *Repository) CanvasShareForProject(userID string, projectID string) (*model.CanvasShare, error) {

@@ -13,10 +13,11 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type Position } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
-import { getNodeDefinition, getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
+import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import type { NodeResizeCorner } from "@/lib/canvas/node-resize-geometry";
+import { useCanvasNodeResize } from "./use-canvas-node-resize";
 import { CanvasNodeContent, CanvasNodeImageInfo, CanvasNodeProducedModel } from "./canvas-node-content";
 
-type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 type CanvasNodeProps = {
@@ -62,7 +63,7 @@ type CanvasNodeProps = {
     onViewImage?: (node: CanvasNodeData) => void;
     onReplaceMedia?: (node: CanvasNodeData) => void;
     onOpenTextEditor?: (node: CanvasNodeData) => void;
-    onOpenDirector?: (node: CanvasNodeData) => void;
+    onOpenPrevis?: (node: CanvasNodeData) => void;
     onOpenDrawing?: (node: CanvasNodeData) => void;
     onMediaPlayRequest?: (nodeId: string) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
@@ -110,7 +111,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onOpenVersions,
     onViewImage,
     onOpenTextEditor,
-    onOpenDirector,
+    onOpenPrevis,
     onOpenDrawing,
     onMediaPlayRequest,
     onContextMenu,
@@ -140,18 +141,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const resizeRef = useRef({
-        isResizing: false,
-        corner: "bottom-right" as ResizeCorner,
-        startX: 0,
-        startY: 0,
-        startLeft: 0,
-        startTop: 0,
-        startWidth: 0,
-        startHeight: 0,
-        keepRatio: false,
-        ratio: 1,
-    });
+    const handleResizePointerDown = useCanvasNodeResize(data, scale, scriptMinHeight, onResize, readOnly);
 
     useEffect(() => {
         const textarea = textareaRef.current;
@@ -187,81 +177,6 @@ export const CanvasNode = React.memo(function CanvasNode({
         window.addEventListener("pointerdown", handleOutsidePointerDown, true);
         return () => window.removeEventListener("pointerdown", handleOutsidePointerDown, true);
     }, [isEditingContent]);
-
-    const handleResizeMove = useCallback(
-        (event: MouseEvent) => {
-            if (!resizeRef.current.isResizing) return;
-
-            const dx = (event.clientX - resizeRef.current.startX) / scale;
-            const dy = (event.clientY - resizeRef.current.startY) / scale;
-            const minSize = getNodeMinSize(data.type);
-            const minWidth = minSize.width;
-            // 分镜脚本的高度由表格内容动态撑开，覆盖注册表里的静态下限。
-            const minHeight = scriptMinHeight || minSize.height;
-            const startRight = resizeRef.current.startLeft + resizeRef.current.startWidth;
-            const startBottom = resizeRef.current.startTop + resizeRef.current.startHeight;
-            const fromLeft = resizeRef.current.corner.includes("left");
-            const fromTop = resizeRef.current.corner.includes("top");
-            const rawWidth = Math.max(minWidth, resizeRef.current.startWidth + (fromLeft ? -dx : dx));
-            const rawHeight = Math.max(minHeight, resizeRef.current.startHeight + (fromTop ? -dy : dy));
-            let width = rawWidth;
-            let height = rawHeight;
-            if (resizeRef.current.keepRatio) {
-                const ratio = resizeRef.current.ratio;
-                if (Math.abs(dx) >= Math.abs(dy)) {
-                    height = width / ratio;
-                } else {
-                    width = height * ratio;
-                }
-                if (height < minHeight) {
-                    height = minHeight;
-                    width = height * ratio;
-                }
-                if (width < minWidth) {
-                    width = minWidth;
-                    height = width / ratio;
-                }
-            }
-
-            onResize(data.id, width, height, {
-                x: fromLeft ? startRight - width : resizeRef.current.startLeft,
-                y: fromTop ? startBottom - height : resizeRef.current.startTop,
-            });
-        },
-        [data.id, data.type, onResize, scale, scriptMinHeight],
-    );
-
-    const handleResizeUp = useCallback(() => {
-        resizeRef.current.isResizing = false;
-        window.removeEventListener("mousemove", handleResizeMove);
-        window.removeEventListener("mouseup", handleResizeUp);
-    }, [handleResizeMove]);
-
-    const handleResizeMouseDown = (event: React.MouseEvent, corner: ResizeCorner) => {
-        event.stopPropagation();
-        event.preventDefault();
-        resizeRef.current = {
-            isResizing: true,
-            corner,
-            startX: event.clientX,
-            startY: event.clientY,
-            startLeft: data.position.x,
-            startTop: data.position.y,
-            startWidth: data.width,
-            startHeight: data.height,
-            keepRatio: shouldKeepAspectRatio(data),
-            ratio: (data.metadata?.naturalWidth || data.width) / (data.metadata?.naturalHeight || data.height || 1),
-        };
-        window.addEventListener("mousemove", handleResizeMove);
-        window.addEventListener("mouseup", handleResizeUp);
-    };
-
-    useEffect(() => {
-        return () => {
-            window.removeEventListener("mousemove", handleResizeMove);
-            window.removeEventListener("mouseup", handleResizeUp);
-        };
-    }, [handleResizeMove, handleResizeUp]);
 
     const commitTitle = () => {
         const next = titleDraft.trim();
@@ -338,9 +253,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onViewImage?.(data);
                         return;
                     }
-                    if (data.metadata?.directorSceneId) {
+                    if (data.metadata?.previsSceneId) {
                         event.stopPropagation();
-                        onOpenDirector?.(data);
+                        onOpenPrevis?.(data);
                         return;
                     }
                     if (data.type === CanvasNodeType.Drawing) {
@@ -489,10 +404,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                 ) : null}
 
                 {showChrome && !readOnly && !data.metadata?.locked && (isSelected || hovered) ? <>
-                    <ResizeHandle corner="top-left" onMouseDown={handleResizeMouseDown} />
-                    <ResizeHandle corner="top-right" onMouseDown={handleResizeMouseDown} />
-                    <ResizeHandle corner="bottom-left" onMouseDown={handleResizeMouseDown} />
-                    <ResizeHandle corner="bottom-right" onMouseDown={handleResizeMouseDown} />
+                    <ResizeHandle corner="top-left" onPointerDown={handleResizePointerDown} />
+                    <ResizeHandle corner="top-right" onPointerDown={handleResizePointerDown} />
+                    <ResizeHandle corner="bottom-left" onPointerDown={handleResizePointerDown} />
+                    <ResizeHandle corner="bottom-right" onPointerDown={handleResizePointerDown} />
                 </> : null}
             </div>
 
@@ -551,7 +466,7 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.onViewImage === next.onViewImage &&
         previous.onReplaceMedia === next.onReplaceMedia &&
         previous.onOpenTextEditor === next.onOpenTextEditor &&
-        previous.onOpenDirector === next.onOpenDirector &&
+        previous.onOpenPrevis === next.onOpenPrevis &&
         previous.onOpenDrawing === next.onOpenDrawing &&
         previous.onContextMenu === next.onContextMenu
     );
@@ -631,7 +546,7 @@ function AssetTagBadges({ tags, theme }: { tags: string[]; theme: (typeof canvas
     );
 }
 
-function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDown: (event: React.MouseEvent, corner: ResizeCorner) => void }) {
+function ResizeHandle({ corner, onPointerDown }: { corner: NodeResizeCorner; onPointerDown: (event: React.PointerEvent<HTMLDivElement>, corner: NodeResizeCorner) => void }) {
     const positionClass = {
         "top-left": "-left-[14px] -top-[14px] cursor-nwse-resize",
         "top-right": "-right-[14px] -top-[14px] cursor-nesw-resize",
@@ -639,7 +554,7 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
         "bottom-right": "-bottom-[14px] -right-[14px] cursor-nwse-resize",
     }[corner];
 
-    return <div className={`absolute z-[var(--node-z-handle)] size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
+    return <div data-resize-corner={corner} className={`absolute z-[var(--node-z-handle)] size-7 touch-none ${positionClass}`} onPointerDown={(event) => onPointerDown(event, corner)} onMouseDown={(event) => event.stopPropagation()} />;
 }
 
 const NODE_EXTERNAL_HEADER_MIN_SCALE = 0.35;

@@ -11,11 +11,19 @@ import (
 	"fmt"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgentCall, result any, err error) bool {
+	if state != nil && err == nil {
+		if cloudAgentLessonToolEligible(call.Function.Name) {
+			state.LessonEligibleToolSuccesses++
+		}
+		if call.Function.Name == "remember_lesson" {
+			state.RememberLessonSuccesses++
+		}
+	}
 	payload := map[string]any{"toolName": call.Function.Name, "callId": call.ID, "arguments": call.Function.Arguments}
 	if call.Function.Name == "skill_read_file" {
 		var args struct {
@@ -154,7 +162,7 @@ func cloudAgentCompactSupersededReadResult(state *cloudAgentRuntime, current clo
 	if state == nil || !cloudAgentReadToolCacheable(current.Function.Name) {
 		return
 	}
-	if current.Function.Name != "canvas_get_state" && current.Function.Name != "canvas_read_storyboard" && current.Function.Name != "director_scene_read" {
+	if current.Function.Name != "canvas_get_state" && current.Function.Name != "canvas_read_storyboard" && current.Function.Name != "previs_scene_read" {
 		return
 	}
 	currentKey := cloudAgentReadCacheKey(current)
@@ -234,7 +242,7 @@ func cloudAgentCompactSupersededReadBody(content, toolName string) string {
 			delete(result, "rows")
 			removed = true
 		}
-	case "director_scene_read":
+	case "previs_scene_read":
 		for _, key := range []string{"content", "shots", "scenes"} {
 			if _, exists := result[key]; exists {
 				delete(result, key)
@@ -579,6 +587,18 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					if err == nil {
 						preview = batchPlan.Preview
 					}
+				case "previs_scene_create":
+					previsPlan, err := prepareCloudAgentPrevisSceneCreate(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil {
+						preview = previsPlan.Preview
+					}
+				case "previs_apply_patch":
+					previsPlan, err := prepareCloudAgentPrevisApplyPatch(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil {
+						preview = previsPlan.Preview
+					}
 				case "canvas_arrange_nodes":
 					arrangePlan, err := prepareCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call)
 					mutationErr = err
@@ -682,6 +702,8 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			result, toolErr = applyCloudAgentCharacterCreate(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_edit_batch_table":
 			result, toolErr = applyCloudAgentBatchTableMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case call.Function.Name == "previs_scene_create", call.Function.Name == "previs_apply_patch":
+			result, toolErr = applyCloudAgentPrevisMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_inspect_image":
 			result, toolErr = inspectionResult, inspectionErr
 			if toolErr == nil && inspectionResult != nil {

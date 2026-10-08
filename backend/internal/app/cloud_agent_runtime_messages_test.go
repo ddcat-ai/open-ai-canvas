@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 运行时会话消息（user/assistant/toolResult + 内容块）必须转换成供应商层能接受的规范请求，

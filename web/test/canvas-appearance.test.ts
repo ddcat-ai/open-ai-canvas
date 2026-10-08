@@ -180,14 +180,14 @@ describe("canvas custom appearance", () => {
     });
 
     test("stores defaults locally with the active account scope", () => {
-        window.localStorage.setItem("infinite-canvas:active-user-scope", "account-A");
+        window.localStorage.setItem("yingce:active-user-scope", "account-A");
         const value = { appearance: customCanvasAppearanceFromTheme("dark"), backgroundMode: "lines" as const };
         writeCanvasAppearanceDefault(value);
 
-        expect(values.has("infinite-canvas:canvas-appearance-default:user:account-A")).toBe(true);
+        expect(values.has("yingce:canvas-appearance-default:user:account-A")).toBe(true);
         expect(readCanvasAppearanceDefault()).toEqual(value);
 
-        window.localStorage.setItem("infinite-canvas:active-user-scope", "account-B");
+        window.localStorage.setItem("yingce:active-user-scope", "account-B");
         expect(readCanvasAppearanceDefault()).toBeNull();
     });
 });

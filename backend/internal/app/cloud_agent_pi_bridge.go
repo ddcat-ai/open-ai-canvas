@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // canonicalFromRuntimeMessages 把运行时的会话消息（user/assistant/toolResult，
@@ -329,6 +329,18 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 		return nil, fmt.Errorf("tool call is missing a name")
 	}
 	if err := validateCloudAgentCalls([]cloudAgentCall{call}); err != nil {
+		// 参数校验失败的调用可能已由纠偏提交预写了结构化回执（见
+		// finishCloudAgentPiModelStepWithInvalidCalls）：超限/非法参数进不了执行器，
+		// 但模型仍需要「拆分重试」的结构化指引，而不是这里的一句泛化校验错误——
+		// 那会让 Pi 会话与服务端 canonical 各记一份不同的结果，下一轮模型请求
+		// 按历史长度二选一，看到哪份不稳定。优先回放已保存回执，两边保持一致。
+		if run, loadErr := s.repo.CloudAgent(userID, runID); loadErr == nil {
+			if state, decodeErr := cloudAgentDecode(run); decodeErr == nil {
+				if content, ok := cloudAgentToolMessage(&state, call.ID); ok {
+					return cloudAgentPiToolResult(call, content), nil
+				}
+			}
+		}
 		return nil, err
 	}
 

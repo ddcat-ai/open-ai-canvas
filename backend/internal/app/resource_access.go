@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/model"
 )
 
 type ResourceAccessOptions = assets.AccessOptions

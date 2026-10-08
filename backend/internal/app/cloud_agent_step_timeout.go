@@ -3,8 +3,8 @@ package app
 import (
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // cloudAgentStepTimeoutError 是一次画布 Agent 模型调用被单步墙钟掐断时写进任务错误的标记。

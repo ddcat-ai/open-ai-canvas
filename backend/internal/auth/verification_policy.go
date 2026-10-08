@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 )
 
 const authPolicyKey = "auth_verification_policy"

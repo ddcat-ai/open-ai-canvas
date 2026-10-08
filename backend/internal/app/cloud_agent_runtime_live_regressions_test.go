@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 这组测试逐条复现线上日志里的失败，使用真实 Node 运行时 + 流式 SSE 模拟上游：

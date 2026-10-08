@@ -12,7 +12,7 @@ import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { intersectsCanvasBounds, selectCanvasVisibleNodes } from "@/lib/canvas/canvas-node-visibility";
 import type { Skill } from "@/services/api/skills";
 import type { Asset, ImageAsset } from "@/stores/use-asset-store";
-import type { DirectorScene } from "@/types/director";
+import type { PrevisScene } from "@/types/previs";
 import { CanvasNodeType, type CanvasConnection, type CanvasDisplayConnection, type CanvasMediaPerformanceMode, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
 
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
@@ -29,7 +29,7 @@ type UseCanvasRenderModelOptions = {
     dragPreview: DragPreview;
     collapsingBatchIds: Set<string>;
     addedSkills: Skill[];
-    directorScenes?: DirectorScene[];
+    previsScenes?: PrevisScene[];
     infoNodeId: string | null;
     cropNodeId: string | null;
     maskEditNodeId: string | null;
@@ -44,7 +44,7 @@ type UseCanvasRenderModelOptions = {
     previewNodeId: string | null;
     contextMenu: ContextMenuState | null;
     versionCompareRootId: string | null;
-    directorNodeId: string | null;
+    previsNodeId: string | null;
     scriptEditorNodeId: string | null;
     dialogNodeId: string | null;
 };
@@ -61,7 +61,7 @@ export function useCanvasRenderModel({
     dragPreview,
     collapsingBatchIds,
     addedSkills,
-    directorScenes,
+    previsScenes,
     infoNodeId,
     cropNodeId,
     maskEditNodeId,
@@ -76,7 +76,7 @@ export function useCanvasRenderModel({
     previewNodeId,
     contextMenu,
     versionCompareRootId,
-    directorNodeId,
+    previsNodeId,
     scriptEditorNodeId,
     dialogNodeId,
 }: UseCanvasRenderModelOptions) {
@@ -389,10 +389,10 @@ export function useCanvasRenderModel({
         configNodeIds.forEach((nodeId) => map.set(nodeId, buildNodeGenerationInputs(nodeId, semanticNodes, connections)));
         return map;
     }, [connections, dialogNodeId, nodeById, selectedNodeIds, semanticNodes, visibleNodes]);
-    const activeDirectorNode = useMemo(() => semanticNodes.find((node) => node.id === directorNodeId) || null, [directorNodeId, semanticNodes]);
+    const activePrevisNode = useMemo(() => semanticNodes.find((node) => node.id === previsNodeId) || null, [previsNodeId, semanticNodes]);
     const activeStylePresetId = useMemo(() => semanticNodes.find((node) => node.metadata?.workflowKind === "styleboard")?.metadata?.stylePresetId, [semanticNodes]);
     const activeScriptNode = useMemo(() => semanticNodes.find((node) => node.id === scriptEditorNodeId && node.type === CanvasNodeType.Script) || null, [scriptEditorNodeId, semanticNodes]);
-    const activeDirectorScene = useMemo(() => directorScenes?.find((scene) => scene.id === activeDirectorNode?.metadata?.directorSceneId) || null, [activeDirectorNode?.metadata?.directorSceneId, directorScenes]);
+    const activePrevisScene = useMemo(() => previsScenes?.find((scene) => scene.id === activePrevisNode?.metadata?.previsSceneId) || null, [activePrevisNode?.metadata?.previsSceneId, previsScenes]);
     const resourceReferenceTargetNodes = useMemo(() => {
         const targetNodes = [...visibleNodes];
         const activeId = dialogNodeId || activeNodeId;
@@ -437,8 +437,8 @@ export function useCanvasRenderModel({
     }, [connections, semanticNodes, skillMentionReferences, toolMentionReferencesByNodeId, visibleNodes]);
 
     return {
-        activeDirectorNode,
-        activeDirectorScene,
+        activePrevisNode,
+        activePrevisScene,
         activeNodeId,
         activeScriptNode,
         activeStylePresetId,

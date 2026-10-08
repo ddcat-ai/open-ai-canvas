@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	paymentplugins "infinite-canvas/backend/payment-plugins"
+	paymentplugins "yingce/backend/payment-plugins"
 )
 
 func main() {

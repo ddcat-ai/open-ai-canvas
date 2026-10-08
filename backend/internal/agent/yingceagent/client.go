@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	agentruntime "infinite-canvas/backend/internal/agent/runtime"
+	agentruntime "yingce/backend/internal/agent/runtime"
 )
 
 type Status struct {

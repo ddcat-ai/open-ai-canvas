@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestCloudAgentContinuationReplySplitsFactsFromAssistantText(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"infinite-canvas/backend/internal/prompts"
+	"yingce/backend/internal/prompts"
 )
 
 func TestChapterAssetsPromptContract(t *testing.T) {

@@ -3,13 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"errors"
-	"infinite-canvas/backend/internal/kernel"
 	"strings"
 	"testing"
 	"time"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"

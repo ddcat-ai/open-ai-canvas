@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func taskHasAgentOrigin(raw string) bool {

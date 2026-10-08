@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {

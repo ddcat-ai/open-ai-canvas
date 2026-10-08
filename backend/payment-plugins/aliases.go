@@ -1,6 +1,6 @@
 package paymentplugins
 
-import paymentsdk "infinite-canvas/backend/payment-sdk"
+import paymentsdk "yingce/backend/payment-sdk"
 
 type Config = paymentsdk.Config
 type Descriptor = paymentsdk.Descriptor

@@ -2,7 +2,7 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
 
 export type CanvasExportFile = {
-    app: "infinite-canvas";
+    app: "yingce";
     version: 3 | 4;
     exportedAt: string;
     projects: CanvasProjectExportItem[];

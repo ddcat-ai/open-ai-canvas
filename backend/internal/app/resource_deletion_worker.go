@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 const resourceDeletionLease = 2 * time.Minute

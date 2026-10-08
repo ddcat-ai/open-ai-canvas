@@ -1,6 +1,6 @@
 package service
 
-import "infinite-canvas/backend/internal/app"
+import "yingce/backend/internal/app"
 
 var (
 	ErrPlaybackNotReady                        = app.ErrPlaybackNotReady

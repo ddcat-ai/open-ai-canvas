@@ -10,14 +10,14 @@ import { useUserStore } from "@/stores/use-user-store";
 export function ModelSetupGuide({ hidden = false }: { hidden?: boolean }) {
     const reducedMotion = useReducedMotion();
     const [dismissed, setDismissed] = useState(false);
-    const registrationGuide = typeof window !== "undefined" && window.sessionStorage.getItem("infinite-canvas:model-setup-guide") === "1";
+    const registrationGuide = typeof window !== "undefined" && window.sessionStorage.getItem("yingce:model-setup-guide") === "1";
     const hydrated = useUserStore((state) => state.hydrated);
     const user = useUserStore((state) => state.user);
     const models = useConfigStore((state) => state.config.models);
     if (hidden || dismissed || !hydrated || !user || user.role === "admin" || (!registrationGuide && models.length > 0)) return null;
 
     const close = () => {
-        window.sessionStorage.removeItem("infinite-canvas:model-setup-guide");
+        window.sessionStorage.removeItem("yingce:model-setup-guide");
         setDismissed(true);
     };
 

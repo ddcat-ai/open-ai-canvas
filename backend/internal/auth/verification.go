@@ -9,12 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/sms"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/sms"
 )
 
 type VerificationRequest struct {
@@ -210,7 +210,10 @@ func (s *Service) contactAvailable(email, phone, ownID string) error {
 			if email == "" {
 				continue
 			}
-			user, err = s.repo.UserByEmail(email)
+			if err := s.repo.CheckEmailAvailable(email, ownID); err != nil {
+				return err
+			}
+			continue
 		} else {
 			if phone == "" {
 				continue

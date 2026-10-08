@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { scopedStorageKey } from "../src/lib/user-scope";
-import type { DirectorScene } from "../src/types/director";
-import { createDirectorSaveCoordinator, type DirectorDraftEnvelope, type DirectorFlushRequest, type FlushFunction, type StorageLike } from "../src/lib/canvas/director/director-save";
+import type { PrevisScene } from "../src/types/previs";
+import { createPrevisSaveCoordinator, type PrevisDraftEnvelope, type PrevisFlushRequest, type FlushFunction, type StorageLike } from "../src/lib/canvas/previs/previs-save";
 
 class MemoryStorage implements StorageLike {
     private readonly values = new Map<string, string>();
@@ -69,7 +69,7 @@ function deferred() {
     };
 }
 
-const makeScene = (overrides: Partial<DirectorScene> = {}): DirectorScene => ({
+const makeScene = (overrides: Partial<PrevisScene> = {}): PrevisScene => ({
     id: "scene-1",
     version: 1,
     title: "Test Scene",
@@ -86,7 +86,7 @@ const makeScene = (overrides: Partial<DirectorScene> = {}): DirectorScene => ({
     ...overrides,
 });
 
-const makeEnvelope = (overrides: Partial<DirectorDraftEnvelope> = {}): DirectorDraftEnvelope => {
+const makeEnvelope = (overrides: Partial<PrevisDraftEnvelope> = {}): PrevisDraftEnvelope => {
     const scene = overrides.scene ?? makeScene();
     return {
         schemaVersion: 1,
@@ -100,7 +100,7 @@ const makeEnvelope = (overrides: Partial<DirectorDraftEnvelope> = {}): DirectorD
 };
 
 /** Serializes a complete valid envelope after breaking only the target fields. */
-const corruptEnvelope = (corrupt: (envelope: Record<string, unknown>) => void, overrides: Partial<DirectorDraftEnvelope> = {}): string => {
+const corruptEnvelope = (corrupt: (envelope: Record<string, unknown>) => void, overrides: Partial<PrevisDraftEnvelope> = {}): string => {
     const envelope: Record<string, unknown> = {
         ...makeEnvelope(overrides),
     };
@@ -124,7 +124,7 @@ const rawEnvelopeWith = (rawFields: Record<string, string>): string => {
 type HarnessOptions = {
     scope?: string;
     storage?: MemoryStorage;
-    initialScene?: DirectorScene;
+    initialScene?: PrevisScene;
 };
 
 const createHarness = (options: HarnessOptions = {}) => {
@@ -133,7 +133,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     const initialScene = options.initialScene ?? makeScene();
     const scheduler = new ManualScheduler();
     let now = 1000;
-    const requests: DirectorFlushRequest[] = [];
+    const requests: PrevisFlushRequest[] = [];
     let flushBehavior: FlushFunction = async () => undefined;
 
     const flushFn: FlushFunction = async (request) => {
@@ -141,7 +141,7 @@ const createHarness = (options: HarnessOptions = {}) => {
         await flushBehavior(request);
     };
 
-    const coord = createDirectorSaveCoordinator({
+    const coord = createPrevisSaveCoordinator({
         initialScene,
         scope,
         storage,
@@ -152,18 +152,18 @@ const createHarness = (options: HarnessOptions = {}) => {
         cancelSchedule: (handle) => scheduler.cancel(handle),
     });
 
-    const key = scopedStorageKey("director-scene-draft:" + initialScene.id, scope);
+    const key = scopedStorageKey("previs-scene-draft:" + initialScene.id, scope);
 
-    const editedScene = (overrides: Partial<DirectorScene> = {}) => {
+    const editedScene = (overrides: Partial<PrevisScene> = {}) => {
         const scene = makeScene(overrides);
         coord.edit(scene);
         return scene;
     };
 
-    const readEnvelope = (id: string = initialScene.id): DirectorDraftEnvelope | null => {
-        const readKey = id === initialScene.id ? key : scopedStorageKey("director-scene-draft:" + id, scope);
+    const readEnvelope = (id: string = initialScene.id): PrevisDraftEnvelope | null => {
+        const readKey = id === initialScene.id ? key : scopedStorageKey("previs-scene-draft:" + id, scope);
         const raw = storage.getItem(readKey);
-        return raw === null ? null : (JSON.parse(raw) as DirectorDraftEnvelope);
+        return raw === null ? null : (JSON.parse(raw) as PrevisDraftEnvelope);
     };
 
     const writeRaw = (raw: string): void => {
@@ -202,7 +202,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     };
 };
 
-describe("DirectorSaveCoordinator", () => {
+describe("PrevisSaveCoordinator", () => {
     describe("01 initial", () => {
         it("should be saved with revision 0, no draft, no recovery", () => {
             const h = createHarness();
@@ -452,7 +452,7 @@ describe("DirectorSaveCoordinator", () => {
     });
 
     describe("17 invalid scene shape", () => {
-        it("should reject a candidate whose scene fails DirectorScene validation", () => {
+        it("should reject a candidate whose scene fails PrevisScene validation", () => {
             const h = createHarness();
 
             h.writeRaw(JSON.stringify(makeEnvelope()));

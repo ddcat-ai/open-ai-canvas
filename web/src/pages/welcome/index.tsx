@@ -59,7 +59,6 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-        document.title = "影策 · 让一个故事从文字走向银幕";
         const media = window.matchMedia("(prefers-reduced-motion: reduce)");
         const onMotion = () => setReduced(media.matches);
         media.addEventListener("change", onMotion);

@@ -13,10 +13,10 @@ import (
 	"time"
 
 	sender "github.com/casdoor/go-sms-sender"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/outbound"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/outbound"
+	"yingce/backend/internal/repository"
 )
 
 const Aliyun = "aliyun"

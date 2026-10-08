@@ -1,0 +1,1839 @@
+
+.workspace-wallet-content.is-history {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.workspace-wallet-history-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.workspace-wallet-section-heading,
+.workspace-wallet-history-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.workspace-wallet-section-heading h3,
+.workspace-wallet-history-toolbar h3 {
+    margin: 0;
+    color: var(--user-ink);
+    font-size: 15px;
+    font-weight: 660;
+}
+
+.workspace-wallet-section-heading p,
+.workspace-wallet-history-toolbar p {
+    margin: 4px 0 0;
+    color: var(--user-ink-muted);
+    font-size: 11px;
+}
+
+.workspace-wallet-section-heading > svg {
+    width: 20px;
+    height: 20px;
+    color: var(--user-accent);
+}
+
+.workspace-wallet-products {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.workspace-wallet-product {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    border: 1px solid var(--user-border);
+    border-radius: 14px;
+    background: var(--user-surface-muted);
+    padding: 14px;
+    color: var(--user-ink);
+    text-align: left;
+    transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.workspace-wallet-product:hover,
+.workspace-wallet-product:focus-visible {
+    border-color: rgba(107, 94, 231, .28);
+    background: var(--user-surface);
+    box-shadow: 0 12px 24px -20px rgba(41, 32, 125, .45);
+    transform: translateY(-2px);
+}
+
+.workspace-wallet-product.is-selected {
+    border-color: rgba(107, 94, 231, .45);
+    background: var(--user-accent-soft);
+}
+
+.workspace-wallet-product span,
+.workspace-wallet-product small {
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-wallet-product strong {
+    font-size: 15px;
+    font-weight: 680;
+}
+
+.workspace-wallet-product > svg {
+    position: absolute;
+    top: 11px;
+    right: 11px;
+    width: 15px;
+    height: 15px;
+    color: var(--user-accent);
+}
+
+.workspace-wallet-provider-row,
+.workspace-wallet-redeem-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.workspace-wallet-providers {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.workspace-wallet-providers button {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--user-border);
+    border-radius: 11px;
+    background: var(--user-surface-muted);
+    padding: 0 11px;
+    color: var(--user-ink-muted);
+    font-size: 11px;
+}
+
+.workspace-wallet-providers button.is-selected {
+    border-color: rgba(107, 94, 231, .32);
+    background: var(--user-accent-soft);
+    color: var(--user-accent);
+}
+
+.workspace-wallet-providers button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.workspace-wallet-redeem-row .ant-input-affix-wrapper,
+.workspace-wallet-redeem-row .ant-input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.workspace-wallet-ledger {
+    display: grid;
+    gap: 2px;
+}
+
+.workspace-wallet-ledger-row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 62px;
+    border-bottom: 1px solid var(--user-border);
+}
+
+.workspace-wallet-ledger-row:last-child {
+    border-bottom: 0;
+}
+
+.workspace-wallet-ledger-icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--user-accent-soft);
+    color: var(--user-accent);
+}
+
+.workspace-wallet-ledger-icon.is-consume {
+    background: var(--user-surface-muted);
+    color: #6c6c72;
+}
+
+.workspace-wallet-ledger-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.workspace-wallet-ledger-row > div {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.workspace-wallet-ledger-row strong {
+    font-size: 12px;
+    font-weight: 630;
+}
+
+.workspace-wallet-ledger-row span,
+.workspace-wallet-ledger-row time {
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-wallet-ledger-row b {
+    min-width: 76px;
+    font-size: 12px;
+    font-weight: 690;
+    text-align: right;
+}
+
+.workspace-wallet-ledger-row b.is-income { color: #3c8f68; }
+.workspace-wallet-ledger-row b.is-consume { color: var(--user-ink); }
+
+.workspace-wallet-inline-state,
+.workspace-wallet-empty {
+    display: flex;
+    min-height: 96px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    border: 1px dashed var(--user-border);
+    border-radius: 14px;
+    background: var(--user-surface-muted);
+    padding: 18px;
+    color: var(--user-ink-muted);
+    text-align: left;
+}
+
+.workspace-wallet-inline-state > svg,
+.workspace-wallet-empty > svg {
+    width: 22px;
+    height: 22px;
+}
+
+.workspace-wallet-inline-state > div,
+.workspace-wallet-empty {
+    font-size: 11px;
+}
+
+.workspace-wallet-inline-state strong,
+.workspace-wallet-inline-state span,
+.workspace-wallet-empty strong,
+.workspace-wallet-empty span {
+    display: block;
+}
+
+.workspace-wallet-inline-state strong,
+.workspace-wallet-empty strong {
+    color: var(--user-ink);
+    font-size: 12px;
+}
+
+.workspace-wallet-inline-state span,
+.workspace-wallet-empty span {
+    margin-top: 3px;
+}
+
+.workspace-wallet-pagination {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--user-border);
+    color: var(--user-ink-muted);
+    font-size: 10px;
+}
+
+.workspace-wallet-pagination button {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border-radius: 9px;
+    background: #f0f0f1;
+}
+
+.workspace-wallet-pagination button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.workspace-wallet-payment {
+    display: grid;
+    justify-items: center;
+    gap: 9px;
+    padding: 10px 0 4px;
+    text-align: center;
+}
+
+.workspace-wallet-payment-icon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border-radius: 16px;
+    background: var(--user-accent-soft);
+    color: var(--user-accent);
+}
+
+.workspace-wallet-payment > strong {
+    font-size: 25px;
+}
+
+.workspace-wallet-payment p,
+.workspace-wallet-payment > span:not(.workspace-wallet-payment-icon) {
+    margin: 0;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: 11px;
+}
+
+.workspace-wallet-payment-status {
+    width: 100%;
+    margin-top: 6px;
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    padding: 10px 12px;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    font-size: 11px;
+}
+
+.workspace-wallet-payment-status.is-success { background: rgba(57, 150, 103, .1); color: #357e5c; }
+.workspace-wallet-payment-status.is-error { background: rgba(207, 65, 75, .09); color: #b23d47; }
+
+@media (max-width: 980px) {
+    .app-user-workspace .creation-empty-workspace { width: min(100% - 28px, 860px); }
+    .creation-featured-layout { grid-template-columns: 1fr; }
+    .creation-featured-card.is-hero .creation-featured-media { min-height: 0; aspect-ratio: 16 / 8; }
+}
+
+@media (max-width: 700px) {
+    .creation-featured-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+    .creation-featured-heading p { text-align: left; }
+    .creation-featured-grid { grid-template-columns: 1fr; }
+    .workspace-wallet-header { align-items: stretch; flex-direction: column; padding: 26px 22px 20px; }
+    .workspace-wallet-balance { min-width: 0; }
+    .workspace-wallet-tabs { margin: 8px 14px 0; }
+    .workspace-wallet-content { margin: 14px 14px 18px; padding: 0; }
+    .workspace-wallet-products { grid-template-columns: 1fr; }
+    .workspace-wallet-provider-row,
+    .workspace-wallet-redeem-row { align-items: stretch; flex-direction: column; }
+    .workspace-wallet-provider-row > .ant-btn,
+    .workspace-wallet-redeem-row > .ant-btn { width: 100%; }
+    .workspace-wallet-ledger-row { grid-template-columns: 34px minmax(0, 1fr) auto; }
+    .workspace-wallet-ledger-row time { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .creation-featured-card,
+.creation-featured-media img,
+.workspace-wallet-product { transition: none !important; }
+    .creation-featured-card:hover,
+    .creation-featured-card:focus-visible,
+    .workspace-wallet-product:hover,
+    .workspace-wallet-product:focus-visible { transform: none; }
+}
+
+/* =========================================================================
+   User workspace visual pass — clear surfaces, compact navigation, readable data
+   This is intentionally scoped to the user shell; admin and canvas internals keep
+   their own contracts while sharing the same semantic tokens.
+   ========================================================================= */
+.app-user-workspace {
+    --user-page-bg: #f8f8fa;
+    --user-surface: #ffffff;
+    --user-surface-muted: #f1f1f3;
+    --user-border: rgba(25, 25, 30, .095);
+    --user-border-strong: rgba(25, 25, 30, .15);
+    --user-ink: #1b1b1f;
+    --user-ink-muted: #65656c;
+    --user-ink-soft: #85858d;
+    --user-accent: #5f55d9;
+    background: var(--user-page-bg);
+}
+
+.app-user-workspace .app-user-content {
+    background: var(--user-page-bg);
+}
+
+.app-user-workspace .app-workspace-sidebar,
+.app-user-workspace .app-workspace-sidebar-nav {
+    background: #f6f6f7;
+}
+
+.app-user-workspace .app-workspace-sidebar {
+    width: var(--workspace-reference-sidebar) !important;
+    flex-basis: var(--workspace-reference-sidebar);
+    border-right: 1px solid rgba(25, 25, 30, .07);
+}
+
+.app-user-workspace .app-workspace-sidebar.is-collapsed {
+    width: var(--workspace-reference-collapsed) !important;
+    flex-basis: var(--workspace-reference-collapsed);
+}
+
+.app-user-workspace .app-workspace-sidebar-scroll-area {
+    padding: 24px 10px 12px;
+    gap: 22px;
+}
+
+.app-user-workspace .app-workspace-sidebar-footer {
+    padding: 12px 10px 14px;
+    border-top: 1px solid rgba(25, 25, 30, .07);
+}
+
+.app-user-workspace .app-workspace-nav-link {
+    min-height: 38px;
+    padding: 0 11px;
+    border-radius: 11px;
+    color: #66666d;
+    font-size: 13px;
+    font-weight: 520;
+}
+
+.app-user-workspace .app-workspace-nav-link.is-active {
+    background: #e9e8ec;
+    color: var(--user-ink);
+    font-weight: 680;
+}
+
+.app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
+.app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) {
+    background: #ededee;
+    color: var(--user-ink);
+}
+
+.app-user-workspace .app-workspace-nav-link .app-workspace-nav-main {
+    gap: 10px;
+}
+
+.app-user-workspace .app-workspace-nav-link .app-workspace-nav-main > svg {
+    width: 16px;
+    height: 16px;
+    color: currentColor;
+    opacity: .78;
+}
+
+.app-user-workspace .app-workspace-nav-group-toggle {
+    min-height: 26px;
+    padding: 0 11px 4px;
+    color: #929299;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .04em;
+}
+
+.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-sidebar-scroll-area {
+    padding-inline: 9px;
+    align-items: center;
+}
+
+.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-nav-link {
+    width: 40px;
+    justify-content: center;
+    padding: 0;
+}
+
+.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-nav-main {
+    justify-content: center;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-popover {
+    width: 100%;
+    padding: 14px;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-summary {
+    min-height: 48px;
+    gap: 11px;
+    padding: 0 1px 13px;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-summary-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-summary-copy strong,
+.app-user-workspace .app-workspace-sidebar-profile-summary-copy span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-summary-copy strong {
+    color: var(--user-ink);
+    font-size: 14px;
+    font-weight: 680;
+    line-height: 1.25;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-summary-copy span {
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    line-height: 1.25;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-menu {
+    gap: 3px;
+    padding-top: 11px;
+    border-top-color: var(--user-border);
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-menu a,
+.app-user-workspace .app-workspace-sidebar-profile-menu button {
+    min-height: 40px;
+    height: 40px;
+    gap: 11px;
+    padding: 0 10px;
+    border-radius: 10px;
+    color: #45454c;
+    font-size: 13px;
+    font-weight: 520;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-menu a span,
+.app-user-workspace .app-workspace-sidebar-profile-menu button span {
+    min-width: 0;
+    flex: 1;
+    line-height: 1;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-menu a svg,
+.app-user-workspace .app-workspace-sidebar-profile-menu button svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    stroke-width: 1.8;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-menu a:hover,
+.app-user-workspace .app-workspace-sidebar-profile-menu a:focus-visible,
+.app-user-workspace .app-workspace-sidebar-profile-menu button:hover,
+.app-user-workspace .app-workspace-sidebar-profile-menu button:focus-visible {
+    background: #f2f1ff;
+    color: var(--user-accent);
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-menu button:last-child:hover,
+.app-user-workspace .app-workspace-sidebar-profile-menu button:last-child:focus-visible {
+    background: #fff1f1;
+    color: #b93b48;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-avatar {
+    width: 32px;
+    height: 32px;
+    background: #e9e9ec;
+    color: #686870;
+}
+
+.app-user-workspace .app-workspace-sidebar-profile-avatar.is-large {
+    width: 40px;
+    height: 40px;
+    background: #eeeeef;
+}
+
+/* Top-right account menu uses the same vertical rhythm as the sidebar menu. */
+.workspace-topbar-account-menu {
+    width: 248px;
+    padding: 14px;
+}
+
+.workspace-topbar-account-summary {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    gap: 11px;
+    padding-bottom: 13px;
+}
+
+.workspace-topbar-account-summary > div {
+    min-width: 0;
+    flex: 1;
+}
+
+.workspace-topbar-account-name {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    color: var(--user-ink);
+    font-size: 14px;
+    font-weight: 680;
+}
+
+.workspace-topbar-account-name > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.workspace-topbar-account-section {
+    padding: var(--space-2) var(--space-3) var(--space-1);
+}
+
+.workspace-topbar-account-theme {
+    display: flex;
+    height: 40px;
+    align-items: center;
+    padding: 0 var(--space-5);
+    border-radius: 10px;
+    color: var(--user-ink-muted);
+}
+
+/* Shared library pages: a quiet grey canvas, white surfaces, and unambiguous controls. */
+.app-user-workspace .library-page > div {
+    width: min(1180px, calc(100% - 48px));
+    margin-inline: auto;
+    padding: 28px 0 52px;
+}
+
+.app-user-workspace .app-page-header {
+    min-height: 72px;
+    margin: 0;
+    padding: 0 2px 20px;
+    border-bottom: 0;
+}
+
+.app-user-workspace .app-page-header-title {
+    color: var(--user-ink);
+    font-size: 24px;
+    letter-spacing: -.035em;
+}
+
+.app-user-workspace .app-page-header p {
+    color: var(--user-ink-muted);
+    font-size: 13px;
+}
+
+.app-user-workspace .library-page .library-toolbar,
+.app-user-workspace .library-page .admin-list-toolbar {
+    min-height: 72px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--user-border);
+    border-radius: 16px;
+    background: var(--user-surface);
+    box-shadow: 0 8px 22px rgba(25, 25, 30, .035);
+}
+
+.app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper,
+.app-user-workspace .library-page .library-toolbar .ant-select-selector,
+.app-user-workspace .library-page .library-toolbar .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) {
+    min-height: 38px;
+    border-color: transparent !important;
+    border-radius: 10px !important;
+    background: var(--user-surface-muted) !important;
+    box-shadow: none !important;
+}
+
+.app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper:hover,
+.app-user-workspace .library-page .library-toolbar .ant-input-affix-wrapper:focus-within,
+.app-user-workspace .library-page .library-toolbar .ant-select-focused .ant-select-selector {
+    border-color: var(--user-border-strong) !important;
+    background: var(--user-surface) !important;
+    box-shadow: none !important;
+}
+
+.app-user-workspace .skills-hero {
+    position: relative;
+    min-height: 220px;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: 22px;
+    background: var(--user-surface);
+    box-shadow: 0 12px 30px rgba(25, 25, 30, .035);
+}
+
+.app-user-workspace .skills-hero::before {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(95, 85, 217, .13) 1px, transparent 1px);
+    background-size: 18px 18px;
+    content: "";
+    opacity: .42;
+    mask-image: linear-gradient(to bottom, #000, transparent 86%);
+}
+
+.app-user-workspace .skills-hero-inner {
+    position: relative;
+    display: flex;
+    min-height: 220px;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    padding: 32px 24px;
+    text-align: center;
+}
+
+.app-user-workspace .skills-hero-badge {
+    background: #efeeff;
+    color: #5a50c9;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.app-user-workspace .skills-hero-title {
+    color: var(--user-ink);
+    font-size: clamp(30px, 4vw, 42px);
+    letter-spacing: -.055em;
+}
+
+.app-user-workspace .skills-hero-description {
+    max-width: 560px;
+    color: var(--user-ink-muted);
+    font-size: 14px;
+}
+
+.app-user-workspace .skills-hero-meta {
+    margin-top: 4px;
+    border-radius: 999px;
+    background: var(--user-surface-muted);
+    padding: 5px 11px;
+    color: #6d6d74;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.app-user-workspace .skills-tabs {
+    min-height: 38px;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--user-surface-muted);
+}
+
+.app-user-workspace .skills-navigation {
+    margin: 8px 0 20px;
+    overflow-x: auto;
+}
+
+.app-user-workspace .skills-tab {
+    min-height: 32px;
+    gap: 7px;
+    padding: 0 11px;
+    border-radius: 9px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    font-weight: 560;
+}
+
+.app-user-workspace .skills-tab.is-active {
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: 0 2px 7px rgba(25, 25, 30, .09);
+}
+
+.app-user-workspace .skills-tab-count {
+    min-width: 20px;
+    border-radius: 999px;
+    background: #e7e7ea;
+    color: #5f5f66;
+    font-size: 10px;
+    line-height: 20px;
+}
+
+.app-user-workspace .skill-group-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 1px solid var(--user-border);
+    border-radius: 9px;
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+}
+
+.app-user-workspace .skill-group-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.app-user-workspace .skills-scope-panel > section > div:first-child h2 {
+    color: var(--user-ink) !important;
+    font-size: 15px;
+    font-weight: 680;
+}
+
+.app-user-workspace .skills-scope-panel > section > div:first-child > span {
+    color: #8a8a91 !important;
+    font-size: 12px;
+}
+
+.app-user-workspace .skill-library-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.app-user-workspace .skill-library-card {
+    min-height: 272px;
+    padding: 18px 18px 16px;
+    border: 1px solid rgba(25, 25, 30, .10);
+    border-radius: 16px;
+    background: var(--user-surface);
+    box-shadow: 0 5px 16px rgba(25, 25, 30, .025);
+}
+
+.app-user-workspace .skill-library-card:hover,
+.app-user-workspace .skill-library-card:focus-within {
+    border-color: rgba(95, 85, 217, .38);
+    box-shadow: 0 12px 26px rgba(25, 25, 30, .08);
+    transform: translateY(-2px);
+}
+
+.app-user-workspace .skill-card-icon {
+    width: 42px;
+    height: 42px;
+    margin-bottom: 17px;
+    border: 1px solid rgba(25, 25, 30, .08);
+    border-radius: 12px;
+    background: var(--user-accent-soft);
+    color: var(--user-accent);
+}
+
+.app-user-workspace .skill-library-card h3 {
+    color: var(--user-ink);
+    font-size: 16px;
+    font-weight: 680;
+}
+
+.app-user-workspace .skill-card-description p {
+    color: var(--user-ink-muted);
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.app-user-workspace .skill-card-footer {
+    color: var(--user-ink-muted);
+    font-size: 11px;
+}
+
+.app-user-workspace .skill-card-tag {
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+}
+
+.app-user-workspace .skill-card-join {
+    height: 36px;
+    border: 1px solid rgba(25, 25, 30, .08);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    font-size: 12px;
+}
+
+.app-user-workspace .skill-card-join:hover,
+.app-user-workspace .skill-card-join:focus-visible {
+    border-color: rgba(95, 85, 217, .28);
+    background: #ebeaff;
+    color: #5148c2;
+}
+
+.app-user-workspace .skill-card-join.is-added {
+    border-color: var(--user-border);
+    background: var(--user-accent-soft);
+    color: var(--user-accent);
+}
+
+.app-user-workspace .library-card-surface,
+.app-user-workspace .app-table-surface,
+.app-user-workspace .canvas-library-frame,
+.app-user-workspace .project-library-card,
+.app-user-workspace .asset-library-card,
+.app-user-workspace .task-library-frame {
+    border-color: var(--user-border);
+    background: var(--user-surface);
+    box-shadow: 0 7px 22px rgba(25, 25, 30, .035);
+}
+
+.app-user-workspace .admin-list-toolbar-main,
+.app-user-workspace .admin-list-toolbar-actions {
+    gap: 8px;
+}
+
+@media (max-width: 1180px) {
+    .app-user-workspace .skill-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+    .app-user-workspace .library-page > div { width: min(100% - 28px, 1180px); padding-top: 20px; }
+    .app-user-workspace .skill-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .app-user-workspace .skills-hero, .app-user-workspace .skills-hero-inner { min-height: 196px; }
+}
+
+@media (max-width: 580px) {
+    .app-user-workspace .library-page > div { width: calc(100% - 24px); }
+    .app-user-workspace .skill-library-grid { grid-template-columns: 1fr; }
+    .app-user-workspace .skills-tabs { width: 100%; overflow-x: auto; justify-content: flex-start; }
+    .app-user-workspace .skills-tab { flex: 0 0 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-user-workspace .skill-library-card { animation: none !important; transition: none !important; }
+}
+
+/* Large desktop follows the reference gallery rhythm: five readable cards rather
+   than a dense admin-table conversion. */
+.app-user-workspace .library-page > div {
+    width: min(1680px, calc(100% - 64px));
+}
+
+.app-user-workspace .skill-library-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.app-user-workspace .skill-library-card {
+    min-height: 268px;
+}
+
+.app-user-workspace .task-library-frame {
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: 16px;
+    background: var(--user-surface);
+}
+
+.app-user-workspace .task-record-row {
+    min-height: 88px;
+    border-bottom: 1px solid rgba(25, 25, 30, .07);
+    border-radius: 0;
+    background: var(--user-surface);
+    color: var(--user-ink);
+}
+
+.app-user-workspace .task-record-row:last-child {
+    border-bottom: 0;
+}
+
+.app-user-workspace .task-record-row:hover,
+.app-user-workspace .task-record-row:focus-within {
+    background: var(--user-surface-hover);
+}
+
+.app-user-workspace .task-grid-card {
+    border: 1px solid var(--user-border);
+    border-radius: 16px;
+    background: var(--user-surface);
+    box-shadow: 0 5px 16px rgba(25, 25, 30, .025);
+}
+
+.app-user-workspace .task-grid-card:hover,
+.app-user-workspace .task-grid-card:focus-within {
+    background: var(--user-surface);
+    border-color: rgba(95, 85, 217, .32);
+    box-shadow: 0 12px 26px rgba(25, 25, 30, .08);
+}
+
+.app-user-workspace .project-library-grid {
+    gap: 16px;
+}
+
+.app-user-workspace .project-library-card {
+    border: 1px solid var(--user-border);
+    border-radius: 16px;
+    background: var(--user-surface);
+    box-shadow: 0 5px 16px rgba(25, 25, 30, .025);
+}
+
+.app-user-workspace .project-library-card:hover,
+.app-user-workspace .project-library-card:focus-within {
+    border-color: rgba(95, 85, 217, .32);
+    box-shadow: 0 12px 26px rgba(25, 25, 30, .08);
+}
+
+.app-user-workspace .assets-library-page .canvas-library-frame {
+    border: 1px solid var(--user-border);
+    border-radius: 16px;
+    background: var(--user-surface);
+}
+
+.app-user-workspace .assets-library-page .assets-filter-item {
+    color: var(--user-ink-muted);
+    border-radius: 9px;
+}
+
+.app-user-workspace .assets-library-page .assets-filter-item.is-active {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+@media (max-width: 1400px) {
+    .app-user-workspace .skill-library-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1180px) {
+    .app-user-workspace .skill-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.app-user-workspace.settings-page {
+    background: var(--user-page-bg);
+}
+
+.app-user-workspace.settings-page .settings-topbar {
+    display: block;
+    min-height: 0;
+    padding: 16px 32px 0;
+    color: var(--user-ink);
+}
+
+.app-user-workspace.settings-page .settings-library-frame {
+    width: min(1680px, calc(100% - 64px));
+    margin: 20px auto 32px;
+    border: 1px solid var(--user-border);
+    border-radius: 18px;
+    background: var(--user-surface);
+    box-shadow: 0 8px 24px rgba(25, 25, 30, .035);
+}
+
+.app-user-workspace.settings-page .settings-nav-panel {
+    border-right: 1px solid var(--user-border);
+    background: var(--user-surface-muted);
+}
+
+.app-user-workspace.settings-page .settings-nav-item {
+    margin: 3px 8px;
+    border-radius: 10px;
+    color: #6b6b73;
+}
+
+.app-user-workspace.settings-page .settings-nav-item.is-active {
+    background: #ecebff;
+    color: #5148c2;
+    font-weight: 650;
+}
+
+.app-user-workspace.settings-page .settings-content {
+    background: var(--user-surface);
+}
+
+.app-user-workspace.settings-page .settings-pane-header h2 {
+    color: var(--user-ink);
+}
+
+.app-user-workspace.settings-page .settings-pane-header p,
+.app-user-workspace.settings-page .settings-field-group-label {
+    color: var(--user-ink-muted);
+}
+
+.app-user-workspace.settings-page .settings-channel,
+.app-user-workspace.settings-page .settings-preference-block {
+    border: 1px solid var(--user-border);
+    border-radius: 14px;
+    background: var(--user-surface);
+}
+
+.app-user-workspace.settings-page .settings-preference-block {
+    padding: 20px 20px 12px;
+}
+
+.app-user-workspace.settings-page .settings-preference-heading h3 {
+    color: var(--user-ink-muted);
+}
+
+.app-user-workspace.settings-page .settings-preference-heading p {
+    color: var(--user-ink-muted);
+}
+
+@media (max-width: 720px) {
+    .app-user-workspace.settings-page .settings-library-frame {
+        width: calc(100% - 24px);
+        margin-bottom: 18px;
+    }
+    .app-user-workspace.settings-page .settings-topbar { padding-inline: 16px; }
+    .app-user-workspace.settings-page .settings-nav-panel { border-right: 0; border-bottom: 1px solid var(--user-border); }
+}
+
+/* ========================================================================
+   User workspace redesign — creation-first layout
+   ------------------------------------------------------------------------
+   This is the single visual contract for the authenticated user shell.  The
+   creation home is intentionally rebuilt as a wide studio surface instead of
+   a narrow admin column.  Light/dark only swap semantic tokens; geometry and
+   interaction states remain identical.
+   ======================================================================== */
+.app-user-workspace,
+.app-user-overlays {
+    --user-page-bg: #f8f8fa;
+    --user-surface: #ffffff;
+    --user-surface-raised: #ffffff;
+    --user-surface-muted: #f1f1f3;
+    --user-surface-hover: #eaeaec;
+    --user-border: rgba(25, 25, 30, .10);
+    --user-border-strong: rgba(25, 25, 30, .17);
+    --user-ink: #1d1d21;
+    --user-ink-muted: #686872;
+    --user-ink-soft: #85858e;
+    --user-accent: var(--workspace-accent);
+    --user-accent-soft: var(--control-selected-bg);
+    --user-shadow-card: none;
+    --user-shadow-hover: none;
+    --user-radius-card: 16px;
+    --user-radius-control: 12px;
+    --user-control-pressed: #e1e1e5;
+    --user-control-height: 38px;
+    --user-icon-size: 16px;
+    --user-motion: 180ms cubic-bezier(.16, 1, .3, 1);
+    min-width: 0;
+    background: var(--user-page-bg);
+    color: var(--user-ink);
+}
+
+.dark .app-user-workspace,
+.dark .app-user-overlays {
+    --user-page-bg: #151517;
+    --user-surface: #1c1c1f;
+    --user-surface-raised: #222226;
+    --user-surface-muted: #26262a;
+    --user-surface-hover: #303036;
+    --user-control-pressed: #3a3a40;
+    --user-border: rgba(255, 255, 255, .09);
+    --user-border-strong: rgba(255, 255, 255, .16);
+    --user-ink: #f3f3f5;
+    --user-ink-muted: #b4b4bc;
+    --user-ink-soft: #9797a1;
+    --user-shadow-card: none;
+    --user-shadow-hover: none;
+}
+
+.app-user-workspace .app-workspace-stage,
+.app-user-workspace .app-user-content,
+.app-user-workspace .app-workspace-grid {
+    background: var(--user-page-bg);
+}
+
+/* Navigation rail: 20% wider than the previous 180 / 58 compact track. */
+.app-user-workspace .app-workspace-sidebar {
+    width: var(--workspace-reference-sidebar) !important;
+    flex-basis: var(--workspace-reference-sidebar) !important;
+    background: var(--user-page-bg) !important;
+    border-right: 0 !important;
+    transition: width var(--user-motion);
+}
+.app-user-workspace .app-workspace-sidebar.is-collapsed {
+    width: var(--workspace-reference-collapsed) !important;
+    flex-basis: var(--workspace-reference-collapsed) !important;
+}
+.app-user-workspace .app-workspace-sidebar-scroll-area { padding: 22px 12px 12px !important; gap: 24px !important; }
+.app-user-workspace .app-workspace-sidebar-footer { padding: 12px 12px 14px !important; border-top: 0 !important; }
+.app-user-workspace .app-workspace-nav-link {
+    min-height: var(--workspace-reference-row) !important;
+    padding: 3px 10px !important;
+    border-radius: 13px !important;
+    color: var(--user-ink-muted) !important;
+    font-size: 13px !important;
+    font-weight: 560 !important;
+    transition: background var(--user-motion), color var(--user-motion), transform var(--user-motion);
+}
+.app-user-workspace .app-workspace-nav-link .app-workspace-nav-main { gap: 10px !important; }
+.app-user-workspace .app-workspace-nav-link .app-workspace-nav-icon svg,
+.app-user-workspace .app-workspace-nav-link .app-workspace-nav-main > svg { width: 16px !important; height: 16px !important; }
+.app-user-workspace .app-workspace-nav-link.is-active { background: transparent !important; color: var(--user-ink) !important; font-weight: 680 !important; }
+.app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
+.app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) { background: var(--user-surface-hover) !important; color: var(--user-ink) !important; }
+.app-user-workspace .app-workspace-nav-group-toggle { color: var(--user-ink-soft) !important; }
+.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-sidebar-scroll-area { padding-inline: 8px !important; }
+.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-nav-link { width: 48px !important; }
+
+.app-user-workspace .app-workspace-topbar {
+    min-height: var(--workspace-reference-topbar) !important;
+    height: var(--workspace-reference-topbar) !important;
+    overflow: visible;
+    padding-inline: 20px !important;
+    border-bottom: 0 !important;
+    background: color-mix(in srgb, var(--user-page-bg) 92%, transparent) !important;
+    color: var(--user-ink) !important;
+}
+.app-user-workspace .app-workspace-topbar-breadcrumb { color: var(--user-ink-muted) !important; }
+.app-user-workspace .app-workspace-topbar-credit-pill { border-color: var(--user-border) !important; background: var(--user-surface) !important; color: var(--user-ink-muted) !important; }
+.app-user-workspace .app-workspace-topbar-credit-pill:hover,
+.app-user-workspace .app-workspace-topbar-credit-pill:focus-visible {
+    border-color: color-mix(in srgb, #ff8a28 36%, var(--user-border)) !important;
+    background: color-mix(in srgb, #ff8a28 10%, var(--user-surface)) !important;
+}
+.app-user-workspace .app-workspace-topbar-credit-pill strong { color: var(--user-ink) !important; }
+
+/* One scroll owner on the creation route. */
+.app-user-workspace .creation-home {
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    background: var(--user-page-bg) !important;
+    color: var(--user-ink) !important;
+}
+.app-user-workspace .creation-home > .creation-empty-workspace,
+.app-user-workspace .creation-home > .creation-thread-workbench {
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+}
+.app-user-workspace .creation-home > .creation-empty-workspace {
+    display: block !important;
+    width: min(1680px, calc(100% - 72px)) !important;
+    height: 100% !important;
+    max-width: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 28px 0 56px !important;
+}
+.app-user-workspace .creation-home > .creation-empty-workspace::-webkit-scrollbar { display: none; width: 0; }
+
+/* Reference page order: title → mode tabs → large composer → quick actions → works. */
+.app-user-workspace .creation-home-heading {
+    width: 100% !important;
+    margin: 0 auto 24px !important;
+    text-align: center !important;
+}
+.app-user-workspace .creation-home-heading-mark {
+    width: 48px !important;
+    height: 48px !important;
+    margin: 0 auto 16px !important;
+    border-radius: 15px !important;
+    background: var(--user-accent-soft) !important;
+    color: var(--user-accent) !important;
+}
+.app-user-workspace .creation-home-heading-mark svg { width: 24px !important; height: 24px !important; }
+.app-user-workspace .creation-home-heading h1 {
+    margin: 0 !important;
+    color: var(--user-ink) !important;
+    font-size: clamp(26px, 2vw, 32px) !important;
+    font-weight: 600 !important;
+    letter-spacing: -.04em !important;
+    line-height: 1.12 !important;
+}
+.app-user-workspace .creation-home-heading p {
+    margin: 12px 0 0 !important;
+    color: var(--user-ink-muted) !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+}
+.creation-launchpad {
+    width: min(100%, 960px);
+    margin-inline: auto;
+    container-type: inline-size;
+}
+
+.app-user-workspace .creation-launchpad > .creation-mode-capsule {
+    display: flex !important;
+    width: fit-content !important;
+    height: 44px !important;
+    margin: 0 auto 16px !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 4px !important;
+    border: 0 !important;
+    border-radius: var(--user-radius-card) !important;
+    background: var(--user-surface-muted) !important;
+    box-shadow: none !important;
+}
+.app-user-workspace .creation-launchpad > .creation-mode-capsule .creation-chat-control {
+    height: 36px !important;
+    min-height: 36px !important;
+    min-width: 92px !important;
+    padding: 0 20px !important;
+    border-radius: var(--user-radius-control) !important;
+    color: var(--user-ink-muted) !important;
+    font-size: 14px !important;
+    font-weight: 620 !important;
+}
+.app-user-workspace .creation-launchpad > .creation-mode-capsule .creation-chat-control[aria-selected="true"] {
+    background: var(--user-surface) !important;
+    color: var(--user-ink) !important;
+    box-shadow: var(--user-shadow-card);
+}
+.app-user-workspace .creation-launchpad > .creation-mode-capsule .creation-chat-control:hover:not([aria-selected="true"]) { background: var(--user-surface-hover) !important; color: var(--user-ink) !important; }
+.app-user-workspace .creation-launchpad > .creation-mode-capsule .creation-chat-control svg { width: 16px !important; height: 16px !important; }
+
+.app-user-workspace .creation-empty-composer { width: 100% !important; margin: 0 0 20px !important; }
+.app-user-workspace .creation-composer-shell {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 22px;
+    background: transparent;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--user-ink) 8%, transparent);
+}
+.dark .app-user-workspace .creation-composer-shell {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .28);
+}
+.app-user-workspace .creation-chat-composer {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 0 !important;
+    border-radius: 21px !important;
+    background: var(--user-surface) !important;
+    box-shadow: none !important;
+    transition: box-shadow var(--user-motion), transform var(--user-motion) !important;
+}
+.app-user-workspace .creation-chat-composer .creation-chat-writing-surface,
+.app-user-workspace .creation-chat-composer .creation-chat-dock {
+    position: relative;
+    z-index: 1;
+}
+.app-user-workspace .creation-chat-composer:focus-within {
+    box-shadow: none !important;
+    transform: none;
+}
+.dark .app-user-workspace .creation-chat-composer {
+    box-shadow: none !important;
+}
+.dark .app-user-workspace .creation-chat-composer:focus-within {
+    box-shadow: none !important;
+}
+.app-user-workspace .creation-chat-composer.is-empty .creation-chat-writing-surface {
+    min-height: 216px !important;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    padding: 30px 32px 18px !important;
+}
+.app-user-workspace .creation-chat-editor textarea,
+.app-user-workspace .creation-chat-mention-editor { min-height: 112px !important; font-size: 18px !important; line-height: 1.55 !important; caret-color: var(--user-accent); }
+.app-user-workspace .creation-chat-editor textarea::placeholder,
+.app-user-workspace .creation-chat-mention-editor:empty::before { color: var(--user-ink-soft) !important; opacity: .86 !important; }
+.app-user-workspace .creation-reference-panel { margin-top: auto !important; }
+.app-user-workspace .creation-chat-dock {
+    min-height: 64px !important;
+    padding: 12px 18px 12px 24px !important;
+    border-top: 0 !important;
+    background: transparent !important;
+}
+.app-user-workspace .creation-chat-controls { gap: 8px !important; }
+.app-user-workspace .creation-chat-control {
+    min-height: 40px !important;
+    border-radius: 999px !important;
+    background: var(--user-surface-muted) !important;
+    color: var(--user-ink-muted) !important;
+    transition: background var(--user-motion), color var(--user-motion), transform var(--user-motion), box-shadow var(--user-motion) !important;
+}
+.app-user-workspace .creation-chat-control:hover,
+.app-user-workspace .creation-chat-control[aria-expanded="true"] {
+    background: var(--user-surface-hover) !important;
+    color: var(--user-ink) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--user-ink) 8%, transparent);
+}
+.app-user-workspace .creation-home .canvas-node-composer-submit-action { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
+
+.app-user-workspace .creation-launchpad .creation-chat-composer {
+    border-radius: 22px !important;
+}
+.app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-writing-surface {
+    min-height: 152px !important;
+    padding: 22px 24px 10px !important;
+}
+.app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-mention-editor {
+    min-height: 64px !important;
+    font-size: 16px !important;
+}
+.app-user-workspace .creation-launchpad .creation-chat-dock {
+    min-height: 64px !important;
+    padding: 8px 16px 16px !important;
+    border-top: 0 !important;
+}
+.app-user-workspace .creation-launchpad .creation-chat-controls .creation-chat-control {
+    min-height: 36px !important;
+    height: 36px !important;
+    padding-inline: 12px;
+    font-size: 12px;
+    border: 0 !important;
+}
+.app-user-workspace .creation-launchpad .creation-reference-add-button {
+    border-style: dashed;
+    border-color: var(--user-border);
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    transition: background var(--user-motion), border-color var(--user-motion), color var(--user-motion), transform var(--user-motion);
+}
+
+.app-user-workspace .creation-launchpad .creation-mode-capsule .creation-chat-control:focus-visible,
+.app-user-workspace .creation-launchpad .suggest-card:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 3px;
+}
+
+.app-user-workspace .creation-empty-suggest {
+    display: grid !important;
+    width: 100% !important;
+    margin: 0 0 0 !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt,
+.app-user-workspace .creation-empty-suggest .suggest-card {
+    position: relative;
+    isolation: isolate;
+    min-height: 80px !important;
+    margin: 0 !important;
+    padding: 12px !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--user-radius-card) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--user-ink) !important;
+    transition: transform var(--user-motion), background var(--user-motion), box-shadow var(--user-motion), border-color var(--user-motion) !important;
+}
+.app-user-workspace .creation-empty-suggest .suggest-card-hover {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: var(--user-surface-hover);
+    pointer-events: none;
+}
+.app-user-workspace .creation-empty-suggest .suggest-card > .suggest-icon,
+.app-user-workspace .creation-empty-suggest .suggest-card > .suggest-copy { position: relative; z-index: 1; }
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt { grid-column: auto !important; }
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt:hover,
+.app-user-workspace .creation-empty-suggest .suggest-card:hover,
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt:focus-visible,
+.app-user-workspace .creation-empty-suggest .suggest-card:focus-visible { transform: none !important; border-color: transparent !important; background: transparent !important; box-shadow: none !important; }
+.app-user-workspace .creation-empty-suggest .suggest-icon { width: 32px !important; height: 32px !important; margin-bottom: 0 !important; flex-shrink: 0; border: 0 !important; border-radius: 12px !important; background: var(--user-surface-muted) !important; color: var(--user-ink-muted) !important; }
+.app-user-workspace .creation-empty-suggest .suggest-copy,
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-copy { gap: 4px !important; }
+.app-user-workspace .creation-empty-suggest .suggest-copy strong,
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-copy strong { color: var(--user-ink) !important; font-size: 14px !important; }
+.app-user-workspace .creation-empty-suggest .suggest-copy span,
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-hint,
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-text { color: var(--user-ink-muted) !important; font-size: 12px !important; }
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-spark,
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-ray { display: none !important; }
+
+/* Featured works are part of the home page rhythm, not an afterthought. */
+.app-user-workspace .creation-featured-works { margin-top: 40px !important; }
+.app-user-workspace .creation-featured-heading { margin-bottom: 24px !important; }
+.app-user-workspace .creation-featured-heading span { color: var(--user-ink-soft) !important; font-size: 13px !important; }
+.app-user-workspace .creation-featured-heading h2 { color: var(--user-ink) !important; font-size: 22px !important; letter-spacing: -.025em !important; }
+.app-user-workspace .creation-featured-heading p { color: var(--user-ink-muted) !important; }
+.app-user-workspace .creation-featured-layout { gap: 18px !important; }
+.app-user-workspace .creation-featured-card { border: 0 !important; border-radius: var(--user-radius-card) !important; background: var(--user-surface) !important; box-shadow: var(--user-shadow-card) !important; }
+.app-user-workspace .creation-featured-card:hover,
+.app-user-workspace .creation-featured-card:focus-visible { border-color: var(--user-border-strong) !important; box-shadow: var(--user-shadow-hover) !important; transform: translateY(-2px) !important; }
+.app-user-workspace .creation-featured-copy strong { color: var(--user-ink) !important; }
+.app-user-workspace .creation-featured-copy > span { color: var(--user-ink-muted) !important; }
+.app-user-workspace .creation-featured-copy em { color: var(--user-accent) !important; }
+
+/* 首页精选灵感：一张主推荐带动右侧节奏，避免机械等宽网格。 */
+.app-user-workspace .creation-featured-layout {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-auto-rows: auto;
+    align-items: stretch;
+}
+.app-user-workspace .creation-featured-card.is-featured-hero { grid-column: span 2; grid-row: span 2; }
+.app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media { flex: 1 1 auto; min-height: 0; aspect-ratio: auto; }
+.app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media img { position: absolute; inset: 0; }
+.app-user-workspace .creation-featured-card:not(.is-featured-hero) .creation-featured-media { aspect-ratio: 1.55 / 1; }
+.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) { grid-column: span 2; min-height: clamp(160px, 14vw, 210px); flex-direction: row; }
+.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media { width: 48%; height: 100%; flex: 0 0 48%; aspect-ratio: auto; }
+.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media img { position: absolute; inset: 0; }
+.app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-copy { align-content: center; flex: 1; padding: 18px 22px; }
+.app-user-workspace .creation-featured-card:not(.is-featured-hero) .creation-featured-copy { padding: 12px 14px 14px; }
+.app-user-workspace .creation-featured-card:not(.is-featured-hero) .creation-featured-copy > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 对话记录统一成窄而有层次的工作区，不让输入区吞掉首屏。 */
+.app-user-workspace .creation-thread-toolbar,
+.app-user-workspace .creation-thread-stage,
+.app-user-workspace .creation-thread-composer { width: min(1066px, calc(100% - 48px)); }
+.app-user-workspace .creation-home .creation-thread-toolbar { min-height: 40px; padding: 4px 0; border-bottom: 0; }
+.app-user-workspace .creation-thread-scroll { background: transparent; }
+.app-user-workspace .creation-thread-stage { padding-top: 16px; padding-bottom: 12px; }
+.app-user-workspace .creation-thread-composer { padding: 4px 0 10px; background: transparent; }
+.app-user-workspace .creation-chat-composer.is-thread .creation-chat-writing-surface {
+    min-height: 0 !important;
+    padding: 8px 12px 0 !important;
+}
+.app-user-workspace .creation-chat-composer.is-thread .creation-chat-editor textarea,
+.app-user-workspace .creation-chat-composer.is-thread .creation-chat-mention-editor {
+    min-height: 40px !important;
+    font-size: 14px !important;
+    line-height: 1.55 !important;
+}
+.app-user-workspace .creation-chat-composer.is-thread .creation-chat-dock {
+    min-height: 44px !important;
+    padding: 4px 10px 8px !important;
+}
+.app-user-workspace .creation-chat-composer.is-thread .creation-chat-control {
+    min-height: 32px !important;
+    height: 32px !important;
+}
+.app-user-workspace .creation-home .creation-chat-composer.is-thread .creation-submit.ant-btn .creation-submit-action,
+.app-product-workspace .creation-home .creation-chat-composer.is-thread .creation-submit.ant-btn .creation-submit-action {
+    height: 36px;
+    padding: 0 14px;
+}
+.app-user-workspace .creation-home .creation-user-message { width: min(676px, 82%); margin-bottom: 28px; gap: 8px; }
+.app-user-workspace .creation-user-message-copy-wrap { border: 1px solid color-mix(in srgb, var(--user-accent) 12%, var(--user-border)); border-radius: 18px 18px 5px 18px; padding: 11px 14px; background: color-mix(in srgb, var(--user-accent) 7%, var(--user-surface)); box-shadow: 0 8px 24px color-mix(in srgb, var(--user-ink) 5%, transparent); }
+.app-user-workspace .creation-assistant-message { width: min(910px, 100%); margin-bottom: 28px; }
+.app-user-workspace .creation-message-content,
+.app-user-workspace .creation-message-error,
+.app-user-workspace .creation-message-reasoning-wrap { max-width: 884px; padding-top: 8px; }
+.app-user-workspace .creation-message-heading { min-height: 28px; }
+.app-user-workspace .creation-home .creation-thread-composer .creation-mode-tabs { transform: none; margin-bottom: 0; }
+.app-user-workspace .creation-history-drawer .ant-drawer-body { background: var(--user-bg); }
+
+@media (max-width: 720px) {
+    .app-user-workspace .creation-featured-layout { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; grid-auto-rows: auto; }
+    .app-user-workspace .creation-featured-card.is-featured-hero { grid-column: 1 / -1; grid-row: auto; }
+    .app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media { flex: none; aspect-ratio: 1.7 / 1; }
+    .app-user-workspace .creation-featured-card.is-featured-hero .creation-featured-media img { position: static; }
+    .app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) { grid-column: auto; min-height: 0; flex-direction: column; }
+    .app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media { width: 100%; height: auto; flex: none; aspect-ratio: 1.55 / 1; }
+    .app-user-workspace .creation-featured-layout > .creation-featured-card:nth-child(4) .creation-featured-media img { position: static; }
+    .app-user-workspace .creation-thread-toolbar,
+    .app-user-workspace .creation-thread-stage,
+    .app-user-workspace .creation-thread-composer { width: calc(100% - 28px); }
+    .app-user-workspace .creation-home .creation-user-message { width: 90%; }
+}
+
+/* Shared library surfaces: no dark-mode geometry fork, only token changes. */
+.app-user-workspace .library-page > div,
+.app-user-workspace .task-library-frame,
+.app-user-workspace .settings-library-frame,
+.app-user-workspace .assets-library-page .canvas-library-frame,
+.app-user-workspace .project-library-card,
+.app-user-workspace .task-grid-card,
+.app-user-workspace .skill-library-card {
+    color: var(--user-ink) !important;
+}
+.app-user-workspace .task-library-frame,
+.app-user-workspace .settings-library-frame,
+.app-user-workspace .assets-library-page .canvas-library-frame {
+    border-color: var(--user-border) !important;
+    background: var(--user-surface) !important;
+    box-shadow: var(--user-shadow-card) !important;
+}
+.dark .app-user-workspace .task-library-frame,
+.dark .app-user-workspace .settings-library-frame,
+.dark .app-user-workspace .assets-library-page .canvas-library-frame { background: var(--user-surface) !important; }
+
+@media (max-width: 1100px) {
+    .app-user-workspace .creation-home > .creation-empty-workspace { width: min(100% - 40px, 900px) !important; }
+    .app-user-workspace .creation-empty-suggest { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 680px) {
+    .app-user-workspace .app-workspace-topbar { padding-inline: 12px !important; gap: 8px; }
+    .app-user-workspace .app-workspace-topbar-breadcrumb > a,
+    .app-user-workspace .app-workspace-topbar-breadcrumb > span[aria-hidden] { display: none; }
+    .app-user-workspace .app-workspace-topbar-breadcrumb { min-width: 0; white-space: nowrap; }
+    .app-user-workspace .app-workspace-sidebar { width: 180px !important; }
+    .app-user-workspace .creation-home > .creation-empty-workspace { width: calc(100% - 24px) !important; padding-top: 28px !important; padding-bottom: 40px !important; }
+    .app-user-workspace .creation-home-heading h1 { font-size: 28px !important; }
+    .app-user-workspace .creation-home-heading p { font-size: 14px !important; }
+    .app-user-workspace .creation-launchpad > .creation-mode-capsule .creation-chat-control { min-width: 0 !important; padding-inline: 16px !important; }
+    .app-user-workspace .creation-chat-writing-surface,
+    .app-user-workspace .creation-chat-composer.is-empty .creation-chat-writing-surface { min-height: 250px !important; padding: 22px 18px 12px !important; }
+    .app-user-workspace .creation-chat-editor textarea,
+    .app-user-workspace .creation-chat-mention-editor { min-height: 120px !important; font-size: 17px !important; }
+    .app-user-workspace .creation-empty-suggest { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .app-user-workspace .creation-empty-suggest .creation-hero-prompt,
+    .app-user-workspace .creation-empty-suggest .suggest-card { min-height: 80px !important; }
+    .app-user-workspace .creation-featured-works { margin-top: 48px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .app-user-workspace .app-workspace-sidebar,
+    .app-user-workspace .creation-empty-suggest .creation-hero-prompt,
+    .app-user-workspace .creation-empty-suggest .suggest-card,
+    .app-user-workspace .creation-featured-card { transition: none !important; }
+    .app-user-workspace .creation-empty-suggest .creation-hero-prompt:hover,
+    .app-user-workspace .creation-empty-suggest .suggest-card:hover,
+    .app-user-workspace .creation-featured-card:hover { transform: none !important; }
+}
+
+/* Quick actions are four independent tiles, not a nested list. */
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt,
+.app-user-workspace .creation-empty-suggest .suggest-card {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 12px !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-copy,
+.app-user-workspace .creation-empty-suggest .suggest-copy {
+    display: flex !important;
+    min-width: 0 !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+}
+.app-user-workspace .creation-empty-suggest .creation-hero-prompt-text { display: block !important; margin-top: 6px !important; }
+
+/* Keep list/detail pages in the same semantic palette in dark mode. */
+.app-user-workspace .library-page,
+.app-user-workspace .library-page > div,
+.app-user-workspace .settings-page,
+.app-user-workspace .settings-page .settings-content,
+.app-user-workspace .assets-library-page,
+.app-user-workspace .project-library-page {
+    color: var(--user-ink) !important;
+}
+.app-user-workspace .task-record-row,
+.app-user-workspace .task-grid-card,
+.app-user-workspace .project-library-card,
+.app-user-workspace .skill-library-card,
+.app-user-workspace .assets-library-page .canvas-library-frame,
+.app-user-workspace .settings-library-frame,
+.app-user-workspace .settings-nav-panel,
+.app-user-workspace .settings-channel,
+.app-user-workspace .settings-preference-block {
+    background: var(--user-surface) !important;
+    border-color: var(--user-border) !important;
+    color: var(--user-ink) !important;
+    box-shadow: var(--user-shadow-card) !important;
+}
+.app-user-workspace .task-record-row:hover,
+.app-user-workspace .task-record-row:focus-within,
+.app-user-workspace .task-grid-card:hover,
+.app-user-workspace .task-grid-card:focus-within,
+.app-user-workspace .project-library-card:hover,
+.app-user-workspace .project-library-card:focus-within,
+.app-user-workspace .skill-library-card:hover,
+.app-user-workspace .skill-library-card:focus-within {
+    background: var(--user-surface-hover) !important;
+    border-color: var(--user-border-strong) !important;
+    box-shadow: var(--user-shadow-hover) !important;
+}
+.app-user-workspace .settings-nav-item { color: var(--user-ink-muted) !important; }
+.app-user-workspace .settings-nav-item.is-active { background: var(--user-accent-soft) !important; color: var(--user-accent) !important; }
+.app-user-workspace :where(.ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number) {
+    border-color: var(--user-border) !important;
+    background: var(--user-surface) !important;
+    color: var(--user-ink) !important;
+    box-shadow: none !important;
+}
+.app-user-workspace :where(.ant-input::placeholder, .ant-select-selection-placeholder) { color: var(--user-ink-soft) !important; }
+.app-user-workspace .ant-input-affix-wrapper > .ant-input {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+.app-user-workspace :where(.ant-input:hover, .ant-input-affix-wrapper:hover, .ant-select-selector:hover, .ant-picker:hover) { border-color: var(--user-border-strong) !important; }
+.app-user-workspace :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector, .ant-picker-focused) { border-color: var(--user-border-strong) !important; box-shadow: none !important; }
+.app-user-workspace .ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open) {
+    outline: 1px solid var(--user-border-strong);
+    outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+   Unified select contract
+   所有 Select / TreeSelect / Cascader / AutoComplete 共用同一套触发器和浮层
+   语义。尤其禁止鼠标点击后出现高亮白边；键盘焦点仍保留可见 ring。
+   ------------------------------------------------------------------------- */
+:where(.app-unified-select, .ant-select, .ant-tree-select, .ant-cascader-picker, .ant-auto-complete) {
+    --unified-select-surface: var(--control-surface, color-mix(in srgb, var(--foreground) 5%, transparent));
+    --unified-select-surface-hover: var(--control-surface-hover, color-mix(in srgb, var(--foreground) 9%, transparent));
+    --unified-select-border: transparent;
+    --unified-select-focus: var(--control-focus-ring, color-mix(in srgb, var(--foreground) 32%, transparent));
+}
+
+:where(.ant-select .ant-select-selector, .ant-tree-select .ant-select-selector, .ant-cascader-picker, .ant-auto-complete .ant-select-selector) {
+    border-color: var(--unified-select-border) !important;
+    background: var(--unified-select-surface) !important;
+    box-shadow: none !important;
+    transition: background-color var(--motion-state, 180ms) ease, border-color var(--motion-state, 180ms) ease !important;
+}
+
+:where(.ant-select:not(.ant-select-disabled):hover .ant-select-selector, .ant-tree-select:not(.ant-select-disabled):hover .ant-select-selector, .ant-cascader-picker:hover, .ant-auto-complete:not(.ant-select-disabled):hover .ant-select-selector) {
+    border-color: var(--unified-select-border) !important;
+    background: var(--unified-select-surface-hover) !important;
+}
+
+/* 点击打开时只改变表面，不制造白色外框；焦点可见性只交给键盘路径。 */
+:where(.ant-select-focused .ant-select-selector, .ant-select-open .ant-select-selector, .ant-tree-select-focused .ant-select-selector, .ant-cascader-picker-focused, .ant-auto-complete.ant-select-focused .ant-select-selector) {
+    border-color: var(--unified-select-border) !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+:where(.ant-select:focus-visible, .ant-tree-select:focus-visible, .ant-cascader-picker:focus-visible, .ant-auto-complete:focus-visible) {
+    outline: 2px solid var(--unified-select-focus) !important;
+    outline-offset: 2px;
+}
+
+:where(.ant-select-dropdown, .ant-dropdown-menu, .ant-cascader-dropdown, .ant-tree-select-dropdown, .ant-picker-dropdown) {
+    border: 0 !important;
+    border-radius: var(--r-lg, 12px) !important;
+    background: var(--popover) !important;
+    background-image: none !important;
+    box-shadow: var(--elevation-overlay) !important;
+}
+
+:where(.ant-select-item-option, .ant-dropdown-menu-item, .ant-dropdown-menu-submenu-title, .ant-cascader-menu-item, .ant-tree-select-tree-node-content-wrapper) {
+    min-height: 36px;
+    margin-block: 2px;
+    border-radius: var(--r-sm, 8px) !important;
+    color: var(--popover-foreground) !important;
+}
+
+:where(.ant-select-item-option-active:not(.ant-select-item-option-disabled), .ant-dropdown-menu-item:hover, .ant-cascader-menu-item-active, .ant-tree-select-tree-node-content-wrapper:hover) {
+    background: color-mix(in srgb, var(--popover-foreground) 7%, var(--popover)) !important;
+}
+
+:where(.ant-select-item-option-selected:not(.ant-select-item-option-disabled), .ant-dropdown-menu-item-selected, .ant-tree-select-tree-node-content-wrapper.ant-tree-node-selected) {
+    background: color-mix(in srgb, var(--popover-foreground) 12%, var(--popover)) !important;
+    color: var(--popover-foreground) !important;
+    font-weight: 600;
+}
+
+/* 旧的 workspace 局部规则曾用 outline 表达 focus，鼠标点击时会误触发白边；
+   这里只保留键盘 focus-visible 的可见 ring。 */
+.app-user-workspace .ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open) {
+    outline: 2px solid var(--unified-select-focus) !important;
+    outline-offset: 2px;
+}
+
+/* 工作台页面已有更具体的控件规则；统一契约必须覆盖它们，确保打开/悬停不再出现白色描边。 */
+.app-user-workspace :where(.app-unified-select .ant-select-selector, .ant-select-focused .ant-select-selector, .ant-select-open .ant-select-selector, .ant-tree-select-focused .ant-select-selector) {
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.app-user-workspace :where(.app-unified-select:hover .ant-select-selector, .ant-select:not(.ant-select-disabled):hover .ant-select-selector, .ant-tree-select:not(.ant-select-disabled):hover .ant-select-selector) {
+    border-color: transparent !important;
+}
+
+/* -------------------------------------------------------------------------
+   Unified Select v2
+   Ant Design 6 把 Select 的边框、背景和 focus 状态放在 .ant-select 根节点，
+   不再是旧版的 .ant-select-selector。这里是统一组件的唯一视觉出口：默认 filled
+   只是借用 AntD 的交互语义，实际渲染为无描边的柔和表面，避免各页面出现不同的
+   outlined 下拉框。键盘 focus-visible 仍保留可发现的焦点提示。
+   ------------------------------------------------------------------------- */
+.ant-select.app-unified-select {
+    --unified-select-surface: color-mix(in srgb, var(--foreground) 6%, transparent);
+    --unified-select-surface-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
+    --unified-select-surface-open: color-mix(in srgb, var(--foreground) 12%, transparent);
+    min-width: 128px;
+    min-height: 36px;
+    border: 0 !important;
+    border-width: 0 !important;
+    border-color: transparent !important;
+    border-radius: var(--r-xl) !important;
+    background: var(--unified-select-surface) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transition: background-color var(--motion-state, 180ms) ease, color var(--motion-state, 180ms) ease !important;
+}
+
+.ant-select.app-unified-select--pill {
+    border-radius: var(--r-full) !important;
+    padding-inline: 4px;
+}
+
+.ant-select.app-unified-select.ant-select-sm {
+    min-width: 112px;
+}
+
+.ant-select.app-unified-select.ant-select-lg {
+    min-width: 144px;
+}
+
+.ant-select.app-unified-select--field {
+    border-radius: var(--r-lg) !important;
+}
+
+.ant-select.app-unified-select:hover:not(.ant-select-disabled) {
+    border: 0 !important;
+    border-color: transparent !important;
+    background: var(--unified-select-surface-hover) !important;
+    box-shadow: none !important;
+}
+
+.ant-select.app-unified-select.ant-select-focused,
+.ant-select.app-unified-select.ant-select-open {
+    border: 0 !important;
+    border-width: 0 !important;
+    border-color: transparent !important;
+    background: var(--unified-select-surface-open) !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.ant-select.app-unified-select .ant-select-content,
+.ant-select.app-unified-select .ant-select-selector,
+.ant-select.app-unified-select .ant-select-selection-search-input {
+    border: 0 !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.ant-select.app-unified-select .ant-select-suffix {
+    margin-inline-end: 10px !important;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent) !important;
+    transition: color var(--motion-state, 180ms) ease, transform var(--motion-state, 180ms) ease !important;
+}
+
+.ant-select.app-unified-select.ant-select-open .ant-select-suffix {
+    color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
+}
+
+.ant-select.app-unified-select[data-input-modality="pointer"],
+.ant-select.app-unified-select[data-input-modality="unknown"],
+.ant-select.app-unified-select[data-input-modality="keyboard"].ant-select-open {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open) {
+    outline: 1px solid color-mix(in srgb, var(--ring) 30%, transparent) !important;
+    outline-offset: 0;
+}
+
+.ant-select.app-unified-select .ant-select-input:focus {
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+.ant-select-dropdown {
+    border: 0 !important;
+    border-color: transparent !important;
+    border-radius: var(--r-2xl) !important;
+    background: var(--popover) !important;
+    background-image: none !important;
+    box-shadow: var(--elevation-overlay) !important;
+}
+
+.ant-select-dropdown .ant-select-item-option {
+    border: 0 !important;
+    border-radius: var(--r-md) !important;
+    background: transparent !important;
+    color: var(--popover-foreground) !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+.ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+    border: 0 !important;
+    background: color-mix(in srgb, var(--popover-foreground) 10%, var(--popover)) !important;
+    color: var(--popover-foreground) !important;
+}

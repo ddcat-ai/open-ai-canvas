@@ -2,12 +2,12 @@ package app
 
 import (
 	"errors"
-	"infinite-canvas/backend/internal/model"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"yingce/backend/internal/model"
 )
 
 func TestCanvasHistoryProtectsMediaAndDeletionWorker(t *testing.T) {

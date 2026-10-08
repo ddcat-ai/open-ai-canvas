@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"infinite-canvas/backend/internal/database"
+	"yingce/backend/internal/database"
 )
 
 type DatabasePoolStats struct {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 const Live2DMaxBytes int64 = 128 << 20

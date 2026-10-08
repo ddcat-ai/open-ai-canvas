@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // Only expose known failure categories; raw provider errors can contain URLs and credentials.

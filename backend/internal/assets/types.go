@@ -3,7 +3,7 @@ package assets
 import (
 	"io"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 type ResourceStream struct {

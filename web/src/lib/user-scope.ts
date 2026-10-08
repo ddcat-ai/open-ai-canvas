@@ -1,4 +1,4 @@
-const ACTIVE_USER_SCOPE_KEY = "infinite-canvas:active-user-scope";
+const ACTIVE_USER_SCOPE_KEY = "yingce:active-user-scope";
 const GUEST_SCOPE = "guest";
 let userScopedPersistenceSuppressionDepth = 0;
 

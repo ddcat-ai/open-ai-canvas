@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 回归（2026-09-15）：模型一轮里并发提交多个写操作（实测：给 6 个镜头建图时一轮 3 个

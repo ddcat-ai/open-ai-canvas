@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
-	"infinite-canvas/backend/internal/platform"
 	"testing"
 	"time"
+	"yingce/backend/internal/platform"
 )
 
 func TestRequestRetryAfterMatchesWindow(t *testing.T) {

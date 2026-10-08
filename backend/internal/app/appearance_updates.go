@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/model"
 )
 
 type UpdateAnnouncement struct {

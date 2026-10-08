@@ -1,7 +1,7 @@
 package generation
 
 import (
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 // Engine 是 generation 域的入口；由 service 组合根构造并注入 Deps。

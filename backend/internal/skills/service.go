@@ -3,7 +3,7 @@ package skills
 import (
 	"context"
 
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/repository"
 )
 
 // Service 是技能域入口。组合根注入仓库、数据目录和后台循环，禁止 import internal/service。

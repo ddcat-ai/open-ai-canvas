@@ -11,7 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/repository"
 )
 
 func cloudAgentSkillPage(version, path, content string, offset int) (any, error) {
@@ -33,6 +33,37 @@ func validateCloudAgentID(value, label string, maxRunes int) error {
 	for _, r := range value {
 		if unicode.IsControl(r) {
 			return BadAuthRequest(label + "不能包含控制字符")
+		}
+	}
+	return nil
+}
+
+// validateCloudAgentVideoFramePatch 校验视频帧选择是否来自当前画布的图片输入。
+// node 是修改后的节点，nodes 和 edges 是当前操作计划；patch 未修改帧时不影响旧节点。
+// 空字符串允许取消选择；非空值必须先建立图片引用连线，实际素材可用性仍由生成准入校验。
+func validateCloudAgentVideoFramePatch(node map[string]any, nodes, edges []map[string]any, patch map[string]any) error {
+	for _, key := range []string{"videoStartFrameNodeId", "videoEndFrameNodeId"} {
+		raw, changed := patch[key]
+		if !changed {
+			continue
+		}
+		id := stringValue(raw)
+		if id == "" {
+			continue
+		}
+		if err := validateCloudAgentID(id, "首尾帧图片节点 ID", 80); err != nil {
+			return cloudAgentFieldError("patch."+key, "invalid_value", cloudAgentSafeToolError(err))
+		}
+		frame := cloudAgentNodeByID(nodes, id)
+		connected := false
+		for _, edge := range edges {
+			if stringValue(edge["fromNodeId"]) == id && stringValue(edge["toNodeId"]) == stringValue(node["id"]) {
+				connected = true
+				break
+			}
+		}
+		if frame == nil || stringValue(frame["type"]) != "image" || !connected {
+			return cloudAgentFieldError("patch."+key, "invalid_value", "首尾帧必须选择已连接到该视频节点的图片；请先建立引用连线")
 		}
 	}
 	return nil

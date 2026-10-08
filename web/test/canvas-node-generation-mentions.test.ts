@@ -43,24 +43,44 @@ describe("canvas node generation position mentions", () => {
         const prompt = "严格参考 @图片1，保持服装一致。";
         expect(normalizeCanvasNodeMentionTokens(prompt, references)).toBe("严格参考 @角色1，保持服装一致。");
         const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, []);
-        expect(context.prompt).toBe("严格参考 @角色1，保持服装一致。");
+        expect(context.prompt).toBe("严格参考 @图片1，保持服装一致。");
         expect(context.characterReferences).toEqual([{ nodeId: character.id, assetId: "character-asset", requestedVersionId: undefined }]);
         expect(() => buildNodeGenerationContext(target.id, nodes, connections, "参考 @图片2", [])).toThrow("@图片2");
     });
 
-    test("角色卡与普通图片混合时，图片编号不指向角色卡", () => {
+    test("角色卡与普通图片混合时共享图片序号，旧独立编号拒绝猜测迁移", () => {
         const target = targetNode();
         const character = node("character", CanvasNodeType.Text, "");
         character.metadata = { workflowKind: "character", characterAssetId: "character-asset" };
         const image = node("scene", CanvasNodeType.Image, "data:image/png;base64,AA==");
         const nodes = [target, character, image];
         const connections = [connection(character.id), connection(image.id)];
-        const prompt = "@角色1 站在 @图片1 场景内。";
+        const prompt = "@角色1站在@图片2场景内。";
         const references = buildCanvasResourceReferences(nodes, connections, target.id);
         expect(normalizeCanvasNodeMentionTokens(prompt, references)).toBe(prompt);
         const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, []);
+        expect(context.prompt).toBe("@图片1站在@图片2场景内。");
         expect(context.referenceImages.map((item) => item.id)).toEqual([image.id]);
         expect(context.characterReferences.map((item) => item.nodeId)).toEqual([character.id]);
+        expect(() => buildNodeGenerationContext(target.id, nodes, connections, "@角色1站在@图片1场景内", [])).toThrow("@图片1");
+    });
+
+    test("混合角色、绘图和图片按连接位置编译，逆序提及不会重排资源", () => {
+        const character = node("character", CanvasNodeType.Text, "");
+        character.metadata = { workflowKind: "character", characterAssetId: "character-asset" };
+        const drawing = node("drawing", CanvasNodeType.Drawing, "");
+        drawing.metadata = { drawingId: "drawing-document" };
+        const image = node("scene", CanvasNodeType.Image, "data:image/png;base64,AA==");
+        const target = targetNode();
+        const nodes = [target, image, drawing, character];
+        const connections = [character, drawing, image].map((source) => connection(source.id));
+        const references = buildCanvasResourceReferences(nodes, connections, target.id).filter((reference) => reference.active);
+        expect(Object.fromEntries(references.map((reference) => [reference.nodeId, reference.label]))).toEqual({ character: "角色1", drawing: "绘图2", scene: "图片3" });
+        const context = buildNodeGenerationContext(target.id, nodes, connections, "@图片3背景，@绘图2@角色1保持一致", [], true);
+        expect(context.prompt).toBe("@图片3背景，@图片2@图片1保持一致");
+        expect(context.referenceImageSlots.map((slot) => slot.nodeId)).toEqual([character.id, drawing.id, image.id]);
+        expect(context.referenceImages.map((item) => item.id)).toEqual([drawing.id, image.id]);
+        expect(() => buildNodeGenerationContext(target.id, nodes, connections, "@角色10保持一致", [], true)).toThrow("@角色10");
     });
 
     test("父图无预览时仍可继承输入，显式子图输入优先且去重", () => {

@@ -1,6 +1,6 @@
 package handler
 
-import "infinite-canvas/backend/internal/model"
+import "yingce/backend/internal/model"
 
 // 成本字段只在已通过 service 管理员校验的模型编辑接口中显式投影。
 type adminChannelModelPriceTier struct {

@@ -11,8 +11,8 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // The Agent uses the same public catalog as the composer, never a second routing policy.
@@ -105,6 +105,8 @@ type cloudAgentMediaArgs struct {
 	Size                  string                   `json:"size"`
 	Quality               string                   `json:"quality"`
 	VideoGenerateAudio    *bool                    `json:"videoGenerateAudio"`
+	VideoStartFrameNodeID string                   `json:"videoStartFrameNodeId"`
+	VideoEndFrameNodeID   string                   `json:"videoEndFrameNodeId"`
 	SnapshotHash          string                   `json:"snapshotHash"`
 	NodeID                string                   `json:"nodeId"`
 	Title                 string                   `json:"title"`
@@ -642,6 +644,8 @@ func (s *Service) fillCloudAgentMediaSnapshotHash(userID, canvasID string, a *cl
 	return nil
 }
 
+// prepareCloudAgentMedia 根据当前运行、画布快照和工具调用解析生成参数及素材。
+// 返回待审批的任务请求、草稿计划或校验错误；此阶段不提交收费任务。
 func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *cloudAgentRuntime, call cloudAgentCall) (CreateTaskRequest, *cloudAgentMediaPlan, error) {
 	var a cloudAgentMediaArgs
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &a); err != nil {
@@ -708,6 +712,13 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		config["channelId"], config["channelModelKey"], config["model"] = a.ChannelID, a.ChannelModelKey, a.ChannelModelKey
 	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
+	// 首尾帧是结构化输入，不能只写进提示词；复用画布提交任务时的字段。
+	if a.VideoStartFrameNodeID != "" {
+		metadata["videoStartFrameNodeId"] = a.VideoStartFrameNodeID
+	}
+	if a.VideoEndFrameNodeID != "" {
+		metadata["videoEndFrameNodeId"] = a.VideoEndFrameNodeID
+	}
 	if len(a.CharacterVersions) > 0 {
 		resolvedVersions := make([]string, 0, len(a.CharacterVersions))
 		for id, versionID := range a.CharacterVersions {
@@ -822,7 +833,9 @@ func saveCloudAgentDocument(repo *repository.Repository, canvas *model.CanvasPro
 	return saveCreationCanvasWithHistory(repo, canvas, before)
 }
 
-// Called inside the same transaction as the task, charge reservation and Agent checkpoint.
+// createCloudAgentMediaNode 为指定用户的画布保存计划中的媒体节点及引用连线。
+// task 为空时保存待审批草稿，否则绑定已创建任务；policy 校验配额，recorder 可记录撤销事件。
+// 返回保存错误；提交生成时由调用方放在任务、计费和 Agent 检查点的同一个事务中执行。
 func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID string, plan *cloudAgentMediaPlan, task *model.Task, policy RuntimePolicySetting, recorder ...cloudAgentMutationRecorder) error {
 	a := plan.Args
 	canvas, doc, refs, err := cloudAgentMediaDocument(repo, userID, canvasID, a, plan.TransientReferences)
@@ -861,6 +874,9 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		return err
 	}
 	meta["status"], meta["agentDraftRunId"], meta["referenceNodeIds"] = "idle", a.DraftRunID, a.ReferenceNodeIDs
+	if a.Mode == "video" {
+		meta["videoStartFrameNodeId"], meta["videoEndFrameNodeId"] = a.VideoStartFrameNodeID, a.VideoEndFrameNodeID
+	}
 	meta["prompt"] = cloudAgentMediaComposerPrompt(a.Prompt, refs)
 	meta["composerContent"] = meta["prompt"]
 	if task != nil {
@@ -981,6 +997,14 @@ func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID, 
 				return stringValue(node["id"]), &cloudAgentMediaWritebackError{error: BadAuthRequest("生成结果没有可用的账号资源，未写入媒体地址"), reason: "result_resource_unavailable"}
 			}
 			meta["content"], meta["storageKey"], meta["status"] = resourceFileURL(id), "resource:"+id, "success"
+			// 完成交易已登记的首个产物，与 Agent 回写的首个资源共用身份。
+			assetID := generationMediaAssetID(task.ID, 0)
+			delete(meta, "assetId")
+			if _, err := repo.AssetForUser(userID, assetID); err == nil {
+				meta["assetId"] = assetID
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return "", err
+			}
 			meta["naturalWidth"], meta["naturalHeight"] = resource.Width, resource.Height
 			if resource.Width > 0 && resource.Height > 0 {
 				if width, ok := node["width"].(float64); ok && width > 0 {

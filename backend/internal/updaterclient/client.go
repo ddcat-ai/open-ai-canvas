@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/hostupdate"
+	"yingce/backend/internal/hostupdate"
 )
 
 type Client struct {

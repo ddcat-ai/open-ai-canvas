@@ -18,10 +18,11 @@ import (
 	"testing/iotest"
 	"time"
 
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/storage"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/outbound/outboundtest"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/storage"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -335,6 +336,7 @@ func TestAliyunOSSSettingKeepsCDNBaseURL(t *testing.T) {
 }
 
 func TestQiniuKodoSettingAllowsMissingCDNBaseURL(t *testing.T) {
+	outboundtest.PublicDNS(t, "up-z0.qiniup.com")
 	next, err := ossSettingFromRequest(OSSSettingRequest{
 		Enabled: true, Provider: qiniuKodoProvider, Region: "z0", Endpoint: "https://up-z0.qiniup.com",
 		Bucket: "private-bucket", AccessKeyID: "access-id", AccessKeySecret: "secret-value",
@@ -415,6 +417,7 @@ func TestArchivedProviderCredentialsAreEncryptedAtRest(t *testing.T) {
 }
 
 func TestResourceAccessChecksOwnershipAndSignsOSSResource(t *testing.T) {
+	outboundtest.PublicDNS(t, "s3.amazonaws.com")
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
 		Enabled: true, Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
@@ -472,6 +475,7 @@ func TestPrepareResourceDeliveryPrefersConfiguredCDN(t *testing.T) {
 }
 
 func TestPrepareResourceDeliveryFallsBackToOriginWhenCDNAuthIsMissing(t *testing.T) {
+	outboundtest.PublicDNS(t, "s3.amazonaws.com")
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://s3.amazonaws.com", CDNBaseURL: "https://media.example.com",
@@ -687,6 +691,7 @@ func TestHistoricalUserResourceWithoutStorageSettingIDKeepsItsProviderCDN(t *tes
 }
 
 func TestPrepareResourceDeliveryUsesSignedOriginWithoutCDN(t *testing.T) {
+	outboundtest.PublicDNS(t, "s3.amazonaws.com")
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket",
@@ -929,7 +934,7 @@ func newResourceTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}, &model.UploadReservation{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}

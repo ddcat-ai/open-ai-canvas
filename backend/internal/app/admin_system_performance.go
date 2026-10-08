@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	agentruntime "infinite-canvas/backend/internal/agent/runtime"
-	"infinite-canvas/backend/internal/agent/yingceagent"
-	"infinite-canvas/backend/internal/buildinfo"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/platform"
-	"infinite-canvas/backend/internal/repository"
+	agentruntime "yingce/backend/internal/agent/runtime"
+	"yingce/backend/internal/agent/yingceagent"
+	"yingce/backend/internal/buildinfo"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
+	"yingce/backend/internal/repository"
 
 	"github.com/redis/go-redis/v9"
 )

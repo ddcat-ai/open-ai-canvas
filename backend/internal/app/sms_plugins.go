@@ -1,8 +1,8 @@
 package app
 
 import (
-	"infinite-canvas/backend/internal/protocol"
-	"infinite-canvas/backend/internal/sms"
+	"yingce/backend/internal/protocol"
+	"yingce/backend/internal/sms"
 )
 
 var systemSMSPolicies = map[string]PluginManagementView{

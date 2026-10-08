@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	agentruntime "infinite-canvas/backend/internal/agent/runtime"
-	"infinite-canvas/backend/internal/model"
+	agentruntime "yingce/backend/internal/agent/runtime"
+	"yingce/backend/internal/model"
 )
 
 // 端到端：生产入口 CreateCloudAgentRun → 真实 Node 运行时 → /model 桥接 → 任务 worker →

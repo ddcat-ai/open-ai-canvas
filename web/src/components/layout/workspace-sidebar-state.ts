@@ -1,4 +1,4 @@
-export const WORKSPACE_SIDEBAR_STORAGE_KEY = "infinite-canvas:workspace-sidebar-collapsed";
+export const WORKSPACE_SIDEBAR_STORAGE_KEY = "yingce:workspace-sidebar-collapsed";
 export const WORKSPACE_SIDEBAR_CHANGE_EVENT = "workspace:sidebar-collapsed-change";
 
 type WorkspaceSidebarStorage = Pick<Storage, "getItem" | "setItem">;

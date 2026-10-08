@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 )
 
 var errInvalidGeneratedDataURL = errors.New("生成内容 data URL 无效")

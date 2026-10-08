@@ -113,6 +113,42 @@ test("automatic focus and panning do not block Agent updates or reset the local 
     expect(useCanvasStore.getState().projects[0].viewport).toEqual(viewport);
 });
 
+test("refresh-only Previs mutations do not conflict with an editor-only viewport change", async () => {
+    const scene = {
+        id: "scene-1",
+        version: 1 as const,
+        title: "镜头",
+        background: "#111111",
+        environmentIntensity: 0.7,
+        environment: { mode: "color" as const },
+        gridVisible: true,
+        objects: [],
+        cameras: [],
+        lights: [],
+        shots: [],
+        activeShotId: "shot-1",
+        createdAt: "2026-09-13T00:00:00Z",
+        updatedAt: "2026-09-13T00:00:00Z",
+    };
+    const local = { ...initial, previsScenes: [scene] };
+    local.remoteContentHash = await canvasContentHash(local);
+    const remoteWithPrevis = {
+        ...local,
+        revision: 2,
+        previsScenes: [{ ...scene, updatedAt: "2026-09-13T12:00:00Z", objects: [{ id: "actor-1", name: "Agent 演员" }] }],
+    };
+    useCanvasStore.setState({ projects: [local] });
+    await initializeRemoteUserDataSession("agent-user");
+    const mock = spyOn(http, "get").mockResolvedValue({ project: remoteWithPrevis });
+    restore = () => mock.mockRestore();
+    const viewport = { x: -640, y: -280, k: 0.68 };
+    useCanvasStore.setState({ projects: [{ ...local, viewport, updatedAt: "2026-09-13T12:01:00Z" }] });
+    await refreshCanvasAfterAgent(local.id);
+    expect(useCanvasStore.getState().projects[0].viewport).toEqual(viewport);
+    expect(useCanvasStore.getState().projects[0].previsScenes).toEqual(remoteWithPrevis.previsScenes);
+    expect(useSyncProgressStore.getState().syncingProjects[local.id].phase).toBe("done");
+});
+
 test("replayed completion events do not reapply unchanged canvas nodes", async () => {
     await setup();
     let deliveries = 0;

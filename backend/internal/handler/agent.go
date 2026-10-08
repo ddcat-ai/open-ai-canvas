@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/service"
 )
 
 // Agent orchestration is durable; the browser stream never drives execution.

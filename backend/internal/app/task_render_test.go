@@ -10,7 +10,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // renderTestProject 构造一个可渲染的 v2 快照：一条可见视频轨 + 一个

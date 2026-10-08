@@ -3,7 +3,7 @@ package generation_test
 import (
 	"testing"
 
-	"infinite-canvas/backend/internal/generation"
+	"yingce/backend/internal/generation"
 )
 
 func TestGenerationPackageHasEngineAndOfficialRegistry(t *testing.T) {

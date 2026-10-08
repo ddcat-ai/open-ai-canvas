@@ -3,7 +3,7 @@ package repository
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // The existing task lease fences every checkpoint write, including after cancellation.

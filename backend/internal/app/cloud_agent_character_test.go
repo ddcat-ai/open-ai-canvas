@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func seedCloudAgentCharacter(t *testing.T, db *gorm.DB, canvasID string) map[string]any {

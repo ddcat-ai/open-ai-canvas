@@ -16,9 +16,9 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/payment"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/payment"
+	"yingce/backend/internal/protocol"
 )
 
 func (s *Service) PaymentNotificationResponse(providerID string, success bool) (int, string, string) {

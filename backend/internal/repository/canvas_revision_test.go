@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"

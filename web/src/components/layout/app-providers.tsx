@@ -9,7 +9,7 @@ import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader"
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { applySkinTheme } from "@/lib/skin-themes";
 import { appQueryClient } from "@/lib/query-client";
-import { isIsolatedDirectorRepro } from "@/lib/dev-repro";
+import { isIsolatedPrevisRepro } from "@/lib/dev-repro";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -42,7 +42,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     // DEV 复现台必须是同源本地确定性场景：AuthSessionHydrator 会打 /api/auth/session，
     // ClientRootInit 会打 /api/model-catalog，没有后端时产生真实 502，与导演台无关却会污染判据。
     // 与启动入口共用精确路径边界；生产构建中 import.meta.env.DEV 为 false，始终不启用隔离。
-    const isolateDevRepro = typeof window !== "undefined" && isIsolatedDirectorRepro(import.meta.env.DEV, window.location.pathname);
+    const isolateDevRepro = typeof window !== "undefined" && isIsolatedPrevisRepro(import.meta.env.DEV, window.location.pathname);
 
     useEffect(() => {
         if (isolateDevRepro) return;

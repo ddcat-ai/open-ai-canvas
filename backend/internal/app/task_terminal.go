@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // taskTerminalCoordinator 收敛任务进入终态后的业务策略。

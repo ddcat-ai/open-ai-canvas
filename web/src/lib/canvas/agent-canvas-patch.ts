@@ -24,21 +24,52 @@ function equal(a: unknown, b: unknown): boolean {
     return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, index) => equal(item, b[index]));
 }
 
+function identifiedArray(value: unknown): value is Record<string, unknown>[] {
+    return Array.isArray(value) && value.length > 0 && value.every((item) => record(item) && typeof item.id === "string" && item.id.length > 0);
+}
+
+function mergeIdentifiedArray(current: unknown, before: unknown, after: unknown): unknown[] | undefined {
+    const values = [current, before, after];
+    if (!values.every((value) => Array.isArray(value))) return undefined;
+    const arrays = values as unknown[][];
+    if (!arrays.some((items) => items.length > 0) || !arrays.every((items) => items.length === 0 || identifiedArray(items))) return undefined;
+
+    const maps = arrays.map((items) => new Map(items.map((item) => [(item as Record<string, unknown>).id as string, item as Record<string, unknown>])));
+    const ids = [...new Set(arrays.flatMap((items) => items.map((item) => (item as Record<string, unknown>).id as string)))];
+    const merged: unknown[] = [];
+    for (const id of ids) {
+        const value = mergeThreeWayValue(maps[0].get(id), maps[1].get(id), maps[2].get(id));
+        if (value !== undefined) merged.push(value);
+    }
+    return merged;
+}
+
 // Three-way merge: untouched local fields (e.g. a drag or prompt edit) survive.
 // A concurrently changed field or a deleted node is a conflict, never an overwrite.
-function mergeValue(current: unknown, before: unknown, after: unknown): unknown {
+export function mergeThreeWayValue(current: unknown, before: unknown, after: unknown): unknown {
     if (equal(before, after) || equal(current, after)) return current;
     if (equal(current, before)) return after;
     if (record(current) && record(before) && record(after)) {
         const next = { ...current };
         for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
             if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("无效的画布增量字段");
-            const value = mergeValue(current[key], before[key], after[key]);
+            let value: unknown;
+            try {
+                value = mergeThreeWayValue(current[key], before[key], after[key]);
+            } catch (error) {
+                // Scene timestamps are persistence bookkeeping emitted for every
+                // Previs mutation, not user-editable content. If both sides
+                // touched only that timestamp, the server snapshot wins.
+                if (key !== "updatedAt") throw error;
+                value = after[key];
+            }
             if (value === undefined) delete next[key];
             else next[key] = value;
         }
         return next;
     }
+    const mergedArray = mergeIdentifiedArray(current, before, after);
+    if (mergedArray !== undefined) return mergedArray;
     throw new Error("Agent 画布增量与本地内容冲突，需要校准；已保留本地编辑");
 }
 
@@ -48,7 +79,7 @@ function mergeItems<T extends { id: string }>(items: T[], changes: Change<T>[]):
     for (const { before, after } of changes) {
         const id = after?.id || before?.id;
         if (!id || (before && after && before.id !== after.id)) throw new Error("无效的画布增量节点");
-        const merged = mergeValue(next.get(id) ?? null, before, after) as T | null;
+        const merged = mergeThreeWayValue(next.get(id) ?? null, before, after) as T | null;
         if (merged === null) next.delete(id);
         else next.set(id, merged);
     }
@@ -105,7 +136,7 @@ export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: Canvas
     const editor = editorState as CanvasProject & Record<string, unknown>;
     for (const key of new Set([...Object.keys(before), ...Object.keys(after), ...Object.keys(editor)])) {
         if (["id", "revision", "updatedAt", "remoteContentHash", "viewport", "nodes", "connections"].includes(key)) continue;
-        const value = mergeValue(editor[key], before[key], after[key]);
+        const value = mergeThreeWayValue(editor[key], before[key], after[key]);
         if (value === undefined) delete merged[key];
         else merged[key] = value;
     }

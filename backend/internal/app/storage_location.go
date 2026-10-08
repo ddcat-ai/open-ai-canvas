@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"gorm.io/gorm"

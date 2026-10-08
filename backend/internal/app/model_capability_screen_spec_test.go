@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func autoDLProfile(t *testing.T, subset bool) *ModelCapabilityConfig {

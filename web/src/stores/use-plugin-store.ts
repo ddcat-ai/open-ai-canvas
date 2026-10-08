@@ -5,7 +5,7 @@ import { localForageStorageForScope } from "@/lib/localforage-storage";
 import type { PluginInstallation, PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import type { PluginState } from "@/services/api/plugins";
 
-export const PLUGIN_STORE_KEY = "infinite-canvas:plugin-store";
+export const PLUGIN_STORE_KEY = "yingce:plugin-store";
 
 type PluginStore = {
     hydrated: boolean;

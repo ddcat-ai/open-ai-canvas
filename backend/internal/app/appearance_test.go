@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/database"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

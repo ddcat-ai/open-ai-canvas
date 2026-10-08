@@ -33,8 +33,8 @@ type EffectStorage = {
     setItem(name: string, value: string): unknown | Promise<unknown>;
 };
 
-const EFFECT_STORAGE_PREFIX = "infinite-canvas:generation-effect:";
-const EFFECT_LOCK_PREFIX = "infinite-canvas:generation-effect-lock:";
+const EFFECT_STORAGE_PREFIX = "yingce:generation-effect:";
+const EFFECT_LOCK_PREFIX = "yingce:generation-effect-lock:";
 const DEFAULT_LEASE_MS = 30_000;
 const inProcessRecords = new Map<string, string>();
 const inProcessLockTails = new Map<string, Promise<void>>();

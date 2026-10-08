@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestTokenEstimateAmountUsesExactArithmetic(t *testing.T) {

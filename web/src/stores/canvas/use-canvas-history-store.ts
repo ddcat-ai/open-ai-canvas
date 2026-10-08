@@ -20,7 +20,7 @@ type CanvasHistoryStore = {
     clearDeletedHistory: () => void;
 };
 
-export const CANVAS_HISTORY_STORE_KEY = "infinite-canvas:deleted_history_store";
+export const CANVAS_HISTORY_STORE_KEY = "yingce:deleted_history_store";
 
 const historyStorage: PersistStorage<CanvasHistoryStore> = {
     getItem: async (name) => {

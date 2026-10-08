@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"infinite-canvas/backend/internal/canvas/capability"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/canvas/capability"
+	"yingce/backend/internal/model"
 )
 
 func TestCloudAgentMixedCanvasReadsUnsupportedNodesWithoutGrantingCapabilities(t *testing.T) {

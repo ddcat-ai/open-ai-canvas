@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"infinite-canvas/backend/internal/kernel"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 const runtimePolicySettingKey = "runtime_policy"
@@ -137,6 +137,7 @@ type PublicRuntimePolicySetting struct {
 type PublicRuntimeLimits struct {
 	ActiveTaskLimit         int   `json:"activeTaskLimit"`
 	ResourceUploadMB        int64 `json:"resourceUploadMB"`
+	StoredFileGB            int64 `json:"storedFileGB"`
 	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
 }
 
@@ -274,6 +275,7 @@ func (s *Service) PublicRuntimeLimits() (*PublicRuntimeLimits, error) {
 	}
 	return &PublicRuntimeLimits{
 		ActiveTaskLimit: policy.Task.ActiveTaskLimit, ResourceUploadMB: policy.Resource.ResourceUploadMB,
+		StoredFileGB:            policy.Resource.StoredFileGB,
 		RecycleBinRetentionDays: policy.Resource.RecycleBinRetentionDays,
 	}, nil
 }

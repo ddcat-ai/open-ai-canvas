@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"infinite-canvas/backend/internal/agentcontext"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/agentcontext"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // cloudAgentContextCompactionOperation 是"压缩历史"这次独立模型调用的任务操作名。

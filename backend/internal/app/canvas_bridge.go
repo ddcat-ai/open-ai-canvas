@@ -6,10 +6,10 @@ import (
 	"io"
 	"time"
 
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/canvas"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/canvas"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 type (

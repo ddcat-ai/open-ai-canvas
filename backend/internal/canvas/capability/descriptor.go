@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"infinite-canvas/backend/internal/canvas/contract"
+	"yingce/backend/internal/canvas/contract"
 )
 
 const (

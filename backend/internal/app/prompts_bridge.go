@@ -1,8 +1,8 @@
 package app
 
 import (
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/prompts"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/prompts"
 )
 
 type (

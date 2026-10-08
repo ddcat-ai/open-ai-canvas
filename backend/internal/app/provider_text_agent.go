@@ -13,8 +13,8 @@ import (
 	"log"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {

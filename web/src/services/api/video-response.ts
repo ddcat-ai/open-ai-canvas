@@ -1,4 +1,5 @@
 import axios from "axios";
+import { readFileAsDataUrl } from "@/lib/image-utils";
 
 import type { ApiEnvelope, ApiVideoResponse, RequestOptions, SeedanceTask, VideoGenerationResult } from "./video-contracts";
 
@@ -54,29 +55,29 @@ export async function assertVideoBlob(blob: Blob) {
 
 export function delay(ms: number, signal?: AbortSignal) {
     return new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const finish = (aborted: boolean) => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", cancel);
+            if (aborted) reject(new DOMException("Aborted", "AbortError"));
+            else resolve();
+        };
+        const cancel = () => finish(true);
         if (signal?.aborted) {
-            reject(new DOMException("Aborted", "AbortError"));
+            cancel();
             return;
         }
-        const timer = setTimeout(resolve, ms);
-        signal?.addEventListener(
-            "abort",
-            () => {
-                clearTimeout(timer);
-                reject(new DOMException("Aborted", "AbortError"));
-            },
-            { once: true },
-        );
+        signal?.addEventListener("abort", cancel, { once: true });
+        timer = setTimeout(() => finish(false), ms);
     });
 }
 
-export function blobToDataUrl(blob: Blob) {
-    return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("读取本地素材失败"));
-        reader.readAsDataURL(blob);
-    });
+export async function blobToDataUrl(blob: Blob) {
+    try {
+        return await readFileAsDataUrl(blob);
+    } catch {
+        throw new Error("读取本地素材失败");
+    }
 }
 
 export async function videoResultFromUrl(url: string, options?: RequestOptions): Promise<VideoGenerationResult> {

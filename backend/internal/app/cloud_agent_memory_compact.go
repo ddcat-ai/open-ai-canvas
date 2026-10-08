@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -217,12 +217,15 @@ func (s *Service) startAgentMemoryCompactScheduler() {
 }
 
 func (s *Service) dispatchDueAgentMemoryCompacts() {
+	now := time.Now()
+	if _, err := s.repo.ExpirePendingAgentLessons("", now.Add(-cloudAgentPendingLessonTTL), now, 500); err != nil {
+		log.Printf("agent memory pending cleanup: %v", err)
+	}
 	rows, err := s.repo.ScheduledAgentMemorySettings(50)
 	if err != nil {
 		log.Printf("agent memory compact schedule: %v", err)
 		return
 	}
-	now := time.Now()
 	started := 0
 	for index := range rows {
 		setting := rows[index]

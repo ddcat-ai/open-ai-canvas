@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // Only user-editable image options cross the approval boundary. Targets,

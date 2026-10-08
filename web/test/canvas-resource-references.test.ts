@@ -356,6 +356,20 @@ describe("image generation reference connections", () => {
 });
 
 describe("reorder canvas resource connections", () => {
+    test("混合角色、绘图和图片拖动后按节点身份同步所有提及", () => {
+        const character = { ...textNode("character"), metadata: { workflowKind: "character" as const, characterAssetId: "character-asset" } };
+        const drawing: CanvasNodeData = { ...imageNode("drawing"), type: CanvasNodeType.Drawing, metadata: { drawingId: "drawing-document" } };
+        const image = imageNode("scene");
+        const target = { ...videoNode("target"), metadata: { composerContent: "@角色1参考@绘图2，背景@图片3，@角色1@绘图2" } };
+        const nodes = [character, drawing, image, target];
+        const before = [character, drawing, image].map((source) => connection(source.id, target.id));
+        const after = reorderCanvasResourceConnections(target.id, [image.id, character.id, drawing.id], nodes, before);
+        const synced = applyCanvasConnectionPromptSync(nodes, before, nodes, after);
+        expect(synced.find((item) => item.id === target.id)?.metadata?.composerContent).toBe("@角色2参考@绘图3，背景@图片1，@角色2@绘图3");
+        expect(replaceCanvasMentionToken("@角色1@角色10@绘图2@绘图20", "@角色1", "@角色2")).toBe("@角色2@角色10@绘图2@绘图20");
+        expect(replaceCanvasMentionToken("@绘图2@绘图20", "@绘图2", "@绘图3")).toBe("@绘图3@绘图20");
+    });
+
     test("直接引用按指定顺序换位并同步编号提示词", () => {
         const imageA = imageNode("image-a");
         const imageB = imageNode("image-b");

@@ -3,8 +3,8 @@ package app
 import (
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"

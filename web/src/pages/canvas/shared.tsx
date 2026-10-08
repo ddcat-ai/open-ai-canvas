@@ -10,7 +10,7 @@ import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import { CanvasBatchTableNodeContent } from "@/components/canvas/canvas-batch-table-node";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
-import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
+import { CanvasViewport } from "@/components/canvas/canvas-viewport";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
@@ -258,7 +258,7 @@ export default function SharedCanvasPage() {
                 <Link className="pointer-events-auto" to="/login"><Button type="text" icon={<LogIn className="size-4" />}>登录</Button></Link>
             </header>
 
-            <InfiniteCanvas containerRef={containerRef} viewport={viewport} appearance={appearance} backgroundMode={backgroundMode} onViewportChange={onViewportChange} onViewportPreviewChange={(next) => { viewportRef.current = next; }} onCanvasDeselect={() => { setSelectedNodeId(null); setContextMenu(null); }} onContextMenu={(event) => openContextMenu(event)} onDrop={(event) => { event.preventDefault(); unauthorized(); }}>
+            <CanvasViewport containerRef={containerRef} viewport={viewport} appearance={appearance} backgroundMode={backgroundMode} onViewportChange={onViewportChange} onViewportPreviewChange={(next) => { viewportRef.current = next; }} onCanvasDeselect={() => { setSelectedNodeId(null); setContextMenu(null); }} onContextMenu={(event) => openContextMenu(event)} onDrop={(event) => { event.preventDefault(); unauthorized(); }}>
                 <svg className="absolute overflow-visible" viewBox={`${connectionBounds.left} ${connectionBounds.top} ${connectionBounds.width} ${connectionBounds.height}`} style={{ left: connectionBounds.left, top: connectionBounds.top, width: connectionBounds.width, height: connectionBounds.height, pointerEvents: "none", zIndex: 0 }}>
                     {visibleConnections.map(({ connection, from, to }) => <ConnectionPath key={connection.id} connection={connection} from={from} to={to} active={false} onSelect={() => setInfoNodeId(to.id)} />)}
                 </svg>
@@ -280,7 +280,7 @@ export default function SharedCanvasPage() {
                     dragRef.current = { primaryId: nodeId, nodeIds: [nodeId], startX: event.clientX, startY: event.clientY, origins: new Map([[nodeId, target.position]]), moved: false };
                     document.body.style.cursor = "grabbing";
                 }} onHoverStart={keepToolbar} onHoverEnd={hideToolbar} onConnectStart={unauthorized} onResize={() => undefined} onContentChange={unauthorized} onRetry={unauthorized} onOpenTaskDetails={unauthorized} onViewImage={(target) => setInfoNodeId(target.id)} onContextMenu={(event, nodeId) => openContextMenu(event, nodeId)} />)}
-            </InfiniteCanvas>
+            </CanvasViewport>
 
             <CanvasNodeToolbar node={dragRef.current ? null : toolbarNode} viewport={viewport} containerRef={containerRef} onKeep={keepToolbar} onLeave={hideToolbar} onInfo={(node) => setInfoNodeId(node.id)} onEditText={unauthorized} onDecreaseFont={unauthorized} onIncreaseFont={unauthorized} onToggleDialog={unauthorized} onAnnotate={unauthorized} onAnnotationEdit={unauthorized} onTextEdit={unauthorized} onGenerateImage={unauthorized} onUpload={unauthorized} onDownload={unauthorized} onSaveAsset={unauthorized} onMaskEdit={unauthorized} onRemoveBackground={unauthorized} onLayerDecomposition={unauthorized} onEmotion={unauthorized} onPortraitTexture={unauthorized} onCrop={unauthorized} onSplit={unauthorized} onUpscale={unauthorized} onSuperResolve={unauthorized} onAngle={unauthorized} onLighting={unauthorized} onPanorama={unauthorized} onViewImage={unauthorized} onExtractVideoFrames={unauthorized} onExtractAudioFromVideo={unauthorized} onTrimVideoSegments={unauthorized} extractingVideoFrames={false} extractingAudio={false} trimmingVideo={false} onSubtitles={unauthorized} onTimeline={unauthorized} onReversePrompt={unauthorized} onRetry={unauthorized} onToggleFreeResize={unauthorized} onToggleLocked={unauthorized} onDelete={unauthorized} onNineGrid={unauthorized} />
 

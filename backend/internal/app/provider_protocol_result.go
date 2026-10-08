@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/protocol"
+	"yingce/backend/internal/protocol"
 )
 
 func appendProtocolQuery(rawURL string, values map[string][]string) (string, error) {

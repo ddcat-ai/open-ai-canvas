@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"infinite-canvas/backend/internal/canvas"
-	"infinite-canvas/backend/internal/database"
+	"yingce/backend/internal/canvas"
+	"yingce/backend/internal/database"
 )
 
 func main() {

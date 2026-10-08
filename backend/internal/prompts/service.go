@@ -1,8 +1,8 @@
 package prompts
 
 import (
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // AdminGate 由组合根注入，避免 prompts → service 回环。

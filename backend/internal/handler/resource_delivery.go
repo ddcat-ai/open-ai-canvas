@@ -3,11 +3,12 @@ package handler
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 
-	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/service"
+	"yingce/backend/internal/assets"
+	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -69,6 +70,12 @@ func serveResourceDelivery(c *gin.Context, delivery *service.ResourceDelivery, c
 		c.Header("Content-Disposition", disposition)
 	}
 	resource := stream.Resource
+	if !assets.InlineMediaType(resource.MimeType) {
+		if dispositionType, _, _ := mime.ParseMediaType(disposition); dispositionType != "attachment" {
+			c.Header("Content-Disposition", "attachment")
+		}
+		c.Header("Content-Security-Policy", "sandbox; default-src 'none'")
+	}
 	mimeType := resource.MimeType
 	if mimeType == "" {
 		mimeType = "application/octet-stream"

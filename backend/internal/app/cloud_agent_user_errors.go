@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 这组函数与前端 web/src/lib/generation-error.ts 的 generationErrorMessage 保持同一套分类，

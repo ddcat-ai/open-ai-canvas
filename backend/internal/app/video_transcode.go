@@ -14,7 +14,7 @@ import (
 	"errors"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 播放副本转码：HEVC/H.265 原片在 Chrome/Firefox 等无法解码（<video> 黑屏），

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"infinite-canvas/backend/internal/agentcontext"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/agentcontext"
+	"yingce/backend/internal/model"
 )
 
 // A deterministic checkpoint failure must not be retried forever like a transient DB error.
@@ -152,6 +152,7 @@ type cloudAgentRuntime struct {
 	DecisionPreparedHashes         map[string]string                       `json:"decisionPreparedHashes,omitempty"`
 	ActionNudged                   bool                                    `json:"actionNudged,omitempty"`
 	EmptyOutputNudged              int                                     `json:"emptyOutputNudged,omitempty"`
+	InvalidArgumentSteps           int                                     `json:"invalidArgumentSteps,omitempty"`
 	StepSnapshotHash               string                                  `json:"stepSnapshotHash,omitempty"`
 	StoryboardTaskID               string                                  `json:"storyboardTaskId,omitempty"`
 	Plan                           []cloudAgentPlanItem                    `json:"plan,omitempty"`
@@ -169,9 +170,11 @@ type cloudAgentRuntime struct {
 	// PiAssistantResponses counts successful assistant message_end events from
 	// the Pi runtime. Completion must not be inferred from a clean Node exit:
 	// a provider/session error can otherwise be reported as a successful run.
-	PiAssistantResponses int    `json:"piAssistantResponses,omitempty"`
-	IsGenerating         bool   `json:"isGenerating,omitempty"`
-	LastError            string `json:"lastError,omitempty"`
+	PiAssistantResponses        int    `json:"piAssistantResponses,omitempty"`
+	LessonEligibleToolSuccesses int    `json:"lessonEligibleToolSuccesses,omitempty"`
+	RememberLessonSuccesses     int    `json:"rememberLessonSuccesses,omitempty"`
+	IsGenerating                bool   `json:"isGenerating,omitempty"`
+	LastError                   string `json:"lastError,omitempty"`
 	// EmptyOutputEscalated 记录"空输出已经升级重试过几次"（关思考 + 放大输出预算）。
 	EmptyOutputEscalated int `json:"emptyOutputEscalated,omitempty"`
 	// StepTimeoutEscalated 记录"单步墙钟到点后已经关思考重试过几次"。

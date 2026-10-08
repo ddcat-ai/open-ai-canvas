@@ -1,9 +1,9 @@
 package app
 
 import (
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/tools"
 	"strings"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/tools"
 )
 
 type (

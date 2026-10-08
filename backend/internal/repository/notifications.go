@@ -4,8 +4,8 @@ import (
 	"errors"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"infinite-canvas/backend/internal/model"
 	"time"
+	"yingce/backend/internal/model"
 )
 
 var ErrNotificationLimit = errors.New("通知发送次数已达上限，请稍后再试")
@@ -97,6 +97,12 @@ func consumeVerification(tx *gorm.DB, id string, now time.Time) error {
 }
 func (r *Repository) CreateUserWithVerification(user *model.User, id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockRegistrationEmail(tx, user.Email); err != nil {
+			return err
+		}
+		if err := New(tx).CheckEmailAvailable(user.Email, ""); err != nil {
+			return err
+		}
 		if err := consumeVerification(tx, id, time.Now()); err != nil {
 			return err
 		}
@@ -106,6 +112,14 @@ func (r *Repository) CreateUserWithVerification(user *model.User, id string) err
 func (r *Repository) CompleteAuthVerification(v *model.AuthVerification, bind bool) (*model.User, error) {
 	var user model.User
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if bind && v.Email != "" {
+			if err := lockRegistrationEmail(tx, v.Email); err != nil {
+				return err
+			}
+			if err := New(tx).CheckEmailAvailable(v.Email, v.UserID); err != nil {
+				return err
+			}
+		}
 		now := time.Now()
 		if err := consumeVerification(tx, v.ID, now); err != nil {
 			return err

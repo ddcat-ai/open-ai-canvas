@@ -7,7 +7,7 @@ import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
 import { parseBackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
-import { resolveMediaUrl, type UploadedFile } from "@/services/file-storage";
+import { resolveMediaUrl, resolveVideoMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getCachedResourceBlob } from "@/services/resource-blob-cache";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -71,14 +71,16 @@ export function videoMetadata(video: UploadedFile): CanvasNodeMetadata {
         mimeType: video.mimeType || "video/mp4",
         durationMs: video.durationMs,
         hasAudio: video.hasAudio,
-        videoPreview: video.preview ? {
-            content: video.preview.url,
-            storageKey: video.preview.storageKey,
-            width: video.preview.width,
-            height: video.preview.height,
-            bytes: video.preview.bytes,
-            mimeType: video.preview.mimeType,
-        } : undefined,
+        videoPreview: video.preview
+            ? {
+                  content: video.preview.url,
+                  storageKey: video.preview.storageKey,
+                  width: video.preview.width,
+                  height: video.preview.height,
+                  bytes: video.preview.bytes,
+                  mimeType: video.preview.mimeType,
+              }
+            : undefined,
         errorDetails: undefined,
         generationErrorCode: undefined,
         resourceReloadAvailable: undefined,
@@ -113,14 +115,17 @@ function workflowMetadataForResultNode(): Partial<CanvasNodeMetadata> {
 // 原地重生会换 storageKey 但继承旧 assetId，形成「旧素材 + 新资源」配对，云端校验会永久拒绝。
 // 新媒体结果必须清掉旧绑定，交给入库/修复路径按新资源重绑。
 export function applyGeneratedMediaResultMetadata(node: CanvasNodeData, media: CanvasNodeMetadata, extra: Partial<CanvasNodeMetadata> = {}, fallbackModel?: string): CanvasNodeMetadata {
-    return commitProducedModel({
-        ...node.metadata,
-        ...workflowMetadataForResultNode(),
-        ...media,
-        ...extra,
-        errorDetails: undefined,
-        assetId: undefined,
-    }, fallbackModel);
+    return commitProducedModel(
+        {
+            ...node.metadata,
+            ...workflowMetadataForResultNode(),
+            ...media,
+            ...extra,
+            errorDetails: undefined,
+            assetId: undefined,
+        },
+        fallbackModel,
+    );
 }
 
 export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node], outputIndex = 0): Promise<CanvasNodeData> {
@@ -166,9 +171,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
 
     if (mode === "video") {
         if (!result.video?.storageKey && !result.video?.dataUrl) throw new Error("后端任务没有返回视频");
-        const video = result.video.storageKey
-            ? await cacheGeneratedRemoteVideo({ ...result.video, storageKey: result.video.storageKey })
-            : await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
+        const video = result.video.storageKey ? await cacheGeneratedRemoteVideo({ ...result.video, storageKey: result.video.storageKey }) : await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || node.width || VIDEO_NODE_MAX_SIZE.width, video.height || node.height || VIDEO_NODE_MAX_SIZE.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
         const geometry = node.metadata?.locked
             ? {}
@@ -197,7 +200,18 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     return {
         ...node,
         type: CanvasNodeType.Text,
-        metadata: { ...node.metadata, content: result.text, richText: undefined, prompt, ...completedTaskMetadata(task), status: "success", errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined },
+        metadata: {
+            ...node.metadata,
+            content: result.text,
+            richText: undefined,
+            prompt,
+            ...completedTaskMetadata(task),
+            status: "success",
+            errorDetails: undefined,
+            generationErrorCode: undefined,
+            resourceReloadAvailable: undefined,
+            failedPromptFingerprint: undefined,
+        },
     };
 }
 
@@ -218,7 +232,7 @@ type GeneratedVideoResult = {
 async function cacheGeneratedRemoteVideo(result: GeneratedVideoResult & { storageKey: string }): Promise<UploadedFile> {
     const blob = await getCachedResourceBlob(result.storageKey);
     if (!blob) throw new Error("生成视频资源缓存失败，未标记为成功");
-    const url = await resolveMediaUrl(result.storageKey, result.dataUrl || "");
+    const url = await resolveVideoMediaUrl(result.storageKey, result.dataUrl || "");
     if (!url) throw new Error("生成视频资源地址为空，未标记为成功");
     return {
         url,
@@ -297,9 +311,15 @@ export function generationTaskOutputsApplied(node: CanvasNodeData, task: Generat
 }
 
 export function shouldRecoverCanvasImageOutputs(node: CanvasNodeData) {
-    return node.type === CanvasNodeType.Image && node.metadata?.status === "success" && Boolean(node.metadata.taskId)
-        && node.metadata.generationOutputCount === undefined && !node.metadata.isBatchRoot && !node.metadata.batchRootId
-        && /(?:midjourney|(?:^|::)mj-)/i.test(node.metadata.producedModel || node.metadata.model || "");
+    return (
+        node.type === CanvasNodeType.Image &&
+        node.metadata?.status === "success" &&
+        Boolean(node.metadata.taskId) &&
+        node.metadata.generationOutputCount === undefined &&
+        !node.metadata.isBatchRoot &&
+        !node.metadata.batchRootId &&
+        /(?:midjourney|(?:^|::)mj-)/i.test(node.metadata.producedModel || node.metadata.model || "")
+    );
 }
 
 async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[]) {
@@ -310,7 +330,10 @@ async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: Genera
     for (let index = 0; index < images.length; index += 1) {
         const id = `${node.id}:task:${task.id}:image:${index}`;
         const existing = nodes.find((item) => item.id === id);
-        if (existing) { children.push(existing); continue; }
+        if (existing) {
+            children.push(existing);
+            continue;
+        }
         const child = await buildGenerationTaskNodeResult({ ...node, id, title: `${node.title} · ${index + 1}`, parentId: undefined }, task, nodes, index);
         children.push({
             ...child,
@@ -318,8 +341,14 @@ async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: Genera
             metadata: {
                 ...child.metadata,
                 assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
-                isBatchRoot: undefined, batchChildIds: undefined, primaryImageId: undefined, imageBatchExpanded: undefined,
-                batchRootId: node.id, versionOfNodeId: undefined, versionLabel: undefined, versionPrimary: undefined,
+                isBatchRoot: undefined,
+                batchChildIds: undefined,
+                primaryImageId: undefined,
+                imageBatchExpanded: undefined,
+                batchRootId: node.id,
+                versionOfNodeId: undefined,
+                versionLabel: undefined,
+                versionPrimary: undefined,
                 agentGenerationContinuation: undefined,
             },
         });
@@ -331,9 +360,12 @@ async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: Genera
             metadata: {
                 ...resultNode.metadata,
                 ...imageMetadata({
-                    url: primary.metadata!.content!, storageKey: primary.metadata!.storageKey!,
-                    width: primary.metadata!.naturalWidth!, height: primary.metadata!.naturalHeight!,
-                    bytes: primary.metadata!.bytes || 0, mimeType: primary.metadata!.mimeType || "image/png",
+                    url: primary.metadata!.content!,
+                    storageKey: primary.metadata!.storageKey!,
+                    width: primary.metadata!.naturalWidth!,
+                    height: primary.metadata!.naturalHeight!,
+                    bytes: primary.metadata!.bytes || 0,
+                    mimeType: primary.metadata!.mimeType || "image/png",
                 }),
                 assetId: primary.metadata?.assetId,
                 isBatchRoot: true,

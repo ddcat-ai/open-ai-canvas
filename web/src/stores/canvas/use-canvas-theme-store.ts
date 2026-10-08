@@ -12,7 +12,7 @@ export const useCanvasThemeStore = create<CanvasThemeStore>()(
     persist(
         (set) => ({ theme: DEFAULT_CANVAS_COLOR_THEME, active: false, setTheme: (theme) => { if (theme === "light" || theme === "dark") set({ theme }); } }),
         {
-            name: "infinite-canvas:canvas-theme",
+            name: "yingce:canvas-theme",
             partialize: ({ theme }) => ({ theme }),
             merge: (persisted, current) => {
                 const theme = (persisted as Partial<CanvasThemeStore> | null)?.theme;

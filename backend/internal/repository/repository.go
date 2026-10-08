@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/database"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/model"
 )
 
 var ErrDailyUploadLimitExceeded = errors.New("今日上传额度已用完，请明天再试")

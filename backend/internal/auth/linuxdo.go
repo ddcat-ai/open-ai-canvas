@@ -7,16 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"infinite-canvas/backend/internal/kernel"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/outbound"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/outbound"
 
 	"gorm.io/gorm"
 )
@@ -263,7 +263,7 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDO
 	now := time.Now()
 	user.LastLoginAt = &now
 	user.UpdatedAt = now
-	if err := s.repo.Save(user); err != nil {
+	if err := s.repo.UpdateUserLoginTime(user.ID, now); err != nil {
 		return nil, err
 	}
 	s.host.RecordActivity(user.ID, "login", 1)

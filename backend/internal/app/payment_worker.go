@@ -12,7 +12,7 @@ import (
 	"math"
 	"time"
 
-	"infinite-canvas/backend/internal/payment"
+	"yingce/backend/internal/payment"
 )
 
 func (s *Service) startPaymentWorker(ctx context.Context) {

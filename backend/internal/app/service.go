@@ -11,17 +11,17 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/auth"
-	"infinite-canvas/backend/internal/canvas"
-	"infinite-canvas/backend/internal/kernel"
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/payment"
-	"infinite-canvas/backend/internal/platform"
-	"infinite-canvas/backend/internal/prompts"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/skills"
-	"infinite-canvas/backend/internal/sms"
-	"infinite-canvas/backend/internal/tools"
+	"yingce/backend/internal/auth"
+	"yingce/backend/internal/canvas"
+	"yingce/backend/internal/kernel"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/payment"
+	"yingce/backend/internal/platform"
+	"yingce/backend/internal/prompts"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/skills"
+	"yingce/backend/internal/sms"
+	"yingce/backend/internal/tools"
 )
 
 type Service struct {

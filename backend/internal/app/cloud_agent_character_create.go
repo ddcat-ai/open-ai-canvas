@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"infinite-canvas/backend/internal/canvas/layout"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/canvas/layout"
+	"yingce/backend/internal/repository"
 )
 
 const (

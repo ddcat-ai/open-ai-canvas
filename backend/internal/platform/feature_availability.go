@@ -3,11 +3,11 @@ package platform
 import (
 	"encoding/json"
 	"errors"
-	"infinite-canvas/backend/internal/kernel"
 	"strings"
 	"time"
+	"yingce/backend/internal/kernel"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
 )

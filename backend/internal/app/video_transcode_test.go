@@ -10,7 +10,7 @@ import (
 
 	"errors"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // stsdBox 构造仅含 first-sample-entry fourcc 的最小 stsd box（置于 moov 切片内）。

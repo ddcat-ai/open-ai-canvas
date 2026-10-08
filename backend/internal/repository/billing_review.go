@@ -3,7 +3,7 @@ package repository
 import (
 	"time"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // BillingReviewStats 记录需要人工关注的长期未闭合订单数量。

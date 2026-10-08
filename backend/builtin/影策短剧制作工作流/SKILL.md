@@ -111,6 +111,12 @@ INTAKE
 
 画布操作顺序仍遵循真实能力：复用已核实节点；使用 `canvas_list_node_types` 查合法类型；分镜通过 `canvas_create_storyboard` 创建、修改前 `canvas_read_storyboard`；角色卡通过 `canvas_create_character` 创建，不用 `canvas_apply_ops` 新建文本节点冒充；普通节点/引用通过 `canvas_apply_ops`；整理使用 `canvas_arrange_nodes`。工具参数、审批和失败恢复以系统级合同及本轮真实 schema 为准。
 
+### 预演台专项执行链
+
+当用户要求城市/环境、人物、走位、运镜或白膜视频时，先用 `previs_scene_read` 读取场景目录，再精读目标场景并设置 `includeTransforms=true`。城市或室内环境用 `previs_scene_create` 的 `interior`、`crowd` 或 `action_chase` 模板建立受控白模，再用 `previs_apply_patch` 增加墙体、道路、建筑块、灯光和道具；人物用 `object_add`，必须提供合法 `kind`、`primitive`、`archetype`、`pose` 和十六进制 `color`（`#RRGGBB` 或 `#RRGGBBAA`）。
+
+人物移动动作应通过对象的 `position`、`rotation`、`pose` 以及镜头/对象关键帧能力逐步写入，摄影机运动通过 `camera_update` 的 `position`、`rotation`、`target`、`focalLength` 和镜头的 `cameraMove` 表达。每次写入前重新读取最新 `snapshotHash`；审批后若状态冲突，重新读取并重新规划，不复用旧补丁。完成布局后再次读取并确认人物、环境、机位和时长，再调用 `previs_preview` 请求 `clay_video` 白膜预演；工具返回任务/请求状态后，用 `task_get` 或真实事件核验，不把“已请求”称为“已导出”。
+
 - `canvas_apply_ops`、分镜写入和媒体生成属于写操作，遵循当前 Agent 权限模式。
 - `generate_media` 是可能收费的操作。用户未明确授权时，先输出方案和预计范围，使用 `ask_user` 获取一次具体确认。
 - 额外数量、换模型、改变规格或重试都视为新方案；失败后不自动重复收费。

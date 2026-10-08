@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"infinite-canvas/backend/internal/logging"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/logging"
+	"yingce/backend/internal/model"
 )
 
 // ModelCatalogSource 标识创作目录来自系统渠道模型。
@@ -24,6 +24,33 @@ type ModelCatalogResponse struct {
 	Source   ModelCatalogSource     `json:"source"`
 	Models   []PublicLogicalModel   `json:"models"`
 	Channels []PublicChannelCatalog `json:"channels"`
+}
+
+// PublicModelAvailability is the historical signal shown next to a model
+// without changing the binary current availability decision above it.
+// Rate24h is nil for no-data or insufficient-sample windows.
+type PublicModelAvailability struct {
+	Rate24h     *float64                         `json:"rate24h"`
+	SampleCount int                              `json:"sampleCount24h"`
+	Trend7d     []PublicModelAvailabilityDay     `json:"trend7d"`
+	DataState   PublicModelAvailabilityDataState `json:"dataState"`
+	ComputedAt  time.Time                        `json:"computedAt"`
+	DataThrough *time.Time                       `json:"dataThrough,omitempty"`
+}
+
+type PublicModelAvailabilityDataState string
+
+const (
+	PublicModelAvailabilityReady        PublicModelAvailabilityDataState = "ready"
+	PublicModelAvailabilityInsufficient PublicModelAvailabilityDataState = "insufficient"
+	PublicModelAvailabilityNoData       PublicModelAvailabilityDataState = "no_data"
+)
+
+type PublicModelAvailabilityDay struct {
+	Day         string                           `json:"day"`
+	Rate        *float64                         `json:"rate"`
+	SampleCount int                              `json:"sampleCount"`
+	DataState   PublicModelAvailabilityDataState `json:"dataState"`
 }
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）
@@ -54,6 +81,7 @@ type PublicChannelModel struct {
 	DisplayPrice     *int64                        `json:"displayPrice,omitempty"`
 	PriceLabel       string                        `json:"priceLabel"`
 	Available        bool                          `json:"available"`
+	Availability     *PublicModelAvailability      `json:"availability,omitempty"`
 }
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
@@ -80,6 +108,13 @@ func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogRespons
 	}
 	response.Source = ModelCatalogSourceSystem
 	response.Channels = append(response.Channels, channels...)
+	if availability, availabilityErr := s.publicModelAvailability(response.Channels, time.Now().UTC()); availabilityErr != nil {
+		// Historical analytics are additive. A delayed or unavailable log store
+		// must not hide the existing catalog or change route selection behavior.
+		slog.Warn("public model availability metrics unavailable", "error", availabilityErr)
+	} else {
+		attachPublicModelAvailability(response.Channels, availability)
+	}
 	return response, nil
 }
 

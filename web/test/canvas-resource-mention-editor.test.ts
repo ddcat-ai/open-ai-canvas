@@ -66,8 +66,9 @@ describe("canvas resource mention editor", () => {
         expect(panel).toContain("<LoaderCircle className=");
         expect(panel).toContain("animate-spin motion-reduce:animate-none");
         expect(panel).not.toContain("isRunning ? theme.accent.danger");
-        expect(configComposer).toContain("wrapper.dataset.referenceToken");
-        expect(configComposer).not.toContain("result += `@[node:");
+        expect(configComposer).toContain("CanvasResourceMentionTextarea");
+        expect(configComposer).toContain("composerReferences(inputs, skillReferences)");
+        expect(configComposer).not.toContain("contentEditable");
         expect(project).not.toContain("removeCanvasResourceMention");
     });
 

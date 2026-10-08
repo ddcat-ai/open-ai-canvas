@@ -16,13 +16,13 @@ import (
 	"syscall"
 	"time"
 
-	"infinite-canvas/backend/internal/database"
-	"infinite-canvas/backend/internal/handler"
-	"infinite-canvas/backend/internal/logging"
-	"infinite-canvas/backend/internal/platform"
-	"infinite-canvas/backend/internal/repository"
-	"infinite-canvas/backend/internal/service"
-	"infinite-canvas/backend/internal/updaterclient"
+	"yingce/backend/internal/database"
+	"yingce/backend/internal/handler"
+	"yingce/backend/internal/logging"
+	"yingce/backend/internal/platform"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/service"
+	"yingce/backend/internal/updaterclient"
 
 	"github.com/gin-gonic/gin"
 )

@@ -47,7 +47,7 @@ func TestCloudAgentMediaReferencePrompt(t *testing.T) {
 	}
 }
 
-func TestCloudAgentMediaComposerPromptSeparatesCharacterAndImageSlots(t *testing.T) {
+func TestCloudAgentMediaComposerPromptUsesUnifiedImageSlots(t *testing.T) {
 	refs := map[string]any{
 		"referenceImages": []any{
 			map[string]any{"storageKey": "resource:character", "canvasReferenceKind": "character"},
@@ -57,7 +57,7 @@ func TestCloudAgentMediaComposerPromptSeparatesCharacterAndImageSlots(t *testing
 		"referenceAudios": []any{map[string]any{"storageKey": "resource:voice"}},
 	}
 	prompt := "@图片1、@图片2、@图片3 和 @音频1"
-	want := "@角色1、@图片1、@角色2 和 @音频1"
+	want := "@角色1、@图片2、@角色3 和 @音频1"
 	if got := cloudAgentMediaComposerPrompt(prompt, refs); got != want {
 		t.Fatalf("composer prompt = %q, want %q", got, want)
 	}

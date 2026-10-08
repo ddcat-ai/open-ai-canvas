@@ -3,7 +3,7 @@ package app
 import (
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // LogicalModelQuote 是创作端当前参数命中的实际供应线路报价。

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/repository"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 // taskLifecycleCoordinator 负责任务重试与取消这类会改变任务状态的写命令。

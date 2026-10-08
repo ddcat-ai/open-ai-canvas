@@ -1,3 +1,3 @@
-export function isIsolatedDirectorRepro(dev: boolean, pathname: string): boolean {
-    return dev && pathname === "/dev/director-repro";
+export function isIsolatedPrevisRepro(dev: boolean, pathname: string): boolean {
+    return dev && pathname === "/dev/previs-repro";
 }

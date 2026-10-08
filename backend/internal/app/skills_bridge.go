@@ -5,8 +5,8 @@ import (
 	"errors"
 	"mime/multipart"
 
-	"infinite-canvas/backend/internal/model"
-	"infinite-canvas/backend/internal/skills"
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/skills"
 )
 
 const SkillPackageUploadMaxBytes = skills.SkillPackageUploadMaxBytes

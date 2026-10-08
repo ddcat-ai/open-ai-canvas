@@ -57,7 +57,7 @@
         </style>
         <script>
             try {
-                var s = JSON.parse(localStorage.getItem("infinite-canvas:theme_store") || "{}");
+                var s = JSON.parse(localStorage.getItem("yingce:theme_store") || "{}");
                 var t = s.state && s.state.theme === "dark" ? "dark" : "light";
                 document.documentElement.classList.toggle("dark", t === "dark");
                 document.documentElement.style.colorScheme = t;

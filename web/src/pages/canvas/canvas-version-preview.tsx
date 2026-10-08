@@ -2,7 +2,7 @@ import { EmptyState } from "@/components/ui/product/empty-state";
 import { Button, Spin } from "antd";
 import { ArrowLeft, Eye, History, Maximize, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
+import { CanvasViewport } from "@/components/canvas/canvas-viewport";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
@@ -124,7 +124,7 @@ export function CanvasVersionPreview({ preview, onReturn, onShowVersions }: { pr
                     {/* No editor callbacks, drawing cache key, or action context may cross this boundary. */}
                     <CanvasNodeActionContext.Provider value={readOnlyActions}>
                         <CanvasNodeGraphContext.Provider value={graph}>
-                            <InfiniteCanvas
+                            <CanvasViewport
                                 containerRef={containerRef}
                                 viewport={viewport}
                                 appearance={project.appearance}
@@ -180,7 +180,7 @@ export function CanvasVersionPreview({ preview, onReturn, onShowVersions }: { pr
                                         />
                                     ),
                                 )}
-                            </InfiniteCanvas>
+                            </CanvasViewport>
                         </CanvasNodeGraphContext.Provider>
                     </CanvasNodeActionContext.Provider>
                     {!nodes.length ? (

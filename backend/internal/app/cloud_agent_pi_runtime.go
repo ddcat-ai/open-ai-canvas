@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	agentruntime "infinite-canvas/backend/internal/agent/runtime"
-	"infinite-canvas/backend/internal/agent/yingceagent"
+	agentruntime "yingce/backend/internal/agent/runtime"
+	"yingce/backend/internal/agent/yingceagent"
 )
 
 // These aliases keep the app coordinator's request shape stable while the

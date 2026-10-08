@@ -3,9 +3,9 @@ package canvas
 import (
 	"bytes"
 	"encoding/json"
-	"infinite-canvas/backend/internal/kernel"
 	"math"
 	"strings"
+	"yingce/backend/internal/kernel"
 )
 
 var userAssetKinds = map[string]struct{}{

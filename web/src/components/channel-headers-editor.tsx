@@ -6,7 +6,7 @@ import type { ChangeEvent } from "react";
 
 import type { ChannelHeader } from "@/stores/use-config-store";
 
-const DEFAULT_USER_AGENT = "InfiniteCanvas/1.0 (+https://github.com/ddcat-ai/open-ai-canvas)";
+const DEFAULT_USER_AGENT = "Yingce/1.0 (+https://github.com/ddcat-ai/open-ai-canvas)";
 const MAX_HEADER_COUNT = 32;
 const BLOCKED_HEADERS = new Set([
     "authorization",

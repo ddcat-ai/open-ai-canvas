@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 // 模型级上游键重命名后，任务请求必须使用新键；价格档中与旧值相同的上游键属于

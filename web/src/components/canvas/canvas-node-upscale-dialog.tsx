@@ -1,113 +1,54 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Modal, Segmented } from "antd";
-import { ImagePlus } from "lucide-react";
-
-import { readImageMeta } from "@/lib/image-utils";
-import { MAX_UPSCALE_LONG_EDGE, resolveUpscaleSize, type ImageUpscaleAlgorithm, type ImageUpscaleParams } from "@/lib/canvas/canvas-image-data";
+import { useState } from "react";
+import { Radio, Select } from "antd";
+import { AppModal } from "@/components/ui/product/app-modal";
+import { MAX_UPSCALE_LONG_EDGE, resolveUpscaleSize, type ImageUpscaleAlgorithm, type ImageUpscaleParams } from "@/lib/canvas/image-operation-plan";
+import { useImageToolSource } from "./use-image-tool-source";
 
 export type CanvasImageUpscaleParams = ImageUpscaleParams;
+type UpscaleDialogProps = { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (params: CanvasImageUpscaleParams) => void };
+const pixelTargets = [1024, 2048, MAX_UPSCALE_LONG_EDGE];
 
-const algorithms: Array<{ value: ImageUpscaleAlgorithm; title: string; description: string }> = [
-    { value: "high", title: "高质量插值", description: "适合照片和细节图" },
-    { value: "bilinear", title: "双线性", description: "平滑、速度快" },
-    { value: "nearest", title: "最近邻", description: "适合像素风格" },
-];
+export function CanvasNodeUpscaleDialog(props: UpscaleDialogProps) {
+    return props.open && props.dataUrl ? <ResizeEditor key={props.dataUrl} {...props} /> : null;
+}
 
-const targetOptions = [
-    { label: "1K", value: 1024 },
-    { label: "2K", value: 2048 },
-    { label: "4K", value: MAX_UPSCALE_LONG_EDGE },
-];
-
-const defaultParams: CanvasImageUpscaleParams = {
-    targetLongEdge: 2048,
-    algorithm: "high",
-};
-
-export function CanvasNodeUpscaleDialog({ dataUrl, open, onClose, onConfirm }: { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (params: CanvasImageUpscaleParams) => void }) {
-    const [params, setParams] = useState<CanvasImageUpscaleParams>(defaultParams);
-    const [image, setImage] = useState<{ width: number; height: number } | null>(null);
-    const sourceLongEdge = image ? Math.max(image.width, image.height) : 0;
-    const outputSize = useMemo(() => (image ? resolveUpscaleSize(image.width, image.height, params.targetLongEdge) : null), [image, params.targetLongEdge]);
-    const canUpscale = Boolean(image && sourceLongEdge < params.targetLongEdge && params.targetLongEdge <= MAX_UPSCALE_LONG_EDGE);
-    const reachedMax = Boolean(image && sourceLongEdge >= MAX_UPSCALE_LONG_EDGE);
-
-    useEffect(() => {
-        if (!open) return;
-        setParams(defaultParams);
-        setImage(null);
-    }, [dataUrl, open]);
-
-    useEffect(() => {
-        if (!open) return;
-        void readImageMeta(dataUrl).then(setImage);
-    }, [dataUrl, open]);
-
-    useEffect(() => {
-        if (!image) return;
-        const nextTarget = targetOptions.find((option) => sourceLongEdge < option.value)?.value || MAX_UPSCALE_LONG_EDGE;
-        setParams((current) => ({ ...current, targetLongEdge: nextTarget }));
-    }, [image, sourceLongEdge]);
-
+function ResizeEditor({ dataUrl, onClose, onConfirm }: UpscaleDialogProps) {
+    const { size, error } = useImageToolSource(dataUrl);
+    const [chosen, setChosen] = useState<number | null>(null);
+    const [algorithm, setAlgorithm] = useState<ImageUpscaleAlgorithm>("high");
+    const edge = size ? Math.max(size.width, size.height) : 0;
+    const target = chosen ?? pixelTargets.find((pixels) => pixels > edge) ?? MAX_UPSCALE_LONG_EDGE;
+    const output = size ? resolveUpscaleSize(size.width, size.height, target) : null;
+    const ready = Boolean(size && target > edge);
     return (
-        <Modal title={null} open={open && Boolean(dataUrl)} onCancel={onClose} footer={null} width={820} centered destroyOnHidden>
-            <div className="space-y-5">
-                <div>
-                    <h2 className="text-xl font-semibold">调整尺寸</h2>
-                    <p className="mt-2 text-sm opacity-60">通过插值放大像素尺寸，另存为新图片，保留原图。这不是 AI 超分，不会生成新的真实细节。</p>
-                </div>
-                <div className="grid gap-6 md:grid-cols-[minmax(260px,1fr)_360px]">
-                    <div className="rounded-xl border p-4">
-                        <div className="grid min-h-[280px] place-items-center rounded-lg bg-black/5">
-                            <img src={dataUrl} alt="" className="max-h-[320px] max-w-full rounded-lg object-contain shadow-xl" draggable={false} />
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-sm">
-                            <span className="opacity-60">源图</span>
-                            <span className="font-semibold">{image ? `${image.width} x ${image.height} px` : "读取中"}</span>
-                        </div>
-                    </div>
-                    <div className="space-y-6 py-2">
-                        <div className="space-y-2">
-                            <div className="font-medium opacity-75">目标像素</div>
-                            <Segmented
-                                block
-                                value={params.targetLongEdge}
-                                options={targetOptions.map((option) => ({ label: `${option.label} · ${option.value}px`, value: option.value, disabled: Boolean(image && sourceLongEdge >= option.value) }))}
-                                onChange={(value) => setParams((current) => ({ ...current, targetLongEdge: Number(value) }))}
-                            />
-                            {image && !canUpscale ? <div className="text-xs font-medium text-[#ef4444]">{reachedMax ? "图片已达到 4K，无需放大" : "图片已达到当前目标像素，无需放大"}</div> : null}
-                        </div>
-                        <div className="space-y-2">
-                            <div className="font-medium opacity-75">放大算法</div>
-                            <Segmented
-                                block
-                                value={params.algorithm}
-                                options={algorithms.map((item) => ({
-                                    value: item.value,
-                                    label: (
-                                        <span className="flex min-h-12 flex-col justify-center text-left leading-5">
-                                            <span className="font-medium">{item.title}</span>
-                                            <span className="text-xs opacity-55">{item.description}</span>
-                                        </span>
-                                    ),
-                                }))}
-                                onChange={(value) => setParams((current) => ({ ...current, algorithm: value as ImageUpscaleAlgorithm }))}
-                            />
-                        </div>
-                        <div className="rounded-xl border px-4 py-3 text-sm">
-                            <div className="flex items-center justify-between">
-                                <span className="opacity-60">输出尺寸</span>
-                                <span className="font-semibold">{outputSize ? `${outputSize.width} x ${outputSize.height} px` : "未知"}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex justify-end">
-                    <Button type="primary" size="large" icon={<ImagePlus className="size-4" />} disabled={!canUpscale} onClick={() => onConfirm(params)}>
-                        生成放大图
-                    </Button>
+        <AppModal open centered title="调整图片尺寸" width={760} onCancel={onClose} okText="生成放大图" okButtonProps={{ disabled: !ready }} onOk={() => ready && onConfirm({ targetLongEdge: target, algorithm })}>
+            <p className="mb-4 text-sm text-muted-foreground">插值放大并另存为新图片，原图保留。此操作不生成新的真实细节。</p>
+            <div className="grid gap-5 md:grid-cols-2">
+                <figure className="m-0 flex flex-col items-center justify-center gap-3 rounded-lg border border-border bg-surface-active p-3">
+                    <img alt="待调整尺寸的图片" src={dataUrl} draggable={false} className="max-h-[320px] max-w-full object-contain" />
+                    <figcaption className="text-sm text-muted-foreground">{size ? `原图 ${size.width} × ${size.height} px` : error || "正在读取图片…"}</figcaption>
+                </figure>
+                <div className="flex flex-col gap-5">
+                    <label className="flex flex-col gap-2 text-sm">
+                        目标长边
+                        <Select aria-label="目标长边" value={target} onChange={setChosen} options={pixelTargets.map((pixels) => ({ value: pixels, label: `${pixels} px`, disabled: pixels <= edge }))} />
+                    </label>
+                    <fieldset className="space-y-2">
+                        <legend className="mb-2 text-sm">插值方式</legend>
+                        <Radio.Group value={algorithm} onChange={(event) => setAlgorithm(event.target.value)} className="flex flex-col gap-2">
+                            <Radio value="high">高质量 · 照片与细节图</Radio>
+                            <Radio value="bilinear">双线性 · 平滑快速</Radio>
+                            <Radio value="nearest">最近邻 · 像素图</Radio>
+                        </Radio.Group>
+                    </fieldset>
+                    <output className="text-sm">{output ? `输出 ${output.width} × ${output.height} px` : "等待读取尺寸"}</output>
+                    {error || (size && !ready) ? (
+                        <p role="alert" className="text-sm text-destructive">
+                            {error || (edge >= MAX_UPSCALE_LONG_EDGE ? "图片已达到 4K，无需放大" : "请选择大于原图的目标尺寸")}
+                        </p>
+                    ) : null}
                 </div>
             </div>
-        </Modal>
+        </AppModal>
     );
 }

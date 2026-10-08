@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "infinite-canvas",
+      "name": "yingce",
       "dependencies": {
         "@ant-design/icons": "^6.3.2",
         "@ant-design/x": "^2.9.0",

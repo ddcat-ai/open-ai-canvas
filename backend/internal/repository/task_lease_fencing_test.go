@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func TestTaskLeaseFencesExpiredAndReclaimedWriters(t *testing.T) {
