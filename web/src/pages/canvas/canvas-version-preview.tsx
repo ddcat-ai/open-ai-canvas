@@ -10,7 +10,7 @@ import { CanvasNodeActionContext } from "@/components/canvas/canvas-node-action-
 import { CanvasNodeGraphContext } from "@/components/canvas/canvas-node-graph-context";
 import { isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
 import { getCanvasNodesBounds, viewportAtScale, viewportForBounds } from "@/lib/canvas/canvas-viewport";
-import { resolveCanvasAppearance } from "@/lib/canvas/canvas-appearance";
+import { resolveCanvasAppearance, resolveCanvasConnectionAppearance } from "@/lib/canvas/canvas-appearance";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveMediaUrl } from "@/services/file-storage";
@@ -29,6 +29,7 @@ export function CanvasVersionPreview({ preview, onReturn, onShowVersions }: { pr
     const [mediaError, setMediaError] = useState("");
     const theme = useActiveTheme();
     const project = preview.project;
+    const connectionStyle = useMemo(() => resolveCanvasConnectionAppearance(project?.appearance), [project?.appearance]);
     useEffect(() => {
         const node = project?.nodes.find((item) => item.id === selectedId);
         const key = node?.metadata?.storageKey;
@@ -136,7 +137,7 @@ export function CanvasVersionPreview({ preview, onReturn, onShowVersions }: { pr
                             >
                                 <svg className="pointer-events-none absolute overflow-visible" width={1} height={1}>
                                     {connections.map(({ connection, from, to }) => (
-                                        <ConnectionPath key={connection.id} connection={{ ...connection, id: previewNodeId(connection.id) }} from={from} to={to} active={false} onSelect={noAction} />
+                                        <ConnectionPath key={connection.id} connection={{ ...connection, id: previewNodeId(connection.id) }} from={from} to={to} active={false} connectionStyle={connectionStyle} onSelect={noAction} />
                                     ))}
                                 </svg>
                                 {visibleNodes.map((node) =>

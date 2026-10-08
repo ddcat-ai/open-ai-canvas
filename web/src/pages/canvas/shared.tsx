@@ -14,7 +14,7 @@ import { InfiniteCanvas } from "@/components/canvas/infinite-canvas";
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
+import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, resolveCanvasAppearance, resolveCanvasConnectionAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, isCanvasFolderNode, isFrameNode, isNodeHiddenByCollapsedFrame, resolveFrameConnection } from "@/lib/canvas/canvas-frame";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
@@ -68,6 +68,7 @@ export default function SharedCanvasPage() {
         const resolved = resolveFrameConnection(connection, nodes);
         return resolved ? [{ connection, ...resolved }] : [];
     }), [connections, nodes]);
+    const connectionStyle = useMemo(() => resolveCanvasConnectionAppearance(appearance), [appearance]);
     const connectionBounds = useMemo(() => {
         if (!nodes.length) return { left: -1, top: -1, width: 2, height: 2 };
         const padding = 320;
@@ -260,7 +261,7 @@ export default function SharedCanvasPage() {
 
             <InfiniteCanvas containerRef={containerRef} viewport={viewport} appearance={appearance} backgroundMode={backgroundMode} onViewportChange={onViewportChange} onViewportPreviewChange={(next) => { viewportRef.current = next; }} onCanvasDeselect={() => { setSelectedNodeId(null); setContextMenu(null); }} onContextMenu={(event) => openContextMenu(event)} onDrop={(event) => { event.preventDefault(); unauthorized(); }}>
                 <svg className="absolute overflow-visible" viewBox={`${connectionBounds.left} ${connectionBounds.top} ${connectionBounds.width} ${connectionBounds.height}`} style={{ left: connectionBounds.left, top: connectionBounds.top, width: connectionBounds.width, height: connectionBounds.height, pointerEvents: "none", zIndex: 0 }}>
-                    {visibleConnections.map(({ connection, from, to }) => <ConnectionPath key={connection.id} connection={connection} from={from} to={to} active={false} onSelect={() => setInfoNodeId(to.id)} />)}
+                    {visibleConnections.map(({ connection, from, to }) => <ConnectionPath key={connection.id} connection={connection} from={from} to={to} active={false} connectionStyle={connectionStyle} onSelect={() => setInfoNodeId(to.id)} />)}
                 </svg>
                 {visibleNodes.map((node) => isFrameNode(node) ? <CanvasFrameNode key={node.id} data={node} dragOffset={dragRef.current?.nodeIds.includes(node.id) && dragOffset ? dragOffset : undefined} childNodes={frameChildrenById.get(node.id) || []} scale={viewport.k} isSelected={selectedNodeId === node.id} isDropTarget={false} readOnly onMouseDown={(event, nodeId) => {
                     event.stopPropagation();
