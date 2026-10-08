@@ -56,7 +56,7 @@ test("history explicitly describes its bounded dataset", () => {
 test("cleared tool references do not fall back to the original generation prompt", () => {
     const source = readFileSync(new URL("../src/pages/canvas/use-canvas-render-model.ts", import.meta.url), "utf8");
     const toolReferences = source.split("const toolMentionReferencesByNodeId = useMemo")[1].split("const tokens =")[0];
-    expect(toolReferences).toContain('node.metadata?.composerContent ?? node.metadata?.prompt ?? ""');
+    expect(toolReferences).toContain("const text = nodeGenerationPrompt(node);");
     expect(toolReferences).not.toContain("||");
 });
 

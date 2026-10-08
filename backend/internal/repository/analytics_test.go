@@ -60,6 +60,44 @@ func TestAPICallLogRecordTypeFiltersListAndExport(t *testing.T) {
 	}
 }
 
+func TestSQLiteAPICallLogRangeUsesInstantNotOffsetText(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:api-log-utc-range?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	local := time.FixedZone("CST", 8*3600)
+	inside := time.Date(2026, 10, 1, 2, 2, 34, 0, local) // 2026-09-30 18:02 UTC
+	outside := time.Date(2026, 10, 1, 9, 0, 0, 0, local) // 2026-10-01 01:00 UTC
+	for _, item := range []model.ApiCallLog{
+		{ID: "inside-local-midnight", Capability: "audio", RequestKind: "create", CreatedAt: inside},
+		{ID: "outside-utc-day", Capability: "audio", RequestKind: "create", CreatedAt: outside},
+	} {
+		if err := db.Create(&item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	logs, total, err := New(db).QueryAPICallLogs(APICallLogFilter{
+		AnalyticsFilter: AnalyticsFilter{
+			From: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+			To:   time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+		},
+		RecordType: "request",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(logs) != 1 || logs[0].ID != "inside-local-midnight" {
+		ids := make([]string, 0, len(logs))
+		for _, log := range logs {
+			ids = append(ids, log.ID)
+		}
+		t.Fatalf("total=%d ids=%v, want only the 02:02+08 record inside the UTC day", total, ids)
+	}
+}
+
 func (l *sqlCaptureLogger) LogMode(logger.LogLevel) logger.Interface { return l }
 func (*sqlCaptureLogger) Info(context.Context, string, ...any)       {}
 func (*sqlCaptureLogger) Warn(context.Context, string, ...any)       {}

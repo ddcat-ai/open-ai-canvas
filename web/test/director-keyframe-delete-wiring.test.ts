@@ -7,9 +7,9 @@ import { moduleGroupSource } from "./helpers/module-group-source";
  * 生产接线回归：领域函数正确不代表用户能删到关键帧。
  * 这里锁住「时间轴入口 -> workbench -> 领域函数」这条链路真的接上了。
  */
-const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/director-viewport-dock.tsx"), "utf8");
-const workbench = moduleGroupSource("components/canvas/director/canvas-director-workbench.tsx");
-const sequencer = readFileSync(resolve(import.meta.dir, "../src/components/canvas/director/director-sequencer.tsx"), "utf8");
+const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/previs-viewport-dock.tsx"), "utf8");
+const workbench = moduleGroupSource("components/canvas/previs/canvas-previs-workbench.tsx");
+const sequencer = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/previs-sequencer.tsx"), "utf8");
 const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
 function slice(source: string, from: string, to: string) {
@@ -21,36 +21,36 @@ function slice(source: string, from: string, to: string) {
 }
 
 describe("workbench 接入时间轴关键帧删除", () => {
-    test("DirectorSequencer 拿到的是 deleteKeyframe，而不是空实现", () => {
-        const element = slice(workbench, "<DirectorSequencer", "/>");
+    test("PrevisSequencer 拿到的是 deleteKeyframe，而不是空实现", () => {
+        const element = slice(workbench, "<PrevisSequencer", "/>");
         expect(element).toContain("onDeleteKeyframe={deleteKeyframe}");
         expect(element).not.toContain("onDeleteKeyframe={() =>");
     });
 
     test("缓动更新通过 workbench commit 接入，未命中不制造历史", () => {
-        const element = slice(workbench, "<DirectorSequencer", "/>");
+        const element = slice(workbench, "<PrevisSequencer", "/>");
         expect(element).toContain("onSetKeyframeEasing={setKeyframeEasing}");
         const handler = slice(workbench, "const setKeyframeEasing = useCallback", "* 快捷键执行器");
-        expect(handler).toContain("setDirectorSceneKeyframeEasing(current, target, easing) === current");
-        expect(handler).toContain("commit((scene) => setDirectorSceneKeyframeEasing(scene, target, easing));");
+        expect(handler).toContain("setPrevisSceneKeyframeEasing(current, target, easing) === current");
+        expect(handler).toContain("commit((scene) => setPrevisSceneKeyframeEasing(scene, target, easing));");
     });
 
     test("deleteKeyframe 未命中时不进 commit：不记历史、不产生修订", () => {
         const handler = slice(workbench, "const deleteKeyframe = useCallback", "* 快捷键执行器");
-        expect(handler).toContain("removeDirectorSceneKeyframe(current, target) === current) return;");
-        expect(handler).toContain("commit((scene) => removeDirectorSceneKeyframe(scene, target));");
+        expect(handler).toContain("removePrevisSceneKeyframe(current, target) === current) return;");
+        expect(handler).toContain("commit((scene) => removePrevisSceneKeyframe(scene, target));");
     });
 
     test("删除走 commit，因此进历史、可撤销、并触发 canonical 保存", () => {
         // commit 自身的语义：入历史 + writeAndPublish（coordinator 保存 + 镜像项目）。
         const commit = slice(workbench, "const commit = useCallback", "/** 暂存型手势");
         expect(commit).toContain("setHistory((items) => [...items.slice(-49), structuredClone(current)]);");
-        expect(commit).toContain("writeAndPublish(touchDirectorScene(updater(current)));");
+        expect(commit).toContain("writeAndPublish(touchPrevisScene(updater(current)));");
     });
 });
 
 describe("workbench 快捷键接线", () => {
-    const effect = slice(workbench, "// 导演台是全屏浮层，快捷键挂在 window", "/** 对象 transform 编辑的唯一入口");
+    const effect = slice(workbench, "// 预演台是全屏浮层，快捷键挂在 window", "/** 对象 transform 编辑的唯一入口");
 
     test("监听挂在 window keydown，并随 open 装卸", () => {
         expect(effect).toContain("if (!open) return;");
@@ -58,10 +58,10 @@ describe("workbench 快捷键接线", () => {
         expect(effect).toContain('window.removeEventListener("keydown", onKeyDown);');
     });
 
-    test("交互控件语境由 blocksDirectorShortcut 判定后交给解析器", () => {
-        expect(effect).toContain("isInteractiveTarget: blocksDirectorShortcut(event.target),");
+    test("交互控件语境由 blocksPrevisShortcut 判定后交给解析器", () => {
+        expect(effect).toContain("isInteractiveTarget: blocksPrevisShortcut(event.target),");
         // 旧的 text-only 判定不得残留：它放过 BUTTON/A/role 型控件。
-        expect(workbench).not.toContain("isDirectorTextEntryTarget");
+        expect(workbench).not.toContain("isPrevisTextEntryTarget");
     });
 
     test("只有动作真的执行了才 preventDefault", () => {
@@ -71,7 +71,7 @@ describe("workbench 快捷键接线", () => {
     });
 
     test("每个动作都落到已存在的真实执行路径", () => {
-        const runner = slice(workbench, "const runShortcut = (action: DirectorShortcutAction)", "const runShortcutRef");
+        const runner = slice(workbench, "const runShortcut = (action: PrevisShortcutAction)", "const runShortcutRef");
         expect(runner).toContain("setTransformMode(action.mode);");
         expect(runner).toContain("removeObject(selectedObject.id);");
         expect(runner).toContain("removeLight(selectedLight.id);");
@@ -82,7 +82,7 @@ describe("workbench 快捷键接线", () => {
     });
 
     test("没有可操作对象/历史时返回 false，把按键交还浏览器", () => {
-        const runner = slice(workbench, "const runShortcut = (action: DirectorShortcutAction)", "const runShortcutRef");
+        const runner = slice(workbench, "const runShortcut = (action: PrevisShortcutAction)", "const runShortcutRef");
         expect(runner).toContain("if (!history.length) return false;");
         expect(runner).toContain("if (!future.length) return false;");
         expect(runner).toContain("if (!selectedObject) return false;");
@@ -93,9 +93,9 @@ describe("workbench 快捷键接线", () => {
         // 全局快捷键是本轮新增的，交互控件守卫会吃掉聚焦按钮上的按键。
         // dock 承载 W/E/R 变换工具；场景列表承载「点选对象 -> 按 Delete」主流程。
         const dockButton = slice(dock, "function DockButton(", "function DockDivider(");
-        expect(dockButton).toContain("releaseDirectorFocusAfterPointer(event)");
+        expect(dockButton).toContain("releasePrevisFocusAfterPointer(event)");
         const sceneRow = slice(workbench, "function SceneRow(", "function AddMenuButton(");
-        expect(sceneRow).toContain("releaseDirectorFocusAfterPointer(event)");
+        expect(sceneRow).toContain("releasePrevisFocusAfterPointer(event)");
     });
 
     test("焦点释放规则集中在共享 helper，各按钮不自写 blur", () => {
@@ -107,13 +107,13 @@ describe("workbench 快捷键接线", () => {
 
     test("时间轴轨道行点选后也释放焦点：与场景列表同源的 select-then-Delete 流程", () => {
         const row = slice(sequencer, "function SequencerRow(", "* 关键帧渲染为真实 button");
-        expect(row).toContain("releaseDirectorFocusAfterPointer(event)");
+        expect(row).toContain("releasePrevisFocusAfterPointer(event)");
     });
 
     test("关键帧按钮绝不释放焦点：它自己拥有 Enter/Space/Delete/Backspace", () => {
         // 关键帧 blur 掉焦点会让键盘连续删除失效，且与它的 stopPropagation 设计冲突。
         const trackKeys = slice(sequencer, "function TrackKeys(", "function TrackBar(");
-        expect(trackKeys).not.toContain("releaseDirectorFocusAfterPointer");
+        expect(trackKeys).not.toContain("releasePrevisFocusAfterPointer");
     });
 });
 
@@ -122,7 +122,7 @@ describe("时间轴关键帧入口可见、可选择、可键盘删除", () => {
 
     test("可编辑关键帧是真实 button，不是惰性 span", () => {
         expect(trackKeys).toContain('type="button"');
-        expect(trackKeys).toContain("director-sequencer-key is-actionable");
+        expect(trackKeys).toContain("previs-sequencer-key is-actionable");
         expect(trackKeys).toContain('aria-label={`选择 ${key.label ?? "关键帧"} ${key.time.toFixed(2)}s 的关键帧`}');
         expect(trackKeys).toContain("aria-pressed=");
     });
@@ -142,14 +142,14 @@ describe("时间轴关键帧入口可见、可选择、可键盘删除", () => {
     });
 
     test("命中区扩大且有 focus-visible 焦点环", () => {
-        expect(styles).toContain(".director-sequencer-key.is-actionable");
-        expect(styles).toContain(".director-sequencer-key.is-actionable::after");
-        expect(styles).toContain(".director-sequencer-key.is-actionable:focus-visible");
-        expect(styles).toContain(".director-sequencer-key.is-actionable.is-selected");
+        expect(styles).toContain(".previs-sequencer-key.is-actionable");
+        expect(styles).toContain(".previs-sequencer-key.is-actionable::after");
+        expect(styles).toContain(".previs-sequencer-key.is-actionable:focus-visible");
+        expect(styles).toContain(".previs-sequencer-key.is-actionable.is-selected");
     });
 
     test("hover/focus 只用语义 token，不新增硬编码颜色", () => {
-        const block = slice(styles, "/* 可删除关键帧：", ".director-sequencer-clip {");
+        const block = slice(styles, "/* 可删除关键帧：", ".previs-sequencer-clip {");
         expect(block).toContain("outline: var(--stroke-2) solid var(--control-focus-ring);");
         expect(block).toContain("color-mix(in srgb, var(--control-focus-ring) 55%, transparent)");
         // rgba / 十六进制字面值一律不允许出现在新增块里。
@@ -186,7 +186,7 @@ describe("三类轨道都有删除入口，概览轨保持只读", () => {
     test("展开后的 Transform 子轨与骨骼子轨都可删除", () => {
         const transformRow = slice(sequencer, 'label="Transform" icon="◇"', "</SequencerRow>");
         expect(transformRow).toContain("onDeleteKey={deleteTrackKey}");
-        const boneRow = slice(sequencer, "label={directorBoneLabel(track.bone)}", "</SequencerRow>");
+        const boneRow = slice(sequencer, "label={previsBoneLabel(track.bone)}", "</SequencerRow>");
         expect(boneRow).toContain("onDeleteKey={deleteTrackKey}");
     });
 
@@ -205,8 +205,8 @@ describe("三类轨道都有删除入口，概览轨保持只读", () => {
     });
 
     test("切换摄影机或外部删帧后清除陈旧选择，顶部控件不能误改不可见轨道", () => {
-        expect(sequencer).toContain("directorKeyframeTargetExists(selectedKey.target, camera, objects)");
-        expect(sequencer).toContain("setSelectedKey((current) => current?.target && !directorKeyframeTargetExists(current.target, camera, objects) ? null : current);");
+        expect(sequencer).toContain("previsKeyframeTargetExists(selectedKey.target, camera, objects)");
+        expect(sequencer).toContain("setSelectedKey((current) => current?.target && !previsKeyframeTargetExists(current.target, camera, objects) ? null : current);");
         expect(sequencer).toContain("camera?.id === target.cameraId && camera.keyframes.some");
         expect(sequencer).toContain("object.boneTracks?.some");
     });

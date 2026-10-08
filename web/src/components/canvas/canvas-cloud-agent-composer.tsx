@@ -187,6 +187,7 @@ export function AgentChatComposer({
     onRemoveAttachment,
     left,
     submitAccessory,
+    footer,
     onStop,
     stopping,
     references = [],
@@ -209,6 +210,8 @@ export function AgentChatComposer({
     left?: ReactNode;
     /** 发送按钮左侧的附属控件，例如上下文用量环。 */
     submitAccessory?: ReactNode;
+    /** 输入区底部的附加内容（例如连接器条）。 */
+    footer?: ReactNode;
     /** 供「@」插入的画布节点/素材/技能引用候选（可选，默认空，缺省时退化为普通输入框） */
     references?: CanvasResourceReference[];
     /** 供「/」弹出的技能候选（可选） */
@@ -339,188 +342,194 @@ export function AgentChatComposer({
 
     return (
         <div className="agent-composer-wrap min-w-0 shrink-0" onWheelCapture={(event) => event.stopPropagation()}>
-            <div
-                className="agent-composer-surface group/composer relative transition-[background-color,box-shadow] duration-200"
-                style={{
-                    color: theme.accent.primary,
-                }}
-            >
-                {sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
-                {attachments.length ? (
-                    <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
-                        {attachments.map((item, index) => (
-                            <div key={item.id} className="group relative w-20 shrink-0">
-                                <button
-                                    type="button"
-                                    className="relative block size-20 overflow-hidden rounded-lg"
-                                    title="点击放大预览"
-                                    aria-label={`预览 ${item.name || `图片${index + 1}`}`}
-                                    onClick={() => setPreviewAttachment(item)}
-                                    onDoubleClick={() => setPreviewAttachment(item)}
-                                >
-                                    <img src={item.url} alt={item.name} className="size-full object-cover" />
-                                </button>
-                                <div className="mt-1 flex min-w-0 items-center justify-between gap-1">
-                                    <button type="button" className="flex min-w-0 items-center gap-0.5 truncate text-[var(--fs-tiny)] opacity-80 hover:opacity-100" title={`插入 @图片${index + 1}`} onClick={() => insertAttachmentMention(item)}>
-                                        <AtSign className="size-2.5 shrink-0" />
-                                        <span className="truncate">图片{index + 1}</span>
+            {/* 有底部附加内容时，外壳托住输入卡片与底部条，形成一张整卡。 */}
+            <div className="agent-composer-shell relative" data-has-footer={footer ? "" : undefined}>
+                {/* 整卡模式下发送光环包住整张卡，避免画在输入区与连接器之间形成一条线。 */}
+                {footer && sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
+                <div
+                    className="agent-composer-surface group/composer relative transition-[background-color,box-shadow] duration-200"
+                    style={{
+                        color: theme.accent.primary,
+                    }}
+                >
+                    {!footer && sending && !reducedMotion ? <WorkingGlow active color={theme.accent.primary} radius={22} /> : null}
+                    {attachments.length ? (
+                        <div className="thin-scrollbar mb-2 flex gap-2 overflow-x-auto pb-1">
+                            {attachments.map((item, index) => (
+                                <div key={item.id} className="group relative w-20 shrink-0">
+                                    <button
+                                        type="button"
+                                        className="relative block size-20 overflow-hidden rounded-lg"
+                                        title="点击放大预览"
+                                        aria-label={`预览 ${item.name || `图片${index + 1}`}`}
+                                        onClick={() => setPreviewAttachment(item)}
+                                        onDoubleClick={() => setPreviewAttachment(item)}
+                                    >
+                                        <img src={item.url} alt={item.name} className="size-full object-cover" />
                                     </button>
-                                    {onRemoveAttachment ? (
-                                        <button
-                                            type="button"
-                                            className="grid size-4 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100"
-                                            style={{ background: theme.toolbar.panel, color: theme.node.text }}
-                                            onClick={() => onRemoveAttachment(item.id)}
-                                            aria-label="移除图片"
-                                        >
-                                            <X className="size-3" />
+                                    <div className="mt-1 flex min-w-0 items-center justify-between gap-1">
+                                        <button type="button" className="flex min-w-0 items-center gap-0.5 truncate text-[var(--fs-tiny)] opacity-80 hover:opacity-100" title={`插入 @图片${index + 1}`} onClick={() => insertAttachmentMention(item)}>
+                                            <AtSign className="size-2.5 shrink-0" />
+                                            <span className="truncate">图片{index + 1}</span>
                                         </button>
-                                    ) : null}
+                                        {onRemoveAttachment ? (
+                                            <button
+                                                type="button"
+                                                className="grid size-4 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100"
+                                                style={{ background: theme.toolbar.panel, color: theme.node.text }}
+                                                onClick={() => onRemoveAttachment(item.id)}
+                                                aria-label="移除图片"
+                                            >
+                                                <X className="size-3" />
+                                            </button>
+                                        ) : null}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
-                <div className="relative" onKeyDownCapture={handleSlashKeyCapture} onPasteCapture={handlePasteCapture}>
-                    <button
-                        type="button"
-                        role="separator"
-                        aria-orientation="horizontal"
-                        aria-label="调整提示词面板高度"
-                        aria-valuemin={MIN_AGENT_PROMPT_HEIGHT}
-                        aria-valuemax={MAX_AGENT_PROMPT_HEIGHT}
-                        aria-valuenow={promptHeight}
-                        className="agent-composer-resize-handle"
-                        style={{ color: theme.node.muted }}
-                        onPointerDown={startPromptResize}
-                        onPointerMove={resizePrompt}
-                        onPointerUp={finishPromptResize}
-                        onPointerCancel={finishPromptResize}
-                        onKeyDown={resizePromptByKeyboard}
-                    >
-                        <span />
-                    </button>
-                    <div className="agent-composer-prompt-scroll" style={{ height: promptHeight }}>
-                        <CanvasResourceMentionTextarea
-                            value={prompt}
-                            references={composerReferences}
-                            includeAssetLibrary={includeAssetLibrary}
-                            sendOnEnter={canSubmit ? "both" : false}
-                            disabled={disabled}
-                            onChange={handlePromptChange}
-                            onSubmit={() => {
-                                if (canSubmit) onSubmit();
-                            }}
-                            onContentSizeChange={handlePromptContentSizeChange}
-                            className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
-                            containerClassName="min-h-[60px] h-full"
-                            style={{ color: theme.node.text }}
-                            placeholder={placeholder}
-                            aria-label="Agent 输入"
-                        />
-                    </div>
-                    {slash && slashCandidates.length ? (
-                        <div
-                            data-agent-slash-menu
-                            className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-1.5 shadow-2xl"
-                            style={{ background: theme.toolbar.panel, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}
-                            onMouseDown={(event) => event.preventDefault()}
-                        >
-                            {slashCandidates.map((skill, index) => (
-                                <button
-                                    key={skill.skillId}
-                                    type="button"
-                                    className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
-                                    style={{ background: index === activeSlashIndex ? theme.toolbar.itemHover : "transparent", color: theme.node.text }}
-                                    onMouseEnter={() => setSlashIndex(index)}
-                                    onClick={() => applySlashSkill(skill)}
-                                >
-                                    <Sparkles className="size-3.5 shrink-0 opacity-70" />
-                                    <span className="min-w-0 truncate font-medium">{skill.skillName}</span>
-                                    {skill.description ? <span className="min-w-0 flex-1 truncate opacity-50">{skill.description}</span> : null}
-                                </button>
                             ))}
                         </div>
                     ) : null}
-                </div>
-                <div className="agent-composer-toolbar mt-2">
-                    <div className="agent-composer-controls flex min-w-0 items-center gap-1">
-                        {onAddFiles ? (
-                            <>
-                                <input
-                                    ref={fileInputRef}
-                                    hidden
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={(event) => {
-                                        void onAddFiles(event.target.files);
-                                        event.target.value = "";
-                                    }}
-                                />
-                                <Tooltip title="上传图片">
-                                    <Button
-                                        type="text"
-                                        shape="circle"
-                                        className="!h-8 !w-8 !min-w-8 !transition-transform hover:!scale-105 active:!scale-95"
-                                        disabled={sending}
-                                        style={{ color: theme.node.muted }}
-                                        icon={<ImagePlus className="size-4" />}
-                                        onClick={() => fileInputRef.current?.click()}
-                                    />
-                                </Tooltip>
-                            </>
+                    <div className="relative" onKeyDownCapture={handleSlashKeyCapture} onPasteCapture={handlePasteCapture}>
+                        <button
+                            type="button"
+                            role="separator"
+                            aria-orientation="horizontal"
+                            aria-label="调整提示词面板高度"
+                            aria-valuemin={MIN_AGENT_PROMPT_HEIGHT}
+                            aria-valuemax={MAX_AGENT_PROMPT_HEIGHT}
+                            aria-valuenow={promptHeight}
+                            className="agent-composer-resize-handle"
+                            style={{ color: theme.node.muted }}
+                            onPointerDown={startPromptResize}
+                            onPointerMove={resizePrompt}
+                            onPointerUp={finishPromptResize}
+                            onPointerCancel={finishPromptResize}
+                            onKeyDown={resizePromptByKeyboard}
+                        >
+                            <span />
+                        </button>
+                        <div className="agent-composer-prompt-scroll" style={{ height: promptHeight }}>
+                            <CanvasResourceMentionTextarea
+                                value={prompt}
+                                references={composerReferences}
+                                includeAssetLibrary={includeAssetLibrary}
+                                sendOnEnter={canSubmit ? "both" : false}
+                                disabled={disabled}
+                                onChange={handlePromptChange}
+                                onSubmit={() => {
+                                    if (canSubmit) onSubmit();
+                                }}
+                                onContentSizeChange={handlePromptContentSizeChange}
+                                className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
+                                containerClassName="min-h-[60px] h-full"
+                                style={{ color: theme.node.text }}
+                                placeholder={placeholder}
+                                aria-label="Agent 输入"
+                            />
+                        </div>
+                        {slash && slashCandidates.length ? (
+                            <div
+                                data-agent-slash-menu
+                                className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-1.5 shadow-2xl"
+                                style={{ background: theme.toolbar.panel, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}
+                                onMouseDown={(event) => event.preventDefault()}
+                            >
+                                {slashCandidates.map((skill, index) => (
+                                    <button
+                                        key={skill.skillId}
+                                        type="button"
+                                        className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
+                                        style={{ background: index === activeSlashIndex ? theme.toolbar.itemHover : "transparent", color: theme.node.text }}
+                                        onMouseEnter={() => setSlashIndex(index)}
+                                        onClick={() => applySlashSkill(skill)}
+                                    >
+                                        <Sparkles className="size-3.5 shrink-0 opacity-70" />
+                                        <span className="min-w-0 truncate font-medium">{skill.skillName}</span>
+                                        {skill.description ? <span className="min-w-0 flex-1 truncate opacity-50">{skill.description}</span> : null}
+                                    </button>
+                                ))}
+                            </div>
                         ) : null}
-                        {left}
                     </div>
-                    <div className="agent-composer-submit flex items-center gap-2">
-                        {submitAccessory}
-                        {canStop ? (
+                    <div className="agent-composer-toolbar mt-2">
+                        <div className="agent-composer-controls flex min-w-0 items-center gap-1">
+                            {onAddFiles ? (
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        hidden
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={(event) => {
+                                            void onAddFiles(event.target.files);
+                                            event.target.value = "";
+                                        }}
+                                    />
+                                    <Tooltip title="上传图片">
+                                        <Button
+                                            type="text"
+                                            shape="circle"
+                                            className="!h-8 !w-8 !min-w-8 !transition-transform hover:!scale-105 active:!scale-95"
+                                            disabled={sending}
+                                            style={{ color: theme.node.muted }}
+                                            icon={<ImagePlus className="size-4" />}
+                                            onClick={() => fileInputRef.current?.click()}
+                                        />
+                                    </Tooltip>
+                                </>
+                            ) : null}
+                            {left}
+                        </div>
+                        <div className="agent-composer-submit flex items-center gap-2">
+                            {submitAccessory}
+                            {canStop ? (
+                                <motion.button
+                                    type="button"
+                                    disabled={stopping}
+                                    aria-label="停止本轮"
+                                    title="停止当前 Agent 运行"
+                                    onClick={() => void onStop?.()}
+                                    whileHover={!reducedMotion && !stopping ? { scale: 1.06, y: -1 } : undefined}
+                                    whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}
+                                    animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1 }}
+                                    transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                                    className="grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                                    style={{ background: theme.accent.danger, color: theme.accent.onPrimary }}
+                                >
+                                    {stopping ? <LoaderCircle className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
+                                </motion.button>
+                            ) : null}
                             <motion.button
                                 type="button"
-                                disabled={stopping}
-                                aria-label="停止本轮"
-                                title="停止当前 Agent 运行"
-                                onClick={() => void onStop?.()}
-                                whileHover={!reducedMotion && !stopping ? { scale: 1.06, y: -1 } : undefined}
-                                whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}
-                                animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1 }}
-                                transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                                className="grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
-                                style={{ background: theme.accent.danger, color: theme.accent.onPrimary }}
+                                disabled={!canSubmit}
+                                aria-label={sending ? "发送中" : canStop ? "插话" : "发送"}
+                                title={canStop ? "插话：Agent 下一次开口时看到它" : "点击发送；Enter 或 ⌘/Ctrl+Enter 发送"}
+                                onClick={() => onSubmit()}
+                                whileHover={canSubmit && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
+                                whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
+                                animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1, rotate: 0 }}
+                                transition={sending && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { type: "spring", stiffness: 420, damping: 24 }}
+                                data-icon-only
+                                className="agent-composer-send grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
+                                style={{
+                                    background: canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
+                                    color: canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
+                                }}
                             >
-                                {stopping ? <LoaderCircle className="size-4 animate-spin" /> : <Square className="size-3.5" fill="currentColor" />}
+                                <motion.span
+                                    key={stopping ? "stopping" : sending ? "sending" : "ready"}
+                                    initial={reducedMotion ? false : { opacity: 0, scale: 0.65, rotate: sending ? -25 : 25 }}
+                                    animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                    transition={{ duration: reducedMotion ? 0 : 0.18, ease: "easeOut" }}
+                                    className="grid place-items-center"
+                                >
+                                    {sending ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
+                                </motion.span>
                             </motion.button>
-                        ) : null}
-                        <motion.button
-                            type="button"
-                            disabled={!canSubmit}
-                            aria-label={sending ? "发送中" : canStop ? "插话" : "发送"}
-                            title={canStop ? "插话：Agent 下一次开口时看到它" : "点击发送；Enter 或 ⌘/Ctrl+Enter 发送"}
-                            onClick={() => onSubmit()}
-                            whileHover={canSubmit && !reducedMotion ? { scale: 1.06, y: -1 } : undefined}
-                            whileTap={canSubmit && !reducedMotion ? { scale: 0.9, y: 1 } : undefined}
-                            animate={stopping && !reducedMotion ? { scale: [1, 0.94, 1] } : { scale: 1, rotate: 0 }}
-                            transition={sending && !reducedMotion ? { duration: 0.42, ease: "easeOut" } : { type: "spring", stiffness: 420, damping: 24 }}
-                            data-icon-only
-                            className="agent-composer-send grid size-7 shrink-0 place-items-center rounded-full p-0 outline-none transition-[background-color,box-shadow,color,transform] duration-200 focus-visible:ring-2 focus-visible:ring-current/35 disabled:cursor-not-allowed"
-                            style={{
-                                background: canSubmit || sending ? theme.accent.primary : theme.spatial.surface,
-                                color: canSubmit || sending ? theme.accent.onPrimary : theme.node.muted,
-                            }}
-                        >
-                            <motion.span
-                                key={stopping ? "stopping" : sending ? "sending" : "ready"}
-                                initial={reducedMotion ? false : { opacity: 0, scale: 0.65, rotate: sending ? -25 : 25 }}
-                                animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                                transition={{ duration: reducedMotion ? 0 : 0.18, ease: "easeOut" }}
-                                className="grid place-items-center"
-                            >
-                                {sending ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
-                            </motion.span>
-                        </motion.button>
+                        </div>
                     </div>
                 </div>
+                {footer}
             </div>
             {previewAttachment ? <AgentImagePreview attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} /> : null}
         </div>

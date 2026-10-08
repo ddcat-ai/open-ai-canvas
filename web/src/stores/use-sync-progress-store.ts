@@ -4,7 +4,7 @@ export type SyncProjectProgress = {
     projectId: string;
     total: number;
     completed: number;
-    phase: "pending" | "uploading" | "saving" | "done" | "error" | "conflict";
+    phase: "pending" | "uploading" | "saving" | "reconciling" | "done" | "error" | "conflict";
     message?: string;
     draftCount?: number;
 };

@@ -71,6 +71,97 @@ func createCloudAgentStoryboardForTest(t *testing.T, s *Service, canvas *model.C
 	return rows
 }
 
+func TestCloudAgentStoryboardAcceptsImagePromptAsDescription(t *testing.T) {
+	if err := validateCloudAgentStoryboardRow(map[string]any{
+		"durationSeconds":       float64(3),
+		"imageGenerationPrompt": "首帧：雨夜街口，主角从巷中走出",
+	}, true, "rows[0]"); err != nil {
+		t.Fatalf("a standalone imageGenerationPrompt should describe the shot: %v", err)
+	}
+	if err := validateCloudAgentStoryboardRow(map[string]any{"durationSeconds": float64(3)}, true, "rows[0]"); err == nil || !strings.Contains(err.Error(), "首帧提示词") {
+		t.Fatalf("missing shot description should explain accepted fields: %v", err)
+	} else if fieldErr, ok := err.(*cloudAgentFieldArgumentError); !ok || fieldErr.Field != "rows[0]" || fieldErr.Issue != "required" {
+		t.Fatalf("missing shot description should be a repairable field error, got %T: %v", err, err)
+	}
+}
+
+func TestCloudAgentStoryboardArgumentFailureContinuesRun(t *testing.T) {
+	s, canvas := cloudAgentStoryboardFixture(t)
+	req := agentTestRequest()
+	req.PermissionMode = "request_approval"
+	root, err := s.CreateCloudAgentRun("user", req, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := cloudAgentStoryboardCall(t, "canvas_create_storyboard", "storyboard-invalid-call", map[string]any{
+		"snapshotHash": cloudAgentCanvasHash(doc),
+		"nodeId":       "storyboard-invalid",
+		"title":        "缺少描述的分镜",
+		"rows":         []map[string]any{{"durationSeconds": 4.0}},
+	})
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.ActiveTaskID = ""
+	state.Calls = []cloudAgentCall{call}
+	state.CallIndex = 0
+	if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	run, err = s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "running" {
+		t.Fatalf("repairable storyboard argument failure terminated run: status=%s message=%s", stored.Status, stored.FailureMessage)
+	}
+	var failed *CloudAgentEvent
+	for i := range state.Events {
+		if state.Events[i].Type == "tool_failed" {
+			failed = &state.Events[i]
+		}
+		if state.Events[i].Type == "run_failed" {
+			t.Fatalf("argument error emitted run_failed: %+v", state.Events[i])
+		}
+	}
+	if failed == nil {
+		t.Fatal("missing tool_failed event")
+	}
+	result, _ := failed.Payload["result"].(map[string]any)
+	if result["field"] != "rows[0]" || result["issue"] != "required" || result["requiredAction"] != "fix_arguments" {
+		t.Fatalf("missing actionable storyboard field feedback: %+v", result)
+	}
+	storedCanvas, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(storedCanvas.PayloadJSON, "storyboard-invalid") {
+		t.Fatal("invalid storyboard arguments wrote to the canvas")
+	}
+}
+
 func TestCloudAgentNodeCapabilityCardsExplainStoryboardTradeoffs(t *testing.T) {
 	result := cloudAgentNodeTypes()
 	if result["schemaVersion"] != 2 {

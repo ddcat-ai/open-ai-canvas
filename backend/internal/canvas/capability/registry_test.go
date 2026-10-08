@@ -241,8 +241,8 @@ func TestBuiltinMediaCapabilitiesUpdateDraftWithoutOverwritingGeneratedAssets(t 
 			if !ok || !descriptor.CanUpdate {
 				t.Fatalf("media capability is not updateable: %#v", descriptor)
 			}
-			if descriptor.PatchFields["content"].Path != "metadata.composerContent" || descriptor.PatchFields["title"].Path != "title" {
-				t.Fatalf("unsafe media update paths: %#v", descriptor.PatchFields)
+			if descriptor.PatchFields["content"].Path != "metadata.generationSpec.prompt" || descriptor.PatchFields["title"].Path != "title" {
+				t.Fatalf("media update must target the generation contract: %#v", descriptor.PatchFields)
 			}
 
 			node := map[string]any{
@@ -251,23 +251,65 @@ func TestBuiltinMediaCapabilitiesUpdateDraftWithoutOverwritingGeneratedAssets(t 
 					"content":         "resource:generated-result",
 					"prompt":          "已提交提示词",
 					"composerContent": "旧草稿",
-					"status":          "success",
+					"generationSpec": map[string]any{
+						"version":           float64(1),
+						"mode":              nodeType,
+						"prompt":            "旧草稿",
+						"options":           map[string]any{},
+						"referenceBindings": []any{},
+						"textInputMode":     "append-sources",
+					},
+					"status": "success",
 				},
 			}
 			if err := descriptor.ApplyPatch(node, map[string]any{"title": "新标题", "content": "下一版提示词"}); err != nil {
 				t.Fatal(err)
 			}
 			metadata := node["metadata"].(map[string]any)
-			if node["title"] != "新标题" || metadata["composerContent"] != "下一版提示词" {
-				t.Fatalf("media draft was not updated: %#v", node)
+			generationSpec := metadata["generationSpec"].(map[string]any)
+			if node["title"] != "新标题" || generationSpec["prompt"] != "下一版提示词" || metadata["composerContent"] != "旧草稿" {
+				t.Fatalf("media prompt contract was not updated: %#v", node)
 			}
-			if metadata["content"] != "resource:generated-result" || metadata["prompt"] != "已提交提示词" || metadata["status"] != "success" {
+			if metadata["content"] != "resource:generated-result" || metadata["prompt"] != "已提交提示词" || metadata["status"] != "success" || generationSpec["prompt"] != "下一版提示词" {
 				t.Fatalf("media result or submission snapshot was overwritten: %#v", metadata)
 			}
 
 			created := descriptor.Metadata("初始草稿")
-			if created["content"] != "" || created["prompt"] != "初始草稿" || created["composerContent"] != "初始草稿" || created["status"] != "idle" {
+			createdSpec := created["generationSpec"].(map[string]any)
+			if created["content"] != "" || created["prompt"] != "初始草稿" || created["composerContent"] != "初始草稿" || createdSpec["prompt"] != "初始草稿" || created["status"] != "idle" {
 				t.Fatalf("media draft metadata is incomplete: %#v", created)
+			}
+		})
+	}
+}
+
+func TestBuiltinMediaCapabilitiesUpdateDraftInitializesEmptyGenerationContract(t *testing.T) {
+	registry := BuiltinRegistry()
+	for _, nodeType := range []string{"image", "video", "audio"} {
+		t.Run(nodeType, func(t *testing.T) {
+			descriptor, ok := registry.Resolve(nodeType)
+			if !ok {
+				t.Fatal("missing media descriptor")
+			}
+			node := map[string]any{
+				"title": "旧媒体节点",
+				"metadata": map[string]any{
+					"content":         "resource:already-generated",
+					"prompt":          "已提交快照",
+					"composerContent": "旧兼容草稿",
+					"status":          "success",
+				},
+			}
+			if err := descriptor.ApplyPatch(node, map[string]any{"content": "空合同后的新提示词"}); err != nil {
+				t.Fatal(err)
+			}
+			metadata := node["metadata"].(map[string]any)
+			spec := metadata["generationSpec"].(map[string]any)
+			if spec["mode"] != nodeType || spec["prompt"] != "空合同后的新提示词" {
+				t.Fatalf("empty generation contract was not initialized: %#v", metadata)
+			}
+			if metadata["content"] != "resource:already-generated" || metadata["prompt"] != "已提交快照" || metadata["composerContent"] != "旧兼容草稿" || metadata["status"] != "success" {
+				t.Fatalf("legacy media state was overwritten: %#v", metadata)
 			}
 		})
 	}

@@ -14,8 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -196,6 +195,7 @@ func (s *Service) failPiRunner(runID, userID string, cause error) {
 			state, decodeErr := cloudAgentDecode(current)
 			if decodeErr == nil {
 				state.LastError = cause.Error()
+				cloudAgentDropInterjections(runID, "本轮已结束："+truncateRunes(cause.Error(), 120), &state)
 				state.event(runID, "run_failed", map[string]any{"error": cause.Error()})
 				return cloudAgentSave(current, &state)
 			}
@@ -292,17 +292,29 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 
 	// 4. 准备会话文件
 	sessionJSONL, _ := input["piSessionJSONL"].(string)
+	// ownSession 表示快照是本轮自己落库的，而不是续轮沿用的上一轮会话。
+	ownSession := false
 	if saved, sessionErr := s.repo.CloudAgentPiSession(userID, runID); sessionErr == nil && saved != nil && saved.SessionJSONL != "" {
 		sessionJSONL = saved.SessionJSONL
+		ownSession = true
 	} else if sessionErr != nil && !errors.Is(sessionErr, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("load session: %w", sessionErr)
 	}
 
-	sessionDir := filepath.Join(s.dataDir, "pi-sessions")
-	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
-		return fmt.Errorf("create session dir: %w", err)
+	// 崩溃恢复：最后答案已写进会话快照、运行却没来得及标记完成。这一回合已经结束，
+	// 直接收尾；再启动运行时会对同一提示词再调用一次模型、多扣一次费。
+	// 例外：完成闸写下的插话续跑提示词（completeCloudAgentPiRun）晚于快照里的
+	// 最终回答，必须真正跑出去——清空收尾会让已标记送达的插话永远到不了模型。
+	if ownSession && cloudAgentPiTurnSettled(sessionJSONL, &runtimeState) {
+		if !cloudAgentPiResumePromptDeliversInterjection(&runtimeState) {
+			if runtimeState.PiResumePrompt != "" {
+				if err := s.saveCloudAgentPiResumePrompt(userID, runID, ""); err != nil {
+					return err
+				}
+			}
+			return s.completeCloudAgentPiRun(userID, runID)
+		}
 	}
-	sessionFile := filepath.Join(sessionDir, runID+".jsonl")
 
 	// 5. 构建完整的 Pi 请求（核心重构）
 	request, err := s.buildEnhancedPiRequest(ctx, EnhancedPiRequestParams{
@@ -315,9 +327,7 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		ModelID:      modelID,
 		RuntimeState: &runtimeState,
 		Canonical:    &canonical,
-		SessionFile:  sessionFile,
 		SessionJSONL: sessionJSONL,
-		SessionDir:   sessionDir,
 	})
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
@@ -346,6 +356,12 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		},
 	})
 	if err != nil {
+		// 已经因审批暂停的会话，收尾阶段再报错不影响运行：状态停在等审批，
+		// 由审批结论接管。把它当失败处理会让用户还没来得及审批就整轮中断。
+		if pausedForApproval.Load() && !errors.Is(err, context.Canceled) {
+			log.Printf("[Agent] session error after approval pause ignored run=%s: %v", runID, err)
+			return nil
+		}
 		return err
 	}
 
@@ -364,6 +380,49 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 
 	// 9. 完成运行
 	return s.completeCloudAgentPiRun(userID, runID)
+}
+
+// cloudAgentPiTurnSettled 判断本轮是否已在会话里完整结束：本轮已有成功的助手回复，
+// 没有挂着的任务或审批，且会话最后一条消息是不带工具调用的正常结束回复。
+// 只能用于本轮自己落库的快照：运行时的事件按顺序提交，助手回复计数增长之前，
+// 含本轮用户提示的快照已经落库，所以最后一条完成回复一定属于本轮。
+// 续轮沿用的上一轮会话最后一条也是完成回复，不能据此收尾。
+func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool {
+	if sessionJSONL == "" || state == nil || state.PiAssistantResponses == 0 {
+		return false
+	}
+	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+		return false
+	}
+	lines := strings.Split(strings.TrimRight(sessionJSONL, "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		var entry struct {
+			Type    string `json:"type"`
+			Message struct {
+				Role       string `json:"role"`
+				StopReason string `json:"stopReason"`
+				Content    []struct {
+					Type string `json:"type"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(lines[i]), &entry); err != nil {
+			return false
+		}
+		if entry.Type != "message" {
+			continue
+		}
+		if entry.Message.Role != "assistant" || entry.Message.StopReason != "stop" {
+			return false
+		}
+		for _, block := range entry.Message.Content {
+			if block.Type == "toolCall" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // completeCloudAgentPiRun 完成运行
@@ -395,9 +454,26 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 		}
 
 		// 原子更新状态
+		resumed := false
 		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 			if cloudAgentRunTerminal(current.Status) || current.Status == "waiting_approval" || current.Status == "waiting_user" {
 				return nil
+			}
+
+			// 运行自然结束但队列里还有插话：它们没赶上最后一次 /model 出队，模型是
+			// 在看不到它们的情况下给出的回答。预算还开得起下一步时，把插话作为续跑
+			// 提示词再走一步（运行时按恢复提示词拉起新会话）；开不起时如实退回。
+			// 续跑消耗的仍是本轮剩余预算，不是替用户自动开新一轮。
+			if len(state.PendingInterjections) > 0 {
+				if limits, limitsErr := s.cloudAgentStepLimits(); limitsErr == nil {
+					state.StepLimits = limits
+				}
+				if !cloudAgentStepBudgetExhausted(&state) {
+					state.PiResumePrompt = cloudAgentPiInterjectionResumePrompt(runID, &state)
+					resumed = true
+					return cloudAgentSave(current, &state)
+				}
+				cloudAgentDropInterjections(runID, "本轮已达到模型调用上限", &state)
 			}
 
 			current.Status = "completed"
@@ -410,6 +486,10 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 		})
 
 		if !errors.Is(err, repository.ErrCreationConflict) {
+			if resumed && err == nil {
+				s.resumeCloudAgentPi(userID, runID)
+				return nil
+			}
 			return err
 		}
 	}

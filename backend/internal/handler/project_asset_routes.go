@@ -4,6 +4,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"infinite-canvas/backend/internal/service"
 
@@ -128,6 +129,136 @@ func registerProjectAssetRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"id": c.Param("folderId")})
 	})
+	r.GET("/characters", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		page, pageSize, parseErr := parsePaginationQuery(c, 12)
+		if parseErr != nil {
+			fail(c, http.StatusBadRequest, parseErr)
+			return
+		}
+		if pageSize > 48 {
+			pageSize = 48
+		}
+		ids := []string{}
+		for _, id := range strings.Split(c.Query("ids"), ",") {
+			if id = strings.TrimSpace(id); id != "" {
+				ids = append(ids, id)
+			}
+		}
+		characters, err := svc.ListCharacters(user.ID, c.Query("q"), page, pageSize, ids)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, characters)
+	})
+	r.POST("/characters", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256<<10)
+		var req service.CreateCharacterRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		character, err := svc.CreateCharacter(user.ID, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, character)
+	})
+	r.GET("/characters/:assetId", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		character, err := svc.Character(user.ID, c.Param("assetId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, character)
+	})
+	r.PATCH("/characters/:assetId", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256<<10)
+		var req service.UpdateProjectCharacterRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		character, err := svc.UpdateCharacter(user.ID, c.Param("assetId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, character)
+	})
+	r.PUT("/characters/:assetId/representations", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 128<<10)
+		var req service.ReplaceCharacterRepresentationsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		character, err := svc.ReplaceCharacterRepresentations(user.ID, c.Param("assetId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, character)
+	})
+	r.PUT("/characters/:assetId/voice", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req service.BindCharacterVoiceRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		character, err := svc.BindCharacterVoice(user.ID, c.Param("assetId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, character)
+	})
+	r.DELETE("/characters/:assetId/voice", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		character, err := svc.UnbindCharacterVoice(user.ID, c.Param("assetId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, character)
+	})
+
 	r.POST("/projects/:id/characters", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

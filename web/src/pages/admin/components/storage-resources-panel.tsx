@@ -20,11 +20,11 @@ export default function StorageResourcesPanel() {
     const kind = normalizeOption(searchParams.get("kind"), ["image", "video", "audio", "file", "live2d"]);
     const status = normalizeOption(searchParams.get("status"), ["pending", "ready", "failed", "deleted"]);
     const provider = normalizeOption(searchParams.get("provider"), ["local", "aliyun", "tencent", "qiniu", "s3"]);
-    const userId = searchParams.get("userId") || "";
+    const userQuery = searchParams.get("user") || searchParams.get("userId") || "";
     const page = positiveInt(searchParams.get("page"), 1);
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
     const debouncedKeyword = useDebouncedValue(keyword);
-    const debouncedUserId = useDebouncedValue(userId);
+    const debouncedUserQuery = useDebouncedValue(userQuery);
     const [resources, setResources] = useState<AdminStorageResource[]>([]);
     const [stats, setStats] = useState<AdminStorageStats | null>(null);
     const [total, setTotal] = useState(0);
@@ -35,12 +35,12 @@ export default function StorageResourcesPanel() {
     const [deleting, setDeleting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const requestSequence = useRef(0);
-    const hasFilters = Boolean(keyword || userId || kind !== "all" || status !== "all" || provider !== "all");
+    const hasFilters = Boolean(keyword || userQuery || kind !== "all" || status !== "all" || provider !== "all");
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
         Object.entries(patch).forEach(([key, value]) => {
-            const isDefault = ((key === "filter" || key === "userId") && value === "") || (["kind", "status", "provider"].includes(key) && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
+            const isDefault = ((key === "filter" || key === "user" || key === "userId") && value === "") || (["kind", "status", "provider"].includes(key) && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
             if (isDefault) next.delete(key);
             else next.set(key, String(value));
         });
@@ -68,7 +68,8 @@ export default function StorageResourcesPanel() {
                 kind: kind === "all" ? undefined : kind,
                 status: status === "all" ? undefined : status,
                 provider: provider === "all" ? undefined : provider,
-                userId: debouncedUserId || undefined,
+                user: debouncedUserQuery || undefined,
+                userId: debouncedUserQuery || undefined,
                 page,
                 pageSize: pageSize,
             },
@@ -86,7 +87,7 @@ export default function StorageResourcesPanel() {
             })
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => controller.abort();
-    }, [debouncedKeyword, debouncedUserId, kind, status, provider, page, pageSize, refreshKey]);
+    }, [debouncedKeyword, debouncedUserQuery, kind, status, provider, page, pageSize, refreshKey]);
 
     const columns = useMemo<ColumnsType<AdminStorageResource>>(
         () => [
@@ -210,7 +211,7 @@ export default function StorageResourcesPanel() {
                             placeholder="资源 ID 或对象路径"
                             onChange={(event) => updateUrl({ filter: event.target.value, page: 1 }, true)}
                         />
-                        <Input aria-label="按用户 ID 筛选" autoComplete="off" allowClear className="w-48" value={userId} placeholder="用户" onChange={(event) => updateUrl({ userId: event.target.value, page: 1 }, true)} />
+                        <Input aria-label="按用户名、昵称、邮箱或用户 ID 筛选" autoComplete="off" allowClear className="w-64" value={userQuery} placeholder="用户名 / 昵称 / 邮箱 / 用户 ID" onChange={(event) => updateUrl({ user: event.target.value, userId: "", page: 1 }, true)} />
                         <Select aria-label="筛选资源类型" className="w-32" value={kind} onChange={(value) => updateUrl({ kind: value, page: 1 })} options={kindOptions} />
                         <Select aria-label="筛选资源状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={statusOptions} />
                         <Select aria-label="筛选存储类型" className="w-36" value={provider} onChange={(value) => updateUrl({ provider: value, page: 1 })} options={providerOptions} />
@@ -219,14 +220,14 @@ export default function StorageResourcesPanel() {
                 toolbarActiveFilters={
                     <>
                         {keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}
-                        {userId ? <AdminFilterChip label={`用户：${userId}`} onRemove={() => updateUrl({ userId: "", page: 1 })} /> : null}
+                        {userQuery ? <AdminFilterChip label={`用户：${userQuery}`} onRemove={() => updateUrl({ user: "", userId: "", page: 1 })} /> : null}
                         {kind !== "all" ? <AdminFilterChip label={`类型：${kindLabel(kind)}`} onRemove={() => updateUrl({ kind: "all", page: 1 })} /> : null}
                         {status !== "all" ? <AdminFilterChip label={`状态：${statusLabel(status)}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
                         {provider !== "all" ? <AdminFilterChip label={`存储：${providerLabel(provider)}`} onRemove={() => updateUrl({ provider: "all", page: 1 })} /> : null}
                     </>
                 }
                 toolbarActive={hasFilters}
-                onReset={() => updateUrl({ filter: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
+                onReset={() => updateUrl({ filter: "", user: "", userId: "", kind: "all", status: "all", provider: "all", page: 1 })}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
                         <Button danger size="small" icon={<Trash2 className="size-3.5" />} loading={deleting} onClick={() => confirmDelete(selectedIds)}>

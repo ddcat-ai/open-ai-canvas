@@ -1025,6 +1025,23 @@
     font-weight: 650;
 }
 
+:root:not(.dark) :is(.admin-drawer, .admin-secondary-drawer) .ant-drawer-content,
+:root:not(.dark) :is(.admin-modal-root, .admin-channel-modal-root) .ant-modal-container {
+    border: 0 !important;
+    box-shadow: 0 16px 40px rgb(15 23 42 / 0.1) !important;
+}
+
+:root:not(.dark) :is(.admin-drawer, .admin-secondary-drawer) :is(.ant-drawer-header, .ant-drawer-footer),
+:root:not(.dark) :is(.admin-modal-root, .admin-channel-modal-root) :is(.ant-modal-header, .ant-modal-footer) {
+    border-color: transparent !important;
+    background: var(--admin-surface) !important;
+}
+
+:root:not(.dark) :is(.admin-drawer, .admin-secondary-drawer) .ant-drawer-body,
+:root:not(.dark) :is(.admin-modal-root, .admin-channel-modal-root) .ant-modal-body {
+    background: var(--admin-surface) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
     [data-admin-root] *,
     body.admin-overlays * {

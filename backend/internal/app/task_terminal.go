@@ -48,6 +48,18 @@ type taskOutputLifecycle interface {
 	RegisterTaskOutputFromTask(task model.Task) error
 }
 
+type audioDurationTaskBilling interface {
+	SettleBillingWithAudioDuration(orderID string, providerRequestID string, durationMs int64) error
+}
+
+type billingOrderReader interface {
+	BillingOrder(orderID string) (*model.BillingOrder, error)
+}
+
+type audioDurationTaskOutput interface {
+	AudioOutputDurationMs(task model.Task) (int64, error)
+}
+
 func newTaskTerminalCoordinator(s *Service) *taskTerminalCoordinator {
 	return &taskTerminalCoordinator{
 		repo:              s.repo,
@@ -225,7 +237,36 @@ func (c *taskTerminalCoordinator) handleSuccess(task *model.Task) error {
 			completionErr = fmt.Errorf("任务成功后的项目产物登记失败：%w", registerErr)
 		}
 	}
-	if err := c.billing.SettleBilling(task.BillingOrderID, ""); err != nil {
+	settleBilling := func() error {
+		if audioBilling, ok := c.billing.(audioDurationTaskBilling); ok && capabilityFromTaskType(task.Type) == "audio" {
+			orderReader, readerOK := c.billing.(billingOrderReader)
+			if readerOK {
+				order, err := orderReader.BillingOrder(task.BillingOrderID)
+				if err != nil {
+					return err
+				}
+				// Only audio orders priced per second need measured output duration.
+				// Fixed-request audio must retain the ordinary settlement path even
+				// when the stored resource has no duration metadata.
+				if order == nil || order.Capability != "audio" || order.BillingMode != "per_second" {
+					return c.billing.SettleBilling(task.BillingOrderID, "")
+				}
+			}
+			output, outputOK := c.outputs.(audioDurationTaskOutput)
+			if outputOK {
+				if completedTask == nil {
+					return errors.New("任务成功后无法读取音频产物")
+				}
+				durationMs, err := output.AudioOutputDurationMs(*completedTask)
+				if err != nil {
+					return err
+				}
+				return audioBilling.SettleBillingWithAudioDuration(task.BillingOrderID, "", durationMs)
+			}
+		}
+		return c.billing.SettleBilling(task.BillingOrderID, "")
+	}
+	if err := settleBilling(); err != nil {
 		uncertainErr := c.billing.MarkBillingUncertain(task.BillingOrderID, "生成成功但积分结算失败："+err.Error())
 		_ = c.logger.log(task.UserID, task.ID, "error", "积分结算失败，已进入待核对", err.Error())
 		completionErr = errors.Join(completionErr, fmt.Errorf("积分结算失败：%w", err))

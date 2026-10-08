@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 const maxAPICallPayloadBytes = 128 << 10
@@ -151,5 +152,14 @@ func truncateAPICallPayload(value string) string {
 	if len(value) <= maxAPICallPayloadBytes {
 		return value
 	}
-	return value[:maxAPICallPayloadBytes] + fmt.Sprintf("\n[报文已截断，原始长度 %d 字节]", len(value))
+	cut := maxAPICallPayloadBytes
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	// 上游报文不保证是合法 UTF-8，直接入库会被 PostgreSQL 以 invalid byte sequence 拒收。
+	truncated := value[:cut]
+	if !utf8.ValidString(truncated) {
+		truncated = strings.ToValidUTF8(truncated, string(utf8.RuneError))
+	}
+	return truncated + fmt.Sprintf("\n[报文已截断，原始长度 %d 字节]", len(value))
 }

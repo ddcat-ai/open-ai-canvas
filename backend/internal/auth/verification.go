@@ -210,7 +210,10 @@ func (s *Service) contactAvailable(email, phone, ownID string) error {
 			if email == "" {
 				continue
 			}
-			user, err = s.repo.UserByEmail(email)
+			if err := s.repo.CheckEmailAvailable(email, ownID); err != nil {
+				return err
+			}
+			continue
 		} else {
 			if phone == "" {
 				continue

@@ -7,6 +7,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -240,6 +241,14 @@ func (r *Repository) MarkBillingUncertain(id string, errorText string) error {
 }
 
 func (r *Repository) SettleBillingOrder(id string, providerRequestID string) error {
+	return r.settleBillingOrder(id, providerRequestID, nil)
+}
+
+func (r *Repository) SettleBillingOrderWithAudioDuration(id string, providerRequestID string, durationMs int64) error {
+	return r.settleBillingOrder(id, providerRequestID, &durationMs)
+}
+
+func (r *Repository) settleBillingOrder(id string, providerRequestID string, audioDurationMs *int64) error {
 	var observedUsage *BillingUsage
 	var observedUsageSource string
 	var observedActual int64
@@ -336,6 +345,79 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			}
 			return nil
 		}
+		actual := order.AmountMicrocredits
+		quantity := order.Quantity
+		refund := int64(0)
+		supplement := int64(0)
+		if order.BillingMode == "per_second" && order.Capability == "audio" {
+			if audioDurationMs == nil || *audioDurationMs <= 0 {
+				return errors.New("音频实际时长不可用，无法按秒结算")
+			}
+			quantity = (*audioDurationMs + 999) / 1000
+			var err error
+			actual, err = audioBillingAmount(order.UnitPriceMicrocredits, quantity, order.MultiplierBasisPoints)
+			if err != nil {
+				return err
+			}
+			if billingChargeLimitApplies(order) && actual > order.ChargeLimitMicrocredits {
+				return errors.New("音频实际费用超过本次授权上限，需人工核对")
+			}
+			reserved := order.ReservedAmountMicrocredits
+			if reserved <= 0 {
+				reserved = order.AmountMicrocredits
+			}
+			refund = max(reserved-actual, int64(0))
+			supplement = max(actual-reserved, int64(0))
+			updated := tx.Model(&model.CreditAccount{}).
+				Where("user_id = ? AND reserved_microcredits >= ? AND available_microcredits >= ?", order.UserID, reserved, supplement).
+				Updates(map[string]any{
+					"available_microcredits": gorm.Expr("available_microcredits + ?", refund-supplement),
+					"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", reserved),
+					"version":                gorm.Expr("version + 1"),
+					"updated_at":             time.Now(),
+				})
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected != 1 {
+				return errors.New("预留积分不足以完成音频实际结算")
+			}
+			var account model.CreditAccount
+			if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+				return err
+			}
+			now := time.Now()
+			costQuantity := order.CostQuantity
+			if order.CostBillingMode == "per_second" {
+				costQuantity = quantity
+			}
+			orderUpdates := map[string]any{"status": model.BillingStatusSettled, "quantity": quantity, "actual_amount_microcredits": actual, "refunded_amount_microcredits": refund, "cost_quantity": costQuantity, "settled_at": &now, "updated_at": now}
+			if providerRequestID != "" {
+				orderUpdates["provider_request_id"] = providerRequestID
+			}
+			if err := tx.Model(&order).Updates(orderUpdates).Error; err != nil {
+				return err
+			}
+			note := "音频按实际输出时长结算"
+			if supplement > 0 {
+				note += "，已补扣差额"
+			}
+			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume,
+				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
+				AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
+				BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: note}).Error; err != nil {
+				return err
+			}
+			if refund > 0 {
+				if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerRefund,
+					AmountMicrocredits: refund, AvailableDeltaMicrocredits: refund,
+					AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
+					BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "音频实际时长短于预授权，差额退回"}).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		updated := tx.Model(&model.CreditAccount{}).
 			Where("user_id = ? AND reserved_microcredits >= ?", order.UserID, order.AmountMicrocredits).
 			Updates(map[string]any{
@@ -396,6 +478,21 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 		}
 	}
 	return err
+}
+
+func audioBillingAmount(unitPrice int64, quantity int64, multiplierBPS int64) (int64, error) {
+	if unitPrice < 0 || quantity <= 0 || multiplierBPS <= 0 {
+		return 0, errors.New("积分计费参数无效")
+	}
+	const maxInt64 = int64(^uint64(0) >> 1)
+	if unitPrice > maxInt64/quantity || unitPrice*quantity > (maxInt64-9_999)/multiplierBPS {
+		return 0, errors.New("积分计费金额溢出")
+	}
+	amount := (unitPrice*quantity*multiplierBPS + 9_999) / 10_000
+	if amount < 0 {
+		return 0, fmt.Errorf("积分计费金额无效：%d", amount)
+	}
+	return amount, nil
 }
 
 // RestoreRefundedBillingOrder compensates a billing order that was refunded

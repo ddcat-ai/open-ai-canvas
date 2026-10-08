@@ -7,13 +7,13 @@ import (
 )
 
 type AdminResourceFilter struct {
-	Kind     string
-	Status   string
-	Provider string
-	UserID   string
-	Keyword  string
-	Limit    int
-	Offset   int
+	Kind      string
+	Status    string
+	Provider  string
+	UserQuery string
+	Keyword   string
+	Limit     int
+	Offset    int
 }
 
 type ResourceKindStat struct {
@@ -52,8 +52,14 @@ func (r *Repository) AdminResources(filter AdminResourceFilter) ([]model.Resourc
 	if filter.Provider != "" {
 		query = query.Where(resourceProviderExpression()+" = ?", filter.Provider)
 	}
-	if filter.UserID != "" {
-		query = query.Where("user_id = ?", filter.UserID)
+	if filter.UserQuery != "" {
+		pattern := "%" + strings.ToLower(filter.UserQuery) + "%"
+		matchingUsers := r.db.Model(&model.User{}).Select("id").Where(
+			"lower(id) LIKE ? OR lower(username) LIKE ? OR lower(display_name) LIKE ? OR lower(email) LIKE ?",
+			pattern, pattern, pattern, pattern,
+		)
+		// 保留对已删除用户资源的 ID 搜索，同时支持按现存用户的账号信息筛选。
+		query = query.Where("(lower(user_id) LIKE ? OR user_id IN (?))", pattern, matchingUsers)
 	}
 	if filter.Keyword != "" {
 		pattern := "%" + strings.ToLower(filter.Keyword) + "%"

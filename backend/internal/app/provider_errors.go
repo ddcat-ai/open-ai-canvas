@@ -129,7 +129,19 @@ func (e providerHTTPError) Error() string {
 	if e.StatusCode == http.StatusBadRequest || e.StatusCode == http.StatusUnprocessableEntity {
 		return providerErrorWithDetail(e.summary(), e.Body)
 	}
+	if message := speechResourceDeniedUserMessage(e.Body); (e.StatusCode == http.StatusUnauthorized || e.StatusCode == http.StatusForbidden) && message != "" {
+		return message
+	}
 	return appendProviderErrorDetail(e.summary(), e.Body)
+}
+
+const volcengineSpeechResourceDeniedMessage = "语音合成服务未开通，或音色与模型版本不匹配。请在火山引擎控制台开通语音合成 1.0，并确认当前音色属于这一版本"
+
+func speechResourceDeniedUserMessage(raw string) string {
+	if strings.Contains(strings.ToLower(raw), "requested resource not granted") {
+		return volcengineSpeechResourceDeniedMessage
+	}
+	return ""
 }
 
 func (e providerHTTPError) summary() string {

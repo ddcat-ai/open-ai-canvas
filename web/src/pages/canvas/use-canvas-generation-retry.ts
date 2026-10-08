@@ -2,6 +2,7 @@ import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
+import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { buildEmotionImageArtifacts, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
@@ -95,7 +96,9 @@ export function useCanvasGenerationRetry({
                     if (controller.signal.aborted) return;
                     bindGenerationTask(node.id, initialTask);
                     const completed = await waitForGenerationTask(initialTask.id, {
-                        initialTask, signal: controller.signal, timeoutMs: 25 * 60_000,
+                        initialTask,
+                        signal: controller.signal,
+                        timeoutMs: 25 * 60_000,
                         onTaskUpdate: (task) => bindGenerationTask(node.id, task),
                     });
                     await applyGenerationTaskResult(node.id, completed);
@@ -133,7 +136,8 @@ export function useCanvasGenerationRetry({
                 return;
             }
 
-            const retryPromptSource = sourceNode.metadata?.composerContent || sourceNode.metadata?.prompt || node.metadata?.prompt || "";
+            //const retryPromptSource = sourceNode.metadata?.composerContent || sourceNode.metadata?.prompt || node.metadata?.prompt || "";
+            const retryPromptSource = nodeGenerationPrompt(sourceNode) || nodeGenerationPrompt(node);
             let retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture) : retryPromptSource;
             if (retryMode === "image" && sourceNode.metadata?.styleTool?.id != null) {
                 const styleTool = sourceNode.metadata.styleTool;

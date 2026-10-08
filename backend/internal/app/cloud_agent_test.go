@@ -522,7 +522,7 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 	}
 	callArguments, err := json.Marshal(map[string]any{
 		"snapshotHash": cloudAgentCanvasHash(doc),
-		"ops":          []map[string]any{{"type": "add_node", "id": "agent-note", "nodeType": "text", "title": "Agent note", "content": "由 Agent 写入", "x": 24, "y": 48}},
+		"ops":          []map[string]any{{"type": "add_node", "id": "agent-note", "nodeType": "text", "title": "Agent note", "content": "由 Agent 写入", "x": json.RawMessage("24.0"), "y": json.RawMessage("48.0")}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -620,12 +620,25 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 func TestCloudAgentNodeTypesExposeExecutableAllowList(t *testing.T) {
 	result := cloudAgentNodeTypes()
 	nodes, ok := result["nodes"].([]map[string]any)
-	if !ok || len(nodes) != 8 {
+	if !ok || len(nodes) != 9 {
 		t.Fatalf("unexpected node registry: %#v", result)
 	}
+	var character map[string]any
 	for _, node := range nodes {
 		if node["type"] == "panorama" {
 			t.Fatal("UI-only node must not be exposed")
+		}
+		if node["type"] == "character" {
+			character = node
+		}
+	}
+	// 角色卡必须被 Agent 发现，但只是 text 节点的变体：不能出现在 add_node 的 nodeType 枚举里。
+	if character == nil || character["creatable"] != false || character["canvasNodeType"] != "text" || character["workflowKind"] != "character" || character["canReference"] != true {
+		t.Fatalf("character capability is not discoverable as a non-creatable variant: %#v", character)
+	}
+	for _, nodeType := range cloudAgentNodeTypeNames() {
+		if nodeType == "character" {
+			t.Fatal("character variant must not be creatable through add_node")
 		}
 	}
 }

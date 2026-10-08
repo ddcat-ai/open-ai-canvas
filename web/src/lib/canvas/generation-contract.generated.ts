@@ -16,6 +16,8 @@ export type Options = {
     audioVoice?: string;
     audioFormat?: string;
     audioSpeed?: string;
+    audioLanguage?: string;
+    audioDialect?: string;
     audioInstructions?: string;
 };
 
@@ -140,6 +142,24 @@ export const GENERATION_OPTION_FIELDS = [
         "name": "audioSpeed",
         "node": "audioSpeed",
         "task": "audioSpeed"
+    },
+    {
+        "kind": "string",
+        "modes": [
+            "audio"
+        ],
+        "name": "audioLanguage",
+        "node": "audioLanguage",
+        "task": "audioLanguage"
+    },
+    {
+        "kind": "string",
+        "modes": [
+            "audio"
+        ],
+        "name": "audioDialect",
+        "node": "audioDialect",
+        "task": "audioDialect"
     },
     {
         "kind": "string",

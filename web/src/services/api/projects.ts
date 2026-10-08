@@ -1,4 +1,4 @@
-import { http } from "@/services/api/request";
+import { compactApiParams, http } from "@/services/api/request";
 import { normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
 import type { GenerationTask } from "@/services/api/task-center";
 
@@ -517,6 +517,49 @@ export function createProjectAssetVersion(projectId: string, assetId: string, in
 
 export function listVoiceProfiles() {
     return http.get<{ profiles: VoiceProfile[] }>("/voice-profiles");
+}
+
+export type CharacterListPage = {
+    characters: ProjectCharacterDetail[];
+    page: number;
+    pageSize: number;
+    total: number;
+    hasMore: boolean;
+};
+
+export function listCharacters(options: { page?: number; pageSize?: number; query?: string; ids?: string[] } = {}) {
+    return http.get<CharacterListPage>("/characters", {
+        params: compactApiParams({
+            page: options.page,
+            pageSize: options.pageSize,
+            q: options.query,
+            ids: options.ids?.length ? options.ids.join(",") : undefined,
+        }),
+    });
+}
+
+export function getCharacter(assetId: string) {
+    return http.get<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}`);
+}
+
+export function createCharacter(input: { name: string; definition?: Record<string, unknown>; imageResourceId?: string; audioResourceId?: string; voiceName?: string; instructions?: string }) {
+    return http.post<ProjectCharacterDetail>("/characters", input);
+}
+
+export function updateCharacter(assetId: string, input: { name: string; definition: Record<string, unknown> }) {
+    return http.patch<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}`, input);
+}
+
+export function replaceCharacterRepresentations(assetId: string, representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>) {
+    return http.put<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/representations`, { representations });
+}
+
+export function bindCharacterVoice(assetId: string, input: { sampleResourceId?: string; voiceName?: string; instructions?: string }) {
+    return http.put<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/voice`, input);
+}
+
+export function unbindCharacterVoice(assetId: string) {
+    return http.delete<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/voice`);
 }
 
 export function createProjectCharacter(projectId: string, input: { name: string; definition?: Record<string, unknown> }) {

@@ -1,10 +1,17 @@
 import { create } from "zustand";
 
-type CanvasUiStore = {
-    editingProjectId: string | null;
-    editingProjectTitle: string;
-    selectedProjectIds: string[];
-    deleteProjectIds: string[];
+type ProjectId = string;
+type ProjectTitle = string;
+type ProjectIdList = string[];
+
+type ProjectUiState = {
+    editingProjectId: ProjectId | null;
+    editingProjectTitle: ProjectTitle;
+    selectedProjectIds: ProjectIdList;
+    deleteProjectIds: ProjectIdList;
+};
+
+type CanvasUiStore = ProjectUiState & {
     startEditingProject: (id: string, title: string) => void;
     setEditingProjectTitle: (title: string) => void;
     stopEditingProject: () => void;
@@ -13,15 +20,42 @@ type CanvasUiStore = {
     removeSelectedProjectIds: (ids: string[]) => void;
 };
 
-export const useCanvasUiStore = create<CanvasUiStore>((set) => ({
+const emptyProjectUi: ProjectUiState = {
     editingProjectId: null,
     editingProjectTitle: "",
-    selectedProjectIds: [],
-    deleteProjectIds: [],
-    startEditingProject: (editingProjectId, editingProjectTitle) => set({ editingProjectId, editingProjectTitle }),
-    setEditingProjectTitle: (editingProjectTitle) => set({ editingProjectTitle }),
-    stopEditingProject: () => set({ editingProjectId: null }),
-    toggleSelectedProjectId: (id, selected) => set((state) => ({ selectedProjectIds: selected ? [...new Set([...state.selectedProjectIds, id])] : state.selectedProjectIds.filter((item) => item !== id) })),
-    setDeleteProjectIds: (deleteProjectIds) => set({ deleteProjectIds }),
-    removeSelectedProjectIds: (ids) => set((state) => ({ selectedProjectIds: state.selectedProjectIds.filter((id) => !ids.includes(id)) })),
+    selectedProjectIds: [] as ProjectIdList,
+    deleteProjectIds: [] as ProjectIdList,
+};
+
+function selectProject(ids: readonly string[], id: string, selected: boolean): string[] {
+    if (!selected) return ids.filter((item) => item !== id);
+    if (ids.includes(id)) return [...ids];
+    return [...ids, id];
+}
+
+function dropProjects(ids: readonly string[], removed: readonly string[]): string[] {
+    const blocked = new Set(removed);
+    return ids.filter((id) => !blocked.has(id));
+}
+
+export const useCanvasUiStore = create<CanvasUiStore>((set) => ({
+    ...emptyProjectUi,
+    startEditingProject: (id, title) => {
+        set({ editingProjectId: id, editingProjectTitle: title });
+    },
+    setEditingProjectTitle: (title) => {
+        set({ editingProjectTitle: title });
+    },
+    stopEditingProject: () => {
+        set({ editingProjectId: null });
+    },
+    toggleSelectedProjectId: (id, selected) => {
+        set((state) => ({ selectedProjectIds: selectProject(state.selectedProjectIds, id, selected) }));
+    },
+    setDeleteProjectIds: (ids) => {
+        set({ deleteProjectIds: ids });
+    },
+    removeSelectedProjectIds: (ids) => {
+        set((state) => ({ selectedProjectIds: dropProjects(state.selectedProjectIds, ids) }));
+    },
 }));

@@ -1,0 +1,22 @@
+/* 画布上的预演台节点卡片样式。必须随节点面板加载，不能依赖懒加载的预演台工作台 CSS。 */
+.previs-node-card { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; flex-direction: column; gap: 10px; padding: 16px 16px 14px; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.018)); }
+.previs-node-card-header, .previs-node-card-title-row, .previs-node-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.previs-node-card-kicker, .previs-node-card-status, .previs-node-card-footer-action, .previs-node-card-duration { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.previs-node-card-kicker { color: color-mix(in srgb, currentColor 62%, transparent); font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+.previs-node-card-mark { display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; background: rgba(255,255,255,.07); color: currentColor; }
+.previs-node-card-status { color: color-mix(in srgb, currentColor 62%, transparent); font-size: 10px; }
+.previs-node-card-title-row { align-items: flex-end; }
+.previs-node-card-title { margin: 0; overflow: hidden; color: currentColor; font-size: 16px; font-weight: 700; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.previs-node-card-shot { margin: 4px 0 0; overflow: hidden; color: color-mix(in srgb, currentColor 56%, transparent); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.previs-node-card-duration { color: color-mix(in srgb, currentColor 65%, transparent); font-size: 10px; }
+.previs-node-preview { position: relative; display: flex; min-height: 0; flex: 1 1 auto; width: 100%; overflow: hidden; border: 1px solid; border-radius: 14px; text-align: left; cursor: pointer; }
+.previs-node-preview:disabled { cursor: default; }
+.previs-node-preview-image { width: 100%; height: 100%; object-fit: cover; }
+.previs-node-preview-cta { position: absolute; inset-inline: 0; bottom: 0; display: flex; height: 38px; align-items: center; justify-content: center; gap: 6px; opacity: 0; font-size: 11px; font-weight: 700; transition: opacity 160ms cubic-bezier(.16,1,.3,1); }
+.previs-node-preview:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.previs-node-card-footer { min-height: 24px; border-top: 1px solid; padding-top: 9px; color: color-mix(in srgb, currentColor 62%, transparent); font-size: 10px; }
+.previs-node-card-footer b { color: currentColor; font-variant-numeric: tabular-nums; }
+.previs-node-card-footer-action { margin-left: auto; color: color-mix(in srgb, currentColor 48%, transparent); }
+.previs-node-preview .previs-mini-viewport-canvas,
+.previs-node-preview .previs-mini-viewport-canvas canvas { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
+.previs-node-preview { min-height: 120px; }

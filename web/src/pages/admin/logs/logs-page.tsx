@@ -1,7 +1,7 @@
 import { Alert, App, Button, Input, Modal, Segmented } from "antd";
 import { IconButton } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
-import { Download, Eye, Play, Search } from "lucide-react";
+import { Download, Eye, Play, Search, RefreshCw } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -11,7 +11,7 @@ import { MediaPreview } from "@/components/media-preview";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { mediaDeliverySummary } from "@/lib/generation-task-display";
-import { exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
+import { batchRecoverAdminApiLogs, exportAdminApiLogs, listAdminApiLogs, type ApiCallLog } from "@/services/api/auth";
 import { ApiLogDetailDrawer } from "../components/api-log-detail-drawer";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
@@ -26,6 +26,7 @@ export default function LogsPage() {
     const view = normalizeLogView(searchParams.get("view"));
     const status = normalizeStatus(searchParams.get("status"));
     const recordType = searchParams.get("recordType") === "download" ? "download" : searchParams.get("recordType") === "all" ? "all" : "request";
+    const capability = normalizeCapability(searchParams.get("capability"));
     const page = positiveInt(searchParams.get("page"), 1);
     const pageSize = normalizePageSize(searchParams.get("pageSize"));
     const debouncedKeyword = useDebouncedValue(keyword);
@@ -36,14 +37,15 @@ export default function LogsPage() {
     const [retry, setRetry] = useState(0);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [detailLogId, setDetailLogId] = useState<string | null>(null);
+    const [batchRecovering, setBatchRecovering] = useState(false);
     const [mediaPreview, setMediaPreview] = useState<{ url: string; kind: "image" | "video"; title: string } | null>(null);
     const requestSequence = useRef(0);
-    const hasFilters = Boolean(keyword || status !== "all" || recordType !== "request");
+    const hasFilters = Boolean(keyword || status !== "all" || recordType !== "request" || capability !== "all");
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
         Object.entries(patch).forEach(([key, value]) => {
-            const isDefault = (key === "filter" && value === "") || (key === "status" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
+            const isDefault = (key === "filter" && value === "") || (key === "status" && value === "all") || (key === "recordType" && value === "request") || (key === "capability" && value === "all") || (key === "page" && value === 1) || (key === "pageSize" && value === 20);
             if (isDefault) next.delete(key);
             else next.set(key, String(value));
         });
@@ -57,7 +59,7 @@ export default function LogsPage() {
         setLogs([]);
         setTotal(0);
         setSelectedIds([]);
-        void listAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
+        void listAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status, page, pageSize })
             .then((result) => {
                 if (sequence !== requestSequence.current) return;
                 setLogs(result.logs);
@@ -73,7 +75,7 @@ export default function LogsPage() {
             })
             .finally(() => sequence === requestSequence.current && setLoading(false));
         return () => { requestSequence.current += 1; };
-    }, [debouncedKeyword, status, recordType, page, pageSize, retry]);
+    }, [debouncedKeyword, status, recordType, capability, page, pageSize, retry]);
 
     const fullColumns: ColumnsType<ApiCallLog> = [
         { title: "时间", width: 168, render: (_, log) => <button type="button" className="admin-log-detail-link" aria-label={`查看请求 ${log.id} 详情`} onClick={() => setDetailLogId(log.id)}>{formatTime(log.startedAt || log.createdAt)}</button> },
@@ -160,7 +162,24 @@ export default function LogsPage() {
         { title: "耗时", dataIndex: "durationMs", align: "right", width: 90, render: formatDuration },
         { title: "错误摘要", key: "error", ellipsis: true, render: (_, log) => <span className={logStatus(log).tone === "error" ? "admin-log-error" : undefined} title={[log.errorCode, log.error].filter(Boolean).join(" · ")}>{[log.errorCode, log.error].filter(Boolean).join(" · ") || (logStatus(log).tone === "error" ? `HTTP ${log.statusCode || "失败"} · 未返回详情` : "—")}</span> },
     ];
-    const columns = view === "all" ? fullColumns : compactColumns;
+    const baseColumns = view === "all" ? fullColumns : compactColumns;
+    const columns: ColumnsType<ApiCallLog> = [...baseColumns, { title: "操作", key: "actions", width: 126, fixed: "right", render: (_, log) => log.capability === "video" ? <Button type="link" size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => setDetailLogId(log.id)}>恢复任务</Button> : <span className="text-foreground/30">--</span> }];
+
+    const runBatchRecovery = async () => {
+        const selectedLogs = logs.filter((log) => selectedIds.includes(log.id));
+        const videoIds = selectedLogs.filter((log) => log.capability === "video").map((log) => log.id);
+        const skipped = selectedIds.length - videoIds.length;
+        if (videoIds.length === 0) { message.info("所选记录中没有视频任务可恢复"); return; }
+        setBatchRecovering(true);
+        try {
+            const result = await batchRecoverAdminApiLogs(videoIds);
+            const totalSkipped = skipped + result.skipped;
+            Modal.info({ title: "批量恢复处理结果", width: 560, content: <div className="max-h-[50vh] space-y-2 overflow-auto"><div className="mb-3">成功 {result.success} 条，失败 {result.failed} 条，跳过 {totalSkipped} 条</div>{result.items.map((item) => <div key={item.logId} className="rounded border border-border/70 px-3 py-2 text-xs"><div className="font-mono">{item.logId}</div><div>{item.recovered ? "成功" : item.error?.startsWith("跳过") ? item.error : item.providerStatus ? `仍在生成中（${item.providerStatus}）` : `失败：${item.error || "未恢复"}`}</div></div>)}</div> });
+            if (result.success > 0) window.dispatchEvent(new CustomEvent("wallet:updated"));
+            setRetry((value) => value + 1);
+        } catch (error) { message.error(error instanceof Error ? error.message : "批量恢复失败"); }
+        finally { setBatchRecovering(false); }
+    };
 
     return (
         <AdminPageFrame
@@ -168,7 +187,7 @@ export default function LogsPage() {
             description="模型生成与结果下载记录；仅计费调用扣除积分"
             actions={
                 <AdminExportButton
-                    exportFile={() => exportAdminApiLogs({ recordType, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
+                    exportFile={() => exportAdminApiLogs({ recordType, capability: capability === "all" ? undefined : capability, keyword: debouncedKeyword || undefined, status: status === "all" ? undefined : status })}
                     fileName={() => `请求明细-${new Date().toISOString().slice(0, 10)}.csv`}
                     label="导出当前筛选"
                     successMessage="已按当前筛选导出请求明细"
@@ -194,11 +213,13 @@ export default function LogsPage() {
                     <>
                         {keyword ? <AdminFilterChip label={`搜索：${keyword}`} onRemove={() => updateUrl({ filter: "", page: 1 })} /> : null}
                         {status !== "all" ? <AdminFilterChip label={`结果：${status === "succeeded" ? "成功" : "失败"}`} onRemove={() => updateUrl({ status: "all", page: 1 })} /> : null}
+                        {capability !== "all" ? <AdminFilterChip label={`能力：${capabilityText(capability)}`} onRemove={() => updateUrl({ capability: "all", page: 1 })} /> : null}
                     </>
                 }
                 toolbarFilters={
                     <>
                     <Select aria-label="明细类型" className="w-32" value={recordType} onChange={(value) => updateUrl({ recordType: value, page: 1 })} options={[{ label: "仅请求", value: "request" }, { label: "仅下载", value: "download" }, { label: "全部明细", value: "all" }]} />
+                    <Select aria-label="能力类型" className="w-28" value={capability} onChange={(value) => updateUrl({ capability: value, page: 1 })} options={[{ label: "全部能力", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]} />
                     <Select
                         aria-label="请求结果"
                         className="w-32"
@@ -213,9 +234,10 @@ export default function LogsPage() {
                     </>
                 }
                 toolbarActive={hasFilters}
-                onReset={() => updateUrl({ filter: "", status: "all", recordType: "request", page: 1 })}
+                onReset={() => updateUrl({ filter: "", status: "all", recordType: "request", capability: "all", page: 1 })}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
+                        <Button size="small" icon={<RefreshCw className="size-3.5" />} loading={batchRecovering} onClick={() => void runBatchRecovery()}>批量恢复</Button>
                         <AdminExportButton
                             type="primary"
                             size="small"
@@ -245,7 +267,7 @@ export default function LogsPage() {
                     tableLayout: "fixed",
                     dataSource: logs,
                     pagination: false,
-                    scroll: { x: view === "all" ? 1775 : view === "billing" ? 1120 : 1060 },
+                    scroll: { x: view === "all" ? 1901 : view === "billing" ? 1246 : 1186 },
                 }}
                 empty={loadError ? <span role="status">数据暂不可用，请重试</span> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
@@ -288,6 +310,7 @@ function normalizePageSize(value: string | null) {
     const parsed = positiveInt(value, 20);
     return [20, 50, 100].includes(parsed) ? parsed : 20;
 }
+function normalizeCapability(value: string | null): "all" | "text" | "image" | "video" | "audio" { return value === "text" || value === "image" || value === "video" || value === "audio" ? value : "all"; }
 function normalizeStatus(value: string | null): "all" | "succeeded" | "failed" {
     return value === "succeeded" || value === "failed" ? value : "all";
 }

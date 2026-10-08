@@ -168,9 +168,7 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if !registrationEnabled {
 		return kernel.Forbidden("管理员未开放新用户注册")
 	}
-	if _, err := s.repo.UserByEmail(email); err == nil {
-		return kernel.BadAuthRequest("邮箱已被注册")
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := s.repo.CheckEmailAvailable(email, ""); err != nil {
 		return err
 	}
 	_, setting, err := s.readEmailSetting()

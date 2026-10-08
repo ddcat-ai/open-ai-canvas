@@ -1,0 +1,109 @@
+[data-admin-root] .admin-update-announcement-editor {
+    display: grid;
+    gap: 24px;
+    min-width: 0;
+}
+[data-admin-root] .admin-update-announcement-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+[data-admin-root] .admin-update-announcement-switch h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 600;
+}
+[data-admin-root] .admin-update-announcement-switch p {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+[data-admin-root] .admin-update-announcement-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+[data-admin-root] .admin-update-announcement-fields {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+[data-admin-root] .admin-update-announcement-release {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+}
+[data-admin-root] .admin-update-announcement-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+[data-admin-root] .admin-update-announcement-toolbar > div,
+[data-admin-root] .admin-update-announcement-add-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+[data-admin-root] .admin-update-announcement-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+}
+[data-admin-root] .admin-update-announcement-block {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface-2);
+}
+[data-admin-root] .admin-update-announcement-block .ant-form-item:last-child {
+    margin-bottom: 0;
+}
+[data-admin-root] .admin-update-announcement-preview {
+    position: sticky;
+    top: 0;
+    padding: 24px;
+    max-height: 72vh;
+    overflow: auto;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+}
+[data-admin-root] .admin-update-announcement-preview-heading {
+    display: grid;
+    gap: 6px;
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--admin-border);
+    overflow-wrap: anywhere;
+}
+[data-admin-root] .admin-update-announcement-preview-heading span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+@media (max-width: 1100px) {
+    [data-admin-root] .admin-update-announcement-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    [data-admin-root] .admin-update-announcement-preview {
+        position: static;
+    }
+}
+@media (max-width: 600px) {
+    [data-admin-root] .admin-update-announcement-meta {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    [data-admin-root] .admin-update-announcement-release,
+    [data-admin-root] .admin-update-announcement-preview {
+        padding: 16px;
+    }
+}

@@ -196,3 +196,50 @@ func TestCloudAgentCharacterReferenceUsesDefinitionAndTurnaround(t *testing.T) {
 		t.Fatalf("approved character version drift not rejected: %v", err)
 	}
 }
+
+func TestCloudAgentCharacterCardIsRegisteredCapability(t *testing.T) {
+	node := map[string]any{"id": "hero", "type": "text", "title": "扶颦", "metadata": map[string]any{"workflowKind": "character", "characterAssetId": "character-asset"}}
+	descriptor, ok := cloudAgentNodeCapabilityForNode(node)
+	if !ok || descriptor.Type != "character" || descriptor.InputKind != "character" || !descriptor.Connection.CanReference {
+		t.Fatalf("character node did not resolve to character capability: %#v, %v", descriptor, ok)
+	}
+	if plain, _ := cloudAgentNodeCapabilityForNode(map[string]any{"id": "note", "type": "text"}); plain.Type != "text" {
+		t.Fatalf("plain text node resolved to %q", plain.Type)
+	}
+	if _, creatable := cloudAgentNodeCapabilityForType("character"); creatable {
+		t.Fatal("character variant must not be resolvable as a creatable node type")
+	}
+	if err := validateCreationOps([]CreationCanvasOp{{Type: "add_node", ID: "new", NodeType: "character"}}); err == nil {
+		t.Fatal("agent must not create character cards from nothing")
+	}
+
+	nodes := []map[string]any{node, {"id": "video", "type": "video"}, {"id": "image", "type": "image"}, {"id": "audio", "type": "audio"}, {"id": "note", "type": "text"}}
+	for _, target := range []string{"video", "image", "audio"} {
+		if err := validateCloudAgentConnection(nodes, "hero", target); err != nil {
+			t.Fatalf("character card cannot feed %s: %v", target, err)
+		}
+	}
+	if err := validateCloudAgentConnection(nodes, "hero", "note"); err == nil {
+		t.Fatal("character card connected to a non-generation text node")
+	}
+	// 角色卡设定只随角色资产版本变化，Agent 不能把节点正文或标题当成角色设定改写。
+	if err := descriptor.ValidatePatch(map[string]any{"content": "改写设定"}); err == nil {
+		t.Fatal("character card accepted content patch")
+	}
+	if err := descriptor.ValidatePatch(map[string]any{"x": 10.0, "y": 20.0}); err != nil {
+		t.Fatalf("character card cannot move: %v", err)
+	}
+
+	guide := cloudAgentCapabilityGuide()
+	if !strings.Contains(guide, "角色卡（character）") || !strings.Contains(guide, "workflowKind=character") {
+		t.Fatalf("capability guide does not introduce character cards: %s", guide)
+	}
+	view, err := cloudAgentCanvasState(nil, "user", "agent-canvas", map[string]any{"nodes": []any{node}, "connections": []any{}}, 0, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := view.(map[string]any)["nodes"].([]any)[0].(map[string]any)
+	if item["kind"] != "character" || item["agentSupported"] == false {
+		t.Fatalf("canvas read does not expose character kind: %#v", item)
+	}
+}

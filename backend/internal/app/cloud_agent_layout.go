@@ -465,7 +465,7 @@ func cloudAgentLayoutTitles(doc map[string]any) map[string]string {
 		}
 		title := strings.TrimSpace(stringValue(node["title"]))
 		if title == "" {
-			if capability, ok := cloudAgentNodeCapabilityForType(stringValue(node["type"])); ok {
+			if capability, ok := cloudAgentNodeCapabilityForNode(node); ok {
 				title = capability.Label
 			}
 		}

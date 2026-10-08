@@ -53,9 +53,13 @@ func RegisterAdminStorageRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
+		userQuery := c.Query("user")
+		if userQuery == "" {
+			userQuery = c.Query("userId")
+		}
 		result, err := svc.AdminResourcePage(user, service.AdminResourceQuery{
 			Keyword: c.Query("keyword"), Kind: c.Query("kind"), Status: c.Query("status"),
-			Provider: c.Query("provider"), UserID: c.Query("userId"), Page: page, Limit: limit,
+			Provider: c.Query("provider"), UserQuery: userQuery, Page: page, Limit: limit,
 		})
 		if err != nil {
 			failService(c, err)

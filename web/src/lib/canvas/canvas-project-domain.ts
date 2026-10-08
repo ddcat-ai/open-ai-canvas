@@ -241,6 +241,8 @@ const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = [
     "audioVoice",
     "audioFormat",
     "audioSpeed",
+    "audioLanguage",
+    "audioDialect",
     "audioInstructions",
 ];
 
@@ -476,6 +478,7 @@ export function applyBatchPrimaryImage(root: CanvasNodeData, primary: CanvasNode
             primaryImageId: primary.id,
             content: primary.metadata?.content,
             storageKey: primary.metadata?.storageKey,
+            assetId: primary.metadata?.assetId,
             status: primary.metadata?.status,
             naturalWidth: primary.metadata?.naturalWidth,
             naturalHeight: primary.metadata?.naturalHeight,

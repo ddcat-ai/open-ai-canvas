@@ -138,7 +138,7 @@ func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state
 		if old, _ := change["before"].(map[string]any); old == nil {
 			action = "created"
 		}
-		entry := map[string]any{"action": action, "nodeId": node["id"], "title": node["title"], "nodeType": node["type"]}
+		entry := map[string]any{"action": action, "nodeId": node["id"], "title": node["title"], "nodeType": cloudAgentEventNodeType(node)}
 		previewOperation := "update_node"
 		if action == "created" {
 			previewOperation = "add_node"
@@ -166,9 +166,9 @@ func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state
 	for _, change := range edges {
 		edge := change["after"].(map[string]any)
 		if node := byID[stringValue(edge["fromNodeId"])]; node != nil {
-			entry := map[string]any{"action": "referenced", "nodeId": node["id"], "title": node["title"], "nodeType": node["type"], "targetNodeId": edge["toNodeId"]}
+			entry := map[string]any{"action": "referenced", "nodeId": node["id"], "title": node["title"], "nodeType": cloudAgentEventNodeType(node), "targetNodeId": edge["toNodeId"]}
 			if target := byID[stringValue(edge["toNodeId"])]; target != nil {
-				entry["targetTitle"], entry["targetNodeType"] = target["title"], target["type"]
+				entry["targetTitle"], entry["targetNodeType"] = target["title"], cloudAgentEventNodeType(target)
 			}
 			if preview, ok := findPreview("connect_nodes", stringValue(edge["fromNodeId"])); ok && preview.TargetNodeTitle != "" {
 				entry["targetTitle"], entry["targetNodeType"] = preview.TargetNodeTitle, preview.TargetNodeType
@@ -192,6 +192,15 @@ func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state
 	}
 	state.event(runID, "canvas_updated", payload)
 	return nil
+}
+
+// cloudAgentEventNodeType 给回执用的节点类型：角色卡等变体底层是 text，
+// 必须按 workflowKind 解析成能力类型，否则前端会把角色卡报成"文本节点"。
+func cloudAgentEventNodeType(node map[string]any) any {
+	if descriptor, ok := cloudAgentNodeCapabilityForNode(node); ok && descriptor.Type != "" {
+		return descriptor.Type
+	}
+	return node["type"]
 }
 
 func cloudAgentPatchCoversDocument(before, after map[string]any) bool {

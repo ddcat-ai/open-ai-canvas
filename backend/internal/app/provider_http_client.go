@@ -263,16 +263,22 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		channelID = metadata.ChannelID
 		policy, err := metadata.Service.RuntimePolicy()
 		if err != nil {
-			return nil, "", fmt.Errorf("读取生成资源限制失败：%w", err)
+			err = fmt.Errorf("读取生成资源限制失败：%w", err)
+			recordProviderRequest(req, startedAt, 0, nil, err)
+			return nil, "", err
 		}
 		responseLimit = megabytes(policy.Resource.GeneratedFileMB)
 		if !cacheManagementRequest {
 			open, err := coordinator.CircuitOpen(req.Context(), channelID)
 			if err != nil {
-				return nil, "", fmt.Errorf("读取渠道熔断状态失败：%w", err)
+				err = fmt.Errorf("读取渠道熔断状态失败：%w", err)
+				recordProviderRequest(req, startedAt, 0, nil, err)
+				return nil, "", err
 			}
 			if open {
-				return nil, "", providerCircuitOpenError{}
+				err = providerCircuitOpenError{}
+				recordProviderRequest(req, startedAt, 0, nil, err)
+				return nil, "", err
 			}
 			slotID := channelID
 			if slotID == "" {
@@ -445,6 +451,7 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		}
 	}
 	metadata.Service.EnrichAPICallLog(&callLog, responseBody)
+	callLog.Error = withUserVisibleLogError(requestErr, callLog.Error)
 	if err := metadata.Service.LogAPICall(callLog); err != nil {
 		if !channelSlotFailure && metadata.Billing != nil {
 			if uncertainErr := metadata.Billing.MarkBillingUncertain(metadata.BillingOrderID, "上游调用日志写入失败，费用状态待核对"); uncertainErr != nil {
@@ -478,6 +485,43 @@ func providerRequestErrorDetails(err error) (string, string) {
 		return "upstream_timeout", "等待上游响应超时"
 	}
 	return "", safeProviderLogError(err)
+}
+
+// withUserVisibleLogError 把画布上实际展示的失败原因写进请求日志，同时保留原始诊断。
+// 语音合成权限/音色不匹配和网络异常都会被前端改写成固定中文；只存上游原文时，后台按用户看到的文案检索不到。
+func withUserVisibleLogError(requestErr error, stored string) string {
+	stored = strings.TrimSpace(stored)
+	visible := userVisibleFailureLabel(requestErr, stored)
+	if visible == "" || strings.Contains(stored, visible) {
+		return truncateRunes(stored, 2_000)
+	}
+	if stored == "" {
+		return visible
+	}
+	return truncateRunes(visible+" "+stored, 2_000)
+}
+
+func userVisibleFailureLabel(requestErr error, stored string) string {
+	texts := make([]string, 0, 3)
+	if requestErr != nil {
+		texts = append(texts, taskFailureMessage(requestErr), requestErr.Error())
+	}
+	if stored != "" {
+		texts = append(texts, stored)
+	}
+	network := false
+	for _, text := range texts {
+		if speechResourceDeniedUserMessage(text) != "" {
+			return volcengineSpeechResourceDeniedMessage
+		}
+		if userFacingTaskError(text) == taskErrorNetworkMessage {
+			network = true
+		}
+	}
+	if network {
+		return taskErrorNetworkMessage
+	}
+	return ""
 }
 
 func safeProviderLogError(err error) string {

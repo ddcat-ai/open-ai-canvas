@@ -8,7 +8,8 @@ import { getNodeSpec } from "@/constant/canvas";
 import { batchSourceRestriction, buildBatchConnectionCreateRequest, hasBatchConnectionCandidate, planBatchConnections, type CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { batchReferenceHandleAtY } from "@/lib/canvas/canvas-batch-table";
 import { connectedNodeCenterFromEdgeDrop } from "@/lib/canvas/canvas-connected-node-placement";
-import { canvasConnectionError } from "@/lib/canvas/canvas-connection-policy";
+import { canvasConnectionError, connectionInputSummary } from "@/lib/canvas/canvas-connection-policy";
+import { audioModelForConnectionInput } from "@/lib/model-selection";
 import { attachNodeToStoryboardRow, createCanvasNode, getConnectionTargetAnchor, isHiddenBatchChild, normalizeConnection, storyboardHandleAtY, storyboardPromptTemplateMetadata, storyboardRowFromHandle } from "@/lib/canvas/canvas-project-domain";
 import { createCanvasDrawingFromImage } from "@/lib/canvas/canvas-drawing-storage";
 import { isDrawingEngineAvailable, type CanvasDrawingEngine } from "@/lib/canvas/canvas-drawing-engine";
@@ -293,6 +294,12 @@ export function useCanvasConnectionController({
               ? pending.position
               : connectedNodeCenterFromEdgeDrop(pending.position, spec, pending.connection.handleType);
         const newNode = createCanvasNode(nodeType, position, metadata);
+        if (nodeType === CanvasNodeType.Audio) {
+            const probe = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
+            const input = probe ? connectionInputSummary(newNode.id, [...nodesRef.current, newNode], connectionsRef.current, probe) : undefined;
+            const model = input ? audioModelForConnectionInput(config, input) : audioModelForConnectionInput(config, { textCount: 0, imageCount: 0, videoCount: 0, audioCount: 0, characterCount: 0 });
+            if (model) newNode.metadata = { ...newNode.metadata, model, generationMode: "audio" };
+        }
         if (nodeType === CanvasNodeType.Config && selectedWorkflowProvider) newNode.title = "RunningHub 工作流";
         if (storyboardRow) newNode.title = `镜头 ${storyboardRow.shotNumber} · 视频`;
         if (batchSourceNodeIds.length && nodeType === CanvasNodeType.Drawing) {
@@ -405,10 +412,15 @@ export function useCanvasConnectionController({
             return plan.connections.length ? "" : plan.skipped[0]?.reason || "当前选中的节点不能连接到此类型";
         }
         const spec = getNodeSpec(nodeType);
-        const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: spec.width, height: spec.height };
-        const pendingNodes = [...nodesRef.current, pendingNode];
-        const connection = normalizeConnection(pending.connection.nodeId, pendingNode.id, pendingNodes, pending.connection.handleType);
+        const basePendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: spec.width, height: spec.height };
+        const connection = normalizeConnection(pending.connection.nodeId, basePendingNode.id, [...nodesRef.current, basePendingNode], pending.connection.handleType);
         if (!connection) return "当前节点类型不能这样连接";
+        // 新建音频节点还没有模型，按这条连线的输入挑一个接得住的音频模型再校验。
+        const pendingAudioModel = nodeType === CanvasNodeType.Audio
+            ? audioModelForConnectionInput(config, connectionInputSummary(basePendingNode.id, [...nodesRef.current, basePendingNode], connectionsRef.current, connection))
+            : "";
+        const pendingNode: CanvasNodeData = pendingAudioModel ? { ...basePendingNode, metadata: { model: pendingAudioModel, generationMode: "audio" } } : basePendingNode;
+        const pendingNodes = [...nodesRef.current, pendingNode];
         return canvasConnectionError(config, pendingNodes, connectionsRef.current, connection);
     }, [config, connectionsRef, nodesRef, runtimeStatuses]);
 

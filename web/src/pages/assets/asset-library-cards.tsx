@@ -7,6 +7,7 @@ import { AlertTriangle, AudioLines, Box, Copy, Download, FileText, FolderOpen, M
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { type AssetKind } from "@/stores/use-asset-store";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
+import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { type LibraryAsset, assetKindIcons } from "./asset-library-format";
 import { assetKindLabel, assetProjectLabel, assetSummary, formatAssetClock, formatAssetTime } from "./asset-library-format";
@@ -105,7 +106,7 @@ export function AssetCard({
 }
 
 export function isKnownAssetKind(kind: unknown): kind is AssetKind {
-    return kind === "image" || kind === "video" || kind === "audio" || kind === "model" || kind === "text";
+    return kind === "image" || kind === "video" || kind === "audio" || kind === "model" || kind === "text" || kind === "entity";
 }
 
 export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen, menuItems }: { asset: LibraryAsset; selected: boolean; isTrash?: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; menuItems: MenuProps["items"] }) {
@@ -119,6 +120,8 @@ export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen,
             <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={`查看素材：${asset.title}`}>
                 {asset.kind === "audio" ? (
                     <AudioWaveCover asset={asset} />
+                ) : asset.kind === "entity" ? (
+                    <CharacterAssetCover asset={asset} />
                 ) : asset.kind === "text" ? (
                     <TextCover asset={asset} />
                 ) : asset.kind === "model" ? (
@@ -147,10 +150,11 @@ export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen,
                     <KindIcon />
                     {kind ? assetKindLabel(kind) : "素材"}
                 </span>
-                {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
+                {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : asset.kind === "entity" ? null : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
                 {asset.portraitCertified ? <span className="assets-cover-badge is-category">人像认证</span> : null}
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}
+            {asset.kind === "audio" && !isTrash ? <AudioPlayButton asset={asset} className="absolute bottom-2 left-2" /> : null}
             <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelect(event.target.checked)} className="assets-select-check" aria-label={`选择 ${asset.title}`} />
             <Dropdown trigger={["click"]} menu={{ items: menuItems }}>
                 <button type="button" className="assets-cover-more" aria-label="更多素材操作" title="更多操作">

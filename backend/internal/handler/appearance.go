@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,27 @@ import (
 
 func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerLive2DRoutes(r, svc)
+	serveUpdateMedia := func(admin bool) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			var actor *model.User
+			if admin {
+				var err error
+				actor, err = currentUser(c, svc)
+				if err != nil {
+					failService(c, err)
+					return
+				}
+			}
+			delivery, err := svc.PrepareUpdateAnnouncementDelivery(actor, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			serveResourceDelivery(c, delivery, "private, no-store", "")
+		}
+	}
+	r.GET("/public/appearance/updates/:id", serveUpdateMedia(false))
+	r.GET("/admin/settings/appearance/updates/:id", serveUpdateMedia(true))
 	r.GET("/public/appearance", func(c *gin.Context) {
 		setting, err := svc.Appearance()
 		if err != nil {
@@ -55,7 +77,7 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 512<<10)
 		req := current.AppearanceSetting
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -100,6 +122,9 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes+(1<<20))
 		file, err := c.FormFile("file")
+		if c.Request.MultipartForm != nil {
+			defer c.Request.MultipartForm.RemoveAll()
+		}
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return

@@ -475,7 +475,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	}
 	// The policy prompt is the stable provider-cache prefix. Canvas contents are
 	// dynamic run data and must not be embedded in that prefix.
-	system, policy, err := compileCloudAgentPolicies(req, skillSnapshots, "", profile, creativeAnchor)
+	_, appearance, err := s.readAppearance()
+	if err != nil {
+		return nil, err
+	}
+	system, policy, err := compileCloudAgentPolicies(req, appearance.Canvas.AgentName, skillSnapshots, "", profile, creativeAnchor)
 	if err != nil {
 		return nil, err
 	}
@@ -494,10 +498,6 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		canonical.Messages = append(append([]map[string]any{}, canonical.Messages[:len(canonical.Messages)-1]...), catalog, last)
 	}
 	s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
-	// 必须登记进 state.Policy（值拷贝）：state 才是随任务持久化、被运行期读取的那份，
-	// 在这里改局部 policy 不会生效。登记之后压力读数的"系统提示分段"才能把 memory 摊开，
-	// 并与 system 桶合计对齐。
-	cloudAgentRecordMemorySegment(&state.Policy, canonical.SystemPrompt)
 	canonical.PromptCacheKey = cloudAgentPromptCacheKeyForRequest(req.CanvasID, cloudAgentPromptCacheIdentity(req, policy), canonical.SystemPrompt, canonical.Tools)
 	attachCloudAgentPlan(&canonical, inheritedPlan)
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
@@ -696,7 +696,7 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 		if node.Type == "text" && node.Metadata.WorkflowKind == "character" {
 			item["kind"] = "character"
 		}
-		if _, known := cloudAgentNodeCapabilityForType(node.Type); !known {
+		if _, known := canvasCapabilityRegistry.ResolveNode(node.Type, node.Metadata.WorkflowKind); !known {
 			item["agentSupported"] = false
 		}
 		nodes = append(nodes, item)

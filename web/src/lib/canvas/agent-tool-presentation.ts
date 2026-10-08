@@ -13,6 +13,7 @@ export const AGENT_TOOL_NAMES = [
     "ask_user",
     "canvas_apply_ops",
     "canvas_arrange_nodes",
+    "canvas_create_character",
     "canvas_create_storyboard",
     "canvas_edit_batch_table",
     "canvas_edit_storyboard",
@@ -50,6 +51,7 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
     task_get: { summary: "已查询任务状态", failureMessage: "查询任务状态失败" },
     canvas_apply_ops: { summary: ({ pending }) => (pending ? "准备更新画布内容" : "画布内容已保存至服务端"), failureMessage: "更新画布内容失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
+    canvas_create_character: { summary: ({ pending }) => (pending ? "准备创建角色卡" : "角色卡已创建并放到画布"), failureMessage: "创建角色卡失败" },
     generate_media: { summary: ({ pending, detail }) => (pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交"), failureMessage: "媒体生成未完成" },
     // 看图：只有这个工具会把图片字节真的交给模型，所以只有它可以说"画面/看图"。
     // 回执字段来源：`backend/internal/app/cloud_agent_runtime.go`（payload["result"] = 回执）。
@@ -77,7 +79,7 @@ const AGENT_CANVAS_READ_TOOLS = new Set(["canvas_get_state", "canvas_list_node_t
 /** 非画布信息的只读工具（模型、任务、技能、偏好）。`skills_load` 是历史事件名，保留兼容。 */
 const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_read_file", "skills_load", "agent_profile_read"]);
 const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image"]);
-const AGENT_CREATE_TOOLS = new Set(["generate_media", "canvas_create_storyboard", "image_annotation_render"]);
+const AGENT_CREATE_TOOLS = new Set(["generate_media", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
 const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_edit_batch_table", "image_layer_split", "image_text_detect"]);
 
 export type AgentToolCategory = "read" | "vision" | "create" | "operate" | "other";

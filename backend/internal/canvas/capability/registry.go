@@ -9,12 +9,20 @@ import (
 	"strings"
 )
 
-const SetVersion = "canvas-capabilities/v4"
+const SetVersion = "canvas-capabilities/v5"
 
-type Registry struct{ descriptors map[string]Descriptor }
+type Registry struct {
+	descriptors map[string]Descriptor
+	// variants 按 baseType+workflowKind 索引，只能通过 ResolveNode 命中，
+	// 不会出现在 Resolve/Types 中，因此不会变成可 add_node 的节点类型。
+	variants map[string]string
+}
+
+func variantKey(baseType, workflowKind string) string { return baseType + "\x00" + workflowKind }
 
 func NewRegistry(descriptors []Descriptor) (*Registry, error) {
 	items := make(map[string]Descriptor, len(descriptors))
+	variants := map[string]string{}
 	generationModes := make(map[string]string, len(descriptors))
 	for _, descriptor := range descriptors {
 		descriptor.Type = normalizeType(descriptor.Type)
@@ -95,9 +103,30 @@ func NewRegistry(descriptors []Descriptor) (*Registry, error) {
 		if _, exists := items[descriptor.Type]; exists {
 			return nil, fmt.Errorf("duplicate canvas capability %q", descriptor.Type)
 		}
+		if descriptor.Variant != nil {
+			variant := &NodeVariant{BaseType: normalizeType(descriptor.Variant.BaseType), WorkflowKind: strings.TrimSpace(descriptor.Variant.WorkflowKind)}
+			descriptor.Variant = variant
+			if variant.BaseType == "" || variant.WorkflowKind == "" || variant.BaseType == descriptor.Type {
+				return nil, fmt.Errorf("capability %q has invalid node variant", descriptor.Type)
+			}
+			if descriptor.GenerationMode != "" || descriptor.CreateMetadata != nil {
+				return nil, fmt.Errorf("capability variant %q cannot be created or generated directly", descriptor.Type)
+			}
+			key := variantKey(variant.BaseType, variant.WorkflowKind)
+			if existing, exists := variants[key]; exists {
+				return nil, fmt.Errorf("node variant %s/%s is registered by both %q and %q", variant.BaseType, variant.WorkflowKind, existing, descriptor.Type)
+			}
+			variants[key] = descriptor.Type
+		}
 		items[descriptor.Type] = cloneDescriptor(descriptor)
 	}
-	return &Registry{descriptors: items}, nil
+	for key, variantType := range variants {
+		base := items[variantType].Variant.BaseType
+		if baseDescriptor, ok := items[base]; !ok || baseDescriptor.Variant != nil {
+			return nil, fmt.Errorf("capability variant %q extends unknown base type %q", variantType, strings.SplitN(key, "\x00", 2)[0])
+		}
+	}
+	return &Registry{descriptors: items, variants: variants}, nil
 }
 
 func (r *Registry) Resolve(nodeType string) (Descriptor, bool) {
@@ -105,11 +134,23 @@ func (r *Registry) Resolve(nodeType string) (Descriptor, bool) {
 		return Descriptor{}, false
 	}
 	d, ok := r.descriptors[normalizeType(nodeType)]
-	if !ok {
+	if !ok || d.Variant != nil {
 		return Descriptor{}, false
 	}
 	d = cloneDescriptor(d)
 	return d, ok
+}
+
+// ResolveNode 按真实画布节点解析能力：先匹配 type+metadata.workflowKind 变体（如角色卡），
+// 否则回落到底层类型。读取、连线、引用等拿到节点本身的调用方都应走这里。
+func (r *Registry) ResolveNode(nodeType, workflowKind string) (Descriptor, bool) {
+	if r == nil {
+		return Descriptor{}, false
+	}
+	if variantType, ok := r.variants[variantKey(normalizeType(nodeType), strings.TrimSpace(workflowKind))]; ok {
+		return cloneDescriptor(r.descriptors[variantType]), true
+	}
+	return r.Resolve(nodeType)
 }
 func (r *Registry) List() []Descriptor {
 	if r == nil {
@@ -122,11 +163,15 @@ func (r *Registry) List() []Descriptor {
 	sort.Slice(out, func(i, j int) bool { return out[i].Type < out[j].Type })
 	return out
 }
+
+// Types 只返回可直接创建的底层节点类型；变体通过 List 被发现，但不能作为 add_node 的 nodeType。
 func (r *Registry) Types() []string {
 	items := r.List()
 	out := make([]string, 0, len(items))
 	for _, d := range items {
-		out = append(out, d.Type)
+		if d.Variant == nil {
+			out = append(out, d.Type)
+		}
 	}
 	return out
 }
@@ -199,6 +244,10 @@ func cloneDescriptor(descriptor Descriptor) Descriptor {
 		patchFields[key] = field
 	}
 	descriptor.PatchFields = patchFields
+	if descriptor.Variant != nil {
+		variant := *descriptor.Variant
+		descriptor.Variant = &variant
+	}
 	return descriptor
 }
 
@@ -222,6 +271,7 @@ type hashDescriptor struct {
 	ProjectionKind  string
 	ProjectionField string
 	PatchFields     []hashPatchField
+	Variant         *NodeVariant
 }
 
 type hashConnectionPolicy struct {
@@ -265,6 +315,7 @@ func registryHashItems(descriptors []Descriptor) []hashDescriptor {
 			ProjectionKind: descriptor.ProjectionKind, ProjectionField: descriptor.ProjectionField,
 			Connection: hashConnectionPolicy{CanSource: descriptor.Connection.CanSource, CanTarget: descriptor.Connection.CanTarget, CanReference: descriptor.Connection.CanReference, AcceptedInputKinds: descriptor.Connection.AcceptedInputKinds, RejectedInputKinds: descriptor.Connection.RejectedInputKinds, MaxInputCount: descriptor.Connection.MaxInputCount},
 			CanUpdate:  descriptor.CanUpdate, SummaryFields: descriptor.SummaryFields, DetailFields: descriptor.DetailFields, PatchFields: patchFields,
+			Variant: descriptor.Variant,
 		})
 	}
 	return items

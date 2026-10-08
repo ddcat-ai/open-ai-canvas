@@ -1,11 +1,12 @@
-import { App } from "antd";
 import copy from "copy-to-clipboard";
+import { App } from "antd";
+
+const COPIED_HINT = "已复制";
 
 export function useCopyText() {
-    const { message } = App.useApp();
-
-    return (value: string, successText = "已复制") => {
-        copy(value);
-        message.success(successText);
+    const feedback = App.useApp().message;
+    return (value: string, successText = COPIED_HINT) => {
+        copy(String(value));
+        feedback.success(successText);
     };
 }

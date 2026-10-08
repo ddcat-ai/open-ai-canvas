@@ -58,9 +58,14 @@ func (s *Service) UserAssetsPage(userID string, page int, pageSize int, filter U
 	}
 	rawAssets := make([]json.RawMessage, 0, len(assets))
 	for _, asset := range assets {
-		if payload := clientAssetListPayload(asset); len(payload) > 0 {
-			rawAssets = append(rawAssets, payload)
+		payload := clientAssetListPayload(asset)
+		if len(payload) == 0 {
+			continue
 		}
+		if asset.Kind == "entity" && asset.Category == model.AssetCategoryCharacter {
+			payload = s.characterAssetListPayload(userID, asset, payload)
+		}
+		rawAssets = append(rawAssets, payload)
 	}
 	kindRows, categoryRows, folderRows, err := s.repo.UserAssetFacets(userID, filter.Status)
 	if err != nil {
@@ -70,6 +75,53 @@ func (s *Service) UserAssetsPage(userID string, page int, pageSize int, filter U
 		Assets: rawAssets, KindCounts: assetFacetMap(kindRows), CategoryCounts: assetFacetMap(categoryRows), FolderCounts: assetFacetMap(folderRows),
 		Page: page, PageSize: pageSize, Total: total, HasMore: int64(page*pageSize) < total,
 	}, nil
+}
+
+// characterAssetListPayload 给素材库里的角色卡补上当前版本的形象与声音。
+// 角色资产的 payload 只存设定，形象/声音在版本表里；不补的话列表卡片和档案只能显示空图标。
+// 只下发 resource: 存储键，展示时由前端换取授权地址，不经后端中转字节。
+func (s *Service) characterAssetListPayload(userID string, asset model.Asset, raw json.RawMessage) json.RawMessage {
+	card, err := s.characterCard(userID, &asset)
+	if err != nil {
+		return raw
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil || payload == nil {
+		return raw
+	}
+	data, _ := payload["data"].(map[string]any)
+	if data == nil {
+		data = map[string]any{}
+	}
+	data["definition"] = card.Definition
+	data["version"] = card.Version
+	data["visualStatus"], data["voiceStatus"] = card.VisualStatus, card.VoiceStatus
+	if cover := characterCoverResourceID(card); cover != "" {
+		data["coverStorageKey"] = "resource:" + cover
+	}
+	if card.Voice != nil {
+		data["voiceName"] = card.Voice.Profile.Name
+		if card.Voice.Profile.SampleResourceID != "" {
+			data["voiceSampleStorageKey"] = "resource:" + card.Voice.Profile.SampleResourceID
+		}
+	}
+	payload["data"] = data
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return raw
+	}
+	return encoded
+}
+
+func characterCoverResourceID(card CharacterCardSummary) string {
+	for _, role := range []string{"turnaround_sheet", "primary", "front"} {
+		for _, representation := range card.Representations {
+			if representation.Role == role && representation.ResourceID != "" {
+				return representation.ResourceID
+			}
+		}
+	}
+	return ""
 }
 
 func assetFacetMap(rows []repository.UserAssetFacetRow) map[string]int64 {

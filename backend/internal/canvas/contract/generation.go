@@ -43,6 +43,8 @@ type Options struct {
 	AudioVoice            *string `json:"audioVoice,omitempty" node:"audioVoice" task:"audioVoice" modes:"audio"`
 	AudioFormat           *string `json:"audioFormat,omitempty" node:"audioFormat" task:"audioFormat" modes:"audio"`
 	AudioSpeed            *string `json:"audioSpeed,omitempty" node:"audioSpeed" task:"audioSpeed" modes:"audio"`
+	AudioLanguage         *string `json:"audioLanguage,omitempty" node:"audioLanguage" task:"audioLanguage" modes:"audio"`
+	AudioDialect          *string `json:"audioDialect,omitempty" node:"audioDialect" task:"audioDialect" modes:"audio"`
 	AudioInstructions     *string `json:"audioInstructions,omitempty" node:"audioInstructions" task:"audioInstructions" modes:"audio"`
 }
 

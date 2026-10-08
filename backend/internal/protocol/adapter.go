@@ -13,6 +13,10 @@ type Adapter interface {
 	BuildCancel(context.Context, PollContext) (RequestSpec, error)
 }
 
+type RequestAwareCreateParser interface {
+	ParseCreateWithRequest(context.Context, GenerationRequest, []byte) (CreateResult, error)
+}
+
 // AgentAdapter is the optional protocol surface for tool-capable text calls.
 // The host still owns credentials, outbound policy and billing; a plugin only
 // maps the platform's agent request into the provider payload and parses the

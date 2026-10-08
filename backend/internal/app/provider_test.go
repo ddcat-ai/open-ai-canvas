@@ -399,7 +399,7 @@ func TestParseAgentToolPayloadSupportsResponses(t *testing.T) {
 		"output": []interface{}{
 			map[string]interface{}{"type": "reasoning", "summary": []interface{}{map[string]interface{}{"type": "summary_text", "text": "先读取画布，再决定操作"}}},
 			map[string]interface{}{"type": "message", "content": []interface{}{map[string]interface{}{"type": "output_text", "text": "开始操作"}}},
-			map[string]interface{}{"type": "function_call", "call_id": "call-2", "name": "canvas_apply_ops", "arguments": `{"ops":[]}`},
+			map[string]interface{}{"type": "function_call", "id": "fc-2", "call_id": "call-2", "name": "canvas_apply_ops", "arguments": `{"ops":[]}`},
 		},
 	}, "responses")
 	if err != nil {
@@ -417,7 +417,7 @@ func TestParseAgentToolPayloadSupportsResponses(t *testing.T) {
 	}
 	call, _ := calls[0].(map[string]interface{})
 	function, _ := call["function"].(map[string]interface{})
-	if call["id"] != "call-2" || function["name"] != "canvas_apply_ops" || function["arguments"] != `{"ops":[]}` {
+	if call["id"] != "call-2" || call["item_id"] != "fc-2" || function["name"] != "canvas_apply_ops" || function["arguments"] != `{"ops":[]}` {
 		t.Fatalf("tool call = %#v", call)
 	}
 }
@@ -491,7 +491,8 @@ func TestCanonicalAgentBodiesPreserveAssistantToolCalls(t *testing.T) {
 		Messages: []map[string]any{
 			{"role": "user", "content": "读取画布"},
 			{"role": "assistant", "content": "我先查看当前内容。", "tool_calls": []cloudAgentCall{{
-				ID: "call-5",
+				ID:     "call-5",
+				ItemID: "fc-5",
 				Function: struct {
 					Name      string `json:"name"`
 					Arguments string `json:"arguments"`
@@ -532,13 +533,16 @@ func TestCanonicalAgentBodiesPreserveAssistantToolCalls(t *testing.T) {
 		t.Fatalf("claude assistant lost tool use: %#v", claudeAssistant)
 	}
 
-	responses := canonicalAgentResponsesBody(&request)
+	responses, err := canonicalAgentResponsesBody(&request)
+	if err != nil {
+		t.Fatal(err)
+	}
 	responseInput, _ := responses["input"].([]interface{})
 	if len(responseInput) != 4 {
 		t.Fatalf("responses input = %#v", responseInput)
 	}
 	functionCall, _ := responseInput[2].(map[string]interface{})
-	if functionCall["type"] != "function_call" || functionCall["name"] != "canvas_get_state" {
+	if functionCall["type"] != "function_call" || functionCall["name"] != "canvas_get_state" || functionCall["id"] != "fc-5" || functionCall["item_reference"] != "fc-5" {
 		t.Fatalf("responses function call = %#v", functionCall)
 	}
 }
@@ -782,6 +786,30 @@ data: [DONE]
 	}
 }
 
+func TestStreamingAgentParserPreservesResponsesFunctionCallItemID(t *testing.T) {
+	parser := newStreamingAgentParser("responses", nil)
+	parser.consume("text/event-stream", []byte(`event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc-stream","call_id":"call-stream","name":"canvas_get_state","arguments":""}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","item_id":"fc-stream","delta":"{\"nodeId\":"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","item_id":"fc-stream","arguments":"{\"nodeId\":\"n1\"}"}
+
+`))
+	parser.flush()
+	result, err := parser.result()
+	if err != nil {
+		t.Fatalf("streamingAgentParser.result() error = %v", err)
+	}
+	calls, _ := result["toolCalls"].([]interface{})
+	call, _ := calls[0].(map[string]interface{})
+	if call["id"] != "call-stream" || call["item_id"] != "fc-stream" {
+		t.Fatalf("responses tool call identity = %#v", call)
+	}
+}
+
 func TestStreamingAgentParserSeparatesResponsesReasoningFromVisibleText(t *testing.T) {
 	var deltas strings.Builder
 	parser := newStreamingAgentParser("responses", func(delta string) {
@@ -965,6 +993,19 @@ func TestProviderUserFacingErrorMessageClassifiesRejectedRequestBodies(t *testin
 				t.Fatalf("provider response body leaked: %q", message)
 			}
 		})
+	}
+}
+
+func TestProviderUserFacingErrorMessageExplainsDoubaoResourceDenial(t *testing.T) {
+	message := providerUserFacingErrorMessage(providerHTTPError{
+		StatusCode: http.StatusForbidden,
+		Body:       `{"header":{"code":45000030,"message":"[resource_id=volc.seedtts.default] requested resource not granted"}}`,
+	})
+	if !strings.Contains(message, "语音合成服务未开通") {
+		t.Fatalf("providerUserFacingErrorMessage() = %q", message)
+	}
+	if strings.Contains(message, "API Key") {
+		t.Fatalf("resource denial was reported as an API key failure: %q", message)
 	}
 }
 
@@ -1337,40 +1378,57 @@ func TestRunOpenAIImageTaskUsesMultipartEditContract(t *testing.T) {
 
 func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/images/edits" {
-			t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
-		}
-		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
-			t.Errorf("Content-Type = %q, want application/json", contentType)
-		}
-		var body grokImageRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
-		if body.Model != "grok-imagine-image-quality" || body.N != 1 || body.ResponseFormat != "url" {
-			t.Fatalf("request body = %#v", body)
-		}
-		if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
-			t.Fatalf("image = %#v", body.Image)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"url":"https://example.com/result.png"}]}`))
-	}))
-	defer server.Close()
+	// response_format 开关（#692）：支持时请求 b64_json，关闭时回落 url。
+	for _, tc := range []struct {
+		name           string
+		responseFormat bool
+		wantFormat     string
+		reply          string
+		wantDataURL    string
+	}{
+		{name: "b64_json", responseFormat: true, wantFormat: "b64_json", reply: `{"data":[{"b64_json":"aGVsbG8="}]}`, wantDataURL: "data:image/png;base64,aGVsbG8="},
+		{name: "url", responseFormat: false, wantFormat: "url", reply: `{"data":[{"url":"https://example.com/result.png"}]}`, wantDataURL: "https://example.com/result.png"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/images/edits" {
+					t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
+				}
+				if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+					t.Errorf("Content-Type = %q, want application/json", contentType)
+				}
+				var body grokImageRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode request body: %v", err)
+				}
+				if body.Model != "grok-imagine-image-quality" || body.N != 1 || body.ResponseFormat != tc.wantFormat {
+					t.Errorf("request body = %#v", body)
+				}
+				if body.Image == nil || body.Image.URL != testReferenceImageDataURL {
+					t.Errorf("image = %#v", body.Image)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.reply))
+			}))
+			defer server.Close()
 
-	result, err := runImageTask(context.Background(), canvasGenerationInput{
-		Mode:            "image",
-		Prompt:          "edit the reference",
-		Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "grok-imagine-image-quality", InterfaceType: "grok-image"},
-		ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}},
-	})
-	if err != nil {
-		t.Fatalf("runImageTask() error = %v", err)
-	}
-	images, _ := result["images"].([]map[string]string)
-	if len(images) != 1 || images[0]["dataUrl"] != "https://example.com/result.png" {
-		t.Fatalf("images = %#v", result["images"])
+			profile := DefaultImageCapabilityConfig("grok-image", "grok-imagine-image-quality")
+			profile.ResponseFormat.Supported = tc.responseFormat
+			result, err := runImageTask(context.Background(), canvasGenerationInput{
+				Mode:            "image",
+				Prompt:          "edit the reference",
+				Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "grok-imagine-image-quality", InterfaceType: "grok-image"},
+				ImageCapability: profile,
+				ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}},
+			})
+			if err != nil {
+				t.Fatalf("runImageTask() error = %v", err)
+			}
+			images, _ := result["images"].([]map[string]string)
+			if len(images) != 1 || images[0]["dataUrl"] != tc.wantDataURL {
+				t.Fatalf("images = %#v", result["images"])
+			}
+		})
 	}
 }
 

@@ -62,6 +62,7 @@ type CloudAgentEvent struct {
 
 type cloudAgentCall struct {
 	ID       string `json:"id"`
+	ItemID   string `json:"item_id,omitempty"`
 	Function struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
@@ -161,7 +162,10 @@ type cloudAgentRuntime struct {
 	PiResumePrompt                 string                                  `json:"piResumePrompt,omitempty"`
 	TransientReferences            map[string]cloudAgentTransientReference `json:"transientReferences,omitempty"`
 	InterjectionIDs                []string                                `json:"interjectionIds,omitempty"`
-	Events                         []CloudAgentEvent                       `json:"events"`
+	// 已送达插话正文的 SHA-256 指纹（有界）。运行时投影回写 canonical 时不带
+	// 来源标记，模型步按指纹补回 user_interjection，见 cloud_agent_interjection_pi.go。
+	DeliveredInterjectionDigests []string          `json:"deliveredInterjectionDigests,omitempty"`
+	Events                       []CloudAgentEvent `json:"events"`
 	// PiAssistantResponses counts successful assistant message_end events from
 	// the Pi runtime. Completion must not be inferred from a clean Node exit:
 	// a provider/session error can otherwise be reported as a successful run.
@@ -214,23 +218,6 @@ type cloudAgentRuntime struct {
 	// 内存只保留最近一窗（repository.CloudAgentJournalWindow），因此它是"窗口在整条
 	// 日志里的偏移"，而不是累计条数。只在内存里有效，不进检查点（检查点里的事件为空）。
 	EventSeqBase int `json:"-"`
-	// LastStep* 记下"最近一次已发出的模型调用"的本地计价，与上游回填的实测用量
-	// 配成锚点用。估算与实测指向同一份 canonical：估算取自任务 input 里实际发出的那份，
-	// 因此"信封一致"是构造保证，不需要额外比对。
-	LastStepTaskID       string `json:"lastStepTaskId,omitempty"`
-	LastStepOperation    string `json:"lastStepOperation,omitempty"`
-	LastStepEstimate     int    `json:"lastStepEstimate,omitempty"`
-	LastStepSourceBytes  int    `json:"lastStepSourceBytes,omitempty"`
-	LastStepSignature    string `json:"lastStepSignature,omitempty"`
-	LastStepModel        string `json:"lastStepModel,omitempty"`
-	LastStepChannelID    string `json:"lastStepChannelId,omitempty"`
-	LastStepWindowTokens int    `json:"lastStepWindowTokens,omitempty"`
-	// TokenAnchor 是上一步上游上报的用量（模型自己的分词器计数），上下文压力的权威锚点。
-	TokenAnchor *cloudAgentTokenAnchor `json:"tokenAnchor,omitempty"`
-	// ContextWindowKnown 记录本轮是否已经看到过"模型窗口已确认"的读数：从"未确认"变为
-	// "已确认"时要落一条 context_transition，消费方据此标"模型窗口已识别"，
-	// 而不是把口径切换画成上下文骤降。
-	ContextWindowKnown bool `json:"contextWindowKnown,omitempty"`
 }
 
 type cloudAgentTransientReference struct {
@@ -284,37 +271,17 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 		// 界面会一直停在上一轮（已结束）的清单上，显示"未完成项已停止"。
 		state.event(task.ID, "plan_updated", map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan), "inherited": true})
 	}
-	pressure := s.cloudAgentContextPressure(input.Requests.Canonical, initial.Request.Prompt, initial.Request)
 	if carrier {
 		// The carrier is deliberately not a model call. Pi will create the first
 		// governed cloud_agent_step through the model bridge below.
-		state.ContextWindowKnown = pressure.ModelLimitConfigured
 		run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
 		if err := cloudAgentSave(run, &state); err != nil {
 			return err
 		}
 		return s.repo.EnsureCloudAgent(run)
 	}
-	// 第一步的模型调用就是根任务本身（不经过 enqueueCloudAgentTask）：在这里登记任务 id
-	// 与本次请求的本地计价，它回来时才能与上游实测配成锚点。根任务的操作名是
-	// cloud_agent，但它就是第一步的模型调用，按"步骤"口径登记，否则回来配锚点时会被
-	// 操作名守卫挡掉。
-	state.LastStepTaskID = task.ID
-	state.LastStepOperation = cloudAgentStepOperation
-	state.LastStepEstimate = pressure.EstimatedInputTokens
-	state.LastStepSourceBytes = pressure.SourceBytes
-	state.LastStepModel = stringValue(input.Config["model"])
-	state.LastStepChannelID = stringValue(input.Config["channelId"])
-	state.LastStepSignature = cloudAgentRequestSignature(&state, input.Requests.Canonical, state.LastStepChannelID, state.LastStepModel)
-	if pressure.ModelLimitConfigured {
-		state.LastStepWindowTokens = pressure.ContextWindowTokens
-	}
-	// 第一步的窗口是"起始状态"而不是"刚刚识别"：只播种标记，不落 window_resolved，
-	// 否则每轮开头都会报一次"模型窗口已识别"。
-	state.ContextWindowKnown = pressure.ModelLimitConfigured
-	firstPressure := cloudAgentContextPressurePayload(pressure, &state, input.Requests.Canonical)
-	firstPressure["requestId"] = task.ID
-	state.event(task.ID, "context_pressure", firstPressure)
+	// 非 Pi 的旧入口仍保留运行状态初始化，但上下文占用统一由 Pi SDK
+	// 在实际模型调用前上报；这里不再生成 Go 侧估算读数。
 	run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
 	if err := cloudAgentSave(run, &state); err != nil {
 		return err

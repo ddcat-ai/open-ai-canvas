@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -19,6 +20,52 @@ func (r *Repository) ProjectCharacterAsset(userID string, projectID string, asse
 		return nil, err
 	}
 	return &asset, nil
+}
+
+func (r *Repository) UserCharacterAsset(userID string, assetID string) (*model.Asset, error) {
+	var asset model.Asset
+	err := r.db.Where("id = ? AND user_id = ? AND category = ? AND kind = ?", assetID, userID, model.AssetCategoryCharacter, "entity").First(&asset).Error
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
+func (r *Repository) characterAssetQuery(userID string, query string) *gorm.DB {
+	db := r.db.Model(&model.Asset{}).Where("user_id = ? AND category = ? AND kind = ? AND status <> ?", userID, model.AssetCategoryCharacter, "entity", model.AssetVersionStatusArchived)
+	if query = strings.TrimSpace(query); query != "" {
+		pattern := "%" + strings.ToLower(query) + "%"
+		db = db.Where("LOWER(title) LIKE ? OR LOWER(payload_json) LIKE ?", pattern, pattern)
+	}
+	return db
+}
+
+func (r *Repository) UserCharacterAssetsPage(userID string, query string, page int, pageSize int) ([]model.Asset, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 48 {
+		pageSize = 12
+	}
+	var total int64
+	if err := r.characterAssetQuery(userID, query).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var assets []model.Asset
+	err := r.characterAssetQuery(userID, query).Order("updated_at desc, id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&assets).Error
+	return assets, total, err
+}
+
+func (r *Repository) UserCharacterAssetsByIDs(userID string, ids []string) ([]model.Asset, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if len(ids) > 80 {
+		ids = ids[:80]
+	}
+	var assets []model.Asset
+	err := r.db.Where("user_id = ? AND category = ? AND kind = ? AND id IN ?", userID, model.AssetCategoryCharacter, "entity", ids).Find(&assets).Error
+	return assets, err
 }
 
 func (r *Repository) AssetVersion(id string) (*model.AssetVersion, error) {
@@ -86,12 +133,41 @@ func (r *Repository) CreateVoiceProfile(profile *model.VoiceProfile) error {
 	return r.db.Create(profile).Error
 }
 
+// RenameVoiceProfile 只改用户上传样本声音的显示名；内置音色的名称由系统维护。
+func (r *Repository) RenameVoiceProfile(userID, id, name string) error {
+	return r.db.Model(&model.VoiceProfile{}).
+		Where("id = ? AND user_id = ? AND provider = ?", id, userID, "user_upload").
+		Updates(map[string]any{"name": name, "updated_at": time.Now()}).Error
+}
+
 func (r *Repository) VoiceProfileBySampleResource(userID string, resourceID string) (*model.VoiceProfile, error) {
 	var profile model.VoiceProfile
 	if err := r.db.First(&profile, "user_id = ? AND sample_resource_id = ? AND status = ?", userID, resourceID, "active").Error; err != nil {
 		return nil, err
 	}
 	return &profile, nil
+}
+
+func (r *Repository) CreateUserCharacter(asset *model.Asset, version *model.AssetVersion, representations []model.AssetRepresentation, voice *model.CharacterVoiceBinding) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(asset).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(version).Error; err != nil {
+			return err
+		}
+		if len(representations) > 0 {
+			if err := tx.Create(&representations).Error; err != nil {
+				return err
+			}
+		}
+		if voice != nil {
+			if err := tx.Create(voice).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // CreateProjectCharacter 将角色身份、首版本和项目关联放入同一事务。
@@ -117,8 +193,19 @@ func (r *Repository) SaveCharacterVersion(projectID string, asset *model.Asset, 
 		if err := saveCharacterVersion(tx, asset, version, representations, voice); err != nil {
 			return err
 		}
-		return tx.Model(&model.Project{}).Where("id = ?", projectID).
-			Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error
+		projectIDs := []string{}
+		if projectID != "" {
+			projectIDs = append(projectIDs, projectID)
+		} else if err := tx.Model(&model.ProjectAssetLink{}).Where("asset_id = ?", asset.ID).Distinct("project_id").Pluck("project_id", &projectIDs).Error; err != nil {
+			return err
+		}
+		for _, linkedProjectID := range projectIDs {
+			if err := tx.Model(&model.Project{}).Where("id = ?", linkedProjectID).
+				Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

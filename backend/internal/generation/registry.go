@@ -104,6 +104,8 @@ func OfficialDeclarativeAudioInterface(interfaceType string) (string, bool) {
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceOpenAIAudio):
 		return "OpenAI Audio", true
+	case string(model.ChannelInterfaceDoubaoStreamingTTS):
+		return "豆包流式语音", true
 	case string(model.ChannelInterfaceAsyncAudio):
 		return "异步音频", true
 	default:

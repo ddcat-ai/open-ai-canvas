@@ -191,17 +191,52 @@ func SignedOSSObjectURL(setting Settings, objectKey string, expiresAt time.Time)
 }
 
 func SignedOriginObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
+	return signedOriginObjectURL(setting, objectKey, objectURLSigning{ExpiresAt: expiresAt})
+}
+
+// SignedOriginObjectDisplayURL 签发浏览器展示用的源站直连地址。
+//
+// 浏览器 HTTP 缓存以完整 URL 为键。调用方把签名起始时间对齐到固定时间窗后，同一对象在
+// 同一窗口内得到逐字节相同的地址：刷新画布、多标签页、多个后端实例都复用浏览器已缓存的字节，
+// 不再每次都从对象存储重新下载。对象键带随机 ID、内容不可变，因此同时让对象存储按签名
+// 剩余有效期回写 Cache-Control，浏览器在有效期内连条件请求都不必发出。
+func SignedOriginObjectDisplayURL(setting Settings, objectKey string, signedAt time.Time, expiresAt time.Time) (string, error) {
+	signing := objectURLSigning{SignedAt: signedAt, ExpiresAt: expiresAt}
+	if seconds := int64(expiresAt.Sub(signingTime(signedAt)) / time.Second); seconds > 0 {
+		signing.CacheControl = "private, max-age=" + strconv.FormatInt(seconds, 10) + ", immutable"
+	}
+	return signedOriginObjectURL(setting, objectKey, signing)
+}
+
+// objectURLSigning 描述一次预签名 GET 的可变部分。
+type objectURLSigning struct {
+	// SignedAt 为零值表示一次性地址（下载、服务端读取），按当前时间签名。
+	SignedAt           time.Time
+	ExpiresAt          time.Time
+	ContentDisposition string
+	CacheControl       string
+}
+
+func signingTime(signedAt time.Time) time.Time {
+	if signedAt.IsZero() {
+		return time.Now().UTC()
+	}
+	return signedAt.UTC()
+}
+
+func signedOriginObjectURL(setting Settings, objectKey string, signing objectURLSigning) (string, error) {
 	setting = NormalizeSettings(setting)
 	if setting.Provider == s3Provider {
-		return SignedS3ObjectURL(setting, objectKey, expiresAt)
+		return signedS3ObjectURL(setting, objectKey, signing)
 	}
 	if setting.Provider == qiniuKodoProvider {
-		return SignedQiniuS3ObjectURL(setting, objectKey, expiresAt)
+		return signedQiniuS3ObjectURL(setting, objectKey, signing)
 	}
 	if setting.Provider == tencentCOSProvider {
-		return SignedCOSObjectURL(setting, objectKey, expiresAt)
+		return signedCOSObjectURL(setting, objectKey, signing)
 	}
-	return SignedAliyunOSSObjectURL(setting, objectKey, expiresAt)
+	// 阿里云 V1 签名只由绝对过期时间决定，过期时间对齐即可得到稳定地址。
+	return signedAliyunOSSObjectURL(setting, objectKey, signing)
 }
 
 // SignedOriginObjectDownloadURL signs a browser-facing object-store URL whose
@@ -210,17 +245,7 @@ func SignedOriginObjectURL(setting Settings, objectKey string, expiresAt time.Ti
 // overrides are forwarded and signed correctly.
 func SignedOriginObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, fileName string) (string, error) {
 	disposition := objectDownloadContentDisposition(fileName, objectKey)
-	setting = NormalizeSettings(setting)
-	if setting.Provider == s3Provider {
-		return SignedS3ObjectDownloadURL(setting, objectKey, expiresAt, disposition)
-	}
-	if setting.Provider == qiniuKodoProvider {
-		return SignedQiniuS3ObjectDownloadURL(setting, objectKey, expiresAt, disposition)
-	}
-	if setting.Provider == tencentCOSProvider {
-		return SignedCOSObjectDownloadURL(setting, objectKey, expiresAt, disposition)
-	}
-	return SignedAliyunOSSObjectDownloadURL(setting, objectKey, expiresAt, disposition)
+	return signedOriginObjectURL(setting, objectKey, objectURLSigning{ExpiresAt: expiresAt, ContentDisposition: disposition})
 }
 
 func objectDownloadContentDisposition(fileName string, objectKey string) string {
@@ -247,14 +272,11 @@ func objectDownloadContentDisposition(fileName string, objectKey string) string 
 }
 
 func SignedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
-	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt, "")
+	return signedAliyunOSSObjectURL(setting, objectKey, objectURLSigning{ExpiresAt: expiresAt})
 }
 
-func SignedAliyunOSSObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
-	return signedAliyunOSSObjectURL(setting, objectKey, expiresAt, disposition)
-}
-
-func signedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+func signedAliyunOSSObjectURL(setting Settings, objectKey string, signing objectURLSigning) (string, error) {
+	expiresAt := signing.ExpiresAt
 	baseURL, err := OssBucketBaseURL(setting)
 	if err != nil {
 		return "", err
@@ -270,9 +292,18 @@ func signedAliyunOSSObjectURL(setting Settings, objectKey string, expiresAt time
 	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
 	canonicalResource := "/" + setting.Bucket + "/" + objectKey
 	query := baseURL.Query()
-	if disposition != "" {
-		query.Set("response-content-disposition", disposition)
-		canonicalResource += "?response-content-disposition=" + disposition
+	// V1 签名要求 response-* 覆盖参数按字典序写入 CanonicalizedResource，且值不做转义。
+	overrides := make([]string, 0, 2)
+	if signing.CacheControl != "" {
+		query.Set("response-cache-control", signing.CacheControl)
+		overrides = append(overrides, "response-cache-control="+signing.CacheControl)
+	}
+	if signing.ContentDisposition != "" {
+		query.Set("response-content-disposition", signing.ContentDisposition)
+		overrides = append(overrides, "response-content-disposition="+signing.ContentDisposition)
+	}
+	if len(overrides) > 0 {
+		canonicalResource += "?" + strings.Join(overrides, "&")
 	}
 	stringToSign := strings.Join([]string{http.MethodGet, "", "", expires, canonicalResource}, "\n")
 	mac := hmac.New(sha1.New, []byte(setting.AccessKeySecret))
@@ -370,14 +401,11 @@ func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string)
 }
 
 func SignedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
-	return signedCOSObjectURL(setting, objectKey, expiresAt, "")
+	return signedCOSObjectURL(setting, objectKey, objectURLSigning{ExpiresAt: expiresAt})
 }
 
-func SignedCOSObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
-	return signedCOSObjectURL(setting, objectKey, expiresAt, disposition)
-}
-
-func signedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+func signedCOSObjectURL(setting Settings, objectKey string, signing objectURLSigning) (string, error) {
+	expiresAt := signing.ExpiresAt
 	setting = NormalizeSettings(setting)
 	if strings.TrimSpace(setting.AccessKeyID) == "" || strings.TrimSpace(setting.AccessKeySecret) == "" {
 		return "", errors.New("COS 访问密钥不可用")
@@ -386,19 +414,24 @@ func signedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time,
 	if objectKey == "" {
 		return "", errors.New("COS 对象路径为空")
 	}
-	expires := time.Until(expiresAt)
-	if expires <= 0 {
+	if !expiresAt.After(time.Now()) {
 		return "", errors.New("COS 签名有效期必须晚于当前时间")
 	}
 	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
 		return "", err
 	}
-	var options interface{}
-	if disposition != "" {
-		options = &cos.ObjectGetOptions{ResponseContentDisposition: disposition}
+	signedAt := signingTime(signing.SignedAt)
+	query := url.Values{}
+	if signing.CacheControl != "" {
+		query.Set("response-cache-control", signing.CacheControl)
 	}
-	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expires, options)
+	if signing.ContentDisposition != "" {
+		query.Set("response-content-disposition", signing.ContentDisposition)
+	}
+	// COS 默认用 time.Now 生成 q-sign-time；显式传入对齐后的时间窗，保证同一窗口内地址稳定。
+	options := &cos.PresignedURLOptions{Query: &query, AuthTime: &cos.AuthTime{SignStartTime: signedAt, SignEndTime: expiresAt, KeyStartTime: signedAt, KeyEndTime: expiresAt}}
+	signedURL, err := client.Object.GetPresignedURL(context.Background(), http.MethodGet, objectKey, setting.AccessKeyID, setting.AccessKeySecret, expiresAt.Sub(signedAt), options)
 	if err != nil {
 		return "", err
 	}
@@ -427,14 +460,10 @@ func SignedQiniuObjectURL(setting Settings, objectKey string, expiresAt time.Tim
 // SignedQiniuS3ObjectURL 用七牛兼容 S3 的 AWS Signature V4 访问私有空间。
 // 没有绑定域名时，浏览器不直接访问该地址，而是由后端代理读取并返回文件。
 func SignedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
-	return signedQiniuS3ObjectURL(setting, objectKey, expiresAt, "")
+	return signedQiniuS3ObjectURL(setting, objectKey, objectURLSigning{ExpiresAt: expiresAt})
 }
 
-func SignedQiniuS3ObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
-	return signedQiniuS3ObjectURL(setting, objectKey, expiresAt, disposition)
-}
-
-func signedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+func signedQiniuS3ObjectURL(setting Settings, objectKey string, signing objectURLSigning) (string, error) {
 	setting = NormalizeSettings(setting)
 	region := QiniuS3Region(setting)
 	if region == "" {
@@ -443,18 +472,25 @@ func signedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.T
 	baseURL := &url.URL{Scheme: "https", Host: setting.Bucket + ".s3." + region + ".qiniucs.com"}
 	// 保留对象键的原始路径，让 url.URL 和 AWS signer 只做一次 RFC 3986 转义。
 	baseURL.Path = "/" + objectKey
-	if disposition != "" {
-		query := baseURL.Query()
-		query.Set("response-content-disposition", disposition)
-		baseURL.RawQuery = query.Encode()
+	if !signing.ExpiresAt.After(time.Now()) {
+		return "", errors.New("七牛云 Kodo S3 签名有效期必须晚于当前时间")
 	}
+	query := baseURL.Query()
+	if signing.CacheControl != "" {
+		query.Set("response-cache-control", signing.CacheControl)
+	}
+	if signing.ContentDisposition != "" {
+		query.Set("response-content-disposition", signing.ContentDisposition)
+	}
+	baseURL.RawQuery = query.Encode()
 	req, err := http.NewRequest(http.MethodGet, baseURL.String(), nil)
 	if err != nil {
 		return "", err
 	}
 	credentialsValue := credentials.NewStaticCredentials(setting.AccessKeyID, setting.AccessKeySecret, "")
 	signer := awsv4.NewSigner(credentialsValue)
-	if _, err := signer.Presign(req, nil, "s3", region, time.Until(expiresAt), time.Now().UTC()); err != nil {
+	signedAt := signingTime(signing.SignedAt)
+	if _, err := signer.Presign(req, nil, "s3", region, signing.ExpiresAt.Sub(signedAt), signedAt); err != nil {
 		return "", fmt.Errorf("七牛云 Kodo S3 签名失败：%w", err)
 	}
 	return req.URL.String(), nil

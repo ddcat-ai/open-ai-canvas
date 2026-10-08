@@ -31,7 +31,7 @@ function shortReference(value: unknown): string {
 
 function nodeTypeLabel(value: unknown): string {
     const type = text(value, 32).toLowerCase();
-    return ({ text: "文本", markdown: "Markdown", image: "图片", video: "视频", audio: "音频", frame: "画框", script: "脚本" } as Record<string, string>)[type] || (type ? "节点" : "");
+    return ({ text: "文本", markdown: "Markdown", image: "图片", video: "视频", audio: "音频", frame: "画框", script: "脚本", character: "角色卡" } as Record<string, string>)[type] || (type ? "节点" : "");
 }
 
 function fieldLabel(key: string, nodeType: string): string {
@@ -41,7 +41,7 @@ function fieldLabel(key: string, nodeType: string): string {
 }
 
 function operation(value: unknown): AgentApprovalPreviewOperation | null {
-    return value === "add_node" || value === "update_node" || value === "connect_nodes" || value === "arrange_nodes" || value === "generate_media" || value === "create_storyboard" || value === "edit_storyboard" || value === "plan_step" ? value : null;
+    return value === "add_node" || value === "update_node" || value === "connect_nodes" || value === "arrange_nodes" || value === "generate_media" || value === "create_storyboard" || value === "edit_storyboard" || value === "create_character" || value === "plan_step" ? value : null;
 }
 
 function normalizeServerPreview(value: unknown): AgentApprovalPresentation | null {

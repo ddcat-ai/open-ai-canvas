@@ -85,6 +85,8 @@ export function normalizeWorkflowFieldSourceName(value: unknown, capability?: Ru
         audioformat: "audioFormat",
         audiospeed: "audioSpeed",
         audioinstructions: "audioInstructions",
+        audiolanguage: "audioLanguage",
+        audiodialect: "audioDialect",
     };
     if (normalized === "resolution") return capability === "video" ? "vquality" : "size";
     // 工作流的 quality 可能是连续数值（例如 0.1-3），不能按视频分辨率处理。
@@ -120,6 +122,8 @@ export function inferWorkflowFieldSource(fieldName: string, fieldType: string, c
     if (["voice", "audiovoice"].includes(key)) return "audioVoice";
     if ((key === "speed" && normalizedFieldType === "audio") || key === "audiospeed") return "audioSpeed";
     if ((key === "instructions" && normalizedFieldType === "audio") || key === "audioinstructions") return "audioInstructions";
+    if (key === "audiolanguage" || (key === "language" && normalizedFieldType === "audio")) return "audioLanguage";
+    if (key === "audiodialect" || (key === "dialect" && normalizedFieldType === "audio")) return "audioDialect";
     if (["transparentbackground", "transparent"].includes(key)) return "transparentBackground";
     if (normalizedFieldType === "image") return "referenceImage";
     if (normalizedFieldType === "video") return "referenceVideo";

@@ -83,19 +83,22 @@ func (s *Service) UpdateTopupProduct(actor *model.User, id string, request Topup
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	existing, err := s.repo.TopupProduct(id)
+	id = strings.TrimSpace(id)
+	var product *model.TopupProduct
+	// 已售数量必须在锁住商品行之后计算，否则会覆盖并发下单扣减或关单退回的库存。
+	err := s.repo.UpdateTopupProduct(id, func(existing *model.TopupProduct) (*model.TopupProduct, error) {
+		consumed := existing.StockTotal - existing.StockRemaining
+		if existing.SaleStrategy != model.TopupSaleStrategyInventory {
+			consumed = 0
+		}
+		built, buildErr := topupProductFromRequest(id, actor.ID, request, existing.StockTotal, consumed)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		product = built
+		return built, nil
+	})
 	if err != nil {
-		return nil, err
-	}
-	consumed := existing.StockTotal - existing.StockRemaining
-	if existing.SaleStrategy != model.TopupSaleStrategyInventory {
-		consumed = 0
-	}
-	product, err := topupProductFromRequest(strings.TrimSpace(id), actor.ID, request, existing.StockTotal, consumed)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.repo.UpdateTopupProduct(product); err != nil {
 		return nil, err
 	}
 	if err := s.appendAdminAudit(actor, "topup_product.update", "topup_product", product.ID, "更新积分充值商品", map[string]any{"enabled": product.Enabled, "saleStrategy": product.SaleStrategy}); err != nil {

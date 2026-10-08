@@ -81,6 +81,26 @@ func TestProviderPayloadBusinessFailureReadsNestedOutputFailure(t *testing.T) {
 	}
 }
 
+func TestProviderResponseBusinessFailureExplainsDoubaoSpeechDenial(t *testing.T) {
+	body := []byte(`{"code":0,"data":"AAAA"}{"header":{"code":45000030,"message":"[resource_id=volc.seedtts.default] requested resource not granted"}}`)
+	code, message, failed := providerResponseBusinessFailure(body)
+	if !failed || !strings.Contains(message, "requested resource not granted") {
+		t.Fatalf("business failure = (%q, %q, %v)", code, message, failed)
+	}
+	if code != "45000030" && code != "4.500003e+07" {
+		t.Fatalf("unexpected code %q", code)
+	}
+}
+
+func TestProviderPayloadBusinessFailureIgnoresOrdinaryHeader(t *testing.T) {
+	if _, _, failed := providerPayloadBusinessFailure(map[string]any{
+		"header": map[string]any{"code": float64(200), "message": "ok"},
+		"data":   map[string]any{"audio": "AAAA"},
+	}); failed {
+		t.Fatal("ordinary header code was treated as a business failure")
+	}
+}
+
 func TestProviderPayloadBusinessFailureIgnoresPendingOutput(t *testing.T) {
 	if code, message, failed := providerPayloadBusinessFailure(map[string]any{
 		"output":     map[string]any{"task_id": "task-1", "task_status": "PENDING"},

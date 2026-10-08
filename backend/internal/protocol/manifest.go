@@ -44,15 +44,18 @@ type ManifestResponse struct {
 	// BinaryPayload 表示 create 同步返回二进制媒体（如 /audio/speech 的音频流）。
 	// 声明式解析会把整个响应体包装为对应能力的单个媒体结果，不做 JSON 路径提取。
 	BinaryPayload bool `json:"binaryPayload,omitempty"`
-	TaskID        any  `json:"taskId,omitempty"`
-	Status        any  `json:"status,omitempty"`
-	Message       any  `json:"message,omitempty"`
-	Text          any  `json:"text,omitempty"`
-	Reasoning     any  `json:"reasoning,omitempty"`
-	Images        any  `json:"images,omitempty"`
-	Videos        any  `json:"videos,omitempty"`
-	Audios        any  `json:"audios,omitempty"`
-	Usage         any  `json:"usage,omitempty"`
+	// StreamedJSONAudio 表示 create 返回由连续 JSON 对象组成的 HTTP chunked 音频流；
+	// 每个对象可携带 data（Base64 音频片段）、code/message 和 usage。
+	StreamedJSONAudio bool `json:"streamedJsonAudio,omitempty"`
+	TaskID            any  `json:"taskId,omitempty"`
+	Status            any  `json:"status,omitempty"`
+	Message           any  `json:"message,omitempty"`
+	Text              any  `json:"text,omitempty"`
+	Reasoning         any  `json:"reasoning,omitempty"`
+	Images            any  `json:"images,omitempty"`
+	Videos            any  `json:"videos,omitempty"`
+	Audios            any  `json:"audios,omitempty"`
+	Usage             any  `json:"usage,omitempty"`
 }
 
 // ManifestAgentResponse describes the provider response shape for a

@@ -33,18 +33,13 @@ type Bridge struct {
 type ProcessRequest struct {
 	BridgeURL     string           `json:"bridgeURL"`
 	BridgeToken   string           `json:"bridgeToken"`
-	SessionFile   string           `json:"sessionFile,omitempty"`
 	SessionJSONL  string           `json:"sessionJSONL,omitempty"`
-	SessionDir    string           `json:"sessionDir,omitempty"`
 	SessionID     string           `json:"sessionId,omitempty"`
 	UserID        string           `json:"userId,omitempty"`
 	CanvasID      string           `json:"canvasId,omitempty"`
 	RunID         string           `json:"runId,omitempty"`
-	CWD           string           `json:"cwd"`
-	AgentDir      string           `json:"agentDir"`
 	Prompt        string           `json:"prompt"`
 	SystemPrompt  string           `json:"systemPrompt"`
-	SkillPaths    []string         `json:"skillPaths,omitempty"`
 	EnabledSkills []map[string]any `json:"enabledSkills,omitempty"`
 	Profile       map[string]any   `json:"profile,omitempty"`
 	Memory        map[string]any   `json:"memory,omitempty"`
@@ -92,10 +87,10 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	cmd := exec.CommandContext(ctx, "node", "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
 	cmd.Dir = runtimeDir
 	cmd.Stdin = strings.NewReader(string(payload))
-	// 环境变量白名单：只传 Node 运行所需的最少变量。
+	// 环境变量白名单：只传 Node 运行所需的最少变量。HOME 与会话、工作目录
+	// 由运行时自己建的临时隔离目录提供，不使用服务端数据目录。
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + request.AgentDir,
 		"NODE_ENV=production",
 		"PI_OFFLINE=1",
 	}

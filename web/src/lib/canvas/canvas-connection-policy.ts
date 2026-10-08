@@ -1,5 +1,6 @@
-import { maxModelInputCapacity, type ModelInputSummary } from "@/lib/model-selection";
+import { audioModelForConnection, audioReferenceCapacity, doubaoAudioInputError, isDoubaoAudioModel, maxModelInputCapacity, resolveCompatibleModel, type ModelInputSummary } from "@/lib/model-selection";
 import { getNodeAcceptedInputKinds, getNodeGenerationMode, getNodeInputKind, getNodeMaxInputCount } from "@/lib/canvas/node-registry";
+import { readNodeGenerationSpec, resolveGenerationSelection } from "@/lib/canvas/generation-contract";
 import type { AiConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
@@ -49,9 +50,26 @@ export function canvasConnectionError(config: AiConfig, nodes: CanvasNodeData[],
         return options.ignoreCapacity ? "" : capacityError(config, mode, "image", visualInputCount, "参考图") || capacityError(config, mode, "video", input.videoCount, "参考视频") || capacityError(config, mode, "audio", input.audioCount, "参考音频");
     }
     if (mode === "text" && input.audioCount > 0) return "文本生成节点不能连接参考音频";
-    if (mode === "audio" && input.characterCount > 1) return "角色配音一次只能连接一个角色卡";
-    if (mode === "audio" && (input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0)) return "音频生成节点只接受文本或单个角色卡输入";
+    if (mode === "audio") {
+        const model = routedAudioModel(config, target, input);
+        if (isDoubaoAudioModel(config, model)) return doubaoAudioInputError(input);
+        if (input.imageCount > 0 || input.videoCount > 0) return "音频生成节点不能连接参考图片或参考视频";
+        if (input.characterCount > 1) return "角色配音一次只能连接一个角色卡";
+        const maxAudios = audioReferenceCapacity(config, model);
+        if (input.audioCount > maxAudios) {
+            return maxAudios > 0 ? `音频生成节点最多连接 ${maxAudios} 个参考音频` : "当前音频模型不支持参考音频";
+        }
+    }
     return "";
+}
+
+function routedAudioModel(config: AiConfig, target: CanvasNodeData, input: ModelInputSummary) {
+    const generationSpec = readNodeGenerationSpec(target);
+    const selectedModel = generationSpec?.mode === "audio" ? resolveGenerationSelection(config, generationSpec.modelSelection) : "";
+    const explicit = audioModelForConnection(config, selectedModel || target.metadata?.model || "");
+    // 同名模型组会在生成时改选到能接受当前参考的成员。连线必须按这个结果判断，
+    // 不能拿组里一个不支持图片的模型把豆包音频挡掉。
+    return resolveCompatibleModel(config, explicit, { capability: "audio", input }) || explicit;
 }
 
 function acceptedInputKindLabel(kind: "image" | "video" | "audio" | "text" | "table_data") {

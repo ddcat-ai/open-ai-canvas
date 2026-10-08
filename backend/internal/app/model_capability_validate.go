@@ -228,6 +228,10 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 		if normalizeErr != nil || normalized == nil || normalized.Video == nil {
 			return BadAuthRequest("当前视频模型能力参数无效")
 		}
+		applyAutoDLVideoScreenSpec(&taskInput, normalized.Video)
+		if config, ok := input["config"].(map[string]any); ok {
+			config["size"], config["vquality"] = taskInput.Config.Size, taskInput.Config.VQuality
+		}
 		return validateVideoTask(normalized.Video, taskInput)
 	}
 	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
@@ -252,8 +256,10 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if normalizeErr != nil || normalized == nil || normalized.Video == nil {
 		return BadAuthRequest("当前视频模型能力参数无效")
 	}
+	applyAutoDLVideoScreenSpec(&taskInput, normalized.Video)
 	applyFixedVideoResolution(&taskInput, normalized.Video)
 	if config, ok := input["config"].(map[string]any); ok {
+		config["size"] = taskInput.Config.Size
 		config["vquality"] = taskInput.Config.VQuality
 	}
 	return validateVideoTask(normalized.Video, taskInput)

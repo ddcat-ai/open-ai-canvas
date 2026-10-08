@@ -49,6 +49,7 @@ export type AdminResourceQuery = {
     kind?: string;
     status?: string;
     provider?: string;
+    user?: string;
     userId?: string;
     page?: number;
     pageSize?: number;

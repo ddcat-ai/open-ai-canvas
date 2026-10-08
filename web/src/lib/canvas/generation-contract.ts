@@ -120,6 +120,20 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
 }
 
 
+export function nodeGenerationPrompt(node: Pick<CanvasNodeData, "type" | "metadata">): string {
+    const mode = canvasGenerationMode(node.type);
+    if (mode) {
+        try {
+            const spec = readNodeGenerationSpec(node);
+            if (spec?.mode === mode) return spec.prompt;
+        } catch {
+            // A malformed legacy contract should not make canvas discovery fail.
+        }
+    }
+    const metadata = node.metadata || {};
+    return typeof metadata.composerContent === "string" ? metadata.composerContent : typeof metadata.prompt === "string" ? metadata.prompt : "";
+}
+
 export function canonicalGenerationMetadata(node: CanvasNodeData, mode: string): CanvasNodeMetadata {
     if (!canvasGenerationMode(mode)) return { ...node.metadata };
     const spec = readNodeGenerationSpec(node);

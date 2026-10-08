@@ -43,6 +43,7 @@ SH-001 镜头
 使用 `FRAME-CHAR-<id>`，至少包含：
 
 ```text
+CH-01-character-card（角色卡节点，核心角色必需）
 CH-01-character-bible.md
 CH-01-turnaround.png
 CH-01-portrait.png
@@ -51,6 +52,8 @@ VO-CH-01-reference.wav（用户需要且平台支持时）
 ```
 
 可选：表情表、姿态表、服装变体、伤势变体。
+
+角色卡由 `canvas_create_character` 创建，台账记录角色卡节点 ID、角色资产 ID 和版本号；分镜行的 `characterAssetIds` 写作 `CH-01@角色卡v1`，生成时引用角色卡节点。
 
 ## 环境资产背板
 
@@ -82,7 +85,7 @@ PROP-01-use-state.png（需要时）
   "durationSeconds": 8,
   "sourceVersion": "SRC-01@v1",
   "bibleVersion": "BIB-01@v1",
-  "characterAssetIds": ["CH-01@v1"],
+  "characterAssetIds": ["CH-01@角色卡v1"],
   "locationAssetId": "LOC-01@v1",
   "propAssetIds": ["PROP-01@v1"],
   "startState": {},

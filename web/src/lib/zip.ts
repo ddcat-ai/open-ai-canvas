@@ -1,21 +1,26 @@
-import { unzipSync, zipSync } from "fflate";
+import { unzipSync as unpack, zipSync as pack } from "fflate";
 
-type ZipFile = {
-    name: string;
-    data: BlobPart;
-};
+type ZipSource = BlobPart;
 
-export async function createZip(files: ZipFile[]) {
-    const entries = await Promise.all(
-        files.map(async (file) => {
-            const data = new Uint8Array(await new Blob([file.data]).arrayBuffer());
-            return [file.name, data] as const;
-        }),
-    );
-    return new Blob([zipSync(Object.fromEntries(entries), { level: 0 })], { type: "application/zip" });
+async function toBytes(data: ZipSource): Promise<Uint8Array> {
+    const buffer = await new Blob([data]).arrayBuffer();
+    return new Uint8Array(buffer);
 }
 
-export async function readZip(file: Blob) {
-    const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
-    return new Map(Object.entries(entries).map(([name, data]) => [name, new Blob([data])]));
+export async function createZip(files: Array<{ name: string; data: ZipSource }>): Promise<Blob> {
+    const entries: Record<string, Uint8Array> = {};
+    for (const file of files) {
+        entries[file.name] = await toBytes(file.data);
+    }
+    const archive = pack(entries, { level: 0 });
+    return new Blob([archive], { type: "application/zip" });
+}
+
+export async function readZip(file: Blob): Promise<Map<string, Blob>> {
+    const opened = unpack(await toBytes(file));
+    const extracted = new Map<string, Blob>();
+    for (const [name, bytes] of Object.entries(opened)) {
+        extracted.set(name, new Blob([bytes]));
+    }
+    return extracted;
 }

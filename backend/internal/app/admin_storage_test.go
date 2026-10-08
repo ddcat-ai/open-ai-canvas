@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ func TestAdminStorageListStatsAndPreview(t *testing.T) {
 	}
 	users := []model.User{
 		{ID: "admin", Username: "admin", DisplayName: "管理员", Role: model.UserRoleAdmin, Status: model.UserStatusActive},
-		{ID: "user-1", Username: "creator", DisplayName: "创作者", Role: model.UserRoleUser, Status: model.UserStatusActive},
+		{ID: "user-1", Username: "creator", Email: "creator@example.com", DisplayName: "创作者", Role: model.UserRoleUser, Status: model.UserStatusActive},
 	}
 	if err := db.Create(&users).Error; err != nil {
 		t.Fatal(err)
@@ -64,6 +65,28 @@ func TestAdminStorageListStatsAndPreview(t *testing.T) {
 	}
 	if page.Items[0].PhysicalBytes != 128 || page.Items[1].PhysicalBytes != 0 {
 		t.Fatalf("physical bytes = %+v", page.Items)
+	}
+
+	for _, userQuery := range []string{"user-1", "creator", "创作者", "creator@example.com"} {
+		filtered, filterErr := svc.AdminResourcePage(admin, AdminResourceQuery{UserQuery: userQuery, Page: 1, Limit: 20})
+		if filterErr != nil {
+			t.Fatalf("AdminResourcePage(UserQuery=%q) error = %v", userQuery, filterErr)
+		}
+		if filtered.Total != 2 || len(filtered.Items) != 2 {
+			t.Fatalf("AdminResourcePage(UserQuery=%q) = %+v", userQuery, filtered)
+		}
+		for _, item := range filtered.Items {
+			if item.UserID != "user-1" {
+				t.Fatalf("AdminResourcePage(UserQuery=%q) returned user %q", userQuery, item.UserID)
+			}
+		}
+	}
+	missing, missingErr := svc.AdminResourcePage(admin, AdminResourceQuery{UserQuery: "missing-user", Page: 1, Limit: 20})
+	if missingErr != nil {
+		t.Fatal(missingErr)
+	}
+	if missing.Total != 0 || len(missing.Items) != 0 {
+		t.Fatalf("missing user filter returned resources: %+v", missing)
 	}
 
 	stats, err := svc.AdminStorageStats(admin)
@@ -102,6 +125,9 @@ func TestAdminStorageRejectsNonAdminAndInvalidFilters(t *testing.T) {
 	}
 	if _, _, _, err := normalizeAdminResourceQuery(AdminResourceQuery{Status: "unknown"}); err == nil {
 		t.Fatal("expected invalid status filter to be rejected")
+	}
+	if _, _, _, err := normalizeAdminResourceQuery(AdminResourceQuery{UserQuery: strings.Repeat("x", 161)}); err == nil {
+		t.Fatal("expected oversized user filter to be rejected")
 	}
 	if _, err := svc.AdminStorageStats(user); err == nil {
 		t.Fatal("expected non-admin stats to be rejected")

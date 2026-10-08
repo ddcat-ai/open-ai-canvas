@@ -1,5 +1,7 @@
 package capability
 
+import "infinite-canvas/backend/internal/canvas/contract"
+
 const (
 	maxAgentNodeTitleRunes   = 240
 	maxAgentNodeContentRunes = 16000
@@ -33,14 +35,15 @@ func BuiltinRegistry() *Registry {
 			PatchFields: editableNodeFields("metadata.content", "Markdown 正文", "Markdown 正文"),
 		},
 		generatedMediaDescriptor("image", "2", "图片", 720, 405, "image", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image"},
+			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "character"},
 		}),
 		generatedMediaDescriptor("video", "2", "视频", 720, 405, "video", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "video", "audio"},
+			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "video", "audio", "character"},
 		}),
 		generatedMediaDescriptor("audio", "2", "音频", 340, 120, "audio", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, MaxInputCount: 1, AcceptedInputKinds: []string{"text"},
+			CanSource: true, CanTarget: true, CanReference: true, MaxInputCount: 1, AcceptedInputKinds: []string{"text", "character"},
 		}),
+		characterDescriptor(),
 		{
 			Type: "frame", Version: "1", Label: "背板", DefaultWidth: 760, DefaultHeight: 520,
 			Purpose:       "在画布上建立可移动、可折叠的视觉分区，用来归组相关节点；背板本身不承载创作正文或生成结果。",
@@ -92,8 +95,12 @@ func BuiltinRegistry() *Registry {
 			GoodFor:       []string{"多镜头规划", "镜头连续性", "逐镜审查和微调", "逐镜生成图片或视频", "需要他人接手维护的内容"},
 			NotIdealFor:   []string{"只有一个画面的快速试验", "一次性临时提示词", "仅需要阅读排版的普通文档"},
 			Tradeoffs:     []string{"前期录入成本高于文本节点", "但能保留镜头级结构、资产关系和后续维护能力"},
-			Actions:       []string{"read_rows", "append_row", "update_row", "remove_row", "generate_storyboard"},
+			Actions:       []string{"read_rows", "append_row", "update_row", "remove_row", "generate_storyboard", "connect_assets", "update_node"},
+			InputKind:     "text",
+			Connection:    ConnectionPolicy{CanSource: true, CanTarget: true, AcceptedInputKinds: []string{"audio", "character", "image", "text", "video"}},
+			CanUpdate:     true,
 			SummaryFields: []string{"storyboard"}, DetailFields: []string{"storyboard"}, ProjectionKind: "storyboard", ProjectionField: "storyboard",
+			PatchFields: titleAndPositionPatchFields(),
 			CreateMetadata: func(string) map[string]any {
 				return map[string]any{"status": "idle", "workflowKind": "script", "storyboard": map[string]any{"rows": []any{}, "visibleColumns": []any{"shotNumber", "durationSeconds", "videoMotionPrompt", "dialogue", "assets"}, "referenceNodeIds": []any{}}}
 			},
@@ -105,17 +112,48 @@ func BuiltinRegistry() *Registry {
 	return registry
 }
 
+// characterDescriptor 是角色卡能力：画布上是 text + metadata.workflowKind=character 的节点，
+// 设定、三视图与声音都来自账号内的角色资产而非节点正文。它可以被发现、精读、连线和引用，
+// 但不能用 add_node 凭空创建：必须经 canvas_create_character 用真实图片/音频建角色资产，名称和设定只随角色资产更新。
+func characterDescriptor() Descriptor {
+	return Descriptor{
+		Type: "character", Version: "1", Label: "角色卡", DefaultWidth: 264, DefaultHeight: 352,
+		Purpose:     "引用账号角色库中的角色资产，统一提供角色设定、三视图/形象图和绑定声音，用来保持人物在多次生成中的一致性。",
+		GoodFor:     []string{"图片或视频生成时锁定人物外观", "多镜头保持同一角色一致", "角色配音时使用绑定声音", "只取角色文字设定作为提示词来源"},
+		NotIdealFor: []string{"临时一次性的人物描述（直接写进提示词或文本节点）", "用 add_node 新建（应使用 canvas_create_character 打包形象图片与声音）", "承载普通正文（节点正文不是角色设定）"},
+		Tradeoffs:   []string{"设定与媒体随角色资产版本变化，提交时会校验版本", "未绑定形象或声音时对应引用不可用，需先读取 character.imageReference/audioReference"},
+		Actions:     []string{"read_character", "use_as_reference", "use_as_text_source"},
+		InputKind:   "character",
+		Connection:  ConnectionPolicy{CanSource: true, CanReference: true},
+		CanUpdate:   true,
+		PatchFields: positionPatchFields(),
+		Variant:     &NodeVariant{BaseType: "text", WorkflowKind: "character"},
+	}
+}
+
+// generatedMediaDescriptor 根据节点类型、显示尺寸、生成模式和连接规则创建媒体能力描述。
+// 返回读写字段及创建默认值；首尾帧只对视频开放，避免其他节点接受无效视频参数。
 func generatedMediaDescriptor(nodeType, version, label string, width, height float64, generationMode string, connection ConnectionPolicy) Descriptor {
 	semantics := generatedMediaSemantics(nodeType)
+	fields := editableNodeFields("metadata.generationSpec.prompt", "提示词", "生成合同中的当前提示词；这是 Agent 唯一读写的媒体提示词")
+	readFields := []string{"prompt", "assetTags", "referenceNodeIds"}
+	if generationMode == "video" {
+		for i, frame := range []struct{ key, label string }{
+			{"videoStartFrameNodeId", "首帧"}, {"videoEndFrameNodeId", "尾帧"},
+		} {
+			fields[frame.key] = PatchField{Path: "metadata." + frame.key, Kind: patchKindString, Label: frame.label, Order: 40 + i, MaxRunes: 80, Description: "已连接图片ID；空字符串取消"}
+			readFields = append(readFields, frame.key)
+		}
+	}
 	return Descriptor{
 		Type: nodeType, Version: version, Label: label, DefaultWidth: width, DefaultHeight: height,
 		Purpose: semantics.Purpose, GoodFor: semantics.GoodFor, NotIdealFor: semantics.NotIdealFor,
 		Tradeoffs: semantics.Tradeoffs, Actions: semantics.Actions,
 		InputKind: nodeType, GenerationMode: generationMode, Connection: connection, CanUpdate: true,
-		SummaryFields:  []string{"prompt", "composerContent", "assetTags", "referenceNodeIds"},
-		DetailFields:   []string{"prompt", "composerContent", "assetTags", "referenceNodeIds"},
-		PatchFields:    editableNodeFields("metadata.composerContent", "下一版提示词", "下次生成使用的提示词草稿；不覆盖已提交提示词或媒体结果"),
-		CreateMetadata: generatedMetadata,
+		SummaryFields:  readFields,
+		DetailFields:   readFields,
+		PatchFields:    fields,
+		CreateMetadata: func(prompt string) map[string]any { return generatedMetadata(generationMode, prompt) },
 	}
 }
 
@@ -158,17 +196,22 @@ func generatedMediaSemantics(nodeType string) generatedMediaCapabilitySemantics 
 	}
 }
 
-func editableNodeFields(contentPath, contentLabel, contentDescription string) map[string]PatchField {
+func titleAndPositionPatchFields() map[string]PatchField {
 	fields := map[string]PatchField{
 		"title": {
 			Path: "title", Kind: patchKindString, Label: "节点名称", Order: 10, Description: "节点标题", MaxRunes: maxAgentNodeTitleRunes,
 		},
-		"content": {
-			Path: contentPath, Kind: patchKindString, Label: contentLabel, Order: 20, Description: contentDescription, MaxRunes: maxAgentNodeContentRunes,
-		},
 	}
 	for key, field := range positionPatchFields() {
 		fields[key] = field
+	}
+	return fields
+}
+
+func editableNodeFields(contentPath, contentLabel, contentDescription string) map[string]PatchField {
+	fields := titleAndPositionPatchFields()
+	fields["content"] = PatchField{
+		Path: contentPath, Kind: patchKindString, Label: contentLabel, Order: 20, Description: contentDescription, MaxRunes: maxAgentNodeContentRunes,
 	}
 	return fields
 }
@@ -182,6 +225,20 @@ func positionPatchFields() map[string]PatchField {
 	}
 }
 
-func generatedMetadata(prompt string) map[string]any {
-	return map[string]any{"content": "", "prompt": prompt, "composerContent": prompt, "status": "idle"}
+func generatedMetadata(mode, prompt string) map[string]any {
+	spec := contract.GenerationSpec{
+		Version:           contract.GenerationVersion,
+		Mode:              mode,
+		Prompt:            prompt,
+		Options:           contract.Options{},
+		ReferenceBindings: []contract.ReferenceBinding{},
+		TextInputMode:     "append-sources",
+	}
+	metadata, err := spec.NodeMetadata()
+	if err != nil {
+		panic(err)
+	}
+	metadata["content"] = ""
+	metadata["status"] = "idle"
+	return metadata
 }

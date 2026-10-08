@@ -17,12 +17,14 @@ func (s *Service) ensureFailedProviderAttemptLogged(task model.Task, taskErr err
 	if s == nil || s.repo == nil || strings.TrimSpace(task.ID) == "" || taskErr == nil {
 		return
 	}
-	hasLog, err := s.repo.HasAPICallLogForTask(task.ID)
+	hasVisibleFailure, err := s.repo.HasVisibleFailedAPICallLogForTask(task.ID)
 	if err != nil {
 		log.Printf("provider attempt log lookup failed: task_id=%s error=%v", task.ID, err)
 		return
 	}
-	if hasLog {
+	// 已有一条管理端默认可看到的失败日志时不再补写。只存在成功日志或被列表隐藏的轮询/下载日志时，
+	// 用户看到的失败原因仍然不在请求明细里，需要补一条失败记录。
+	if hasVisibleFailure {
 		return
 	}
 
@@ -83,7 +85,7 @@ func (s *Service) ensureFailedProviderAttemptLogged(task model.Task, taskErr err
 		DurationMs:        now.Sub(startedAt).Milliseconds(),
 		ProviderRequestID: metadata.ProviderRequestID,
 		ErrorCode:         errorCode,
-		Error:             truncateRunes(s.UserFacingErrorMessage(taskErr), 2_000),
+		Error:             truncateRunes(withUserVisibleLogError(taskErr, s.UserFacingErrorMessage(taskErr)), 2_000),
 		StartedAt:         startedAt,
 		CreatedAt:         now,
 	}

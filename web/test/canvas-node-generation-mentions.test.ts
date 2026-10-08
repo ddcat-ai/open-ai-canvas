@@ -28,8 +28,8 @@ function targetNode(): CanvasNodeData {
     };
 }
 
-function connection(fromNodeId: string): CanvasConnection {
-    return { id: `connection-${fromNodeId}`, fromNodeId, toNodeId: "target" };
+function connection(fromNodeId: string, toNodeId = "target"): CanvasConnection {
+    return { id: `connection-${fromNodeId}`, fromNodeId, toNodeId };
 }
 
 describe("canvas node generation position mentions", () => {
@@ -169,6 +169,42 @@ describe("canvas node generation position mentions", () => {
         expect(context.referenceImages.map((image) => image.id)).toEqual(["image-b"]);
         expect(context.referenceAudios.map((audio) => audio.id)).toEqual(["audio-a"]);
         expect(context.prompt).toBe("让 @图片1 配合 @音频1");
+    });
+
+    test("音频节点即使提示词只 @ 了文本，也会带上已连接的参考音频", () => {
+        const target: CanvasNodeData = {
+            id: "audio-target",
+            type: CanvasNodeType.Audio,
+            title: "audio-target",
+            position: { x: 0, y: 0 },
+            width: 220,
+            height: 160,
+            metadata: { composerContent: "参考 @文本1" },
+        };
+        const source = node("audio-source", CanvasNodeType.Audio, "data:audio/mpeg;base64,a");
+        const note = node("note", CanvasNodeType.Text, "旁白：你好");
+        const context = buildNodeGenerationContext(target.id, [source, note, target], [connection(source.id, target.id), connection(note.id, target.id)], "参考 @文本1", []);
+
+        expect(context.referenceAudios.map((audio) => audio.id)).toEqual(["audio-source"]);
+        expect(context.prompt).toContain("旁白：你好");
+    });
+
+    test("只有 storageKey 的已生成音频也可以作为音频节点参考输入", () => {
+        const target: CanvasNodeData = {
+            id: "audio-target",
+            type: CanvasNodeType.Audio,
+            title: "audio-target",
+            position: { x: 0, y: 0 },
+            width: 220,
+            height: 160,
+            metadata: {},
+        };
+        const source = node("audio-source", CanvasNodeType.Audio, "");
+        source.metadata = { storageKey: "resource:audio-source", mimeType: "audio/wav", durationMs: 2400 };
+        const context = buildNodeGenerationContext(target.id, [source, target], [connection(source.id, target.id)], "你好", []);
+
+        expect(context.referenceAudios).toHaveLength(1);
+        expect(context.referenceAudios[0]).toMatchObject({ id: source.id, storageKey: "resource:audio-source", type: "audio/wav" });
     });
 
     test("旧节点 token 只做读取迁移，不再进入生成提示词", () => {

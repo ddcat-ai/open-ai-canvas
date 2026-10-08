@@ -67,9 +67,9 @@ export function agentCanvasActions(toolName: string, detail: unknown, references
 }
 
 export function agentCanvasActionLabel(action: AgentCanvasAction) {
-    const kind = ({ image: "图片", video: "视频", audio: "音频", text: "文本", markdown: "Markdown", script: "分镜" } as Record<string, string>)[action.nodeType] || "";
+    const kind = ({ image: "图片", video: "视频", audio: "音频", text: "文本", markdown: "Markdown", script: "分镜", character: "角色卡" } as Record<string, string>)[action.nodeType] || "";
     if (action.action === "referenced" && action.targetTitle) {
-        const targetKind = ({ image: "图片", video: "视频", audio: "音频", text: "文本", markdown: "Markdown", script: "分镜" } as Record<string, string>)[action.targetNodeType || ""] || "";
+        const targetKind = ({ image: "图片", video: "视频", audio: "音频", text: "文本", markdown: "Markdown", script: "分镜", character: "角色卡" } as Record<string, string>)[action.targetNodeType || ""] || "";
         return `建立引用：${kind}节点《${action.title}》 → ${targetKind}节点《${action.targetTitle}》`;
     }
     // read 的动词必须是"存在式"：canvas_get_state 只读到清单，说成"读取了图片节点"会被读成看过画面。

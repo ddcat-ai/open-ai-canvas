@@ -181,6 +181,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                     model={activeModel}
                                     value={activeModelCost?.capabilityConfig || defaultModelCapabilityConfig(activeProtocol, activeModel)}
                                     protocol={activeProtocol}
+                                    workflows={modelProtocolDefinition(activeProtocol, availableProtocols)?.workflows}
                                     onChange={(capabilityConfig) => updateCost(activeModel, { capabilityConfig })}
                                 />
                             ) : <p className="text-xs text-foreground/50">当前模型类型无需额外配置引用与参数。</p>}

@@ -16,7 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
+	awsv4 "github.com/aws/aws-sdk-go/aws/signer/v4"
 	awss3 "github.com/aws/aws-sdk-go/service/s3"
 )
 
@@ -137,29 +139,33 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 }
 
 func SignedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
-	return signedS3ObjectURL(setting, objectKey, expiresAt, "")
+	return signedS3ObjectURL(setting, objectKey, objectURLSigning{ExpiresAt: expiresAt})
 }
 
-func SignedS3ObjectDownloadURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
-	return signedS3ObjectURL(setting, objectKey, expiresAt, disposition)
-}
-
-func signedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time, disposition string) (string, error) {
+func signedS3ObjectURL(setting Settings, objectKey string, signing objectURLSigning) (string, error) {
 	setting = NormalizeSettings(setting)
 	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
 		return "", err
 	}
-	duration := time.Until(expiresAt)
-	if duration <= 0 {
+	if !signing.ExpiresAt.After(time.Now()) {
 		return "", errors.New("S3 签名有效期必须晚于当前时间")
 	}
 	input := &awss3.GetObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
-	if disposition != "" {
-		input.ResponseContentDisposition = aws.String(disposition)
+	if signing.CacheControl != "" {
+		input.ResponseCacheControl = aws.String(signing.CacheControl)
+	}
+	if signing.ContentDisposition != "" {
+		input.ResponseContentDisposition = aws.String(signing.ContentDisposition)
 	}
 	req, _ := client.GetObjectRequest(input)
-	value, err := req.Presign(duration)
+	signedAt := signingTime(signing.SignedAt)
+	// SDK 默认以 time.Now 作为 X-Amz-Date；替换为对齐后的签名时间，保证同一窗口内地址稳定。
+	// DisableURIPathEscaping 与 SDK 为 S3 注册的默认签名器保持一致。
+	req.Handlers.Sign.Swap(awsv4.SignRequestHandler.Name, request.NamedHandler{Name: awsv4.SignRequestHandler.Name, Fn: func(r *request.Request) {
+		awsv4.SignSDKRequestWithCurrentTime(r, func() time.Time { return signedAt }, func(s *awsv4.Signer) { s.DisableURIPathEscaping = true })
+	}})
+	value, err := req.Presign(signing.ExpiresAt.Sub(signedAt))
 	if err != nil {
 		return "", fmt.Errorf("S3 下载地址签名失败：%w", err)
 	}

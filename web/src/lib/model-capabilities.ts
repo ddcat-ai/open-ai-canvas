@@ -1,6 +1,8 @@
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import type { ImageResolutionOption, ImageResolutionTier } from "@/lib/image-resolution-tiers";
+import { imagePresetForRatio } from "./image-size-presets";
 import { type WorkflowVideoFieldLike, workflowImageCapabilityConfig, workflowVideoCapabilityConfig } from "./model-capabilities-workflow";
+import { resolveWorkflowVideoScreenSpec } from "./video-screen-specs";
 
 export { workflowFieldChoiceValues, workflowFieldConfigurationError, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldNumberBounds, workflowFieldPresetOptions, workflowFieldRandomKey, workflowFieldRole, workflowFieldSafeToOverride, workflowFieldSource, workflowFieldSubmissionValue, workflowFieldValueError, workflowImageCapabilityConfig, workflowOutputSizeValue, workflowParameterFields, workflowVideoCapabilityConfig, workflowVideoDefaultSize, workflowVideoFieldsFromJson, type WorkflowFieldNumberBounds, type WorkflowVideoFieldLike } from "./model-capabilities-workflow";
 
@@ -91,11 +93,14 @@ export type VideoCapabilityConfig = {
     defaultRatio: string;
     resolutions: string[];
     defaultResolution: string;
+    fixedScreenSpec?: VideoScreenSpecConfig;
     generateAudio: { supported: boolean; default: boolean };
     watermark: { supported: boolean; default: boolean };
     operations: string[];
     defaultOperation: string;
 };
+
+export type VideoScreenSpecConfig = Pick<VideoCapabilityConfig, "ratios" | "defaultRatio" | "resolutions" | "defaultResolution">;
 
 // 旧版本的“允许自定义”可能只保存了 `*`，前台需要用这组标准值恢复可选项。
 export const STANDARD_IMAGE_SIZE_VALUES = [
@@ -148,7 +153,7 @@ export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): M
               }
             : undefined,
         video: config.video
-            ? {
+            ? resolveWorkflowVideoScreenSpec({
                   ...config.video,
                   ratios: normalizeCapabilityStrings(config.video.ratios),
                   defaultRatio: normalizeCapabilityString(config.video.defaultRatio),
@@ -156,7 +161,7 @@ export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): M
                   defaultResolution: normalizeCapabilityString(config.video.defaultResolution),
                   operations: normalizeCapabilityStrings(config.video.operations),
                   defaultOperation: normalizeCapabilityString(config.video.defaultOperation),
-              }
+              })
             : undefined,
     };
 }
@@ -215,6 +220,37 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         outputFormat: { supported: true },
         maxOutputs: 15,
     };
+    if (protocol === "kacang-midjourney-special" || protocol === "kacang-midjourney-v7" || protocol === "kacang-midjourney") {
+        const stable = protocol === "kacang-midjourney";
+        const extendedRatios = stable || protocol === "kacang-midjourney-v7";
+        const ratios = ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "21:9", ...(extendedRatios ? ["9:21"] : [])];
+        // 卡藏未声明分辨率档。1K 预设只用于宿主比例选择，插件不发送 resolution。
+        image.references = { ...image.references, maxImages: stable ? 5 : 1, maskSupported: false };
+        image.size = { parameter: "aspect_ratio", values: [...(extendedRatios ? ["auto"] : []), ...ratios], default: stable ? "9:16" : "16:9", allowCustom: false, presets: ratios.map((ratio) => ({ ...imagePresetForRatio("1k", ratio), ratio })) };
+        // 稳定版的数值 quality 通过插件命名空间设置，避免与宿主分辨率档混用。
+        image.quality = { supported: false, values: [], default: "auto" };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: false };
+        image.outputFormat = { supported: false };
+        image.maxOutputs = 1;
+        return image;
+    }
+    if (protocol === "cangyuan-midjourney-v7" || protocol === "cangyuan-midjourney-v82") {
+        const v7 = protocol === "cangyuan-midjourney-v7";
+        const tier = !v7 && model.trim().toLowerCase().replace(/^models\//, "") === "midjourney-2k" ? "2k" : "1k";
+        const ratios = v7
+            ? ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "21:9"]
+            : ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "16:9", "9:16", "1:2", "6:11", "5:6", "2:1", "11:6", "6:5"];
+        image.references = { ...image.references, promptMaxChars: v7 ? 4000 : 32000, maxImages: v7 ? 5 : 1, maskSupported: !v7 };
+        image.size = { parameter: "aspect_ratio", values: ["auto", ...ratios], default: "auto", allowCustom: false, presets: ratios.map((ratio) => imagePresetForRatio(tier, ratio)) };
+        image.quality = { supported: false, values: [], default: "auto" };
+        image.transparentBackground = { supported: false, default: false };
+        image.responseFormat = { supported: false };
+        image.outputFormat = { supported: false };
+        // n=1 是一次提交；供应商返回的四张图片仍全部消费。
+        image.maxOutputs = 1;
+        return image;
+    }
     if (protocol === "grok-image") {
         image.references.maxImages = 1;
         image.references.maskSupported = false;

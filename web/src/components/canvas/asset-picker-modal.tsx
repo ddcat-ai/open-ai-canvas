@@ -1,5 +1,8 @@
 import { useMemo } from "react";
 
+import { projectCharacterToInsertPayload } from "@/components/canvas/canvas-project-asset-modal";
+import { getCharacter } from "@/services/api/projects";
+
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { ASSET_CATEGORY_LABELS, normalizeAssetCategory } from "@/lib/asset-category";
@@ -62,6 +65,8 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
     return (
         <AssetLibraryPickerModal
             remoteLibrary
+            allowCharacters
+            acceptRemoteItems
             open={open}
             mediaKinds={["image", "video", "audio", "text"]}
             items={items}
@@ -70,13 +75,28 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
             footerNote={externalAssetSources.error || undefined}
             multiple={multiple}
             confirmLabel={(count) => `插入已选素材${count ? `（${count}）` : ""}`}
-            emptyDescription="先在素材库中添加图片、视频、音频或文本。"
+            emptyDescription="先在素材库中添加图片、视频、音频、文本或角色卡。"
             onClose={onClose}
-            onConfirm={async (ids) => {
-                await onInsert(assetPickerItemsToInsertPayloads(ids, items));
+            onConfirm={async (ids, pickedItems) => {
+                await onInsert(await assetPickerSelectionToInsertPayloads(ids, pickedItems || items));
                 onClose();
             }}
         />
+    );
+}
+
+/** 选择结果转画布插入：角色卡需要读一次当前版本（形象、声音、设定），其它素材同步转换。 */
+export async function assetPickerSelectionToInsertPayloads(ids: string[], items: AssetLibraryPickerItem[]): Promise<InsertAssetPayload[]> {
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    return Promise.all(
+        ids.map(async (id) => {
+            const item = itemsById.get(id);
+            if (item?.asset?.kind === "entity") {
+                const detail = await getCharacter(item.asset.id);
+                return projectCharacterToInsertPayload({ ...detail.asset, character: detail.character });
+            }
+            return assetPickerItemsToInsertPayloads([id], items)[0];
+        }),
     );
 }
 

@@ -91,7 +91,7 @@ const BUILTIN_NODE_TRAITS = {
         icon: <Music2 />,
         minSize: DEFAULT_MIN_SIZE,
         showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "audio" : null),
+        resourceKind: (node: CanvasNodeData) => (node.metadata?.content || node.metadata?.storageKey ? "audio" : null),
         generationMode: () => "audio",
         inputKind: "audio",
     },

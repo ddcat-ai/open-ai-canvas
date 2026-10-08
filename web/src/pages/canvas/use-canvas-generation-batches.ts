@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { generationBatchStatus, isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { buildGenerationConfig, createGenerationRetryContext, generationTaskMetadata, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { unchangedModeratedPrompt } from "@/lib/generation-error";
+import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { listGenerationTasks } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -207,7 +208,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                     updateBatch(batch.sourceNodeId, batch.id, (current) => withUpdatedItem(current, item.id, { status: "failed", errorDetails: "生成模型未配置，请完成配置后重试" }));
                     continue;
                 }
-                const prompt = (node.metadata?.composerContent || node.metadata?.prompt || "").trim();
+                const prompt = nodeGenerationPrompt(node).trim();
                 if (!prompt) {
                     updateBatch(batch.sourceNodeId, batch.id, (current) => withUpdatedItem(current, item.id, { status: "failed", errorDetails: "生成提示词为空" }));
                     continue;
@@ -242,7 +243,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
             const nodeById = new Map(nodesRef.current.map((node) => [node.id, node]));
             const blockedItems = failedItems.filter((item) => {
                 const node = nodeById.get(item.nodeId);
-                return unchangedModeratedPrompt(node?.metadata, node?.metadata?.composerContent || node?.metadata?.prompt || "");
+                return unchangedModeratedPrompt(node?.metadata, node ? nodeGenerationPrompt(node) : "");
             });
             const retryableItems = failedItems.filter((item) => !blockedItems.includes(item));
             if (blockedItems.length) message.warning(`${blockedItems.length} 个镜头未通过内容审核，请先修改提示词`);

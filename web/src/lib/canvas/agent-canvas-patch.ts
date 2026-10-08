@@ -26,14 +26,14 @@ function equal(a: unknown, b: unknown): boolean {
 
 // Three-way merge: untouched local fields (e.g. a drag or prompt edit) survive.
 // A concurrently changed field or a deleted node is a conflict, never an overwrite.
-function mergeValue(current: unknown, before: unknown, after: unknown): unknown {
+export function mergeThreeWayValue(current: unknown, before: unknown, after: unknown): unknown {
     if (equal(before, after) || equal(current, after)) return current;
     if (equal(current, before)) return after;
     if (record(current) && record(before) && record(after)) {
         const next = { ...current };
         for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
             if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("无效的画布增量字段");
-            const value = mergeValue(current[key], before[key], after[key]);
+            const value = mergeThreeWayValue(current[key], before[key], after[key]);
             if (value === undefined) delete next[key];
             else next[key] = value;
         }
@@ -48,7 +48,7 @@ function mergeItems<T extends { id: string }>(items: T[], changes: Change<T>[]):
     for (const { before, after } of changes) {
         const id = after?.id || before?.id;
         if (!id || (before && after && before.id !== after.id)) throw new Error("无效的画布增量节点");
-        const merged = mergeValue(next.get(id) ?? null, before, after) as T | null;
+        const merged = mergeThreeWayValue(next.get(id) ?? null, before, after) as T | null;
         if (merged === null) next.delete(id);
         else next.set(id, merged);
     }
@@ -83,14 +83,15 @@ export function applyAgentCanvasPatch(project: CanvasProject, patch: AgentCanvas
     return { ...project, nodes, connections, updatedAt: patch.updatedAt || project.updatedAt };
 }
 
-export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: CanvasProject, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
+export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: CanvasProject, nodes: CanvasNodeData[], connections: CanvasConnection[], editorProject?: CanvasProject) {
     const changes = <T extends { id: string }>(before: T[], after: T[]): Change<T>[] => {
         const byId = new Map(before.map((item) => [item.id, item]));
         const afterIds = new Set(after.map((item) => item.id));
         return [...after.filter((item) => !equal(item, byId.get(item.id))).map((item) => ({ before: byId.get(item.id) ?? null, after: item })), ...before.filter((item) => !afterIds.has(item.id)).map((item) => ({ before: item, after: null }))];
     };
+    const editorState = editorProject || { ...previous, nodes, connections };
     const projected = applyAgentCanvasPatch(
-        { ...previous, nodes, connections },
+        { ...previous, nodes: editorState.nodes, connections: editorState.connections },
         {
             canvasId: previous.id,
             updatedAt: incoming.updatedAt,
@@ -101,12 +102,12 @@ export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: Canvas
     const merged = { ...projected } as CanvasProject & Record<string, unknown>;
     const before = previous as CanvasProject & Record<string, unknown>;
     const after = incoming as CanvasProject & Record<string, unknown>;
-    const editor = { ...previous, nodes, connections } as CanvasProject & Record<string, unknown>;
+    const editor = editorState as CanvasProject & Record<string, unknown>;
     for (const key of new Set([...Object.keys(before), ...Object.keys(after), ...Object.keys(editor)])) {
         if (["id", "revision", "updatedAt", "remoteContentHash", "viewport", "nodes", "connections"].includes(key)) continue;
-        const value = mergeValue(editor[key], before[key], after[key]);
+        const value = mergeThreeWayValue(editor[key], before[key], after[key]);
         if (value === undefined) delete merged[key];
         else merged[key] = value;
     }
-    return { ...merged, revision: incoming.revision, updatedAt: incoming.updatedAt, viewport: editor.viewport } as CanvasProject;
+    return { ...merged, revision: incoming.revision, updatedAt: incoming.updatedAt, viewport: editorState.viewport } as CanvasProject;
 }

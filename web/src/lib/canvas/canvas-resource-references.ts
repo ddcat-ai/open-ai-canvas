@@ -1,6 +1,7 @@
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { normalizeCharacterImageMentions } from "@/lib/canvas/canvas-character-reference";
 import { canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
+import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { writeCanvasNodePrompt } from "@/lib/canvas/canvas-node-prompt";
 import { getNodeResourceKind } from "@/lib/canvas/node-registry";
 import { seedanceReferenceLabel } from "@/lib/seedance-video";
@@ -264,7 +265,7 @@ export function applyCanvasConnectionPromptSync(previousNodes: CanvasNodeData[],
     const nextMap = buildCanvasNodeMentionReferenceMap(nextNodes, nextConnections, nextNodes);
     let changed = false;
     const mapped = nextNodes.map((node) => {
-        const previousPrompt = node.metadata?.composerContent ?? node.metadata?.prompt ?? "";
+        const previousPrompt = nodeGenerationPrompt(node);
         const nextPrompt = rewriteCanvasPromptAfterReferenceChange(previousPrompt, previousMap.get(node.id) || [], nextMap.get(node.id) || []);
         if (nextPrompt === previousPrompt) return node;
         changed = true;
@@ -387,7 +388,7 @@ export function buildCanvasAgentMentionReferences(nodes: CanvasNodeData[]): Canv
             previewStorageKey: node.type === CanvasNodeType.Video ? node.metadata?.videoPreview?.storageKey : undefined,
             drawingId: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingId : undefined,
             drawingRevision: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingRevision : undefined,
-            text: node.metadata?.content || node.metadata?.composerContent || node.metadata?.prompt || node.title,
+            text: node.metadata?.content || nodeGenerationPrompt(node) || node.title,
             active: true,
             sourceType: node.type,
             mentionToken: canvasNodeMentionToken(node.id),

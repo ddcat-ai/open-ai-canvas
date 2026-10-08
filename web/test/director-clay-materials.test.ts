@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Line, LineBasicMaterial, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Scene, ShaderMaterial, type Material } from "three";
 
-import { applyClaySceneMaterials } from "../src/lib/canvas/director/director-clay-materials";
+import { applyClaySceneMaterials } from "../src/lib/canvas/previs/previs-clay-materials";
 
 const geometry = new PlaneGeometry(1, 1);
 
-describe("导演台白膜材质切换", () => {
+describe("预演台白膜材质切换", () => {
     test("标准材质 mesh 换成 clay，恢复后还原为原材质", () => {
         const scene = new Scene();
         const original = new MeshStandardMaterial({ color: "#ff0000" });
@@ -29,11 +29,11 @@ describe("导演台白膜材质切换", () => {
         expect(grid.material).toBe(shader);
     });
 
-    test("directorActor mesh 与非 Mesh 对象不受影响", () => {
+    test("previsActor mesh 与非 Mesh 对象不受影响", () => {
         const scene = new Scene();
         const actorMaterial = new MeshBasicMaterial();
         const actor = new Mesh(geometry, actorMaterial);
-        actor.userData.directorActor = true;
+        actor.userData.previsActor = true;
         const line = new Line(geometry, new LineBasicMaterial());
         scene.add(actor, line);
         const restore = applyClaySceneMaterials(scene);

@@ -18,6 +18,20 @@ type CreateProjectCharacterRequest struct {
 	Definition map[string]any `json:"definition"`
 }
 
+type CreateCharacterRequest struct {
+	Name            string         `json:"name"`
+	Definition      map[string]any `json:"definition"`
+	ImageResourceID string         `json:"imageResourceId"`
+	AudioResourceID string         `json:"audioResourceId"`
+	VoiceName       string         `json:"voiceName"`
+	Instructions    string         `json:"instructions"`
+}
+
+type CharacterAssetSummary struct {
+	Asset     ProjectAssetSummary  `json:"asset"`
+	Character CharacterCardSummary `json:"character"`
+}
+
 type UpdateProjectCharacterRequest struct {
 	Name       string         `json:"name"`
 	Definition map[string]any `json:"definition"`
@@ -117,6 +131,164 @@ func (s *Service) ListVoiceProfiles(userID string) ([]VoiceProfileSummary, error
 	return result, nil
 }
 
+type CharacterListPage struct {
+	Characters []CharacterAssetSummary `json:"characters"`
+	Page       int                     `json:"page"`
+	PageSize   int                     `json:"pageSize"`
+	Total      int64                   `json:"total"`
+	HasMore    bool                    `json:"hasMore"`
+}
+
+func (s *Service) ListCharacters(userID string, query string, page int, pageSize int, ids []string) (CharacterListPage, error) {
+	var assets []model.Asset
+	var total int64
+	var err error
+	if len(ids) > 0 {
+		assets, err = s.repo.UserCharacterAssetsByIDs(userID, ids)
+		total = int64(len(assets))
+		page, pageSize = 1, len(assets)
+	} else {
+		assets, total, err = s.repo.UserCharacterAssetsPage(userID, query, page, pageSize)
+		pageSize = normalizeCharacterPageSize(pageSize)
+		if page < 1 {
+			page = 1
+		}
+	}
+	if err != nil {
+		return CharacterListPage{}, err
+	}
+	result := make([]CharacterAssetSummary, 0, len(assets))
+	for index := range assets {
+		detail, detailErr := s.characterAssetDetail(userID, &assets[index])
+		if detailErr != nil {
+			return CharacterListPage{}, detailErr
+		}
+		result = append(result, detail)
+	}
+	if pageSize < 1 {
+		pageSize = len(result)
+	}
+	return CharacterListPage{Characters: result, Page: page, PageSize: pageSize, Total: total, HasMore: int64(page*pageSize) < total}, nil
+}
+
+func normalizeCharacterPageSize(pageSize int) int {
+	if pageSize < 1 || pageSize > 48 {
+		return 12
+	}
+	return pageSize
+}
+
+func (s *Service) Character(userID string, assetID string) (CharacterAssetSummary, error) {
+	asset, err := s.repo.UserCharacterAsset(userID, strings.TrimSpace(assetID))
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	return s.characterAssetDetail(userID, asset)
+}
+
+func (s *Service) CreateCharacter(userID string, req CreateCharacterRequest) (CharacterAssetSummary, error) {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return CharacterAssetSummary{}, BadAuthRequest("角色名称不能为空")
+	}
+	definition, err := normalizedCharacterDefinition(req.Definition)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	now := time.Now()
+	assetID, versionID := newID(), newID()
+	payload, err := characterAssetPayload(assetID, versionID, name, definition, now, now)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	asset := model.Asset{ID: assetID, UserID: userID, Kind: "entity", Category: model.AssetCategoryCharacter, Status: model.AssetVersionStatusConfirmed, PrimaryVersionID: versionID, Title: name, PayloadJSON: payload, CreatedAt: now, UpdatedAt: now}
+	version := model.AssetVersion{ID: versionID, AssetID: assetID, Version: 1, Status: model.AssetVersionStatusConfirmed, DefinitionJSON: string(definition), CreatedAt: now, UpdatedAt: now}
+	representations, err := s.characterRepresentationsForResources(userID, newID(), req.ImageResourceID, now)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	voice, err := s.characterVoiceForResource(userID, req.AudioResourceID, req.VoiceName, req.Instructions, now)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	// 形象与声音绑定挂在首个版本上；漏设版本 ID 会让新卡读回来显示"形象缺失 / 声音未绑定"。
+	for index := range representations {
+		representations[index].AssetVersionID = versionID
+	}
+	if voice != nil {
+		voice.AssetVersionID = versionID
+	}
+	if err := s.repo.CreateUserCharacter(&asset, &version, representations, voice); err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	return s.characterAssetDetail(userID, &asset)
+}
+
+func (s *Service) UpdateCharacter(userID string, assetID string, req UpdateProjectCharacterRequest) (CharacterAssetSummary, error) {
+	asset, err := s.repo.UserCharacterAsset(userID, strings.TrimSpace(assetID))
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return CharacterAssetSummary{}, BadAuthRequest("角色名称不能为空")
+	}
+	definition, err := normalizedCharacterDefinition(req.Definition)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	if _, err := s.createNextCharacterVersion("", asset, name, string(definition), nil, nil, false); err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	return s.Character(userID, asset.ID)
+}
+
+func (s *Service) ReplaceCharacterRepresentations(userID string, assetID string, req ReplaceCharacterRepresentationsRequest) (CharacterAssetSummary, error) {
+	asset, err := s.repo.UserCharacterAsset(userID, strings.TrimSpace(assetID))
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	representations, err := s.characterRepresentationsForInputs(userID, req.Representations, newID(), time.Now())
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	if _, err := s.createNextCharacterVersion("", asset, asset.Title, "", representations, nil, false); err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	return s.Character(userID, asset.ID)
+}
+
+func (s *Service) BindCharacterVoice(userID string, assetID string, req BindCharacterVoiceRequest) (CharacterAssetSummary, error) {
+	asset, err := s.repo.UserCharacterAsset(userID, strings.TrimSpace(assetID))
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	voice, err := s.characterVoiceForResource(userID, req.SampleResourceID, req.VoiceName, req.Instructions, time.Now())
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	if voice == nil {
+		voice, err = s.characterVoiceForProfile(userID, req.VoiceProfileID, req.Instructions, time.Now())
+		if err != nil {
+			return CharacterAssetSummary{}, err
+		}
+	}
+	if _, err := s.createNextCharacterVersion("", asset, asset.Title, "", nil, voice, false); err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	return s.Character(userID, asset.ID)
+}
+
+func (s *Service) UnbindCharacterVoice(userID string, assetID string) (CharacterAssetSummary, error) {
+	asset, err := s.repo.UserCharacterAsset(userID, strings.TrimSpace(assetID))
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	if _, err := s.createNextCharacterVersion("", asset, asset.Title, "", nil, nil, true); err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	return s.Character(userID, asset.ID)
+}
 func (s *Service) CreateProjectCharacter(userID string, projectID string, req CreateProjectCharacterRequest) (ProjectCharacterDetail, error) {
 	if _, err := s.repo.ProjectForUser(userID, projectID); err != nil {
 		return ProjectCharacterDetail{}, err
@@ -350,6 +522,11 @@ func (s *Service) BindProjectCharacterVoice(userID string, projectID string, ass
 		}
 		var profileErr error
 		profile, profileErr = s.repo.VoiceProfileBySampleResource(userID, sampleResourceID)
+		if profileErr == nil {
+			if err := s.renameSampleVoiceProfile(userID, profile, req.VoiceName); err != nil {
+				return ProjectCharacterDetail{}, err
+			}
+		}
 		if profileErr != nil {
 			if !errors.Is(profileErr, gorm.ErrRecordNotFound) {
 				return ProjectCharacterDetail{}, profileErr
@@ -549,6 +726,119 @@ func (s *Service) characterCardVersion(userID string, version *model.AssetVersio
 	return CharacterCardSummary{VersionID: version.ID, Version: version.Version, Definition: definition, Representations: representations, Voice: voice, VisualStatus: visualStatus, VoiceStatus: voiceStatus}, nil
 }
 
+func (s *Service) characterAssetDetail(userID string, asset *model.Asset) (CharacterAssetSummary, error) {
+	if asset == nil || asset.Category != model.AssetCategoryCharacter || asset.Kind != "entity" {
+		return CharacterAssetSummary{}, BadAuthRequest("角色资产不可用")
+	}
+	versions, err := s.repo.AssetVersions(asset.ID)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	card, err := s.characterCard(userID, asset)
+	if err != nil {
+		return CharacterAssetSummary{}, err
+	}
+	storageKey, previewText, source, durationMs := projectAssetPreview(asset.PayloadJSON)
+	return CharacterAssetSummary{Asset: ProjectAssetSummary{ID: asset.ID, Title: asset.Title, MediaType: asset.Kind, Category: asset.Category, Status: asset.Status, PrimaryVersionID: asset.PrimaryVersionID, VersionCount: len(versions), Usages: []string{}, StorageKey: storageKey, PreviewText: previewText, DurationMs: durationMs, UpdatedAt: asset.UpdatedAt, Source: source, Character: &card}, Character: card}, nil
+}
+
+func (s *Service) characterRepresentationsForResources(userID, taskID, imageResourceID string, now time.Time) ([]model.AssetRepresentation, error) {
+	imageResourceID = strings.TrimSpace(imageResourceID)
+	if imageResourceID == "" {
+		return nil, nil
+	}
+	resource, err := s.repo.ResourceForUser(userID, imageResourceID)
+	if err != nil || resource == nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+		return nil, BadAuthRequest("角色形象资源不可用")
+	}
+	metadata, _ := json.Marshal(map[string]any{"source": "character_image"})
+	return []model.AssetRepresentation{
+		{ID: newID(), TaskID: taskID, ResourceID: imageResourceID, MediaType: "image", Role: "turnaround_sheet", MetadataJSON: string(metadata), CreatedAt: now},
+		{ID: newID(), TaskID: taskID, ResourceID: imageResourceID, MediaType: "image", Role: "primary", MetadataJSON: string(metadata), CreatedAt: now},
+	}, nil
+}
+
+func (s *Service) characterRepresentationsForInputs(userID string, inputs []CharacterRepresentationInput, taskID string, now time.Time) ([]model.AssetRepresentation, error) {
+	if len(inputs) == 0 || len(inputs) > 8 {
+		return nil, BadAuthRequest("角色形象数量必须在 1 到 8 之间")
+	}
+	roles := make(map[string]struct{}, len(inputs))
+	result := make([]model.AssetRepresentation, 0, len(inputs))
+	for _, input := range inputs {
+		role := strings.TrimSpace(input.Role)
+		if !validCharacterRepresentationRole(role) {
+			return nil, BadAuthRequest("不支持的角色形象视角")
+		}
+		if _, exists := roles[role]; exists {
+			return nil, BadAuthRequest("同一角色形象视角不能重复")
+		}
+		roles[role] = struct{}{}
+		resourceID := strings.TrimSpace(input.ResourceID)
+		resource, err := s.repo.ResourceForUser(userID, resourceID)
+		if err != nil || resource == nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+			return nil, BadAuthRequest("角色形象资源不可用")
+		}
+		metadata, marshalErr := json.Marshal(input.Metadata)
+		if marshalErr != nil {
+			return nil, BadAuthRequest("角色形象元数据格式无效")
+		}
+		result = append(result, model.AssetRepresentation{ID: newID(), TaskID: taskID, ResourceID: resourceID, MediaType: "image", Role: role, MetadataJSON: string(metadata), CreatedAt: now})
+	}
+	return result, nil
+}
+
+func (s *Service) characterVoiceForResource(userID, resourceID, voiceName, instructions string, now time.Time) (*model.CharacterVoiceBinding, error) {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return nil, nil
+	}
+	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	if err != nil || resource == nil || resource.Kind != "audio" || resource.Status != model.ResourceStatusReady || !isSupportedVoiceSampleMimeType(resource.MimeType) {
+		return nil, BadAuthRequest("请选择已上传完成的支持格式音频：MP3、WAV、M4A/AAC、FLAC、OGG/Opus 或 WebM")
+	}
+	profile, profileErr := s.repo.VoiceProfileBySampleResource(userID, resourceID)
+	if profileErr == nil {
+		if err := s.renameSampleVoiceProfile(userID, profile, voiceName); err != nil {
+			return nil, err
+		}
+	}
+	if profileErr != nil {
+		if !errors.Is(profileErr, gorm.ErrRecordNotFound) {
+			return nil, profileErr
+		}
+		voiceName = strings.TrimSpace(voiceName)
+		if voiceName == "" {
+			voiceName = "上传声音 · " + resourceID[:min(8, len(resourceID))]
+		}
+		profile = &model.VoiceProfile{ID: newID(), UserID: userID, Name: voiceName, Provider: "user_upload", VoiceKey: "sample:" + resourceID, Language: "按样本使用", Timbre: "用户上传样本", SampleResourceID: resourceID, CompatibleModelsJSON: "[]", Status: "active", CreatedAt: now, UpdatedAt: now}
+		if err := s.repo.CreateVoiceProfile(profile); err != nil {
+			return nil, err
+		}
+	}
+	return &model.CharacterVoiceBinding{ID: newID(), VoiceProfileID: profile.ID, Instructions: strings.TrimSpace(instructions), CreatedAt: now, UpdatedAt: now}, nil
+}
+
+// renameSampleVoiceProfile 让同一段样本复用的声音档案跟随用户最新给的名字
+// （例如画布上把「生成音频」改名为「杨过·声音」后重新绑定）。
+func (s *Service) renameSampleVoiceProfile(userID string, profile *model.VoiceProfile, voiceName string) error {
+	voiceName = truncateRunes(strings.TrimSpace(voiceName), 160)
+	if profile == nil || profile.Provider != "user_upload" || voiceName == "" || voiceName == profile.Name {
+		return nil
+	}
+	if err := s.repo.RenameVoiceProfile(userID, profile.ID, voiceName); err != nil {
+		return err
+	}
+	profile.Name = voiceName
+	return nil
+}
+
+func (s *Service) characterVoiceForProfile(userID, profileID, instructions string, now time.Time) (*model.CharacterVoiceBinding, error) {
+	profile, err := s.repo.VoiceProfileForUser(userID, strings.TrimSpace(profileID))
+	if err != nil || profile == nil || profile.Status != "active" {
+		return nil, BadAuthRequest("选择的声音素材不可用")
+	}
+	return &model.CharacterVoiceBinding{ID: newID(), VoiceProfileID: profile.ID, Instructions: strings.TrimSpace(instructions), CreatedAt: now, UpdatedAt: now}, nil
+}
 func normalizedCharacterDefinition(value map[string]any) (json.RawMessage, error) {
 	if value == nil {
 		value = map[string]any{}

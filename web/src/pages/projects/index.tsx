@@ -15,6 +15,7 @@ import { resourceFileUrl } from "@/services/api/resources";
 import { ModelPicker } from "@/components/model-picker";
 import { createStyleProfileSnapshot, parseStyleProfile, serializeStyleProfile } from "@/lib/canvas/style-profile";
 import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-workbench";
+import { shouldRetryProjectNameConflict } from "@/lib/project-name-conflict";
 import { settingsPath } from "@/lib/settings-navigation";
 import { PromptTemplateOperation, parseGeneratedStory, promptTemplateTaskPlaceholder, shortDramaOutlineVariables } from "@/lib/prompts";
 import { runBackendGenerationTask } from "@/services/api/generation-task";
@@ -339,9 +340,7 @@ async function createUniqueProjectName(story: string, selectedStyle: CanvasStyle
         try {
             return await createProject(buildInput(attempt === 0 ? base : `${base}（${attempt + 1}）`));
         } catch (error) {
-            const message = error instanceof Error ? error.message : "";
-            const uniqueConflict = message.includes("UNIQUE") || message.includes("projects.user_id") || message.includes("projects.name");
-            if (!uniqueConflict || attempt >= 5) throw error;
+            if (!shouldRetryProjectNameConflict(error, attempt)) throw error;
             attempt += 1;
         }
     }

@@ -1,5 +1,6 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
@@ -67,6 +68,25 @@ export function changeChannelModelCapability(values: ChannelModelFormValues, pro
     };
 }
 
+export function updateChannelModelUpstreamCapabilities(values: ChannelModelFormValues): ChannelModelFormValues {
+    if (values.capability !== "image" || values.protocol !== "cangyuan-midjourney-v82") return values;
+    const defaults = defaultModelCapabilityConfig(values.protocol, values.providerModelKey?.trim() || values.modelKey.trim());
+    const image = values.capabilityConfig?.image;
+    if (!image) return { ...values, capabilityConfig: defaults };
+    if (image.size.parameter !== "aspect_ratio") return values;
+    const tier = defaults.image!.size.presets![0].tier;
+    const presets = imageSizePresets(image);
+    if (presets.length && presets.every((preset) => preset.tier === tier)) return values;
+    const ratios = Array.from(new Set(presets.map((preset) => preset.ratio)));
+    return {
+        ...values,
+        capabilityConfig: {
+            ...values.capabilityConfig!,
+            image: { ...image, size: { ...image.size, presets: ratios.length ? ratios.map((ratio) => imagePresetForRatio(tier, ratio)) : defaults.image!.size.presets } },
+        },
+    };
+}
+
 export function validateChannelModelProtocol(capability: string, protocol: string | undefined, protocols: ModelProtocolDefinition[]) {
     if (!protocols.some((p) => p.value === protocol && p.capability === capability && p.enabled !== false)) {
         throw new Error("请选择当前能力下已启用的请求协议");
@@ -88,7 +108,7 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
             throw new Error(`价格档 ${index + 1}：${text}`);
         };
         if (!["fixed_request", "per_second", "token"].includes(tier.billingMode)) fail("请选择计费方式");
-        if (tier.billingMode === "per_second" && capability !== "video") fail("按秒计费仅支持视频，请重新选择计费方式并核对价格");
+        if (tier.billingMode === "per_second" && capability !== "video" && capability !== "audio") fail("按秒计费仅支持视频或音频，请重新选择计费方式并核对价格");
         if (tier.billingMode === "token" && !modelProtocolSupportsTokenBilling(capability, protocol)) fail("当前模型能力不支持 Token 计费，请重新选择计费方式并核对价格");
         if (tier.matchMode === "advanced") {
             if (tier.operation && tier.operation !== "*" && !operations[capability]?.includes(tier.operation)) fail("生成方式与模型能力不匹配");

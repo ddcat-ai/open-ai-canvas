@@ -20,6 +20,13 @@ export function agentErrorPresentation(cause: unknown, fallback = "Agent 执行�
     return { title: fallback, text: text || fallback };
 }
 
+export function agentErrorContent(text: string, title: string) {
+    // 只拆分服务端公开提示中的诊断尾注，不据此推断错误类型或改变业务语义。
+    const diagnostic = text.trim().match(/^([\s\S]*?)；如反复出现，请把诊断号\s+([a-zA-Z0-9:_-]+)\s+反馈给管理员[。.]?$/);
+    const description = (diagnostic?.[1] ?? text).trim();
+    return { description: description === title.trim() ? "" : description, diagnosticId: diagnostic?.[2] };
+}
+
 export function agentSubmissionErrorTitle(cause: unknown, accepted: boolean) {
     if (accepted) return "运行已接收，但本地提交记录清理失败";
     const status = cause instanceof ApiError ? cause.status : undefined;

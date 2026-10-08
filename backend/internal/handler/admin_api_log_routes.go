@@ -68,7 +68,57 @@ func registerAdminAPILogRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		result, err := svc.AdminQueryFailedVideoTask(c.Request.Context(), user, c.Param("id"))
+		var req struct {
+			ProviderRequestID string `json:"providerRequestId"`
+		}
+		if c.Request.ContentLength != 0 {
+			if err := c.ShouldBindJSON(&req); err != nil {
+				fail(c, http.StatusBadRequest, err)
+				return
+			}
+		}
+		result, err := svc.AdminQueryFailedVideoTask(c.Request.Context(), user, c.Param("id"), req.ProviderRequestID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.POST("/admin/api-logs/:id/recover-url", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			URL               string `json:"url"`
+			ProviderRequestID string `json:"providerRequestId"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminRecoverVideoByURL(c.Request.Context(), user, c.Param("id"), req.URL, req.ProviderRequestID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.POST("/admin/api-logs/recover-batch", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			IDs []string `json:"ids"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.AdminBatchQueryFailedVideoTasks(c.Request.Context(), user, req.IDs)
 		if err != nil {
 			failService(c, err)
 			return

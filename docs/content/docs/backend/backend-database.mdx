@@ -5,6 +5,18 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 分片上传预留
+
+Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`expires_at`。创建会话时在数据库事务内检查并行会话数、现有资源容量、未到期预留和每日上传用量，更新既有 `user_daily_upload_usages` 后插入预留。SQLite 先取得写锁，PostgreSQL 使用账号级事务 advisory lock。
+
+资源变为 ready 与删除对应预留在同一事务中提交；普通资源上传及生成结果的容量提交也使用同一锁，并计入分片预留。沿用 `UserStoredFileBytes` 的 ready 物理对象去重口径，不改变容量配置。跨 UTC 日期完成时重新预留当天日额度并释放原日额度，失败则整体回滚。
+
+预留有效期 90 分钟。失败或会话删除时释放原日额度；再次创建该账号会话时清理已到期预留。进程重启不批量删除其他实例的预留。分片文件与路由会话仍在本机，需要粘性路由；崩溃后的残片需要部署侧临时目录清理策略，未增加跨实例文件恢复或启动时全局清扫。
+
+## 更新公告配置
+
+外观 JSON 合同版本 10 新增 `updates`：`enabled`、`currentVersion`、`releases`。每个版本保存 `id/version/title/date/blocks`，内容块保存 `id/type/text/resourceId/caption/layout`；公共媒体 URL 由服务端按当前引用生成，不保存客户端 URL。关闭开关保留公告和资源引用，只关闭公共展示。不增加数据库表或 schema 迁移。
+
 ## 画布 Agent 外观配置
 
 `system_settings` 的 `appearance` JSON 合同版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`。独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
@@ -293,3 +305,9 @@ Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`�
 - 启动幂等装载 87 个预设（风格 45、运镜 33、九宫格 9），不下载第三方媒体。显式 ID 与用户工具冲突时启动报错，不覆盖用户数据；PostgreSQL 同步自增序列。
 - 工具预览纳入资源引用检查；自定义预览必须是当前用户已上传完成的资源。公开工具暂不接受私人预览资源。
 - SQLite → PostgreSQL 迁移包含上述两表。首次启动前备份测试数据；回退旧代码不能视为数据库降级，应使用备份恢复，不手工重写迁移记录。
+
+## 可选技能策展
+
+迁移 46 新增 skill_curation_settings、skill_curation_categories、skill_curation_assignments；默认关闭，不导入技能内容。表结构与事务规则见 [平台技能策展](./skill-curation)。
+
+迁移 47 依赖 46，新增 skill_curation_roots 与 skill_curation_root_assignments；保留原五个根 ID，根停用时使用派生默认桶，根表为空回落固定五类。

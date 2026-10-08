@@ -19,6 +19,25 @@ export function positiveNumber(value: string) {
     return Number.isFinite(number) && number > 0 ? number : undefined;
 }
 
+function compactionMessageID(event: AgentEvent, payload: Record<string, unknown>) {
+    const compactionID = typeof payload.compactionId === "string" ? payload.compactionId.trim() : "";
+    const eventKey = event.eventId || (Number.isFinite(event.seq) ? `seq-${event.seq}` : "event");
+    return compactionID ? `compaction-${event.runId}-${compactionID}` : `compaction-${event.runId}-${eventKey}`;
+}
+
+function compactTokenLabel(value: unknown) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "";
+    if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`;
+    if (value >= 1_000) return `${Math.round(value / 100) / 10}K`;
+    return Math.round(value).toLocaleString("zh-CN");
+}
+
+function compactionCompletedText(payload: Record<string, unknown>) {
+    const before = compactTokenLabel(payload.tokensBefore);
+    const after = compactTokenLabel(payload.estimatedTokensAfter);
+    return before && after ? `上下文压缩完成（${before} → ${after} Token）` : "上下文压缩完成";
+}
+
 export function applyAgentEvent(
     event: AgentEvent,
     setMessages: Dispatch<SetStateAction<CloudAgentChatMessage[]>>,
@@ -51,8 +70,8 @@ export function applyAgentEvent(
         if (terminal) {
             setMessages((current) => current.map((message) => (message.id === `plan-${event.runId}` && message.planItems?.length ? { ...message, planTerminal: true, streaming: false } : message)));
         }
-        if (terminal && nextStatus === "failed" && payload.failureMessage) {
-            setMessages((current) => appendAgentError(current, `terminal-${event.runId}`, String(payload.failureMessage), "Agent 执行失败", { severity: "error" }));
+        if (nextStatus === "failed") {
+            setMessages((current) => upsertRunFailure(current, event, String(payload.failureMessage || "")));
         }
         if (snapshotApproval && !snapshotApproval.decision && snapshotApproval.approvalId) {
             setApproval((current) => ({ approvalId: snapshotApproval.approvalId, detail: snapshotApproval, reason: current?.approvalId === snapshotApproval.approvalId ? current.reason : snapshotApproval.reason || "" }));
@@ -125,6 +144,65 @@ export function applyAgentEvent(
         setPrompt?.((current) => (current.trim() ? current : text));
         return;
     }
+    if (event.type === "context_compaction_requested") {
+        const id = compactionMessageID(event, payload);
+        const compactionId = typeof payload.compactionId === "string" ? payload.compactionId : undefined;
+        setMessages((current) =>
+            appendUniqueMessage(current, {
+                id,
+                role: "system",
+                text: "正在整理上下文",
+                compaction: { status: "pending", compactionId, reason: String(payload.reason || "") },
+            }),
+        );
+        return;
+    }
+    if (event.type === "context_compacted") {
+        const explicitId = typeof payload.compactionId === "string" && payload.compactionId.trim() ? `compaction-${event.runId}-${payload.compactionId}` : undefined;
+        const fallbackId = compactionMessageID(event, payload);
+        const tokensBefore = typeof payload.tokensBefore === "number" ? payload.tokensBefore : undefined;
+        const estimatedTokensAfter = typeof payload.estimatedTokensAfter === "number" ? payload.estimatedTokensAfter : undefined;
+        const compaction = { status: "completed" as const, compactionId: typeof payload.compactionId === "string" ? payload.compactionId : undefined, tokensBefore, estimatedTokensAfter, reason: String(payload.reason || "") };
+        setMessages((current) => {
+            const existing = explicitId
+                ? current.findIndex((item) => item.id === explicitId)
+                : ([...current]
+                      .map((item, index) => ({ item, index }))
+                      .reverse()
+                      .find(({ item }) => item.compaction?.status === "pending")?.index ?? -1);
+            const id = existing >= 0 ? current[existing]?.id || fallbackId : fallbackId;
+            if (existing >= 0) {
+                const next = [...current];
+                next[existing] = { ...next[existing], text: compactionCompletedText(payload), compaction };
+                return next;
+            }
+            return appendUniqueMessage(current, { id, role: "system", text: compactionCompletedText(payload), compaction });
+        });
+        return;
+    }
+    if (event.type === "context_compaction_failed") {
+        const explicitId = typeof payload.compactionId === "string" && payload.compactionId.trim() ? `compaction-${event.runId}-${payload.compactionId}` : undefined;
+        const fallbackId = compactionMessageID(event, payload);
+        const aborted = payload.cancelled === true || payload.aborted === true;
+        const errorText = String(payload.errorMessage || payload.text || "上下文压缩失败");
+        setMessages((current) => {
+            const existing = explicitId
+                ? current.findIndex((item) => item.id === explicitId)
+                : ([...current]
+                      .map((item, index) => ({ item, index }))
+                      .reverse()
+                      .find(({ item }) => item.compaction?.status === "pending")?.index ?? -1);
+            const id = existing >= 0 ? current[existing]?.id || fallbackId : fallbackId;
+            const compaction = { status: aborted ? ("aborted" as const) : ("failed" as const), compactionId: typeof payload.compactionId === "string" ? payload.compactionId : undefined, reason: String(payload.reason || ""), errorMessage: errorText };
+            if (existing >= 0) {
+                const next = [...current];
+                next[existing] = { ...next[existing], text: errorText, errorSeverity: "warning", compaction };
+                return next;
+            }
+            return appendUniqueMessage(current, { id, role: "system", text: errorText, errorSeverity: "warning", compaction });
+        });
+        return;
+    }
     if (event.type === "user_question") {
         const options = Array.isArray(payload.options)
             ? (payload.options as Array<{ label?: unknown; detail?: unknown }>).map((option) => ({ label: String(option?.label || "").trim(), detail: option?.detail === undefined ? undefined : String(option.detail) })).filter((option) => option.label)
@@ -192,7 +270,7 @@ export function applyAgentEvent(
         if (payload.operation === "generate_media_submit" || payload.operation === "generate_media_complete") return;
         const { canvasPatch: _patch, ...detail } = payload;
         const id = payload.callId ? `canvas-${event.runId}-${payload.callId}` : event.eventId;
-        setMessages((current) => appendUniqueMessage(current, { id, role: "tool", title: "canvas_apply_ops", text: "画布操作已完成", detail: { ...detail, eventType: event.type } }));
+        setMessages((current) => appendUniqueMessage(current, { id, role: "tool", title: "canvas_apply_ops", text: String(payload.text || "画布操作已完成"), detail: { ...detail, eventType: event.type } }));
         return;
     }
     if (event.type.startsWith("tool_") && agentToolRetry(payload)) {
@@ -200,12 +278,13 @@ export function applyAgentEvent(
         setMessages((current) => mergeAgentToolRetry(current, message));
         if (event.type === "tool_failed") return;
     }
-    if (event.type === "tool_completed" && payload.toolName === "director_preview") {
+    if (event.type === "tool_completed" && payload.toolName === "previs_preview") {
         const result = payload.result && typeof payload.result === "object" ? (payload.result as Record<string, unknown>) : {};
         window.dispatchEvent(
-            new CustomEvent("director:preview-requested", {
+            new CustomEvent("previs:preview-requested", {
                 detail: {
                     sceneId: String(result.sceneId || ""),
+                    canvasId: String(result.canvasId || ""),
                     shotId: String(result.shotId || ""),
                     duration: Number(result.duration || 0),
                     fps: Number(result.fps || 0),
@@ -217,8 +296,8 @@ export function applyAgentEvent(
             appendUniqueMessage(current, {
                 id: event.eventId,
                 role: "tool",
-                title: "director_preview",
-                text: text || "已请求导演台生成白模预演",
+                title: "previs_preview",
+                text: text || "已请求预演台生成白模预演",
                 detail: { ...payload, eventType: event.type },
             }),
         );
@@ -243,7 +322,23 @@ export function applyAgentEvent(
         }
         return;
     }
-    if (event.type === "run_failed" || event.type === "error") setMessages((current) => appendAgentError(current, event.eventId, text || "Agent 执行失败"));
+    if (event.type === "run_failed" || event.type === "error") setMessages((current) => upsertRunFailure(current, event, text));
+}
+
+function upsertRunFailure(current: CloudAgentChatMessage[], event: AgentEvent, text: string) {
+    const id = `terminal-${event.runId}`;
+    const message: CloudAgentChatMessage = { id, role: "error", ...agentErrorPresentation(text), errorSeverity: "error" };
+    // 失败事件和终态快照描述的是同一次失败；重放时同时收敛已缓存的事件行。
+    const next = current.filter((item) => item.role !== "error" || item.id !== event.eventId || item.id === id);
+    const index = next.findIndex((item) => item.id === id);
+    if (index < 0) return [...next, message];
+    const previous = next[index];
+    const hasDetails = message.text !== message.title;
+    const hadDetails = previous.text !== previous.title;
+    // 快照的公开原因优先；乱序到达的通用通知不能覆盖更完整的说明。
+    if (!hasDetails || (event.type !== "run_status" && hadDetails)) return next;
+    next[index] = message;
+    return next;
 }
 
 export function toolDetailRecord(value: unknown): Record<string, unknown> {

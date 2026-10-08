@@ -38,9 +38,11 @@ export function PriceTierFields({
     // 静默改变实际发往供应商的模型，必须显式提示并允许一键恢复“跟随模型默认”。
     const staleTierUpstream = matchMode === "default" && tierUpstream && modelUpstream && tierUpstream !== modelUpstream ? tierUpstream : "";
     const video = capabilityConfig?.video;
-    const resolutionOptions = video?.resolutions || [];
+    const resolutionOptions = Array.from(new Set([...(video?.resolutions || []), ...(protocol === "autodl-comfyui" ? video?.fixedScreenSpec?.resolutions || [] : [])]));
     const tokenEnabled = modelProtocolSupportsTokenBilling(capability, protocol);
     const isVideo = capability === "video";
+    const isAudio = capability === "audio";
+    const isDurationPriced = isVideo || isAudio;
     const isImage = capability === "image";
     return (
         <article className="admin-price-tier-card">
@@ -149,7 +151,7 @@ export function PriceTierFields({
                                     className="w-full"
                                     options={[
                                         { label: "按次", value: "fixed_request" },
-                                        { label: "按秒", value: "per_second", disabled: !isVideo },
+                                        { label: "按秒", value: "per_second", disabled: !isDurationPriced },
                                         { label: isVideo ? "视频 Token" : "Token", value: "token", disabled: !tokenEnabled },
                                     ]}
                                 />

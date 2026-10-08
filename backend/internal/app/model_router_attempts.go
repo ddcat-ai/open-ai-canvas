@@ -274,7 +274,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 			capability = capabilityFromTaskType(task.Type)
 		}
 		priceTierID, _ := config["priceTierId"].(string)
-		replacement, err = s.newBillingOrderWithPriceTier(task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(nextInput, capability), strings.TrimSpace(priceTierID), intent)
+		replacement, err = s.newBillingOrderWithPriceTier(task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(nextInput, capability), strings.TrimSpace(priceTierID), intent)
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +287,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 	} else if task.BillingOrderID != "" {
 		config, _ := nextInput["config"].(map[string]any)
 		capability := selected.ChannelModel.Capability
-		snapshotCreditCost(&costOrder, channelModelPriceTierForIntent(selected.ChannelModel, intent), billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(nextInput, capability))
+		snapshotCreditCost(&costOrder, channelModelPriceTierForIntent(selected.ChannelModel, intent), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(nextInput, capability))
 	}
 	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement, costOrder.BillingCostSnapshot); err != nil {
 		if errors.Is(err, repository.ErrInsufficientCredits) {

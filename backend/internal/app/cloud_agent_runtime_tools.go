@@ -138,9 +138,120 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 	}
 	state.event(runID, kind, payload)
 	state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "tool", "tool_call_id": call.ID, "content": string(raw)})
+	if err == nil {
+		cloudAgentCompactSupersededReadResult(state, call)
+	}
 	state.CallIndex++
 	state.Approval = nil
 	return exhausted
+}
+
+// cloudAgentCompactSupersededReadResult bounds repeated snapshots without
+// changing the transcript shape. A newer read with the same cache key makes an
+// older canvas projection stale; keep the old tool message for provider pairing,
+// but remove rereadable bodies while retaining hashes and execution facts.
+func cloudAgentCompactSupersededReadResult(state *cloudAgentRuntime, current cloudAgentCall) {
+	if state == nil || !cloudAgentReadToolCacheable(current.Function.Name) {
+		return
+	}
+	if current.Function.Name != "canvas_get_state" && current.Function.Name != "canvas_read_storyboard" && current.Function.Name != "previs_scene_read" {
+		return
+	}
+	currentKey := cloudAgentReadCacheKey(current)
+	protected := make(map[string]bool, len(state.Calls))
+	for _, call := range state.Calls {
+		protected[call.ID] = true
+	}
+	callByID := make(map[string]cloudAgentCall)
+	for _, message := range state.Canonical.Messages {
+		if stringValue(message["role"]) != "assistant" {
+			continue
+		}
+		for _, rawCall := range canonicalAgentToolCalls(message["tool_calls"]) {
+			var call cloudAgentCall
+			encoded, err := json.Marshal(rawCall)
+			if err != nil || json.Unmarshal(encoded, &call) != nil || call.ID == "" {
+				continue
+			}
+			callByID[call.ID] = call
+		}
+	}
+	for _, message := range state.Canonical.Messages {
+		if stringValue(message["role"]) != "tool" {
+			continue
+		}
+		callID := stringValue(message["tool_call_id"])
+		if callID == "" || callID == current.ID || protected[callID] {
+			continue
+		}
+		prior, ok := callByID[callID]
+		if !ok || prior.Function.Name != current.Function.Name || cloudAgentReadCacheKey(prior) != currentKey {
+			continue
+		}
+		if compacted := cloudAgentCompactSupersededReadBody(stringValue(message["content"]), current.Function.Name); compacted != "" {
+			message["content"] = compacted
+		}
+	}
+}
+
+func cloudAgentCompactSupersededReadBody(content, toolName string) string {
+	var result map[string]any
+	if content == "" || json.Unmarshal([]byte(content), &result) != nil {
+		return ""
+	}
+	removed := false
+	switch toolName {
+	case "canvas_get_state":
+		if nodes, ok := result["nodes"].([]any); ok {
+			facts := make([]map[string]any, 0, len(nodes))
+			for _, value := range nodes {
+				node, ok := value.(map[string]any)
+				if !ok {
+					continue
+				}
+				fact := map[string]any{"nodeId": node["id"]}
+				for _, key := range []string{"generation", "generationDraft", "outputReference"} {
+					if value, exists := node[key]; exists {
+						fact[key] = value
+					}
+				}
+				if len(fact) > 1 {
+					facts = append(facts, fact)
+				}
+			}
+			if len(facts) > 0 {
+				result["observedFacts"] = facts
+			}
+			delete(result, "nodes")
+			removed = true
+		}
+		if _, exists := result["connections"]; exists {
+			delete(result, "connections")
+			removed = true
+		}
+	case "canvas_read_storyboard":
+		if _, exists := result["rows"]; exists {
+			delete(result, "rows")
+			removed = true
+		}
+	case "previs_scene_read":
+		for _, key := range []string{"content", "shots", "scenes"} {
+			if _, exists := result[key]; exists {
+				delete(result, key)
+				removed = true
+			}
+		}
+	}
+	if !removed {
+		return ""
+	}
+	result["contextCompacted"] = true
+	result["guidance"] = "较新的同参读取已替代这份旧快照；需要正文时重新读取，不要依据旧快照重复提交写入。"
+	encoded, err := json.Marshal(result)
+	if err != nil || len(encoded) >= len(content) {
+		return ""
+	}
+	return string(encoded)
 }
 
 // cloudAgentReadResultInContext reports whether the full cached result is still
@@ -456,11 +567,29 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					if err == nil {
 						preview = storyboardPlan.Preview
 					}
+				case "canvas_create_character":
+					characterPlan, err := prepareCloudAgentCharacterCreate(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil {
+						preview = characterPlan.Preview
+					}
 				case "canvas_edit_batch_table":
 					batchPlan, err := prepareCloudAgentBatchTableEdit(repo, run.UserID, state.Request.CanvasID, call)
 					mutationErr = err
 					if err == nil {
 						preview = batchPlan.Preview
+					}
+				case "previs_scene_create":
+					previsPlan, err := prepareCloudAgentPrevisSceneCreate(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil {
+						preview = previsPlan.Preview
+					}
+				case "previs_apply_patch":
+					previsPlan, err := prepareCloudAgentPrevisApplyPatch(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil {
+						preview = previsPlan.Preview
 					}
 				case "canvas_arrange_nodes":
 					arrangePlan, err := prepareCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call)
@@ -561,8 +690,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			result, toolErr = applyCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_create_storyboard", call.Function.Name == "canvas_edit_storyboard":
 			result, toolErr = applyCloudAgentStoryboardMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case call.Function.Name == "canvas_create_character":
+			result, toolErr = applyCloudAgentCharacterCreate(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_edit_batch_table":
 			result, toolErr = applyCloudAgentBatchTableMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case call.Function.Name == "previs_scene_create", call.Function.Name == "previs_apply_patch":
+			result, toolErr = applyCloudAgentPrevisMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_inspect_image":
 			result, toolErr = inspectionResult, inspectionErr
 			if toolErr == nil && inspectionResult != nil {

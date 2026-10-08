@@ -2,8 +2,10 @@ import { http } from "@/services/api/request";
 import type { SkinDefinition } from "@/lib/skin-themes";
 import type { CanvasAppearance } from "@/lib/canvas/agent-appearance";
 import { apiBaseURL } from "@/services/api/request";
+import type { UpdateAnnouncement } from "@/lib/update-announcement";
 
 export type PublicAppearance = {
+    updates?: UpdateAnnouncement;
     canvas?: CanvasAppearance;
     schemaVersion: number;
     brandName: string;
@@ -24,6 +26,7 @@ export type PublicAppearance = {
     footerCopyright: string;
     icpFilingEnabled: boolean;
     icpFilingNumber: string;
+    redeemPurchaseUrl: string;
     logoConfigured: boolean;
     darkLogoConfigured: boolean;
     authVideoConfigured: boolean;
@@ -34,6 +37,7 @@ export type PublicAppearance = {
 };
 
 export type AdminAppearance = {
+    updates?: UpdateAnnouncement;
     canvas?: CanvasAppearance;
     schemaVersion: number;
     brandName: string;
@@ -54,6 +58,7 @@ export type AdminAppearance = {
     footerCopyright: string;
     icpFilingEnabled: boolean;
     icpFilingNumber: string;
+    redeemPurchaseUrl: string;
     public: PublicAppearance;
     configured: boolean;
     updatedBy?: string;
@@ -86,6 +91,7 @@ export async function updateAdminAppearance(
         AdminAppearance,
         | "brandName"
         | "canvas"
+        | "updates"
         | "brandSlug"
         | "authHeroTitle"
         | "authHeroDescription"
@@ -103,6 +109,7 @@ export async function updateAdminAppearance(
         | "footerCopyright"
         | "icpFilingEnabled"
         | "icpFilingNumber"
+        | "redeemPurchaseUrl"
     >,
 ) {
     const result = await http.patch<{ setting: AdminAppearance }>("/admin/settings/appearance", input);
@@ -114,15 +121,20 @@ export async function resetAdminAppearance() {
     return result.setting;
 }
 
-export async function uploadAppearanceAsset(slot: AppearanceAssetSlot, file: File) {
+export async function uploadAppearanceAsset(slot: AppearanceAssetSlot | "update-image" | "update-video", file: File) {
     const body = new FormData();
     body.append("file", file);
     const result = await http.post<{ resource: AppearanceResource }>(`/admin/settings/appearance/assets/${slot}`, body);
     return result.resource;
 }
 
+export function updateAnnouncementPreviewURL(resourceId: string) {
+    return `${apiBaseURL.replace(/\/$/, "")}/admin/settings/appearance/updates/${encodeURIComponent(resourceId)}`;
+}
+
 export async function uploadLive2D(file: File) {
-    const body = new FormData(); body.append("file", file);
+    const body = new FormData();
+    body.append("file", file);
     const result = await http.post<{ model: { resourceId: string; entry: string } }>("/admin/settings/appearance/live2d", body);
     return result.model;
 }

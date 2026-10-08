@@ -1,3 +1,4 @@
+import { normalizeAudioFormatForConfig, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
@@ -306,7 +307,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
             referenceVideos: prepared.referenceVideos,
             referenceAudios: prepared.referenceAudios,
             mask: prepared.mask,
-            metadata: generationMetadata(config, mode, {
+            metadata: generationMetadata(config, {
                 ...metadata,
                 ...(options.clientOperationId ? { clientOperationId: options.clientOperationId } : {}),
                 ...(options.retryOf ? { retryOf: options.retryOf } : {}),
@@ -316,7 +317,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
     };
 }
 
-function generationMetadata(config: AiConfig, mode: BackendGenerationMode, metadata?: Record<string, unknown>) {
+function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>) {
     const channel = resolveModelChannel(config, config.model);
     const model = modelOptionName(config.model);
     const modelCost = channel.modelCosts?.find((item) => item.model === model);
@@ -329,20 +330,8 @@ function generationMetadata(config: AiConfig, mode: BackendGenerationMode, metad
         ? existing[protocol] as Record<string, unknown>
         : {};
     const defaults = modelCost?.defaultOptions && typeof modelCost.defaultOptions === "object" ? modelCost.defaultOptions : {};
-    const audioOptions = mode === "audio" ? {
-        emo_control_method: config.audioEmotionControlMethod || "与音色参考音频相同",
-        emo_random: config.audioEmotionRandom === "true",
-        emo_happy: Number(config.audioEmotionHappy || 0),
-        emo_angry: Number(config.audioEmotionAngry || 0),
-        emo_sad: Number(config.audioEmotionSad || 0),
-        emo_afraid: Number(config.audioEmotionAfraid || 0),
-        emo_disgusted: Number(config.audioEmotionDisgusted || 0),
-        emo_melancholic: Number(config.audioEmotionMelancholic || 0),
-        emo_surprised: Number(config.audioEmotionSurprised || 0),
-        emo_calm: Number(config.audioEmotionCalm || 0),
-    } : {};
-    if (!Object.keys(defaults).length && !Object.keys(audioOptions).length && !Object.keys(namespace).length) return metadata;
-    return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...audioOptions, ...namespace } } };
+    if (!Object.keys(defaults).length && !Object.keys(namespace).length) return metadata;
+    return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...namespace } } };
 }
 
 async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAudio) {
@@ -420,9 +409,11 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         videoGenerateAudio: config.videoGenerateAudio,
         videoWatermark: config.videoWatermark,
         videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
-        audioVoice: config.audioVoice,
-        audioFormat: config.audioFormat,
+        audioVoice: normalizeAudioVoiceForConfig(config, config.audioVoice),
+        audioFormat: normalizeAudioFormatForConfig(config, config.audioFormat),
         audioSpeed: config.audioSpeed,
+        audioLanguage: config.audioLanguage,
+        audioDialect: config.audioDialect,
         audioInstructions: config.audioInstructions,
         systemPrompt: config.systemPrompt,
     };
@@ -462,9 +453,11 @@ function workflowProviderConfig(config: AiConfig, requestConfig: ReturnType<type
         videoGenerateAudio: config.videoGenerateAudio,
         videoWatermark: config.videoWatermark,
         videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
-        audioVoice: config.audioVoice,
-        audioFormat: config.audioFormat,
+        audioVoice: normalizeAudioVoiceForConfig(config, config.audioVoice),
+        audioFormat: normalizeAudioFormatForConfig(config, config.audioFormat),
         audioSpeed: config.audioSpeed,
+        audioLanguage: config.audioLanguage,
+        audioDialect: config.audioDialect,
         audioInstructions: config.audioInstructions,
         workflowId: workflow.workflowId,
         webappId: workflow.webappId,
@@ -497,7 +490,7 @@ function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode)
         : mode === "video"
             ? { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" }
             : mode === "audio"
-                ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) }
+                ? { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed), audioLanguage: config.audioLanguage, audioDialect: config.audioDialect }
                 : {};
     const filtered = Object.fromEntries(Object.entries(candidates).filter(([key]) => Boolean(spec?.options?.[key])));
     // 只把前台模型声明过的参数送进能力匹配。未声明的 quality 不能因为画布选了 4K 档位

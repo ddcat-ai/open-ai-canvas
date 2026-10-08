@@ -8,6 +8,7 @@ import (
 
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+	"infinite-canvas/backend/internal/outbound/outboundtest"
 	"infinite-canvas/backend/internal/storage"
 )
 
@@ -26,6 +27,7 @@ func testPlatformURL(variants *[]ResourceVariant) func(ResourceVariant, time.Tim
 }
 
 func TestResolveAccessPolicyMatrix(t *testing.T) {
+	outboundtest.PublicDNS(t, "s3.amazonaws.com")
 	now := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 	tests := []struct {
 		name       string
@@ -55,7 +57,7 @@ func TestResolveAccessPolicyMatrix(t *testing.T) {
 		{
 			name:     "CDN without supported auth falls back to public origin",
 			resource: testReadyResource("aliyun"),
-			setting:  storage.Settings{Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", CDNBaseURL: "https://media.example.com", AccessKeyID: "id", AccessKeySecret: "secret"},
+			setting:  storage.Settings{Provider: "aliyun", Endpoint: "https://s3.amazonaws.com", Bucket: "private-bucket", CDNBaseURL: "https://media.example.com", AccessKeyID: "id", AccessKeySecret: "secret"},
 			options:  AccessOptions{Purpose: PurposeDisplay},
 			wantMode: DeliveryOrigin, wantReason: "cdn_auth_unconfigured",
 		},
@@ -97,6 +99,12 @@ func TestResolveAccessPolicyMatrix(t *testing.T) {
 			}
 			if access.Delivery != tt.wantMode || access.FallbackReason != tt.wantReason {
 				t.Fatalf("ResolveAccess() = %#v, want mode=%q reason=%q", access, tt.wantMode, tt.wantReason)
+			}
+			if tt.wantMode == DeliveryOrigin {
+				parsed, err := url.Parse(access.URL)
+				if err != nil || parsed.Host != "private-bucket.s3.amazonaws.com" || parsed.Query().Get("Signature") == "" {
+					t.Fatalf("invalid signed origin URL: %q (%v)", access.URL, err)
+				}
 			}
 			if tt.wantURL != "" && access.URL != tt.wantURL {
 				t.Fatalf("ResolveAccess().URL = %q, want %q", access.URL, tt.wantURL)
@@ -191,13 +199,77 @@ func TestResolveAccessUsesRuntimePolicyTTL(t *testing.T) {
 	resource := testReadyResource("local")
 	setting := storage.Settings{Runtime: storage.RuntimePolicy{AccessURLTTL: 2 * time.Hour, ProviderAccessURLTTL: 6 * time.Hour}}
 	var variants []ResourceVariant
-	for purpose, want := range map[AccessPurpose]time.Duration{PurposeDisplay: 2 * time.Hour, PurposeProvider: 6 * time.Hour} {
+	// 展示地址按 ttl/4（30 分钟）对齐签名窗口：03:04:05 落在 03:00 窗口，过期于 05:00；模型输入仍按当前时间签发。
+	for purpose, want := range map[AccessPurpose]time.Time{PurposeDisplay: time.Date(2026, time.January, 2, 5, 0, 0, 0, time.UTC), PurposeProvider: now.Add(6 * time.Hour)} {
 		access, err := ResolveAccess(resource, setting, AccessOptions{Purpose: purpose}, now, testPlatformURL(&variants))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if access.ExpiresAt == nil || !access.ExpiresAt.Equal(now.Add(want)) {
-			t.Fatalf("%s access expiry = %v, want %v", purpose, access.ExpiresAt, now.Add(want))
+		if access.ExpiresAt == nil || !access.ExpiresAt.Equal(want) {
+			t.Fatalf("%s access expiry = %v, want %v", purpose, access.ExpiresAt, want)
 		}
 	}
+}
+
+func TestResolveDisplayAccessIsStableWithinSigningWindow(t *testing.T) {
+	setting := storage.Settings{
+		Provider: "aliyun", Endpoint: "https://1.1.1.1", Bucket: "private-bucket",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
+		Runtime: storage.RuntimePolicy{AccessURLTTL: 24 * time.Hour},
+	}
+	resource := testReadyResource("aliyun")
+	first, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDisplay}, time.Date(2026, time.September, 30, 18, 0, 1, 0, time.UTC), testPlatformURL(&[]ResourceVariant{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 刷新画布（同一 6 小时窗口内再次签发）必须拿到逐字节相同的地址，浏览器才能复用 HTTP 缓存。
+	again, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDisplay}, time.Date(2026, time.September, 30, 23, 59, 0, 0, time.UTC), testPlatformURL(&[]ResourceVariant{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Delivery != DeliveryOrigin || first.URL != again.URL {
+		t.Fatalf("display URL changed within one signing window:\n%s\n%s", first.URL, again.URL)
+	}
+	if cacheControl := mustQuery(t, first.URL).Get("response-cache-control"); !strings.Contains(cacheControl, "max-age=86400") || !strings.Contains(cacheControl, "immutable") {
+		t.Fatalf("display URL cache-control = %q", cacheControl)
+	}
+	next, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDisplay}, time.Date(2026, time.October, 1, 0, 0, 1, 0, time.UTC), testPlatformURL(&[]ResourceVariant{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.URL == first.URL {
+		t.Fatal("next signing window must rotate the display URL")
+	}
+	// 下载地址携带一次性 Content-Disposition，不做对齐也不附加长缓存。
+	download, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDownload}, time.Now(), testPlatformURL(&[]ResourceVariant{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mustQuery(t, download.URL).Get("response-cache-control") != "" {
+		t.Fatalf("download URL must not carry display cache override: %s", download.URL)
+	}
+}
+
+func TestResolveAccessAcceptsThumbnailVariantWithOriginalFallback(t *testing.T) {
+	now := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	var variants []ResourceVariant
+	access, err := ResolveAccess(testReadyResource("local"), storage.Settings{}, AccessOptions{Purpose: PurposeDisplay, Variant: VariantThumbnail}, now, testPlatformURL(&variants))
+	if err != nil {
+		t.Fatalf("thumbnail variant must not fail (the canvas would fall back to the redirecting platform URL): %v", err)
+	}
+	if access.RequestedVariant != VariantThumbnail || access.ActualVariant != VariantOriginal || access.FallbackReason != "thumbnail_not_ready" {
+		t.Fatalf("thumbnail access = %#v", access)
+	}
+	if len(variants) != 1 || variants[0] != VariantOriginal {
+		t.Fatalf("platform URL variants = %#v, want original", variants)
+	}
+}
+
+func mustQuery(t *testing.T, raw string) url.Values {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed.Query()
 }

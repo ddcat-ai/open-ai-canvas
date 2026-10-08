@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { Agent, setGlobalDispatcher } from "undici";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
@@ -17,6 +17,7 @@ setGlobalDispatcher(new Agent({
 
 const providerID = "infinite-canvas";
 const api = "openai-completions";
+
 
 async function readRequest() {
   let raw = "";
@@ -36,6 +37,7 @@ function createMessage(model, result) {
     content.push({
       type: "toolCall",
       id: call.id,
+      ...(call.item_id ? { itemId: call.item_id } : {}),
       name: call.name,
       arguments: call.arguments ?? {},
     });
@@ -82,13 +84,26 @@ async function run() {
 
   // 每次运行使用独立的空配置目录：SDK 的 auth.json / models.json / 锁文件都落在这里，
   // 不读取宿主 ~/.pi，也不会执行预置 auth.json 里的 !command。运行结束即删除。
+  // 会话文件和工作目录同样放在这里：它们只是本轮的工作副本，真实来源是服务端
+  // 数据库里的会话快照（请求带 sessionJSONL，运行中回传）。不使用服务端的路径：
+  // 独立容器里没有服务端的数据目录；空工作目录也不会被发现任何项目级配置或技能。
   const isolatedDir = await mkdtemp(join(tmpdir(), "agent-runtime-"));
   process.env.HOME = isolatedDir;
   process.env.PI_CODING_AGENT_DIR = isolatedDir;
   process.on("exit", () => {
     try { rmSync(isolatedDir, { recursive: true, force: true }); } catch {}
   });
-  request.agentDir = isolatedDir;
+  const agentDir = isolatedDir;
+  const workDir = join(isolatedDir, "work");
+  const sessionDir = join(isolatedDir, "sessions");
+  await mkdir(workDir, { mode: 0o700 });
+  await mkdir(sessionDir, { mode: 0o700 });
+  // Lifecycle state, not prompt wording, identifies SDK summarization calls.
+  // Keep the id through the closing event delivery so the requested/end pair
+  // can always be correlated, while the closing phase no longer labels a
+  // following normal model request as a summary request.
+  let activeCompaction = null;
+  const eventChain = { current: Promise.resolve() };
   const modelRuntime = await ModelRuntime.create({
     authPath: join(isolatedDir, "auth.json"),
     modelsPath: join(isolatedDir, "models.json"),
@@ -123,9 +138,23 @@ async function run() {
       };
       void (async () => {
         stream.push({ type: "start", partial });
+        // 审批暂停时 session.abort() 是异步生效的，SDK 可能在它生效前就开下一轮。
+        // 这一轮不能发给服务端：运行正在等审批，再跑一步会多计一次费，
+        // 新的工具调用还会和待审批的调用对不上，让整轮以检查点校验失败收场。
+        if (pausedForApproval) {
+          stream.push({ type: "error", reason: "aborted", error: { ...partial, stopReason: "aborted", errorMessage: "paused for approval" } });
+          stream.end();
+          return;
+        }
         try {
+          const purpose = activeCompaction?.phase === "summarizing" ? "compaction" : "conversation";
+          // Deliver lifecycle events/snapshots before scheduling the next request.
+          // In particular, compaction must be visible before its model call begins.
+          await eventChain.current;
           const result = await bridge(request, "/model", {
             modelId: model.id,
+            purpose,
+            systemPrompt: context.systemPrompt,
             messages: context.messages,
             tools: (context.tools ?? []).map((tool) => ({
               name: tool.name,
@@ -133,6 +162,7 @@ async function run() {
               parameters: tool.parameters,
             })),
             thinkingLevel: options?.reasoning ?? "off",
+            contextUsage: session.getContextUsage(),
           }, options?.signal);
           for (const text of result.steeringMessages ?? []) {
             await session.steer(text);
@@ -210,32 +240,36 @@ async function run() {
 
   let sessionManager;
   if (request.sessionJSONL) {
-    if (!request.sessionFile) throw new Error("Agent session restore requires a session file path");
-    await mkdir(dirname(request.sessionFile), { recursive: true, mode: 0o700 });
-    await writeFile(request.sessionFile, request.sessionJSONL, { mode: 0o600, flag: "w" });
-    sessionManager = SessionManager.open(request.sessionFile, undefined, request.cwd);
+    const sessionFile = join(sessionDir, "session.jsonl");
+    await writeFile(sessionFile, request.sessionJSONL, { mode: 0o600, flag: "wx" });
+    sessionManager = SessionManager.open(sessionFile, sessionDir, workDir);
   } else {
-    sessionManager = SessionManager.create(request.cwd, request.sessionDir);
+    sessionManager = SessionManager.create(workDir, sessionDir);
   }
-  // 严格隔离：不探索文件系统的 packages/skills/extensions
+  // 严格隔离：不探索文件系统的 packages/skills/extensions/项目配置。
+  // 技能由服务端的读取工具提供，这里不再按路径加载；projectTrusted=false 让 SDK
+  // 不读取 <cwd>/.pi 设置，也不向上层目录收集 .agents/skills。
+  // 同一个设置管理器也交给 createAgentSession，否则 SDK 会另建一个读文件的实例。
+  const settingsManager = SettingsManager.inMemory({}, { projectTrusted: false });
   const resourceLoader = new DefaultResourceLoader({
-    cwd: request.cwd,
-    agentDir: request.agentDir,
+    cwd: workDir,
+    agentDir,
     noExtensions: true,
     noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
     noContextFiles: true,
-    additionalSkillPaths: request.skillPaths ?? [],
+    additionalSkillPaths: [],
     systemPrompt: request.systemPrompt,
-    settingsManager: SettingsManager.inMemory({}),
+    settingsManager,
   });
   await resourceLoader.reload();
 
   const contextWindow = Math.max(1, Number(request.model?.contextWindow || 128000));
   const sessionConfig = {
-    cwd: request.cwd,
-    agentDir: request.agentDir,
+    cwd: workDir,
+    agentDir,
+    settingsManager,
     modelRuntime,
     model,
     resourceLoader,
@@ -297,10 +331,35 @@ async function run() {
     retry: { enabled: false },
   });
 
-  const eventChain = { current: Promise.resolve() };
   let runtimeError = null;
+  // 事件链串行执行。已有一次快照在排队时，它执行时读到的已是最新文件，
+  // 不必为每条新条目再整份上传一次。
+  let snapshotQueued = false;
   const enqueueEvent = (payload) => {
-    eventChain.current = eventChain.current.then(() => bridge(request, "/event", payload));
+    const pending = eventChain.current.then(() => bridge(request, "/event", payload));
+    eventChain.current = pending;
+    return pending;
+  };
+  const enqueueSessionSnapshot = () => {
+    if (snapshotQueued) return;
+    snapshotQueued = true;
+    eventChain.current = eventChain.current.then(async () => {
+      snapshotQueued = false;
+      const sessionFile = sessionManager.getSessionFile();
+      if (!sessionFile) return;
+      let sessionJSONL;
+      try {
+        sessionJSONL = await readFile(sessionFile, "utf8");
+      } catch (error) {
+        if (error?.code === "ENOENT") return;
+        throw error;
+      }
+      return bridge(request, "/event", {
+        type: "session_snapshot",
+        sessionJSONL,
+        contextUsage: session.getContextUsage(),
+      });
+    });
   };
 
   session.subscribe((event) => {
@@ -404,24 +463,36 @@ async function run() {
         approvalId: event.approvalId,
       });
     } else if (event.type === "entry_appended") {
-      eventChain.current = eventChain.current.then(async () => {
-        const sessionFile = sessionManager.getSessionFile();
-        if (!sessionFile) return;
-        let sessionJSONL;
-        try {
-          sessionJSONL = await readFile(sessionFile, "utf8");
-        } catch (error) {
-          if (error?.code === "ENOENT") return;
-          throw error;
-        }
-        return bridge(request, "/event", {
-          type: "session_snapshot",
-          sessionJSONL,
-          contextUsage: session.getContextUsage(),
-        });
-      });
+      enqueueSessionSnapshot();
     } else if (event.type === "compaction_start" || event.type === "compaction_end") {
-      enqueueEvent({ type: event.type, reason: event.reason, contextUsage: session.getContextUsage() });
+      // Persist the compaction entry before reporting it to the server. If event
+      // delivery fails, the summary and retained tail are still recoverable.
+      if (event.type === "compaction_start") activeCompaction = { id: crypto.randomUUID(), phase: "summarizing" };
+      const compaction = activeCompaction;
+      if (event.type === "compaction_end" && compaction) compaction.phase = "closing";
+      if (event.type === "compaction_end") enqueueSessionSnapshot();
+      const eventDelivery = enqueueEvent({
+        type: event.type,
+        compactionId: compaction?.id,
+        reason: event.reason,
+        aborted: event.aborted,
+        willRetry: event.willRetry,
+        errorMessage: event.errorMessage,
+        hasResult: Boolean(event.result),
+        tokensBefore: event.result?.tokensBefore,
+        estimatedTokensAfter: event.result?.estimatedTokensAfter,
+        contextUsage: session.getContextUsage(),
+      });
+      if (event.type === "compaction_end" && compaction) {
+        eventDelivery.then(
+          () => {
+            if (activeCompaction === compaction) activeCompaction = null;
+          },
+          () => {
+            if (activeCompaction === compaction) activeCompaction = null;
+          },
+        );
+      }
     }
   });
 

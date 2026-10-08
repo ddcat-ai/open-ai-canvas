@@ -49,8 +49,8 @@ var publicCanvasMetadataKeys = map[string]bool{
 	"characterName": true, "characterPrompt": true, "characterAliases": true, "characterView": true, "characterViewNodeIds": true,
 	"videoEditOperation": true, "videoCameraMoveId": true, "videoCameraMovePrompt": true,
 	"videoStartFrameNodeId": true, "videoEndFrameNodeId": true, "versionOfNodeId": true,
-	"versionLabel": true, "versionPrimary": true, "directorSceneId": true, "directorShotId": true,
-	"directorPreviewNodeId": true, "directorDepthNodeId": true, "directorNormalNodeId": true,
+	"versionLabel": true, "versionPrimary": true, "previsSceneId": true, "previsShotId": true,
+	"previsPreviewNodeId": true, "previsDepthNodeId": true, "previsNormalNodeId": true,
 	"skillId": true, "skillVersion": true, "skillSnapshot": true, "storyboard": true,
 	"storyboardShotDuration": true, "storyboardShotCount": true, "storyboardComposerHeight": true, "frame": true,
 }
@@ -234,7 +234,7 @@ func publicCanvasProject(project *model.CanvasProject, token string) (map[string
 		"connections":    publicCanvasConnections(source["connections"]),
 		"chatSessions":   []any{},
 		"activeChatId":   nil,
-		"directorScenes": []any{},
+		"previsScenes":   []any{},
 	}
 	rawNodes, _ := source["nodes"].([]any)
 	nodes := make([]any, 0, len(rawNodes))

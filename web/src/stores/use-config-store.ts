@@ -129,6 +129,8 @@ export type AiConfig = {
     audioVoice: string;
     audioFormat: string;
     audioSpeed: string;
+    audioLanguage: string;
+    audioDialect: string;
     audioInstructions: string;
     audioEmotionControlMethod: string;
     audioEmotionRandom: string;
@@ -181,6 +183,8 @@ export const defaultConfig: AiConfig = {
     audioVoice: "alloy",
     audioFormat: "mp3",
     audioSpeed: "1",
+    audioLanguage: "",
+    audioDialect: "",
     audioInstructions: "",
     audioEmotionControlMethod: "与音色参考音频相同",
     audioEmotionRandom: "false",
@@ -438,6 +442,8 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
             audioVoice: config.audioVoice || defaultConfig.audioVoice,
             audioFormat: config.audioFormat || defaultConfig.audioFormat,
             audioSpeed: config.audioSpeed || defaultConfig.audioSpeed,
+            audioLanguage: config.audioLanguage || "",
+            audioDialect: config.audioDialect || "",
             audioInstructions: config.audioInstructions || "",
             audioEmotionControlMethod: config.audioEmotionControlMethod || defaultConfig.audioEmotionControlMethod,
             audioEmotionRandom: config.audioEmotionRandom || defaultConfig.audioEmotionRandom,

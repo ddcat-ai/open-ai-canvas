@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -19,6 +21,21 @@ type ProviderTaskQueryResult struct {
 	ProviderStatus string      `json:"providerStatus"`
 	Recovered      bool        `json:"recovered"`
 	BillingSettled bool        `json:"billingSettled"`
+	Error          string      `json:"error,omitempty"`
+}
+
+type ProviderTaskRecoveryItem struct {
+	LogID          string `json:"logId"`
+	Recovered      bool   `json:"recovered"`
+	ProviderStatus string `json:"providerStatus,omitempty"`
+	Error          string `json:"error,omitempty"`
+}
+
+type ProviderTaskRecoveryBatchResult struct {
+	Items   []ProviderTaskRecoveryItem `json:"items"`
+	Success int                        `json:"success"`
+	Failed  int                        `json:"failed"`
+	Skipped int                        `json:"skipped"`
 }
 
 func (s *Service) QueryFailedVideoTask(ctx context.Context, userID string, taskID string) (*ProviderTaskQueryResult, error) {
@@ -29,7 +46,7 @@ func (s *Service) QueryFailedVideoTask(ctx context.Context, userID string, taskI
 	return s.queryFailedVideoTask(ctx, task, strings.TrimSpace(userID))
 }
 
-func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.User, logID string) (*ProviderTaskQueryResult, error) {
+func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.User, logID string, requestedProviderID string) (result *ProviderTaskQueryResult, returnErr error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
@@ -37,29 +54,260 @@ func (s *Service) AdminQueryFailedVideoTask(ctx context.Context, actor *model.Us
 	if err != nil {
 		return nil, err
 	}
+	var task *model.Task
+	defer func() {
+		metadata := map[string]any{
+			"apiCallLogId":              log.ID,
+			"taskId":                    log.TaskID,
+			"suppliedProviderRequestId": strings.TrimSpace(requestedProviderID),
+			"providerRequestId":         "",
+			"providerStatus":            "",
+			"recovered":                 result != nil && result.Recovered,
+			"outcome":                   "failed",
+			"error":                     errorString(returnErr),
+		}
+		if task != nil {
+			metadata["providerRequestId"] = task.ProviderRequestID
+		}
+		if result != nil {
+			metadata["providerStatus"] = result.ProviderStatus
+			if result.Recovered {
+				metadata["outcome"] = "recovered"
+			} else {
+				metadata["outcome"] = "provider_processing"
+			}
+		}
+		_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", log.ID, "人工查询失败视频任务", metadata)
+	}()
 	if log.Capability != "video" || strings.TrimSpace(log.TaskID) == "" {
 		return nil, BadAuthRequest("该请求没有可查询的视频任务")
 	}
-	task, err := s.repo.Task(log.TaskID)
-	if err != nil {
-		return nil, err
+	task, returnErr = s.repo.Task(log.TaskID)
+	if returnErr != nil {
+		return nil, returnErr
 	}
 	if task.UserID != log.UserID {
 		return nil, BadAuthRequest("请求与任务归属不一致")
 	}
+	if task.Status == model.TaskStatusSucceeded {
+		result = &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: "succeeded", Recovered: true, BillingSettled: s.billingSettled(task)}
+		return result, nil
+	}
+	if strings.TrimSpace(requestedProviderID) != "" {
+		task.ProviderRequestID = strings.TrimSpace(requestedProviderID)
+	}
 	if task.ProviderRequestID == "" {
 		task.ProviderRequestID = strings.TrimSpace(log.ProviderRequestID)
 	}
-	result, err := s.queryFailedVideoTask(ctx, task, "")
+	result, returnErr = s.queryFailedVideoTask(ctx, task, "")
+	return result, returnErr
+}
+
+func (s *Service) AdminRecoverVideoByURL(ctx context.Context, actor *model.User, logID string, rawURL string, providerRequestID string) (result *ProviderTaskQueryResult, returnErr error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	log, task, err := s.adminRecoveryTask(logID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "api_log.query_provider_task", "task", task.ID, "人工查询失败视频任务", map[string]any{
-		"apiCallLogId": log.ID, "providerRequestId": task.ProviderRequestID, "providerStatus": result.ProviderStatus, "recovered": result.Recovered,
-	}); err != nil {
+	parsedURL := ""
+	defer func() {
+		metadata := map[string]any{
+			"apiCallLogId":              log.ID,
+			"taskId":                    task.ID,
+			"suppliedProviderRequestId": strings.TrimSpace(providerRequestID),
+			"providerRequestId":         task.ProviderRequestID,
+			"url":                       parsedURL,
+			"recovered":                 result != nil && result.Recovered,
+			"outcome":                   "failed",
+			"error":                     errorString(returnErr),
+		}
+		if result != nil {
+			metadata["providerStatus"] = result.ProviderStatus
+			if result.Recovered {
+				metadata["outcome"] = "recovered"
+			}
+		}
+		_ = s.appendAdminAudit(actor, "api_log.recover_video_url", "api_call_log", log.ID, "人工转存上游视频并回写", metadata)
+	}()
+	if task.Status == model.TaskStatusSucceeded {
+		result = &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: "succeeded", Recovered: true, BillingSettled: s.billingSettled(task)}
+		return result, nil
+	}
+	if task.Status != model.TaskStatusFailed {
+		return nil, BadAuthRequest("只能恢复失败的视频任务")
+	}
+	if strings.TrimSpace(providerRequestID) != "" {
+		task.ProviderRequestID = strings.TrimSpace(providerRequestID)
+	}
+	if task.ProviderRequestID == "" {
+		task.ProviderRequestID = strings.TrimSpace(log.ProviderRequestID)
+	}
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, BadAuthRequest("视频 URL 只支持有效的 http/https 地址")
+	}
+	parsedURL = recoveryURLForAudit(parsed)
+	owner := "manual-recovery:" + newID()
+	if err := s.repo.ClaimFailedTaskProviderRecovery(task.ID, "", owner, providerTaskRecoveryLeaseDuration); err != nil {
+		if errors.Is(err, repository.ErrTaskProviderRecoveryConflict) {
+			return nil, &AuthError{Status: 409, Message: "该任务正在恢复中，请稍后再试"}
+		}
 		return nil, err
 	}
+	task.LeaseOwner = owner
+	defer func() { _ = s.repo.ReleaseTaskProviderRecovery(task.ID, owner) }()
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	payload, err := downloadRemoteResource(parsed.String(), megabytes(policy.Resource.GeneratedFileMB)+1)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(strings.ToLower(payload.mimeType), "video/") {
+		return nil, BadAuthRequest("上游地址返回的不是视频文件")
+	}
+	resultPayload := map[string]interface{}{"mode": "video", "video": map[string]interface{}{"dataUrl": dataURL(payload.mimeType, payload.data), "mimeType": payload.mimeType}}
+	resultPayload, err = s.persistGeneratedMediaResult(task.UserID, resultPayload)
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resultPayload)
+	if err != nil {
+		return nil, err
+	}
+	task.Error = ""
+	task.PollStage = "succeeded"
+	task.NextPollAt = nil
+	if err := s.saveTaskCompletionWithinStorageQuota(task, resultJSON, nil, false); err != nil {
+		return nil, err
+	}
+	if err := s.settleRecoveredBilling(task, task.ProviderRequestID); err != nil {
+		uncertainErr := s.taskBilling().MarkBillingUncertain(task.BillingOrderID, "人工转存视频已成功，但积分结算失败："+err.Error())
+		if uncertainErr != nil {
+			return nil, errors.Join(err, uncertainErr)
+		}
+		return nil, err
+	}
+	if err := s.RegisterTaskOutputFromTask(*task); err != nil {
+		return nil, err
+	}
+	result = &ProviderTaskQueryResult{Task: taskForOutput(*task), ProviderStatus: "succeeded", Recovered: true, BillingSettled: true}
 	return result, nil
+}
+
+func (s *Service) AdminBatchQueryFailedVideoTasks(ctx context.Context, actor *model.User, logIDs []string) (*ProviderTaskRecoveryBatchResult, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	ids := uniqueNonEmpty(logIDs)
+	result := &ProviderTaskRecoveryBatchResult{Items: make([]ProviderTaskRecoveryItem, len(ids))}
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	for index, id := range ids {
+		index, id := index, id
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			item := ProviderTaskRecoveryItem{LogID: id}
+			log, logErr := s.repo.APICallLog(id)
+			if logErr != nil {
+				item.Error = logErr.Error()
+				_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", id, "批量查询视频任务失败", map[string]any{"apiCallLogId": id, "outcome": "failed", "error": item.Error})
+				result.Items[index] = item
+				return
+			}
+			if log.Capability != "video" {
+				item.Error = "跳过：不是视频请求明细"
+				_ = s.appendAdminAudit(actor, "api_log.query_provider_task", "api_call_log", id, "批量查询跳过非视频请求", map[string]any{"apiCallLogId": id, "outcome": "skipped", "error": item.Error})
+				result.Items[index] = item
+				return
+			}
+			queryResult, queryErr := s.AdminQueryFailedVideoTask(ctx, actor, id, "")
+			if queryErr != nil {
+				item.Error = queryErr.Error()
+			} else {
+				item.Recovered, item.ProviderStatus = queryResult.Recovered, queryResult.ProviderStatus
+			}
+			result.Items[index] = item
+		}()
+	}
+	wg.Wait()
+	for _, item := range result.Items {
+		if strings.HasPrefix(item.Error, "跳过：") {
+			result.Skipped++
+		} else if item.Error != "" || !item.Recovered {
+			result.Failed++
+		} else {
+			result.Success++
+		}
+	}
+	return result, nil
+}
+
+func (s *Service) adminRecoveryTask(logID string) (*model.ApiCallLog, *model.Task, error) {
+	log, err := s.repo.APICallLog(strings.TrimSpace(logID))
+	if err != nil {
+		return nil, nil, err
+	}
+	if log.Capability != "video" || strings.TrimSpace(log.TaskID) == "" {
+		return nil, nil, BadAuthRequest("该请求没有可恢复的视频任务")
+	}
+	task, err := s.repo.Task(log.TaskID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if task.UserID != log.UserID {
+		return nil, nil, BadAuthRequest("请求与任务归属不一致")
+	}
+	return log, task, nil
+}
+
+func (s *Service) billingSettled(task *model.Task) bool {
+	if task == nil || task.BillingOrderID == "" {
+		return true
+	}
+	order, err := s.repo.BillingOrder(task.BillingOrderID)
+	return err == nil && order.Status == model.BillingStatusSettled
+}
+
+func (s *Service) settleRecoveredBilling(task *model.Task, providerRequestID string) error {
+	if task == nil || task.BillingOrderID == "" {
+		return nil
+	}
+	billing := s.taskBilling()
+	order, err := billing.BillingOrder(task.BillingOrderID)
+	if err != nil {
+		return err
+	}
+	if order == nil {
+		return fmt.Errorf("任务计费订单不存在：%s", task.BillingOrderID)
+	}
+	if order.Status == model.BillingStatusSettled {
+		return nil
+	}
+	if order.Status == model.BillingStatusRefunded {
+		return billing.RestoreRefundedBilling(task.BillingOrderID, providerRequestID)
+	}
+	return billing.SettleBilling(task.BillingOrderID, providerRequestID)
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func recoveryURLForAudit(value *url.URL) string {
+	if value == nil {
+		return ""
+	}
+	return value.Scheme + "://" + value.Host + value.Path
 }
 
 func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, claimUserID string) (*ProviderTaskQueryResult, error) {
@@ -83,7 +331,6 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if providerRequestID == "" {
 		return nil, BadAuthRequest("该任务没有可恢复的上游任务 ID")
 	}
-	wasRefunded := false
 	if task.BillingOrderID != "" {
 		order, err := s.repo.BillingOrder(task.BillingOrderID)
 		if err != nil {
@@ -92,7 +339,6 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		if order.UserID != task.UserID || order.TaskID != task.ID {
 			return nil, BadAuthRequest("任务与计费订单归属不一致")
 		}
-		wasRefunded = order.Status == model.BillingStatusRefunded
 	}
 
 	decryptedInput, err := s.decryptTaskInputJSON(task.InputJSON)
@@ -115,9 +361,6 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	input.Config = config
 	task.InputJSON = decryptedInput
 	task.ProviderRequestID = providerRequestID
-	if err := s.repo.UpdateTaskProviderState(task.ID, providerRequestID, task.PollStage, task.NextPollAt); err != nil {
-		return nil, err
-	}
 
 	owner := "manual-recovery:" + newID()
 	if err := s.repo.ClaimFailedTaskProviderRecovery(task.ID, claimUserID, owner, providerTaskRecoveryLeaseDuration); err != nil {
@@ -173,11 +416,7 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	}
 	billingSettled := true
 	var billingErr error
-	if wasRefunded {
-		billingErr = billing.RestoreRefundedBilling(task.BillingOrderID, providerRequestID)
-	} else {
-		billingErr = billing.SettleBilling(task.BillingOrderID, providerRequestID)
-	}
+	billingErr = s.settleRecoveredBilling(task, providerRequestID)
 	if billingErr != nil {
 		billingSettled = false
 		uncertainErr := billing.MarkBillingUncertain(task.BillingOrderID, "人工查询确认生成成功，但积分结算失败："+billingErr.Error())

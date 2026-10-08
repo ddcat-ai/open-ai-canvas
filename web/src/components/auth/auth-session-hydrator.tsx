@@ -25,7 +25,7 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
                     durationMs: performance.now() - startedAt,
                 });
                 if (!payload.user) {
-                    applyAnonymousSession(payload);
+                    await applyAnonymousSession(payload);
                     recordDiagnosticEvent({
                         category: "navigation",
                         level: "info",
@@ -48,9 +48,9 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
                 });
                 preloadWorkspaceRoute(window.location.pathname);
             })
-            .catch(() => {
+            .catch(async () => {
                 if (!cancelled) {
-                    applyAnonymousSession({ user: null });
+                    await applyAnonymousSession({ user: null });
                     recordDiagnosticEvent({
                         category: "navigation",
                         level: "warning",
@@ -68,11 +68,7 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
     return hydrated ? children : <FullScreenLoader />;
 }
 
-function applyAnonymousSession(payload: AuthSessionPayload) {
-    const store = useUserStore.getState();
-    store.clearSession();
-    store.setRuntimeLimits(payload.runtimeLimits);
-    store.setDrawingEngine(payload.drawingEngine);
-    store.setFeatures(payload.features);
-    store.setHydrated(true);
+async function applyAnonymousSession(payload: AuthSessionPayload) {
+    const { applyUserSession } = await import("@/lib/user-session");
+    await applyUserSession({ ...payload, user: null });
 }

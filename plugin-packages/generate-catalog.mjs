@@ -7,6 +7,8 @@ const scopes = ["admin.system-channel", "user.custom-channel", "canvas", "creati
 const ref = (path) => ({ $ref: path });
 const omit = (value) => ({ $omitEmpty: value });
 const coalesce = (...values) => ({ $coalesce: values });
+const addNumbers = (...values) => ({ $add: values });
+const multiply = (...values) => ({ $multiply: values });
 const map = (from, as, body) => ({ $map: { from, as, in: body } });
 const filter = (from, as, where) => ({ $filter: { from, as, where } });
 const eq = (left, right) => ({ $eq: [left, right] });
@@ -563,6 +565,58 @@ add({
   }, { originPath: true, query: { Action: "CVSync2AsyncSubmitTask", Version: "2022-08-31" } }),
   poll: { method: "POST", path: "/", originPath: true, contentType: "application/json", query: { Action: "CVSync2AsyncGetResult", Version: "2022-08-31" }, body: { req_key: ref("request.model"), task_id: ref("taskId"), req_json: "{\"return_url\":true}" } },
   response: asyncResponse("image", { taskId: coalesce(ref("response.data.task_id"), ref("response.task_id"), ref("taskId")), status: coalesce(ref("response.data.status"), ref("response.status"), "pending"), images: coalesce(ref("response.data.image_urls"), ref("response.data.binary_data_base64")), errorPaths: ["code"], messagePaths: ["message"] })
+});
+
+add({
+  id: "doubao-streaming-tts", providerId: "doubao-streaming-tts", name: "豆包音频生成", vendor: "Volcengine", capability: "audio",
+  baseUrl: "https://openspeech.bytedance.com", auth: { type: "header", field: "apiKey", header: "X-Api-Key" }, params: audioParams,
+  notes: "火山引擎 seed-audio-1.0 非流式音频生成。POST /api/v3/tts/create。不传 references 为纯文本生成；连接音频时写入 references 的 audio_url 或 audio_data，最多 3 段，参考音频少于 3 段且指定了音色时再追加一个 speaker；连接图片时写入 image_url 或 image_data，最多 1 张。图片和音频不能同时使用。没有参考素材时，speaker 只在用户明确指定音色时发送，且官方仅接受语音合成 2.0 音色或复刻音色。text_prompt 引用参考音频时使用 @Audio1、@Audio2。响应是单个 JSON，audio 为 Base64，url 两小时过期。",
+  create: jsonCreate("/api/v3/tts/create", {
+    model: ref("request.model"),
+    text_prompt: ref("request.prompt"),
+    references: omit(conditional(
+      gt(len(ref("request.images")), 0),
+      map(ref("request.images"), "media", {
+        image_url: omit(conditional(eq(ref("media.source.type"), "url"), ref("media.url"))),
+        image_data: omit(conditional(eq(ref("media.source.type"), "data"), { $dataPayload: ref("media.value") }))
+      }),
+      conditional(
+        gt(len(ref("request.audios")), 0),
+        {
+          $concatArrays: [
+            map(ref("request.audios"), "media", {
+              audio_url: omit(conditional(eq(ref("media.source.type"), "url"), ref("media.url"))),
+              audio_data: omit(conditional(eq(ref("media.source.type"), "data"), { $dataPayload: ref("media.value") }))
+            }),
+            conditional(and(ref("request.extra.audioVoice"), lt(len(ref("request.audios")), 3)), [{ speaker: ref("request.extra.audioVoice") }], [])
+          ]
+        },
+        conditional(ref("request.extra.audioVoice"), [{ speaker: ref("request.extra.audioVoice") }], null)
+      )
+    )),
+    audio_config: {
+      format: coalesce(ref("request.extra.audioFormat"), "mp3"),
+      speech_rate: omit(conditional(ne(toFloat(ref("request.extra.audioSpeed")), 0), addNumbers(multiply(toFloat(ref("request.extra.audioSpeed")), 100), -100)))
+    }
+  }, {
+    headers: {
+      "X-Api-Request-Id": ref("request.extra.idempotencyKey")
+    }
+  }),
+  response: {
+    errorPaths: ["code"],
+    messagePaths: ["message"],
+    status: "succeeded",
+    resultKind: "audio",
+    audios: conditional(
+      ref("response.url"),
+      { url: ref("response.url"), ephemeral: true },
+      conditional(ref("response.audio"), {
+        dataUrl: ref("response.audio"),
+        mimeType: conditional(eq(ref("request.extra.audioFormat"), "wav"), "audio/wav", conditional(eq(ref("request.extra.audioFormat"), "pcm"), "audio/pcm", conditional(eq(ref("request.extra.audioFormat"), "ogg_opus"), "audio/ogg", "audio/mpeg")))
+      })
+    )
+  }
 });
 
 add({

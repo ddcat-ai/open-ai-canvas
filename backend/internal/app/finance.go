@@ -457,7 +457,7 @@ func (s *Service) taskBillingOrder(userID string, task *model.Task, input map[st
 	scene := firstNonEmpty(strings.TrimSpace(task.Operation), task.Type)
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 	priceTierID, _ := config["priceTierId"].(string)
-	return s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(input, capability), strings.TrimSpace(priceTierID), intent)
+	return s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelID, modelKey, capability, scene, requestedBillingQuantity(capability, config), estimateTaskBillingTokens(input, capability), strings.TrimSpace(priceTierID), intent)
 }
 
 func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, input map[string]any) (*model.BillingOrder, error) {
@@ -481,7 +481,7 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	if logicalModel.PricePolicy == "channel" {
 		intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 		priceTierID, _ := config["priceTierId"].(string)
-		order, priceErr := s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelModel.ChannelID, channelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), billingQuantity(capability, config["videoSeconds"]), estimateTaskBillingTokens(input, capability), strings.TrimSpace(priceTierID), intent)
+		order, priceErr := s.newBillingOrderWithPriceTier(userID, task.ID, "task:"+task.ID+":"+newID(), channelModel.ChannelID, channelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(input, capability), strings.TrimSpace(priceTierID), intent)
 		if priceErr != nil {
 			return nil, priceErr
 		}
@@ -499,8 +499,8 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	case "fixed_request":
 		amount = logicalModel.UnitPriceMicrocredits
 	case "per_second":
-		quantity = billingQuantity(capability, config["videoSeconds"])
-		if capability != "video" || quantity <= 0 {
+		quantity = requestedBillingQuantity(capability, config)
+		if (capability != "video" && capability != "audio") || quantity <= 0 {
 			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")
 		}
 		amount, err = creditAmount(logicalModel.UnitPriceMicrocredits, quantity, 10_000)
@@ -543,7 +543,7 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	}
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 	priceTierID, _ := config["priceTierId"].(string)
-	snapshotCreditCost(order, channelModelPriceTierForBilling(*channelModel, priceTierID, capability, intent), billingQuantity(capability, config["videoSeconds"]), tokenEstimate)
+	snapshotCreditCost(order, channelModelPriceTierForBilling(*channelModel, priceTierID, capability, intent), requestedBillingQuantity(capability, config), tokenEstimate)
 	return order, nil
 }
 
@@ -596,11 +596,11 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	switch tier.BillingMode {
 	case "fixed_request":
 	case "per_second":
-		if item.Capability != "video" || capability != "video" {
-			return nil, BadAuthRequest("按秒计费仅适用于视频生成")
+		if (item.Capability != "video" && item.Capability != "audio") || capability != item.Capability {
+			return nil, BadAuthRequest("按秒计费仅适用于视频或音频生成")
 		}
 		if requestedQuantity <= 0 {
-			return nil, BadAuthRequest("视频生成时长无效，无法按秒计费")
+			return nil, BadAuthRequest("生成时长无效，无法按秒计费")
 		}
 		quantity = requestedQuantity
 	case "token":
@@ -741,7 +741,7 @@ func tokenEstimateAmount(item *model.ChannelModel, estimate tokenBillingEstimate
 }
 
 func billingQuantity(capability string, value any) int64 {
-	if capability != "video" {
+	if capability != "video" && capability != "audio" {
 		return 1
 	}
 	quantity, err := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(value)), 10, 64)
@@ -749,6 +749,28 @@ func billingQuantity(capability string, value any) int64 {
 		return 0
 	}
 	return quantity
+}
+
+// requestedBillingQuantity is the quantity reserved before a provider has
+// returned the generated media. Audio output length is not known at request
+// time, so an audio per-second order uses one second as the minimum
+// preauthorization unless the caller explicitly supplied audioSeconds.
+// Settlement must replace this estimate with the measured output duration.
+func requestedBillingQuantity(capability string, config map[string]any) int64 {
+	if capability == "audio" {
+		if config == nil {
+			return 1
+		}
+		value, present := config["audioSeconds"]
+		if !present || strings.TrimSpace(fmt.Sprint(value)) == "" {
+			return 1
+		}
+		return billingQuantity(capability, value)
+	}
+	if config == nil {
+		return billingQuantity(capability, nil)
+	}
+	return billingQuantity(capability, config["videoSeconds"])
 }
 
 func (s *Service) MarkBillingRunning(orderID string) error {

@@ -77,7 +77,7 @@ func cloudAgentStoryboardPatchSchema() map[string]any {
 	return schema
 }
 
-func validateCloudAgentStoryboardRow(row map[string]any, requireDescription bool) error {
+func validateCloudAgentStoryboardRow(row map[string]any, requireDescription bool, fieldPath string) error {
 	if row == nil {
 		return BadAuthRequest("分镜行不能为空")
 	}
@@ -102,8 +102,9 @@ func validateCloudAgentStoryboardRow(row map[string]any, requireDescription bool
 	if requireDescription {
 		plot := strings.TrimSpace(stringValue(row["plotDescription"]))
 		motion := strings.TrimSpace(stringValue(row["videoMotionPrompt"]))
-		if plot == "" && motion == "" {
-			return BadAuthRequest("新增镜头需要画面描述或视频提示词")
+		imagePrompt := strings.TrimSpace(stringValue(row["imageGenerationPrompt"]))
+		if plot == "" && motion == "" && imagePrompt == "" {
+			return cloudAgentFieldError(fieldPath, "required", "新增镜头需要画面描述、首帧提示词或视频提示词")
 		}
 	}
 	return nil
@@ -115,7 +116,7 @@ func normalizeCloudAgentStoryboardRows(rows []map[string]any, userID, nodeID, se
 	}
 	out := make([]any, 0, len(rows))
 	for index, input := range rows {
-		if err := validateCloudAgentStoryboardRow(input, true); err != nil {
+		if err := validateCloudAgentStoryboardRow(input, true, fmt.Sprintf("rows[%d]", index)); err != nil {
 			return nil, err
 		}
 		row := cloudAgentStoryboardRowDefaults()
@@ -294,7 +295,7 @@ func prepareCloudAgentStoryboardEdit(repo *repository.Repository, userID, canvas
 			if len(rows) >= maxCloudAgentStoryboardRows {
 				return nil, BadAuthRequest("单个分镜表最多100个镜头")
 			}
-			if err := validateCloudAgentStoryboardRow(patch, true); err != nil {
+			if err := validateCloudAgentStoryboardRow(patch, true, "patch"); err != nil {
 				return nil, err
 			}
 			row := cloudAgentStoryboardRowDefaults()

@@ -15,6 +15,7 @@ import (
 )
 
 func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerSkillCurationRoutes(r, svc)
 	r.POST("/skills/install", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -88,6 +89,8 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		result, err := svc.Skills(user.ID, service.SkillListRequest{
+			PlatformRootID:     c.Query("platformRootId"),
+			PlatformCategoryID: c.Query("platformCategoryId"), PlatformUncategorized: c.Query("platformUncategorized") == "true",
 			Page: page, PageSize: pageSize, Scope: c.DefaultQuery("scope", "public"),
 			Search: c.Query("search"), Tag: c.Query("tag"), Sort: c.DefaultQuery("sort", "popular"),
 			LibraryCategoryID: c.Query("libraryCategoryId"), LibraryUncategorized: libraryUncategorized,

@@ -32,7 +32,9 @@ import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-
 import { markdownPlainText } from "@/lib/markdown-plain-text";
 import type { ApprovalState } from "./canvas-cloud-agent-events";
 
-export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; onOpen: () => void }) {
+// hidden 为 true 时入口保持挂载但不显示：Live2D 模型加载开销大，面板开合不能卸载它，
+// 否则每次重新挂载都要重新下载模型并重建渲染上下文，期间只能显示默认形象。
+export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, hidden = false, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; hidden?: boolean; onOpen: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
     const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -50,7 +52,9 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
             aria-label={`打开${appearance.agentName}`}
             title={`${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
             className={cn("canvas-agent-launcher fixed z-[calc(var(--z-toast)+1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging", live && "canvas-agent-launcher-live2d")}
-            style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow } as CSSProperties}
+            style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow, ...(hidden ? { display: "none" } : null) } as CSSProperties}
+            aria-hidden={hidden || undefined}
+            tabIndex={hidden ? -1 : undefined}
             data-canvas-no-zoom
             {...handlers}
             whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
@@ -161,7 +165,7 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
     const protocolBytes = formatContextBytes(view.protocolBytes);
     const usedRatio = view.ratio === undefined ? 0 : Math.max(0, Math.min(1, view.ratio));
     const phaseLabel = CONTEXT_PHASE_LABEL[view.phase];
-    const sourceLabel = view.tokenSource === "provider" ? "模型实测校准" : view.estimate ? "本地估算" : "未测量";
+    const sourceLabel = view.tokenSource === "pi" ? "Pi 会话估算" : "未测量";
     const usageHeading = view.ratio !== undefined ? `上下文已用 ${percent}` : view.phase === "idle" ? "上下文用量" : view.phase === "unknown" ? "上下文窗口未知" : `上下文${view.label}`;
 
     return (
@@ -231,11 +235,17 @@ export function AgentContextRing({ view }: { view: AgentContextUsageView }) {
                     <div className="agent-context-panel-foot">
                         <span>
                             {sourceLabel}
-                            {view.estimate ? " · 不是计费 Token" : " · 预计下次请求"}
+                            {view.tokenSource === "pi" ? " · 不是计费 Token" : ""}
                         </span>
                         {view.compactAtTokens ? <span>压缩线 {formatContextCount(view.compactAtTokens)}</span> : null}
                     </div>
-                    {view.lastCompaction ? <p className="agent-context-note">本轮已完成一次上下文压缩，下一次读数会刷新。</p> : null}
+                    {view.compactionError ? (
+                        <p className="agent-context-note" role="status">
+                            {view.compactionError}
+                        </p>
+                    ) : view.lastCompaction ? (
+                        <p className="agent-context-note">本轮已完成一次上下文压缩，下一次读数会刷新。</p>
+                    ) : null}
                 </div>
             }
         >
@@ -606,9 +616,11 @@ export function ApprovalPreviewItemView({ item, theme, onFocusNode }: { item: Re
                     ? "创建分镜"
                     : item.operation === "edit_storyboard"
                       ? "修改分镜"
-                      : item.operation === "plan_step"
-                        ? "计划"
-                        : "生成";
+                      : item.operation === "create_character"
+                        ? "创建角色卡"
+                        : item.operation === "plan_step"
+                          ? "计划"
+                          : "生成";
     const renderNode = (title: string | undefined, id: string | undefined, typeLabel: string | undefined, role: "source" | "target" | "node") => {
         if (!title) return null;
         const content = (

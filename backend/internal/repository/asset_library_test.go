@@ -25,6 +25,31 @@ func newAssetLibraryTestRepository(t *testing.T) (*Repository, *gorm.DB) {
 	return New(db), db
 }
 
+func TestUserCharacterAssetsPageReturnsStablePages(t *testing.T) {
+	repo, db := newAssetLibraryTestRepository(t)
+	now := time.Now().UTC()
+	for index, title := range []string{"甲", "乙", "丙"} {
+		asset := model.Asset{ID: fmt.Sprintf("character-%d", index), UserID: "user-1", Kind: "entity", Category: model.AssetCategoryCharacter, Status: model.AssetVersionStatusConfirmed, Title: title, PayloadJSON: "{}", CreatedAt: now, UpdatedAt: now.Add(time.Duration(index) * time.Second)}
+		if err := db.Create(&asset).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Create(&model.Asset{ID: "image-1", UserID: "user-1", Kind: "image", Category: model.AssetCategoryMaterial, Status: model.AssetVersionStatusConfirmed, Title: "不是角色", PayloadJSON: "{}", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	first, total, err := repo.UserCharacterAssetsPage("user-1", "", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := repo.UserCharacterAssetsPage("user-1", "乙", 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(first) != 2 || first[0].ID != "character-2" || len(second) != 1 || second[0].Title != "乙" {
+		t.Fatalf("page = total %d first %#v search %#v", total, first, second)
+	}
+}
+
 func TestUserAssetsPagePaginatesAndIsolatesUsers(t *testing.T) {
 	repo, db := newAssetLibraryTestRepository(t)
 	now := time.Now().UTC()

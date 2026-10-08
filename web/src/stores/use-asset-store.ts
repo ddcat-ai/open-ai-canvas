@@ -23,7 +23,18 @@ export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storage
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; durationMs?: number; hasAudio?: boolean; bytes: number; mimeType: string } };
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; durationMs?: number; bytes: number; mimeType: string } };
 export type ModelAsset = AssetBase<"model"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string; fileName: string } };
-export type EntityAsset = AssetBase<"entity"> & { data: { definition: Record<string, unknown> } };
+/** 角色卡：设定来自版本；列表接口会补上当前版本的形象/声音存储键与状态（只读展示字段）。 */
+export type EntityAsset = AssetBase<"entity"> & {
+    data: {
+        definition: Record<string, unknown>;
+        version?: number;
+        coverStorageKey?: string;
+        voiceName?: string;
+        voiceSampleStorageKey?: string;
+        visualStatus?: string;
+        voiceStatus?: string;
+    };
+};
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset | ModelAsset | EntityAsset;
 export type NewAsset =
     | Omit<TextAsset, "id" | "createdAt" | "updatedAt">
@@ -88,6 +99,12 @@ const queuedAssetPersists = new Map<string, QueuedAssetPersist>();
 const assetPersistTokens = new Map<string, number>();
 const assetOperations = new Set<Promise<unknown>>();
 const generationAssetFailures = new Map<string, unknown>();
+const generationAssetDefaults = new Map<string, Map<string, Asset>>();
+
+// 只记录本次实际创建的生成输入，不能把重读的缓存（可能已编辑）当作默认值。
+export function getGenerationAssetDefaults(id: string): Asset | undefined {
+    return generationAssetDefaults.get(getActiveUserScope())?.get(id);
+}
 
 function recordAssetStorageDocument(scope: string, document: AssetStorageDocument) {
     observedAssetPersists.set(scope, {
@@ -326,13 +343,17 @@ export const useAssetStore = create<AssetStore>()(
                             assetId: id,
                             createAsset: () => {
                                 const now = new Date().toISOString();
-                                return parseAssetRecord({
+                                const created = parseAssetRecord({
                                     ...asset,
                                     id,
                                     createdAt: now,
                                     updatedAt: now,
                                     metadata: { ...asset.metadata, generationEffectKey: effectKey },
                                 });
+                                const defaults = generationAssetDefaults.get(scope) ?? new Map<string, Asset>();
+                                defaults.set(id, structuredClone(created));
+                                generationAssetDefaults.set(scope, defaults);
+                                return created;
                             },
                             updateAssets: (updater) => {
                                 withAssetStorePersistenceSuppressed(() => {
@@ -397,6 +418,7 @@ export const useAssetStore = create<AssetStore>()(
             removeAsset: async (id) => get().removeAssets([id]),
             removeAssets: async (ids) => {
                 const removedIds = new Set(ids);
+                for (const id of ids) generationAssetDefaults.get(getActiveUserScope())?.delete(id);
                 let remainingAssets: Asset[] = [];
                 let hasLocalMedia = false;
                 set((state) => {

@@ -18,16 +18,25 @@ const originalWindow = globalThis.window;
 const indexed = new Map<string, unknown>();
 beforeEach(() => {
     resetRemoteUserDataSync();
-    Object.defineProperty(globalThis, "window", { configurable: true, value: {
-        setTimeout: () => 1, clearTimeout: () => {},
-        localStorage: { getItem: () => "agent-user", setItem: () => {} },
-    } });
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            setTimeout: () => 1,
+            clearTimeout: () => {},
+            localStorage: { getItem: () => "agent-user", setItem: () => {} },
+        },
+    });
     indexed.clear();
     localforage.getItem = (async (key: string) => indexed.get(key) ?? null) as typeof localforage.getItem;
-    localforage.setItem = (async (key: string, value: unknown) => { indexed.set(key, value); return value; }) as typeof localforage.setItem;
+    localforage.setItem = (async (key: string, value: unknown) => {
+        indexed.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
 });
 afterEach(async () => {
-    unsubscribe(); restore(); resetRemoteUserDataSync();
+    unsubscribe();
+    restore();
+    resetRemoteUserDataSync();
     await flushCanvasStorePersistence();
     localforage.getItem = originalGet;
     localforage.setItem = originalSet;
@@ -58,7 +67,9 @@ test("successful Agent refresh projects nodes into the open editor and store", a
 
 test("unsaved editor conflicts preserve store and acknowledged baseline", async () => {
     await setup();
-    unsubscribe = subscribeAgentCanvasRefresh(() => { throw new Error("本地编辑冲突"); });
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        throw new Error("本地编辑冲突");
+    });
     await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地编辑冲突");
     expect(useCanvasStore.getState().projects[0]).toEqual(initial);
     unsubscribe();
@@ -66,13 +77,25 @@ test("unsaved editor conflicts preserve store and acknowledged baseline", async 
     expect(useCanvasStore.getState().projects[0]).toMatchObject(remote);
 });
 
-test("dirty persisted edits are not replaced or delivered to the editor", async () => {
+test("dirty persisted edits are rebased when Agent changes different fields", async () => {
     await setup();
     useCanvasStore.setState({ projects: [{ ...initial, title: "本地修改" }] });
     let notified = false;
-    unsubscribe = subscribeAgentCanvasRefresh(() => { notified = true; });
-    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地存在未同步编辑");
-    expect(notified).toBe(false);
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        notified = true;
+    });
+    await expect(refreshCanvasAfterAgent(initial.id)).resolves.toMatchObject({ title: "本地修改", revision: 2, nodes: remote.nodes });
+    expect(notified).toBe(true);
+    expect(useCanvasStore.getState().projects[0]).toMatchObject({ title: "本地修改", revision: 2, nodes: remote.nodes });
+    expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("pending");
+});
+
+test("dirty persisted edits still conflict when Agent changes the same field", async () => {
+    const mock = await setup({ ...remote, title: "云端修改" });
+    useCanvasStore.setState({ projects: [{ ...initial, title: "本地修改" }] });
+    mock.mockResolvedValue({ project: { ...remote, title: "云端修改" } });
+    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow();
+    expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("conflict");
     expect(useCanvasStore.getState().projects[0].title).toBe("本地修改");
 });
 
@@ -81,7 +104,9 @@ test("automatic focus and panning do not block Agent updates or reset the local 
     const viewport = { x: -800, y: -400, k: 0.7 };
     useCanvasStore.setState({ projects: [{ ...initial, viewport, updatedAt: "2026-09-13" }] });
     let editor = initial;
-    unsubscribe = subscribeAgentCanvasRefresh((project) => { editor = project; });
+    unsubscribe = subscribeAgentCanvasRefresh((project) => {
+        editor = project;
+    });
     await refreshCanvasAfterAgent(initial.id);
     expect(editor.nodes).toEqual(remote.nodes);
     expect(editor.viewport).toEqual(viewport);
@@ -91,7 +116,9 @@ test("automatic focus and panning do not block Agent updates or reset the local 
 test("replayed completion events do not reapply unchanged canvas nodes", async () => {
     await setup();
     let deliveries = 0;
-    unsubscribe = subscribeAgentCanvasRefresh(() => { deliveries += 1; });
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        deliveries += 1;
+    });
     await refreshCanvasAfterAgent(initial.id);
     await refreshCanvasAfterAgent(initial.id);
     expect(deliveries).toBe(1);
@@ -102,22 +129,25 @@ test("media admission and completion refresh the editor with references and resu
     const project: CanvasProject = { ...remote, nodes: [...remote.nodes, { ...video, id: "image-1", type: CanvasNodeType.Image }, video], connections: [{ id: "edge-1", fromNodeId: "image-1", toNodeId: "video-1" }] };
     const mock = await setup(project);
     let editor = initial;
-    unsubscribe = subscribeAgentCanvasRefresh((updated) => { editor = updated; });
+    unsubscribe = subscribeAgentCanvasRefresh((updated) => {
+        editor = updated;
+    });
     await refreshCanvasAfterAgent(initial.id);
     expect(editor.connections).toEqual(project.connections);
     expect(editor.nodes.find((node) => node.id === "video-1")?.metadata?.referenceNodeIds).toEqual(["image-1"]);
-    const complete: CanvasProject = { ...project, revision: 3, nodes: project.nodes.map((node) => node.id === "video-1" ? { ...node, metadata: { ...node.metadata, status: "success", storageKey: "resource:video-result" } } : node) };
+    const complete: CanvasProject = { ...project, revision: 3, nodes: project.nodes.map((node) => (node.id === "video-1" ? { ...node, metadata: { ...node.metadata, status: "success", storageKey: "resource:video-result" } } : node)) };
     mock.mockResolvedValue({ project: complete });
     await refreshCanvasAfterAgent(initial.id);
     expect(editor.nodes.find((node) => node.id === "video-1")?.metadata?.storageKey).toBe("resource:video-result");
     expect(useCanvasStore.getState().projects[0].nodes).toEqual(complete.nodes);
 });
 
-
 test("incremental batches update the editor once without full canvas requests", async () => {
     const get = await setup();
     let deliveries = 0;
-    unsubscribe = subscribeAgentCanvasRefresh(() => { deliveries++; });
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        deliveries++;
+    });
     const patch = { canvasId: initial.id, baseRevision: 1, revision: 2, updatedAt: remote.updatedAt, nodes: remote.nodes.map((after) => ({ before: null, after })), connections: [] };
     await applyAgentCanvasPatches(initial.id, [patch, patch]);
     expect(get).not.toHaveBeenCalled();
@@ -125,11 +155,21 @@ test("incremental batches update the editor once without full canvas requests", 
     expect(useCanvasStore.getState().projects[0].nodes).toEqual(remote.nodes);
 });
 
+test("incremental batches sort and deduplicate revisions before applying", async () => {
+    await setup();
+    const first = { canvasId: initial.id, baseRevision: 1, revision: 2, updatedAt: remote.updatedAt, nodes: [{ before: null, after: { ...remote.nodes[0], id: "agent-1" } }], connections: [] };
+    const second = { canvasId: initial.id, baseRevision: 2, revision: 3, updatedAt: remote.updatedAt, nodes: [{ before: null, after: { ...remote.nodes[0], id: "agent-2" } }], connections: [] };
+    await applyAgentCanvasPatches(initial.id, [second, first, first]);
+    expect(useCanvasStore.getState().projects[0].revision).toBe(3);
+    expect(useCanvasStore.getState().projects[0].nodes.map((node) => node.id)).toEqual(["agent-1", "agent-2"]);
+});
 test("already projected deltas still advance the remote baseline", async () => {
     await setup();
     useCanvasStore.setState({ projects: [{ ...remote, revision: 1 }] });
     let deliveries = 0;
-    unsubscribe = subscribeAgentCanvasRefresh(() => { deliveries++; });
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        deliveries++;
+    });
     await applyAgentCanvasPatches(initial.id, [{ canvasId: initial.id, baseRevision: 1, revision: 2, updatedAt: remote.updatedAt, nodes: remote.nodes.map((after) => ({ before: null, after })), connections: [] }]);
     expect(deliveries).toBe(0);
     await expect(refreshCanvasAfterAgent(initial.id)).resolves.toMatchObject(remote);
@@ -139,7 +179,9 @@ test("already projected deltas still advance the remote baseline", async () => {
 test("editor rejection keeps delta projection atomic and retryable", async () => {
     await setup();
     const patch = { canvasId: initial.id, baseRevision: 1, revision: 2, updatedAt: remote.updatedAt, nodes: remote.nodes.map((after) => ({ before: null, after })), connections: [] };
-    unsubscribe = subscribeAgentCanvasRefresh(() => { throw new Error("编辑冲突"); });
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        throw new Error("编辑冲突");
+    });
     await expect(applyAgentCanvasPatches(initial.id, [patch])).rejects.toThrow("编辑冲突");
     expect(useCanvasStore.getState().projects[0]).toEqual(initial);
     unsubscribe();
@@ -147,17 +189,36 @@ test("editor rejection keeps delta projection atomic and retryable", async () =>
     expect(useCanvasStore.getState().projects[0].nodes).toEqual(remote.nodes);
 });
 
-
 test("50 distinct media completions project once and keep the local viewport", async () => {
     const get = await setup();
-    const nodes = Array.from({ length: 50 }, (_, index) => ({ id: `video-${index}`, title: `动画${index}`, type: CanvasNodeType.Video, position: { x: index * 400, y: 100 }, width: 320, height: 180, metadata: { status: "loading" as const, taskId: `task-${index}`, taskStatus: "running" } }));
+    const nodes = Array.from({ length: 50 }, (_, index) => ({
+        id: `video-${index}`,
+        title: `动画${index}`,
+        type: CanvasNodeType.Video,
+        position: { x: index * 400, y: 100 },
+        width: 320,
+        height: 180,
+        metadata: { status: "loading" as const, taskId: `task-${index}`, taskStatus: "running" },
+    }));
     const pending = { ...initial, nodes };
     useCanvasStore.setState({ projects: [pending] });
     pending.remoteContentHash = await canvasContentHash(pending);
     await initializeRemoteUserDataSession("agent-user");
     let deliveries = 0;
-    unsubscribe = subscribeAgentCanvasRefresh(() => { deliveries++; });
-    await applyAgentCanvasPatches(initial.id, nodes.map((before, index) => ({ canvasId: initial.id, baseRevision: index + 1, revision: index + 2, updatedAt: initial.updatedAt, nodes: [{ before, after: { ...before, metadata: { ...before.metadata, status: index % 2 ? "error" as const : "success" as const, taskStatus: index % 2 ? "failed" : "succeeded" } } }], connections: [] })));
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        deliveries++;
+    });
+    await applyAgentCanvasPatches(
+        initial.id,
+        nodes.map((before, index) => ({
+            canvasId: initial.id,
+            baseRevision: index + 1,
+            revision: index + 2,
+            updatedAt: initial.updatedAt,
+            nodes: [{ before, after: { ...before, metadata: { ...before.metadata, status: index % 2 ? ("error" as const) : ("success" as const), taskStatus: index % 2 ? "failed" : "succeeded" } } }],
+            connections: [],
+        })),
+    );
     const result = useCanvasStore.getState().projects[0];
     expect(result.nodes.filter((node) => node.metadata?.status === "success")).toHaveLength(25);
     expect(result.nodes.filter((node) => node.metadata?.status === "error")).toHaveLength(25);
@@ -178,10 +239,10 @@ test("a delta gap reconciles against the cloud before declaring a conflict", asy
 });
 
 test("reconciliation after a delta gap still protects genuinely conflicting edits", async () => {
-    await setup();
+    await setup({ ...remote, title: "云端标题" });
     useCanvasStore.setState({ projects: [{ ...initial, title: "未保存标题" }] });
     await expect(applyAgentCanvasPatches(initial.id, [{ canvasId: initial.id, baseRevision: 2, revision: 3, nodes: [], connections: [] }])).rejects.toThrow("版本不连续");
-    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地存在未同步编辑");
+    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("冲突");
     expect(useSyncProgressStore.getState().syncingProjects[initial.id].phase).toBe("conflict");
     expect((await readCanvasSyncDrafts(initial.id))[0].project.title).toBe("未保存标题");
     await expect(saveRemoteUserDataNow(initial.id)).rejects.toThrow("云端画布已有更新");
@@ -191,7 +252,9 @@ test("an identical cloud snapshot clears a stale conflict without replaying edit
     await setup(initial);
     useSyncProgressStore.getState().setProjectProgress(initial.id, { phase: "conflict", draftCount: 9 });
     let deliveries = 0;
-    unsubscribe = subscribeAgentCanvasRefresh(() => { deliveries++; });
+    unsubscribe = subscribeAgentCanvasRefresh(() => {
+        deliveries++;
+    });
     await refreshCanvasAfterAgent(initial.id);
     expect(deliveries).toBe(0);
     expect(useSyncProgressStore.getState().syncingProjects[initial.id]).toMatchObject({ phase: "done", draftCount: 9 });
@@ -214,7 +277,7 @@ test("an unverified dirty cache cannot become a save baseline merely because rev
     const edited = { ...initial, title: "离线标题" };
     useCanvasStore.setState({ projects: [edited] });
     await initializeRemoteUserDataSession("agent-user");
-    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("本地存在未同步编辑");
+    await expect(refreshCanvasAfterAgent(initial.id)).rejects.toThrow("缺少画布合并基线");
     expect(useCanvasStore.getState().projects[0]).toBe(edited);
     expect((await readCanvasSyncDrafts(initial.id))[0].project.title).toBe(edited.title);
 });
@@ -239,5 +302,7 @@ test("Agent updates merge a local title edit and the next save uses the new revi
         await applyAgentCanvasPatches(initial.id, [patch]);
         expect(useCanvasStore.getState().projects[0].revision).toBe(3);
         expect(useCanvasStore.getState().projects[0].title).toBe("本地标题");
-    } finally { put.mockRestore(); }
+    } finally {
+        put.mockRestore();
+    }
 });

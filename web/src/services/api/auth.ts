@@ -48,6 +48,7 @@ export type AuthSessionPayload = {
 export type RuntimeLimits = {
     activeTaskLimit: number;
     resourceUploadMB: number;
+    storedFileGB: number;
     recycleBinRetentionDays?: number;
 };
 
@@ -608,7 +609,7 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all" };
+export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });
@@ -618,8 +619,16 @@ export function getAdminApiLog(id: string) {
     return http.get<{ log: ApiCallLog }>(`/admin/api-logs/${encodeURIComponent(id)}`);
 }
 
-export function queryAdminApiLogTask(id: string) {
-    return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/query-task`);
+export function queryAdminApiLogTask(id: string, providerRequestId?: string) {
+    return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/query-task`, providerRequestId ? { providerRequestId } : undefined, { timeout: 120_000 });
+}
+
+export function recoverAdminApiLogVideoByURL(id: string, url: string, providerRequestId?: string) {
+    return http.post<AdminProviderTaskQueryResult>(`/admin/api-logs/${encodeURIComponent(id)}/recover-url`, { url, providerRequestId }, { timeout: 120_000 });
+}
+
+export function batchRecoverAdminApiLogs(ids: string[]) {
+    return http.post<{ items: Array<{ logId: string; recovered: boolean; providerStatus?: string; error?: string }>; success: number; failed: number; skipped: number }>("/admin/api-logs/recover-batch", { ids }, { timeout: 180_000 });
 }
 
 export async function exportAdminApiLogs(params: AdminApiLogParams & { ids?: string[] } = {}) {

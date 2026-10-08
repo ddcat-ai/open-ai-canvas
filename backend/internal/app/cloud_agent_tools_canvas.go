@@ -38,6 +38,37 @@ func validateCloudAgentID(value, label string, maxRunes int) error {
 	return nil
 }
 
+// validateCloudAgentVideoFramePatch 校验视频帧选择是否来自当前画布的图片输入。
+// node 是修改后的节点，nodes 和 edges 是当前操作计划；patch 未修改帧时不影响旧节点。
+// 空字符串允许取消选择；非空值必须先建立图片引用连线，实际素材可用性仍由生成准入校验。
+func validateCloudAgentVideoFramePatch(node map[string]any, nodes, edges []map[string]any, patch map[string]any) error {
+	for _, key := range []string{"videoStartFrameNodeId", "videoEndFrameNodeId"} {
+		raw, changed := patch[key]
+		if !changed {
+			continue
+		}
+		id := stringValue(raw)
+		if id == "" {
+			continue
+		}
+		if err := validateCloudAgentID(id, "首尾帧图片节点 ID", 80); err != nil {
+			return cloudAgentFieldError("patch."+key, "invalid_value", cloudAgentSafeToolError(err))
+		}
+		frame := cloudAgentNodeByID(nodes, id)
+		connected := false
+		for _, edge := range edges {
+			if stringValue(edge["fromNodeId"]) == id && stringValue(edge["toNodeId"]) == stringValue(node["id"]) {
+				connected = true
+				break
+			}
+		}
+		if frame == nil || stringValue(frame["type"]) != "image" || !connected {
+			return cloudAgentFieldError("patch."+key, "invalid_value", "首尾帧必须选择已连接到该视频节点的图片；请先建立引用连线")
+		}
+	}
+	return nil
+}
+
 type agentCanvasArgs struct {
 	SnapshotHash string          `json:"snapshotHash"`
 	Ops          []agentCanvasOp `json:"ops"`
@@ -52,10 +83,12 @@ type agentCanvasOp struct {
 	Patch    map[string]any `json:"patch"`
 	// X/Y 为指针：nil 表示模型没有指定坐标，服务端按画布内容自动落位（不再落到原点重叠）。
 	// 指针语义与 canvas/capability/builtin.go 的 positionPatchFields 一致（坐标是可选的数字）。
-	X          *float64 `json:"x"`
-	Y          *float64 `json:"y"`
-	FromNodeID string   `json:"fromNodeId"`
-	ToNodeID   string   `json:"toNodeId"`
+	X            *float64 `json:"x"`
+	Y            *float64 `json:"y"`
+	FromNodeID   string   `json:"fromNodeId"`
+	ToNodeID     string   `json:"toNodeId"`
+	FromHandleID string   `json:"fromHandleId"`
+	ToHandleID   string   `json:"toHandleId"`
 }
 
 // Explicit node creation and edges only; no generic metadata, media URL or deletion.
@@ -67,6 +100,7 @@ func applyCloudAgentCanvas(repo *repository.Repository, userID, canvasID string,
 	if err = saveCloudAgentDocument(repo, plan.Canvas, plan.Document, policy); err != nil {
 		return nil, err
 	}
+	appliedPreview := cloudAgentCanvasAppliedPreview(plan.Preview)
 	if len(recorder) > 0 && recorder[0] != nil {
 		if err := recorder[0](repo, cloudAgentMutationInput{
 			UserID:             userID,
@@ -76,15 +110,19 @@ func applyCloudAgentCanvas(repo *repository.Repository, userID, canvasID string,
 			BeforeSnapshotHash: plan.BeforeSnapshotHash,
 			AfterSnapshotHash:  cloudAgentCanvasHash(plan.Document),
 			BeforeJSON:         plan.BeforeJSON,
-			Preview:            &plan.Preview,
+			Preview:            &appliedPreview,
 		}); err != nil {
 			return nil, err
 		}
 	}
-	return map[string]any{"canvasId": canvasID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "summary": fmt.Sprintf("已完成 %d 项节点/连线操作", len(plan.Args.Ops)), "preview": plan.Preview}, nil
+	return map[string]any{"canvasId": canvasID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "committed": true, "summary": fmt.Sprintf("已完成 %d 项节点/连线操作", len(plan.Args.Ops)), "preview": appliedPreview}, nil
 }
 
 func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, existingConnections ...[]map[string]any) error {
+	return validateCloudAgentConnectionWithHandles(nodes, fromID, toID, "", "", existingConnections...)
+}
+
+func validateCloudAgentConnectionWithHandles(nodes []map[string]any, fromID, toID, fromHandleID, toHandleID string, existingConnections ...[]map[string]any) error {
 	if err := validateCloudAgentID(fromID, "来源节点 ID", 80); err != nil {
 		return err
 	}
@@ -106,8 +144,14 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 	if from == nil || to == nil {
 		return BadAuthRequest("连线端点不存在")
 	}
-	fromCapability, fromKnown := cloudAgentNodeCapabilityForType(stringValue(from["type"]))
-	toCapability, toKnown := cloudAgentNodeCapabilityForType(stringValue(to["type"]))
+	if err := validateCloudAgentStoryboardHandle(from, fromHandleID, "来源"); err != nil {
+		return err
+	}
+	if err := validateCloudAgentStoryboardHandle(to, toHandleID, "目标"); err != nil {
+		return err
+	}
+	fromCapability, fromKnown := cloudAgentNodeCapabilityForNode(from)
+	toCapability, toKnown := cloudAgentNodeCapabilityForNode(to)
 	if !fromKnown || !toKnown {
 		return BadAuthRequest("连线包含当前 Agent 不支持的节点类型")
 	}
@@ -123,7 +167,7 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 		connections = existingConnections[0]
 	}
 	for _, edge := range connections {
-		if stringValue(edge["toNodeId"]) == toID && stringValue(edge["fromNodeId"]) == fromID {
+		if stringValue(edge["toNodeId"]) == toID && stringValue(edge["fromNodeId"]) == fromID && stringValue(edge["fromHandleId"]) == fromHandleID && stringValue(edge["toHandleId"]) == toHandleID {
 			return BadAuthRequest("连线重复")
 		}
 	}
@@ -143,6 +187,30 @@ func validateCloudAgentConnection(nodes []map[string]any, fromID, toID string, e
 		}
 	}
 	return nil
+}
+
+func validateCloudAgentStoryboardHandle(node map[string]any, handleID, side string) error {
+	if handleID == "" {
+		return nil
+	}
+	if stringValue(node["type"]) != "script" {
+		return BadAuthRequest(fmt.Sprintf("只有分镜脚本节点可以指定%s handle", side))
+	}
+	if handleID == "storyboard:context" {
+		return nil
+	}
+	if !strings.HasPrefix(handleID, "row:") || strings.TrimSpace(strings.TrimPrefix(handleID, "row:")) == "" {
+		return BadAuthRequest(fmt.Sprintf("分镜%s handle 必须是 row:<rowId> 或 storyboard:context", side))
+	}
+	metadata, _ := node["metadata"].(map[string]any)
+	storyboard, _ := metadata["storyboard"].(map[string]any)
+	rowID := strings.TrimPrefix(handleID, "row:")
+	for _, row := range creationMaps(storyboard["rows"]) {
+		if stringValue(row["id"]) == rowID {
+			return nil
+		}
+	}
+	return BadAuthRequest(fmt.Sprintf("分镜%s handle 引用的 rowId 不存在，请先读取最新分镜", side))
 }
 
 func cloudAgentInputKindLabel(kind string) string {
@@ -184,6 +252,10 @@ func cloudAgentNodeTypes() map[string]any {
 			"purpose":     capability.Purpose,
 			"defaultSize": map[string]any{"width": capability.DefaultWidth, "height": capability.DefaultHeight},
 			"canUpdate":   capability.CanUpdate,
+		}
+		if variant := capability.Variant; variant != nil {
+			// 变体不能 add_node；画布里按 type+metadata.workflowKind 识别，读取结果以 kind 标出。
+			item["canvasNodeType"], item["workflowKind"], item["creatable"] = variant.BaseType, variant.WorkflowKind, false
 		}
 		if len(capability.GoodFor) > 0 {
 			item["goodFor"] = capability.GoodFor

@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -215,6 +218,7 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		return nil, errors.New("暂存作品不是普通文件")
 	}
 	width, height := 0, 0
+	durationMs := int64(0)
 	if kind == "image" {
 		config, _, err := image.DecodeConfig(file)
 		if err != nil {
@@ -233,6 +237,11 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return nil, err
 		}
+	} else if kind == "audio" {
+		// Audio duration is the source of truth for per-second settlement. The
+		// media can still be saved when ffprobe is unavailable; settlement then
+		// moves the order to review instead of silently charging a fake length.
+		durationMs = probeMediaDurationMs(path)
 	}
 	day, err := s.reserveGeneratedResourceQuota(task.UserID, info.Size())
 	if err != nil {
@@ -246,17 +255,18 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 	}()
 	var resource *model.Resource
 	if existing == nil {
-		resource, _, err = s.storeResourceWithWriter(task.UserID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, info.Size(), width, height, 0, file, mediaUploadKey(task.ID, index), false, s.storeTaskMediaObject)
+		resource, _, err = s.storeResourceWithWriter(task.UserID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, info.Size(), width, height, durationMs, file, mediaUploadKey(task.ID, index), false, s.storeTaskMediaObject)
 	} else {
 		// Reuse the same object key after a failed upload; no orphan per retry.
 		resource = existing
 		if resource.UserID != task.UserID || resource.Size != info.Size() || resource.MimeType != mimeType {
 			return nil, errors.New("恢复文件与原始资源不一致")
 		}
+		resource.DurationMs = durationMs
 		resource.ETag, err = s.storeTaskMediaObject(resource, "generated."+extensionFromMimeType(mimeType), file)
 		if err == nil {
 			resource.Status, resource.Error, resource.UpdatedAt = model.ResourceStatusReady, "", time.Now()
-			err = s.repo.SaveResource(resource)
+			err = s.saveResourceWithinStorageLimit(resource, "")
 		}
 	}
 	if err != nil {
@@ -269,6 +279,24 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		s.maybeStartPlaybackTranscode(resource)
 	}
 	return resource, nil
+}
+
+func probeMediaDurationMs(path string) int64 {
+	if strings.TrimSpace(path) == "" {
+		return 0
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		return 0
+	}
+	output, err := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path).Output()
+	if err != nil {
+		return 0
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil || seconds <= 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {
+		return 0
+	}
+	return int64(math.Ceil(seconds * 1000))
 }
 
 // Unlike ordinary uploads, generated output preserves an OSS failure for

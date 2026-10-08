@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"infinite-canvas/backend/internal/canvas/contract"
 )
 
 const (
@@ -34,6 +36,14 @@ type PatchField struct {
 	MaxRunes    int
 }
 
+// NodeVariant 表示同一底层节点类型按 metadata.workflowKind 标记出的独立能力，
+// 例如 text + workflowKind=character 的角色卡。变体可被发现、读取、引用和连线，
+// 但不是可直接创建的节点类型：add_node 的 nodeType 枚举和 Resolve 都不会返回变体。
+type NodeVariant struct {
+	BaseType     string
+	WorkflowKind string
+}
+
 // Descriptor is the server-owned canvas contract. Agent tools, creation,
 // persistence and state projection all consume this registry; no caller owns a
 // second node allow-list.
@@ -58,6 +68,7 @@ type Descriptor struct {
 	ProjectionField string
 	PatchFields     map[string]PatchField
 	CreateMetadata  func(content string) map[string]any
+	Variant         *NodeVariant
 }
 
 func (d Descriptor) Metadata(content string) map[string]any {
@@ -137,6 +148,23 @@ func (d Descriptor) ApplyPatch(node map[string]any, patch map[string]any) error 
 	}
 	for key, value := range patch {
 		field := d.PatchFields[key]
+		if field.Path == "metadata.generationSpec.prompt" {
+			metadata, ok := node["metadata"].(map[string]any)
+			if !ok {
+				metadata = map[string]any{}
+				node["metadata"] = metadata
+			}
+			if _, ok := metadata["generationSpec"].(map[string]any); !ok {
+				metadata["generationSpec"] = map[string]any{
+					"version":           float64(contract.GenerationVersion),
+					"mode":              d.GenerationMode,
+					"prompt":            "",
+					"options":           map[string]any{},
+					"referenceBindings": []any{},
+					"textInputMode":     "append-sources",
+				}
+			}
+		}
 		parts := strings.Split(field.Path, ".")
 		target := node
 		for _, part := range parts[:len(parts)-1] {
@@ -170,6 +198,8 @@ func inputKindLabel(kind string) string {
 		return "视频"
 	case "audio":
 		return "音频"
+	case "character":
+		return "角色卡"
 	default:
 		return "文本"
 	}

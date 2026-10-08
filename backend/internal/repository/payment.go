@@ -51,16 +51,30 @@ func (r *Repository) CreateTopupProduct(product *model.TopupProduct) error {
 	return r.db.Create(product).Error
 }
 
-func (r *Repository) UpdateTopupProduct(product *model.TopupProduct) error {
-	return r.db.Model(&model.TopupProduct{}).Where("id = ?", product.ID).Updates(map[string]any{
-		"name": product.Name, "description": product.Description, "amount_fen": product.AmountFen,
-		"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
-		"sort_order": product.SortOrder, "sale_strategy": product.SaleStrategy,
-		"period_days": product.PeriodDays, "period_purchase_limit": product.PeriodPurchaseLimit,
-		"stock_total": product.StockTotal, "stock_remaining": product.StockRemaining,
-		"sale_start_at": product.SaleStartAt, "sale_end_at": product.SaleEndAt,
-		"updated_by": product.UpdatedBy, "updated_at": time.Now(),
-	}).Error
+// UpdateTopupProduct locks the product row and derives the new values from the
+// locked state. Orders reserve and release stock with stock_remaining ± 1 on the
+// same row, so computing the remaining stock outside the lock would overwrite a
+// concurrent reservation or release.
+func (r *Repository) UpdateTopupProduct(id string, build func(existing *model.TopupProduct) (*model.TopupProduct, error)) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var existing model.TopupProduct
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&existing, "id = ?", strings.TrimSpace(id)).Error; err != nil {
+			return err
+		}
+		product, err := build(&existing)
+		if err != nil {
+			return err
+		}
+		return tx.Model(&model.TopupProduct{}).Where("id = ?", existing.ID).Updates(map[string]any{
+			"name": product.Name, "description": product.Description, "amount_fen": product.AmountFen,
+			"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
+			"sort_order": product.SortOrder, "sale_strategy": product.SaleStrategy,
+			"period_days": product.PeriodDays, "period_purchase_limit": product.PeriodPurchaseLimit,
+			"stock_total": product.StockTotal, "stock_remaining": product.StockRemaining,
+			"sale_start_at": product.SaleStartAt, "sale_end_at": product.SaleEndAt,
+			"updated_by": product.UpdatedBy, "updated_at": time.Now(),
+		}).Error
+	})
 }
 
 func (r *Repository) CreatePaymentProviderConfig(config *model.PaymentProviderConfig) error {
@@ -99,6 +113,13 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 		if strategy == "" {
 			strategy = model.TopupSaleStrategyUnlimited
 		}
+		// 同一幂等键的重试直接返回原订单：不能被下面的限购/库存检查拦下，
+		// 尤其是周期限购已把这笔待付款订单计入名额。
+		if err := tx.First(&existing, "user_id = ? AND idempotency_key = ?", order.UserID, order.IdempotencyKey).Error; err == nil {
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 		now := time.Now()
 		if !product.Enabled {
 			return ErrTopupUnavailable
@@ -107,8 +128,13 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 			return ErrTopupUnavailable
 		}
 		if strategy == model.TopupSaleStrategyPeriodic && product.PeriodDays > 0 && product.PeriodPurchaseLimit > 0 {
+			// 未关闭的订单都占用周期名额：只数已入账订单的话，用户可以先建多笔
+			// 待付款订单再逐笔付款，全部入账。订单关闭（含超时关单）后名额释放。
+			// 商品行已加锁，同一商品的下单在这里串行。
 			var count int64
-			if err := tx.Model(&model.PaymentOrder{}).Where("user_id = ? AND product_id = ? AND status = ? AND created_at >= ?", order.UserID, order.ProductID, model.PaymentOrderCredited, now.Add(-time.Duration(product.PeriodDays)*24*time.Hour)).Count(&count).Error; err != nil {
+			if err := tx.Model(&model.PaymentOrder{}).Where("user_id = ? AND product_id = ? AND status IN ? AND created_at >= ?", order.UserID, order.ProductID, []model.PaymentOrderStatus{
+				model.PaymentOrderCreated, model.PaymentOrderPending, model.PaymentOrderClosing, model.PaymentOrderCreateFailed, model.PaymentOrderCredited,
+			}, now.Add(-time.Duration(product.PeriodDays)*24*time.Hour)).Count(&count).Error; err != nil {
 				return err
 			}
 			if count >= int64(product.PeriodPurchaseLimit) {

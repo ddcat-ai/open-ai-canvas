@@ -101,7 +101,13 @@ export function parseAssetRecord(value: unknown): Asset {
         return { ...base, kind, data: parsed } satisfies ModelAsset;
     }
     if (kind === "entity") {
-        return { ...base, kind, data: { definition: requireRecord(data.definition, "definition") } } satisfies EntityAsset;
+        const entity: EntityAsset["data"] = { definition: requireRecord(data.definition, "definition") };
+        // 以下是列表接口补的只读展示字段，缺失或类型不对时直接忽略，不影响角色合同。
+        if (typeof data.version === "number") entity.version = data.version;
+        for (const key of ["coverStorageKey", "voiceName", "voiceSampleStorageKey", "visualStatus", "voiceStatus"] as const) {
+            if (typeof data[key] === "string" && data[key]) entity[key] = data[key];
+        }
+        return { ...base, kind, data: entity } satisfies EntityAsset;
     }
     throw new Error(`不支持的素材类型 ${kind}`);
 }

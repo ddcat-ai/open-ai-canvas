@@ -9751,9 +9751,14 @@
 }
 
 :root:not(.dark) .admin-model-editor-section {
-    border: 1px solid rgba(17, 17, 17, 0.15);
-    background: #ffffff;
-    box-shadow: 0 1px 3px rgb(17 17 17 / 0.055);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+:root:not(.dark) .admin-model-editor-section + .admin-model-editor-section {
+    border-top: 0;
+    padding-top: 8px;
 }
 
 :root:not(.dark) .admin-model-editor-drawer :is(.admin-capability-group, .admin-capability-boolean-field, .admin-capability-parameter-field),

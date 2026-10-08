@@ -86,6 +86,8 @@ type providerConfig struct {
 	AudioFormat           string                 `json:"audioFormat"`
 	AudioSpeed            string                 `json:"audioSpeed"`
 	AudioInstructions     string                 `json:"audioInstructions"`
+	AudioLanguage         string                 `json:"audioLanguage"`
+	AudioDialect          string                 `json:"audioDialect"`
 	SystemPrompt          string                 `json:"systemPrompt"`
 	CapabilityConfig      *ModelCapabilityConfig `json:"capabilityConfig"`
 	WorkflowID            string                 `json:"workflowId"`
@@ -308,7 +310,8 @@ func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput)
 		string(model.ChannelInterfaceXAIVideo), string(model.ChannelInterfaceNovitaVideo),
 		string(model.ChannelInterfaceMiniMaxVideo), string(model.ChannelInterfaceNewAPIVideo),
 		string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2),
-		string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo):
+		string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo),
+		string(model.ChannelInterfaceDoubaoStreamingTTS):
 		return true
 	}
 	if isGrokVideoConfig(input.Config) || isSeedanceVideoConfig(input.Config) || isArkPlanVideoConfig(input.Config) {

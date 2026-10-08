@@ -20,6 +20,7 @@ import (
 // ownership, node registry, locks and budget after approval.
 type cloudAgentApprovalPreview struct {
 	Kind        string                          `json:"kind"`
+	Status      string                          `json:"status,omitempty"`
 	Title       string                          `json:"title"`
 	Description string                          `json:"description"`
 	Items       []cloudAgentApprovalPreviewItem `json:"items"`
@@ -150,32 +151,52 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			})
 		case "connect_nodes":
 			if err := validateCloudAgentID(op.FromNodeID, "来源节点 ID", 80); err != nil {
-				return nil, err
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].fromNodeId", opIndex), "invalid_value", cloudAgentSafeToolError(err))
 			}
 			if err := validateCloudAgentID(op.ToNodeID, "目标节点 ID", 80); err != nil {
-				return nil, err
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].toNodeId", opIndex), "invalid_value", cloudAgentSafeToolError(err))
 			}
 			fromIndex, toIndex := cloudAgentNodeIndex(nodes, op.FromNodeID), cloudAgentNodeIndex(nodes, op.ToNodeID)
-			if fromIndex < 0 || toIndex < 0 || op.FromNodeID == op.ToNodeID {
-				return nil, BadAuthRequest("连线端点不存在或指向自身")
+			switch {
+			case fromIndex < 0:
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].fromNodeId", opIndex), "not_found", "连线来源节点不在当前画布；请重新读取画布并使用真实节点 ID")
+			case toIndex < 0:
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].toNodeId", opIndex), "not_found", "连线目标节点不在当前画布；请重新读取画布并使用真实节点 ID")
+			case op.FromNodeID == op.ToNodeID:
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].toNodeId", opIndex), "invalid_value", "连线不能指向自身；请选择另一个目标节点")
 			}
-			if err := validateCloudAgentConnection(nodes, op.FromNodeID, op.ToNodeID, edges); err != nil {
+			if err := validateCloudAgentConnectionWithHandles(nodes, op.FromNodeID, op.ToNodeID, op.FromHandleID, op.ToHandleID, edges); err != nil {
 				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d]", opIndex), "invalid_connection", cloudAgentSafeToolError(err))
 			}
 			for _, edge := range edges {
-				if stringValue(edge["id"]) == op.ID || (stringValue(edge["fromNodeId"]) == op.FromNodeID && stringValue(edge["toNodeId"]) == op.ToNodeID) {
-					return nil, BadAuthRequest("连线重复")
+				if stringValue(edge["id"]) == op.ID {
+					return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].id", opIndex), "duplicate", "连线 ID 已存在；请为新连线指定未使用的 ID")
+				}
+				if stringValue(edge["fromNodeId"]) == op.FromNodeID && stringValue(edge["toNodeId"]) == op.ToNodeID && stringValue(edge["fromHandleId"]) == op.FromHandleID && stringValue(edge["toHandleId"]) == op.ToHandleID {
+					return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d]", opIndex), "duplicate", "这两个节点与 handle 之间已有连线；请移除重复操作")
 				}
 			}
-			fromCapability, _ := cloudAgentNodeCapabilityForType(stringValue(nodes[fromIndex]["type"]))
-			toCapability, _ := cloudAgentNodeCapabilityForType(stringValue(nodes[toIndex]["type"]))
+			fromCapability, _ := cloudAgentNodeCapabilityForNode(nodes[fromIndex])
+			toCapability, _ := cloudAgentNodeCapabilityForNode(nodes[toIndex])
 			fromTitle := cloudAgentApprovalNodeTitle(nodes[fromIndex], fromCapability.Label)
 			toTitle := cloudAgentApprovalNodeTitle(nodes[toIndex], toCapability.Label)
-			edges = append(edges, map[string]any{"id": op.ID, "fromNodeId": op.FromNodeID, "toNodeId": op.ToNodeID})
+			edge := map[string]any{"id": op.ID, "fromNodeId": op.FromNodeID, "toNodeId": op.ToNodeID}
+			if op.FromHandleID != "" {
+				edge["fromHandleId"] = op.FromHandleID
+			}
+			if op.ToHandleID != "" {
+				edge["toHandleId"] = op.ToHandleID
+			}
+			edges = append(edges, edge)
+			if err := applyCloudAgentStoryboardConnection(nodes, op.FromNodeID, op.ToNodeID, op.FromHandleID, op.ToHandleID); err != nil {
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d]", opIndex), "invalid_connection", cloudAgentSafeToolError(err))
+			}
+			details := cloudAgentStoryboardConnectionDetails(op.FromHandleID, op.ToHandleID)
 			items = append(items, cloudAgentApprovalPreviewItem{
 				Operation: "connect_nodes", NodeID: op.FromNodeID, NodeTitle: fromTitle,
 				NodeType: fromCapability.Type, NodeTypeLabel: fromCapability.Label,
 				TargetNodeID: op.ToNodeID, TargetNodeTitle: toTitle, TargetNodeType: toCapability.Type,
+				Details: details,
 				Summary: fmt.Sprintf("建立《%s》→《%s》的引用连线", fromTitle, toTitle),
 			})
 		case "update_node":
@@ -188,7 +209,7 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			if index < 0 {
 				return nil, BadAuthRequest("只能更新现有且受 Agent 支持的节点")
 			}
-			capability, ok := cloudAgentNodeCapabilityForType(stringValue(nodes[index]["type"]))
+			capability, ok := cloudAgentNodeCapabilityForNode(nodes[index])
 			if !ok || !capability.CanUpdate {
 				return nil, BadAuthRequest("该节点类型不支持 Agent 更新")
 			}
@@ -200,6 +221,9 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 			fields := cloudAgentApprovalPatchLabels(capability.PatchFields, op.Patch)
 			if err := capability.ApplyPatch(nodes[index], op.Patch); err != nil {
 				return nil, BadAuthRequest(err.Error())
+			}
+			if err := validateCloudAgentVideoFramePatch(nodes[index], nodes, edges, op.Patch); err != nil {
+				return nil, err
 			}
 			afterTitle := cloudAgentApprovalNodeTitle(nodes[index], capability.Label)
 			resultTitle := ""
@@ -218,6 +242,189 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 	doc["nodes"] = nodes
 	doc["connections"] = edges
 	return items, nil
+}
+
+func applyCloudAgentStoryboardConnection(nodes []map[string]any, fromNodeID, toNodeID, fromHandleID, toHandleID string) error {
+	if fromHandleID == "" && toHandleID == "" {
+		return nil
+	}
+	from := cloudAgentNodeByID(nodes, fromNodeID)
+	to := cloudAgentNodeByID(nodes, toNodeID)
+	if from == nil || to == nil {
+		return BadAuthRequest("分镜连线端点不存在")
+	}
+	scriptNode, linkedNode, handleID := from, to, fromHandleID
+	scriptIsSource := true
+	if handleID == "" {
+		scriptNode, linkedNode, handleID = to, from, toHandleID
+		scriptIsSource = false
+	}
+	if stringValue(scriptNode["type"]) != "script" {
+		return BadAuthRequest("分镜 handle 必须挂在分镜脚本节点上")
+	}
+	metadata, ok := scriptNode["metadata"].(map[string]any)
+	if !ok {
+		return BadAuthRequest("分镜节点数据格式无效")
+	}
+	storyboard, ok := metadata["storyboard"].(map[string]any)
+	if !ok {
+		return BadAuthRequest("分镜节点缺少结构化表格")
+	}
+	if handleID == "storyboard:context" {
+		ids := stringIDs(storyboard["referenceNodeIds"])
+		linkedID := stringValue(linkedNode["id"])
+		if linkedID != "" && !containsStoryboardString(ids, linkedID) {
+			storyboard["referenceNodeIds"] = append(idsAsAny(ids), linkedID)
+		}
+		return nil
+	}
+	rowID := strings.TrimPrefix(handleID, "row:")
+	var row map[string]any
+	for _, candidate := range creationMaps(storyboard["rows"]) {
+		if stringValue(candidate["id"]) == rowID {
+			row = candidate
+			break
+		}
+	}
+	if row == nil {
+		return BadAuthRequest("分镜行不存在，请先读取最新分镜行 ID")
+	}
+	if scriptIsSource {
+		switch stringValue(linkedNode["type"]) {
+		case "image":
+			row["imageNodeId"] = linkedNode["id"]
+		case "video":
+			row["videoNodeId"] = linkedNode["id"]
+		}
+		return nil
+	}
+	binding, ok := cloudAgentStoryboardBinding(linkedNode)
+	if !ok {
+		return nil
+	}
+	bindings := creationMaps(row["assetBindings"])
+	for _, existing := range bindings {
+		if stringValue(existing["nodeId"]) == stringValue(linkedNode["id"]) {
+			return nil
+		}
+	}
+	row["assetBindings"] = append(bindingsAsAny(bindings), binding)
+	return nil
+}
+
+func cloudAgentStoryboardConnectionDetails(fromHandleID, toHandleID string) []string {
+	handleID := fromHandleID
+	if handleID == "" {
+		handleID = toHandleID
+	}
+	if handleID == "storyboard:context" {
+		return []string{"挂载到分镜全局设定"}
+	}
+	if strings.HasPrefix(handleID, "row:") {
+		return []string{fmt.Sprintf("挂载到镜头行 %s", strings.TrimPrefix(handleID, "row:"))}
+	}
+	return nil
+}
+
+func cloudAgentStoryboardBinding(node map[string]any) (map[string]any, bool) {
+	metadata, _ := node["metadata"].(map[string]any)
+	role := ""
+	switch {
+	case stringValue(metadata["workflowKind"]) == "character" || stringValue(metadata["assetCategory"]) == "character":
+		role = "character"
+	case stringValue(node["type"]) == "audio":
+		role = "audio"
+	case stringValue(node["type"]) == "video":
+		role = "motion"
+	case stringValue(metadata["assetCategory"]) == "environment":
+		role = "environment"
+	case stringValue(metadata["assetCategory"]) == "prop":
+		role = "prop"
+	case stringValue(node["type"]) == "image":
+		role = "style"
+	}
+	if role == "" || stringValue(node["id"]) == "" {
+		return nil, false
+	}
+	priority := 60
+	switch role {
+	case "character":
+		priority = 100
+	case "environment":
+		priority = 90
+	case "prop", "wardrobe", "weapon":
+		priority = 80
+	case "motion", "audio":
+		priority = 70
+	}
+	return map[string]any{"nodeId": node["id"], "role": role, "priority": float64(priority)}, true
+}
+
+func cloudAgentNodeByID(nodes []map[string]any, id string) map[string]any {
+	for _, node := range nodes {
+		if stringValue(node["id"]) == id {
+			return node
+		}
+	}
+	return nil
+}
+
+func stringIDs(value any) []string {
+	values, _ := value.([]any)
+	ids := make([]string, 0, len(values))
+	for _, item := range values {
+		if id := stringValue(item); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func idsAsAny(values []string) []any {
+	out := make([]any, len(values))
+	for index, value := range values {
+		out[index] = value
+	}
+	return out
+}
+
+func bindingsAsAny(values []map[string]any) []any {
+	out := make([]any, len(values))
+	for index, value := range values {
+		out[index] = value
+	}
+	return out
+}
+
+func containsStoryboardString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func cloudAgentCanvasAppliedPreview(preview cloudAgentApprovalPreview) cloudAgentApprovalPreview {
+	applied := preview
+	counts := map[string]int{}
+	for _, item := range preview.Items {
+		counts[item.Operation]++
+	}
+	parts := make([]string, 0, 3)
+	if counts["add_node"] > 0 {
+		parts = append(parts, fmt.Sprintf("新增 %d 个节点", counts["add_node"]))
+	}
+	if counts["update_node"] > 0 {
+		parts = append(parts, fmt.Sprintf("修改 %d 个节点", counts["update_node"]))
+	}
+	if counts["connect_nodes"] > 0 {
+		parts = append(parts, fmt.Sprintf("建立 %d 条引用连线", counts["connect_nodes"]))
+	}
+	applied.Status = "applied"
+	applied.Title = "画布修改已写入"
+	applied.Description = fmt.Sprintf("画布修改已写入：%s。", strings.Join(parts, "，"))
+	return applied
 }
 
 func cloudAgentCanvasApprovalPreview(items []cloudAgentApprovalPreviewItem) cloudAgentApprovalPreview {
@@ -266,6 +473,12 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	}
 	if args.Size != "" {
 		details = append(details, "画幅："+truncateRunes(args.Size, 40))
+	}
+	if args.VideoStartFrameNodeID != "" {
+		details = append(details, "首帧节点："+truncateRunes(args.VideoStartFrameNodeID, 80))
+	}
+	if args.VideoEndFrameNodeID != "" {
+		details = append(details, "尾帧节点："+truncateRunes(args.VideoEndFrameNodeID, 80))
 	}
 	if args.Quality != "" {
 		details = append(details, "质量："+truncateRunes(args.Quality, 40))

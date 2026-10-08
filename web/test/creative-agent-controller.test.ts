@@ -140,8 +140,8 @@ describe("创作控制器恢复", () => {
     });
     test("第一项失败不阻止同批成功结果回写", async () => {
         const media = ["a", "b"].map((ref) => ({ ref, nodeId: ref, attempt: 1, submissionId: ref, taskId: ref, status: "queued" as const }));
-        const h = harness({ ...initialCreativeState(), proposal, canvasApplied: true, media }, "paused", [submission("a", "a", "a"), submission("b", "b", "b")], async (id) => { if (id === "a") throw new Error("A生成失败"); return { id, status: "succeeded", resultJson: JSON.stringify({ images: [{ storageKey: "resource:output", dataUrl: "/api/resources/output/file" }] }) } as GenerationTask; });
-        try { await h.controller.load("run"); await expect(h.controller.resume()).rejects.toThrow("A生成失败"); expect(h.view().state.media.map((item) => item.status)).toEqual(["failed", "ready"]); expect(h.counters().executions).toBe(0); expect(h.counters().commits).toBe(1); } finally { h.controller.dispose(); }
+        const h = harness({ ...initialCreativeState(), proposal, canvasApplied: true, media }, "paused", [submission("a", "a", "a"), submission("b", "b", "b")], async (id) => { if (id === "a") throw new Error("provider request failed: invalid_request_error"); return { id, status: "succeeded", resultJson: JSON.stringify({ images: [{ storageKey: "resource:output", dataUrl: "/api/resources/output/file" }] }) } as GenerationTask; });
+        try { await h.controller.load("run"); await expect(h.controller.resume()).rejects.toThrow("模型服务处理失败，请稍后重试或换用其他模型。"); expect(h.view().state.media[0].error).toBe("模型服务处理失败，请稍后重试或换用其他模型。"); expect(h.view().state.media.map((item) => item.status)).toEqual(["failed", "ready"]); expect(h.counters().executions).toBe(0); expect(h.counters().commits).toBe(1); } finally { h.controller.dispose(); }
     });
     test("暂停后迟到的任务回调不能写画布", async () => {
         let resolveTask!: (task: GenerationTask) => void;

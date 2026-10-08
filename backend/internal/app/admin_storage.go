@@ -13,13 +13,13 @@ import (
 )
 
 type AdminResourceQuery struct {
-	Keyword  string
-	Kind     string
-	Status   string
-	Provider string
-	UserID   string
-	Page     int
-	Limit    int
+	Keyword   string
+	Kind      string
+	Status    string
+	Provider  string
+	UserQuery string
+	Page      int
+	Limit     int
 }
 
 type AdminStorageResourceView struct {
@@ -149,13 +149,13 @@ func (s *Service) PrepareResourceDeliveryAsAdmin(actor *model.User, id string, o
 func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminResourceFilter, int, int, error) {
 	page, limit := normalizeAdminPage(query.Page, query.Limit)
 	filter := repository.AdminResourceFilter{
-		Keyword:  strings.TrimSpace(query.Keyword),
-		Kind:     strings.ToLower(strings.TrimSpace(query.Kind)),
-		Status:   strings.ToLower(strings.TrimSpace(query.Status)),
-		Provider: strings.ToLower(strings.TrimSpace(query.Provider)),
-		UserID:   strings.TrimSpace(query.UserID),
-		Limit:    limit,
-		Offset:   (page - 1) * limit,
+		Keyword:   strings.TrimSpace(query.Keyword),
+		Kind:      strings.ToLower(strings.TrimSpace(query.Kind)),
+		Status:    strings.ToLower(strings.TrimSpace(query.Status)),
+		Provider:  strings.ToLower(strings.TrimSpace(query.Provider)),
+		UserQuery: strings.TrimSpace(query.UserQuery),
+		Limit:     limit,
+		Offset:    (page - 1) * limit,
 	}
 	if filter.Kind != "" && !oneOf(filter.Kind, "image", "video", "audio", "file", "live2d") {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源类型筛选无效")
@@ -166,7 +166,7 @@ func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminReso
 	if filter.Provider != "" && !oneOf(filter.Provider, "local", aliyunOSSProvider, tencentCOSProvider, qiniuKodoProvider, s3Provider) {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源存储位置筛选无效")
 	}
-	if len(filter.Keyword) > 200 || len(filter.UserID) > 64 {
+	if len(filter.Keyword) > 200 || len(filter.UserQuery) > 160 {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源筛选条件过长")
 	}
 	return filter, page, limit, nil

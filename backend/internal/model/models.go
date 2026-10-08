@@ -68,6 +68,7 @@ const (
 	ChannelInterfaceVolcengineJiMengImage       ChannelInterfaceType = "volcengine-jimeng-image"
 	ChannelInterfaceGeminiImage                 ChannelInterfaceType = "gemini-image"
 	ChannelInterfaceOpenAIAudio                 ChannelInterfaceType = "openai-audio"
+	ChannelInterfaceDoubaoStreamingTTS          ChannelInterfaceType = "doubao-streaming-tts"
 	ChannelInterfaceAsyncAudio                  ChannelInterfaceType = "async-audio"
 	ChannelInterfaceNewAPIVideo                 ChannelInterfaceType = "newapi"
 	ChannelInterfaceNewAPIChannel1              ChannelInterfaceType = "newapi-channel-1"

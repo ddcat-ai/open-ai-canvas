@@ -4,28 +4,28 @@ import { resolve } from "node:path";
 import localforage from "localforage";
 
 import {
-    DIRECTOR_ONBOARDING_KEY,
-    DIRECTOR_ONBOARDING_STEPS,
-    DIRECTOR_ONBOARDING_VERSION,
-    advanceDirectorOnboarding,
-    createDirectorOnboardingGate,
-    directorOnboardingInitial,
-    loadDirectorOnboardingProgress,
-    parseDirectorOnboardingProgress,
-    reduceDirectorOnboarding,
-    resetDirectorOnboardingProgress,
-    resolveDirectorOnboardingView,
-    saveDirectorOnboardingProgress,
-    type DirectorOnboardingAction,
-    type DirectorOnboardingProgress,
-    type DirectorOnboardingStorage,
-} from "../src/lib/canvas/director/director-onboarding";
+    PREVIS_ONBOARDING_KEY,
+    PREVIS_ONBOARDING_STEPS,
+    PREVIS_ONBOARDING_VERSION,
+    advancePrevisOnboarding,
+    createPrevisOnboardingGate,
+    previsOnboardingInitial,
+    loadPrevisOnboardingProgress,
+    parsePrevisOnboardingProgress,
+    reducePrevisOnboarding,
+    resetPrevisOnboardingProgress,
+    resolvePrevisOnboardingView,
+    savePrevisOnboardingProgress,
+    type PrevisOnboardingAction,
+    type PrevisOnboardingProgress,
+    type PrevisOnboardingStorage,
+} from "../src/lib/canvas/previs/previs-onboarding";
 import { moduleGroupSource } from "./helpers/module-group-source";
 
-const ACTIVE: DirectorOnboardingProgress = directorOnboardingInitial;
+const ACTIVE: PrevisOnboardingProgress = previsOnboardingInitial;
 
-function progressAt(stepId: DirectorOnboardingProgress["stepId"], status: DirectorOnboardingProgress["status"] = "active"): DirectorOnboardingProgress {
-    return { version: DIRECTOR_ONBOARDING_VERSION, status, stepId };
+function progressAt(stepId: PrevisOnboardingProgress["stepId"], status: PrevisOnboardingProgress["status"] = "active"): PrevisOnboardingProgress {
+    return { version: PREVIS_ONBOARDING_VERSION, status, stepId };
 }
 
 /**
@@ -40,7 +40,7 @@ function stripComments(source: string) {
 function memoryStorage(initial?: string) {
     const writes: string[] = [];
     let value = initial ?? null;
-    const storage: DirectorOnboardingStorage = {
+    const storage: PrevisOnboardingStorage = {
         getItem: async () => value,
         setItem: async (_name, next) => {
             value = next;
@@ -103,14 +103,14 @@ describe("用户隔离", () => {
     test("两个账号的进度写进各自的 scope 键，互不可见", async () => {
         const harness = localforageHarness();
         try {
-            await saveDirectorOnboardingProgress("user-a", progressAt("pose"));
-            await saveDirectorOnboardingProgress("user-b", progressAt("apply", "completed"));
+            await savePrevisOnboardingProgress("user-a", progressAt("pose"));
+            await savePrevisOnboardingProgress("user-b", progressAt("apply", "completed"));
 
-            expect([...harness.durable.keys()].sort()).toEqual([`${DIRECTOR_ONBOARDING_KEY}:user:user-a`, `${DIRECTOR_ONBOARDING_KEY}:user:user-b`]);
-            expect(await loadDirectorOnboardingProgress("user-a")).toEqual(progressAt("pose"));
-            expect(await loadDirectorOnboardingProgress("user-b")).toEqual(progressAt("apply", "completed"));
+            expect([...harness.durable.keys()].sort()).toEqual([`${PREVIS_ONBOARDING_KEY}:user:user-a`, `${PREVIS_ONBOARDING_KEY}:user:user-b`]);
+            expect(await loadPrevisOnboardingProgress("user-a")).toEqual(progressAt("pose"));
+            expect(await loadPrevisOnboardingProgress("user-b")).toEqual(progressAt("apply", "completed"));
             // 没写过的账号拿到初始进度，而不是继承别人的已完成状态。
-            expect(await loadDirectorOnboardingProgress("user-c")).toEqual(ACTIVE);
+            expect(await loadPrevisOnboardingProgress("user-c")).toEqual(ACTIVE);
         } finally {
             harness.restore();
         }
@@ -119,8 +119,8 @@ describe("用户隔离", () => {
     test("进度只走 localforage，完全不碰 localStorage", async () => {
         const harness = localforageHarness();
         try {
-            await saveDirectorOnboardingProgress("user-a", progressAt("move"));
-            await loadDirectorOnboardingProgress("user-a");
+            await savePrevisOnboardingProgress("user-a", progressAt("move"));
+            await loadPrevisOnboardingProgress("user-a");
             expect(harness.localStorageCalls).toEqual([]);
         } finally {
             harness.restore();
@@ -128,16 +128,16 @@ describe("用户隔离", () => {
     });
 
     test("空 scope 一律硬失败，绝不回落到默认账号", async () => {
-        await expect(loadDirectorOnboardingProgress("")).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(loadDirectorOnboardingProgress("   ")).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(saveDirectorOnboardingProgress("", ACTIVE)).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(advanceDirectorOnboarding("", ACTIVE, "next")).rejects.toThrow("缺少导演台引导的用户 scope");
+        await expect(loadPrevisOnboardingProgress("")).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(loadPrevisOnboardingProgress("   ")).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(savePrevisOnboardingProgress("", ACTIVE)).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(advancePrevisOnboarding("", ACTIVE, "next")).rejects.toThrow("缺少预演台引导的用户 scope");
     });
 
     test("存储层失败向上抛，不伪装成初始进度", async () => {
         const harness = localforageHarness({ failReads: true });
         try {
-            await expect(loadDirectorOnboardingProgress("user-a")).rejects.toThrow("indexeddb unavailable");
+            await expect(loadPrevisOnboardingProgress("user-a")).rejects.toThrow("indexeddb unavailable");
         } finally {
             harness.restore();
         }
@@ -146,8 +146,8 @@ describe("用户隔离", () => {
 
 describe("版本失效与脏数据", () => {
     test("版本不符的旧进度整条丢弃，回到第一步", () => {
-        const stale = JSON.stringify({ version: DIRECTOR_ONBOARDING_VERSION - 1, status: "completed", stepId: "apply" });
-        expect(parseDirectorOnboardingProgress(stale)).toEqual(ACTIVE);
+        const stale = JSON.stringify({ version: PREVIS_ONBOARDING_VERSION - 1, status: "completed", stepId: "apply" });
+        expect(parsePrevisOnboardingProgress(stale)).toEqual(ACTIVE);
     });
 
     test("缺失、非 JSON、非对象、字段越界的持久值都回落到初始进度", () => {
@@ -162,19 +162,19 @@ describe("版本失效与脏数据", () => {
             "42",
             "null",
             JSON.stringify({ status: "active", stepId: "actor" }),
-            JSON.stringify({ version: DIRECTOR_ONBOARDING_VERSION, status: "paused", stepId: "actor" }),
-            JSON.stringify({ version: DIRECTOR_ONBOARDING_VERSION, status: "active", stepId: "lighting" }),
+            JSON.stringify({ version: PREVIS_ONBOARDING_VERSION, status: "paused", stepId: "actor" }),
+            JSON.stringify({ version: PREVIS_ONBOARDING_VERSION, status: "active", stepId: "lighting" }),
             JSON.stringify({ version: "2", status: "active", stepId: "actor" }),
-            JSON.stringify([{ version: DIRECTOR_ONBOARDING_VERSION, status: "active", stepId: "actor" }]),
+            JSON.stringify([{ version: PREVIS_ONBOARDING_VERSION, status: "active", stepId: "actor" }]),
         ];
-        for (const raw of dirty) expect(parseDirectorOnboardingProgress(raw)).toEqual(ACTIVE);
+        for (const raw of dirty) expect(parsePrevisOnboardingProgress(raw)).toEqual(ACTIVE);
     });
 
     test("脏持久值经由真实读路径也只会得到初始进度", async () => {
         const harness = localforageHarness();
         try {
-            harness.durable.set(`${DIRECTOR_ONBOARDING_KEY}:user:user-a`, "{ broken");
-            expect(await loadDirectorOnboardingProgress("user-a")).toEqual(ACTIVE);
+            harness.durable.set(`${PREVIS_ONBOARDING_KEY}:user:user-a`, "{ broken");
+            expect(await loadPrevisOnboardingProgress("user-a")).toEqual(ACTIVE);
         } finally {
             harness.restore();
         }
@@ -182,15 +182,15 @@ describe("版本失效与脏数据", () => {
 
     test("落盘时只写受控字段，不回写未知字段", async () => {
         const store = memoryStorage();
-        await saveDirectorOnboardingProgress("user-a", { ...progressAt("move"), extra: "x" } as DirectorOnboardingProgress, store.storage);
-        expect(JSON.parse(store.writes[0])).toEqual({ version: DIRECTOR_ONBOARDING_VERSION, status: "active", stepId: "move" });
+        await savePrevisOnboardingProgress("user-a", { ...progressAt("move"), extra: "x" } as PrevisOnboardingProgress, store.storage);
+        expect(JSON.parse(store.writes[0])).toEqual({ version: PREVIS_ONBOARDING_VERSION, status: "active", stepId: "move" });
     });
 
     test("状态机遇到不存在的步骤时回到初始进度，而不是越界", () => {
-        const bogus = { version: DIRECTOR_ONBOARDING_VERSION, status: "active", stepId: "lighting" } as unknown as DirectorOnboardingProgress;
-        expect(reduceDirectorOnboarding(bogus, "next")).toEqual(ACTIVE);
-        expect(reduceDirectorOnboarding(bogus, "back")).toEqual(ACTIVE);
-        expect(resolveDirectorOnboardingView(bogus)).toBeNull();
+        const bogus = { version: PREVIS_ONBOARDING_VERSION, status: "active", stepId: "lighting" } as unknown as PrevisOnboardingProgress;
+        expect(reducePrevisOnboarding(bogus, "next")).toEqual(ACTIVE);
+        expect(reducePrevisOnboarding(bogus, "back")).toEqual(ACTIVE);
+        expect(resolvePrevisOnboardingView(bogus)).toBeNull();
     });
 });
 
@@ -198,55 +198,55 @@ describe("步骤流转", () => {
     test("next 依次走完六步，最后一步 next 即结束引导", () => {
         let progress = ACTIVE;
         const visited = [progress.stepId];
-        for (let i = 0; i < DIRECTOR_ONBOARDING_STEPS.length - 1; i += 1) {
-            progress = reduceDirectorOnboarding(progress, "next");
+        for (let i = 0; i < PREVIS_ONBOARDING_STEPS.length - 1; i += 1) {
+            progress = reducePrevisOnboarding(progress, "next");
             visited.push(progress.stepId);
         }
-        expect(visited).toEqual(DIRECTOR_ONBOARDING_STEPS.map((step) => step.id));
+        expect(visited).toEqual(PREVIS_ONBOARDING_STEPS.map((step) => step.id));
         expect(progress.status).toBe("active");
 
-        const done = reduceDirectorOnboarding(progress, "next");
+        const done = reducePrevisOnboarding(progress, "next");
         expect(done.status).toBe("completed");
         // 完成是终态：停在最后一步，且不再前进。
-        expect(done.stepId).toBe(DIRECTOR_ONBOARDING_STEPS[DIRECTOR_ONBOARDING_STEPS.length - 1].id);
-        expect(reduceDirectorOnboarding(done, "next")).toBe(done);
+        expect(done.stepId).toBe(PREVIS_ONBOARDING_STEPS[PREVIS_ONBOARDING_STEPS.length - 1].id);
+        expect(reducePrevisOnboarding(done, "next")).toBe(done);
     });
 
     test("back 逐步回退，首步 back 原地不动且不关闭引导", () => {
-        const second = reduceDirectorOnboarding(ACTIVE, "next");
-        expect(reduceDirectorOnboarding(second, "back").stepId).toBe("actor");
-        expect(reduceDirectorOnboarding(ACTIVE, "back")).toBe(ACTIVE);
-        expect(reduceDirectorOnboarding(ACTIVE, "back").status).toBe("active");
+        const second = reducePrevisOnboarding(ACTIVE, "next");
+        expect(reducePrevisOnboarding(second, "back").stepId).toBe("actor");
+        expect(reducePrevisOnboarding(ACTIVE, "back")).toBe(ACTIVE);
+        expect(reducePrevisOnboarding(ACTIVE, "back").status).toBe("active");
     });
 
     test("dismiss 与 complete 都是终态，next/back/dismiss/complete 无法唤醒", () => {
         for (const status of ["dismissed", "completed"] as const) {
             const frozen = progressAt("move", status);
             for (const action of ["next", "back", "dismiss", "complete"] as const) {
-                expect(reduceDirectorOnboarding(frozen, action)).toBe(frozen);
+                expect(reducePrevisOnboarding(frozen, action)).toBe(frozen);
             }
-            expect(resolveDirectorOnboardingView(frozen)).toBeNull();
+            expect(resolvePrevisOnboardingView(frozen)).toBeNull();
         }
     });
 
     test("reset 是唯一能让已跳过/已完成引导复活的动作", () => {
-        expect(reduceDirectorOnboarding(progressAt("apply", "dismissed"), "reset")).toEqual(ACTIVE);
-        expect(reduceDirectorOnboarding(progressAt("apply", "completed"), "reset")).toEqual(ACTIVE);
-        expect(reduceDirectorOnboarding(progressAt("pose"), "reset")).toEqual(ACTIVE);
+        expect(reducePrevisOnboarding(progressAt("apply", "dismissed"), "reset")).toEqual(ACTIVE);
+        expect(reducePrevisOnboarding(progressAt("apply", "completed"), "reset")).toEqual(ACTIVE);
+        expect(reducePrevisOnboarding(progressAt("pose"), "reset")).toEqual(ACTIVE);
     });
 
     test("dismiss 保留当前步骤，reset 之后才回到第一步", () => {
-        const dismissed = reduceDirectorOnboarding(progressAt("pose"), "dismiss");
+        const dismissed = reducePrevisOnboarding(progressAt("pose"), "dismiss");
         expect(dismissed).toEqual(progressAt("pose", "dismissed"));
-        expect(reduceDirectorOnboarding(dismissed, "reset").stepId).toBe("actor");
+        expect(reducePrevisOnboarding(dismissed, "reset").stepId).toBe("actor");
     });
 
     test("展示态给出 1 起数的位置与首尾标记", () => {
-        const first = resolveDirectorOnboardingView(ACTIVE);
-        expect(first).toEqual({ step: DIRECTOR_ONBOARDING_STEPS[0], position: 1, total: DIRECTOR_ONBOARDING_STEPS.length, isFirst: true, isLast: false });
+        const first = resolvePrevisOnboardingView(ACTIVE);
+        expect(first).toEqual({ step: PREVIS_ONBOARDING_STEPS[0], position: 1, total: PREVIS_ONBOARDING_STEPS.length, isFirst: true, isLast: false });
 
-        const last = resolveDirectorOnboardingView(progressAt("apply"));
-        expect(last?.position).toBe(DIRECTOR_ONBOARDING_STEPS.length);
+        const last = resolvePrevisOnboardingView(progressAt("apply"));
+        expect(last?.position).toBe(PREVIS_ONBOARDING_STEPS.length);
         expect(last?.isLast).toBe(true);
         expect(last?.isFirst).toBe(false);
     });
@@ -255,41 +255,41 @@ describe("步骤流转", () => {
 describe("推进即落盘", () => {
     test("每次有效推进都写盘，返回值与磁盘一致", async () => {
         const store = memoryStorage();
-        const second = await advanceDirectorOnboarding("user-a", ACTIVE, "next", store.storage);
+        const second = await advancePrevisOnboarding("user-a", ACTIVE, "next", store.storage);
         expect(second.stepId).toBe("move");
-        expect(parseDirectorOnboardingProgress(store.current())).toEqual(second);
+        expect(parsePrevisOnboardingProgress(store.current())).toEqual(second);
 
-        const dismissed = await advanceDirectorOnboarding("user-a", second, "dismiss", store.storage);
+        const dismissed = await advancePrevisOnboarding("user-a", second, "dismiss", store.storage);
         expect(dismissed.status).toBe("dismissed");
-        expect(parseDirectorOnboardingProgress(store.current())).toEqual(dismissed);
+        expect(parsePrevisOnboardingProgress(store.current())).toEqual(dismissed);
         expect(store.writes).toHaveLength(2);
     });
 
     test("无变化的动作不写盘", async () => {
         const store = memoryStorage();
-        expect(await advanceDirectorOnboarding("user-a", ACTIVE, "back", store.storage)).toBe(ACTIVE);
+        expect(await advancePrevisOnboarding("user-a", ACTIVE, "back", store.storage)).toBe(ACTIVE);
         const frozen = progressAt("move", "completed");
-        expect(await advanceDirectorOnboarding("user-a", frozen, "next", store.storage)).toBe(frozen);
+        expect(await advancePrevisOnboarding("user-a", frozen, "next", store.storage)).toBe(frozen);
         expect(store.writes).toEqual([]);
     });
 
     test("写盘失败向上抛，调用方保留旧进度", async () => {
-        const failing: DirectorOnboardingStorage = {
+        const failing: PrevisOnboardingStorage = {
             getItem: async () => null,
             setItem: async () => {
                 throw new Error("indexeddb write failed");
             },
         };
-        await expect(advanceDirectorOnboarding("user-a", ACTIVE, "next", failing)).rejects.toThrow("indexeddb write failed");
+        await expect(advancePrevisOnboarding("user-a", ACTIVE, "next", failing)).rejects.toThrow("indexeddb write failed");
     });
 
     test("重启后从磁盘恢复到同一步骤", async () => {
         const harness = localforageHarness();
         try {
-            const second = await advanceDirectorOnboarding("user-a", ACTIVE, "next");
-            const third = await advanceDirectorOnboarding("user-a", second, "next");
-            expect(await loadDirectorOnboardingProgress("user-a")).toEqual(third);
-            expect(resolveDirectorOnboardingView(third)?.step.id).toBe("pose");
+            const second = await advancePrevisOnboarding("user-a", ACTIVE, "next");
+            const third = await advancePrevisOnboarding("user-a", second, "next");
+            expect(await loadPrevisOnboardingProgress("user-a")).toEqual(third);
+            expect(resolvePrevisOnboardingView(third)?.step.id).toBe("pose");
         } finally {
             harness.restore();
         }
@@ -299,51 +299,51 @@ describe("推进即落盘", () => {
 describe("scope 归一化与并发写锁", () => {
     test("回归：注入 storage 时空白 scope 依旧硬失败，不因为跳过默认 localforage 分支而漏检", async () => {
         const store = memoryStorage();
-        await expect(loadDirectorOnboardingProgress("   ", store.storage)).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(saveDirectorOnboardingProgress("", ACTIVE, store.storage)).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(advanceDirectorOnboarding(" ", ACTIVE, "next", store.storage)).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(resetDirectorOnboardingProgress("\t", store.storage)).rejects.toThrow("缺少导演台引导的用户 scope");
+        await expect(loadPrevisOnboardingProgress("   ", store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(savePrevisOnboardingProgress("", ACTIVE, store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(advancePrevisOnboarding(" ", ACTIVE, "next", store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(resetPrevisOnboardingProgress("\t", store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
         expect(store.writes).toEqual([]);
     });
 
     test("advance 对无变化的动作也无条件校验 scope，不因提前返回而漏检", async () => {
-        await expect(advanceDirectorOnboarding("", ACTIVE, "back")).rejects.toThrow("缺少导演台引导的用户 scope");
-        await expect(advanceDirectorOnboarding("   ", progressAt("apply", "completed"), "next")).rejects.toThrow("缺少导演台引导的用户 scope");
+        await expect(advancePrevisOnboarding("", ACTIVE, "back")).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(advancePrevisOnboarding("   ", progressAt("apply", "completed"), "next")).rejects.toThrow("缺少预演台引导的用户 scope");
     });
 
     test("scope 前后空白归一化，与已裁剪的 scope 共用同一把生产键，互不分裂", async () => {
         const harness = localforageHarness();
         try {
-            await saveDirectorOnboardingProgress(" user-a ", progressAt("pose"));
-            expect([...harness.durable.keys()]).toEqual([`${DIRECTOR_ONBOARDING_KEY}:user:user-a`]);
-            expect(await loadDirectorOnboardingProgress("user-a")).toEqual(progressAt("pose"));
-            expect(await loadDirectorOnboardingProgress("  user-a")).toEqual(progressAt("pose"));
-            expect(await loadDirectorOnboardingProgress("user-a\t")).toEqual(progressAt("pose"));
+            await savePrevisOnboardingProgress(" user-a ", progressAt("pose"));
+            expect([...harness.durable.keys()]).toEqual([`${PREVIS_ONBOARDING_KEY}:user:user-a`]);
+            expect(await loadPrevisOnboardingProgress("user-a")).toEqual(progressAt("pose"));
+            expect(await loadPrevisOnboardingProgress("  user-a")).toEqual(progressAt("pose"));
+            expect(await loadPrevisOnboardingProgress("user-a\t")).toEqual(progressAt("pose"));
         } finally {
             harness.restore();
         }
     });
 
-    test("resetDirectorOnboardingProgress 让已跳过/已完成的账号回到激活的第一步，并落盘", async () => {
-        const store = memoryStorage(JSON.stringify({ version: DIRECTOR_ONBOARDING_VERSION, status: "completed", stepId: "apply" }));
-        const result = await resetDirectorOnboardingProgress("user-a", store.storage);
+    test("resetPrevisOnboardingProgress 让已跳过/已完成的账号回到激活的第一步，并落盘", async () => {
+        const store = memoryStorage(JSON.stringify({ version: PREVIS_ONBOARDING_VERSION, status: "completed", stepId: "apply" }));
+        const result = await resetPrevisOnboardingProgress("user-a", store.storage);
         expect(result).toEqual(ACTIVE);
-        expect(parseDirectorOnboardingProgress(store.current())).toEqual(ACTIVE);
+        expect(parsePrevisOnboardingProgress(store.current())).toEqual(ACTIVE);
     });
 
-    test("resetDirectorOnboardingProgress 经真实持久层也能复活已跳过的引导", async () => {
+    test("resetPrevisOnboardingProgress 经真实持久层也能复活已跳过的引导", async () => {
         const harness = localforageHarness();
         try {
-            await saveDirectorOnboardingProgress("user-a", progressAt("apply", "dismissed"));
-            expect(await resetDirectorOnboardingProgress("user-a")).toEqual(ACTIVE);
-            expect(await loadDirectorOnboardingProgress("user-a")).toEqual(ACTIVE);
+            await savePrevisOnboardingProgress("user-a", progressAt("apply", "dismissed"));
+            expect(await resetPrevisOnboardingProgress("user-a")).toEqual(ACTIVE);
+            expect(await loadPrevisOnboardingProgress("user-a")).toEqual(ACTIVE);
         } finally {
             harness.restore();
         }
     });
 
     test("写锁：锁定期间的重复进入被拒绝，release 后可再次进入，release 本身幂等", () => {
-        const gate = createDirectorOnboardingGate();
+        const gate = createPrevisOnboardingGate();
         expect(gate.tryEnter()).toBe(true);
         expect(gate.tryEnter()).toBe(false);
         expect(gate.tryEnter()).toBe(false);
@@ -356,11 +356,11 @@ describe("scope 归一化与并发写锁", () => {
 
     test("同一 tick 内的重复动作只产生一次写入（复刻 hook 用写锁挡重复调用的方式）", async () => {
         const store = memoryStorage();
-        const gate = createDirectorOnboardingGate();
+        const gate = createPrevisOnboardingGate();
         const progress = ACTIVE;
-        const fire = (action: DirectorOnboardingAction) => {
+        const fire = (action: PrevisOnboardingAction) => {
             if (!gate.tryEnter()) return null;
-            return advanceDirectorOnboarding("user-a", progress, action, store.storage).finally(() => gate.release());
+            return advancePrevisOnboarding("user-a", progress, action, store.storage).finally(() => gate.release());
         };
         const first = fire("next");
         const second = fire("next");
@@ -376,7 +376,7 @@ describe("scope 归一化与并发写锁", () => {
         // 精确复刻 hook 的接线方式：换代时把 ref 换成全新的 gate 实例（不 release 旧实例），
         // 每次调用在拿锁的同一刻把 ref 当前指向的实例捕获进局部变量，release 只作用在这份捕获上，
         // 绝不在写入收尾时重新读一次 ref（那时 ref 可能已经转向了新一代的锁）。
-        let gateRef = createDirectorOnboardingGate();
+        let gateRef = createPrevisOnboardingGate();
 
         function fire() {
             const gate = gateRef; // 同步捕获调用时刻的实例，而不是稍后再读 gateRef
@@ -389,7 +389,7 @@ describe("scope 归一化与并发写锁", () => {
         expect(gen1.entered).toBe(true);
 
         // scope 切换：effect 把 ref 换成全新实例，不 release 旧实例 —— gen1 的写入仍在途、仍锁着自己那把。
-        gateRef = createDirectorOnboardingGate();
+        gateRef = createPrevisOnboardingGate();
 
         // 第二代应该立刻拿到全新的锁，不受 gen1 未完成写入的影响。
         const gen2 = fire();
@@ -410,32 +410,32 @@ describe("scope 归一化与并发写锁", () => {
 
 describe("步骤内容契约", () => {
     test("六个步骤覆盖添加演员、移动、调姿、轨迹、CAM 与应用，顺序固定", () => {
-        expect(DIRECTOR_ONBOARDING_STEPS.map((step) => step.id)).toEqual(["actor", "move", "pose", "path", "camera", "apply"]);
+        expect(PREVIS_ONBOARDING_STEPS.map((step) => step.id)).toEqual(["actor", "move", "pose", "path", "camera", "apply"]);
     });
 
     test("每个步骤都有标题与可执行说明，id 不重复", () => {
-        for (const step of DIRECTOR_ONBOARDING_STEPS) {
+        for (const step of PREVIS_ONBOARDING_STEPS) {
             expect(step.title.length).toBeGreaterThan(0);
             expect(step.detail.length).toBeGreaterThan(0);
         }
-        expect(new Set(DIRECTOR_ONBOARDING_STEPS.map((step) => step.id)).size).toBe(DIRECTOR_ONBOARDING_STEPS.length);
+        expect(new Set(PREVIS_ONBOARDING_STEPS.map((step) => step.id)).size).toBe(PREVIS_ONBOARDING_STEPS.length);
     });
 
     test("每一步都给出对应一级模式，覆盖摆场、姿态、动画和摄影机", () => {
-        const byId = Object.fromEntries(DIRECTOR_ONBOARDING_STEPS.map((step) => [step.id, step]));
+        const byId = Object.fromEntries(PREVIS_ONBOARDING_STEPS.map((step) => [step.id, step]));
         expect(byId.actor.mode).toBe("layout");
         expect(byId.move.mode).toBe("layout");
         expect(byId.pose.mode).toBe("pose");
         expect(byId.path.mode).toBe("animate");
         expect(byId.camera.mode).toBe("camera");
         expect(byId.apply.mode).toBe("camera");
-        for (const step of DIRECTOR_ONBOARDING_STEPS) {
+        for (const step of PREVIS_ONBOARDING_STEPS) {
             if (step.mode) expect(["layout", "pose", "animate", "camera"]).toContain(step.mode);
         }
     });
 
     test("步骤文案指向真实入口，不把浏览步骤称为任务完成", () => {
-        const content = DIRECTOR_ONBOARDING_STEPS.map((step) => `${step.title} ${step.detail}`).join("\n");
+        const content = PREVIS_ONBOARDING_STEPS.map((step) => `${step.title} ${step.detail}`).join("\n");
         for (const label of ["快速添加", "移动工具", "姿态模式", "Transform 关键帧", "CAM", "应用到镜头"]) expect(content).toContain(label);
     });
 });
@@ -446,15 +446,15 @@ describe("步骤内容契约", () => {
  * 而不是假装渲染过组件。
  */
 describe("引导浮层契约", () => {
-    const componentPath = resolve(import.meta.dir, "../src/components/canvas/director/canvas-director-onboarding.tsx");
+    const componentPath = resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-onboarding.tsx");
     const source = readFileSync(componentPath, "utf8");
     // 契约断言只看真正的代码：文档注释里为了解释「为什么不这样做」而提到的反例词
-    // （role="dialog"、getActiveUserScope、DirectorScene）不该让断言把「提到」误判成「使用」。
+    // （role="dialog"、getActiveUserScope、PrevisScene）不该让断言把「提到」误判成「使用」。
     const code = stripComments(source);
 
     test("非阻塞浮层：region 语义，不是 dialog，也没有遮罩与焦点陷阱", () => {
         expect(code).toContain("<section");
-        expect(code).toContain('aria-label="导演台上手引导"');
+        expect(code).toContain('aria-label="预演台上手引导"');
         expect(code).not.toContain('role="dialog"');
         expect(code).not.toContain("aria-modal");
         expect(code).not.toContain("Modal");
@@ -502,22 +502,22 @@ describe("引导浮层契约", () => {
         expect(code).not.toContain("localforage");
     });
 
-    test("状态与持久化全部走 director-onboarding 模块，组件不复制状态机", () => {
-        expect(code).toContain('from "@/lib/canvas/director/director-onboarding"');
-        expect(code).toContain("loadDirectorOnboardingProgress");
-        expect(code).toContain("advanceDirectorOnboarding");
-        expect(code).toContain("resetDirectorOnboardingProgress");
-        expect(code).toContain("resolveDirectorOnboardingView");
-        expect(code).not.toContain("DIRECTOR_ONBOARDING_STEPS");
+    test("状态与持久化全部走 previs-onboarding 模块，组件不复制状态机", () => {
+        expect(code).toContain('from "@/lib/canvas/previs/previs-onboarding"');
+        expect(code).toContain("loadPrevisOnboardingProgress");
+        expect(code).toContain("advancePrevisOnboarding");
+        expect(code).toContain("resetPrevisOnboardingProgress");
+        expect(code).toContain("resolvePrevisOnboardingView");
+        expect(code).not.toContain("PREVIS_ONBOARDING_STEPS");
         expect(code).not.toContain('"dismissed"');
         expect(code).not.toContain('"completed"');
     });
 
     test("并发写保护走同步 gate：换代新建实例而不是 release 共享实例，释放的是调用时捕获的那把锁", () => {
-        expect(code).toContain("createDirectorOnboardingGate");
+        expect(code).toContain("createPrevisOnboardingGate");
         // 换代必须新建实例，绝不能对共享的旧实例调用 release —— 那会把旧一代还没收尾的写入
         // 和新一代刚建好的锁混在一起判定。
-        expect(code).toContain("gateRef.current = createDirectorOnboardingGate()");
+        expect(code).toContain("gateRef.current = createPrevisOnboardingGate()");
         expect(code).not.toContain("gateRef.current.release()");
         // run() 必须在拿锁的同一刻把 gateRef.current 同步捕获进局部变量，
         // tryEnter/release 都作用在这份捕获上，绝不在写入收尾时重新读取 gateRef.current。
@@ -530,21 +530,21 @@ describe("引导浮层契约", () => {
         expect(code).toContain("restartSignal?: number");
         expect(code).toContain("const previousRestartSignal = useRef(restartSignal)");
         expect(code).toContain("previousRestartSignal.current === restartSignal");
-        expect(code).toContain("resetDirectorOnboardingProgress(normalizedScope, storage)");
-        expect(code).toContain("return loadDirectorOnboardingProgress(normalizedScope, storage)");
+        expect(code).toContain("resetPrevisOnboardingProgress(normalizedScope, storage)");
+        expect(code).toContain("return loadPrevisOnboardingProgress(normalizedScope, storage)");
         expect(code).not.toContain('run("reset")');
 
         const generationAdvance = code.indexOf("generation.current += 1", code.indexOf("const reset = useCallback"));
-        const resetWrite = code.indexOf("resetDirectorOnboardingProgress(normalizedScope, storage)");
+        const resetWrite = code.indexOf("resetPrevisOnboardingProgress(normalizedScope, storage)");
         expect(generationAdvance).toBeGreaterThan(-1);
         expect(resetWrite).toBeGreaterThan(generationAdvance);
     });
 
     test("模块不写场景内容，也不引入历史/撤销", () => {
-        const modelSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/director/director-onboarding.ts"), "utf8");
+        const modelSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/previs/previs-onboarding.ts"), "utf8");
         const modelCode = stripComments(modelSource);
-        expect(modelCode).not.toContain("DirectorScene");
-        expect(modelCode).not.toContain("director-scene");
+        expect(modelCode).not.toContain("PrevisScene");
+        expect(modelCode).not.toContain("previs-scene");
         expect(modelCode).not.toMatch(/\bhistory\b/i);
         expect(modelCode).not.toContain("window.localStorage");
         expect(modelCode).toContain("localForageStorageForScope");
@@ -553,21 +553,21 @@ describe("引导浮层契约", () => {
 
 describe("引导产品接线", () => {
     const projectCode = stripComments(moduleGroupSource("pages/canvas/project.tsx"));
-    const workbenchCode = stripComments(moduleGroupSource("components/canvas/director/canvas-director-workbench.tsx"));
+    const workbenchCode = stripComments(moduleGroupSource("components/canvas/previs/canvas-previs-workbench.tsx"));
 
     test("页面只把已认证用户 id 传给引导，不使用 guest fallback 或未定义变量", () => {
-        expect(projectCode).toContain('const directorOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "")');
-        expect(projectCode).toContain("onboardingScope={directorOnboardingScope}");
+        expect(projectCode).toContain('const previsOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "")');
+        expect(projectCode).toContain("onboardingScope={previsOnboardingScope}");
         expect(projectCode).not.toContain("trimmedUserId");
         expect(projectCode).not.toContain("onboardingScope={canvasStorageScope}");
     });
 
     test("工作台渲染非模态引导，并提供可发现的重新开始入口", () => {
-        expect(workbenchCode).toContain('import { CanvasDirectorOnboarding } from "@/components/canvas/director/canvas-director-onboarding"');
+        expect(workbenchCode).toContain('import { CanvasPrevisOnboarding } from "@/components/canvas/previs/canvas-previs-onboarding"');
         expect(workbenchCode).toContain("onboardingScope: string");
         expect(workbenchCode).toContain('label="重新开始引导"');
         expect(workbenchCode).toContain("setOnboardingRestartSignal((value) => value + 1)");
-        expect(workbenchCode).toContain("<CanvasDirectorOnboarding");
+        expect(workbenchCode).toContain("<CanvasPrevisOnboarding");
         expect(workbenchCode).toContain("scope={onboardingScope}");
         expect(workbenchCode).toContain("restartSignal={onboardingRestartSignal}");
         expect(workbenchCode).toContain("overflow-x-auto");
@@ -575,8 +575,8 @@ describe("引导产品接线", () => {
     });
 
     test("开发复现页启用独立 scope，可实际检查首次引导与重启", () => {
-        const reproCode = stripComments(readFileSync(resolve(import.meta.dir, "../src/pages/dev/director-repro-lab.tsx"), "utf8"));
-        expect(reproCode).toContain('onboardingScope="director-repro-lab"');
+        const reproCode = stripComments(readFileSync(resolve(import.meta.dir, "../src/pages/dev/previs-repro-lab.tsx"), "utf8"));
+        expect(reproCode).toContain('onboardingScope="previs-repro-lab"');
         expect(reproCode).not.toContain('onboardingScope=""');
     });
 });

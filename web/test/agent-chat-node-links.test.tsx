@@ -63,3 +63,10 @@ test("renders an agent node link as a titled inline node card", () => {
     expect(html).toContain("片头镜头");
     expect(visibleText).not.toContain("video-1790385749473-q4157");
 });
+
+test("labels character cards by resource kind instead of the underlying text type", () => {
+    const nodeId = "text-1790385749473-char1";
+    const reference = { id: nodeId, nodeId, kind: "character" as const, label: "李莫愁", title: "李莫愁", sourceType: "text" as const };
+
+    expect(rewriteAgentNodeLinks(nodeId, [reference])).toContain(`[角色卡 · 李莫愁](#agent-node:${nodeId})`);
+});

@@ -23,12 +23,13 @@ func cloudAgentCharacterNode(node map[string]any) bool {
 func cloudAgentResolveCharacter(repo *repository.Repository, userID, projectID string, node map[string]any) (*cloudAgentCharacter, error) {
 	meta, _ := node["metadata"].(map[string]any)
 	assetID := stringValue(meta["characterAssetId"])
-	if projectID == "" || assetID == "" {
-		return nil, BadAuthRequest("角色卡未关联当前项目的角色资产")
+	if assetID == "" {
+		return nil, BadAuthRequest("角色卡未关联角色资产")
 	}
-	asset, err := repo.ProjectCharacterAsset(userID, projectID, assetID)
+	_ = projectID
+	asset, err := repo.UserCharacterAsset(userID, assetID)
 	if err != nil {
-		return nil, BadAuthRequest("角色卡对应的项目角色资产不存在或不可访问")
+		return nil, BadAuthRequest("角色卡不存在或不可访问")
 	}
 	policy := stringValue(meta["characterVersionPolicy"])
 	versionID := asset.PrimaryVersionID

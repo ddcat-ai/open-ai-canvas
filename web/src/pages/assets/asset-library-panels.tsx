@@ -1,7 +1,8 @@
 // 素材库的批量操作条、空态、筛选组、详情抽屉与图片放大。
 
 import { Button, Drawer, Tag } from "antd";
-import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { formatBytes } from "@/lib/image-utils";
@@ -152,6 +153,75 @@ export function AssetFilterGroup({
     );
 }
 
+const CHARACTER_PROFILE_FIELDS: Array<[string, string]> = [
+    ["role", "剧情身份"],
+    ["appearance", "外貌特征"],
+    ["physique", "体型姿态"],
+    ["clothing", "服装造型"],
+    ["personality", "性格气质"],
+    ["props", "标志道具"],
+    ["consistencyPrompt", "一致性要求"],
+    ["voiceLanguage", "语言口音"],
+    ["voiceAge", "声音年龄感"],
+    ["voiceTimbre", "音色气质"],
+];
+
+/** 素材档案里的角色卡：立绘主视觉 + 声音试听 + 已填写的设定，只读；编辑在画布角色卡里完成。 */
+function CharacterArchive({ asset }: { asset: Extract<LibraryAsset, { kind: "entity" }> }) {
+    const definition = asset.data.definition;
+    const aliases = Array.isArray(definition.aliases) ? definition.aliases.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
+    const rows = CHARACTER_PROFILE_FIELDS.map(([key, label]) => [label, typeof definition[key] === "string" ? (definition[key] as string).trim() : ""] as const).filter(([, value]) => value);
+    const voiceAsset = asset.data.voiceSampleStorageKey
+        ? ({
+              id: `${asset.id}:voice`,
+              kind: "audio",
+              title: asset.data.voiceName || "角色声音",
+              coverUrl: "",
+              tags: [],
+              createdAt: asset.createdAt,
+              updatedAt: asset.updatedAt,
+              data: { url: "", storageKey: asset.data.voiceSampleStorageKey, bytes: 0, mimeType: "audio/mpeg" },
+          } satisfies Extract<LibraryAsset, { kind: "audio" }>)
+        : null;
+    return (
+        <div className="space-y-5">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--r-xl)]">
+                <CharacterAssetCover asset={asset} size="hero" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-4">
+                    <div className="text-[10px] font-medium uppercase tracking-[.24em] text-white/55">Character{asset.data.version ? ` · v${asset.data.version}` : ""}</div>
+                    {aliases.length ? <div className="mt-1 truncate text-xs text-white/70">又名 {aliases.join("、")}</div> : null}
+                </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-[var(--r-lg)] bg-foreground/[.04] px-4 py-3">
+                {voiceAsset ? (
+                    <AudioPlayButton asset={voiceAsset} className="shrink-0" />
+                ) : (
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground/[.06] text-foreground/40">
+                        <Mic className="size-4" />
+                    </span>
+                )}
+                <span className="min-w-0">
+                    <span className="block text-[11px] text-foreground/45">声音</span>
+                    <span className="block truncate text-sm font-medium">{asset.data.voiceName || "未绑定声音"}</span>
+                </span>
+                <span className={`ml-auto shrink-0 text-xs ${asset.data.visualStatus === "ready" ? "text-emerald-600 dark:text-emerald-400" : "text-foreground/45"}`}>{asset.data.visualStatus === "ready" ? "形象就绪" : "形象待完善"}</span>
+            </div>
+            {rows.length ? (
+                <dl className="divide-y divide-border/60 border-y border-border/60">
+                    {rows.map(([label, value]) => (
+                        <div key={label} className="grid grid-cols-[84px_minmax(0,1fr)] gap-3 py-3 text-sm leading-6">
+                            <dt className="text-foreground/45">{label}</dt>
+                            <dd className="whitespace-pre-wrap text-foreground/85">{value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            ) : (
+                <p className="text-sm text-foreground/45">还没有填写角色设定，可在画布上打开角色卡补充。</p>
+            )}
+        </div>
+    );
+}
+
 export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAsset | null; onClose: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void }) {
     const facts = asset ? assetArchiveFacts(asset) : [];
     const kind = asset && isKnownAssetKind(asset.kind) ? asset.kind : undefined;
@@ -171,26 +241,30 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                             </p>
                         </div>
                     </div>
-                    <div className="asset-archive-preview">
-                        {asset.kind === "text" ? (
-                            <div className="asset-archive-preview-note">{asset.data.content}</div>
-                        ) : asset.kind === "audio" ? (
-                            <div className="asset-archive-audio">
-                                <audio src={asset.data.url} controls />
-                            </div>
-                        ) : asset.kind === "model" ? (
-                            <div className="asset-archive-preview-model">
-                                <Box />
-                                <span>
-                                    {asset.data.fileName} · {formatBytes(asset.data.bytes)}
-                                </span>
-                            </div>
-                        ) : asset.kind === "video" ? (
-                            <video src={asset.data.url} controls className="asset-archive-preview-media" />
-                        ) : (
-                            <AssetImageZoom asset={asset} />
-                        )}
-                    </div>
+                    {asset.kind === "entity" ? (
+                        <CharacterArchive asset={asset} />
+                    ) : (
+                        <div className="asset-archive-preview">
+                            {asset.kind === "text" ? (
+                                <div className="asset-archive-preview-note">{asset.data.content}</div>
+                            ) : asset.kind === "audio" ? (
+                                <div className="asset-archive-audio">
+                                    <audio src={asset.data.url} controls />
+                                </div>
+                            ) : asset.kind === "model" ? (
+                                <div className="asset-archive-preview-model">
+                                    <Box />
+                                    <span>
+                                        {asset.data.fileName} · {formatBytes(asset.data.bytes)}
+                                    </span>
+                                </div>
+                            ) : asset.kind === "video" ? (
+                                <video src={asset.data.url} controls className="asset-archive-preview-media" />
+                            ) : (
+                                <AssetImageZoom asset={asset} />
+                            )}
+                        </div>
+                    )}
                     <div className="flex flex-wrap gap-1.5">
                         {(asset.tags || []).map((tag) => (
                             <Tag key={tag} className="m-0">
@@ -305,12 +379,12 @@ export function assetArchiveFacts(asset: LibraryAsset) {
     if (asset.kind === "video" || asset.kind === "audio") {
         facts.push({ label: "时长", value: formatAssetClock(asset.data.durationMs) || "未知" });
     }
-    if (asset.kind !== "text") {
+    if (asset.kind !== "text" && asset.kind !== "entity") {
         facts.push({ label: "大小", value: formatBytes(asset.data.bytes) });
         facts.push({ label: "格式", value: asset.data.mimeType });
         facts.push({ label: "存储", value: resourceStorageLabel(asset.data.storageKey) });
     }
-    facts.push({ label: "来源", value: asset.source || "未标注" });
+    if (asset.kind !== "entity" || asset.source) facts.push({ label: "来源", value: asset.source || "未标注" });
     facts.push({ label: "创建", value: formatAssetDateTime(asset.createdAt) });
     facts.push({ label: "更新", value: formatAssetDateTime(asset.updatedAt) });
     return facts;

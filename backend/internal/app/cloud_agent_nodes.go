@@ -21,6 +21,14 @@ func cloudAgentNodeCapabilityForType(nodeType string) (cloudAgentNodeCapability,
 	return canvasCapabilityRegistry.Resolve(nodeType)
 }
 
+// cloudAgentNodeCapabilityForNode 按画布节点本身解析能力：角色卡等 workflowKind 变体
+// 优先于底层类型。凡是手里有真实节点（读取、连线、引用、更新）的调用方都应使用它；
+// 只有 add_node 这类按类型名创建的入口才使用 cloudAgentNodeCapabilityForType。
+func cloudAgentNodeCapabilityForNode(node map[string]any) (cloudAgentNodeCapability, bool) {
+	meta, _ := node["metadata"].(map[string]any)
+	return canvasCapabilityRegistry.ResolveNode(stringValue(node["type"]), stringValue(meta["workflowKind"]))
+}
+
 func cloudAgentNodeTypeNames() []string { return canvasCapabilityRegistry.Types() }
 
 func cloudAgentGenerationModeNames() []string {

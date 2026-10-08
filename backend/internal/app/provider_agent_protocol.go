@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"infinite-canvas/backend/internal/model"
@@ -24,8 +25,16 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 	}
 	for _, message := range source.Messages {
 		if stringField(message, "type") == "function_call" {
-			if stringField(message, "call_id") == "" || stringField(message, "name") == "" {
+			callID, err := canonicalAgentFunctionCallID(message, "画布 Agent 工具调用")
+			if err != nil {
+				return nil, err
+			}
+			if callID == "" || stringField(message, "name") == "" {
 				return nil, errors.New("画布 Agent 工具调用缺少标识或名称")
+			}
+			message["call_id"] = callID
+			if _, err := canonicalAgentFunctionCallItemID(message); err != nil {
+				return nil, err
 			}
 			if _, ok := message["arguments"].(string); !ok {
 				return nil, errors.New("画布 Agent 工具调用参数无效")
@@ -56,6 +65,9 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 		if !ok || stringField(function, "name") == "" {
 			return nil, errors.New("画布 Agent 工具定义缺少名称")
 		}
+	}
+	if err := validateCanonicalAgentHistory(source, config.InterfaceType == string(model.ChannelInterfaceOpenAIResponse)); err != nil {
+		return nil, err
 	}
 	switch choice := source.ToolChoice.(type) {
 	case string:
@@ -89,7 +101,11 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 	result := &agentToolRequests{}
 	if declarative {
 		result.ChatCompletion = canonicalAgentChatBody(&request, false)
-		result.Responses = canonicalAgentResponsesBody(&request)
+		responses, err := canonicalAgentResponsesBody(&request)
+		if err != nil {
+			return nil, err
+		}
+		result.Responses = responses
 		result.Claude = claudeAgentBody(canonicalAgentChatBody(&request, true))
 		result.Claude["model"] = config.Model
 		result.Gemini = canonicalAgentGeminiBody(&request)
@@ -97,7 +113,11 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 	}
 	switch config.InterfaceType {
 	case string(model.ChannelInterfaceOpenAIResponse):
-		result.Responses = canonicalAgentResponsesBody(&request)
+		responses, err := canonicalAgentResponsesBody(&request)
+		if err != nil {
+			return nil, err
+		}
+		result.Responses = responses
 	case string(model.ChannelInterfaceClaudeAPI):
 		result.Claude = claudeAgentBody(canonicalAgentChatBody(&request, true))
 	default:
@@ -165,21 +185,60 @@ func canonicalAgentChatBody(source *canonicalAgentRequest, claude bool) map[stri
 	return body
 }
 
-func canonicalAgentResponsesBody(source *canonicalAgentRequest) map[string]interface{} {
+func canonicalAgentResponsesBody(source *canonicalAgentRequest) (map[string]interface{}, error) {
 	messages := make([]interface{}, 0, len(source.Messages))
 	for _, message := range source.Messages {
 		switch {
 		case stringField(message, "type") == "function_call":
-			messages = append(messages, map[string]interface{}{
-				"type": "function_call", "call_id": message["call_id"], "name": message["name"], "arguments": message["arguments"],
-			})
+			callID, err := canonicalAgentFunctionCallID(message, "画布 Agent 工具调用")
+			if err != nil {
+				return nil, err
+			}
+			if callID == "" {
+				return nil, errors.New("画布 Agent 工具调用缺少 call_id")
+			}
+			itemID, err := canonicalAgentFunctionCallItemID(message)
+			if err != nil {
+				return nil, err
+			}
+			item := map[string]interface{}{
+				"type": "function_call", "call_id": callID, "name": message["name"], "arguments": message["arguments"],
+			}
+			if itemID != "" {
+				item["id"] = itemID
+				item["item_reference"] = itemID
+			}
+			messages = append(messages, item)
 		case stringField(message, "role") == "tool":
-			messages = append(messages, map[string]interface{}{"type": "function_call_output", "call_id": message["tool_call_id"], "output": message["content"]})
+			callID, err := canonicalAgentStringAliases(message, "画布 Agent 工具结果 call_id", "tool_call_id", "toolCallId", "call_id")
+			if err != nil {
+				return nil, err
+			}
+			if callID == "" {
+				return nil, errors.New("画布 Agent 工具结果缺少 tool_call_id")
+			}
+			messages = append(messages, map[string]interface{}{"type": "function_call_output", "call_id": callID, "output": message["content"]})
 		default:
 			messages = append(messages, map[string]interface{}{"role": message["role"], "content": canonicalAgentContent(message["content"], "responses")})
 			for _, call := range canonicalAgentToolCalls(message["tool_calls"]) {
 				function, _ := call["function"].(map[string]interface{})
-				messages = append(messages, map[string]interface{}{"type": "function_call", "call_id": call["id"], "name": function["name"], "arguments": function["arguments"]})
+				callID, err := canonicalAgentToolCallID(call, "画布 Agent 工具调用")
+				if err != nil {
+					return nil, err
+				}
+				if callID == "" || stringField(function, "name") == "" {
+					return nil, errors.New("画布 Agent 工具调用缺少标识或名称")
+				}
+				itemID, err := canonicalAgentToolCallItemID(call)
+				if err != nil {
+					return nil, err
+				}
+				item := map[string]interface{}{"type": "function_call", "call_id": callID, "name": function["name"], "arguments": function["arguments"]}
+				if itemID != "" {
+					item["id"] = itemID
+					item["item_reference"] = itemID
+				}
+				messages = append(messages, item)
 			}
 		}
 	}
@@ -194,7 +253,143 @@ func canonicalAgentResponsesBody(source *canonicalAgentRequest) map[string]inter
 	if source.PromptCacheKey != "" {
 		body["prompt_cache_key"] = source.PromptCacheKey
 	}
-	return body
+	return body, nil
+}
+
+func canonicalAgentStringAliases(fields map[string]interface{}, label string, aliases ...string) (string, error) {
+	value := ""
+	firstAlias := ""
+	for _, alias := range aliases {
+		raw, present := fields[alias]
+		if !present || raw == nil {
+			continue
+		}
+		text, ok := raw.(string)
+		if !ok {
+			return "", fmt.Errorf("%s 字段 %q 必须是字符串", label, alias)
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		if value != "" && value != text {
+			return "", fmt.Errorf("%s 的别名 %q 与 %q 冲突", label, firstAlias, alias)
+		}
+		if value == "" {
+			value, firstAlias = text, alias
+		}
+	}
+	return value, nil
+}
+
+func canonicalAgentFunctionCallID(fields map[string]interface{}, label string) (string, error) {
+	return canonicalAgentStringAliases(fields, label+" call_id", "call_id", "toolCallId", "tool_call_id")
+}
+
+func canonicalAgentToolCallID(fields map[string]interface{}, label string) (string, error) {
+	return canonicalAgentStringAliases(fields, label+" call_id", "id", "call_id", "toolCallId", "tool_call_id")
+}
+
+func canonicalAgentFunctionCallItemID(message map[string]interface{}) (string, error) {
+	return canonicalAgentStringAliases(message, "画布 Agent function_call item id", "item_id", "itemId", "id")
+}
+
+func canonicalAgentToolCallItemID(call map[string]interface{}) (string, error) {
+	return canonicalAgentStringAliases(call, "画布 Agent tool call item id", "item_id", "itemId")
+}
+
+func validateCanonicalAgentHistory(source *canonicalAgentRequest, requireResponseItemIDs bool) error {
+	if source == nil {
+		return errors.New("画布 Agent 会话为空")
+	}
+	pending := make(map[string]string)
+	for _, message := range source.Messages {
+		if stringField(message, "type") == "function_call" {
+			callID, err := canonicalAgentFunctionCallID(message, "画布 Agent 工具调用")
+			if err != nil {
+				return err
+			}
+			if callID == "" {
+				return errors.New("画布 Agent 工具调用缺少 call_id")
+			}
+			if _, exists := pending[callID]; exists {
+				return fmt.Errorf("画布 Agent 工具调用 %q 重复或缺少结果", callID)
+			}
+			itemID, err := canonicalAgentFunctionCallItemID(message)
+			if err != nil {
+				return err
+			}
+			pending[callID] = itemID
+			continue
+		}
+
+		role := stringField(message, "role")
+		switch role {
+		case "assistant":
+			calls := canonicalAgentToolCalls(message["tool_calls"])
+			if len(calls) == 0 {
+				if callID := firstPendingCanonicalAgentCall(pending); callID != "" {
+					return fmt.Errorf("画布 Agent 工具调用 %q 缺少结果", callID)
+				}
+				continue
+			}
+			if callID := firstPendingCanonicalAgentCall(pending); callID != "" {
+				return fmt.Errorf("画布 Agent 工具调用 %q 缺少结果", callID)
+			}
+			for _, call := range calls {
+				callID, err := canonicalAgentToolCallID(call, "画布 Agent 工具调用")
+				if err != nil {
+					return err
+				}
+				if callID == "" {
+					return errors.New("画布 Agent 工具调用缺少 call_id")
+				}
+				if _, exists := pending[callID]; exists {
+					return fmt.Errorf("画布 Agent 工具调用 %q 重复或缺少结果", callID)
+				}
+				itemID, err := canonicalAgentToolCallItemID(call)
+				if err != nil {
+					return err
+				}
+				pending[callID] = itemID
+			}
+		case "tool":
+			callID, err := canonicalAgentStringAliases(message, "画布 Agent 工具结果 call_id", "tool_call_id", "toolCallId", "call_id")
+			if err != nil {
+				return err
+			}
+			if callID == "" {
+				return errors.New("画布 Agent 工具结果缺少 tool_call_id")
+			}
+			itemID, exists := pending[callID]
+			if !exists {
+				return fmt.Errorf("画布 Agent 工具结果 %q 没有对应的工具调用", callID)
+			}
+			if requireResponseItemIDs && itemID == "" {
+				return fmt.Errorf("画布 Agent Responses 工具调用 %q 缺少 function_call item id", callID)
+			}
+			delete(pending, callID)
+		case "system", "user":
+			if callID := firstPendingCanonicalAgentCall(pending); callID != "" {
+				return fmt.Errorf("画布 Agent 工具调用 %q 缺少结果", callID)
+			}
+		case "":
+			return errors.New("画布 Agent 会话条目缺少角色")
+		default:
+			return fmt.Errorf("画布 Agent 会话角色无效: %s", role)
+		}
+	}
+	if callID := firstPendingCanonicalAgentCall(pending); callID != "" {
+		return fmt.Errorf("画布 Agent 工具调用 %q 缺少结果", callID)
+	}
+	return nil
+}
+
+func firstPendingCanonicalAgentCall(pending map[string]string) string {
+	for callID := range pending {
+		return callID
+	}
+	return ""
 }
 
 func canonicalAgentGeminiBody(source *canonicalAgentRequest) map[string]interface{} {

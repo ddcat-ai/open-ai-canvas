@@ -1,8 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -40,14 +43,44 @@ func providerResponseBusinessFailure(responseBody []byte) (string, string, bool)
 	if len(responseBody) == 0 {
 		return "", "", false
 	}
-	var payload map[string]any
-	if json.Unmarshal(responseBody, &payload) != nil {
-		return "", "", false
+	// 火山单向语音合成把多帧 JSON 直接拼在同一个 HTTP 200 里。只解析第一帧会把后面的业务失败当成成功。
+	decoder := json.NewDecoder(bytes.NewReader(responseBody))
+	decoder.UseNumber()
+	decoded := false
+	for {
+		var payload map[string]any
+		err := decoder.Decode(&payload)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			if !decoded {
+				return "", "", false
+			}
+			break
+		}
+		decoded = true
+		if payload == nil {
+			continue
+		}
+		if code, message, failed := providerPayloadBusinessFailure(payload); failed {
+			return code, message, true
+		}
 	}
-	return providerPayloadBusinessFailure(payload)
+	return "", "", false
 }
 
 func providerPayloadBusinessFailure(payload map[string]any) (string, string, bool) {
+	if header, ok := payload["header"].(map[string]any); ok {
+		// 只认火山语音合成这种明确的资源拒绝。header.code 在别的协议里可能是 HTTP 状态，不能一律当成业务失败。
+		rawMessage := strings.TrimSpace(stringField(header, "message"))
+		if speechResourceDeniedUserMessage(rawMessage) != "" {
+			if code, message, failed := providerBusinessFailure(header); failed {
+				return code, message, true
+			}
+			return "resource_not_granted", rawMessage, true
+		}
+	}
 	if code, message, failed := providerBusinessFailure(payload); failed {
 		return code, message, true
 	}

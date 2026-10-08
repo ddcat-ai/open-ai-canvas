@@ -56,6 +56,7 @@ const kindOptions = [
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },
     { label: "3D 模型", value: "model" },
+    { label: "角色", value: "entity" },
 ];
 
 const categoryOptions = [{ label: "全部分类", value: "all" }, ...ASSET_CATEGORY_OPTIONS];
@@ -118,7 +119,7 @@ export default function AssetsPage() {
     });
     const folders = foldersQuery.data?.folders || [];
 
-    const allLibraryAssets = useMemo(() => assets.filter((asset): asset is LibraryAsset => asset.kind !== "entity"), [assets]);
+    const allLibraryAssets = useMemo(() => assets, [assets]);
     const activeAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status !== "archived"), [allLibraryAssets]);
     const trashAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status === "archived"), [allLibraryAssets]);
     const validAssets = viewMode === "trash" ? trashAssets : activeAssets;
@@ -158,7 +159,7 @@ export default function AssetsPage() {
     }, [filteredAssets, page, pageSize]);
     // 远端成功且本页有可展示素材时用远端。真正的空结果保持空页。
     // 仅在「远端空、本地仍有筛选结果」或「远端总数>0 但本页全是被排除的 entity」时回退本地。
-    const remotePageAssets = useMemo(() => (assetPageQuery.data?.assets || []).filter((asset): asset is LibraryAsset => asset.kind !== "entity"), [assetPageQuery.data?.assets]);
+    const remotePageAssets = useMemo(() => assetPageQuery.data?.assets || [], [assetPageQuery.data?.assets]);
     const remoteTotal = assetPageQuery.data?.total ?? 0;
     const remoteReady = assetPageQuery.isSuccess && assetPageQuery.data !== undefined;
     const preferLocalUnsynced = remoteReady && remoteTotal === 0 && localVisibleAssets.length > 0;
@@ -259,12 +260,12 @@ export default function AssetsPage() {
     };
 
     const openEdit = async (asset: LibraryAsset) => {
-        let editableAsset = useAssetStore.getState().assets.find((item): item is LibraryAsset => item.id === asset.id && item.kind !== "entity");
+        let editableAsset = useAssetStore.getState().assets.find((item) => item.id === asset.id);
         if (!editableAsset) {
             try {
                 // 分页卡片是轻量 DTO，编辑前补齐完整记录，避免保存时覆盖远端 metadata。
                 await loadAssetsForUse([asset.id]);
-                editableAsset = useAssetStore.getState().assets.find((item): item is LibraryAsset => item.id === asset.id && item.kind !== "entity");
+                editableAsset = useAssetStore.getState().assets.find((item) => item.id === asset.id);
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "素材详情读取失败，请重试");
                 return;

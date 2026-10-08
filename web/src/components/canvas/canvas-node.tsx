@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, Video, WandSparkles } from "lucide-react";
+import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, Copy, Download, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, ScanSearch, Settings2, Star, Trash2, Type, UserRound, Video, WandSparkles } from "lucide-react";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 
@@ -62,7 +62,7 @@ type CanvasNodeProps = {
     onViewImage?: (node: CanvasNodeData) => void;
     onReplaceMedia?: (node: CanvasNodeData) => void;
     onOpenTextEditor?: (node: CanvasNodeData) => void;
-    onOpenDirector?: (node: CanvasNodeData) => void;
+    onOpenPrevis?: (node: CanvasNodeData) => void;
     onOpenDrawing?: (node: CanvasNodeData) => void;
     onMediaPlayRequest?: (nodeId: string) => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
@@ -110,7 +110,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onOpenVersions,
     onViewImage,
     onOpenTextEditor,
-    onOpenDirector,
+    onOpenPrevis,
     onOpenDrawing,
     onMediaPlayRequest,
     onContextMenu,
@@ -338,9 +338,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onViewImage?.(data);
                         return;
                     }
-                    if (data.metadata?.directorSceneId) {
+                    if (data.metadata?.previsSceneId) {
                         event.stopPropagation();
-                        onOpenDirector?.(data);
+                        onOpenPrevis?.(data);
                         return;
                     }
                     if (data.type === CanvasNodeType.Drawing) {
@@ -551,7 +551,7 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
         previous.onViewImage === next.onViewImage &&
         previous.onReplaceMedia === next.onReplaceMedia &&
         previous.onOpenTextEditor === next.onOpenTextEditor &&
-        previous.onOpenDirector === next.onOpenDirector &&
+        previous.onOpenPrevis === next.onOpenPrevis &&
         previous.onOpenDrawing === next.onOpenDrawing &&
         previous.onContextMenu === next.onContextMenu
     );
@@ -668,7 +668,7 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
     // 标题保持屏幕尺寸只适用于近景；远景继续反向缩放会遮住节点和连线。
     if (scale < NODE_EXTERNAL_HEADER_MIN_SCALE && !editing) return null;
     const inverseScale = 1 / Math.max(scale, 0.05);
-    const Icon = nodeTypeIcon(node.type);
+    const Icon = nodeTypeIcon(node);
     const maxHeaderWidth = Math.min(240, node.width * scale);
 
     return (
@@ -719,7 +719,9 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
     );
 }
 
-function nodeTypeIcon(type: CanvasNodeTypeId) {
+function nodeTypeIcon(node: CanvasNodeData) {
+    if (node.metadata?.workflowKind === "character") return UserRound;
+    const type = node.type;
     if (type === CanvasNodeType.Image) return ImageIcon;
     if (type === CanvasNodeType.Video) return Video;
     if (type === CanvasNodeType.Audio) return Music2;

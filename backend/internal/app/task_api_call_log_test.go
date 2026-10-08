@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -131,4 +133,83 @@ func TestEnsureFailedProviderAttemptLoggedDoesNotDuplicateHTTPLog(t *testing.T) 
 	if count != 1 {
 		t.Fatalf("api call log count = %d, want 1", count)
 	}
+}
+
+func TestRecordProviderRequestKeepsUserVisibleSpeechAndNetworkErrors(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:provider-visible-error-log?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.ModelPricing{}); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{repo: repository.New(db)}
+	speechBody := []byte(`{"code":0,"data":"AAAA"}{"header":{"code":45000030,"message":"[resource_id=volc.seedtts.default] requested resource not granted"}}`)
+	recordLoggedProviderRequest(t, service, "task-speech", http.StatusOK, speechBody, nil)
+	recordLoggedProviderRequest(t, service, "task-network", 0, nil, errors.New(`dial tcp 10.0.0.1:443: connect: connection refused`))
+	recordLoggedProviderRequest(t, service, "task-gateway", http.StatusBadGateway, []byte(`<html>Bad Gateway</html>`), providerHTTPError{StatusCode: http.StatusBadGateway, Status: "502 Bad Gateway", Body: "<html>Bad Gateway</html>"})
+
+	assertLoggedTaskError(t, db, "task-speech", "语音合成服务未开通")
+	assertLoggedTaskError(t, db, "task-network", "网络异常。", "connection refused")
+	assertLoggedTaskError(t, db, "task-gateway", "网络异常。", "502")
+}
+
+func assertLoggedTaskError(t *testing.T, db *gorm.DB, taskID string, parts ...string) {
+	t.Helper()
+	var log model.ApiCallLog
+	if err := db.Where("task_id = ?", taskID).First(&log).Error; err != nil {
+		t.Fatal(err)
+	}
+	if log.Status != model.ApiCallStatusFailed {
+		t.Fatalf("%s status = %q, want failed; error %q", taskID, log.Status, log.Error)
+	}
+	for _, part := range parts {
+		if !strings.Contains(log.Error, part) {
+			t.Fatalf("%s error %q does not contain %q", taskID, log.Error, part)
+		}
+	}
+}
+
+func TestEnsureFailedProviderAttemptLoggedRecordsFailureHiddenBySuccessLog(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:provider-success-hides-failure?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.ModelPricing{}); err != nil {
+		t.Fatal(err)
+	}
+	success := model.ApiCallLog{ID: "api-log-success", TaskID: "task-1", Status: model.ApiCallStatusSucceeded, RequestKind: "create"}
+	hidden := model.ApiCallLog{ID: "api-log-poll", TaskID: "task-1", Status: model.ApiCallStatusFailed, RequestKind: "poll", Error: "poll failed"}
+	if err := db.Create(&success).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&hidden).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{repo: repository.New(db)}
+	service.ensureFailedProviderAttemptLogged(model.Task{ID: "task-1", UserID: "user-1", Type: "canvas_audio", Model: "seed-tts-2.0"}, errors.New("流式音频合成失败（code 45000030）：[resource_id=volc.seedtts.default] requested resource not granted"))
+	service.ensureFailedProviderAttemptLogged(model.Task{ID: "task-1", UserID: "user-1", Type: "canvas_audio", Model: "seed-tts-2.0"}, errors.New("流式音频合成失败（code 45000030）：[resource_id=volc.seedtts.default] requested resource not granted"))
+
+	var logs []model.ApiCallLog
+	if err := db.Where("request_kind <> ?", "poll").Order("created_at asc").Find(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("visible log count = %d, want success plus one failure", len(logs))
+	}
+	if logs[1].Status != model.ApiCallStatusFailed || !strings.Contains(logs[1].Error, "语音合成服务未开通") {
+		t.Fatalf("visible failure = status %q error %q", logs[1].Status, logs[1].Error)
+	}
+}
+
+func recordLoggedProviderRequest(t *testing.T, service *Service, taskID string, statusCode int, body []byte, requestErr error) {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPost, "https://openspeech.bytedance.com/api/v3/tts/unidirectional", strings.NewReader(`{"text":"你好"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request = request.WithContext(context.WithValue(request.Context(), providerAnalyticsKey{}, providerAnalyticsContext{
+		Service: service, UserID: "user-1", TaskID: taskID, ChannelID: "channel-1", Capability: "audio", Model: "seed-tts-2.0", RequestKind: "create",
+	}))
+	recordProviderRequest(request, time.Now(), statusCode, body, requestErr)
 }

@@ -46,10 +46,14 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Watermark:     parseBool(input.Config.VideoWatermark, false),
 		Operation:     firstNonEmpty(metadataString(input.Metadata, "videoEditOperation"), metadataString(input.Metadata, "videoOperation")),
 		Extra: map[string]any{
-			"videoSeconds": input.Config.VideoSeconds,
-			"audioVoice":   input.Config.AudioVoice,
-			"audioFormat":  input.Config.AudioFormat,
-			"count":        input.Config.Count,
+			"videoSeconds":      input.Config.VideoSeconds,
+			"audioVoice":        input.Config.AudioVoice,
+			"audioFormat":       input.Config.AudioFormat,
+			"audioSpeed":        input.Config.AudioSpeed,
+			"audioInstructions": input.Config.AudioInstructions,
+			"audioLanguage":     input.Config.AudioLanguage,
+			"audioDialect":      input.Config.AudioDialect,
+			"count":             input.Config.Count,
 		},
 	}
 	for _, message := range input.TextHistory {
@@ -86,6 +90,14 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 				request.ProviderOptions[strings.TrimSpace(namespace)] = options
 			}
 		}
+	}
+	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
+		options := make(map[string]any)
+		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {
+			options[name] = value
+		}
+		options["response_format"] = grokImageResponseFormat(input.ImageCapability)
+		request.ProviderOptions[input.Config.InterfaceType] = options
 	}
 	return request
 }

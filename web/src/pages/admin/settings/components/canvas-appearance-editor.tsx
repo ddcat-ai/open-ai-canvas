@@ -42,7 +42,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
         <div className="grid gap-6 lg:grid-cols-2">
             <div>
                 <h3 className="mb-3 font-semibold">Agent 身份与文案</h3>
-                <p className="mb-4 text-sm text-foreground/60">独立于站点品牌。文案可使用 {"{agentName}"} 引用助手名称；这里只配置展示文字，不修改工具权限。</p>
+                <p className="mb-4 text-sm text-foreground/60">独立于站点品牌。助手名称同步用于界面文案和对话中的自我介绍；文案可使用 {"{agentName}"} 引用名称，不修改工具权限。</p>
                 <Form layout="vertical" disabled={disabled || uploading}>
                     {(
                         [

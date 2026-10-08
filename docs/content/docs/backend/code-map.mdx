@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 自定义更新公告
+
+- 后台编辑：`web/src/pages/admin/settings/components/update-announcement-editor.tsx`；版本、排序与草稿校验：`web/src/lib/update-announcement.ts`。
+- 统一入口与弹窗：`web/src/components/layout/app-changelog-modal.tsx`、`app-changelog-dialog.tsx`；图文视频展示：`update-announcement-content.tsx`。
+- 服务端持久化、校验、公开投影及媒体访问：`backend/internal/app/appearance_updates.go` 与 `appearance.go`；HTTP 边界：`backend/internal/handler/appearance.go`。
+
 ## 画布 Agent 配置与 Live2D
 
 - 后台入口：`web/src/pages/admin/settings/appearance-settings-page.tsx` 与 `components/canvas-appearance-editor.tsx`。
@@ -84,6 +90,8 @@ description: 从产品功能快速定位主要代码入口
 
 ## 后端调用链
 
+AutoDL 画面规格由 `app/model_capability_screen_spec.go` 读取官方插件工作流合同，校验所选分辨率及默认值；`task_creation.go` 在价格选择之前归一化，任务校验与 `provider_video.go` 再次使用同一规则。前端 `lib/video-screen-specs.ts` 管理插件预设、所选规格与工作流切换，`ModelCapabilityEditor` 复用到系统及自定义渠道；无开关或独立草稿。
+
 ```text
 HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合根）-> 业务域包 -> repository/model
                                                                      |
@@ -151,3 +159,9 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 - 任务入队 `internal/app/task_creation.go` 与生成执行 `internal/app/provider.go` 共用严格 token 解析。
 - 前端 `canvas-tool-presentation.ts` 共享轻量展示配置，`canvas-resource-references.ts` 统一 token；节点提示词与工具面板共用同一持久状态，不复制到 metadata 风格字段。
 - `canvas-workspace-panel.tsx` 提供常驻左侧菜单，按需挂载节点、资产、工具、任务和历史面板；资产面板复用素材分页服务与画布插入合同；主分支项目章节侧栏与工作区互斥。
+
+## 技能策展
+
+`internal/skills/skill_curation.go` 负责校验，`internal/repository/skill_curation.go` 负责分类持久化与 CAS 审计交易，handler／app bridge 接入原有技能域。
+
+`skill_curation_roots.go` 扩展动态根维护、有效根查询和空表回落；数据库迁移 47 接续 46。

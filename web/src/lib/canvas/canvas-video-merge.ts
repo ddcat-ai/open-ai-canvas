@@ -33,6 +33,30 @@ export async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => 
     }
 }
 
+export async function transcodeVideoToMp4(input: Blob, onProgress?: (progress: MergeVideoProgress) => void) {
+    const ffmpeg = await loadFFmpeg(onProgress);
+    const inputName = input.type === "video/mp4" ? "recording.mp4" : "recording.webm";
+    const outputName = "recording-transcoded.mp4";
+    try {
+        await ffmpeg.writeFile(inputName, await fetchFile(input));
+        onProgress?.({ phase: "encoding", progress: 55 });
+        const exitCode = await ffmpeg.exec([
+            "-i", inputName,
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-movflags", "+faststart",
+            outputName,
+        ]);
+        if (exitCode !== 0) throw new Error("视频转码失败，请重试");
+        const output = await ffmpeg.readFile(outputName);
+        onProgress?.({ phase: "encoding", progress: 100 });
+        return new Blob([output as BlobPart], { type: "video/mp4" });
+    } finally {
+        await Promise.all([inputName, outputName].map((file) => ffmpeg.deleteFile(file).catch(() => undefined)));
+    }
+}
+
 export async function mergeVideos(inputs: MergeVideoInput[], onProgress?: (progress: MergeVideoProgress) => void) {
     if (inputs.length < 2) throw new Error("至少选择 2 个视频才能合并");
     const ffmpeg = await loadFFmpeg(onProgress);
