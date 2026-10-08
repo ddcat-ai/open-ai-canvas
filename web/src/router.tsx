@@ -22,6 +22,7 @@ const AgentLessonsPage = lazy(() => import("@/pages/admin/admin-route-pages").th
 const ChannelsPage = lazy(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazy(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazy(() => import("@/pages/admin/plugins/plugins-page"));
+const AdminToolsPage = lazy(() => import("@/pages/admin/tools/admin-tools-page"));
 const SkillCurationPage = lazy(() => import("@/pages/admin/skill-curation-page"));
 const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-page"));
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
@@ -190,6 +191,7 @@ export const router = createBrowserRouter([
                     { path: "channels", element: <ChannelsPage /> },
                     { path: "models", element: <RequireFeature feature="frontendModelsEnabled"><LogicalModelsPage /></RequireFeature> },
                     { path: "plugins", element: <AdminPluginsPage /> },
+                    { path: "tools", element: <AdminToolsPage /> },
                     { path: "skill-curation", element: <SkillCurationPage /> },
                     { path: "payments", element: <AdminPaymentsPage /> },
                     { path: "prompt-templates", element: <StoryboardPromptsPage /> },

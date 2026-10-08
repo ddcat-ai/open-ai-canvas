@@ -13,6 +13,19 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// FirstAdminUserID 返回最早创建的管理员 ID，用于内置工具归属；尚无管理员时返回空串。
+func (r *Repository) FirstAdminUserID() (string, error) {
+	var user model.User
+	err := r.db.Where("role = ?", model.UserRoleAdmin).Order("created_at asc").First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return user.ID, nil
+}
+
 // UpsertBuiltinTools 按 id 幂等更新内置工具；created_at 保留首次写入值。
 func (r *Repository) UpsertBuiltinTools(tools []model.Tool) error {
 	if len(tools) == 0 {
@@ -196,5 +209,106 @@ func (r *Repository) DeleteUserTool(userID string, toolID int64) error {
 			return err
 		}
 		return tx.Delete(&model.Tool{}, toolID).Error
+	})
+}
+
+// AdminListTools 后台分页查询全部工具（含禁用、私有），不受用户可见性约束。
+func (r *Repository) AdminListTools(req tools.AdminToolListRequest) ([]model.Tool, int64, error) {
+	base := r.db.Table("tools")
+	if req.Type != "" {
+		base = base.Where("tools.type = ?", req.Type)
+	}
+	if req.Source != "" {
+		base = base.Where("tools.source = ?", req.Source)
+	}
+	if req.Enabled != nil {
+		base = base.Where("tools.enabled = ?", *req.Enabled)
+	}
+	if req.Search != "" {
+		keyword := "%" + strings.ToLower(req.Search) + "%"
+		base = base.Where("(LOWER(tools.label) LIKE ? OR LOWER(tools.label_en) LIKE ? OR LOWER(tools.desc) LIKE ?)", keyword, keyword, keyword)
+	}
+
+	var total int64
+	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 列表只取摘要字段，不取 extra_info_json、prompt 两个大字段；列与 tools.ToolSummary 对齐。
+	selectColumns := "tools.id, tools.type, tools.label_en, tools.label, tools.desc, tools.tag, tools.cover, " +
+		"tools.ratio, tools.media_url, tools.owner_id, tools.source, tools.enabled, tools.visibility, " +
+		"tools.sort_weight, tools.created_at, tools.updated_at"
+	offset := (req.Page - 1) * req.PageSize
+	var items []model.Tool
+	err := base.Session(&gorm.Session{}).
+		Select(selectColumns).
+		Order("tools.sort_weight ASC, tools.id ASC").
+		Offset(offset).
+		Limit(req.PageSize).
+		Scan(&items).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+// AdminTool 后台按 ID 获取工具，不做可见性/启用过滤。
+func (r *Repository) AdminTool(toolID int64) (model.Tool, error) {
+	var tool model.Tool
+	err := r.db.First(&tool, toolID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return tool, kernel.NotFound("工具不存在")
+	}
+	if err != nil {
+		return tool, err
+	}
+	return tool, nil
+}
+
+// AdminUpdateTool 后台更新工具的启用状态、可见性与排序权重。
+func (r *Repository) AdminUpdateTool(tool *model.Tool) (*model.Tool, error) {
+	err := r.db.Model(&model.Tool{}).Where("id = ?", tool.ID).
+		Select("enabled", "visibility", "sort_weight", "updated_at").
+		Updates(tool).Error
+	if err != nil {
+		return nil, err
+	}
+	var updated model.Tool
+	if err := r.db.First(&updated, tool.ID).Error; err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// AdminUpdateToolFull 后台完整更新工具业务字段；来源与所属人随请求调整，英文标识保留原值。
+func (r *Repository) AdminUpdateToolFull(tool *model.Tool) (*model.Tool, error) {
+	err := r.db.Model(&model.Tool{}).Where("id = ?", tool.ID).
+		Select("type", "label", "desc", "tag", "cover", "extra_info_json", "prompt", "ratio",
+			"media_url", "owner_id", "source", "visibility", "enabled", "sort_weight", "updated_at").
+		Updates(tool).Error
+	if err != nil {
+		return nil, err
+	}
+	var updated model.Tool
+	if err := r.db.First(&updated, tool.ID).Error; err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
+
+// AdminDeleteTool 后台删除工具（调用方需保证非内置），事务内同步清理收藏记录。
+func (r *Repository) AdminDeleteTool(toolID int64) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tool_id = ?", toolID).Delete(&model.ToolFavorite{}).Error; err != nil {
+			return err
+		}
+		result := tx.Delete(&model.Tool{}, toolID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return kernel.NotFound("工具不存在")
+		}
+		return nil
 	})
 }

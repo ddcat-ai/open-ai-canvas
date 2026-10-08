@@ -19,6 +19,8 @@ type ToolWithFavorite struct {
 // Repository 定义 tools 域需要的持久化接口，由 repository.Repository 实现。
 type Repository interface {
 	UpsertBuiltinTools(tools []model.Tool) error
+	// FirstAdminUserID 返回最早创建的管理员 ID，用于内置工具归属；无管理员时返回空串。
+	FirstAdminUserID() (string, error)
 	ListTools(userID string, req ToolListRequest) ([]ToolWithFavorite, int64, error)
 	ToolForUser(userID string, toolID int64) (model.Tool, error)
 	ToolFavorited(userID string, toolID int64) (model.Tool, *time.Time, error)
@@ -26,6 +28,11 @@ type Repository interface {
 	RemoveToolFavorite(userID string, toolID int64) error
 	CreateTool(tool *model.Tool) (*model.Tool, error)
 	DeleteUserTool(userID string, toolID int64) error
+	AdminListTools(req AdminToolListRequest) ([]model.Tool, int64, error)
+	AdminTool(toolID int64) (model.Tool, error)
+	AdminUpdateTool(tool *model.Tool) (*model.Tool, error)
+	AdminUpdateToolFull(tool *model.Tool) (*model.Tool, error)
+	AdminDeleteTool(toolID int64) error
 }
 
 var labelEnPattern = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
