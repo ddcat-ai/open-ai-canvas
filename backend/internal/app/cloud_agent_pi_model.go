@@ -194,7 +194,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		// 还会顶掉待审批的调用。这里不入队、不改状态，审批结论照常接管运行。
 		// 批准后先持久化 running，再执行工具。这个窗口里 Approval 仍然存在，
 		// 不能接受新模型步骤覆盖 Calls；必须等执行回执与审批清理一起保存后再恢复。
-		if state.Approval != nil {
+		// 已提交媒体任务的审批会保留到产物回写；沿用下面的等待与结算流程，
+		// 不能在媒体任务完成前调度模型，也不能直接拒绝正常的等待请求。
+		if state.Approval != nil && state.MediaTaskID == "" {
 			return nil, false, errCloudAgentAwaitingApproval
 		}
 		if cloudAgentStepBudgetExhausted(&state) {
