@@ -28,7 +28,7 @@ import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store"
 import { repairMissingCanvasAssets, repairMissingCanvasVideoPreviews, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 import { applyAgentCanvasPatch, mergeAgentCanvasEditor, mergeThreeWayValue, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
-import { collectLocalMediaKeys, ensureRemoteResourceReferences } from "./user-data-sync-media";
+import { collectLocalMediaKeys, ensureRemoteResourceReferences, hasUnuploadedLocalImageMedia } from "./user-data-sync-media";
 
 export { numberValue } from "./user-data-sync-media";
 
@@ -50,6 +50,7 @@ const verifiedProjects = new Set<string>();
 const verifiedAssets = new Set<string>();
 const remoteProjectLoadPromises = new Map<string, Promise<CanvasProject | undefined>>();
 const REMOTE_SYNC_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000] as const;
+type RemoteUserDataSyncOptions = { force?: boolean; repairMissingResources?: boolean; automatic?: boolean };
 
 export async function initializeRemoteUserDataSession(userId: string) {
     await withRemoteUserDataSyncExclusive(async () => {
@@ -452,7 +453,7 @@ export function scheduleRemoteUserDataSync() {
     if (syncTimer) window.clearTimeout(syncTimer);
     syncTimer = window.setTimeout(() => {
         syncTimer = null;
-        void saveRemoteUserDataNow().catch((error) => console.warn("云端自动同步失败", error));
+        void saveRemoteUserDataNow({ automatic: true }).catch((error) => console.warn("云端自动同步失败", error));
     }, 1200);
 }
 
@@ -486,7 +487,7 @@ function stopRetryProgress() {
     }
 }
 
-function scheduleRemoteUserDataRetry(error: unknown) {
+function scheduleRemoteUserDataRetry(error: unknown, options: RemoteUserDataSyncOptions) {
     if (!isRetryableRemoteSyncError(error) || !activeRemoteUserId || remoteUserDataPhase !== "ready") return false;
     if (syncRetryAttempt >= REMOTE_SYNC_RETRY_DELAYS_MS.length) {
         stopRetryProgress();
@@ -498,7 +499,7 @@ function scheduleRemoteUserDataRetry(error: unknown) {
     updateRetryProgress(delayMs);
     syncTimer = window.setTimeout(() => {
         syncTimer = null;
-        void saveRemoteUserDataNow().catch((retryError) => console.warn("云端自动重试失败", retryError));
+        void saveRemoteUserDataNow(options.automatic ? { automatic: true } : undefined).catch((retryError) => console.warn("云端自动重试失败", retryError));
     }, delayMs);
     return true;
 }
@@ -686,9 +687,9 @@ export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
     });
 }
 
-export async function saveRemoteUserDataNow(input?: string | readonly string[] | { force?: boolean; repairMissingResources?: boolean }) {
+export async function saveRemoteUserDataNow(input?: string | readonly string[] | RemoteUserDataSyncOptions) {
     const projectId = typeof input === "string" || Array.isArray(input) ? (input as string | readonly string[]) : undefined;
-    const options = input && typeof input === "object" && !Array.isArray(input) ? (input as { force?: boolean; repairMissingResources?: boolean }) : {};
+    const options: RemoteUserDataSyncOptions = input && typeof input === "object" && !Array.isArray(input) ? input as RemoteUserDataSyncOptions : {};
     const epoch = sessionEpoch;
     if (!activeRemoteUserId) throw new Error("尚未建立云端同步会话，本地内容尚未保存到云端");
     requireRemoteUserDataBaseline();
@@ -706,7 +707,7 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
         assertNoConflict();
         // The in-flight drain may have started before this explicit repair/force
         // request. Re-enter after it settles so the user's intent is not lost.
-        if (options.force || options.repairMissingResources) {
+        if (!options.automatic || options.force || options.repairMissingResources) {
             return saveRemoteUserDataNow(input);
         }
         return;
@@ -730,7 +731,7 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
         if (syncQueued) scheduleRemoteUserDataSync();
     }
     if (syncFailed) {
-        scheduleRemoteUserDataRetry(syncError);
+        scheduleRemoteUserDataRetry(syncError, options);
         throw syncError;
     }
 }
@@ -768,7 +769,7 @@ export async function forceOverwriteRemoteCanvasSync(): Promise<CanvasAssetRebin
     return rebind;
 }
 
-async function drainRemoteUserDataChanges(options: { force?: boolean; repairMissingResources?: boolean } = {}) {
+async function drainRemoteUserDataChanges(options: RemoteUserDataSyncOptions = {}) {
     const uploaded = new Map<string, string>();
     do {
         syncQueued = false;
@@ -776,7 +777,7 @@ async function drainRemoteUserDataChanges(options: { force?: boolean; repairMiss
     } while (syncQueued);
 }
 
-async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: { force?: boolean; repairMissingResources?: boolean } = {}) {
+async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: RemoteUserDataSyncOptions = {}) {
     // 中央兜底：任何调用方只要把持久媒体写进画布，提交前都会先补齐素材记录与 assetId。
     // 页面级入口仍主动入库，以便立即反馈；这里负责阻止遗漏入口形成远端幽灵资源。
     const changedProjectIds = new Set(
@@ -788,8 +789,19 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     repairMissingCanvasAssets(changedProjectIds, incrementalSession);
     const currentProjects = useCanvasStore.getState().projects;
     const currentAssets = useAssetStore.getState().assets;
-    const dirtyProjects = currentProjects.filter((project) => !sameCanvasContent(acknowledgedProjects.get(project.id), project) && useSyncProgressStore.getState().syncingProjects[project.id]?.phase !== "conflict");
-    const dirtyAssets = currentAssets.filter((asset) => !sameEntitySnapshot(acknowledgedAssets.get(asset.id), asset));
+    let dirtyProjects = currentProjects.filter((project) => !sameCanvasContent(acknowledgedProjects.get(project.id), project) && useSyncProgressStore.getState().syncingProjects[project.id]?.phase !== "conflict");
+    let dirtyAssets = currentAssets.filter((asset) => !sameEntitySnapshot(acknowledgedAssets.get(asset.id), asset));
+
+    if (options.automatic) {
+        const projectChecks = await Promise.all(dirtyProjects.map(async (project) => [project, await hasUnuploadedLocalImageMedia(project)] as const));
+        const deferredProjectIds = new Set(projectChecks.filter(([, deferred]) => deferred).map(([project]) => project.id));
+        dirtyProjects = projectChecks.filter(([, deferred]) => !deferred).map(([project]) => project);
+        const assetChecks = await Promise.all(dirtyAssets.map(async (asset) => [asset, await hasUnuploadedLocalImageMedia(asset)] as const));
+        dirtyAssets = assetChecks.filter(([, deferred]) => !deferred).map(([asset]) => asset);
+        for (const id of deferredProjectIds) {
+            useSyncProgressStore.getState().setProjectProgress(id, { phase: "pending", message: "图片已保存在本机，生成或手动同步时上传到云端" });
+        }
+    }
     if (!dirtyProjects.length && !dirtyAssets.length) return;
 
     const adoptedAssetIds = new Set<string>();

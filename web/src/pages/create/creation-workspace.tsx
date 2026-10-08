@@ -1,7 +1,7 @@
 import { ImageSizePicker } from "@/components/image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { Button, Popover } from "antd";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
 import { Tooltip } from "@/components/ui/base/tooltip";
@@ -85,8 +85,8 @@ type ComposerProps = {
     prompt: string;
     setPrompt: (value: string) => void;
     busy: boolean;
+    referenceUploadBusy: boolean;
     generationActive: boolean;
-    referenceReplacementBusy: boolean;
     attachments: CreationAttachment[];
     referenceImageSize?: { width: number; height: number };
     maxReferences: number;
@@ -97,6 +97,8 @@ type ComposerProps = {
     onReorderAttachments: (attachments: CreationAttachment[]) => void;
     onReplaceAttachment: (targetAttachmentId: string, replacement: CreationAttachment) => void;
     onReplaceReferenceFiles: (targetAttachmentId: string, files: File[]) => void;
+    onImageFilesDrop: (files: File[]) => void;
+    onImageFilesPaste: (files: File[]) => void;
     onOpenLibrary: () => void;
     onModeChange: (mode: CreationMode) => void;
     model: string;
@@ -130,6 +132,7 @@ type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
 export function CreationComposer(props: ComposerProps) {
     const [previewUrl, setPreviewUrl] = useState("");
+    const [previewStorageKey, setPreviewStorageKey] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [referenceFilter, setReferenceFilter] = useState<CreationReferenceFilter>("all");
@@ -140,7 +143,7 @@ export function CreationComposer(props: ComposerProps) {
     const suppressAttachmentClickRef = useRef(false);
     const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: true, isDragging: false });
     const previousAttachmentCountRef = useRef(0);
-    const interactionBusy = props.busy || props.referenceReplacementBusy;
+    const interactionBusy = props.busy;
     const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
@@ -175,7 +178,7 @@ export function CreationComposer(props: ComposerProps) {
     const generationCredits = routeQuote ? routeQuote.amountMicrocredits / 1_000_000 : credits;
     const showCost = creditsEnabled && generationCredits !== null && generationCredits !== undefined;
     const formattedCredits = generationCredits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : interactionBusy || (props.generationActive && !canSubmit) ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，发送` : "发送";
+    const actionLabel = interactionBusy || (props.generationActive && !canSubmit) ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，发送` : "发送";
     // Send-button working state must span the WHOLE generation (not just the
     // submit-lock window): spinner + glow stay while a message is pending and
     // the composer is empty; typing a next prompt returns the arrow so the
@@ -191,7 +194,8 @@ export function CreationComposer(props: ComposerProps) {
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.maxReferences > 0;
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
-    const addReferenceLabel = interactionBusy ? (props.referenceReplacementBusy ? "正在替换参考图" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
+    const failedReferenceUploads = props.attachments.some((attachment) => attachment.uploadState === "failed");
+    const addReferenceLabel = interactionBusy ? "生成中暂不能添加参考内容" : props.referenceUploadBusy ? "参考图正在上传，可继续输入" : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
     const referenceCounts = useMemo(() => props.attachments.reduce((counts, attachment) => {
         const kind = creationAttachmentKind(attachment);
         counts[kind] += 1;
@@ -255,10 +259,11 @@ export function CreationComposer(props: ComposerProps) {
         drag.moved = true;
         setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true }));
     };
-    const previewAttachment = (type: "image" | "video", url: string) => {
+    const previewAttachment = (type: "image" | "video", url: string, storageKey?: string) => {
         if (suppressAttachmentClickRef.current || cardDragRef.current?.moved) return;
         setPreviewType(type);
         setPreviewUrl(url);
+        setPreviewStorageKey(storageKey || "");
     };
     const reorderVisibleAttachments = useCallback((next: CreationAttachment[]) => {
         if (referenceFilter === "all") {
@@ -288,7 +293,20 @@ export function CreationComposer(props: ComposerProps) {
         }
         return undefined;
     };
-    const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
+    const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => {
+        const hasImages = Array.from(event.dataTransfer.items).some((item) => item.kind === "file" && (!item.type || item.type.startsWith("image/")))
+            || Array.from(event.dataTransfer.files).some((file) => file.type.startsWith("image/"));
+        if (!hasImages) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = interactionBusy ? "none" : "copy";
+    };
+    const handleComposerDrop = (event: DragEvent<HTMLDivElement>) => {
+        const files = Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+        if (!files.length) return;
+        event.preventDefault();
+        if (!interactionBusy) props.onImageFilesDrop(files);
+    };
+    const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner" onDragOver={handleComposerDragOver} onDrop={handleComposerDrop}>
         <SpotlightSurface
             className={`creation-chat-composer is-${props.variant}`}
             contentClassName="contents"
@@ -297,7 +315,7 @@ export function CreationComposer(props: ComposerProps) {
         >
         <div className="creation-chat-writing-surface">
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
+                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} onImageFilesPaste={props.onImageFilesPaste} />
                 {props.attachments.length || referencesSupported ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
                     {trackState.isExpanded ? <div className="creation-reference-panel-header">
                         <div className="creation-reference-filter-tabs" role="group" aria-label="筛选参考内容">
@@ -310,6 +328,7 @@ export function CreationComposer(props: ComposerProps) {
                             ] as const).map((filter) => <button key={filter.id} type="button" aria-pressed={referenceFilter === filter.id} className={referenceFilter === filter.id ? "is-active" : undefined} onClick={() => setReferenceFilter(filter.id)}>{filter.label}{filter.count ? ` (${filter.count})` : ""}</button>)}
                         </div>
                         <div className="creation-reference-panel-actions">
+                            {props.referenceUploadBusy ? <span role="status">参考图正在上传，可继续输入</span> : failedReferenceUploads ? <span role="status">参考图上传失败，生成时会重试</span> : props.attachments.some((attachment) => attachment.uploadState === "pending") ? <span role="status">参考图已保存在本地，生成时上传</span> : null}
                             {props.attachments.length ? <button type="button" onClick={props.onClearAttachments} disabled={interactionBusy}>清空全部素材</button> : null}
                             <Tooltip title="收起素材面板"><button type="button" className="creation-reference-panel-collapse" onClick={() => setReferencePanelExpanded(false)} aria-label="收起素材面板"><Minimize2 aria-hidden="true" /></button></Tooltip>
                         </div>
@@ -411,7 +430,7 @@ export function CreationComposer(props: ComposerProps) {
                 <span className="creation-submit-action" aria-hidden>{showWorkingSpinner ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}<span>{showWorkingSpinner ? "生成中" : "开始创作"}</span></span>
             </Button>
         </footer>
-        <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
+        <CreationMediaPreviewModal url={previewUrl} storageKey={previewStorageKey} type={previewType} onClose={() => { setPreviewUrl(""); setPreviewStorageKey(""); }} />
         </SpotlightSurface>
     </HoverBorderGradient>;
 

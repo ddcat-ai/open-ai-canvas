@@ -24,12 +24,193 @@ export type UploadedImage = {
 };
 
 const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
+const uploadedImageStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_upload_results" });
 const objectUrls = new Map<string, string>();
+type LocalImageUploadState = "staged" | "queued" | "uploading" | "ready" | "failed";
+type LocalImageUploadJob = {
+    storageKey: string;
+    fileName?: string;
+    blob?: Blob;
+    previewUrl: string;
+    state: LocalImageUploadState;
+    promise: Promise<UploadedImage>;
+    resolve: (image: UploadedImage) => void;
+    reject: (error: unknown) => void;
+    result?: UploadedImage;
+    error?: unknown;
+};
+export type LocalImageUploadEvent = { state: LocalImageUploadState; image?: UploadedImage; error?: unknown };
+const stagedImageBlobs = new Map<string, Blob>();
+const imageStageWrites = new Map<string, Promise<void>>();
+const localImageUploadJobs = new Map<string, LocalImageUploadJob>();
+const localImageUploadQueue: LocalImageUploadJob[] = [];
+const localImageUploadListeners = new Map<string, Set<(event: LocalImageUploadEvent) => void>>();
+const MAX_CONCURRENT_LOCAL_IMAGE_UPLOADS = 2;
+let activeLocalImageUploads = 0;
+
+export function createImageStorageKey() {
+    return `image:${getActiveUserScope()}:${nanoid()}`;
+}
+
+export function releaseImagePreview(storageKey: string, fallbackUrl = "") {
+    const url = objectUrls.get(storageKey) || fallbackUrl;
+    objectUrls.delete(storageKey);
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
+/**
+ * 将图片先写入浏览器本地存储并返回即时预览地址；此函数不发起网络请求。
+ * 图片仅在调用 ensureImageUploaded（生成或显式云端同步）时上传。
+ */
+export function stageLocalImageUpload(input: Blob, options: { storageKey?: string; previewUrl?: string; fileName?: string } = {}) {
+    const storageKey = options.storageKey || createImageStorageKey();
+    const previewUrl = options.previewUrl || URL.createObjectURL(input);
+    objectUrls.set(storageKey, previewUrl);
+    stagedImageBlobs.set(storageKey, input);
+    const write = store
+        .setItem(storageKey, input)
+        .then(() => {
+            stagedImageBlobs.delete(storageKey);
+        })
+        .catch((error: unknown) => {
+            // 保留当前会话中的 Blob，使用户仍可继续生成；刷新前若 IndexedDB 不可用则会明确报错。
+            console.warn("参考图片本地暂存失败", error);
+        });
+    imageStageWrites.set(storageKey, write);
+    void write.finally(() => {
+        if (imageStageWrites.get(storageKey) === write) imageStageWrites.delete(storageKey);
+    });
+    return { storageKey, previewUrl };
+}
+
+export function subscribeLocalImageUpload(storageKey: string, listener: (event: LocalImageUploadEvent) => void) {
+    const listeners = localImageUploadListeners.get(storageKey) || new Set();
+    listeners.add(listener);
+    localImageUploadListeners.set(storageKey, listeners);
+    const job = localImageUploadJobs.get(storageKey);
+    listener(job ? localImageUploadEvent(job) : { state: "staged" });
+    return () => {
+        listeners.delete(listener);
+        if (!listeners.size) localImageUploadListeners.delete(storageKey);
+    };
+}
+
+/** 在用户提交生成或明确同步时上传本地图片；同一 storageKey 并发复用同一个任务。 */
+export async function ensureImageUploaded(storageKey: string, fileName?: string): Promise<UploadedImage> {
+    const cachedResult = await uploadedImageStore.getItem<UploadedImage>(storageKey);
+    if (cachedResult?.storageKey && resourceIdFromStorageKey(cachedResult.storageKey)) {
+        localImageUploadListeners.get(storageKey)?.forEach((listener) => listener({ state: "ready", image: cachedResult }));
+        return cachedResult;
+    }
+
+    const existing = localImageUploadJobs.get(storageKey);
+    if (existing?.state === "ready" && existing.result) return existing.result;
+    if (existing && (existing.state === "queued" || existing.state === "uploading")) return existing.promise;
+
+    await imageStageWrites.get(storageKey);
+    const concurrent = localImageUploadJobs.get(storageKey);
+    if (concurrent?.state === "ready" && concurrent.result) return concurrent.result;
+    if (concurrent && (concurrent.state === "queued" || concurrent.state === "uploading")) return concurrent.promise;
+
+    const blob = stagedImageBlobs.get(storageKey) || (await getImageBlob(storageKey));
+    if (!blob) throw new Error("参考图片尚未保存在本机，请重新添加后再生成");
+    const job = createLocalImageUploadJob(storageKey, blob, fileName, objectUrls.get(storageKey) || "");
+    localImageUploadJobs.set(storageKey, job);
+    localImageUploadQueue.push(job);
+    pumpLocalImageUploads();
+    return job.promise;
+}
+
+export async function hasCompletedImageUpload(storageKey: string) {
+    if (resourceIdFromStorageKey(storageKey)) return true;
+    const job = localImageUploadJobs.get(storageKey);
+    if (job?.state === "ready") return true;
+    const result = await uploadedImageStore.getItem<UploadedImage>(storageKey);
+    return Boolean(result?.storageKey && resourceIdFromStorageKey(result.storageKey));
+}
+
+function createLocalImageUploadJob(storageKey: string, blob: Blob, fileName: string | undefined, previewUrl: string): LocalImageUploadJob {
+    let resolve!: (image: UploadedImage) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<UploadedImage>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { storageKey, blob, fileName, previewUrl, state: "queued", promise, resolve, reject };
+}
+
+function localImageUploadEvent(job: LocalImageUploadJob): LocalImageUploadEvent {
+    return { state: job.state, ...(job.result ? { image: job.result } : {}), ...(job.error ? { error: job.error } : {}) };
+}
+
+function notifyLocalImageUpload(job: LocalImageUploadJob) {
+    const event = localImageUploadEvent(job);
+    localImageUploadListeners.get(job.storageKey)?.forEach((listener) => listener(event));
+}
+
+function pumpLocalImageUploads() {
+    while (activeLocalImageUploads < MAX_CONCURRENT_LOCAL_IMAGE_UPLOADS && localImageUploadQueue.length) {
+        const job = localImageUploadQueue.shift();
+        if (!job) return;
+        activeLocalImageUploads += 1;
+        job.state = "uploading";
+        notifyLocalImageUpload(job);
+        void uploadLocalImageJob(job)
+            .then((image) => {
+                job.state = "ready";
+                job.result = image;
+                job.blob = undefined;
+                job.resolve(image);
+                void uploadedImageStore.setItem(job.storageKey, image).catch((error: unknown) => console.warn("参考图片上传结果缓存失败", error));
+                notifyLocalImageUpload(job);
+            })
+            .catch((error: unknown) => {
+                job.state = "failed";
+                job.error = error;
+                job.reject(error);
+                notifyLocalImageUpload(job);
+            })
+            .finally(() => {
+                activeLocalImageUploads = Math.max(0, activeLocalImageUploads - 1);
+                pumpLocalImageUploads();
+            });
+    }
+}
+
+async function uploadLocalImageJob(job: LocalImageUploadJob): Promise<UploadedImage> {
+    const blob = job.blob || (await getImageBlob(job.storageKey));
+    if (!blob) throw new Error("参考图片的本地缓存已失效，请重新添加后再生成");
+    let meta = job.previewUrl ? await readImageMeta(job.previewUrl).catch(() => undefined) : undefined;
+    if (!meta) {
+        const previewUrl = URL.createObjectURL(blob);
+        try {
+            meta = await readImageMeta(previewUrl).catch(() => undefined);
+        } finally {
+            URL.revokeObjectURL(previewUrl);
+        }
+    }
+    const resource = await uploadResourceFile(blob, "image", {
+        width: meta?.width,
+        height: meta?.height,
+        fileName: job.fileName,
+        idempotencyKey: job.storageKey,
+    });
+    const storageKey = resourceStorageKey(resource.id);
+    await primeResourceBlobCache(storageKey, blob).catch(() => "");
+    return {
+        url: resource.publicUrl || resourceFileUrl(resource.id),
+        storageKey,
+        width: resource.width || meta?.width || 0,
+        height: resource.height || meta?.height || 0,
+        bytes: resource.size || blob.size,
+        mimeType: resource.mimeType || blob.type || meta?.mimeType || "image/png",
+    };
+}
 
 export async function uploadImage(input: string | Blob, onProgress?: (uploadedBytes: number, totalBytes: number) => void): Promise<UploadedImage> {
     // 同一个逻辑上传在直传失败后会退回 IndexedDB，并由云端数据同步再次提交。
     // 提前生成本地 key，确保两条路径向后端发送相同的幂等标识。
-    const storageKey = `image:${getActiveUserScope()}:${nanoid()}`;
+    const storageKey = createImageStorageKey();
     if (typeof input === "string" && shouldImportRemoteImage(input)) {
         try {
             const resource = await importResourceFromUrl(input, "image", { idempotencyKey: storageKey });
@@ -95,12 +276,17 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
 
 export async function getImageBlob(storageKey: string) {
     if (resourceIdFromStorageKey(storageKey)) return getCachedResourceBlob(storageKey);
+    const staged = stagedImageBlobs.get(storageKey);
+    if (staged) return staged;
     return store.getItem<Blob>(storageKey);
 }
 
 export async function setImageBlob(storageKey: string, blob: Blob) {
     if (resourceIdFromStorageKey(storageKey)) return primeResourceBlobCache(storageKey, blob);
+    stagedImageBlobs.set(storageKey, blob);
+    void uploadedImageStore.removeItem(storageKey).catch(() => undefined);
     await store.setItem(storageKey, blob);
+    stagedImageBlobs.delete(storageKey);
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
     return url;
@@ -123,6 +309,10 @@ export async function deleteStoredImages(keys: Iterable<string>) {
     await Promise.all(
         Array.from(new Set(keys)).map(async (key) => {
             if (resourceIdFromStorageKey(key)) return;
+            await imageStageWrites.get(key);
+            stagedImageBlobs.delete(key);
+            localImageUploadJobs.delete(key);
+            await uploadedImageStore.removeItem(key).catch(() => undefined);
             const url = objectUrls.get(key);
             if (url) URL.revokeObjectURL(url);
             objectUrls.delete(key);

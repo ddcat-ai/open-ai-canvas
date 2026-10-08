@@ -9,7 +9,7 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
+import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, scheduleRemoteUserDataSync, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
@@ -309,11 +309,8 @@ export function useCanvasProjectLifecycle({
 
     const renameCurrentProject = useCallback((title: string) => {
         renameProject(projectId, title);
-        // 标题是画布列表和分享入口的元数据，重命名后立即提交，避免只停留在浏览器缓存。
-        void saveRemoteUserDataNow(projectId).catch((error) => {
-            message.warning(error instanceof Error ? `名称已更新到本地，云端同步将在后台重试：${error.message}` : "名称已更新到本地，云端同步将在后台重试");
-        });
-    }, [message, projectId, renameProject]);
+        scheduleRemoteUserDataSync();
+    }, [projectId, renameProject]);
 
     const persistLocalEdits = useCallback(async () => {
         const snapshot = { nodes: nodesRef.current, connections: connectionsRef.current, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo };

@@ -727,6 +727,7 @@ function InfiniteCanvasPage() {
     } = useCanvasUpload({
         canvasId: projectId,
         domainProjectId: linkedProjectId,
+        nodes,
         nodesRef,
         selectedNodeIdsRef,
         getCanvasCenter,
