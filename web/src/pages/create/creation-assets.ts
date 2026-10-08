@@ -17,7 +17,9 @@ export type CreationDocumentAttachment = {
     previewUrl: string;
 };
 export type CreationAttachment = ((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment;
-export type CreationMode = "text" | "image" | "video";
+import type { CreationMode } from "@/lib/creation-mode";
+
+export type { CreationMode };
 export type CreationAttachmentKind = "image" | "video" | "audio" | "file";
 
 const textDocumentExtensions = [".pdf", ".txt", ".md", ".csv", ".json", ".html", ".xml", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"];

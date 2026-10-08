@@ -1,0 +1,285 @@
+/* 灵感库画廊。卡片是主体：封面占满、信息压在底部、悬停整体抬起来。
+   颜色、圆角、阴影一律走项目 token，不写字面值。 */
+
+.inspiration-gallery {
+    display: grid;
+    gap: var(--space-4, 16px);
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+}
+
+.inspiration-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* 玻璃质感：亮描边 + 大而软的投影，和首页纵深画廊同一套语言。 */
+    border: 1px solid color-mix(in srgb, var(--user-ink) 9%, transparent);
+    border-radius: var(--r-2xl, 16px);
+    background: var(--creation-surface, var(--user-surface));
+    box-shadow: 0 12px 28px -20px color-mix(in srgb, var(--user-ink) 42%, transparent);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        transform var(--user-motion, 180ms) cubic-bezier(.2, .8, .3, 1),
+        box-shadow var(--user-motion, 180ms) ease,
+        border-color var(--user-motion, 180ms) ease;
+}
+
+.inspiration-card:hover,
+.inspiration-card:focus-visible {
+    border-color: color-mix(in srgb, var(--user-ink) 18%, transparent);
+    box-shadow: 0 24px 44px -24px color-mix(in srgb, var(--user-ink) 52%, transparent);
+    transform: translateY(-3px);
+}
+
+.inspiration-card:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 2px;
+}
+
+.inspiration-card-cover {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: var(--user-surface-muted);
+}
+
+.inspiration-card-cover img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 420ms cubic-bezier(.2, .8, .3, 1);
+}
+
+.inspiration-card:hover .inspiration-card-cover img {
+    transform: scale(1.045);
+}
+
+/* 封面底部压一层暗角，让源标签始终读得清。 */
+.inspiration-card-cover::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 46%;
+    background: linear-gradient(transparent, rgba(0, 0, 0, .58));
+    pointer-events: none;
+}
+
+.inspiration-card-cover .inspiration-card-source {
+    position: absolute;
+    bottom: var(--space-2, 8px);
+    left: var(--space-2, 8px);
+    z-index: 1;
+    padding: 3px var(--space-2, 8px);
+    border-radius: var(--r-full, 999px);
+    background: rgba(20, 22, 26, .48);
+    color: #fff;
+    font-size: var(--fs-tiny, 10px);
+    line-height: 1.6;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+/* 悬停才浮出的快捷操作，平时不干扰画面。 */
+.inspiration-card-actions {
+    position: absolute;
+    top: var(--space-2, 8px);
+    right: var(--space-2, 8px);
+    z-index: 2;
+    display: flex;
+    gap: var(--space-1, 4px);
+    opacity: 0;
+    transition: opacity var(--user-motion, 180ms) ease;
+}
+
+.inspiration-card:hover .inspiration-card-actions,
+.inspiration-card:focus-within .inspiration-card-actions {
+    opacity: 1;
+}
+
+.inspiration-card-action {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    color: #fff;
+    background: rgba(20, 22, 26, .5);
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: var(--r-full, 999px);
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    transition: background-color var(--user-motion, 180ms) ease;
+}
+
+.inspiration-card-action:hover {
+    background: rgba(20, 22, 26, .72);
+}
+
+.inspiration-card-action.is-on {
+    color: var(--user-accent);
+    background: color-mix(in srgb, var(--user-surface) 88%, transparent);
+}
+
+.inspiration-card-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-1, 4px);
+    padding: var(--space-3, 12px);
+}
+
+.inspiration-card-title {
+    overflow: hidden;
+    color: var(--user-ink);
+    font-size: var(--fs-body, 14px);
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inspiration-card-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption, 12px);
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.inspiration-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1, 4px);
+    margin-top: var(--space-1, 4px);
+}
+
+/* 分类标签。未选中态必须有看得出边界的底色：
+   页面本身是纯白，只给 #f1f1f3 这种 4% 差的浅灰等于没给，整排会糊成"一片白按钮"。 */
+.inspiration-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1, 4px);
+    padding: var(--space-1, 4px) var(--space-3, 12px);
+    color: var(--user-ink, #1d1d21);
+    background: color-mix(in srgb, var(--user-ink, #1d1d21) 12%, var(--user-surface, #fff));
+    border: 1px solid color-mix(in srgb, var(--user-ink, #1d1d21) 22%, transparent);
+    border-radius: var(--r-full, 999px);
+    font-size: var(--fs-caption, 12px);
+    line-height: 1.7;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color var(--user-motion, 180ms) ease,
+        background-color var(--user-motion, 180ms) ease,
+        border-color var(--user-motion, 180ms) ease;
+}
+
+.inspiration-chip:hover {
+    background: color-mix(in srgb, var(--user-ink, #1d1d21) 18%, var(--user-surface, #fff));
+    border-color: color-mix(in srgb, var(--user-ink, #1d1d21) 34%, transparent);
+}
+
+.inspiration-chip[aria-pressed="true"] {
+    color: var(--user-surface, #fff);
+    background: var(--user-ink, #1d1d21);
+    border-color: transparent;
+}
+
+.inspiration-chip:focus-visible {
+    outline: 2px solid var(--user-accent, #5f55d9);
+    outline-offset: 2px;
+}
+
+/* 标签里的计数：比正文弱一档，但仍要在两种底色上都读得出来。 */
+.inspiration-chip-count {
+    font-variant-numeric: tabular-nums;
+    opacity: .58;
+}
+
+/* 卡片上的分类/署名标签是纯展示，不参与点击，去掉指针与悬停反馈。 */
+.inspiration-card-tags .inspiration-chip {
+    padding: 1px var(--space-2, 8px);
+    font-size: var(--fs-tiny, 10px);
+    background: var(--user-surface-muted, #f1f1f3);
+    border-color: color-mix(in srgb, var(--user-ink, #1d1d21) 12%, transparent);
+    color: color-mix(in srgb, var(--user-ink, #1d1d21) 72%, transparent);
+    cursor: default;
+}
+
+.inspiration-card-tags .inspiration-chip:hover {
+    background: var(--user-surface-muted, #f1f1f3);
+    border-color: color-mix(in srgb, var(--user-ink, #1d1d21) 12%, transparent);
+}
+
+/* 详情与列表里的纯图标按钮。带 span 是为了避开 workspace-product.css 里
+   那条 `button:has(> svg):not(:has(> span))` 的全局浮起规则，这里的悬停是自定义的。 */
+.inspiration-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    color: var(--user-ink-soft);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--user-ink) 12%, transparent);
+    border-radius: var(--r-full, 999px);
+    cursor: pointer;
+    transition:
+        color var(--user-motion, 180ms) ease,
+        background-color var(--user-motion, 180ms) ease,
+        border-color var(--user-motion, 180ms) ease;
+}
+
+.inspiration-icon-button:hover {
+    color: var(--user-ink);
+    background: var(--user-surface-muted);
+    border-color: color-mix(in srgb, var(--user-ink) 20%, transparent);
+}
+
+.inspiration-icon-button[aria-pressed="true"] {
+    color: var(--user-accent);
+    border-color: color-mix(in srgb, var(--user-accent) 42%, transparent);
+}
+
+.inspiration-icon-button:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 2px;
+}
+
+/* 提示词正文：等宽、可滚动、保留换行，复制按钮钉在右上角。 */
+.inspiration-prompt-block {
+    position: relative;
+    max-height: 320px;
+    padding: var(--space-3, 12px);
+    overflow: auto;
+    border: 1px solid color-mix(in srgb, var(--user-ink) 10%, transparent);
+    border-radius: var(--r-lg, 12px);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--fs-caption, 12px);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .inspiration-card,
+    .inspiration-card-cover img {
+        transition: none;
+    }
+
+    .inspiration-card:hover,
+    .inspiration-card:focus-visible {
+        transform: none;
+    }
+
+    .inspiration-card:hover .inspiration-card-cover img {
+        transform: none;
+    }
+}

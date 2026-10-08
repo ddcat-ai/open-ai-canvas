@@ -6,7 +6,7 @@ import { ArrowUp, ChevronDown, Clapperboard, FileText, Image as ImageIcon, Spark
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { creationFeaturedWorks, inspirationSource } from "./creation-inspirations";
+import { curatedInspirations, inspirationSourceOf, inspirationSources } from "@/lib/inspirations/catalog";
 import { modeLabels } from "./creation-types";
 import { Button } from "antd";
 
@@ -82,14 +82,18 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
     const [filter, setFilter] = useState<"all" | CreationMode>("all");
     const [limit, setLimit] = useState(12);
-    const filtered = creationFeaturedWorks.filter((item) => filter === "all" || item.mode === filter);
+    const filtered = curatedInspirations.filter((item) => filter === "all" || item.mode === filter);
+    // 只列出真正用到的外部来源；原创条目不写来源声明。
+    const declaredSources = Array.from(new Set(curatedInspirations.map((item) => item.sourceId ?? "original")))
+        .map((id) => inspirationSources[id])
+        .filter((source) => source.notice);
     return (
         <section className="creation-featured-works" aria-labelledby="creation-featured-title">
             <div className="creation-featured-heading">
                 <div>
                     <h2 id="creation-featured-title">精选灵感</h2>
                 </div>
-                <p>{creationFeaturedWorks.length} 个创意起点 · 点击填入提示词，不自动生成</p>
+                <p>{curatedInspirations.length} 个创意起点 · 点击填入提示词，不自动生成</p>
             </div>
             <div className="creation-inspiration-filters" role="group" aria-label="灵感类型">
                 {(["all", "video", "image", "text"] as const).map((value) => (
@@ -103,7 +107,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                         }}
                     >
                         {value === "all" ? "全部灵感" : modeLabels[value]}
-                        <span>{creationFeaturedWorks.filter((item) => value === "all" || item.mode === value).length}</span>
+                        <span>{curatedInspirations.filter((item) => value === "all" || item.mode === value).length}</span>
                     </button>
                 ))}
             </div>
@@ -122,7 +126,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                             <span>{item.description}</span>
                             <em>
                                 <Sparkles />
-                                {item.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[item.mode]}
+                                {inspirationSourceOf(item).label} · {modeLabels[item.mode]}
                             </em>
                         </span>
                     </button>
@@ -139,10 +143,16 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                 )}
                 <details>
                     <summary>模板与封面来源</summary>
-                    <p>{inspirationSource.notice}</p>
-                    <a href={inspirationSource.repository} target="_blank" rel="noreferrer">
-                        awesome-chatgpt-prompts · CC0
-                    </a>
+                    {declaredSources.map((source) => (
+                        <div key={source.name ?? source.label}>
+                            <p>{source.notice}</p>
+                            {source.repository ? (
+                                <a href={source.repository} target="_blank" rel="noreferrer">
+                                    {source.name} · {source.license}
+                                </a>
+                            ) : null}
+                        </div>
+                    ))}
                 </details>
             </footer>
         </section>

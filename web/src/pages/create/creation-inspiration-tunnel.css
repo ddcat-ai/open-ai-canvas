@@ -1,0 +1,388 @@
+/* 创作页空态的纵深图片画廊。
+   卡片沿 Z 轴排队：当前一张在最前、正对画面且最大，其余按层往后推，
+   每层按等比缩小并向中轴收拢，形成展厅走廊那种一排挂在纵深上的画。
+   不做弧形——弯曲会立刻丢掉"纵深"的错觉。
+
+   缩放在 JS 里按 perspective 公式预先算好，而不是交给 CSS perspective：
+   平面卡片在固定 z 上做投影，结果就是等比缩放加平移，自己算省掉每帧的投影光栅化。
+
+   滚轮或左右按钮切换，切换靠 transform / opacity 的 transition 平滑过渡。 */
+
+/* 内容层压住画廊，但指针事件要能穿过空白处，否则整条画廊都点不到；
+   真正的交互元素由下面一条规则恢复命中。 */
+.creation-home .creation-empty-workspace {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.creation-home .creation-empty-workspace > * {
+    pointer-events: auto;
+}
+
+/* 画廊占中上部、输入框沉到下方：
+   先把 main 的居中改掉，否则 justify-content: center 会吃掉 margin-top: auto。 */
+.creation-home .creation-empty-workspace {
+    justify-content: flex-start;
+}
+
+.creation-home .creation-home-heading {
+    margin-top: clamp(16px, 5vh, 52px);
+}
+
+.creation-home .creation-empty-workspace > .creation-launchpad {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(16px, 5vh, 52px);
+    width: min(960px, calc(100% - 32px));
+    margin: 0;
+    transform: translateX(-50%);
+}
+
+/* ── 让画廊从内容区背后穿过 ──
+   输入框、模式切换器、快捷卡换成毛玻璃：背后的照片透过来变成模糊底纹，
+   文字仍落在半透明实色层上保持可读。 */
+.creation-home .creation-chat-composer {
+    background: color-mix(in srgb, var(--user-surface) 70%, transparent) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    backdrop-filter: blur(24px) saturate(1.4);
+}
+
+.creation-home .creation-mode-tabs {
+    background: color-mix(in srgb, var(--user-surface-muted) 72%, transparent) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.creation-home .creation-empty-suggest .suggest-card {
+    background: color-mix(in srgb, var(--creation-surface) 74%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    backdrop-filter: blur(16px) saturate(1.25);
+}
+
+/* 标题没有玻璃层可依附，用背景色光晕保住可读性，而不是整块盖住画面。 */
+.creation-home .creation-home-heading h1 {
+    text-shadow:
+        0 2px 20px var(--creation-bg, var(--workspace-page)),
+        0 0 56px var(--creation-bg, var(--workspace-page));
+}
+
+.creation-home .creation-home-heading p {
+    text-shadow: 0 1px 14px var(--creation-bg, var(--workspace-page));
+}
+
+/* ── 画廊本体 ──
+   上下边界同时定义在这里，两侧切换按钮靠它们算出纵向居中位置。 */
+.creation-inspiration-tunnel {
+    /* 上边让开标题，下边让开输入框——前卡刚好停在输入框上沿之上。 */
+    --gallery-top: clamp(120px, 14vh, 184px);
+    --gallery-bottom: clamp(430px, 48vh, 550px);
+
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.creation-gallery-stage {
+    position: absolute;
+    top: var(--gallery-top);
+    right: 0;
+    bottom: var(--gallery-bottom);
+    left: 0;
+    /* 只有舞台能收到滚轮，避免整页滚动被劫持。 */
+    pointer-events: auto;
+}
+
+.creation-tunnel-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(440px, 40vw);
+    aspect-ratio: 16 / 9;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    /* 玻璃质感边框：亮描边勾出面板边缘，内侧一圈高光给厚度，
+       外圈大而软的投影把面板从背景里"抬"起来，避免看成扁平纸片。
+       阴影只留三层——11 张卡片都在动，每多一层就是每帧多一次大范围重绘。 */
+    border: 1px solid rgba(255, 255, 255, .5);
+    border-radius: var(--r-2xl, 16px);
+    background: var(--creation-surface-raised, #f0f1ee);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .55),
+        0 0 0 1px rgba(0, 0, 0, .07),
+        0 28px 54px -26px rgba(0, 0, 0, .52);
+    cursor: pointer;
+    /* 只有最前面那张能点，后面的点击会穿到页面上，不去抢焦点。 */
+    pointer-events: none;
+    will-change: transform, opacity;
+    /* 封面就绪前整张卡不可见。先露面板再填图，会出现"右边有图、左边还是空白面板"的观感；
+       --card-mount 由 .is-ready 翻开，opacity 走 transition 平滑淡入。 */
+    opacity: calc(var(--card-mount, 0) * var(--card-depth-opacity, 1));
+    /* 先把卡片按自身尺寸对中，再叠加纵深位移与缩放——位移不会被 scale 影响。
+       --card-enter-y / --card-enter-scale 是入场位移，封面就绪后归零，
+       所以卡片是"从略下方、略小的位置浮上来"，而不是硬闪出来。 */
+    transform:
+        translate(-50%, -50%)
+        translate(var(--card-x, 0px), var(--card-enter-y, 44px))
+        scale(calc(var(--card-scale, 1) * var(--card-enter-scale, .95)));
+    /* 只动 transform 和 opacity，两者都能交给合成层，不触发重排重绘。
+       缓动先缓后快再长尾软着陆，观感是镜头平稳推拉而不是"弹"过去。 */
+    transition:
+        transform 660ms cubic-bezier(.32, .72, 0, 1),
+        opacity 520ms cubic-bezier(.4, 0, .2, 1);
+}
+
+/* 封面已就绪：放行这张卡。 */
+.creation-tunnel-card.is-ready {
+    --card-mount: 1;
+    --card-enter-y: 0px;
+    --card-enter-scale: 1;
+}
+
+.creation-tunnel-card.is-active {
+    pointer-events: auto;
+}
+
+/* 悬停时抬起放大一点，给"可以点进去"的反馈。
+   整条 transform 链重写一遍而不是用 translate / scale 独立属性：
+   独立属性会插在 transform 之前合成，卡片会被缩放带得偏离原位。
+   抬起用更短的时长——切换是运镜，悬停是手感，两者不该共用一个节奏。 */
+.creation-tunnel-card.is-active:hover {
+    transform:
+        translate(-50%, -50%)
+        translate(var(--card-x, 0px), calc(var(--card-enter-y, 0px) - 14px))
+        scale(calc(var(--card-scale, 1) * var(--card-enter-scale, 1) * 1.04));
+    transition:
+        transform 240ms cubic-bezier(.2, .8, .3, 1),
+        opacity 520ms cubic-bezier(.4, 0, .2, 1);
+}
+
+/* 玻璃罩：斜向高光 + 底部压暗，让面板读起来是一块有厚度的玻璃，不是一张图。 */
+.creation-tunnel-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(158deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 40%),
+        linear-gradient(0deg, rgba(0, 0, 0, .18), rgba(0, 0, 0, 0) 44%);
+    pointer-events: none;
+}
+
+.creation-tunnel-card img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ── 卡片上的三段提示词信息：行动点 / 标题 / 描述 ── */
+.creation-tunnel-card-info {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1, 4px);
+    padding: 44px var(--space-4, 16px) var(--space-3, 12px);
+    background: linear-gradient(transparent, rgba(0, 0, 0, .52) 40%, rgba(0, 0, 0, .84));
+    color: #fff;
+    text-align: left;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, .55);
+    opacity: 0;
+    /* 比位移稍慢一点收尾，避免文字跟着画面一起"闪"进闪出。 */
+    transition: opacity 380ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.creation-tunnel-card.is-active .creation-tunnel-card-info {
+    opacity: 1;
+}
+
+.creation-tunnel-card-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1, 4px);
+    font-size: var(--fs-label, 11px);
+    line-height: 1.2;
+    opacity: .84;
+}
+
+.creation-tunnel-card-cta svg {
+    width: 12px;
+    height: 12px;
+}
+
+.creation-tunnel-card-title {
+    font-size: var(--fs-body, 14px);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.creation-tunnel-card-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: var(--fs-caption, 12px);
+    line-height: 1.45;
+    opacity: .84;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+/* ── 左右切换按钮 ── */
+.creation-gallery-arrow {
+    position: absolute;
+    /* 对齐画廊那条带子的纵向中线，而不是整屏中线——输入框在下面，整屏中线偏低。 */
+    top: calc((100% - var(--gallery-top) - var(--gallery-bottom)) / 2 + var(--gallery-top));
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    color: var(--user-ink, #fff);
+    background: color-mix(in srgb, var(--user-surface) 62%, transparent);
+    border: 1px solid color-mix(in srgb, var(--user-ink) 14%, transparent);
+    border-radius: var(--r-full, 999px);
+    box-shadow: 0 14px 30px -14px rgba(0, 0, 0, .55);
+    -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    backdrop-filter: blur(18px) saturate(1.3);
+    cursor: pointer;
+    pointer-events: auto;
+    /* 用整条 transform 表达"居中 + 悬停放大"：
+       换成 scale 独立属性会插在 transform 之前合成，按钮会跟着往下掉。 */
+    transform: translateY(-50%);
+    transition:
+        transform var(--user-motion, 180ms) ease,
+        background-color var(--user-motion, 180ms) ease,
+        color var(--user-motion, 180ms) ease;
+}
+
+.creation-gallery-arrow.is-prev {
+    left: clamp(12px, 2.4vw, 40px);
+}
+
+.creation-gallery-arrow.is-next {
+    right: clamp(12px, 2.4vw, 40px);
+}
+
+.creation-gallery-arrow:hover {
+    transform: translateY(-50%) scale(1.08);
+}
+
+.creation-gallery-arrow:focus-visible {
+    outline: 2px solid var(--creation-accent, var(--user-accent));
+    outline-offset: 3px;
+}
+
+.creation-gallery-arrow-icon {
+    display: inline-flex;
+}
+
+.creation-gallery-arrow svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* 卡片对辅助技术隐藏，切换结果改由这条文本播报。 */
+.creation-gallery-announce {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* 素材来源署名：CC BY 4.0 要求可追溯，画廊形态下不再有灵感分区页脚。 */
+.creation-inspiration-credit {
+    position: absolute;
+    right: 22px;
+    bottom: 14px;
+    z-index: 2;
+    max-width: 62ch;
+    color: var(--creation-faint, var(--user-ink-soft));
+    font-size: var(--fs-caption, 12px);
+    line-height: 1.6;
+}
+
+.creation-inspiration-credit summary {
+    cursor: pointer;
+    list-style: none;
+    opacity: .72;
+    transition: opacity var(--user-motion, 180ms) ease;
+}
+
+.creation-inspiration-credit summary:hover {
+    opacity: 1;
+}
+
+.creation-inspiration-credit summary::-webkit-details-marker {
+    display: none;
+}
+
+.creation-inspiration-credit p {
+    margin: 6px 0;
+}
+
+.creation-inspiration-credit a {
+    color: var(--creation-accent, var(--user-accent));
+}
+
+/* 减少动效：不做入场位移、悬停也不放大，切换改为瞬时。
+   （卡片仍然等封面就绪，只是不再有过渡过程。） */
+@media (prefers-reduced-motion: reduce) {
+    .creation-tunnel-card {
+        --card-enter-y: 0px;
+        --card-enter-scale: 1;
+        transition: none;
+    }
+
+    .creation-tunnel-card.is-active:hover {
+        transform:
+            translate(-50%, -50%)
+            translate(var(--card-x, 0px), 0)
+            scale(var(--card-scale, 1));
+    }
+
+    .creation-gallery-arrow {
+        transition: none;
+    }
+
+    .creation-gallery-arrow:hover {
+        transform: translateY(-50%);
+    }
+}
+
+/* 窄屏：横向偏移收小一点，免得侧翼卡片被裁掉。 */
+@media (max-width: 1100px) {
+    .creation-inspiration-tunnel {
+        --gallery-top: clamp(72px, 11vh, 132px);
+        --gallery-bottom: clamp(210px, 33vh, 320px);
+    }
+
+    .creation-tunnel-card {
+        width: min(400px, 48vw);
+    }
+
+    .creation-gallery-arrow {
+        width: 40px;
+        height: 40px;
+    }
+}
+
+@media (max-width: 640px) {
+    .creation-inspiration-credit {
+        right: 14px;
+    }
+
+    .creation-tunnel-card {
+        width: 68vw;
+    }
+
+    .creation-tunnel-card-desc {
+        -webkit-line-clamp: 1;
+    }
+}
