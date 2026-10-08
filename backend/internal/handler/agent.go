@@ -319,8 +319,10 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		c.Header("Content-Type", "text/event-stream")
-		c.Header("Cache-Control", "no-cache")
+		c.Header("Content-Type", "text/event-stream; charset=utf-8")
+		c.Header("Cache-Control", "no-cache, no-transform")
+		c.Header("Content-Encoding", "identity")
+		c.Header("Connection", "keep-alive")
 		c.Header("X-Accel-Buffering", "no")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()

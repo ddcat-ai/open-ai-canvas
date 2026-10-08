@@ -78,6 +78,16 @@ type CloudAgentPanelProps = {
 };
 type AgentPanelView = "chat" | "history" | "settings";
 
+function approvalStateFromRun(nextRun: AgentRun | null): ApprovalState | null {
+    const approval = nextRun?.approval;
+    if (!approval?.approvalId || approval.decision) return null;
+    return {
+        approvalId: approval.approvalId,
+        detail: approval,
+        reason: approval.reason || "",
+    };
+}
+
 export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, selectedNodeIds, references, open, prefillRequest, onOpen, onCollapse, onFocusNode, canvasNodes, runningNodeId }: CloudAgentPanelProps) {
     const userId = useUserStore((state) => state.user?.id);
     const theme = canvasThemes[useActiveTheme()];
@@ -484,6 +494,8 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                     setActiveConversationId(current.id);
                     setMessages(current.messages);
                     setRun(current.run);
+                    setApproval(approvalStateFromRun(current.run));
+                    setPrompt(current.draft || "");
                     setPermissionMode(current.permissionMode);
                     setSelectedSkillIds(current.skillIds || []);
                     if (current.model) setModel(current.model);
@@ -510,7 +522,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
     }, [canvasId, userId]);
 
     useEffect(() => {
-        if (!historyHydrated || (!messages.length && !run)) return;
+        if (!historyHydrated || (!messages.length && !run && !prompt.trim())) return;
         const now = new Date().toISOString();
         setConversations((current) => {
             const existing = current.find((conversation) => conversation.id === activeConversationId);
@@ -519,6 +531,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 title: cloudAgentConversationTitle(messages),
                 messages,
                 run,
+                draft: prompt || undefined,
                 model: selectedModel || undefined,
                 permissionMode,
                 skillIds: selectedSkillIds,
@@ -527,7 +540,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             };
             return [next, ...current.filter((conversation) => conversation.id !== activeConversationId)];
         });
-    }, [activeConversationId, historyHydrated, messages, permissionMode, run, selectedModel, selectedSkillIds]);
+    }, [activeConversationId, historyHydrated, messages, permissionMode, prompt, run, selectedModel, selectedSkillIds]);
 
     useEffect(() => {
         if (!historyHydrated) return;
@@ -560,6 +573,14 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 onConnectionChange: setConnectionStatus,
                 onError: (cause) => {
                     canvasSyncRef.current?.reconcile();
+                    const status = (cause as { status?: number }).status;
+                    if (status === 404) {
+                        setMessages((current) => appendAgentError(current, `stream-error-${run.id}`, cause, "上一次 Agent 运行记录已失效，无法确认任务结果；请到任务中心或资产中核对"));
+                        setRun((current) => (current?.id === run.id ? null : current));
+                        setApproval(null);
+                        setConnectionStatus("disconnected");
+                        return;
+                    }
                     setMessages((current) => appendAgentError(current, `stream-error-${run.id}`, cause, "Agent 事件流已断开"));
                     // The observation channel failed, not the durable run. Keep
                     // identity and approval so reconnect/cancel/continue remain available.
@@ -568,6 +589,43 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             },
         );
     }, [run?.id, connectionEpoch]);
+
+    const reconnectAgent = async () => {
+        const activeRun = run;
+        if (!activeRun?.id || currentScope.current !== conversationScope) return;
+        const scope = conversationScope;
+        setConnectionStatus("connecting");
+        try {
+            const snapshot = (await getAgentRun(activeRun.id, AbortSignal.timeout(10_000))).run;
+            if (currentScope.current !== scope) return;
+            setRun(snapshot);
+            setApproval(approvalStateFromRun(snapshot));
+            if (!snapshot.cleanupPending && ["completed", "failed", "cancelled", "rejected"].includes(snapshot.status)) {
+                setConnectionStatus("connected");
+                setMessages((current) =>
+                    appendUniqueMessage(current, {
+                        id: `reconnect-complete-${snapshot.id}-${snapshot.updatedAt}`,
+                        role: "system",
+                        text: snapshot.status === "completed" ? "上一次任务已处理完成，结果已同步。" : `上一次任务已结束（${snapshot.status}）。`,
+                    }),
+                );
+                return;
+            }
+            setMessages((current) =>
+                appendUniqueMessage(current, {
+                    id: `reconnect-active-${snapshot.id}-${snapshot.updatedAt}`,
+                    role: "system",
+                    text: snapshot.status === "waiting_approval" ? "上一次任务尚未完成，正在等待确认；已恢复状态监听。" : "上一次任务尚未处理完成，正在继续监听；完成后会自动更新。",
+                }),
+            );
+            setConnectionEpoch((value) => value + 1);
+        } catch (cause) {
+            if (currentScope.current !== scope) return;
+            setConnectionStatus("disconnected");
+            const status = (cause as { status?: number }).status;
+            setMessages((current) => appendAgentError(current, `reconnect-error-${activeRun.id}`, cause, status === 404 ? "找不到上一次 Agent 运行记录，无法确认任务是否完成；请到任务中心或资产中核对" : "暂时无法获取上一次任务状态，请稍后重试"));
+        }
+    };
 
     useEffect(() => {
         if (!run?.id || connectionStatus !== "disconnected") return;
@@ -578,7 +636,11 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
 
     const interject = async (value: string) => {
         const activeRun = run;
-        if (!value || !activeRun?.id || busy || connectionStatus !== "connected" || currentScope.current !== conversationScope || !historyHydrated) return;
+        if (!value || !activeRun?.id || busy || currentScope.current !== conversationScope || !historyHydrated) return;
+        if (connectionStatus !== "connected") {
+            setMessages((current) => appendAgentError(current, `interject-disconnected-${activeRun.id}`, new Error("Agent 连接已断开"), "当前连接已断开，消息已保存为草稿；请点击“重新连接”后再发送"));
+            return;
+        }
         const scope = conversationScope;
         const messageId = `user-${crypto.randomUUID()}`;
         setBusy(true);
@@ -603,7 +665,11 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             await interject(value);
             return;
         }
-        if (!value || busy || running || (run && connectionStatus !== "connected") || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
+        if (!value || busy || running || submissionRequestRef.current || !historyHydrated || !pendingHydrated || currentScope.current !== conversationScope) return;
+        if (run && connectionStatus !== "connected") {
+            setMessages((current) => appendAgentError(current, `submit-disconnected-${run.id}`, new Error("Agent 连接已断开"), "当前连接已断开，消息已保存为草稿；请点击“重新连接”后再发送"));
+            return;
+        }
         const scope = conversationScope;
         submissionRequestRef.current = true;
         setBusy(true);
@@ -717,7 +783,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             const snapshot = await getAgentRun(activeRun.id, AbortSignal.timeout(5_000));
             if (currentScope.current === conversationScope) {
                 setRun((current) => (current?.id === activeRun.id ? snapshot.run : current));
-                if (!snapshot.run.approval) setApproval(null);
+                setApproval(approvalStateFromRun(snapshot.run));
                 setConnectionEpoch((value) => value + 1);
             }
         } catch (cause) {
@@ -823,13 +889,14 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 title: "新对话",
                 messages: [],
                 run: null,
+                draft: "",
                 model: selectedModel || undefined,
                 permissionMode,
                 skillIds: inheritedSkillIds,
                 createdAt: now,
                 updatedAt: now,
             },
-            ...current.filter((conversation) => conversation.messages.length > 0 || conversation.run),
+            ...current.filter((conversation) => conversation.messages.length > 0 || conversation.run || conversation.draft?.trim()),
         ]);
         setView("chat");
     };
@@ -845,11 +912,11 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         setApprovalSubmitting(false);
         setActiveConversationId(conversation.id);
         setRun(conversation.run);
+        setApproval(approvalStateFromRun(conversation.run));
         setMessages(conversation.messages);
         setPermissionMode(conversation.permissionMode);
         setSelectedSkillIds(conversation.skillIds || []);
-        setApproval(null);
-        setPrompt("");
+        setPrompt(conversation.draft || "");
         if (conversation.model) setModel(conversation.model);
         setView("chat");
         void loadCloudAgentPendingSubmission(canvasId, conversation.id)
@@ -987,9 +1054,15 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                                     />
                                     {run && connectionStatus !== "connected" ? (
                                         <div role="status" className="flex items-center justify-between gap-2 px-5 py-2 text-xs" style={{ color: theme.node.muted }}>
-                                            <span>{connectionStatus === "disconnected" ? "连接已断开，服务端任务可能仍在执行；运行记录已保留" : "正在连接并校准运行状态…"}</span>
+                                            <span>
+                                                {connectionStatus === "disconnected"
+                                                    ? run && ["queued", "running", "waiting_approval"].includes(run.status)
+                                                        ? "连接已断开；上一次任务尚未完成，点击“重新连接”查看状态"
+                                                        : "连接已断开；点击“重新连接”确认上一次任务状态"
+                                                    : "正在连接并校准运行状态…"}
+                                            </span>
                                             {connectionStatus === "disconnected" ? (
-                                                <Button size="small" onClick={() => setConnectionEpoch((value) => value + 1)}>
+                                                <Button size="small" onClick={() => void reconnectAgent()}>
                                                     重新连接
                                                 </Button>
                                             ) : null}
@@ -1005,7 +1078,8 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                                         approval={approval}
                                         approvalTargetGenerating={approval ? agentApprovalTargetGenerating(approval.detail, canvasNodes, runningNodeId) : undefined}
                                         nodeCount={nodeCount}
-                                        approvalSubmitting={approvalSubmitting || connectionStatus !== "connected"}
+                                        approvalSubmitting={approvalSubmitting}
+                                        approvalBlocked={connectionStatus !== "connected"}
                                         onChooseSkill={() => setSkillsOpen(true)}
                                         onDraftPrompt={(draft) => setPrompt((current) => (current.trim() ? `${current}\n\n${draft}` : draft))}
                                         onApprovalReasonChange={(reason) => setApproval((current) => (current ? { ...current, reason } : current))}
@@ -1035,7 +1109,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                                     {pendingQuestion ? <AgentQuestionBar question={pendingQuestion} theme={theme} disabled={approvalSubmitting || connectionStatus !== "connected"} onAnswer={(label) => void submit(label)} /> : null}
                                     <AgentChatComposer
                                         prompt={prompt}
-                                        disabled={Boolean(run && connectionStatus !== "connected") || !historyHydrated || !pendingHydrated}
+                                        disabled={!historyHydrated || !pendingHydrated}
                                         sending={busy}
                                         running={running}
                                         placeholder={running ? "运行中可直接插话，会在它下一步生效" : "输入操作指导；用 @ 引用画布节点，用 / 或 、 引用 Skills"}
