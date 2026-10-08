@@ -67,7 +67,8 @@ describe("canvas resource mention editor", () => {
 
         const stageFunction = imageStorage.slice(imageStorage.indexOf("export function stageLocalImageUpload"), imageStorage.indexOf("export function subscribeLocalImageUpload"));
         const cachedUpload = imageStorage.slice(imageStorage.indexOf("const cachedResult = await uploadedImageStore"), imageStorage.indexOf("const existing = localImageUploadJobs"));
-        expect(stageFunction).toContain("store.setItem(storageKey, input)");
+        expect(stageFunction).toContain("store");
+        expect(stageFunction).toContain(".setItem(storageKey, input)");
         expect(stageFunction).not.toContain("uploadResourceFile(");
         expect(cachedUpload).toContain('listener({ state: "ready", image: cachedResult })');
         expect(creationPage).toContain("creationPendingImageAttachment(file)");

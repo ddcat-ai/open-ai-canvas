@@ -51,7 +51,7 @@ export async function hasUnuploadedLocalImageMedia(value: unknown) {
     visit(value);
     if (hasInlineImage) return true;
     for (const storageKey of storageKeys) {
-        if (!await hasCompletedImageUpload(storageKey)) return true;
+        if (!(await hasCompletedImageUpload(storageKey))) return true;
     }
     return false;
 }

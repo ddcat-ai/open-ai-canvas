@@ -67,12 +67,15 @@ export function stageLocalImageUpload(input: Blob, options: { storageKey?: strin
     const previewUrl = options.previewUrl || URL.createObjectURL(input);
     objectUrls.set(storageKey, previewUrl);
     stagedImageBlobs.set(storageKey, input);
-    const write = store.setItem(storageKey, input).then(() => {
-        stagedImageBlobs.delete(storageKey);
-    }).catch((error: unknown) => {
-        // 保留当前会话中的 Blob，使用户仍可继续生成；刷新前若 IndexedDB 不可用则会明确报错。
-        console.warn("参考图片本地暂存失败", error);
-    });
+    const write = store
+        .setItem(storageKey, input)
+        .then(() => {
+            stagedImageBlobs.delete(storageKey);
+        })
+        .catch((error: unknown) => {
+            // 保留当前会话中的 Blob，使用户仍可继续生成；刷新前若 IndexedDB 不可用则会明确报错。
+            console.warn("参考图片本地暂存失败", error);
+        });
     imageStageWrites.set(storageKey, write);
     void write.finally(() => {
         if (imageStageWrites.get(storageKey) === write) imageStageWrites.delete(storageKey);
@@ -109,7 +112,7 @@ export async function ensureImageUploaded(storageKey: string, fileName?: string)
     if (concurrent?.state === "ready" && concurrent.result) return concurrent.result;
     if (concurrent && (concurrent.state === "queued" || concurrent.state === "uploading")) return concurrent.promise;
 
-    const blob = stagedImageBlobs.get(storageKey) || await getImageBlob(storageKey);
+    const blob = stagedImageBlobs.get(storageKey) || (await getImageBlob(storageKey));
     if (!blob) throw new Error("参考图片尚未保存在本机，请重新添加后再生成");
     const job = createLocalImageUploadJob(storageKey, blob, fileName, objectUrls.get(storageKey) || "");
     localImageUploadJobs.set(storageKey, job);
@@ -175,7 +178,7 @@ function pumpLocalImageUploads() {
 }
 
 async function uploadLocalImageJob(job: LocalImageUploadJob): Promise<UploadedImage> {
-    const blob = job.blob || await getImageBlob(job.storageKey);
+    const blob = job.blob || (await getImageBlob(job.storageKey));
     if (!blob) throw new Error("参考图片的本地缓存已失效，请重新添加后再生成");
     let meta = job.previewUrl ? await readImageMeta(job.previewUrl).catch(() => undefined) : undefined;
     if (!meta) {
