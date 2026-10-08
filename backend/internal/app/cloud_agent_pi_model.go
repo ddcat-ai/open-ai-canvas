@@ -192,7 +192,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		// 等审批期间不接受新的模型步骤。运行时在审批暂停后中止会话是异步的，
 		// 可能抢在中止生效前再请求一步；放它过去会多计一次费，返回的新工具调用
 		// 还会顶掉待审批的调用。这里不入队、不改状态，审批结论照常接管运行。
-		if run.Status == "waiting_approval" && state.Approval != nil {
+		// 批准后先持久化 running，再执行工具。这个窗口里 Approval 仍然存在，
+		// 不能接受新模型步骤覆盖 Calls；必须等执行回执与审批清理一起保存后再恢复。
+		if state.Approval != nil {
 			return nil, false, errCloudAgentAwaitingApproval
 		}
 		if cloudAgentStepBudgetExhausted(&state) {
@@ -521,6 +523,9 @@ func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text, reaso
 			if fresh.ActiveTaskID != taskID {
 				return nil
 			}
+			if fresh.Approval != nil {
+				return errCloudAgentAwaitingApproval
+			}
 			fresh.ActiveTaskID = ""
 			fresh.ActiveTextDraft = ""
 			if len(callBatches) > 0 {
@@ -583,6 +588,9 @@ func (s *Service) finishCloudAgentPiModelStepWithInvalidCalls(userID, runID, tas
 			}
 			if fresh.ActiveTaskID != taskID {
 				return nil
+			}
+			if fresh.Approval != nil {
+				return errCloudAgentAwaitingApproval
 			}
 			fresh.ActiveTaskID = ""
 			fresh.ActiveTextDraft = ""
