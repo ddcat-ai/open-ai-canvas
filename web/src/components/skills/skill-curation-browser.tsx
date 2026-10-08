@@ -56,9 +56,25 @@ export function SkillCurationBrowser({ data, value, onChange, error, retry }: { 
     }, [data, value, onChange]);
     if (error) return <Alert type="warning" title={error} action={<Button onClick={retry}>重试</Button>} />;
     if (!data?.enabled) return null;
-    return <Space wrap><span>平台分类</span><Select aria-label="平台分类" value={value} onChange={onChange} popupMatchSelectWidth={false} options={[
-        { value: "", label: "全部分类" }, { value: "__uncategorized__", label: "未细分" },
-        ...(data.roots || []).map((root) => { const Icon = curationIcon(root.iconKey); return { value: `root:${root.id}`, label: <Space><Icon size={16} />{root.name}</Space> }; }),
-        ...data.categories.map((item) => ({ value: item.id, label: `${data.roots?.find((root) => root.id === item.rootTag)?.name || "分类"} / ${item.name}` })),
-    ]} /></Space>;
+    return (
+        <div className="skill-curation-browser">
+            <span className="skill-curation-browser-label">平台分类</span>
+            <Select
+                aria-label="平台分类"
+                className="skill-curation-browser-select"
+                value={value}
+                onChange={onChange}
+                popupMatchSelectWidth={false}
+                options={[
+                    { value: "", label: "全部分类" },
+                    { value: "__uncategorized__", label: "未细分" },
+                    ...(data.roots || []).map((root) => {
+                        const Icon = curationIcon(root.iconKey);
+                        return { value: `root:${root.id}`, label: <Space><Icon size={16} />{root.name}</Space> };
+                    }),
+                    ...data.categories.map((item) => ({ value: item.id, label: `${data.roots?.find((root) => root.id === item.rootTag)?.name || "分类"} / ${item.name}` })),
+                ]}
+            />
+        </div>
+    );
 }

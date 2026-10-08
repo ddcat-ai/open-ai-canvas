@@ -15,13 +15,13 @@ import { type CanvasNodeData, CanvasNodeType } from "@/types/canvas";
 import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
-import { resolveMediaUrl } from "@/services/file-storage";
+import { resolveVideoMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
-import { getResourceAccess, resolveResourceAccessURL } from "@/services/api/resources";
+import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL } from "@/services/api/resources";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
 import { ErrorContent, LoadingContent } from "./canvas-node-status-content";
 
@@ -97,7 +97,7 @@ export function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchP
 export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
     const { updateMediaNode } = useCanvasNodeActions();
-    const { url, loading } = useVideoPlaybackUrl(node, mediaActive);
+    const { url, loading, onError } = useVideoPlaybackUrl(node, mediaActive);
     const preview = canvasNodeVideoPreviewReference(node);
     const subtitleEntries = node.metadata?.subtitleEntries || [];
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
@@ -159,6 +159,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
             {url ? (
                 <div className={`relative z-[1] transition-opacity duration-150 ${videoReady ? "opacity-100" : "opacity-0"}`} style={{ width: fitWidth, height: Math.round(fitHeight) }}>
                     <VideoPlayer
+                        key={url}
                         src={url}
                         mimeType={node.metadata?.mimeType}
                         title={node.title || "视频"}
@@ -170,6 +171,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                         dataCanvasNoZoom
                         compactControls
                         onCanPlay={() => setVideoReady(true)}
+                        onError={onError}
                     />
                     {activeEntry && activeEntry.text.trim() ? <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} /> : null}
                 </div>
@@ -212,7 +214,7 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
         if (!element) return;
         const content = node.metadata?.content || "";
         const fallback = node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(content) : content;
-        return bindCanvasVideoHoverPreview(element, () => resolveMediaUrl(node.metadata?.storageKey, fallback));
+        return bindCanvasVideoHoverPreview(element, () => resolveVideoMediaUrl(node.metadata?.storageKey, fallback));
     }, [node.metadata?.content, node.metadata?.storageKey, node.metadata?.importSource?.provider]);
 
     useEffect(() => {
@@ -313,22 +315,47 @@ export function VideoPreviewPlayButton({ title, onPlay }: { title: string; onPla
     );
 }
 
+const videoPlaybackRecoveryMaxAttempts = 8;
+const videoPlaybackRecoveryDelayMs = 1_500;
+
+function waitForVideoPlaybackRecovery(signal: AbortSignal) {
+    return new Promise<void>((resolve) => {
+        let timer = 0;
+        const finish = () => {
+            window.clearTimeout(timer);
+            signal.removeEventListener("abort", finish);
+            resolve();
+        };
+        timer = window.setTimeout(finish, videoPlaybackRecoveryDelayMs);
+        signal.addEventListener("abort", finish, { once: true });
+    });
+}
+
 export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
     const rawContent = node.metadata?.content || "";
     const fallback = node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(rawContent) : rawContent;
     const storageKey = node.metadata?.storageKey || "";
     const [url, setUrl] = useState("");
     const [loading, setLoading] = useState(false);
+    const recoveryRef = useRef<AbortController | null>(null);
+    const recoveryAttemptedRef = useRef(false);
+    const sourceGenerationRef = useRef(0);
 
     useEffect(() => {
+        sourceGenerationRef.current += 1;
+        recoveryAttemptedRef.current = false;
+        recoveryRef.current?.abort();
+        recoveryRef.current = null;
         let cancelled = false;
         if (!active) {
             setUrl("");
             setLoading(false);
-            return;
+            return () => {
+                cancelled = true;
+            };
         }
         setLoading(true);
-        void resolveMediaUrl(storageKey, fallback)
+        void resolveVideoMediaUrl(storageKey, fallback)
             .then((resolved) => {
                 if (!cancelled) setUrl(resolved);
             })
@@ -340,10 +367,69 @@ export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
             });
         return () => {
             cancelled = true;
+            recoveryRef.current?.abort();
         };
     }, [active, fallback, storageKey]);
 
-    return { url, loading };
+    const onError = () => {
+        const resourceId = resourceIdFromStorageKey(storageKey);
+        if (!active || !resourceId || recoveryAttemptedRef.current) {
+            if (!resourceId) setUrl("");
+            return;
+        }
+        recoveryAttemptedRef.current = true;
+        const controller = new AbortController();
+        const generation = sourceGenerationRef.current;
+        recoveryRef.current?.abort();
+        recoveryRef.current = controller;
+        setUrl("");
+        setLoading(true);
+
+        const recover = async () => {
+            for (let attempt = 0; attempt < videoPlaybackRecoveryMaxAttempts; attempt += 1) {
+                if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+                if (attempt > 0) await waitForVideoPlaybackRecovery(controller.signal);
+                if (controller.signal.aborted || generation !== sourceGenerationRef.current) return;
+
+                let resource: Awaited<ReturnType<typeof refreshResource>>;
+                try {
+                    resource = await refreshResource(resourceId);
+                } catch {
+                    break;
+                }
+                const status = String(resource.playbackStatus || "").toLowerCase();
+                if (resource.status !== "ready" || status === "none" || status === "failed") break;
+                if (status !== "ready") {
+                    if (resource.provider !== "local") break;
+                    continue;
+                }
+
+                try {
+                    const access = await getResourceAccess(storageKey, "display", "playback", "", { forceRefresh: true });
+                    if (access.actualVariant !== "playback") continue;
+                    const resolved = resolveResourceAccessURL(access.url);
+                    if (!resolved) continue;
+                    if (!controller.signal.aborted && generation === sourceGenerationRef.current) {
+                        setUrl(resolved);
+                        setLoading(false);
+                    }
+                    return;
+                } catch {
+                    // A ready status can race the access endpoint; the next bounded refresh retries it.
+                }
+            }
+            if (!controller.signal.aborted && generation === sourceGenerationRef.current) {
+                setUrl("");
+                setLoading(false);
+            }
+        };
+
+        void recover().finally(() => {
+            if (recoveryRef.current === controller) recoveryRef.current = null;
+        });
+    };
+
+    return { url, loading, onError };
 }
 
 export function InactiveMediaCard({ icon, title, hint, theme }: { icon: ReactNode; title: string; hint: string; theme: CanvasTheme }) {

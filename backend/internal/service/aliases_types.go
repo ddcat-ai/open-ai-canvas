@@ -239,6 +239,9 @@ type (
 	PublicLinuxDOSetting                   = app.PublicLinuxDOSetting
 	PublicLogicalModel                     = app.PublicLogicalModel
 	PublicLogicalModelPriceTier            = app.PublicLogicalModelPriceTier
+	PublicModelAvailability                = app.PublicModelAvailability
+	PublicModelAvailabilityDataState       = app.PublicModelAvailabilityDataState
+	PublicModelAvailabilityDay             = app.PublicModelAvailabilityDay
 	PublicModelChannel                     = app.PublicModelChannel
 	PublicOSSSetting                       = app.PublicOSSSetting
 	PublicRegistrationSetting              = app.PublicRegistrationSetting

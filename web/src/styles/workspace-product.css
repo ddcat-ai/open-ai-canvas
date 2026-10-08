@@ -417,6 +417,9 @@
 }
 .app-product-workspace .skills-browse-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .app-product-workspace .skills-browse-bar .collection-toolbar { margin: 0; max-width: 100%; }
+.app-product-workspace .skill-curation-browser { display: flex; min-width: 0; max-width: 100%; align-items: center; gap: var(--space-2); }
+.app-product-workspace .skill-curation-browser-label { flex: 0 0 auto; color: var(--user-ink-muted); font-size: var(--fs-label); white-space: nowrap; }
+.app-product-workspace .skill-curation-browser-select { width: min(220px, 100%); min-width: 0; }
 
 .app-product-workspace .skills-scope-panel { display: grid; gap: 28px; padding: 0; animation: none; }
 .app-product-workspace .skills-library-layout { display: grid; grid-template-columns: minmax(208px, 236px) minmax(0, 1fr); align-items: start; gap: 24px; }

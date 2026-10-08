@@ -142,6 +142,9 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	if state.Step < 0 || state.Generations < 0 || state.VideoSeconds < 0 {
 		return errors.New("Agent runtime budget or step is invalid")
 	}
+	if state.LessonEligibleToolSuccesses < 0 || state.RememberLessonSuccesses < 0 {
+		return errors.New("Agent lesson success counters are invalid")
+	}
 	if state.ConfirmationRounds < 0 || state.ConfirmationRounds > cloudAgentMaxConfirmationRounds {
 		return errors.New("Agent runtime confirmation round is invalid")
 	}

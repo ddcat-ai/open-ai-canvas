@@ -48,6 +48,7 @@ const (
 	cloudAgentLessonSearchTokenMax         = 8
 	cloudAgentRememberLessonMaxPerRun      = 3
 	cloudAgentRememberLessonPendingPerUser = 50
+	cloudAgentPendingLessonTTL             = 30 * 24 * time.Hour
 	cloudAgentRememberLessonApprovedMax    = 300
 	cloudAgentMemoryImportMax              = 200
 )
@@ -121,12 +122,16 @@ func cloudAgentRememberLesson(repo *repository.Repository, userID string, state 
 	if cloudAgentRememberLessonCount(state) >= cloudAgentRememberLessonMaxPerRun {
 		return nil, BadAuthRequest(fmt.Sprintf("本轮最多记录 %d 条经验，请合并成更通用的一条", cloudAgentRememberLessonMaxPerRun))
 	}
+	now := time.Now()
+	if _, err := repo.ExpirePendingAgentLessons(userID, now.Add(-cloudAgentPendingLessonTTL), now, cloudAgentRememberLessonPendingPerUser); err != nil {
+		return nil, err
+	}
 	pending, err := repo.CountAgentLessonsByAuthor(userID, model.AgentLessonStatusPending)
 	if err != nil {
 		return nil, err
 	}
 	if pending >= cloudAgentRememberLessonPendingPerUser {
-		return nil, BadAuthRequest("待你批准的记忆已经比较多，请先到「设置 → Agent 记忆」处理后再记新的")
+		return nil, BadAuthRequest(fmt.Sprintf("当前有 %d 条待批准记忆，已达到上限 %d；请先到「设置 → Agent 记忆」批准或删除后再记新的", pending, cloudAgentRememberLessonPendingPerUser))
 	}
 	var args struct {
 		Topic     string                  `json:"topic"`
@@ -170,7 +175,6 @@ func cloudAgentRememberLesson(repo *repository.Repository, userID string, state 
 			return nil, err
 		}
 	}
-	now := time.Now()
 	entry := &model.AgentLesson{
 		ID: newID(), Topic: topic, Situation: situation, Lesson: lesson, Source: source,
 		Category: cloudAgentNormalizeLessonCategory(args.Category),
@@ -214,13 +218,23 @@ func cloudAgentLessonEligibleSuccesses(state *cloudAgentRuntime) int {
 			continue
 		}
 		name, _ := event.Payload["toolName"].(string)
-		switch name {
-		case "", "skills_load", "remember_lesson", "recall_lessons", "agent_profile_read", "plan_update", "ask_user":
-			continue
+		if cloudAgentLessonToolEligible(name) {
+			count++
 		}
-		count++
 	}
-	return count
+	if count > state.LessonEligibleToolSuccesses {
+		return count
+	}
+	return state.LessonEligibleToolSuccesses
+}
+
+func cloudAgentLessonToolEligible(name string) bool {
+	switch name {
+	case "", "skills_load", "remember_lesson", "recall_lessons", "agent_profile_read", "plan_update", "ask_user":
+		return false
+	default:
+		return true
+	}
 }
 
 func cloudAgentRememberLessonCount(state *cloudAgentRuntime) int {
@@ -236,7 +250,10 @@ func cloudAgentRememberLessonCount(state *cloudAgentRuntime) int {
 			count++
 		}
 	}
-	return count
+	if count > state.RememberLessonSuccesses {
+		return count
+	}
+	return state.RememberLessonSuccesses
 }
 
 func cloudAgentLessonFingerprint(situation, lesson, stepsJSON string) string {
@@ -397,20 +414,34 @@ func (s *Service) cloudAgentLessonsBlock(userID, taskText string) string {
 }
 
 func cloudAgentPickLessonIndex(lessons []model.AgentLesson, taskText string, limit int) ([]model.AgentLesson, int) {
-	matched := make([]model.AgentLesson, 0)
-	rest := make([]model.AgentLesson, 0, len(lessons))
-	for _, lesson := range lessons {
-		if cloudAgentLessonMatchesTask(lesson, taskText) {
-			matched = append(matched, lesson)
-		} else {
-			rest = append(rest, lesson)
-		}
+	type rankedLesson struct {
+		lesson model.AgentLesson
+		score  int
 	}
-	index := append(matched, rest...)
+	ranked := make([]rankedLesson, 0, len(lessons))
+	for _, lesson := range lessons {
+		ranked = append(ranked, rankedLesson{lesson: lesson, score: cloudAgentLessonTaskScore(lesson, taskText)})
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score > ranked[j].score
+		}
+		if ranked[i].lesson.Hits != ranked[j].lesson.Hits {
+			return ranked[i].lesson.Hits > ranked[j].lesson.Hits
+		}
+		return ranked[i].lesson.UpdatedAt.After(ranked[j].lesson.UpdatedAt)
+	})
+	index := make([]model.AgentLesson, 0, len(ranked))
+	matchedN := 0
+	for _, item := range ranked {
+		if item.score > 0 {
+			matchedN++
+		}
+		index = append(index, item.lesson)
+	}
 	if limit > 0 && len(index) > limit {
 		index = index[:limit]
 	}
-	matchedN := len(matched)
 	if matchedN > len(index) {
 		matchedN = len(index)
 	}
@@ -476,20 +507,34 @@ func cloudAgentLessonsBlock(view cloudAgentLessonView) string {
 }
 
 func cloudAgentLessonMatchesTask(lesson model.AgentLesson, taskText string) bool {
+	return cloudAgentLessonTaskScore(lesson, taskText) > 0
+}
+
+func cloudAgentLessonTaskScore(lesson model.AgentLesson, taskText string) int {
 	haystack := cloudAgentLessonNormalize(taskText)
 	if haystack == "" {
-		return false
+		return 0
 	}
+	score := 0
 	for _, needle := range cloudAgentLessonNeedles(lesson) {
-		if utf8.RuneCountInString(needle) >= 3 && strings.Contains(haystack, needle) {
-			return true
+		runes := []rune(needle)
+		isHanPhrase := len(runes) >= 2 && unicode.Is(unicode.Han, runes[0]) && unicode.Is(unicode.Han, runes[1])
+		if (!isHanPhrase && utf8.RuneCountInString(needle) < 3) || !strings.Contains(haystack, needle) {
+			continue
 		}
+		weight := 1
+		if strings.Contains(cloudAgentLessonNormalize(lesson.Topic), needle) {
+			weight = 4
+		} else if strings.Contains(cloudAgentLessonNormalize(lesson.Situation), needle) {
+			weight = 2
+		}
+		score += weight
 	}
-	return false
+	return score
 }
 
 func cloudAgentLessonNeedles(lesson model.AgentLesson) []string {
-	needles := make([]string, 0, 8)
+	needles := make([]string, 0, 24)
 	seen := map[string]bool{}
 	push := func(value string) {
 		value = cloudAgentLessonNormalize(value)
@@ -498,6 +543,14 @@ func cloudAgentLessonNeedles(lesson model.AgentLesson) []string {
 		}
 		seen[value] = true
 		needles = append(needles, value)
+	}
+	pushCJKBigrams := func(value string) {
+		runes := []rune(cloudAgentLessonNormalize(value))
+		for index := 0; index+1 < len(runes); index++ {
+			if unicode.Is(unicode.Han, runes[index]) && unicode.Is(unicode.Han, runes[index+1]) {
+				push(string(runes[index : index+2]))
+			}
+		}
 	}
 	var steps []model.AgentLessonStep
 	if json.Unmarshal([]byte(lesson.StepsJSON), &steps) == nil {
@@ -509,13 +562,16 @@ func cloudAgentLessonNeedles(lesson model.AgentLesson) []string {
 		return r == '.' || r == '-' || r == '_' || r == ' '
 	}) {
 		push(chunk)
+		pushCJKBigrams(chunk)
 	}
+	pushCJKBigrams(lesson.Situation)
 	return needles
 }
 
 func cloudAgentLessonGenericToken(token string) bool {
 	switch token {
-	case "video", "image", "canvas", "storyboard", "shot", "step", "task", "model", "with", "and", "the":
+	case "video", "image", "canvas", "storyboard", "shot", "step", "task", "model", "with", "and", "the",
+		"画布", "分镜", "镜头", "视频", "图片", "生成", "任务", "操作", "处理", "使用", "通过", "进行", "一个", "这个", "可以", "需要", "如果", "然后", "之后", "之前", "结果", "内容", "相关":
 		return true
 	}
 	return false

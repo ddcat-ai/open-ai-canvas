@@ -154,6 +154,206 @@ func TestCloudAgentPrevisSceneCreateAndPatchKeepSemanticAndCanvasHashesSeparate(
 	}
 }
 
+func TestCloudAgentPrevisSceneCreateBindsVideoWorkstation(t *testing.T) {
+	s, canvas := previsMutationFixture(t)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := previsMutationCall(t, "previs-bind-create", "previs_scene_create", map[string]any{
+		"canvasSnapshotHash": cloudAgentCanvasHash(doc),
+		"sceneId":            "bound-scene",
+		"title":              "绑定镜头",
+		"templateId":         "empty",
+	})
+	result, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, call, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeID := previsResultString(t, result, "nodeId")
+	shotID := previsResultString(t, result, "shotId")
+	if nodeID != "previs-bound-scene" {
+		t.Fatalf("nodeId = %q, want stable scene-derived ID", nodeID)
+	}
+	stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedDoc, err := creationDocument(stored.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workstation map[string]any
+	for _, node := range creationMaps(storedDoc["nodes"]) {
+		if stringValue(node["id"]) == nodeID {
+			workstation = node
+			break
+		}
+	}
+	if workstation == nil {
+		t.Fatalf("bound workstation node missing: %#v", storedDoc["nodes"])
+	}
+	if stringValue(workstation["type"]) != "video" || numberValue(workstation["width"], 0) != cloudAgentPrevisWorkstationWidth || numberValue(workstation["height"], 0) != cloudAgentPrevisWorkstationHeight {
+		t.Fatalf("unexpected workstation shape: %#v", workstation)
+	}
+	metadata, _ := workstation["metadata"].(map[string]any)
+	if stringValue(metadata["workflowKind"]) != "shot" || stringValue(metadata["previsSceneId"]) != "bound-scene" || stringValue(metadata["previsShotId"]) != shotID || stringValue(metadata["generationMode"]) != "video" {
+		t.Fatalf("workstation is not bound as a shot node: %#v", metadata)
+	}
+	if stringValue(metadata["videoEditOperation"]) != "text_to_video" || stringValue(metadata["status"]) != "idle" {
+		t.Fatalf("workstation generation metadata is incomplete: %#v", metadata)
+	}
+}
+
+func TestCloudAgentPrevisPatchReusesIdleBoundWorkstationWithoutTaskCollision(t *testing.T) {
+	s, canvas := previsMutationFixture(t)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := previsMutationCall(t, "reuse-create", "previs_scene_create", map[string]any{
+		"canvasSnapshotHash": cloudAgentCanvasHash(doc),
+		"sceneId":            "reuse-scene",
+		"title":              "可复用镜头",
+		"templateId":         "empty",
+	})
+	created, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, create, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeID := previsResultString(t, created, "nodeId")
+	stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedDoc, err := creationDocument(stored.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workstation := creationMaps(storedDoc["nodes"])[0]
+	metadata, _ := workstation["metadata"].(map[string]any)
+	metadata["taskStatus"] = "not_submitted"
+	metadata["composerContent"] = "保留现有提示词"
+	raw, err := json.Marshal(storedDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.PayloadJSON = string(raw)
+	if err := s.repo.Save(stored); err != nil {
+		t.Fatal(err)
+	}
+
+	patch := previsMutationCall(t, "reuse-patch", "previs_apply_patch", map[string]any{
+		"snapshotHash": previsResultString(t, created, "snapshotHash"),
+		"sceneId":      "reuse-scene",
+		"operations": []map[string]any{{
+			"type":  "scene_update",
+			"id":    "reuse-scene",
+			"title": "可复用镜头·已更新",
+		}},
+	})
+	result, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, patch, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previsResultString(t, result, "nodeId") != nodeID {
+		t.Fatalf("idle bound workstation was replaced: got %q want %q", previsResultString(t, result, "nodeId"), nodeID)
+	}
+	stored, err = s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedDoc, err = creationDocument(stored.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes := creationMaps(storedDoc["nodes"])
+	if len(nodes) != 1 || stringValue(nodes[0]["id"]) != nodeID {
+		t.Fatalf("idle bound workstation was not reused: %#v", nodes)
+	}
+	metadata, _ = nodes[0]["metadata"].(map[string]any)
+	if stringValue(metadata["taskStatus"]) != "not_submitted" || stringValue(metadata["composerContent"]) != "保留现有提示词" {
+		t.Fatalf("workstation metadata was overwritten during repair: %#v", metadata)
+	}
+}
+
+func TestCloudAgentPrevisPatchRepairsLegacySceneWithoutWorkstation(t *testing.T) {
+	s, canvas := previsMutationFixture(t)
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := previsMutationCall(t, "legacy-create", "previs_scene_create", map[string]any{
+		"canvasSnapshotHash": cloudAgentCanvasHash(doc),
+		"sceneId":            "legacy-scene",
+		"title":              "旧场景",
+		"templateId":         "empty",
+	})
+	if _, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, create, policy); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyDoc, err := creationDocument(stored.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyDoc["nodes"] = []any{}
+	legacyRaw, err := json.Marshal(legacyDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.PayloadJSON = string(legacyRaw)
+	if err := s.repo.Save(stored); err != nil {
+		t.Fatal(err)
+	}
+	legacyScene, ok := findPrevisScene(creationMaps(legacyDoc["previsScenes"]), "legacy-scene")
+	if !ok {
+		t.Fatal("legacy scene missing")
+	}
+	patch := previsMutationCall(t, "legacy-repair", "previs_apply_patch", map[string]any{
+		"snapshotHash": creationHash(legacyScene),
+		"sceneId":      "legacy-scene",
+		"operations":   []map[string]any{{"type": "scene_update", "id": "legacy-scene", "title": "旧场景已修复"}},
+	})
+	result, err := applyCloudAgentPrevisMutation(s.repo, "user", canvas.ID, patch, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previsResultString(t, result, "nodeId") != "previs-legacy-scene" {
+		t.Fatalf("legacy patch returned unexpected node: %#v", result)
+	}
+	stored, err = s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repairedDoc, err := creationDocument(stored.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(creationMaps(repairedDoc["nodes"])) != 1 {
+		t.Fatalf("legacy repair created unexpected node count: %#v", repairedDoc["nodes"])
+	}
+	metadata, _ := creationMaps(repairedDoc["nodes"])[0]["metadata"].(map[string]any)
+	if stringValue(metadata["previsSceneId"]) != "legacy-scene" || stringValue(metadata["previsShotId"]) == "" {
+		t.Fatalf("legacy repair did not bind scene and shot: %#v", metadata)
+	}
+}
+
 func TestCloudAgentPrevisRejectsStaleSnapshotsAndCrossUserCanvas(t *testing.T) {
 	s, canvas := previsMutationFixture(t)
 	doc, err := creationDocument(canvas.PayloadJSON)

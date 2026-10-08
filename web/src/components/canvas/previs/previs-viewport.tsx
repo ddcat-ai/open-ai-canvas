@@ -1,7 +1,38 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Grid, Html, Line, OrbitControls, TransformControls } from "@react-three/drei";
 import { Component, forwardRef, memo, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useReducer, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { AnimationClip, AnimationMixer, Camera, Color, Matrix4, Euler, EquirectangularReflectionMapping, Group, LoopOnce, LoopRepeat, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, MOUSE, Object3D, OrthographicCamera, PerspectiveCamera, Plane, Quaternion, Raycaster, Scene, SkeletonHelper, SRGBColorSpace, Texture, TextureLoader, TOUCH, Vector2, Vector3, WebGLRenderer } from "three";
+import {
+    AnimationClip,
+    AnimationMixer,
+    Camera,
+    Color,
+    Matrix4,
+    Euler,
+    EquirectangularReflectionMapping,
+    Group,
+    LoopOnce,
+    LoopRepeat,
+    Mesh,
+    MeshBasicMaterial,
+    MeshDepthMaterial,
+    MeshNormalMaterial,
+    MOUSE,
+    Object3D,
+    OrthographicCamera,
+    PerspectiveCamera,
+    Plane,
+    Quaternion,
+    Raycaster,
+    Scene,
+    SkeletonHelper,
+    SRGBColorSpace,
+    Texture,
+    TextureLoader,
+    TOUCH,
+    Vector2,
+    Vector3,
+    WebGLRenderer,
+} from "three";
 import { GLTFLoader, SkeletonUtils } from "three-stdlib";
 
 import { applyClaySceneMaterials } from "@/lib/canvas/previs/previs-clay-materials";
@@ -9,10 +40,35 @@ import { createPrevisTransaction, installPrevisTerminalListeners } from "@/lib/c
 import { emptyPrevisPlacementIntent, finitePrevisGroundPoint, type PrevisGroundPoint, type PrevisPlacementIntent } from "@/lib/canvas/previs/previs-placement";
 import { previsDiagnosticObjectKind } from "@/lib/canvas/previs/previs-diagnostics";
 import { recordPrevisDiagnostic } from "@/lib/canvas/previs/previs-diagnostics-recorder";
-import { previsCaptureInitial, previsCaptureUsable, previsLoadIdentity, previsLoadInitial, installPrevisContextListeners, reducePrevisCapture, reducePrevisLoad, releasePrevisCapture, resolvePrevisDisplay, restorePrevisCapture, upsertPrevisFailedLoad, type PrevisFailedLoads, type PrevisLoadSignal } from "@/lib/canvas/previs/previs-recovery";
+import { PREVIS_MIN_ORBIT_DISTANCE, resolvePrevisFrameBounds, resolvePrevisZoomMinDistance } from "@/lib/canvas/previs/previs-frame-bounds";
+import {
+    previsCaptureInitial,
+    previsCaptureUsable,
+    previsLoadIdentity,
+    previsLoadInitial,
+    installPrevisContextListeners,
+    reducePrevisCapture,
+    reducePrevisLoad,
+    releasePrevisCapture,
+    resolvePrevisDisplay,
+    restorePrevisCapture,
+    upsertPrevisFailedLoad,
+    type PrevisFailedLoads,
+    type PrevisLoadSignal,
+} from "@/lib/canvas/previs/previs-recovery";
 import { disposePrevisAdoptionFailure, disposePrevisHelper, disposePrevisModelResources, disposePrevisObject3D, resolvePrevisLoadOwnership } from "@/lib/canvas/previs/previs-resources";
 import { PREVIS_DEFAULT_ACTOR_URL, previsActorProfileForArchetype, resolvePrevisActorColor, previsTransformPathLength, finitePrevisTransformKeyframes, interpolatePrevisTransform } from "@/lib/canvas/previs/previs-scene";
-import { PREVIS_DEFAULT_VIEW_MODE, previsViewFramingKey, resolvePrevisEffectiveViewport, resolvePrevisOrthographicFraming, resolvePrevisOrthographicFrustum, resolvePrevisViewFraming, type PrevisOrthographicFraming, type PrevisViewFraming, type PrevisViewMode } from "@/lib/canvas/previs/previs-view-modes";
+import {
+    PREVIS_DEFAULT_VIEW_MODE,
+    previsViewFramingKey,
+    resolvePrevisEffectiveViewport,
+    resolvePrevisOrthographicFraming,
+    resolvePrevisOrthographicFrustum,
+    resolvePrevisViewFraming,
+    type PrevisOrthographicFraming,
+    type PrevisViewFraming,
+    type PrevisViewMode,
+} from "@/lib/canvas/previs/previs-view-modes";
 import { PrevisViewToolbar } from "@/components/canvas/previs/previs-view-toolbar";
 import { resolveMediaUrl } from "@/services/file-storage";
 import type { PrevisCamera, PrevisEnvironment, PrevisHumanoidBone, PrevisLight, PrevisObject, PrevisQuat, PrevisRenderMode, PrevisRig, PrevisScene, PrevisTransform, PrevisVec3 } from "@/types/previs";
@@ -154,29 +210,36 @@ export const PrevisViewport = forwardRef<PrevisViewportHandle, PrevisViewportPro
     };
     const navigationRef = useRef<Pick<PrevisViewportHandle, "focusSelected" | "frameScene" | "resetCamera" | "zoom"> | null>(null);
     const [navigation, setNavigation] = useState<Pick<PrevisViewportHandle, "focusSelected" | "frameScene" | "resetCamera" | "zoom"> | null>(null);
-    const handleNavigationReady = useCallback((next: Pick<PrevisViewportHandle, "focusSelected" | "frameScene" | "resetCamera" | "zoom">) => { navigationRef.current = next; setNavigation(next); }, []);
-    useImperativeHandle(ref, () => ({
-        capture: (mode) => captureFrame(usableContext(), mode),
-        recordVideo: (duration, fps) => recordCanvas(usableContext(), duration, fps),
-        readCameraTransform: () => {
-            const camera = usableContext()?.camera;
-            return camera ? { position: camera.position.toArray() as PrevisTransform["position"], rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z], scale: [1, 1, 1] } : null;
-        },
-        focusSelected: () => navigationRef.current?.focusSelected(),
-        frameScene: () => navigationRef.current?.frameScene(),
-        resetCamera: () => navigationRef.current?.resetCamera(),
-        zoom: (factor) => navigationRef.current?.zoom(factor),
-        readPlacementIntent: () => {
-            const context = usableContext();
-            if (!context) return emptyPrevisPlacementIntent;
-            // owner 校验：上下文重建后，旧 renderer canvas 记录的点一律不采用。
-            const tracked = groundRef.current;
-            const pointer = tracked && tracked.owner === context.gl.domElement ? tracked.point : null;
-            // 读实例当前 target，而不是 activeCamera.target prop；投影到 y=0 即取 x/z。
-            const target = orbitControlsRef.current?.target;
-            return { pointer, orbitTarget: finitePrevisGroundPoint(target?.x, target?.z) };
-        },
-    }), []);
+    const handleNavigationReady = useCallback((next: Pick<PrevisViewportHandle, "focusSelected" | "frameScene" | "resetCamera" | "zoom">) => {
+        navigationRef.current = next;
+        setNavigation(next);
+    }, []);
+    useImperativeHandle(
+        ref,
+        () => ({
+            capture: (mode) => captureFrame(usableContext(), mode),
+            recordVideo: (duration, fps) => recordCanvas(usableContext(), duration, fps),
+            readCameraTransform: () => {
+                const camera = usableContext()?.camera;
+                return camera ? { position: camera.position.toArray() as PrevisTransform["position"], rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z], scale: [1, 1, 1] } : null;
+            },
+            focusSelected: () => navigationRef.current?.focusSelected(),
+            frameScene: () => navigationRef.current?.frameScene(),
+            resetCamera: () => navigationRef.current?.resetCamera(),
+            zoom: (factor) => navigationRef.current?.zoom(factor),
+            readPlacementIntent: () => {
+                const context = usableContext();
+                if (!context) return emptyPrevisPlacementIntent;
+                // owner 校验：上下文重建后，旧 renderer canvas 记录的点一律不采用。
+                const tracked = groundRef.current;
+                const pointer = tracked && tracked.owner === context.gl.domElement ? tracked.point : null;
+                // 读实例当前 target，而不是 activeCamera.target prop；投影到 y=0 即取 x/z。
+                const target = orbitControlsRef.current?.target;
+                return { pointer, orbitTarget: finitePrevisGroundPoint(target?.x, target?.z) };
+            },
+        }),
+        [],
+    );
 
     return (
         // data-renderer-ready 直接来自 previsCaptureUsable：capture context 已登记且未 lost。
@@ -218,14 +281,7 @@ export const PrevisViewport = forwardRef<PrevisViewportHandle, PrevisViewportPro
             {/* 取景切换是纯视口状态：放在 DOM 层，不随 Canvas 重建而丢失。 */}
             {onViewModeChange ? <PrevisViewToolbar viewMode={props.viewMode ?? PREVIS_DEFAULT_VIEW_MODE} onViewModeChange={onViewModeChange} /> : null}
             {showNavigation ? <PrevisNavigationToolbar navigation={navigation} /> : null}
-            {capture.contextLost ? (
-                <PrevisViewportNotice
-                    title="3D 显示上下文已丢失"
-                    description="浏览器回收了 WebGL 上下文。等待自动恢复，或立即重建视口。"
-                    actionLabel="重建 3D 视口"
-                    onAction={retry}
-                />
-            ) : null}
+            {capture.contextLost ? <PrevisViewportNotice title="3D 显示上下文已丢失" description="浏览器回收了 WebGL 上下文。等待自动恢复，或立即重建视口。" actionLabel="重建 3D 视口" onAction={retry} /> : null}
             {!capture.contextLost && showModelLoadNotice && failedIds.length ? (
                 <PrevisViewportNotice
                     variant="corner"
@@ -270,14 +326,7 @@ const PrevisCanvasSurface = memo(function PrevisCanvasSurface(props: PrevisCanva
     const onPointerMissed = useCallback(() => onSelectObject(null), [onSelectObject]);
 
     return (
-        <Canvas
-            shadows
-            frameloop="demand"
-            dpr={previsCanvasDpr}
-            camera={previsCanvasCamera}
-            gl={previsCanvasGl}
-            onPointerMissed={onPointerMissed}
-        >
+        <Canvas shadows frameloop="demand" dpr={previsCanvasDpr} camera={previsCanvasCamera} gl={previsCanvasGl} onPointerMissed={onPointerMissed}>
             <Suspense fallback={null}>
                 <PrevisSceneContent
                     scene={props.scene}
@@ -347,15 +396,29 @@ class PrevisViewportErrorBoundary extends Component<{ children: ReactNode; onRel
 }
 
 function PrevisNavigationToolbar({ navigation }: { navigation: Pick<PrevisViewportHandle, "focusSelected" | "frameScene" | "resetCamera" | "zoom"> | null }) {
-    const action = (run: () => void) => { run(); };
-    return <div className="previs-viewport-navigation" aria-label="视口导航工具">
-        <button type="button" aria-label="聚焦选中对象" title="聚焦选中对象" disabled={!navigation} onClick={() => navigation && action(navigation.focusSelected)}>聚焦</button>
-        <button type="button" aria-label="适配全部对象" title="适配全部对象" disabled={!navigation} onClick={() => navigation && action(navigation.frameScene)}>全景</button>
-        <button type="button" aria-label="重置视角" title="重置视角" disabled={!navigation} onClick={() => navigation && action(navigation.resetCamera)}>重置</button>
-        <span className="previs-viewport-navigation-divider" />
-        <button type="button" aria-label="拉近视角" title="拉近视角" disabled={!navigation} onClick={() => navigation && action(() => navigation.zoom(0.72))}>＋</button>
-        <button type="button" aria-label="拉远视角" title="拉远视角" disabled={!navigation} onClick={() => navigation && action(() => navigation.zoom(1.38))}>−</button>
-    </div>;
+    const action = (run: () => void) => {
+        run();
+    };
+    return (
+        <div className="previs-viewport-navigation" aria-label="视口导航工具">
+            <button type="button" aria-label="聚焦选中对象" title="聚焦选中对象" disabled={!navigation} onClick={() => navigation && action(navigation.focusSelected)}>
+                聚焦
+            </button>
+            <button type="button" aria-label="适配全部对象" title="适配全部对象" disabled={!navigation} onClick={() => navigation && action(navigation.frameScene)}>
+                全景
+            </button>
+            <button type="button" aria-label="重置视角" title="重置视角" disabled={!navigation} onClick={() => navigation && action(navigation.resetCamera)}>
+                重置
+            </button>
+            <span className="previs-viewport-navigation-divider" />
+            <button type="button" aria-label="拉近视角" title="拉近视角" disabled={!navigation} onClick={() => navigation && action(() => navigation.zoom(0.72))}>
+                ＋
+            </button>
+            <button type="button" aria-label="拉远视角" title="拉远视角" disabled={!navigation} onClick={() => navigation && action(() => navigation.zoom(1.38))}>
+                −
+            </button>
+        </div>
+    );
 }
 
 function PrevisViewportNotice({ title, description, actionLabel, onAction, variant = "cover" }: { title: string; description: string; actionLabel: string; onAction: () => void; variant?: "cover" | "corner" }) {
@@ -363,12 +426,42 @@ function PrevisViewportNotice({ title, description, actionLabel, onAction, varia
         <div className={`previs-viewport-notice ${variant === "corner" ? "is-corner" : "is-cover"}`} role="alert">
             <div className="previs-viewport-notice-title">{title}</div>
             <p className="previs-viewport-notice-text">{description}</p>
-            <button type="button" className="previs-viewport-notice-action" onClick={onAction}>{actionLabel}</button>
+            <button type="button" className="previs-viewport-notice-action" onClick={onAction}>
+                {actionLabel}
+            </button>
         </div>
     );
 }
 
-function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMode, renderMode, playhead, showMotionPaths = false, viewMode = PREVIS_DEFAULT_VIEW_MODE, onSelectObject, onSelectBone, onGroundClick, trajectoryDrawing = false, onTrajectoryComplete, onObjectTransform, onBoneTransform, onActorRigReady, selectedCameraId, onSelectCamera, onCameraTransform, onCaptureContext, onRelease, onContextLost, onContextRestored, onLoadStateChange, onGroundPoint, onOrbitControls, onNavigationReady }: PrevisCanvasSurfaceProps) {
+function PrevisSceneContent({
+    scene,
+    selectedObjectId,
+    selectedBone,
+    transformMode,
+    renderMode,
+    playhead,
+    showMotionPaths = false,
+    viewMode = PREVIS_DEFAULT_VIEW_MODE,
+    onSelectObject,
+    onSelectBone,
+    onGroundClick,
+    trajectoryDrawing = false,
+    onTrajectoryComplete,
+    onObjectTransform,
+    onBoneTransform,
+    onActorRigReady,
+    selectedCameraId,
+    onSelectCamera,
+    onCameraTransform,
+    onCaptureContext,
+    onRelease,
+    onContextLost,
+    onContextRestored,
+    onLoadStateChange,
+    onGroundPoint,
+    onOrbitControls,
+    onNavigationReady,
+}: PrevisCanvasSurfaceProps) {
     const { gl, camera, scene: threeScene, invalidate, set, size } = useThree();
     const orbitRef = useRef<PrevisOrbitControls>(null);
     const [transforming, setTransforming] = useState(false);
@@ -391,12 +484,18 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
     const camFraming = resolvePrevisViewFraming({ scene, mode: viewMode, playhead, cameraId: selectedCameraId });
     const orthoFraming = resolvePrevisOrthographicFraming({ scene, mode: viewMode });
     const effectiveViewport = resolvePrevisEffectiveViewport({ mode: viewMode, framing: camFraming });
-    const setTransformingState = useCallback((active: boolean) => {
-        setTransforming(active);
-        if (orbitRef.current) orbitRef.current.enabled = !active && effectiveViewport.orbit;
-    }, [effectiveViewport.orbit]);
-    const actorMotionPaths = useMemo(() => showMotionPaths ? scene.objects.filter((object) => object.visible && (object.kind === "actor" || object.primitive === "character") && previsTransformPathLength(object.keyframes) > 0.001) : [], [scene.objects, showMotionPaths]);
-    const cameraMotionPaths = useMemo(() => showMotionPaths ? scene.cameras.filter((item) => previsTransformPathLength(item.keyframes) > 0.001) : [], [scene.cameras, showMotionPaths]);
+    const setTransformingState = useCallback(
+        (active: boolean) => {
+            setTransforming(active);
+            if (orbitRef.current) orbitRef.current.enabled = !active && effectiveViewport.orbit;
+        },
+        [effectiveViewport.orbit],
+    );
+    const actorMotionPaths = useMemo(
+        () => (showMotionPaths ? scene.objects.filter((object) => object.visible && (object.kind === "actor" || object.primitive === "character") && previsTransformPathLength(object.keyframes) > 0.001) : []),
+        [scene.objects, showMotionPaths],
+    );
+    const cameraMotionPaths = useMemo(() => (showMotionPaths ? scene.cameras.filter((item) => previsTransformPathLength(item.keyframes) > 0.001) : []), [scene.cameras, showMotionPaths]);
     const suspendDisplayMaterialOverride = useCallback(() => {
         const suspended = Boolean(displayClayRestoreRef.current);
         displayClayRestoreRef.current?.();
@@ -418,17 +517,22 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
     useEffect(() => () => onRelease(), [onRelease]);
 
     // 上下文丢失/恢复监听绑定在 renderer 自己的 canvas 上，随 renderer 与重试精确摘除。
-    useEffect(() => installPrevisContextListeners(gl.domElement, {
-        onLost: onContextLost,
-        // 恢复后 registered 会被置回 false，必须用当前 renderer 重新登记，
-        // 否则 capture/record/readCameraTransform 会一直不可用。走与测试共用的序列 helper。
-        onRestored: () => restorePrevisCapture({
-            readContext: readCaptureContext,
-            onAvailability: onContextRestored,
-            onRegister: onCaptureContext,
-            invalidate,
-        }),
-    }), [gl, invalidate, onCaptureContext, onContextLost, onContextRestored, readCaptureContext]);
+    useEffect(
+        () =>
+            installPrevisContextListeners(gl.domElement, {
+                onLost: onContextLost,
+                // 恢复后 registered 会被置回 false，必须用当前 renderer 重新登记，
+                // 否则 capture/record/readCameraTransform 会一直不可用。走与测试共用的序列 helper。
+                onRestored: () =>
+                    restorePrevisCapture({
+                        readContext: readCaptureContext,
+                        onAvailability: onContextRestored,
+                        onRegister: onCaptureContext,
+                        invalidate,
+                    }),
+            }),
+        [gl, invalidate, onCaptureContext, onContextLost, onContextRestored, readCaptureContext],
+    );
 
     /**
      * 地面拾取：renderer 自己的 canvas 上做 pointer 监听，再用真实 Raycaster 与
@@ -469,35 +573,43 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
             setDraftPath(pathPoints);
         };
 
-            const onPointerDown = (event: PointerEvent) => {
-                // 原生 canvas 监听先于 R3F（挂在父容器）触发：先清零，命中对象时 R3F 再置位。
-                pointerHitRef.current = false;
-                if (!onGroundClick || event.isPrimary === false || event.button !== 0) return;
-                pointerDown = { id: event.pointerId, x: event.clientX, y: event.clientY, button: event.button };
-                if (!trajectoryDrawing) return;
-                const point = resolveGroundPoint(event);
-                if (!point) return;
-                try { canvasElement.setPointerCapture(event.pointerId); } catch { /* pointer capture may be unavailable */ }
-                pathDrawing = true;
-                pathPoints = [[point.x, 0, point.z]];
-                setDraftPath(pathPoints);
-                if (orbitRef.current) orbitRef.current.enabled = false;
-            };
+        const onPointerDown = (event: PointerEvent) => {
+            // 原生 canvas 监听先于 R3F（挂在父容器）触发：先清零，命中对象时 R3F 再置位。
+            pointerHitRef.current = false;
+            if (!onGroundClick || event.isPrimary === false || event.button !== 0) return;
+            pointerDown = { id: event.pointerId, x: event.clientX, y: event.clientY, button: event.button };
+            if (!trajectoryDrawing) return;
+            const point = resolveGroundPoint(event);
+            if (!point) return;
+            try {
+                canvasElement.setPointerCapture(event.pointerId);
+            } catch {
+                /* pointer capture may be unavailable */
+            }
+            pathDrawing = true;
+            pathPoints = [[point.x, 0, point.z]];
+            setDraftPath(pathPoints);
+            if (orbitRef.current) orbitRef.current.enabled = false;
+        };
 
-            const onPointerUp = (event: PointerEvent) => {
-                const start = pointerDown;
-                pointerDown = null;
-                if (!start || start.id !== event.pointerId || start.button !== 0 || event.button !== 0) return;
-                if (pathDrawing) {
-                    try { if (canvasElement.hasPointerCapture(event.pointerId)) canvasElement.releasePointerCapture(event.pointerId); } catch { /* pointer capture may already be gone */ }
-                    pathDrawing = false;
-                    const completed = pathPoints;
-                    pathPoints = [];
-                    setDraftPath([]);
-                    if (orbitRef.current) orbitRef.current.enabled = !transforming && effectiveViewport.orbit;
-                    if (completed.length > 1) onTrajectoryComplete?.(completed.map(([x, , z]) => ({ x, z })));
-                    return;
+        const onPointerUp = (event: PointerEvent) => {
+            const start = pointerDown;
+            pointerDown = null;
+            if (!start || start.id !== event.pointerId || start.button !== 0 || event.button !== 0) return;
+            if (pathDrawing) {
+                try {
+                    if (canvasElement.hasPointerCapture(event.pointerId)) canvasElement.releasePointerCapture(event.pointerId);
+                } catch {
+                    /* pointer capture may already be gone */
                 }
+                pathDrawing = false;
+                const completed = pathPoints;
+                pathPoints = [];
+                setDraftPath([]);
+                if (orbitRef.current) orbitRef.current.enabled = !transforming && effectiveViewport.orbit;
+                if (completed.length > 1) onTrajectoryComplete?.(completed.map(([x, , z]) => ({ x, z })));
+                return;
+            }
             // OrbitControls 旋转、平移或缩放结束时也会收到 pointerup，移动阈值避免误落位。
             const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
             if (distance > 5 || pointerHitRef.current) return;
@@ -508,7 +620,11 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
         const onPointerCancel = (event: PointerEvent) => {
             if (pointerDown?.id === event.pointerId) pointerDown = null;
             if (!pathDrawing) return;
-            try { if (canvasElement.hasPointerCapture(event.pointerId)) canvasElement.releasePointerCapture(event.pointerId); } catch { /* pointer capture may already be gone */ }
+            try {
+                if (canvasElement.hasPointerCapture(event.pointerId)) canvasElement.releasePointerCapture(event.pointerId);
+            } catch {
+                /* pointer capture may already be gone */
+            }
             pathDrawing = false;
             pathPoints = [];
             setDraftPath([]);
@@ -525,7 +641,11 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
             canvasElement.removeEventListener("pointerup", onPointerUp);
             canvasElement.removeEventListener("pointercancel", onPointerCancel);
             if (pointerDown) {
-                try { if (canvasElement.hasPointerCapture(pointerDown.id)) canvasElement.releasePointerCapture(pointerDown.id); } catch { /* pointer capture may already be gone */ }
+                try {
+                    if (canvasElement.hasPointerCapture(pointerDown.id)) canvasElement.releasePointerCapture(pointerDown.id);
+                } catch {
+                    /* pointer capture may already be gone */
+                }
             }
             pointerDown = null;
             pathDrawing = false;
@@ -535,6 +655,21 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
             onGroundPoint(canvasElement, null);
         };
     }, [camera, effectiveViewport.orbit, gl, onGroundClick, onGroundPoint, onTrajectoryComplete, trajectoryDrawing, transforming]);
+
+    // 滚轮/触控缩放与按钮缩放共用同一最近距离：环绕目标落在演员体内时不允许推进到身体内部。
+    // 走 state 而不是直接写 controls.minDistance，否则 drei 每次 render 回写 props 会把它重置。
+    const [orbitMinDistance, setOrbitMinDistance] = useState(PREVIS_MIN_ORBIT_DISTANCE);
+    useEffect(() => {
+        const controls = orbitRef.current;
+        if (!controls) return;
+        const sync = () => {
+            const next = resolvePrevisZoomMinDistance(scene.objects, controls.target);
+            setOrbitMinDistance((current) => (Math.abs(current - next) > 0.01 ? next : current));
+        };
+        sync();
+        controls.addEventListener("end", sync);
+        return () => controls.removeEventListener("end", sync);
+    }, [scene.objects]);
 
     // 导航只改 free 相机，不写回场景坐标。初次挂载自动适配一次，避免对象出现在视口角落；之后由用户按钮控制取景。
     const initialFrameSceneRef = useRef<string | null>(null);
@@ -547,47 +682,32 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
             invalidate();
         };
         const frame = (ids?: Set<string>) => {
-            const objects = scene.objects.filter((object) => object.visible && (!ids || ids.has(object.id)));
-            if (!objects.length) return resetCamera();
+            const aspect = size.width / Math.max(size.height, 1);
+            const bounds = resolvePrevisFrameBounds(scene.objects, ids, aspect, freeCamera.fov);
+            if (!bounds) return resetCamera();
 
-            const min = new Vector3(Infinity, Infinity, Infinity);
-            const max = new Vector3(-Infinity, -Infinity, -Infinity);
-            objects.forEach((object) => {
-                const [x, y, z] = object.transform.position;
-                const [sx, sy, sz] = object.transform.scale;
-                const actor = object.kind === "actor" || object.primitive === "character";
-                const primitiveBounds: [number, number, number] = actor
-                    ? [0.55, 1.45, 0.55]
-                    : object.primitive === "sphere" ? [0.6, 0.6, 0.6]
-                        : object.primitive === "cylinder" ? [0.55, 0.8, 0.55]
-                            : object.primitive === "plane" ? [1.2, 0.05, 1.2]
-                                : [0.6, 0.6, 0.6];
-                const half = new Vector3(primitiveBounds[0] * Math.max(0.1, Math.abs(sx)), primitiveBounds[1] * Math.max(0.1, Math.abs(sy)), primitiveBounds[2] * Math.max(0.1, Math.abs(sz)));
-                min.min(new Vector3(x, y, z).sub(half));
-                max.max(new Vector3(x, y, z).add(half));
-            });
-
-            const target = min.clone().add(max).multiplyScalar(0.5);
-            const span = max.clone().sub(min);
-            const radius = Math.max(1.8, Math.max(span.x, span.y, span.z) * 0.72 + 0.7);
             const orbitTarget = orbitRef.current?.target || new Vector3(...PREVIS_FREE_ORBIT_TARGET);
             const direction = freeCamera.position.clone().sub(orbitTarget);
             if (direction.lengthSq() < 0.01) direction.set(4.8, 2.7, 6.8);
             direction.normalize();
-            orbitRef.current?.target.copy(target);
-            freeCamera.position.copy(target).add(direction.multiplyScalar(radius));
-            freeCamera.lookAt(target);
+            orbitRef.current?.target.copy(bounds.target);
+            freeCamera.position.copy(bounds.target).add(direction.multiplyScalar(Math.max(1.8, bounds.fitDistance * 1.18)));
+            freeCamera.lookAt(bounds.target);
             orbitRef.current?.update();
             invalidate();
         };
         const navigation = {
-            focusSelected: () => selectedObjectId ? frame(new Set([selectedObjectId])) : frame(),
+            focusSelected: () => (selectedObjectId ? frame(new Set([selectedObjectId])) : frame()),
             frameScene: () => frame(),
             resetCamera,
             zoom: (factor: number) => {
                 const target = orbitRef.current?.target || new Vector3(...PREVIS_FREE_ORBIT_TARGET);
-                const offset = freeCamera.position.clone().sub(target).multiplyScalar(Math.max(0.2, Math.min(2, factor)));
-                freeCamera.position.copy(target).add(offset);
+                const offset = freeCamera.position.clone().sub(target);
+                const currentDistance = offset.length();
+                const direction = currentDistance > 0.01 ? offset.multiplyScalar(1 / currentDistance) : new Vector3(4.8, 2.7, 6.8).normalize();
+                const minDistance = resolvePrevisZoomMinDistance(scene.objects, target);
+                const nextDistance = Math.max(minDistance, currentDistance * Math.max(0.2, Math.min(2, factor)));
+                freeCamera.position.copy(target).add(direction.multiplyScalar(nextDistance));
                 freeCamera.lookAt(target);
                 orbitRef.current?.update();
                 invalidate();
@@ -599,7 +719,7 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
             frame();
         }
         return () => onNavigationReady?.({ focusSelected: () => undefined, frameScene: () => undefined, resetCamera: () => undefined, zoom: () => undefined });
-    }, [freeCamera, invalidate, onNavigationReady, scene.id, scene.objects, selectedObjectId]);
+    }, [freeCamera, invalidate, onNavigationReady, scene.id, scene.objects, selectedObjectId, size.height, size.width]);
 
     useEffect(() => {
         threeScene.background = new Color(scene.background);
@@ -647,44 +767,63 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
             <PrevisOrthoCameraSync camera={orthoCamera} framing={orthoFraming} aspect={size.width / Math.max(size.height, 1)} />
             <PrevisEnvironmentView environment={scene.environment} fallbackColor={scene.background} />
             <ambientLight intensity={scene.environmentIntensity * 0.35} />
-            {scene.lights.map((light) => <PrevisLightView key={light.id} light={light} />)}
+            {scene.lights.map((light) => (
+                <PrevisLightView key={light.id} light={light} />
+            ))}
             {scene.gridVisible ? <Grid position={[0, 0, 0]} infiniteGrid fadeDistance={40} fadeStrength={5} cellSize={0.5} sectionSize={5} cellColor="#8f99a3" sectionColor="#626d77" /> : null}
             <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.012, 0]}>
                 <planeGeometry args={[120, 120]} />
                 <meshStandardMaterial color="#aeb7bf" roughness={0.92} />
             </mesh>
             {draftPath.length > 1 ? <PrevisDraftPath points={draftPath} /> : null}
-            {actorMotionPaths.map((object) => <PrevisTransformPath key={`actor-path-${object.id}`} objectId={object.id} keyframes={object.keyframes} playhead={playhead} color="#61d2ad" onSelectObject={onSelectObject} />)}
-            {cameraMotionPaths.map((item) => <PrevisTransformPath key={`camera-path-${item.id}`} keyframes={item.keyframes} playhead={playhead} color="#78a9ff" />)}
-            {scene.objects.filter((item) => item.visible).map((object) => (
-                <PrevisObjectView
-                    key={object.id}
-                    object={object}
-                    selected={selectedObjectId === object.id}
-                    selectedBone={selectedObjectId === object.id ? selectedBone : null}
-                    transformMode={transformMode}
-                    playhead={playhead}
-                    onSelect={() => { pointerHitRef.current = true; onSelectObject(object.id); }}
-                    onSelectBone={(bone) => { onSelectObject(object.id); onSelectBone(bone); }}
-                    onTransforming={setTransformingState}
-                    onTransform={(from, to) => onObjectTransform(object.id, from, to)}
-                    onBoneTransform={(bone, rotation) => onBoneTransform(object.id, bone, rotation)}
-                    onActorRigReady={(rig, animations) => onActorRigReady(object.id, rig, animations)}
-                    onLoadStateChange={onLoadStateChange}
-                />
+            {actorMotionPaths.map((object) => (
+                <PrevisTransformPath key={`actor-path-${object.id}`} objectId={object.id} keyframes={object.keyframes} playhead={playhead} color="#61d2ad" onSelectObject={onSelectObject} />
             ))}
+            {cameraMotionPaths.map((item) => (
+                <PrevisTransformPath key={`camera-path-${item.id}`} keyframes={item.keyframes} playhead={playhead} color="#78a9ff" />
+            ))}
+            {scene.objects
+                .filter((item) => item.visible)
+                .map((object) => (
+                    <PrevisObjectView
+                        key={object.id}
+                        object={object}
+                        selected={selectedObjectId === object.id}
+                        selectedBone={selectedObjectId === object.id ? selectedBone : null}
+                        transformMode={transformMode}
+                        playhead={playhead}
+                        onSelect={() => {
+                            pointerHitRef.current = true;
+                            onSelectObject(object.id);
+                        }}
+                        onSelectBone={(bone) => {
+                            onSelectObject(object.id);
+                            onSelectBone(bone);
+                        }}
+                        onTransforming={setTransformingState}
+                        onTransform={(from, to) => onObjectTransform(object.id, from, to)}
+                        onBoneTransform={(bone, rotation) => onBoneTransform(object.id, bone, rotation)}
+                        onActorRigReady={(rig, animations) => onActorRigReady(object.id, rig, animations)}
+                        onLoadStateChange={onLoadStateChange}
+                    />
+                ))}
             {/* 导演视角下渲染每台摄影机，选中时显示 TransformControls；CAM 视角隐藏，避免挡住取景。 */}
-            {effectiveViewport.camera === "camera" ? null : scene.cameras.map((cam) => (
-                <PrevisCameraView
-                    key={cam.id}
-                    camera={cam}
-                    selected={selectedCameraId === cam.id}
-                    transformMode={transformMode}
-                    onSelect={() => { pointerHitRef.current = true; onSelectCamera?.(cam.id); }}
-                    onTransforming={setTransformingState}
-                    onTransform={(from, to) => onCameraTransform?.(cam.id, from, to)}
-                />
-            ))}
+            {effectiveViewport.camera === "camera"
+                ? null
+                : scene.cameras.map((cam) => (
+                      <PrevisCameraView
+                          key={cam.id}
+                          camera={cam}
+                          selected={selectedCameraId === cam.id}
+                          transformMode={transformMode}
+                          onSelect={() => {
+                              pointerHitRef.current = true;
+                              onSelectCamera?.(cam.id);
+                          }}
+                          onTransforming={setTransformingState}
+                          onTransform={(from, to) => onCameraTransform?.(cam.id, from, to)}
+                      />
+                  ))}
             {/* 只有有效 free 回落允许环绕：drei 只在 enabled 时调 controls.update()，CAM/正交下这是
                 真正的锁定，不会有 controls 每帧把相机拽回自己 target 的回写竞争。
                 camera 显式绑定 freeCamera：即使 state.camera 当前指向别的相机，也绝不会
@@ -695,7 +834,7 @@ function PrevisSceneContent({ scene, selectedObjectId, selectedBone, transformMo
                 camera={freeCamera}
                 enabled={!transforming && effectiveViewport.orbit}
                 target={PREVIS_FREE_ORBIT_TARGET}
-                minDistance={0.6}
+                minDistance={orbitMinDistance}
                 maxDistance={80}
                 enableDamping
                 dampingFactor={0.08}
@@ -720,17 +859,25 @@ function PrevisEnvironmentView({ environment, fallbackColor }: { environment?: P
         if (!url) return;
         const loader = new TextureLoader();
         let disposed = false;
-        loader.load(url, (texture) => {
-            if (disposed) { texture.dispose(); return; }
-            texture.colorSpace = SRGBColorSpace;
-            texture.mapping = EquirectangularReflectionMapping;
-            texture.center.set(0.5, 0.5);
-            texture.rotation = activeEnvironment?.rotationY || 0;
-            textureRef.current = texture;
-            scene.background = texture;
-        }, undefined, () => {
-            if (!disposed) scene.background = new Color(fallbackColor);
-        });
+        loader.load(
+            url,
+            (texture) => {
+                if (disposed) {
+                    texture.dispose();
+                    return;
+                }
+                texture.colorSpace = SRGBColorSpace;
+                texture.mapping = EquirectangularReflectionMapping;
+                texture.center.set(0.5, 0.5);
+                texture.rotation = activeEnvironment?.rotationY || 0;
+                textureRef.current = texture;
+                scene.background = texture;
+            },
+            undefined,
+            () => {
+                if (!disposed) scene.background = new Color(fallbackColor);
+            },
+        );
         return () => {
             disposed = true;
             if (scene.background === textureRef.current) scene.background = new Color(fallbackColor);
@@ -754,32 +901,49 @@ function PrevisTransformPath({ objectId, keyframes, playhead, color, onSelectObj
         return new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), vector.normalize()).toArray() as PrevisQuat;
     }, [end, previous]);
 
-    return <group>
-        <Line points={points} color={color} lineWidth={2} />
-        {points.map((point, index) => <mesh key={`${index}-${point.join("-")}`} position={point} onPointerDown={(event) => { if (!objectId || !onSelectObject) return; event.stopPropagation(); onSelectObject(objectId); }}><sphereGeometry args={[index === 0 || index === points.length - 1 ? 0.11 : 0.075, 10, 8]} /><meshBasicMaterial color={index === 0 ? "#61d2ad" : index === points.length - 1 ? "#f08b6a" : color} /></mesh>)}
-        <mesh position={end} quaternion={direction}>
-            <coneGeometry args={[0.1, 0.28, 10]} />
-            <meshBasicMaterial color={color} />
-        </mesh>
-        <mesh position={current}>
-            <sphereGeometry args={[0.14, 12, 8]} />
-            <meshBasicMaterial color="#f0d36a" />
-        </mesh>
-    </group>;
+    return (
+        <group>
+            <Line points={points} color={color} lineWidth={2} />
+            {points.map((point, index) => (
+                <mesh
+                    key={`${index}-${point.join("-")}`}
+                    position={point}
+                    onPointerDown={(event) => {
+                        if (!objectId || !onSelectObject) return;
+                        event.stopPropagation();
+                        onSelectObject(objectId);
+                    }}
+                >
+                    <sphereGeometry args={[index === 0 || index === points.length - 1 ? 0.11 : 0.075, 10, 8]} />
+                    <meshBasicMaterial color={index === 0 ? "#61d2ad" : index === points.length - 1 ? "#f08b6a" : color} />
+                </mesh>
+            ))}
+            <mesh position={end} quaternion={direction}>
+                <coneGeometry args={[0.1, 0.28, 10]} />
+                <meshBasicMaterial color={color} />
+            </mesh>
+            <mesh position={current}>
+                <sphereGeometry args={[0.14, 12, 8]} />
+                <meshBasicMaterial color="#f0d36a" />
+            </mesh>
+        </group>
+    );
 }
 
 function PrevisDraftPath({ points }: { points: PrevisVec3[] }) {
-    return <group>
-        <Line points={points} color="#f0d36a" lineWidth={3} dashed dashSize={0.16} gapSize={0.08} />
-        <mesh position={points[0]}>
-            <sphereGeometry args={[0.13, 12, 8]} />
-            <meshBasicMaterial color="#61d2ad" />
-        </mesh>
-        <mesh position={points[points.length - 1]}>
-            <sphereGeometry args={[0.15, 12, 8]} />
-            <meshBasicMaterial color="#f0d36a" />
-        </mesh>
-    </group>;
+    return (
+        <group>
+            <Line points={points} color="#f0d36a" lineWidth={3} dashed dashSize={0.16} gapSize={0.08} />
+            <mesh position={points[0]}>
+                <sphereGeometry args={[0.13, 12, 8]} />
+                <meshBasicMaterial color="#61d2ad" />
+            </mesh>
+            <mesh position={points[points.length - 1]}>
+                <sphereGeometry args={[0.15, 12, 8]} />
+                <meshBasicMaterial color="#f0d36a" />
+            </mesh>
+        </group>
+    );
 }
 
 /**
@@ -840,7 +1004,33 @@ function PrevisOrthoCameraSync({ camera, framing, aspect }: { camera: Orthograph
     return null;
 }
 
-function PrevisObjectView({ object, selected, selectedBone, transformMode, playhead, onSelect, onSelectBone, onTransforming, onTransform, onBoneTransform, onActorRigReady, onLoadStateChange }: { object: PrevisObject; selected: boolean; selectedBone: string | null; transformMode: PrevisViewportProps["transformMode"]; playhead: number; onSelect: () => void; onSelectBone: (bone: string | null) => void; onTransforming: (value: boolean) => void; onTransform: (from: PrevisTransform, to: PrevisTransform) => void; onBoneTransform: (bone: string, rotation: PrevisQuat) => void; onActorRigReady: (rig: PrevisRig, animations: AnimationClip[]) => void; onLoadStateChange: (id: string, signal: PrevisLoadSignal, retry: () => void) => void }) {
+function PrevisObjectView({
+    object,
+    selected,
+    selectedBone,
+    transformMode,
+    playhead,
+    onSelect,
+    onSelectBone,
+    onTransforming,
+    onTransform,
+    onBoneTransform,
+    onActorRigReady,
+    onLoadStateChange,
+}: {
+    object: PrevisObject;
+    selected: boolean;
+    selectedBone: string | null;
+    transformMode: PrevisViewportProps["transformMode"];
+    playhead: number;
+    onSelect: () => void;
+    onSelectBone: (bone: string | null) => void;
+    onTransforming: (value: boolean) => void;
+    onTransform: (from: PrevisTransform, to: PrevisTransform) => void;
+    onBoneTransform: (bone: string, rotation: PrevisQuat) => void;
+    onActorRigReady: (rig: PrevisRig, animations: AnimationClip[]) => void;
+    onLoadStateChange: (id: string, signal: PrevisLoadSignal, retry: () => void) => void;
+}) {
     const [target, setTarget] = useState<Group | null>(null);
     const { camera, gl, invalidate } = useThree();
     const resolved = interpolatePrevisTransform(object.transform, object.keyframes, playhead);
@@ -857,34 +1047,54 @@ function PrevisObjectView({ object, selected, selectedBone, transformMode, playh
     onTransformRef.current = onTransform;
     onTransformingRef.current = onTransforming;
 
-    const resolveGroundPoint = useCallback((event: PointerEvent) => {
-        const bounds = gl.domElement.getBoundingClientRect();
-        if (bounds.width <= 0 || bounds.height <= 0) return null;
-        ndc.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
-        raycaster.setFromCamera(ndc, camera);
-        if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
-        return finitePrevisGroundPoint(hit.x, hit.z);
-    }, [camera, gl, groundPlane, hit, ndc, raycaster]);
+    const resolveGroundPoint = useCallback(
+        (event: PointerEvent) => {
+            const bounds = gl.domElement.getBoundingClientRect();
+            if (bounds.width <= 0 || bounds.height <= 0) return null;
+            ndc.set(((event.clientX - bounds.left) / bounds.width) * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
+            raycaster.setFromCamera(ndc, camera);
+            if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
+            return finitePrevisGroundPoint(hit.x, hit.z);
+        },
+        [camera, gl, groundPlane, hit, ndc, raycaster],
+    );
 
-    const releasePointerCapture = useCallback((pointerId: number) => {
-        const canvas = gl.domElement;
-        if (!canvas.hasPointerCapture(pointerId)) return;
-        try { canvas.releasePointerCapture(pointerId); } catch { /* pointer capture may already be gone */ }
-    }, [gl]);
+    const releasePointerCapture = useCallback(
+        (pointerId: number) => {
+            const canvas = gl.domElement;
+            if (!canvas.hasPointerCapture(pointerId)) return;
+            try {
+                canvas.releasePointerCapture(pointerId);
+            } catch {
+                /* pointer capture may already be gone */
+            }
+        },
+        [gl],
+    );
 
-    const capturePointer = useCallback((pointerId: number) => {
-        try { gl.domElement.setPointerCapture(pointerId); } catch { /* browser may reject a stale pointer */ }
-    }, [gl]);
+    const capturePointer = useCallback(
+        (pointerId: number) => {
+            try {
+                gl.domElement.setPointerCapture(pointerId);
+            } catch {
+                /* browser may reject a stale pointer */
+            }
+        },
+        [gl],
+    );
 
-    const finishDirectDrag = useCallback((pointerId: number, cancel = false) => {
-        const drag = dragRef.current;
-        if (!drag || drag.pointerId !== pointerId) return;
-        dragRef.current = null;
-        releasePointerCapture(pointerId);
-        onTransformingRef.current(false);
-        if (!cancel && drag.moved) onTransformRef.current(drag.from, drag.to);
-        setFrozen(null);
-    }, [releasePointerCapture]);
+    const finishDirectDrag = useCallback(
+        (pointerId: number, cancel = false) => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== pointerId) return;
+            dragRef.current = null;
+            releasePointerCapture(pointerId);
+            onTransformingRef.current(false);
+            if (!cancel && drag.moved) onTransformRef.current(drag.from, drag.to);
+            setFrozen(null);
+        },
+        [releasePointerCapture],
+    );
 
     // 命中对象后由视口级 Pointer Events 接管整段拖动，指针离开模型仍能持续更新。
     useEffect(() => {
@@ -939,17 +1149,18 @@ function PrevisObjectView({ object, selected, selectedBone, transformMode, playh
                     onTransforming(true);
                 }}
             >
-                <PrevisObjectVisual object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} onLoadStateChange={onLoadStateChange} />
-            </group>
-            {selected && target ? (
-                <PrevisObjectGizmo
-                    target={target}
-                    transformMode={transformMode}
-                    onFreeze={setFrozen}
-                    onTransforming={onTransforming}
-                    onTransform={onTransform}
+                <PrevisObjectVisual
+                    object={object}
+                    selected={selected}
+                    selectedBone={selectedBone}
+                    playhead={playhead}
+                    onSelectBone={onSelectBone}
+                    onBoneTransform={onBoneTransform}
+                    onActorRigReady={onActorRigReady}
+                    onLoadStateChange={onLoadStateChange}
                 />
-            ) : null}
+            </group>
+            {selected && target ? <PrevisObjectGizmo target={target} transformMode={transformMode} onFreeze={setFrozen} onTransforming={onTransforming} onTransform={onTransform} /> : null}
         </>
     );
 }
@@ -975,7 +1186,14 @@ function resolvePrevisCameraPalette(camera: PrevisCamera) {
  * 场景内摄影机标记：导演视角中每台摄影机都保持可见；点击任意机位即可选中并调节位置、旋转或缩放。
  * 视觉上用分层的机身、镜头、取景器和热靴替代普通方盒，但交互仍由同一个 group/gizmo 承担。
  */
-function PrevisCameraView({ camera, selected, transformMode, onSelect, onTransforming, onTransform }: {
+function PrevisCameraView({
+    camera,
+    selected,
+    transformMode,
+    onSelect,
+    onTransforming,
+    onTransform,
+}: {
     camera: PrevisCamera;
     selected: boolean;
     transformMode: PrevisViewportProps["transformMode"];
@@ -1009,7 +1227,10 @@ function PrevisCameraView({ camera, selected, transformMode, onSelect, onTransfo
         const w = h * 1.78;
         const origin: [number, number, number] = [0, 0.2, -0.2];
         const corners: [number, number, number][] = [
-            [w, 0.2 + h, -0.2 - dist], [-w, 0.2 + h, -0.2 - dist], [-w, 0.2 - h, -0.2 - dist], [w, 0.2 - h, -0.2 - dist],
+            [w, 0.2 + h, -0.2 - dist],
+            [-w, 0.2 + h, -0.2 - dist],
+            [-w, 0.2 - h, -0.2 - dist],
+            [w, 0.2 - h, -0.2 - dist],
         ];
         const rays = corners.map((corner) => [origin, corner] as [[number, number, number], [number, number, number]]);
         const farRect = [corners[0], corners[1], corners[1], corners[2], corners[2], corners[3], corners[3], corners[0]] as [number, number, number][];
@@ -1026,7 +1247,13 @@ function PrevisCameraView({ camera, selected, transformMode, onSelect, onTransfo
 
     return (
         <>
-            <group ref={setTarget} onPointerDown={(event) => { event.stopPropagation(); onSelect(); }}>
+            <group
+                ref={setTarget}
+                onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onSelect();
+                }}
+            >
                 {selected ? (
                     <mesh position={[0, 0.2, 0.02]}>
                         <sphereGeometry args={[0.52, 20, 14]} />
@@ -1101,50 +1328,65 @@ function PrevisCameraView({ camera, selected, transformMode, onSelect, onTransfo
                     <Line key={`ray-${index}`} points={pair} color={lineColor} lineWidth={selected ? 2 : 1.2} transparent opacity={lineOpacity} />
                 ))}
                 <Line points={frustumLines.farRect} color={lineColor} lineWidth={selected ? 2 : 1.2} transparent opacity={lineOpacity} />
-                <Line points={[[0, 0.2, 0], [0, 0.7, 0]]} color={lineColor} lineWidth={selected ? 2 : 1.2} transparent opacity={selected ? 0.85 : 0.46} />
+                <Line
+                    points={[
+                        [0, 0.2, 0],
+                        [0, 0.7, 0],
+                    ]}
+                    color={lineColor}
+                    lineWidth={selected ? 2 : 1.2}
+                    transparent
+                    opacity={selected ? 0.85 : 0.46}
+                />
                 <Html center position={[0, 0.98, 0]} zIndexRange={[12, 0]} style={{ pointerEvents: "none", userSelect: "none" }}>
-                    <div style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        maxWidth: 160,
-                        padding: "4px 8px",
-                        border: `1px solid ${palette.accentHex}40`,
-                        borderRadius: 6,
-                        background: "var(--pd-s1)",
-                        boxShadow: "var(--pd-shadow-raised)",
-                        color: "var(--pd-t0)",
-                        fontFamily: "inherit",
-                        fontSize: 10,
-                        fontWeight: 600,
-                        letterSpacing: "0.02em",
-                        lineHeight: 1,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        opacity: selected ? 1 : 0.75,
-                        transform: selected ? "scale(1)" : "scale(0.95)",
-                        transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                    }}>
+                    <div
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            maxWidth: 160,
+                            padding: "4px 8px",
+                            border: `1px solid ${palette.accentHex}40`,
+                            borderRadius: 6,
+                            background: "var(--pd-s1)",
+                            boxShadow: "var(--pd-shadow-raised)",
+                            color: "var(--pd-t0)",
+                            fontFamily: "inherit",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            letterSpacing: "0.02em",
+                            lineHeight: 1,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            opacity: selected ? 1 : 0.75,
+                            transform: selected ? "scale(1)" : "scale(0.95)",
+                            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                        }}
+                    >
                         <span style={{ width: 4, height: 4, flex: "0 0 auto", borderRadius: "50%", background: palette.accentHex, boxShadow: selected ? `0 0 6px ${palette.accentHex}` : "none" }} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
                     </div>
                 </Html>
             </group>
-            {selected && target ? (
-                <PrevisObjectGizmo
-                    target={target}
-                    transformMode={transformMode === "scale" ? "translate" : transformMode}
-                    onFreeze={setFrozen}
-                    onTransforming={onTransforming}
-                    onTransform={onTransform}
-                />
-            ) : null}
+            {selected && target ? <PrevisObjectGizmo target={target} transformMode={transformMode === "scale" ? "translate" : transformMode} onFreeze={setFrozen} onTransforming={onTransforming} onTransform={onTransform} /> : null}
         </>
     );
 }
 
-function PrevisObjectGizmo({ target, transformMode, onFreeze, onTransforming, onTransform }: { target: Group; transformMode: PrevisViewportProps["transformMode"]; onFreeze: (transform: PrevisTransform | null) => void; onTransforming: (value: boolean) => void; onTransform: (from: PrevisTransform, to: PrevisTransform) => void }) {
+function PrevisObjectGizmo({
+    target,
+    transformMode,
+    onFreeze,
+    onTransforming,
+    onTransform,
+}: {
+    target: Group;
+    transformMode: PrevisViewportProps["transformMode"];
+    onFreeze: (transform: PrevisTransform | null) => void;
+    onTransforming: (value: boolean) => void;
+    onTransform: (from: PrevisTransform, to: PrevisTransform) => void;
+}) {
     const transaction = usePrevisGizmoTransaction<PrevisTransform>({
         read: () => readObject3DTransform(target),
         restore: (snapshot) => applyObject3DTransform(target, snapshot),
@@ -1154,15 +1396,7 @@ function PrevisObjectGizmo({ target, transformMode, onFreeze, onTransforming, on
             onTransforming(active);
         },
     });
-    return (
-        <TransformControls
-            object={target}
-            mode={transformMode}
-            size={0.8}
-            onMouseDown={() => transaction.begin()}
-            onMouseUp={() => transaction.end("commit")}
-        />
-    );
+    return <TransformControls object={target} mode={transformMode} size={0.8} onMouseDown={() => transaction.begin()} onMouseUp={() => transaction.end("commit")} />;
 }
 
 /**
@@ -1170,26 +1404,46 @@ function PrevisObjectGizmo({ target, transformMode, onFreeze, onTransforming, on
  * 监听在挂载期间常驻安装（不以「当前是否有手势」为安装条件），
  * 非活跃时 end 自身是空操作。
  */
-function usePrevisGizmoTransaction<TSnapshot>({ read, restore, commit, onActive }: { read: () => TSnapshot | null; restore: (snapshot: TSnapshot) => void; commit: (from: TSnapshot, to: TSnapshot) => void; onActive: (active: boolean, snapshot: TSnapshot | null) => void }) {
+function usePrevisGizmoTransaction<TSnapshot>({
+    read,
+    restore,
+    commit,
+    onActive,
+}: {
+    read: () => TSnapshot | null;
+    restore: (snapshot: TSnapshot) => void;
+    commit: (from: TSnapshot, to: TSnapshot) => void;
+    onActive: (active: boolean, snapshot: TSnapshot | null) => void;
+}) {
     const hooksRef = useRef({ read, restore, commit, onActive });
-    useEffect(() => { hooksRef.current = { read, restore, commit, onActive }; }, [commit, onActive, read, restore]);
+    useEffect(() => {
+        hooksRef.current = { read, restore, commit, onActive };
+    }, [commit, onActive, read, restore]);
 
-    const transaction = useMemo(() => createPrevisTransaction<TSnapshot>({
-        read: () => hooksRef.current.read(),
-        restore: (snapshot) => hooksRef.current.restore(snapshot),
-        commit: (from, to) => hooksRef.current.commit(from, to),
-        setActive: (active) => hooksRef.current.onActive(active, active ? hooksRef.current.read() : null),
-        // stdlib 在 domElement.ownerDocument 上注册 pointerup，其 pointerUp({button:0})
-        // 会 dispatch mouseUp 后清 dragging=false / axis=null。因此用真实事件走它自己的
-        // 收尾通道，而不是写它的私有字段（.d.ts 中 dragging/axis 均为 private）。
-        terminateDrag: () => document.dispatchEvent(new PointerEvent("pointerup", { button: 0, bubbles: true })),
-    }), []);
+    const transaction = useMemo(
+        () =>
+            createPrevisTransaction<TSnapshot>({
+                read: () => hooksRef.current.read(),
+                restore: (snapshot) => hooksRef.current.restore(snapshot),
+                commit: (from, to) => hooksRef.current.commit(from, to),
+                setActive: (active) => hooksRef.current.onActive(active, active ? hooksRef.current.read() : null),
+                // stdlib 在 domElement.ownerDocument 上注册 pointerup，其 pointerUp({button:0})
+                // 会 dispatch mouseUp 后清 dragging=false / axis=null。因此用真实事件走它自己的
+                // 收尾通道，而不是写它的私有字段（.d.ts 中 dragging/axis 均为 private）。
+                terminateDrag: () => document.dispatchEvent(new PointerEvent("pointerup", { button: 0, bubbles: true })),
+            }),
+        [],
+    );
 
-    useEffect(() => installPrevisTerminalListeners(transaction, {
-        window,
-        document,
-        isHidden: () => document.visibilityState === "hidden",
-    }), [transaction]);
+    useEffect(
+        () =>
+            installPrevisTerminalListeners(transaction, {
+                window,
+                document,
+                isHidden: () => document.visibilityState === "hidden",
+            }),
+        [transaction],
+    );
 
     // 取消选中、删除对象、切换模型或卸载都必须回到快照并释放 transforming。
     useEffect(() => () => transaction.end("cancel"), [transaction]);
@@ -1208,21 +1462,67 @@ function applyObject3DTransform(target: Object3D, transform: PrevisTransform) {
     target.updateMatrixWorld(true);
 }
 
-function PrevisObjectVisual({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady, onLoadStateChange }: { object: PrevisObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: PrevisQuat) => void; onActorRigReady: (rig: PrevisRig, animations: AnimationClip[]) => void; onLoadStateChange: (id: string, signal: PrevisLoadSignal, retry: () => void) => void }) {
+function PrevisObjectVisual({
+    object,
+    selected,
+    selectedBone,
+    playhead,
+    onSelectBone,
+    onBoneTransform,
+    onActorRigReady,
+    onLoadStateChange,
+}: {
+    object: PrevisObject;
+    selected: boolean;
+    selectedBone: string | null;
+    playhead: number;
+    onSelectBone: (bone: string | null) => void;
+    onBoneTransform: (bone: string, rotation: PrevisQuat) => void;
+    onActorRigReady: (rig: PrevisRig, animations: AnimationClip[]) => void;
+    onLoadStateChange: (id: string, signal: PrevisLoadSignal, retry: () => void) => void;
+}) {
     const actorColor = resolvePrevisActorColor(object.color);
-if (object.kind === "actor" && object.url === PREVIS_DEFAULT_ACTOR_URL && !object.assetId) return <PrevisClayActor archetype={object.archetype || "adult"} actorProfile={object.actorProfile} color={actorColor} pose={object.pose || "stand"} boneOverrides={object.boneOverrides} selected={selected} />;
-    if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character")) return <PrevisModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} onLoadStateChange={onLoadStateChange} />;
+    if (object.kind === "actor" && object.url === PREVIS_DEFAULT_ACTOR_URL && !object.assetId)
+        return <PrevisClayActor archetype={object.archetype || "adult"} actorProfile={object.actorProfile} color={actorColor} pose={object.pose || "stand"} boneOverrides={object.boneOverrides} selected={selected} />;
+    if ((object.kind === "model" || object.kind === "actor" || object.primitive === "character") && (object.url || object.primitive === "character"))
+        return <PrevisModel object={object} selected={selected} selectedBone={selectedBone} playhead={playhead} onSelectBone={onSelectBone} onBoneTransform={onBoneTransform} onActorRigReady={onActorRigReady} onLoadStateChange={onLoadStateChange} />;
     if (object.kind === "billboard" && object.url) return <PrevisBillboard object={object} selected={selected} />;
     const material = <meshStandardMaterial color={selected ? "#ffcc00" : object.color} roughness={0.68} metalness={0.05} emissive={selected ? "#ffaa00" : "#000000"} emissiveIntensity={selected ? 0.4 : 0} />;
     return (
         <mesh castShadow={object.castShadow} receiveShadow={object.receiveShadow}>
-            {object.primitive === "sphere" ? <sphereGeometry args={[0.6, 32, 24]} /> : object.primitive === "cylinder" ? <cylinderGeometry args={[0.5, 0.5, 1.2, 32]} /> : object.primitive === "plane" ? <planeGeometry args={[1.6, 1]} /> : <boxGeometry args={[1, 1, 1]} />}
+            {object.primitive === "sphere" ? (
+                <sphereGeometry args={[0.6, 32, 24]} />
+            ) : object.primitive === "cylinder" ? (
+                <cylinderGeometry args={[0.5, 0.5, 1.2, 32]} />
+            ) : object.primitive === "plane" ? (
+                <planeGeometry args={[1.6, 1]} />
+            ) : (
+                <boxGeometry args={[1, 1, 1]} />
+            )}
             {material}
         </mesh>
     );
 }
 
-function PrevisModel({ object, selected, selectedBone, playhead, onSelectBone, onBoneTransform, onActorRigReady, onLoadStateChange }: { object: PrevisObject; selected: boolean; selectedBone: string | null; playhead: number; onSelectBone: (bone: string | null) => void; onBoneTransform: (bone: string, rotation: PrevisQuat) => void; onActorRigReady: (rig: PrevisRig, animations: AnimationClip[]) => void; onLoadStateChange: (id: string, signal: PrevisLoadSignal, retry: () => void) => void }) {
+function PrevisModel({
+    object,
+    selected,
+    selectedBone,
+    playhead,
+    onSelectBone,
+    onBoneTransform,
+    onActorRigReady,
+    onLoadStateChange,
+}: {
+    object: PrevisObject;
+    selected: boolean;
+    selectedBone: string | null;
+    playhead: number;
+    onSelectBone: (bone: string | null) => void;
+    onBoneTransform: (bone: string, rotation: PrevisQuat) => void;
+    onActorRigReady: (rig: PrevisRig, animations: AnimationClip[]) => void;
+    onLoadStateChange: (id: string, signal: PrevisLoadSignal, retry: () => void) => void;
+}) {
     const actorColor = resolvePrevisActorColor(object.color);
     const [load, dispatchLoad] = useReducer(reducePrevisLoad, previsLoadInitial);
     const loadRef = useRef(load);
@@ -1248,7 +1548,7 @@ function PrevisModel({ object, selected, selectedBone, playhead, onSelectBone, o
     const onActorRigReadyRef = useRef(onActorRigReady);
     const invalidate = useThree((state) => state.invalidate);
     // helper 只跟随「当前 identity 下真正要展示的 model」，不会挂在已卸下的旧 model 上。
-    const helper = useMemo(() => model ? new SkeletonHelper(model) : null, [model]);
+    const helper = useMemo(() => (model ? new SkeletonHelper(model) : null), [model]);
     useEffect(() => () => disposePrevisHelper(helper), [helper]);
 
     // 把 loading/error/ready 报到 DOM 层，Canvas 内部无法呈现可操作提示。
@@ -1262,7 +1562,9 @@ function PrevisModel({ object, selected, selectedBone, playhead, onSelectBone, o
         dispatchLoad({ type: "retry" });
     }, [objectId, objectKind]);
     const onLoadStateChangeRef = useRef(onLoadStateChange);
-    useEffect(() => { onLoadStateChangeRef.current = onLoadStateChange; }, [onLoadStateChange]);
+    useEffect(() => {
+        onLoadStateChangeRef.current = onLoadStateChange;
+    }, [onLoadStateChange]);
     useEffect(() => {
         onLoadStateChangeRef.current(object.id, load.phase, retryLoad);
     }, [load.phase, object.id, retryLoad]);
@@ -1273,27 +1575,32 @@ function PrevisModel({ object, selected, selectedBone, playhead, onSelectBone, o
     const selectedBoneObject = selectedBone && rig?.boneMap[selectedBone as PrevisHumanoidBone] ? model?.getObjectByName(rig.boneMap[selectedBone as PrevisHumanoidBone]!) : null;
     const motion = object.motionClips?.find((item) => item.id === object.activeMotionClipId);
     const activeAnimation = motion ? animations.find((item) => item.name === motion.sourceAnimation) : undefined;
-    const handleModelPointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
-        if (!selected || !rig) return;
-        let nearestBone: string | null = null;
-        let nearestDistance = Number.POSITIVE_INFINITY;
-        Object.entries(rig.boneMap).forEach(([bone, name]) => {
-            if (!name) return;
-            const target = model?.getObjectByName(name);
-            if (!target) return;
-            const distance = event.ray.distanceSqToPoint(target.getWorldPosition(new Vector3()));
-            if (distance <= 0.12 ** 2 && distance < nearestDistance) {
-                nearestBone = bone;
-                nearestDistance = distance;
-            }
-        });
-        if (!nearestBone) return;
-        // 模型表面可能先于关节控制球被射线命中，用最近骨骼保证点击仍可选中。
-        event.stopPropagation();
-        onSelectBone(nearestBone);
-    }, [model, onSelectBone, rig, selected]);
+    const handleModelPointerDown = useCallback(
+        (event: ThreeEvent<PointerEvent>) => {
+            if (!selected || !rig) return;
+            let nearestBone: string | null = null;
+            let nearestDistance = Number.POSITIVE_INFINITY;
+            Object.entries(rig.boneMap).forEach(([bone, name]) => {
+                if (!name) return;
+                const target = model?.getObjectByName(name);
+                if (!target) return;
+                const distance = event.ray.distanceSqToPoint(target.getWorldPosition(new Vector3()));
+                if (distance <= 0.12 ** 2 && distance < nearestDistance) {
+                    nearestBone = bone;
+                    nearestDistance = distance;
+                }
+            });
+            if (!nearestBone) return;
+            // 模型表面可能先于关节控制球被射线命中，用最近骨骼保证点击仍可选中。
+            event.stopPropagation();
+            onSelectBone(nearestBone);
+        },
+        [model, onSelectBone, rig, selected],
+    );
 
-    useEffect(() => { onActorRigReadyRef.current = onActorRigReady; }, [onActorRigReady]);
+    useEffect(() => {
+        onActorRigReadyRef.current = onActorRigReady;
+    }, [onActorRigReady]);
 
     useEffect(() => {
         const generation = loadRef.current.generation;
@@ -1396,7 +1703,10 @@ function PrevisModel({ object, selected, selectedBone, playhead, onSelectBone, o
         const mixer = mixerRef.current;
         mixer.stopAllAction();
         if (!activeAnimation) return;
-        mixer.clipAction(activeAnimation).setLoop(motion?.loop ? LoopRepeat : LoopOnce, motion?.loop ? Infinity : 1).play();
+        mixer
+            .clipAction(activeAnimation)
+            .setLoop(motion?.loop ? LoopRepeat : LoopOnce, motion?.loop ? Infinity : 1)
+            .play();
         return () => {
             mixer.stopAllAction();
         };
@@ -1419,16 +1729,30 @@ function PrevisModel({ object, selected, selectedBone, playhead, onSelectBone, o
     });
 
     if (!model) return <PrevisClayActor archetype={object.archetype || "adult"} actorProfile={object.actorProfile} color={actorColor} pose={object.pose || "stand"} boneOverrides={object.boneOverrides} selected={selected} />;
-    return <group onPointerDown={handleModelPointerDown}>
-        <primitive object={model} />
-        {selected && selectedBone && helper ? <primitive object={helper} /> : null}
-        {selected && rig ? Object.entries(rig.boneMap).filter(([, name]) => Boolean(name)).map(([bone, name]) => {
-            const fingerGroup = previsFingerGroup(bone);
-            const selectedFingerGroup = previsFingerGroup(selectedBone);
-            return <BoneController key={bone} bone={model.getObjectByName(name!)} selected={selectedBone === bone} dimmed={Boolean(fingerGroup && selectedFingerGroup && fingerGroup !== selectedFingerGroup)} onSelect={() => onSelectBone(bone)} />;
-        }) : null}
-        {selected && selectedBoneObject && selectedBone ? <PrevisBoneGizmo bone={selectedBoneObject} onCommit={(rotation) => onBoneTransform(selectedBone, rotation)} /> : null}
-    </group>;
+    return (
+        <group onPointerDown={handleModelPointerDown}>
+            <primitive object={model} />
+            {selected && selectedBone && helper ? <primitive object={helper} /> : null}
+            {selected && rig
+                ? Object.entries(rig.boneMap)
+                      .filter(([, name]) => Boolean(name))
+                      .map(([bone, name]) => {
+                          const fingerGroup = previsFingerGroup(bone);
+                          const selectedFingerGroup = previsFingerGroup(selectedBone);
+                          return (
+                              <BoneController
+                                  key={bone}
+                                  bone={model.getObjectByName(name!)}
+                                  selected={selectedBone === bone}
+                                  dimmed={Boolean(fingerGroup && selectedFingerGroup && fingerGroup !== selectedFingerGroup)}
+                                  onSelect={() => onSelectBone(bone)}
+                              />
+                          );
+                      })
+                : null}
+            {selected && selectedBoneObject && selectedBone ? <PrevisBoneGizmo bone={selectedBoneObject} onCommit={(rotation) => onBoneTransform(selectedBone, rotation)} /> : null}
+        </group>
+    );
 }
 
 /** 骨骼 gizmo 与对象 gizmo 共用事务接线，取消时恢复骨骼 quaternion。 */
@@ -1448,10 +1772,32 @@ function PrevisBoneGizmo({ bone, onCommit }: { bone: Object3D; onCommit: (rotati
 function archetypeProfile(archetype: PrevisObject["archetype"], custom?: PrevisObject["actorProfile"]) {
     const base = previsActorProfileForArchetype(archetype || "adult");
     const profile = { ...base, ...custom };
-    return { height: profile.height, torso: [profile.torsoRatio, profile.torsoRatio, profile.torsoRatio] as [number, number, number], head: profile.headRatio, limb: profile.height, shoulder: profile.shoulderWidth, accessory: profile.accessory, monster: archetype === "monster" || profile.accessory === "horns" };
+    return {
+        height: profile.height,
+        torso: [profile.torsoRatio, profile.torsoRatio, profile.torsoRatio] as [number, number, number],
+        head: profile.headRatio,
+        limb: profile.height,
+        shoulder: profile.shoulderWidth,
+        accessory: profile.accessory,
+        monster: archetype === "monster" || profile.accessory === "horns",
+    };
 }
 
-function PrevisClayActor({ archetype, actorProfile, color, pose, boneOverrides, selected }: { archetype: PrevisObject["archetype"]; actorProfile?: PrevisObject["actorProfile"]; color: string; pose: PrevisObject["pose"]; boneOverrides?: PrevisObject["boneOverrides"]; selected: boolean }) {
+function PrevisClayActor({
+    archetype,
+    actorProfile,
+    color,
+    pose,
+    boneOverrides,
+    selected,
+}: {
+    archetype: PrevisObject["archetype"];
+    actorProfile?: PrevisObject["actorProfile"];
+    color: string;
+    pose: PrevisObject["pose"];
+    boneOverrides?: PrevisObject["boneOverrides"];
+    selected: boolean;
+}) {
     const profile = archetypeProfile(archetype || "adult", actorProfile);
     const resolvedColor = selected ? new Color(color).lerp(new Color("#8fb8ff"), 0.16).getStyle() : color;
     const seated = pose === "sit" || pose === "squat";
@@ -1471,29 +1817,55 @@ function PrevisClayActor({ archetype, actorProfile, color, pose, boneOverrides, 
     const leftUpperLeg = readClayBoneEuler(boneOverrides, "leftUpperLeg");
     const rightUpperLeg = readClayBoneEuler(boneOverrides, "rightUpperLeg");
 
-    return <group userData={{ previsActor: true }} scale={[1, profile.height, 1]}>
-        <mesh position={[0, torsoY, 0]} rotation={spine} scale={[0.78 * profile.torso[0] * profile.shoulder, profile.torso[1], 0.68 * profile.torso[2]]} castShadow receiveShadow>
-            <capsuleGeometry args={[0.34, 0.64, 8, 18]} />
-            <meshStandardMaterial color={resolvedColor} roughness={0.84} metalness={0.02} emissive={selected ? "#ffaa00" : "#000000"} emissiveIntensity={selected ? 0.4 : 0} />
-        </mesh>
-        <mesh position={[0, seated ? 1.72 : 2.02, 0]} rotation={head} scale={[0.82 * profile.head, 0.86 * profile.head, 0.82 * profile.head]} castShadow receiveShadow>
-            <sphereGeometry args={[0.28, 24, 16]} />
-            <meshStandardMaterial color={resolvedColor} roughness={0.82} metalness={0.02} />
-        </mesh>
-        <ClayActorLimb position={[-0.32 * profile.shoulder, seated ? 1.27 : 1.54, 0]} rotation={[leftUpperArm[0] + leftLowerArm[0], leftUpperArm[1] + leftLowerArm[1], leftArm + leftUpperArm[2] + leftLowerArm[2]]} length={0.62} color={resolvedColor} />
-        <ClayActorLimb position={[0.32 * profile.shoulder, seated ? 1.27 : 1.54, 0]} rotation={[rightUpperArm[0] + rightLowerArm[0], rightUpperArm[1] + rightLowerArm[1], rightArm + rightUpperArm[2] + rightLowerArm[2]]} length={0.62} color={resolvedColor} />
-        <ClayActorLimb position={[-0.18, seated ? 0.78 : 0.72, 0]} rotation={[(seated ? -0.35 : 0) + leftUpperLeg[0], leftUpperLeg[1], leftLeg + leftUpperLeg[2]]} length={0.78} color={resolvedColor} />
-        <ClayActorLimb position={[0.18, seated ? 0.78 : 0.72, 0]} rotation={[(seated ? 0.35 : 0) + rightUpperLeg[0], rightUpperLeg[1], rightLeg + rightUpperLeg[2]]} length={0.78} color={resolvedColor} />
-        <mesh position={[-0.2, 0.1, seated ? 0.08 : 0]} scale={[0.9, 0.28, 1.2]} castShadow receiveShadow>
-            <sphereGeometry args={[0.16, 16, 10]} />
-            <meshStandardMaterial color={resolvedColor} roughness={0.86} />
-        </mesh>
-        {profile.accessory === "horns" ? <>
-            <mesh position={[-0.18, 2.38, 0]} rotation={[0, 0, -0.35]} castShadow><coneGeometry args={[0.11, 0.34, 8]} /><meshStandardMaterial color={resolvedColor} roughness={0.8} /></mesh>
-            <mesh position={[0.18, 2.38, 0]} rotation={[0, 0, 0.35]} castShadow><coneGeometry args={[0.11, 0.34, 8]} /><meshStandardMaterial color={resolvedColor} roughness={0.8} /></mesh>
-        </> : null}
-        {profile.accessory === "cane" ? <group position={[0.48, 0.58, 0.08]} rotation={[0, 0, -0.08]}><mesh position={[0, 0.55, 0]} castShadow><cylinderGeometry args={[0.035, 0.035, 1.1, 8]} /><meshStandardMaterial color="#5d4639" roughness={0.9} /></mesh><mesh position={[-0.04, 1.1, 0]} rotation={[0, 0, Math.PI / 2]} castShadow><torusGeometry args={[0.08, 0.025, 6, 12, Math.PI]} /><meshStandardMaterial color="#5d4639" roughness={0.9} /></mesh></group> : null}
-    </group>;
+    return (
+        <group userData={{ previsActor: true }} scale={[1, profile.height, 1]}>
+            <mesh position={[0, torsoY, 0]} rotation={spine} scale={[0.78 * profile.torso[0] * profile.shoulder, profile.torso[1], 0.68 * profile.torso[2]]} castShadow receiveShadow>
+                <capsuleGeometry args={[0.34, 0.64, 8, 18]} />
+                <meshStandardMaterial color={resolvedColor} roughness={0.84} metalness={0.02} emissive={selected ? "#ffaa00" : "#000000"} emissiveIntensity={selected ? 0.4 : 0} />
+            </mesh>
+            <mesh position={[0, seated ? 1.72 : 2.02, 0]} rotation={head} scale={[0.82 * profile.head, 0.86 * profile.head, 0.82 * profile.head]} castShadow receiveShadow>
+                <sphereGeometry args={[0.28, 24, 16]} />
+                <meshStandardMaterial color={resolvedColor} roughness={0.82} metalness={0.02} />
+            </mesh>
+            <ClayActorLimb position={[-0.32 * profile.shoulder, seated ? 1.27 : 1.54, 0]} rotation={[leftUpperArm[0] + leftLowerArm[0], leftUpperArm[1] + leftLowerArm[1], leftArm + leftUpperArm[2] + leftLowerArm[2]]} length={0.62} color={resolvedColor} />
+            <ClayActorLimb
+                position={[0.32 * profile.shoulder, seated ? 1.27 : 1.54, 0]}
+                rotation={[rightUpperArm[0] + rightLowerArm[0], rightUpperArm[1] + rightLowerArm[1], rightArm + rightUpperArm[2] + rightLowerArm[2]]}
+                length={0.62}
+                color={resolvedColor}
+            />
+            <ClayActorLimb position={[-0.18, seated ? 0.78 : 0.72, 0]} rotation={[(seated ? -0.35 : 0) + leftUpperLeg[0], leftUpperLeg[1], leftLeg + leftUpperLeg[2]]} length={0.78} color={resolvedColor} />
+            <ClayActorLimb position={[0.18, seated ? 0.78 : 0.72, 0]} rotation={[(seated ? 0.35 : 0) + rightUpperLeg[0], rightUpperLeg[1], rightLeg + rightUpperLeg[2]]} length={0.78} color={resolvedColor} />
+            <mesh position={[-0.2, 0.1, seated ? 0.08 : 0]} scale={[0.9, 0.28, 1.2]} castShadow receiveShadow>
+                <sphereGeometry args={[0.16, 16, 10]} />
+                <meshStandardMaterial color={resolvedColor} roughness={0.86} />
+            </mesh>
+            {profile.accessory === "horns" ? (
+                <>
+                    <mesh position={[-0.18, 2.38, 0]} rotation={[0, 0, -0.35]} castShadow>
+                        <coneGeometry args={[0.11, 0.34, 8]} />
+                        <meshStandardMaterial color={resolvedColor} roughness={0.8} />
+                    </mesh>
+                    <mesh position={[0.18, 2.38, 0]} rotation={[0, 0, 0.35]} castShadow>
+                        <coneGeometry args={[0.11, 0.34, 8]} />
+                        <meshStandardMaterial color={resolvedColor} roughness={0.8} />
+                    </mesh>
+                </>
+            ) : null}
+            {profile.accessory === "cane" ? (
+                <group position={[0.48, 0.58, 0.08]} rotation={[0, 0, -0.08]}>
+                    <mesh position={[0, 0.55, 0]} castShadow>
+                        <cylinderGeometry args={[0.035, 0.035, 1.1, 8]} />
+                        <meshStandardMaterial color="#5d4639" roughness={0.9} />
+                    </mesh>
+                    <mesh position={[-0.04, 1.1, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+                        <torusGeometry args={[0.08, 0.025, 6, 12, Math.PI]} />
+                        <meshStandardMaterial color="#5d4639" roughness={0.9} />
+                    </mesh>
+                </group>
+            ) : null}
+        </group>
+    );
 }
 
 function readClayBoneEuler(overrides: PrevisObject["boneOverrides"], bone: PrevisHumanoidBone): [number, number, number] {
@@ -1504,14 +1876,15 @@ function readClayBoneEuler(overrides: PrevisObject["boneOverrides"], bone: Previ
 }
 
 function ClayActorLimb({ position, rotation, length, color }: { position: [number, number, number]; rotation: [number, number, number]; length: number; color: string }) {
-    return <group position={position} rotation={rotation}>
-        <mesh position={[0, -length * 0.5, 0]} castShadow receiveShadow>
-            <capsuleGeometry args={[0.1, length, 6, 12]} />
-            <meshStandardMaterial color={color} roughness={0.84} metalness={0.02} />
-        </mesh>
-    </group>;
+    return (
+        <group position={position} rotation={rotation}>
+            <mesh position={[0, -length * 0.5, 0]} castShadow receiveShadow>
+                <capsuleGeometry args={[0.1, length, 6, 12]} />
+                <meshStandardMaterial color={color} roughness={0.84} metalness={0.02} />
+            </mesh>
+        </group>
+    );
 }
-
 
 function BoneController({ bone, selected, dimmed, onSelect }: { bone: Object3D | undefined; selected: boolean; dimmed: boolean; onSelect: () => void }) {
     const ref = useRef<Group>(null);
@@ -1538,18 +1911,23 @@ function BoneController({ bone, selected, dimmed, onSelect }: { bone: Object3D |
         hitRef.current?.scale.setScalar(screenPixelsToWorldRadius(camera, distance, hitPixels, size.height));
     });
     if (!bone) return null;
-    const handlePointerDown = (event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); onSelect(); };
-    return <group ref={ref}>
-        <mesh ref={visibleRef} onPointerDown={handlePointerDown} frustumCulled={false}>
-            <sphereGeometry args={[1, 12, 8]} />
-            <meshBasicMaterial color={selected ? "#ffcc00" : "#78a9ff"} depthTest={false} transparent opacity={selected ? 1 : dimmed ? 0.14 : 0.68} />
-        </mesh>
-        {/* 可视点保持小尺寸，透明球只负责提供稳定的点击面积。 */}
-        <mesh ref={hitRef} onPointerDown={handlePointerDown} frustumCulled={false}>
-            <sphereGeometry args={[1, 8, 6]} />
-            <meshBasicMaterial transparent opacity={0} depthTest={false} />
-        </mesh>
-    </group>;
+    const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+        event.stopPropagation();
+        onSelect();
+    };
+    return (
+        <group ref={ref}>
+            <mesh ref={visibleRef} onPointerDown={handlePointerDown} frustumCulled={false}>
+                <sphereGeometry args={[1, 12, 8]} />
+                <meshBasicMaterial color={selected ? "#ffcc00" : "#78a9ff"} depthTest={false} transparent opacity={selected ? 1 : dimmed ? 0.14 : 0.68} />
+            </mesh>
+            {/* 可视点保持小尺寸，透明球只负责提供稳定的点击面积。 */}
+            <mesh ref={hitRef} onPointerDown={handlePointerDown} frustumCulled={false}>
+                <sphereGeometry args={[1, 8, 6]} />
+                <meshBasicMaterial transparent opacity={0} depthTest={false} />
+            </mesh>
+        </group>
+    );
 }
 
 function PrevisBillboard({ object, selected }: { object: PrevisObject; selected: boolean }) {
@@ -1564,15 +1942,20 @@ function PrevisBillboard({ object, selected }: { object: PrevisObject; selected:
         setLoaded(null);
         const loader = new TextureLoader();
         loader.crossOrigin = "anonymous";
-        loader.load(object.url!, (next) => {
-            // 晚到的回调：本组件已换 URL 或卸载，直接释放这张纹理。
-            if (!active) {
-                next.dispose();
-                return;
-            }
-            owned = next;
-            setLoaded({ identity, value: next });
-        }, undefined, () => active && setLoaded(null));
+        loader.load(
+            object.url!,
+            (next) => {
+                // 晚到的回调：本组件已换 URL 或卸载，直接释放这张纹理。
+                if (!active) {
+                    next.dispose();
+                    return;
+                }
+                owned = next;
+                setLoaded({ identity, value: next });
+            },
+            undefined,
+            () => active && setLoaded(null),
+        );
         return () => {
             active = false;
             owned?.dispose();

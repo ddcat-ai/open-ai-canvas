@@ -13,7 +13,7 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ModelLogo } from "@/components/model-logo";
 import { ModelTags } from "@/components/model-tags";
-import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
+import { quoteModel, type LogicalModelQuote, type PublicChannelModelAvailability } from "@/services/api/logical-models";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -329,6 +329,7 @@ export function ModelLabel({
                             <ModelPrice price={modelMenuPrice(config, model, capability, true, requirements)} />
                         </span>
                     ) : null}
+                    <ModelAvailabilityBadge availability={modelAvailability(config, model)} available={logicalCost?.available ?? true} showAvailability={channel.scope === "system"} />
                 </span>
                 <span className={cn("canvas-model-picker-description mt-1 block", showDescription && "is-visible")} style={{ color: theme.node.muted }}>
                     {capabilitySummary}
@@ -509,6 +510,58 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
     );
 }
 
+function modelAvailability(config: AiConfig, model: string): PublicChannelModelAvailability | undefined {
+    if (!model) return undefined;
+    const channel = resolveModelChannel(config, model);
+    return channel.modelCosts?.find((item) => item.model === modelOptionName(model))?.availability;
+}
+
+function ModelAvailabilityBadge({ availability, available, showAvailability }: { availability?: PublicChannelModelAvailability; available: boolean; showAvailability: boolean }) {
+    if (!showAvailability) return null;
+    const label = availability?.dataState === "ready" && availability.rate24h !== null
+        ? `${Math.round(availability.rate24h * 100)}%`
+        : availability?.dataState === "insufficient"
+            ? "数据不足"
+            : "暂无数据";
+    const trend = availability?.trend7d || [];
+    const trendSamples = trend.reduce((total, item) => total + item.sampleCount, 0);
+    const summary = availability
+        ? `当前${available ? "可用" : "不可用"}；近24小时${label}，样本 ${availability.sampleCount24h} 条`
+        : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
+    const content = availability ? (
+        <div className="model-picker-availability-popover">
+            <div className="model-picker-availability-popover-head">
+                <strong>近24小时成功率</strong>
+                <span>{label}</span>
+            </div>
+            <div className="model-picker-availability-popover-meta">{availability.sampleCount24h} 次 create 尝试 · 7天样本 {trendSamples} 条</div>
+            <div className="model-picker-availability-trend" aria-label="近7天成功率趋势">
+                {trend.map((item) => {
+                    const dayLabel = item.rate === null ? "暂无数据" : `${Math.round(item.rate * 100)}%`;
+                    return <span key={item.day} className={`model-picker-availability-segment is-${item.dataState}`} title={`${item.day}：${dayLabel}，${item.sampleCount} 条`} style={item.rate === null ? undefined : { opacity: 0.35 + item.rate * 0.65 }} />;
+                })}
+            </div>
+            <div className="model-picker-availability-popover-foot">7天分段趋势 · 悬停查看每日样本</div>
+        </div>
+    ) : null;
+    return (
+        <Popover content={content} trigger={["hover", "focus"]} placement="topRight" arrow={false}>
+            <span
+                className={`model-picker-availability is-${availability?.dataState || "unavailable"}`}
+                role="img"
+                tabIndex={0}
+                aria-label={summary}
+                title={summary}
+                onClick={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+            >
+                <span className="model-picker-availability-dot" aria-hidden="true" />
+                <span className="model-picker-availability-label">近24h {label}</span>
+            </span>
+        </Popover>
+    );
+}
 function modelMenuMeta(model: string, capability?: ModelCapability): { description: string; time?: string } {
     const name = modelOptionName(model).toLowerCase();
     if (capability === "image") {

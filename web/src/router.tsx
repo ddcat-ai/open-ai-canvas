@@ -7,6 +7,7 @@ import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, 
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
 const AnalyticsPage = lazy(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
@@ -68,7 +69,7 @@ function AuthenticatedWorkspaceLayout() {
     const { pathname } = useLocation();
     const isCanvasProjectRoute = pathname.startsWith("/canvas/");
     const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
-    return <RequireAuth><Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense></RequireAuth>;
+    return <RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}><Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense></RequireAuth>;
 }
 
 /**
@@ -104,8 +105,8 @@ export const router = createBrowserRouter([
         element: <AuthenticatedWorkspaceLayout />,
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
-            { path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> },
+            { path: "/", element: deferred(<CreatePage />) },
+            { path: "/create", element: deferred(<CreatePage />) },
             {
                 path: "/tasks",
                 element: (

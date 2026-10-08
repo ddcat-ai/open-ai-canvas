@@ -15,14 +15,16 @@ import (
 )
 
 const (
-	cloudAgentPrevisMaxOperations = 32
-	cloudAgentPrevisMaxScenes     = 32
-	cloudAgentPrevisMaxShots      = 64
-	cloudAgentPrevisMaxObjects    = 128
-	cloudAgentPrevisMaxCameras    = 32
-	cloudAgentPrevisMaxLights     = 64
-	cloudAgentPrevisDocumentLimit = 1 << 20
-	cloudAgentPrevisTextLimit     = 160
+	cloudAgentPrevisMaxOperations     = 32
+	cloudAgentPrevisMaxScenes         = 32
+	cloudAgentPrevisMaxShots          = 64
+	cloudAgentPrevisMaxObjects        = 128
+	cloudAgentPrevisMaxCameras        = 32
+	cloudAgentPrevisMaxLights         = 64
+	cloudAgentPrevisDocumentLimit     = 1 << 20
+	cloudAgentPrevisTextLimit         = 160
+	cloudAgentPrevisWorkstationWidth  = 520.0
+	cloudAgentPrevisWorkstationHeight = 340.0
 )
 
 type cloudAgentPrevisSceneCreateArgs struct {
@@ -30,6 +32,8 @@ type cloudAgentPrevisSceneCreateArgs struct {
 	SceneID            string `json:"sceneId"`
 	Title              string `json:"title"`
 	TemplateID         string `json:"templateId"`
+	NodeID             string `json:"nodeId,omitempty"`
+	NodeTitle          string `json:"nodeTitle,omitempty"`
 }
 
 type cloudAgentPrevisApplyPatchArgs struct {
@@ -101,6 +105,8 @@ type cloudAgentPrevisMutationPlan struct {
 	Operation          string
 	Preview            cloudAgentApprovalPreview
 	SceneID            string
+	NodeID             string
+	ShotID             string
 }
 
 func cloudAgentPrevisSceneCreateSchema() map[string]any {
@@ -111,6 +117,8 @@ func cloudAgentPrevisSceneCreateSchema() map[string]any {
 			"sceneId":            map[string]any{"type": "string", "maxLength": 80, "description": "新的稳定场景 ID"},
 			"title":              map[string]any{"type": "string", "maxLength": cloudAgentPrevisTextLimit, "description": "场景标题"},
 			"templateId":         map[string]any{"type": "string", "enum": []string{"empty", "monologue", "dialogue", "blocking", "product", "action_chase", "interior", "crowd"}, "description": "模板：empty/monologue/dialogue/blocking/product/action_chase/interior/crowd"},
+			"nodeId":             map[string]any{"type": "string", "maxLength": 80, "description": "可选的预演视频工作站节点 ID；省略时由 sceneId 派生稳定 ID"},
+			"nodeTitle":          map[string]any{"type": "string", "maxLength": cloudAgentPrevisTextLimit, "description": "可选的预演视频工作站节点标题"},
 		},
 		"required":             []string{"canvasSnapshotHash", "sceneId", "title", "templateId"},
 		"additionalProperties": false,
@@ -747,6 +755,165 @@ func cloudAgentPrevisSceneCreateTemplate(args cloudAgentPrevisSceneCreateArgs) (
 	return scene, cloudAgentPrevisValidateScene(scene)
 }
 
+func cloudAgentPrevisWorkstationNodeID(sceneID string) string {
+	candidate := "previs-" + sceneID
+	if utf8.RuneCountInString(candidate) <= 80 {
+		return candidate
+	}
+	return "previs-" + creationHash(map[string]any{"sceneId": sceneID})[:40]
+}
+
+func cloudAgentPrevisActiveShot(scene map[string]any) (string, string, int, error) {
+	activeShotID := stringValue(scene["activeShotId"])
+	for index, shot := range creationMaps(scene["shots"]) {
+		if activeShotID != "" && stringValue(shot["id"]) != activeShotID {
+			continue
+		}
+		shotID := stringValue(shot["id"])
+		if shotID == "" {
+			return "", "", 0, BadAuthRequest("预演场景的活动镜头缺少稳定 ID")
+		}
+		shotTitle := stringValue(shot["name"])
+		if shotTitle == "" {
+			shotTitle = fmt.Sprintf("镜头 %d", index+1)
+		}
+		return shotID, shotTitle, index + 1, nil
+	}
+	return "", "", 0, BadAuthRequest("预演场景没有可绑定的活动镜头")
+}
+
+func cloudAgentPrevisWorkstationPosition(nodes []map[string]any) (float64, float64) {
+	right := math.Inf(-1)
+	y := 80.0
+	for _, node := range nodes {
+		position, _ := node["position"].(map[string]any)
+		x := numberValue(position["x"], 0)
+		width := numberValue(node["width"], 340)
+		if x+width > right {
+			right = x + width
+			y = math.Max(80, numberValue(position["y"], 80))
+		}
+	}
+	if math.IsInf(right, -1) {
+		return 80, 80
+	}
+	return math.Max(80, right+80), y
+}
+
+func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]any, requestedNodeID, requestedTitle string) (string, string, bool, error) {
+	sceneID := stringValue(scene["id"])
+	if err := validateCloudAgentID(sceneID, "导演场景 ID", 80); err != nil {
+		return "", "", false, err
+	}
+	shotID, shotTitle, shotIndex, err := cloudAgentPrevisActiveShot(scene)
+	if err != nil {
+		return "", "", false, err
+	}
+
+	nodeID := strings.TrimSpace(requestedNodeID)
+	if nodeID != "" {
+		if err := validateCloudAgentID(nodeID, "预演工作站节点 ID", 80); err != nil {
+			return "", "", false, err
+		}
+	} else {
+		nodeID = cloudAgentPrevisWorkstationNodeID(sceneID)
+	}
+	title := strings.TrimSpace(requestedTitle)
+	if title == "" {
+		title = stringValue(scene["title"])
+	}
+	if title == "" {
+		title = shotTitle
+	}
+	if err := cloudAgentPrevisValidateText(title, "预演工作站标题", cloudAgentPrevisTextLimit, true); err != nil {
+		return "", "", false, err
+	}
+
+	nodes := creationMaps(doc["nodes"])
+	var bound map[string]any
+	for _, node := range nodes {
+		metadata, _ := node["metadata"].(map[string]any)
+		if stringValue(metadata["previsSceneId"]) != sceneID {
+			continue
+		}
+		if stringValue(node["type"]) != "video" {
+			return "", "", false, BadAuthRequest("预演场景已绑定非视频节点，无法修复工作站")
+		}
+		if bound != nil && stringValue(bound["id"]) != stringValue(node["id"]) {
+			return "", "", false, BadAuthRequest("预演场景绑定了多个工作站节点，无法自动选择")
+		}
+		bound = node
+	}
+
+	var requested map[string]any
+	for _, node := range nodes {
+		if stringValue(node["id"]) == nodeID {
+			requested = node
+			break
+		}
+	}
+	if requested != nil {
+		if stringValue(requested["type"]) != "video" {
+			return "", "", false, BadAuthRequest("预演工作站节点 ID 已被非视频节点占用")
+		}
+		metadata, _ := requested["metadata"].(map[string]any)
+		otherSceneID := stringValue(metadata["previsSceneId"])
+		if otherSceneID != "" && otherSceneID != sceneID {
+			return "", "", false, BadAuthRequest("预演工作站节点 ID 已绑定其他场景")
+		}
+		if bound != nil && stringValue(bound["id"]) != nodeID {
+			return "", "", false, BadAuthRequest("预演场景已有其他工作站节点绑定")
+		}
+		bound = requested
+	}
+
+	created := false
+	if bound == nil {
+		positionX, positionY := cloudAgentPrevisWorkstationPosition(nodes)
+		metadata := map[string]any{
+			"content":            "",
+			"status":             "idle",
+			"workflowKind":       "shot",
+			"workflowTitle":      shotTitle,
+			"shotIndex":          float64(shotIndex),
+			"generationMode":     "video",
+			"videoEditOperation": "text_to_video",
+			"composerContent":    "",
+			"previsSceneId":      sceneID,
+			"previsShotId":       shotID,
+		}
+		width, height := cloudAgentPrevisWorkstationWidth, cloudAgentPrevisWorkstationHeight
+		op := CreationCanvasOp{Type: "add_node", ID: nodeID, NodeType: "video", Title: title, X: &positionX, Y: &positionY, Width: &width, Height: &height, Metadata: metadata}
+		nodes = append(nodes, creationAddedNode(op))
+		doc["nodes"] = nodes
+		return nodeID, shotID, true, nil
+	}
+
+	metadata, _ := bound["metadata"].(map[string]any)
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadata["workflowKind"] = "shot"
+	metadata["workflowTitle"] = shotTitle
+	metadata["shotIndex"] = float64(shotIndex)
+	metadata["generationMode"] = "video"
+	metadata["videoEditOperation"] = "text_to_video"
+	metadata["previsSceneId"] = sceneID
+	metadata["previsShotId"] = shotID
+	if _, exists := metadata["status"]; !exists {
+		metadata["status"] = "idle"
+	}
+	if _, exists := metadata["composerContent"]; !exists {
+		metadata["composerContent"] = ""
+	}
+	bound["metadata"] = metadata
+	if stringValue(bound["title"]) == "" || strings.TrimSpace(requestedTitle) != "" {
+		bound["title"] = title
+	}
+	doc["nodes"] = nodes
+	return stringValue(bound["id"]), shotID, created, nil
+}
+
 func prepareCloudAgentPrevisSceneCreate(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (*cloudAgentPrevisMutationPlan, error) {
 	var args cloudAgentPrevisSceneCreateArgs
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
@@ -754,6 +921,19 @@ func prepareCloudAgentPrevisSceneCreate(repo *repository.Repository, userID, can
 	}
 	if strings.TrimSpace(args.CanvasSnapshotHash) == "" {
 		return nil, cloudAgentFieldError("canvasSnapshotHash", "required", "创建预演场景前必须先读取场景目录")
+	}
+	if err := validateCloudAgentID(args.SceneID, "导演场景 ID", 80); err != nil {
+		return nil, cloudAgentFieldError("sceneId", "invalid_value", cloudAgentSafeToolError(err))
+	}
+	if args.NodeID != "" {
+		if err := validateCloudAgentID(args.NodeID, "预演工作站节点 ID", 80); err != nil {
+			return nil, cloudAgentFieldError("nodeId", "invalid_value", cloudAgentSafeToolError(err))
+		}
+	}
+	if args.NodeTitle != "" {
+		if err := cloudAgentPrevisValidateText(args.NodeTitle, "预演工作站标题", cloudAgentPrevisTextLimit, false); err != nil {
+			return nil, cloudAgentFieldError("nodeTitle", "invalid_value", cloudAgentSafeToolError(err))
+		}
 	}
 	canvas, doc, err := cloudAgentPrevisCanvas(repo, userID, canvasID)
 	if err != nil {
@@ -779,7 +959,12 @@ func prepareCloudAgentPrevisSceneCreate(repo *repository.Repository, userID, can
 		return nil, err
 	}
 	doc["previsScenes"] = scenes
-	return &cloudAgentPrevisMutationPlan{Canvas: canvas, Document: doc, BeforeJSON: canvas.PayloadJSON, BeforeSnapshotHash: beforeHash, AfterSnapshotHash: cloudAgentCanvasHash(doc), ResultSnapshotHash: creationHash(scene), Operation: "previs_scene_create", SceneID: args.SceneID, Preview: cloudAgentPrevisMutationApprovalPreview("previs_scene_create", args.SceneID, args.Title, []string{"创建受控白模场景", "模板：" + args.TemplateID})}, nil
+	nodeID, shotID, _, err := cloudAgentPrevisEnsureWorkstationNode(doc, scene, args.NodeID, args.NodeTitle)
+	if err != nil {
+		return nil, err
+	}
+	details := []string{"创建受控白模场景", "模板：" + args.TemplateID, "绑定预演视频工作站：" + nodeID}
+	return &cloudAgentPrevisMutationPlan{Canvas: canvas, Document: doc, BeforeJSON: canvas.PayloadJSON, BeforeSnapshotHash: beforeHash, AfterSnapshotHash: cloudAgentCanvasHash(doc), ResultSnapshotHash: creationHash(scene), Operation: "previs_scene_create", SceneID: args.SceneID, NodeID: nodeID, ShotID: shotID, Preview: cloudAgentPrevisMutationApprovalPreview("previs_scene_create", args.SceneID, args.Title, details)}, nil
 }
 
 func prepareCloudAgentPrevisApplyPatch(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (*cloudAgentPrevisMutationPlan, error) {
@@ -829,7 +1014,15 @@ func prepareCloudAgentPrevisApplyPatch(repo *repository.Repository, userID, canv
 		return nil, err
 	}
 	doc["previsScenes"] = scenes
-	return &cloudAgentPrevisMutationPlan{Canvas: canvas, Document: doc, BeforeJSON: canvas.PayloadJSON, BeforeSnapshotHash: canvasSnapshotHash, AfterSnapshotHash: cloudAgentCanvasHash(doc), ResultSnapshotHash: creationHash(scene), Operation: "previs_apply_patch", SceneID: args.SceneID, Preview: cloudAgentPrevisMutationApprovalPreview("previs_apply_patch", args.SceneID, stringValue(scene["title"]), itemsToDetails(items))}, nil
+	nodeID, shotID, workstationCreated, err := cloudAgentPrevisEnsureWorkstationNode(doc, scene, "", "")
+	if err != nil {
+		return nil, err
+	}
+	details := itemsToDetails(items)
+	if workstationCreated {
+		details = append(details, "创建并绑定预演视频工作站："+nodeID)
+	}
+	return &cloudAgentPrevisMutationPlan{Canvas: canvas, Document: doc, BeforeJSON: canvas.PayloadJSON, BeforeSnapshotHash: canvasSnapshotHash, AfterSnapshotHash: cloudAgentCanvasHash(doc), ResultSnapshotHash: creationHash(scene), Operation: "previs_apply_patch", SceneID: args.SceneID, NodeID: nodeID, ShotID: shotID, Preview: cloudAgentPrevisMutationApprovalPreview("previs_apply_patch", args.SceneID, stringValue(scene["title"]), details)}, nil
 }
 
 func itemsToDetails(items []cloudAgentApprovalPreviewItem) []string {
@@ -1762,5 +1955,5 @@ func applyCloudAgentPrevisMutation(repo *repository.Repository, userID, canvasID
 	if resultSnapshotHash == "" {
 		resultSnapshotHash = plan.AfterSnapshotHash
 	}
-	return map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": plan.AfterSnapshotHash, "committed": true, "summary": plan.Preview.Description}, nil
+	return map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "nodeId": plan.NodeID, "shotId": plan.ShotID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": plan.AfterSnapshotHash, "committed": true, "summary": plan.Preview.Description}, nil
 }
