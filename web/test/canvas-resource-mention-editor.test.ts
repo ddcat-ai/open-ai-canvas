@@ -56,6 +56,30 @@ describe("canvas resource mention editor", () => {
         expect(css).toContain('content: "替换"');
     });
 
+    test("stages reference images locally and uploads them at generation or explicit cloud sync", () => {
+        const imageStorage = source("../src/services/image-storage.ts");
+        const creationAssets = source("../src/pages/create/creation-assets.ts");
+        const creationPage = source("../src/pages/create/index.tsx");
+        const generation = source("../src/services/api/generation-task.ts");
+        const canvasUpload = source("../src/pages/canvas/use-canvas-upload.ts");
+        const syncMedia = source("../src/services/user-data-sync-media.ts");
+        const sync = source("../src/services/user-data-sync.ts");
+
+        const stageFunction = imageStorage.slice(imageStorage.indexOf("export function stageLocalImageUpload"), imageStorage.indexOf("export function subscribeLocalImageUpload"));
+        const cachedUpload = imageStorage.slice(imageStorage.indexOf("const cachedResult = await uploadedImageStore"), imageStorage.indexOf("const existing = localImageUploadJobs"));
+        expect(stageFunction).toContain("store.setItem(storageKey, input)");
+        expect(stageFunction).not.toContain("uploadResourceFile(");
+        expect(cachedUpload).toContain('listener({ state: "ready", image: cachedResult })');
+        expect(creationPage).toContain("creationPendingImageAttachment(file)");
+        expect(creationPage).toContain("stageReferenceImage(file, attachment)");
+        expect(creationAssets).toContain('uploadState: "pending"');
+        expect(generation).toContain("ensureImageUploaded(image.storageKey, image.name)");
+        expect(canvasUpload).toContain("stageLocalImageUpload(file, { storageKey, previewUrl, fileName: file.name })");
+        expect(syncMedia).toContain("ensureImageUploaded(storageKey, fileName)");
+        expect(sync).toContain("saveRemoteUserDataNow({ automatic: true })");
+        expect(sync).toContain("hasUnuploadedLocalImageMedia(project)");
+    });
+
     test("resolves storage-backed previews and renders a visible loading spinner", () => {
         const editor = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
         const panel = moduleGroupSource("components/canvas/canvas-node-prompt-panel.tsx");

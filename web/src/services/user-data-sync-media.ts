@@ -3,7 +3,7 @@
 // 同一份内联数据按内容摘要去重上传；上传失败时整批同步失败并进入重试，不写入半成品。
 
 import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
-import { getImageBlob } from "@/services/image-storage";
+import { ensureImageUploaded, hasCompletedImageUpload } from "@/services/image-storage";
 import { getMediaBlob } from "@/services/file-storage";
 
 export function numberValue(value: unknown) {
@@ -31,6 +31,29 @@ export function collectLocalMediaKeys(value: unknown, set = new Set<string>()): 
         collectLocalMediaKeys(child, set);
     }
     return [...set];
+}
+
+export async function hasUnuploadedLocalImageMedia(value: unknown) {
+    const storageKeys = new Set<string>();
+    let hasInlineImage = false;
+    const visit = (item: unknown) => {
+        if (!item || typeof item !== "object") return;
+        if (Array.isArray(item)) {
+            item.forEach(visit);
+            return;
+        }
+        const record = item as Record<string, unknown>;
+        const storageKey = typeof record.storageKey === "string" ? record.storageKey : "";
+        if (storageKey.startsWith("image:") && !resourceIdFromStorageKey(storageKey)) storageKeys.add(storageKey);
+        else if (!resourceIdFromStorageKey(storageKey) && Object.values(record).some((child) => typeof child === "string" && /^data:image\//i.test(child))) hasInlineImage = true;
+        Object.values(record).forEach(visit);
+    };
+    visit(value);
+    if (hasInlineImage) return true;
+    for (const storageKey of storageKeys) {
+        if (!await hasCompletedImageUpload(storageKey)) return true;
+    }
+    return false;
 }
 
 export async function ensureRemoteResourceReferences<T>(value: T, uploaded = new Map<string, string>(), onUploaded?: () => void): Promise<T> {
@@ -106,7 +129,11 @@ export async function inlineMediaUploadIdentity(dataUrl: string) {
 }
 
 export async function uploadLocalStorageKey(storageKey: string, payload: Record<string, unknown>) {
-    const blob = storageKey.startsWith("image:") ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
+    if (storageKey.startsWith("image:")) {
+        const fileName = [payload.fileName, payload.name, payload.title].find((value): value is string => typeof value === "string");
+        return (await ensureImageUploaded(storageKey, fileName)).storageKey;
+    }
+    const blob = await getMediaBlob(storageKey);
     if (!blob) throw new Error(`本地媒体不存在，无法同步：${storageKey}`);
     const kind = blob.type.startsWith("image/") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
     const resource = await uploadResourceFile(blob, kind, {

@@ -49,6 +49,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     includeAssetLibrary?: boolean;
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
+    onImageFilesPaste?: (files: File[]) => void;
     autoLinkEnabled?: boolean;
 };
 
@@ -62,7 +63,7 @@ function shouldSubmitOnEnter(event: { key: string; ctrlKey: boolean; metaKey: bo
 }
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, onImageFilesPaste, autoLinkEnabled = false, ...props },
     forwardedRef,
 ) {
     const rawTheme = useActiveTheme();
@@ -323,6 +324,13 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const imageFilesFromTransfer = (event: DragEvent<HTMLDivElement>) => Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/"));
+    const imageFilesFromClipboard = (event: ClipboardEvent<HTMLElement>) => {
+        const files = Array.from(event.clipboardData.items)
+            .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => Boolean(file));
+        return files.length ? files : Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+    };
 
     const mergedStyle = {
         ...(style || {}),
@@ -384,6 +392,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onCompositionEnd?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+                        const images = imageFilesFromClipboard(event);
+                        if (images.length && onImageFilesPaste) {
+                            event.preventDefault();
+                            onImageFilesPaste(images);
+                            return;
+                        }
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
@@ -412,6 +426,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         setNativeDropReferenceId(null);
                         if (onReferenceFilesDrop && reference?.kind === "image" && files.length) {
                             event.preventDefault();
+                            event.stopPropagation();
                             onReferenceFilesDrop(reference, files);
                         }
                         props.onDrop?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
@@ -531,6 +546,12 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                     const textarea = event.currentTarget;
                     setAutoLinkCursor(textarea.selectionStart === textarea.selectionEnd ? textarea.selectionStart : null);
                     props.onSelect?.(event);
+                }}
+                onPaste={(event) => {
+                    const images = imageFilesFromClipboard(event);
+                    if (!images.length || !onImageFilesPaste) return;
+                    event.preventDefault();
+                    onImageFilesPaste(images);
                 }}
                 onKeyDown={(event) => {
 if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;

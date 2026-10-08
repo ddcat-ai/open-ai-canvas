@@ -28,7 +28,7 @@ import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins
 import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, reconcileCreationAttachmentLimits, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference, type CreationReferenceLimits } from "./creation-references";
-import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
+import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationPendingImageAttachment, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 import { defaultCreationMode, modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
 import { CreationComposer, CreationEmptySuggest, CreationFeaturedWorks, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
@@ -36,6 +36,7 @@ import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
 import { CreationLoginDialog } from "./creation-login-dialog";
+import { releaseImagePreview, stageLocalImageUpload, subscribeLocalImageUpload } from "@/services/image-storage";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
@@ -117,7 +118,10 @@ export default function CreatePage() {
     const [textStreaming, setTextStreaming] = useState(() => readComposerPref(TEXT_STREAMING_PREF_KEY, true));
     const [textThinking, setTextThinking] = useState(() => readComposerPref(TEXT_THINKING_PREF_KEY, false));
     const [busy, setBusy] = useState(false);
-    const [referenceReplacementBusy, setReferenceReplacementBusy] = useState(false);
+    const [referenceUploadBusy, setReferenceUploadBusy] = useState(false);
+    const activeReferenceUploadsRef = useRef(new Set<string>());
+    const referenceUploadUnsubscribersRef = useRef(new Map<string, () => void>());
+    const completedReferenceUploadIdsRef = useRef(new Set<string>());
     const [historyOpen, setHistoryOpen] = useState(false);
     const [loginDialogOpen, setLoginDialogOpen] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(false);
@@ -460,6 +464,74 @@ export default function CreatePage() {
             attachment: creationAttachmentFromImage(file, uploaded),
         };
     };
+    const setReferenceUploadActivity = useCallback((storageKey: string, active: boolean) => {
+        if (active) activeReferenceUploadsRef.current.add(storageKey);
+        else activeReferenceUploadsRef.current.delete(storageKey);
+        setReferenceUploadBusy(activeReferenceUploadsRef.current.size > 0);
+    }, []);
+    const updateAttachmentSnapshot = useCallback((attachmentId: string, updater: (attachment: CreationAttachment) => CreationAttachment) => {
+        let found = false;
+        const currentAttachments = attachmentsRef.current;
+        const nextAttachments = currentAttachments.map((attachment) => {
+            if (attachment.id !== attachmentId) return attachment;
+            found = true;
+            return updater(attachment);
+        });
+        if (found) {
+            attachmentsRef.current = nextAttachments;
+            setAttachments(nextAttachments);
+        }
+        const nextConversations = conversationsRef.current.map((conversation) => {
+            let changed = false;
+            const messages = conversation.messages.map((item) => {
+                if (!item.attachments?.some((attachment) => attachment.id === attachmentId)) return item;
+                changed = true;
+                return { ...item, attachments: item.attachments.map((attachment) => attachment.id === attachmentId ? updater(attachment) : attachment) };
+            });
+            if (changed) found = true;
+            return changed ? { ...conversation, updatedAt: new Date().toISOString(), messages } : conversation;
+        });
+        if (nextConversations.some((conversation, index) => conversation !== conversationsRef.current[index])) {
+            conversationsRef.current = nextConversations;
+            setConversations(nextConversations);
+            void saveCreationConversations(nextConversations).catch((error) => toast.error(error instanceof Error ? error.message : "参考图状态保存失败"));
+        }
+        return found;
+    }, [toast]);
+    const stageReferenceImage = useCallback((file: File, attachment: CreationAttachment & { storageKey: string }) => {
+        const { storageKey, previewUrl } = stageLocalImageUpload(file, { storageKey: attachment.storageKey, previewUrl: attachment.previewUrl, fileName: file.name });
+        referenceUploadUnsubscribersRef.current.get(storageKey)?.();
+        let unsubscribe: () => void = () => {};
+        let completed = false;
+        const subscription = subscribeLocalImageUpload(storageKey, (event) => {
+            if (event.state === "uploading") {
+                setReferenceUploadActivity(storageKey, true);
+                updateAttachmentSnapshot(attachment.id, (current) => ({ ...current, uploadState: "uploading" }));
+                return;
+            }
+            setReferenceUploadActivity(storageKey, false);
+            if (event.state === "failed") {
+                updateAttachmentSnapshot(attachment.id, (current) => ({ ...current, uploadState: "failed" }));
+                return;
+            }
+            if (event.state !== "ready" || !event.image) {
+                if (event.state === "staged" || event.state === "queued") updateAttachmentSnapshot(attachment.id, (current) => ({ ...current, uploadState: "pending" }));
+                return;
+            }
+            const uploadedAttachment = creationAttachmentFromImage(file, event.image, attachment.id);
+            completed = true;
+            if (updateAttachmentSnapshot(attachment.id, () => uploadedAttachment) && !completedReferenceUploadIdsRef.current.has(attachment.id)) {
+                completedReferenceUploadIdsRef.current.add(attachment.id);
+                addAsset(creationImageAsset({ title: file.name, uploaded: event.image, metadata: { source: "create-upload", fileName: file.name } }));
+            }
+            releaseImagePreview(storageKey, previewUrl);
+            unsubscribe();
+            referenceUploadUnsubscribersRef.current.delete(storageKey);
+        });
+        unsubscribe = subscription;
+        if (completed) unsubscribe();
+        else referenceUploadUnsubscribersRef.current.set(storageKey, unsubscribe);
+    }, [addAsset, setReferenceUploadActivity, updateAttachmentSnapshot]);
     const uploadLibraryAssets = async (files: FileList | File[]) => {
         const next = Array.from(files).filter((file) => creationFileAccepted(mode, file));
         if (!next.length) return [];
@@ -495,20 +567,35 @@ export default function CreatePage() {
         setLibraryOpen(false);
     };
 
+    const discardReferenceUpload = (attachment?: CreationAttachment) => {
+        if (!attachment?.storageKey || attachment.uploadState === "ready") return;
+        referenceUploadUnsubscribersRef.current.get(attachment.storageKey)?.();
+        referenceUploadUnsubscribersRef.current.delete(attachment.storageKey);
+        setReferenceUploadActivity(attachment.storageKey, false);
+        releaseImagePreview(attachment.storageKey, attachment.previewUrl);
+    };
+
     const removeAttachment = (id: string) => {
         const reference = mentionReferences.find((item) => item.attachmentId === id);
-        setAttachments((current) => removeCreationAttachment(current, id));
+        discardReferenceUpload(attachmentsRef.current.find((item) => item.id === id));
+        const next = removeCreationAttachment(attachmentsRef.current, id);
+        attachmentsRef.current = next;
+        setAttachments(next);
         if (reference) setPrompt((current) => removeCreationReferenceTokens(current, [reference]));
     };
 
     const clearAttachments = () => {
-        const attachmentIds = new Set(attachments.map((item) => item.id));
+        const currentAttachments = attachmentsRef.current;
+        currentAttachments.forEach((item) => discardReferenceUpload(item));
+        const attachmentIds = new Set(currentAttachments.map((item) => item.id));
         const references = mentionReferences.filter((item) => item.attachmentId && attachmentIds.has(item.attachmentId));
+        attachmentsRef.current = [];
         setAttachments([]);
         if (references.length) setPrompt((current) => removeCreationReferenceTokens(current, references));
     };
 
     const clearComposer = () => {
+        attachmentsRef.current.forEach((item) => discardReferenceUpload(item));
         promptRef.current = "";
         attachmentsRef.current = [];
         setPrompt("");
@@ -545,25 +632,50 @@ export default function CreatePage() {
         }
     }, [replaceAttachmentReference, toast]);
 
-    const replaceReferenceFromFiles = useCallback(async (targetAttachmentId: string, files: File[]) => {
-        if (busy || referenceReplacementBusy) return;
+    const addReferenceFiles = useCallback((files: File[]) => {
+        if (busy) return;
+        const images = files.filter((file) => file.type.startsWith("image/"));
+        if (!images.length) return;
+        const maxImages = mode === "video" ? videoReferenceLimits?.maxImages ?? maxReferences : mode === "image" ? imageProfile.references.maxImages : maxReferences;
+        const usedImages = attachmentsRef.current.filter((attachment) => creationAttachmentKind(attachment) === "image").length;
+        const availableSlots = Math.max(0, Math.min(maxImages - usedImages, maxReferences - attachmentsRef.current.length));
+        if (!availableSlots) {
+            toast.warning(`当前模式和模型最多支持 ${maxReferences} 个参考内容`);
+            return;
+        }
+        if (images.length > availableSlots) toast.warning(`当前模型还可添加 ${availableSlots} 张，超出的图片已忽略`);
+        const accepted = images.slice(0, availableSlots).map((file) => ({ file, attachment: creationPendingImageAttachment(file) }));
+        const next = [...attachmentsRef.current, ...accepted.map(({ attachment }) => attachment)];
+        attachmentsRef.current = next;
+        setAttachments(next);
+        accepted.forEach(({ file, attachment }) => stageReferenceImage(file, attachment));
+    }, [busy, imageProfile.references.maxImages, maxReferences, mode, stageReferenceImage, toast, videoReferenceLimits]);
+
+    const replaceReferenceFromFiles = useCallback((targetAttachmentId: string, files: File[]) => {
+        if (busy) return;
         const file = files.find((item) => item.type.startsWith("image/"));
         if (!file) {
             toast.warning("请拖入图片文件进行替换");
             return;
         }
-        setReferenceReplacementBusy(true);
+        const oldAttachment = attachmentsRef.current.find((item) => item.id === targetAttachmentId);
+        if (!oldAttachment) return;
+        const attachment = creationPendingImageAttachment(file);
         try {
-            const { asset, attachment } = await uploadCreationAsset(file);
-            if (creationAttachmentKind(attachment) !== "image") throw new Error("上传结果不是可用图片");
-            if (asset) addAsset(asset);
-            if (replaceAttachmentReference(targetAttachmentId, attachment)) toast.success("参考图已替换，槽位不变，提示词无需修改");
+            if (!replaceAttachmentReference(targetAttachmentId, attachment)) throw new Error("参考图引用已不存在");
+            if (oldAttachment.storageKey) {
+                referenceUploadUnsubscribersRef.current.get(oldAttachment.storageKey)?.();
+                referenceUploadUnsubscribersRef.current.delete(oldAttachment.storageKey);
+                setReferenceUploadActivity(oldAttachment.storageKey, false);
+                releaseImagePreview(oldAttachment.storageKey, oldAttachment.previewUrl);
+            }
+            stageReferenceImage(file, attachment);
+            toast.success("参考图已替换，可继续输入");
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "参考图上传或替换失败");
-        } finally {
-            setReferenceReplacementBusy(false);
+            URL.revokeObjectURL(attachment.previewUrl);
+            toast.error(error instanceof Error ? error.message : "参考图替换失败");
         }
-    }, [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, toast]);
+    }, [busy, replaceAttachmentReference, setReferenceUploadActivity, stageReferenceImage, toast]);
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
         const releaseRetryLock = () => {
@@ -801,6 +913,7 @@ export default function CreatePage() {
     }, [retrySequence]);
 
     const startNewConversation = () => {
+        attachmentsRef.current.forEach((item) => discardReferenceUpload(item));
         const next = newConversation();
         followLatestMessageRef.current = true;
         setConversations((current) => [next, ...current]);
@@ -850,6 +963,7 @@ export default function CreatePage() {
     };
 
     const selectConversation = (conversation: CreationConversation) => {
+        attachmentsRef.current.forEach((item) => discardReferenceUpload(item));
         followLatestMessageRef.current = true;
         setActiveId(conversation.id);
         setPrompt("");
@@ -986,8 +1100,8 @@ export default function CreatePage() {
         prompt,
         setPrompt,
         busy,
+        referenceUploadBusy,
         generationActive,
-        referenceReplacementBusy,
         attachments,
         referenceImageSize,
         maxReferences,
@@ -998,6 +1112,8 @@ export default function CreatePage() {
         onReorderAttachments: reorderAttachments,
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
+        onImageFilesDrop: addReferenceFiles,
+        onImageFilesPaste: addReferenceFiles,
         onOpenLibrary: () => setLibraryOpen(true),
         onModeChange: selectMode,
         model: selectedModel,
@@ -1039,7 +1155,7 @@ export default function CreatePage() {
                         initial={{ opacity: 0, y: -12, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: .98 }}
                         transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 360, damping: 32, mass: .8 }}>
                         <Sparkles aria-hidden="true" />
-                        <input aria-label="快捷编辑提示词" placeholder="继续描述你的创作想法…" value={prompt} disabled={busy || referenceReplacementBusy} onChange={(event) => setPrompt(event.target.value)} />
+                        <input aria-label="快捷编辑提示词" placeholder="继续描述你的创作想法…" value={prompt} disabled={busy} onChange={(event) => setPrompt(event.target.value)} />
                         <Tooltip title="展开完整创作区"><button type="button" aria-label="展开完整创作区" onClick={() => {
                             threadScrollRef.current?.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
                             composerFocusRef.current?.focus({ preventScroll: true });

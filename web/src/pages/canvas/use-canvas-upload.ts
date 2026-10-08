@@ -14,7 +14,7 @@ import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size"
 import { CANVAS_UPLOAD_ACCEPT, createFileUploadPlaceholder, uploadNodeType, uploadPercent } from "@/lib/canvas/canvas-file-upload";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { uploadMediaFile } from "@/services/file-storage";
-import { resolveImageUrl, uploadImage } from "@/services/image-storage";
+import { createImageStorageKey, releaseImagePreview, resolveImageUrl, stageLocalImageUpload, subscribeLocalImageUpload, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getProjectUnit } from "@/services/api/projects";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
@@ -25,6 +25,7 @@ import type { CanvasUploadStatus } from "./canvas-project-feedback";
 type UseCanvasUploadOptions = {
     canvasId: string;
     domainProjectId?: string;
+    nodes: CanvasNodeData[];
     nodesRef: { current: CanvasNodeData[] };
     selectedNodeIdsRef: { current: Set<string> };
     getCanvasCenter: () => Position;
@@ -56,6 +57,7 @@ function isBatchTableDragEvent(event: DragEvent<HTMLElement>) {
 export function useCanvasUpload({
     canvasId,
     domainProjectId,
+    nodes,
     nodesRef,
     selectedNodeIdsRef,
     getCanvasCenter,
@@ -78,9 +80,12 @@ export function useCanvasUpload({
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<CanvasUploadStatus | null>(null);
     const [fileDropActive, setFileDropActive] = useState(false);
+    const imageUploadUnsubscribersRef = useRef(new Map<string, { storageKey: string; unsubscribe: () => void }>());
 
     useEffect(() => () => {
         statusTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+        imageUploadUnsubscribersRef.current.forEach(({ unsubscribe }) => unsubscribe());
+        imageUploadUnsubscribersRef.current.clear();
     }, []);
 
     const startUploadStatus = useCallback<StartCanvasUploadStatus>((title, detail, total = 3) => {
@@ -150,10 +155,110 @@ export function useCanvasUpload({
     }, [canvasId, domainProjectId, queryClient]);
 
     const activeUploadsRef = useRef(new Set<string>());
+    const completeCanvasImageUpload = useCallback((nodeId: string, storageKey: string, previewUrl: string, image: UploadedImage) => {
+        const currentNode = nodesRef.current.find((item) => item.id === nodeId && item.metadata?.storageKey === storageKey);
+        if (!currentNode) {
+            releaseImagePreview(storageKey, previewUrl);
+            return;
+        }
+        const uploadedNode: CanvasNodeData = { ...currentNode, metadata: { ...currentNode.metadata, ...imageMetadata(image) } };
+        setNodes((current) => current.map((item) => item.id === nodeId && item.metadata?.storageKey === storageKey ? uploadedNode : item));
+        releaseImagePreview(storageKey, previewUrl);
+        void persistMediaNode(uploadedNode);
+    }, [nodesRef, persistMediaNode, setNodes]);
+    const observeCanvasImageUpload = useCallback((nodeId: string, storageKey: string, previewUrl: string) => {
+        const current = imageUploadUnsubscribersRef.current.get(nodeId);
+        if (current?.storageKey === storageKey) return;
+        current?.unsubscribe();
+        imageUploadUnsubscribersRef.current.delete(nodeId);
+        let unsubscribe: () => void = () => {};
+        let completed = false;
+        const subscription = subscribeLocalImageUpload(storageKey, (event) => {
+            if (event.state !== "ready" || !event.image) return;
+            completed = true;
+            completeCanvasImageUpload(nodeId, storageKey, previewUrl, event.image);
+            imageUploadUnsubscribersRef.current.delete(nodeId);
+            unsubscribe();
+        });
+        unsubscribe = subscription;
+        if (completed) unsubscribe();
+        else imageUploadUnsubscribersRef.current.set(nodeId, { storageKey, unsubscribe });
+    }, [completeCanvasImageUpload]);
+
+    const localImageNodeSignature = JSON.stringify(nodes.flatMap((node) => {
+        const storageKey = node.type === CanvasNodeType.Image ? node.metadata?.storageKey || "" : "";
+        if (!storageKey.startsWith("image:")) return [];
+        const previewUrl = node.metadata?.content?.startsWith("blob:") ? node.metadata.content : "";
+        return [[node.id, storageKey, previewUrl]];
+    }));
+
+    useEffect(() => {
+        const liveImageNodeIds = new Set<string>();
+        nodesRef.current.forEach((node) => {
+            const storageKey = node.type === CanvasNodeType.Image ? node.metadata?.storageKey || "" : "";
+            if (!storageKey.startsWith("image:")) return;
+            liveImageNodeIds.add(node.id);
+            observeCanvasImageUpload(node.id, storageKey, node.metadata?.content || "");
+        });
+        imageUploadUnsubscribersRef.current.forEach(({ unsubscribe }, nodeId) => {
+            if (liveImageNodeIds.has(nodeId)) return;
+            unsubscribe();
+            imageUploadUnsubscribersRef.current.delete(nodeId);
+        });
+    }, [localImageNodeSignature, nodesRef, observeCanvasImageUpload]);
+
     const createFileNode = useCallback(async (file: File, position: Position, replaceId?: string) => {
         const original = replaceId ? nodesRef.current.find((node) => node.id === replaceId) : undefined;
         if (replaceId && (!original || activeUploadsRef.current.has(replaceId))) return null;
         const id = replaceId || `upload-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        if (uploadNodeType(file) === CanvasNodeType.Image) {
+            const storageKey = createImageStorageKey();
+            const previewUrl = URL.createObjectURL(file);
+            const size = original ? { width: original.width, height: original.height } : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+            const node: CanvasNodeData = {
+                ...(original || {}),
+                id,
+                type: CanvasNodeType.Image,
+                title: file.name,
+                position: original?.position || { x: position.x - size.width / 2, y: position.y - size.height / 2 },
+                width: size.width,
+                height: size.height,
+                metadata: {
+                    ...(original?.metadata || {}),
+                    content: previewUrl,
+                    storageKey,
+                    status: NODE_STATUS_SUCCESS,
+                    bytes: file.size,
+                    mimeType: file.type || "image/png",
+                    fileUpload: undefined,
+                    fileUploadProgress: undefined,
+                    errorDetails: undefined,
+                    producedModel: undefined,
+                    producedModelCandidate: undefined,
+                    ...(replaceId ? {
+                        assetId: undefined, taskId: undefined, freeResize: false,
+                        isBatchRoot: undefined, batchRootId: undefined, batchChildIds: undefined,
+                        batchFailedCount: undefined, batchUsesReferenceImages: undefined,
+                        generationType: undefined, generationResultPlacement: undefined,
+                        copiedFromNodeId: undefined, versionOfNodeId: undefined,
+                        model: undefined, size: undefined, quality: undefined,
+                        transparentBackground: undefined, count: undefined, references: undefined,
+                        primaryImageId: undefined, imageBatchExpanded: undefined,
+                        richText: undefined, composerContent: undefined,
+                    } : {}),
+                },
+            };
+            if (original?.metadata?.storageKey) {
+                imageUploadUnsubscribersRef.current.get(original.id)?.unsubscribe();
+                imageUploadUnsubscribersRef.current.delete(original.id);
+                releaseImagePreview(original.metadata.storageKey, original.metadata.content);
+            }
+            setNodes((current) => replaceId ? current.map((item) => item.id === id ? node : item) : [...current, node]);
+            selectInsertedNode(id, "close");
+            stageLocalImageUpload(file, { storageKey, previewUrl, fileName: file.name });
+            observeCanvasImageUpload(id, storageKey, previewUrl);
+            return id;
+        }
         activeUploadsRef.current.add(id);
         const progress = startUploadStatus(replaceId ? "替换文件" : "上传文件", "读取文件信息", domainProjectId ? 4 : 3);
         try {
@@ -226,7 +331,7 @@ export function useCanvasUpload({
         } finally {
             activeUploadsRef.current.delete(id);
         }
-    }, [domainProjectId, message, nodesRef, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
+    }, [domainProjectId, message, nodesRef, observeCanvasImageUpload, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus]);
 
     const createImageAssetNode = useCallback(async (asset: ImageAsset, position?: Position) => {
         try {

@@ -1,6 +1,6 @@
 import { normalizeAudioFormatForConfig, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
 import { getMediaBlob } from "@/services/file-storage";
-import { getImageBlob } from "@/services/image-storage";
+import { ensureImageUploaded, getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask, type CreateTaskInput } from "@/services/api/task-center";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
@@ -356,6 +356,14 @@ async function prepareBackendImageReference(image: ReferenceImage, preferArkAsse
     if (resourceIdFromStorageKey(image.storageKey)) return backendImageReference(image, { storageKey: image.storageKey });
     const sourceUrl = image.url || image.dataUrl;
     if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
+    if (image.storageKey) {
+        try {
+            const uploaded = await ensureImageUploaded(image.storageKey, image.name);
+            return backendImageReference(image, { storageKey: uploaded.storageKey, type: uploaded.mimeType || image.type });
+        } catch (error) {
+            throw new Error(error instanceof Error ? `参考图片上传失败：${error.message}` : "参考图片上传失败");
+        }
+    }
     const blob = image.storageKey ? await getImageBlob(image.storageKey) : sourceUrl ? await (await fetch(sourceUrl)).blob() : null;
     if (!blob) throw new Error("参考图片尚未保存，请重新上传后再生成");
     try {

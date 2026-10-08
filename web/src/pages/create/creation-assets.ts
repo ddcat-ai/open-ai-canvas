@@ -6,6 +6,8 @@ import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import type { Asset, AudioAsset, ImageAsset, NewAsset } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
+import { createClientId } from "@/lib/client-id";
+import { createImageStorageKey } from "@/services/image-storage";
 
 export type CreationDocumentAttachment = {
     id: string;
@@ -16,7 +18,10 @@ export type CreationDocumentAttachment = {
     bytes: number;
     previewUrl: string;
 };
-export type CreationAttachment = ((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment;
+export type CreationAttachmentUploadState = "pending" | "uploading" | "ready" | "failed";
+export type CreationAttachment = (((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment) & {
+    uploadState?: CreationAttachmentUploadState;
+};
 export type CreationMode = "text" | "image" | "video";
 export type CreationAttachmentKind = "image" | "video" | "audio" | "file";
 
@@ -96,9 +101,9 @@ export function isSameCreationAsset(asset: Pick<Asset, "metadata">, identity: Cr
     return isLegacyResult && asset.metadata?.source === "create-generation" && asset.metadata?.taskId === identity.taskId && asset.metadata?.resultIndex === undefined;
 }
 
-export function creationAttachmentFromImage(file: File, uploaded: UploadedImage): CreationAttachment {
+export function creationAttachmentFromImage(file: File, uploaded: UploadedImage, attachmentId?: string): CreationAttachment {
     return {
-        id: `upload:${file.name}:${uploaded.storageKey}`,
+        id: attachmentId || `upload:${file.name}:${uploaded.storageKey}`,
         name: file.name,
         type: uploaded.mimeType || file.type || "image/png",
         dataUrl: uploaded.url,
@@ -108,6 +113,22 @@ export function creationAttachmentFromImage(file: File, uploaded: UploadedImage)
         width: uploaded.width,
         height: uploaded.height,
         previewUrl: uploaded.url,
+        uploadState: "ready",
+    };
+}
+
+export function creationPendingImageAttachment(file: File): CreationAttachment & ReferenceImage & { storageKey: string } {
+    const previewUrl = URL.createObjectURL(file);
+    return {
+        id: `upload-pending:${createClientId()}`,
+        name: file.name,
+        type: file.type || "image/png",
+        dataUrl: previewUrl,
+        url: previewUrl,
+        storageKey: createImageStorageKey(),
+        bytes: file.size,
+        previewUrl,
+        uploadState: "pending",
     };
 }
 

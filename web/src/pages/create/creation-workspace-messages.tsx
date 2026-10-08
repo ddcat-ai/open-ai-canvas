@@ -406,8 +406,8 @@ export function CreationMessageReferences({ references }: { references: Creation
     );
 }
 
-export function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: "image" | "video"; onClose: () => void }) {
-    if (type === "image") return <CanvasImagePreview src={url} alt="媒体预览" onClose={onClose} />;
+export function CreationMediaPreviewModal({ url, storageKey, type, onClose }: { url: string; storageKey?: string; type: "image" | "video"; onClose: () => void }) {
+    if (type === "image") return <CanvasImagePreview src={url} storageKey={storageKey} alt="媒体预览" onClose={onClose} />;
 
     return (
         <AppModal flush open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width="min(1160px, calc(100vw - 32px))" onCancel={onClose} className="creation-media-preview-modal">
@@ -416,7 +416,7 @@ export function CreationMediaPreviewModal({ url, type, onClose }: { url: string;
     );
 }
 
-export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { item: CreationAttachment; onPreview: (type: "image" | "video", url: string) => void; onRemove: (id: string) => void }) {
+export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { item: CreationAttachment; onPreview: (type: "image" | "video", url: string, storageKey?: string) => void; onRemove: (id: string) => void }) {
     const kind = creationAttachmentKind(item);
     const previewable = kind === "image" || kind === "video";
     const url = (kind === "video" ? item.url : item.previewUrl) || "";
@@ -447,7 +447,7 @@ export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { ite
     return (
         <div className="creation-reference-card-content">
             {previewable ? (
-                <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
+                <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl, item.storageKey)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
                     {content}
                     <span aria-hidden="true">
                         <Maximize2 />
