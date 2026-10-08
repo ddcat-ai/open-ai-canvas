@@ -659,7 +659,7 @@
 .app-user-workspace .creation-composer-stage .creation-empty-composer { min-width: 0; flex: 1 1 auto; }
 .app-user-workspace .creation-composer-stage.is-agent-mode .creation-agent-entry { min-width: 0; flex: 1 1 auto; }
 
-.creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-two-pane { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; min-height: 0; align-items: start; }
+.creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-two-pane { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; min-height: 0; }
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand-rail { display: grid; align-content: start; gap: 5px; border-right: 1px solid var(--workspace-border); padding-right: 14px; }
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand { width: 100%; }
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-model-pane { border: 0; margin: 0; padding: 0; }
