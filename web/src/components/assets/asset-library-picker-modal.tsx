@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { deleteAssetsWithRemoteSync, loadAssetLibraryPage, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
 
 export type AssetPickerMediaKind = "image" | "video" | "audio" | "text";
 
@@ -46,6 +47,12 @@ export type AssetLibraryPickerFolder = {
     parentId?: string;
     name: string;
 };
+
+export function isLocalPendingPickerItem(item: AssetLibraryPickerItem) {
+    if (item.asset?.kind !== "image") return false;
+    const storageKey = item.asset.data.storageKey || "";
+    return item.asset.metadata?.remoteUploadPending === true || Boolean(storageKey && !resourceIdFromStorageKey(storageKey));
+}
 
 type Props = {
     remoteLibrary?: boolean;
@@ -192,6 +199,13 @@ export function AssetLibraryPickerModal({
     }, [items, uploadedItems]);
     itemsRef.current = allItems;
     const localItems = useMemo(() => allItems.filter((item) => !item.external), [allItems]);
+    // 远端分页不会返回尚未同步的本地图片。它们必须继续显示在素材库中，
+    // 否则用户刚上传就会在服务端已有素材时看不到自己的新素材。
+    const localPendingItems = useMemo(
+        () =>
+            localItems.filter(isLocalPendingPickerItem),
+        [localItems],
+    );
     // 远端成功且有可展示素材时用远端。真正的空结果保持空列表。
     // 仅在远端空而本地仍有素材、或远端总数>0 但本页全被排除时回退本地，避免合法空搜索被缓存铺满。
     const remoteTotal = remoteQuery.data?.total ?? 0;
@@ -214,10 +228,10 @@ export function AssetLibraryPickerModal({
     const hasPluginSource = useMemo(() => Object.keys(categoryLabels).some((value) => value.startsWith("external:")) || pluginItems.some((item) => item.category.startsWith("external:")), [categoryLabels, pluginItems]);
     // 媒体类型在分类之前收窄数据源，让左侧分类计数、网格和分页始终描述同一批素材。
     const sourceItems = useMemo(() => {
-        const base = source === "plugin" ? pluginItems : useRemoteItems ? remoteItems : localItems;
+        const base = source === "plugin" ? pluginItems : useRemoteItems ? [...localPendingItems, ...remoteItems.filter((item) => !localPendingItems.some((local) => local.id === item.id))] : localItems;
         if (mediaKind === "all") return base;
         return base.filter((item) => pickerItemMediaKind(item) === mediaKind);
-    }, [localItems, mediaKind, pluginItems, useRemoteItems, remoteItems, source]);
+    }, [localItems, localPendingItems, mediaKind, pluginItems, useRemoteItems, remoteItems, source]);
     const activeSourceItems = useMemo(() => sourceItems.filter((item) => !item.archived), [sourceItems]);
     const archivedItems = useMemo(() => sourceItems.filter((item) => item.archived), [sourceItems]);
     const mediaKindOptions = useMemo(() => (remoteKind ? [] : Array.from(new Set(mediaKinds))), [mediaKinds, remoteKind]);
@@ -242,9 +256,10 @@ export function AssetLibraryPickerModal({
                 return false;
             }
             if (folderId !== "all" && (item.folderId || "") !== folderId) return false;
-            return useRemoteItems || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
+            const localPending = localPendingItems.some((pending) => pending.id === item.id);
+            return (useRemoteItems && !localPending) || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
         });
-    }, [category, folderId, keyword, sourceItems, useRemoteItems]);
+    }, [category, folderId, keyword, localPendingItems, sourceItems, useRemoteItems]);
     const selectedIds = useMemo(
         () =>
             Array.from(selected).filter((id) => {

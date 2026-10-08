@@ -3,7 +3,8 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { getResourceAccess, importResourceFromUrl, isResourceUrl, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
+import { ApiError } from "@/services/api/request";
+import { getResourceAccess, importResourceFromUrl, isResourceUrl, refreshResource, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
 import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
 
 export type UploadedImage = {
@@ -38,6 +39,8 @@ type LocalImageUploadJob = {
     reject: (error: unknown) => void;
     result?: UploadedImage;
     error?: unknown;
+    cancelled?: boolean;
+    settled?: boolean;
 };
 export type LocalImageUploadEvent = { state: LocalImageUploadState; image?: UploadedImage; error?: unknown };
 const stagedImageBlobs = new Map<string, Blob>();
@@ -99,8 +102,22 @@ export function subscribeLocalImageUpload(storageKey: string, listener: (event: 
 export async function ensureImageUploaded(storageKey: string, fileName?: string): Promise<UploadedImage> {
     const cachedResult = await uploadedImageStore.getItem<UploadedImage>(storageKey);
     if (cachedResult?.storageKey && resourceIdFromStorageKey(cachedResult.storageKey)) {
-        localImageUploadListeners.get(storageKey)?.forEach((listener) => listener({ state: "ready", image: cachedResult }));
-        return cachedResult;
+        const resourceId = resourceIdFromStorageKey(cachedResult.storageKey);
+        try {
+            const resource = await refreshResource(resourceId);
+            if (resource.status !== "deleted" && resource.status !== "failed") {
+                localImageUploadListeners.get(storageKey)?.forEach((listener) => listener({ state: "ready", image: cachedResult }));
+                return cachedResult;
+            }
+        } catch (error) {
+            // 网络暂时不可用时仍可复用已知资源；明确的 404 才回到本地 Blob 重传。
+            if (!(error instanceof ApiError) || error.status !== 404) {
+                localImageUploadListeners.get(storageKey)?.forEach((listener) => listener({ state: "ready", image: cachedResult }));
+                return cachedResult;
+            }
+        }
+        await uploadedImageStore.removeItem(storageKey).catch(() => undefined);
+        localImageUploadJobs.delete(storageKey);
     }
 
     const existing = localImageUploadJobs.get(storageKey);
@@ -157,17 +174,27 @@ function pumpLocalImageUploads() {
         notifyLocalImageUpload(job);
         void uploadLocalImageJob(job)
             .then((image) => {
-                job.state = "ready";
-                job.result = image;
-                job.blob = undefined;
-                job.resolve(image);
-                void uploadedImageStore.setItem(job.storageKey, image).catch((error: unknown) => console.warn("参考图片上传结果缓存失败", error));
-                notifyLocalImageUpload(job);
+                if (job.cancelled) return;
+                void uploadedImageStore
+                    .setItem(job.storageKey, image)
+                    .catch((error: unknown) => console.warn("参考图片上传结果缓存失败", error))
+                    .finally(() => {
+                        if (job.cancelled) {
+                            void uploadedImageStore.removeItem(job.storageKey).catch(() => undefined);
+                            return;
+                        }
+                        job.state = "ready";
+                        job.result = image;
+                        job.blob = undefined;
+                        settleLocalImageUpload(job, image);
+                        notifyLocalImageUpload(job);
+                    });
             })
             .catch((error: unknown) => {
+                if (job.cancelled) return;
                 job.state = "failed";
                 job.error = error;
-                job.reject(error);
+                settleLocalImageUpload(job, undefined, error);
                 notifyLocalImageUpload(job);
             })
             .finally(() => {
@@ -175,6 +202,26 @@ function pumpLocalImageUploads() {
                 pumpLocalImageUploads();
             });
     }
+}
+
+function settleLocalImageUpload(job: LocalImageUploadJob, image?: UploadedImage, error?: unknown) {
+    if (job.settled) return;
+    job.settled = true;
+    if (error) job.reject(error);
+    else if (image) job.resolve(image);
+}
+
+export function cancelLocalImageUpload(storageKey: string) {
+    const job = localImageUploadJobs.get(storageKey);
+    if (!job || job.state === "ready" || job.state === "failed") return;
+    job.cancelled = true;
+    job.state = "failed";
+    job.error = new DOMException("本地图片上传已取消", "AbortError");
+    const queuedIndex = localImageUploadQueue.indexOf(job);
+    if (queuedIndex >= 0) localImageUploadQueue.splice(queuedIndex, 1);
+    settleLocalImageUpload(job, undefined, job.error);
+    notifyLocalImageUpload(job);
+    localImageUploadJobs.delete(storageKey);
 }
 
 async function uploadLocalImageJob(job: LocalImageUploadJob): Promise<UploadedImage> {
@@ -309,6 +356,7 @@ export async function deleteStoredImages(keys: Iterable<string>) {
     await Promise.all(
         Array.from(new Set(keys)).map(async (key) => {
             if (resourceIdFromStorageKey(key)) return;
+            cancelLocalImageUpload(key);
             await imageStageWrites.get(key);
             stagedImageBlobs.delete(key);
             localImageUploadJobs.delete(key);

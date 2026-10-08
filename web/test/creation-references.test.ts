@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { canvasResourceMentionToken } from "../src/lib/canvas/canvas-resource-references";
-import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio, creationUploadAccept, type CreationAttachment } from "../src/pages/create/creation-assets";
+import { creationAttachmentFromImage, creationAttachmentKind, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, type CreationAttachment } from "../src/pages/create/creation-assets";
 import {
     buildCreationMentionReferences,
     displayCreationPrompt,
@@ -27,6 +27,23 @@ function mediaAttachment(id: string, type: string): CreationAttachment {
 }
 
 describe("creation references", () => {
+    test("本地待同步图片在附件和素材库中保持待上传状态", () => {
+        const file = new File(["image"], "local.png", { type: "image/png" });
+        const uploaded = {
+            url: "blob:http://localhost/local",
+            storageKey: "image:user:local",
+            width: 640,
+            height: 480,
+            bytes: file.size,
+            mimeType: "image/png",
+            pendingRemoteUpload: true,
+        };
+
+        expect(creationAttachmentFromImage(file, uploaded).uploadState).toBe("pending");
+        expect(creationImageAsset({ title: file.name, uploaded }).status).toBe("draft");
+        expect(creationImageAsset({ title: file.name, uploaded }).metadata?.remoteUploadPending).toBe(true);
+    });
+
     test("removes attachments and prompt tokens beyond the current model limit", () => {
         const attachments = [imageAttachment("first"), imageAttachment("second"), imageAttachment("third")];
         const references = buildCreationMentionReferences([], attachments);

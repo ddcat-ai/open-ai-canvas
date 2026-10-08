@@ -49,9 +49,10 @@ describe("creation library button", () => {
         expect(source.slice(uploadStart, uploadEnd)).not.toContain("setAttachments");
         expect(source).toContain("onUpload: uploadLibraryAssets");
         expect(source).not.toContain("onUpload={() => fileInputRef.current?.click()}");
-        expect(source).toContain("上传后保存到素材库");
+        expect(source).toContain("图片先保存到本机");
         expect(pickerSource).toContain("保存完成后会自动选中");
-        expect(source).toContain("个素材已上传到素材库并自动选中");
+        expect(source).toContain("个素材已保存在本机，生成或同步时上传");
+        expect(source).toContain("图片先保存到本机");
     });
 
     test("视频创作使用同名模型组的全部参考能力开放素材入口", () => {

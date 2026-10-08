@@ -113,7 +113,7 @@ export function creationAttachmentFromImage(file: File, uploaded: UploadedImage,
         width: uploaded.width,
         height: uploaded.height,
         previewUrl: uploaded.url,
-        uploadState: "ready",
+        uploadState: uploaded.pendingRemoteUpload ? "pending" : "ready",
     };
 }
 
@@ -265,9 +265,13 @@ export function creationImageAsset({ title, uploaded, metadata }: { title: strin
         title: title.trim() || "创作图片",
         coverUrl: uploaded.url,
         tags: ["创作"],
-        status: "confirmed",
+        status: uploaded.pendingRemoteUpload ? "draft" : "confirmed",
         source: "创作页",
-        metadata: { source: "create-page", ...metadata },
+        metadata: {
+            source: "create-page",
+            ...(uploaded.pendingRemoteUpload ? { remoteUploadPending: true, remoteUploadError: uploaded.remoteUploadError } : {}),
+            ...metadata,
+        },
         data: {
             dataUrl: uploaded.url,
             storageKey: uploaded.storageKey,

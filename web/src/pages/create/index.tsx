@@ -20,6 +20,7 @@ import { loadCreationConversations, pendingCreationTaskIds, removeCreationConver
 import { resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { readImageMeta } from "@/lib/image-utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
@@ -36,7 +37,7 @@ import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
 import { CreationLoginDialog } from "./creation-login-dialog";
-import { releaseImagePreview, stageLocalImageUpload, subscribeLocalImageUpload } from "@/services/image-storage";
+import { deleteStoredImages, releaseImagePreview, stageLocalImageUpload, subscribeLocalImageUpload, type UploadedImage } from "@/services/image-storage";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const loadCreationRuntime = () => import("./creation-runtime");
@@ -439,7 +440,7 @@ export default function CreatePage() {
         ...externalLibraryItems,
     ], [assets, externalLibraryItems, mode, videoReferenceLimits]);
     const uploadCreationAsset = async (file: File) => {
-        const { uploadImage, uploadMediaFile } = await loadCreationRuntime();
+        const { uploadMediaFile } = await loadCreationRuntime();
         if (file.type.startsWith("video/")) {
             const uploaded = await uploadMediaFile(file, "create-upload");
             return {
@@ -458,7 +459,24 @@ export default function CreatePage() {
             const uploaded = await uploadMediaFile(file, "create-upload");
             return { attachment: creationAttachmentFromDocument(file, uploaded) };
         }
-        const uploaded = await uploadImage(file);
+        const pendingAttachment = creationPendingImageAttachment(file);
+        stageLocalImageUpload(file, { storageKey: pendingAttachment.storageKey, previewUrl: pendingAttachment.previewUrl, fileName: file.name });
+        let meta: Awaited<ReturnType<typeof readImageMeta>>;
+        try {
+            meta = await readImageMeta(pendingAttachment.previewUrl);
+        } catch (error) {
+            await deleteStoredImages([pendingAttachment.storageKey]);
+            throw error;
+        }
+        const uploaded: UploadedImage = {
+            url: pendingAttachment.previewUrl,
+            storageKey: pendingAttachment.storageKey,
+            width: meta.width,
+            height: meta.height,
+            bytes: file.size,
+            mimeType: file.type || meta.mimeType,
+            pendingRemoteUpload: true,
+        };
         return {
             asset: creationImageAsset({ title: file.name, uploaded, metadata: { source: "create-upload", fileName: file.name } }),
             attachment: creationAttachmentFromImage(file, uploaded),
@@ -525,6 +543,7 @@ export default function CreatePage() {
                 addAsset(creationImageAsset({ title: file.name, uploaded: event.image, metadata: { source: "create-upload", fileName: file.name } }));
             }
             releaseImagePreview(storageKey, previewUrl);
+            void deleteStoredImages([storageKey]).catch((error) => console.warn("参考图片本地缓存清理失败", error));
             unsubscribe();
             referenceUploadUnsubscribersRef.current.delete(storageKey);
         });
@@ -537,11 +556,21 @@ export default function CreatePage() {
         if (!next.length) return [];
         const settled = await Promise.allSettled(next.map(async (file) => {
             const { asset } = await uploadCreationAsset(file);
-            return asset ? addAsset(asset) : "";
+            return asset ? { id: addAsset(asset), pending: asset.status === "draft" } : null;
         }));
-        const assetIds = settled.flatMap((entry) => entry.status === "fulfilled" && entry.value ? [entry.value] : []);
+        const successful = settled.flatMap((entry) => entry.status === "fulfilled" && entry.value ? [entry.value] : []);
+        const assetIds = successful.map(({ id }) => id).filter(Boolean);
+        const pendingCount = successful.filter(({ pending }) => pending).length;
         const failed = settled.filter((entry) => entry.status === "rejected");
-        if (assetIds.length) toast.success(`${assetIds.length} 个素材已上传到素材库并自动选中`);
+        if (assetIds.length) {
+            const remoteCount = assetIds.length - pendingCount;
+            const message = pendingCount && remoteCount
+                ? `${remoteCount} 个素材已上传，${pendingCount} 个素材已保存在本机，生成或同步时上传`
+                : pendingCount
+                    ? `${pendingCount} 个素材已保存在本机，生成或同步时上传`
+                    : `${assetIds.length} 个素材已上传到素材库`;
+            toast.success(message);
+        }
         if (failed.length) toast.error(`${failed.length} 个素材上传失败，请重试`);
         return assetIds;
     };
@@ -573,6 +602,7 @@ export default function CreatePage() {
         referenceUploadUnsubscribersRef.current.delete(attachment.storageKey);
         setReferenceUploadActivity(attachment.storageKey, false);
         releaseImagePreview(attachment.storageKey, attachment.previewUrl);
+        void deleteStoredImages([attachment.storageKey]).catch((error) => console.warn("参考图片本地缓存清理失败", error));
     };
 
     const removeAttachment = (id: string) => {
@@ -603,6 +633,10 @@ export default function CreatePage() {
         setDraftReferences([]);
         window.requestAnimationFrame(() => composerFocusRef.current?.focus());
     };
+
+    useEffect(() => () => {
+        attachmentsRef.current.forEach((attachment) => discardReferenceUpload(attachment));
+    }, []);
 
     const reorderAttachments = useCallback((next: CreationAttachment[]) => {
         attachmentsRef.current = next;
@@ -668,6 +702,7 @@ export default function CreatePage() {
                 referenceUploadUnsubscribersRef.current.delete(oldAttachment.storageKey);
                 setReferenceUploadActivity(oldAttachment.storageKey, false);
                 releaseImagePreview(oldAttachment.storageKey, oldAttachment.previewUrl);
+                void deleteStoredImages([oldAttachment.storageKey]).catch((error) => console.warn("参考图片本地缓存清理失败", error));
             }
             stageReferenceImage(file, attachment);
             toast.success("参考图已替换，可继续输入");
@@ -1206,7 +1241,7 @@ export default function CreatePage() {
             categoryLabels={{ ...creationAssetCategoryLabels, ...externalAssetSources.categoryLabels }}
             folders={externalAssetSources.folders}
             initialSelectedIds={attachments.flatMap((item) => item.id.startsWith("asset:") ? [item.id.slice(6)] : item.id.startsWith("external:") ? [item.id] : [])}
-            upload={{ accept: creationUploadAccept(mode), description: mode === "text" ? "支持图片、视频、音频和常用文档；媒体会保存到素材库" : `支持图片${mode === "video" ? "、视频和音频" : ""}，上传后保存到素材库`, onUpload: uploadLibraryAssets, external: { accept: "image/*", description: "写入当前 Eagle 文件夹；Eagle 当前支持图片文件", onUpload: (files, folderId) => externalAssetSources.uploadExternalFiles(files, folderId) } }}
+            upload={{ accept: creationUploadAccept(mode), description: mode === "text" ? "支持图片、视频、音频和常用文档；图片先保存到本机素材库，生成或同步时上传" : `支持图片${mode === "video" ? "、视频和音频" : ""}；图片先保存到本机，生成或同步时上传`, onUpload: uploadLibraryAssets, external: { accept: "image/*", description: "写入当前 Eagle 文件夹；Eagle 当前支持图片文件", onUpload: (files, folderId) => externalAssetSources.uploadExternalFiles(files, folderId) } }}
             onClose={() => setLibraryOpen(false)}
             onConfirm={handleLibrarySelect}
         /></Suspense> : null}

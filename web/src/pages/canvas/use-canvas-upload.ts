@@ -14,7 +14,7 @@ import { fitNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size"
 import { CANVAS_UPLOAD_ACCEPT, createFileUploadPlaceholder, uploadNodeType, uploadPercent } from "@/lib/canvas/canvas-file-upload";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { uploadMediaFile } from "@/services/file-storage";
-import { createImageStorageKey, releaseImagePreview, resolveImageUrl, stageLocalImageUpload, subscribeLocalImageUpload, uploadImage, type UploadedImage } from "@/services/image-storage";
+import { createImageStorageKey, deleteStoredImages, releaseImagePreview, resolveImageUrl, stageLocalImageUpload, subscribeLocalImageUpload, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getProjectUnit } from "@/services/api/projects";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
@@ -159,11 +159,13 @@ export function useCanvasUpload({
         const currentNode = nodesRef.current.find((item) => item.id === nodeId && item.metadata?.storageKey === storageKey);
         if (!currentNode) {
             releaseImagePreview(storageKey, previewUrl);
+            void deleteStoredImages([storageKey]).catch((error) => console.warn("画布图片本地缓存清理失败", error));
             return;
         }
         const uploadedNode: CanvasNodeData = { ...currentNode, metadata: { ...currentNode.metadata, ...imageMetadata(image) } };
         setNodes((current) => current.map((item) => item.id === nodeId && item.metadata?.storageKey === storageKey ? uploadedNode : item));
         releaseImagePreview(storageKey, previewUrl);
+        void deleteStoredImages([storageKey]).catch((error) => console.warn("画布图片本地缓存清理失败", error));
         void persistMediaNode(uploadedNode);
     }, [nodesRef, persistMediaNode, setNodes]);
     const observeCanvasImageUpload = useCallback((nodeId: string, storageKey: string, previewUrl: string) => {
@@ -252,6 +254,7 @@ export function useCanvasUpload({
                 imageUploadUnsubscribersRef.current.get(original.id)?.unsubscribe();
                 imageUploadUnsubscribersRef.current.delete(original.id);
                 releaseImagePreview(original.metadata.storageKey, original.metadata.content);
+                void deleteStoredImages([original.metadata.storageKey]).catch((error) => console.warn("画布图片本地缓存清理失败", error));
             }
             setNodes((current) => replaceId ? current.map((item) => item.id === id ? node : item) : [...current, node]);
             selectInsertedNode(id, "close");
