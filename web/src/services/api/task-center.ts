@@ -537,10 +537,11 @@ async function taskTextStreamHTTPError(response: Response) {
 
 function taskWaitTimeoutMs(task?: GenerationTask) {
     const type = task?.type || "";
-    // 等待上限必须不小于后端同类任务的执行超时（分镜 20 分钟、视频 120 分钟，见后台
+    // 等待上限必须不小于后端同类任务的执行超时（分镜 20 分钟、视频 180 分钟，见后台
     // 资源与策略），否则长任务会在前端被判超时、消息显示失败，而后端其实还在跑并最终成功。
+    // 上游排队高峰会公告"预计等待 2 小时"，所以视频留出比超时更宽的余量。
     if (type.includes("storyboard")) return 25 * 60 * 1000;
-    if (type.includes("video")) return 125 * 60 * 1000;
+    if (type.includes("video")) return 185 * 60 * 1000;
     if (type.includes("image")) return 10 * 60 * 1000;
     if (type.includes("text") || type.includes("audio")) return 12 * 60 * 1000;
     return 10 * 60 * 1000;
