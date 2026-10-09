@@ -134,6 +134,47 @@ func TestEnrichAPICallLogReadsChatCompletionStreamUsage(t *testing.T) {
 	}
 }
 
+func TestEnrichAPICallLogUsesChatCountersWhenResponsesAliasesAreZero(t *testing.T) {
+	log := &model.ApiCallLog{Capability: "text", Path: "/v1/chat/completions"}
+	response := []byte(`{"usage":{"input_tokens":0,"output_tokens":0,"prompt_tokens":120,"completion_tokens":10,"total_tokens":130,"prompt_tokens_details":{"cached_tokens":20}}}`)
+	(&Service{}).EnrichAPICallLog(log, response)
+	if !log.UsageAvailable || log.InputTokens != 120 || log.OutputTokens != 10 || log.CachedTokens != 20 {
+		t.Fatalf("Chat Completions usage = %#v, want input=120 output=10 cached=20", log)
+	}
+}
+
+func TestEnrichAPICallLogKeepsResponsesCountersWhenChatAliasesAreZero(t *testing.T) {
+	log := &model.ApiCallLog{Capability: "text", Path: "/v1/responses"}
+	response := []byte(`{"usage":{"input_tokens":31,"output_tokens":11,"prompt_tokens":0,"completion_tokens":0,"total_tokens":42,"input_tokens_details":{"cached_tokens":9}}}`)
+	(&Service{}).EnrichAPICallLog(log, response)
+	if !log.UsageAvailable || log.InputTokens != 31 || log.OutputTokens != 11 || log.CachedTokens != 9 {
+		t.Fatalf("Responses usage = %#v, want input=31 output=11 cached=9", log)
+	}
+}
+
+func TestEstimateCallCostExcludesCachedTokensFromFullPriceInput(t *testing.T) {
+	svc, db := newChannelModelTestService(t)
+	if err := db.AutoMigrate(&model.ModelPricing{}); err != nil {
+		t.Fatal(err)
+	}
+	pricing := model.ModelPricing{
+		ID: "pricing-chat", ChannelID: "channel-chat", Model: "chat-model", Capability: "text", Currency: "USD",
+		InputPerMillionMicros: 1_000_000, OutputPerMillionMicros: 2_000_000, CachedPerMillionMicros: 100_000,
+	}
+	if err := db.Create(&pricing).Error; err != nil {
+		t.Fatal(err)
+	}
+	log := &model.ApiCallLog{
+		ChannelID: "channel-chat", Model: "chat-model", Capability: "text", Billable: true,
+		InputTokens: 1_000, OutputTokens: 50, CachedTokens: 200,
+	}
+	svc.estimateCallCost(log)
+	// 800 uncached input + 100 output + 20 cached input micro-units.
+	if !log.CostAvailable || log.EstimatedCostMicros != 920 {
+		t.Fatalf("estimateCallCost() = %#v, want 920 micros", log)
+	}
+}
+
 func TestEnrichAPICallLogReadsResponsesStreamUsage(t *testing.T) {
 	log := &model.ApiCallLog{Capability: "text", Path: "/v1/responses"}
 	stream := []byte("event: response.output_text.delta\n" +

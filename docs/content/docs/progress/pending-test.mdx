@@ -5,6 +5,12 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## Chat Completions 混合用量字段与缓存成本
+
+- 已修复：当 Chat Completions 响应同时包含零值 `input_tokens` / `output_tokens` 与有效 `prompt_tokens` / `completion_tokens` 时，按请求协议读取后者；Responses 继续优先读取原生字段。成本估算将缓存 Token 从普通输入中扣除，再按缓存单价计费。
+- [x] 用混合字段响应验证同步解析、Responses 隔离及缓存成本计算；后端完整测试通过。
+- [ ] 在真实上游的普通与流式请求中核对请求日志、Token 结算金额和成本。
+
 ## 复制生图节点后节点消失
 
 - 已修复：副本不再继承原节点的 `generationEffectKeys`，避免普通保存把它误判为未确认的生成结果。图片内容、提示词和参考字段仍保留，原节点不受影响。
