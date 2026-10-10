@@ -152,6 +152,12 @@
     padding: 0;
 }
 
+[data-admin-root] .admin-nav-group-items > span,
+[data-admin-root] .admin-sidebar-footer > span {
+    display: block;
+    width: 100%;
+}
+
 [data-admin-root] .admin-nav-link:hover {
     background: var(--admin-nav-hover);
     color: var(--admin-text);
