@@ -551,9 +551,10 @@
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-account { width: 100%; align-items: center; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-checkin { width: 48px; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-storage { width: 40px; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-profile-row { width: 100%; justify-content: center; }
-.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-profile { width: 48px; min-width: 48px; flex: 0 0 48px; margin-inline: auto; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-profile-row { width: 100%; justify-content: center; gap: 4px; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-profile { width: 48px; min-width: 48px; flex: 0 0 48px; }
 .app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-notification-spacer { display: none; }
+.app-user-workspace .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-collapse-toggle.is-collapsed { margin-top: 4px; }
 
 .app-user-workspace .app-workspace-nav-link {
     position: relative;
@@ -712,6 +713,13 @@
 .app-product-overlays button:has(> svg):not(:has(> span)):not(:disabled):active { transform: scale(.92) translateY(0); }
 .app-product-workspace button:has(> svg):not(:has(> span)):focus-visible,
 .app-product-overlays button:has(> svg):not(:has(> span)):focus-visible { outline: 2px solid var(--product-focus-ring); outline-offset: 2px; }
+
+/* 侧栏自绘图标按钮（收起/展开切换等）不套用浮层 accent 光晕，悬浮表现与导航菜单保持一致。 */
+.app-user-workspace .app-workspace-sidebar button:has(> svg):not(:has(> span)):not(:disabled):hover {
+    color: var(--user-ink) !important;
+    background: var(--user-surface-hover) !important;
+    box-shadow: none !important;
+}
 
 /* 列表进入节奏：卡片和图片错开出现，慢网络时仍有内容层次。 */
 .app-product-workspace :is(.product-collection-card, .library-card, .task-grid-card, .task-record-row, .skill-library-card, .plugin-card) { animation: product-card-enter var(--product-enter) var(--product-ease) both; }

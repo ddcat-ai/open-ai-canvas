@@ -33,27 +33,35 @@
 
 [data-admin-root] .admin-sidebar-identity {
     display: flex;
-    height: 56px;
+    min-height: 54px;
     align-items: center;
-    padding: 0 12px;
-    border-bottom: 0;
+    padding: 10px 8px 0;
+}
+
+[data-admin-root] .admin-sidebar-identity > span {
+    display: block;
+    width: 100%;
 }
 
 [data-admin-root] .admin-sidebar-brand-button {
     display: flex;
     min-width: 0;
+    min-height: 38px;
     width: 100%;
     align-items: center;
+    justify-content: center;
     gap: 10px;
-    padding: 4px;
+    padding: 0 7px;
     border: 0;
+    border-radius: 10px;
     background: transparent;
     color: inherit;
-    text-align: left;
+    transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-[data-admin-root] .admin-sidebar-brand-button.is-collapsed {
-    justify-content: center;
+[data-admin-root] .admin-sidebar-brand-button:hover,
+[data-admin-root] .admin-sidebar-brand-button:focus-visible {
+    background: var(--admin-nav-hover);
 }
 
 [data-admin-root] .admin-sidebar-brand-mark {
@@ -123,20 +131,18 @@
 }
 
 [data-admin-root] .admin-nav-collapsed-separator {
-    height: 1px;
-    margin: 8px 10px;
-    background: var(--admin-divider);
+    display: none;
 }
 
 [data-admin-root] .admin-nav-link {
     position: relative;
     display: flex;
-    height: 32px;
+    min-height: 44px;
     align-items: center;
     gap: 10px;
-    padding: 0 8px;
+    padding: 0 12px;
     border: 0;
-    border-radius: var(--admin-radius);
+    border-radius: 8px;
     color: var(--admin-text-secondary);
     font-size: 13px;
     font-weight: 500;
@@ -149,7 +155,16 @@
 
 [data-admin-root] .admin-nav-link.is-collapsed {
     justify-content: center;
+    width: 100%;
+    min-width: 0;
+    margin-inline: 0;
     padding: 0;
+}
+
+[data-admin-root] .admin-nav-group-items > span,
+[data-admin-root] .admin-sidebar-footer-row > span {
+    display: block;
+    width: 100%;
 }
 
 [data-admin-root] .admin-nav-link:hover {
@@ -172,47 +187,76 @@
 }
 
 [data-admin-root] .admin-nav-link svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
     flex: 0 0 auto;
     color: currentColor;
     stroke-width: 1.75;
 }
 
+[data-admin-root] .admin-sidebar.is-collapsed .admin-nav-link svg {
+    width: 18px;
+    height: 18px;
+}
+
 [data-admin-root] .admin-nav-link:focus-visible,
 [data-admin-root] .admin-icon-button:focus-visible,
-[data-admin-root] .admin-sidebar-edge-toggle:focus-visible {
+[data-admin-root] .admin-sidebar-collapse-toggle:focus-visible {
     outline: 2px solid var(--admin-focus);
     outline-offset: 1px;
 }
 
 [data-admin-root] .admin-sidebar-footer {
-    padding: 8px;
-    border-top: 1px solid var(--admin-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px 12px;
+    border-top: 0;
     background: var(--admin-sidebar);
 }
 
-[data-admin-root] .admin-sidebar-edge-toggle {
-    position: absolute;
-    top: 50%;
-    left: calc(var(--admin-sidebar-width) - 11px);
-    z-index: 4;
-    width: 22px;
-    height: 36px;
+[data-admin-root] .admin-sidebar-footer.is-collapsed {
+    padding-inline: 8px;
+}
+
+[data-admin-root] .admin-sidebar-footer-row {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 4px;
+}
+
+[data-admin-root] .admin-sidebar-footer .admin-nav-link {
+    flex: 1 1 auto;
+}
+
+[data-admin-root] .admin-sidebar-collapse-toggle {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
     place-items: center;
-    border: 1px solid var(--admin-border);
-    border-radius: 999px;
-    background: var(--admin-surface);
-    color: var(--admin-text-muted);
-    transform: translateY(-50%);
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--admin-text-secondary);
 }
 
-[data-admin-root] .admin-sidebar-edge-toggle.is-collapsed {
-    left: calc(var(--admin-sidebar-collapsed) - 11px);
-}
-
-[data-admin-root] .admin-sidebar-edge-toggle:hover {
+[data-admin-root] .admin-sidebar-collapse-toggle:hover {
+    background: var(--admin-nav-hover);
     color: var(--admin-text);
+}
+
+[data-admin-root] .admin-sidebar-collapse-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+[data-admin-root] .admin-sidebar-collapse-toggle.is-collapsed {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
 }
 
 [data-admin-root] .admin-page-root,
