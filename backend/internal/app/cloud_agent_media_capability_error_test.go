@@ -29,17 +29,32 @@ func TestCloudAgentMediaCapabilityErrorBecomesCorrectableArgumentError(t *testin
 	}
 }
 
-func TestCloudAgentMediaCapabilityErrorCoversDurationRatioAndResolution(t *testing.T) {
+func TestCloudAgentMediaCapabilityErrorCoversDurationRatioResolutionAndModelChoice(t *testing.T) {
 	for message, field := range map[string]string{
 		"视频时长不在当前模型支持范围内":  "durationSeconds",
 		"画面比例不在当前模型支持范围内":  "size",
 		"输出分辨率不在当前模型支持范围内": "quality",
 		"图片质量不在当前模型支持范围内":  "quality",
+		"当前视频模型不支持该生成模式":   "logicalModelId",
+		"参考素材数量超过当前模型限制":   "logicalModelId",
+		"参考视频时长超过当前模型限制":   "logicalModelId",
+		"图片尺寸宽高必须是 16 的倍数": "size",
 	} {
 		var fieldErr *cloudAgentFieldArgumentError
 		if !errors.As(cloudAgentWrapMediaAdmissionError(BadAuthRequest(message)), &fieldErr) || fieldErr.Field != field {
 			t.Fatalf("%s → %#v, want field %s", message, fieldErr, field)
 		}
+	}
+}
+
+func TestCloudAgentMediaAdmissionFailureMessageKeepsReason(t *testing.T) {
+	message := cloudAgentMediaAdmissionFailureMessage(cloudAgentWrapMediaAdmissionError(BadAuthRequest("已超过本轮视频时长预算")))
+	if !strings.Contains(message, "已超过本轮视频时长预算") || !strings.Contains(message, "未提交生成任务") {
+		t.Fatalf("admission message lost the actionable reason: %q", message)
+	}
+	generic := cloudAgentMediaAdmissionFailureMessage(cloudAgentWrapMediaAdmissionError(errors.New("opaque failure")))
+	if !strings.Contains(generic, "未提交生成任务") || strings.Contains(generic, "opaque failure") {
+		t.Fatalf("unsafe admission detail leaked or missing: %q", generic)
 	}
 }
 

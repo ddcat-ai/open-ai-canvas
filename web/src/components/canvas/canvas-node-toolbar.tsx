@@ -7,7 +7,7 @@ import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { ASSET_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
-import { subscribeCanvasGraphicsViewportPreview } from "@/lib/canvas/canvas-live-viewport";
+import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
@@ -17,7 +17,7 @@ import { producedModelLabel } from "@/lib/canvas/produced-model";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
-import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode, type ViewportTransform } from "@/types/canvas";
+import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode, type Position, type ViewportTransform } from "@/types/canvas";
 import { buildImageToolbarTools } from "./canvas-image-toolbar-tools";
 import { CanvasGridSplitPicker } from "./canvas-grid-split-picker";
 
@@ -163,28 +163,41 @@ export function CanvasNodeToolbar({
         }
         let disposed = false;
         let queued = false;
+        let liveViewport = viewport;
+        let liveDragOffset: Position | null = null;
         let containerRect = container.getBoundingClientRect();
         let toolbarWidth = toolbarRef.current?.offsetWidth || 0;
         let toolbarHeight = toolbarRef.current?.offsetHeight || 44;
         const update = () => {
-            const nodeRect = element.getBoundingClientRect();
-            const preferredLeft = nodeRect.left - containerRect.left + nodeRect.width / 2;
+            // 视口预览帧已经修改了世界层 transform；直接用节点世界坐标计算，
+            // 避免随后读取 getBoundingClientRect() 强制同步布局。
+            const scale = Math.max(liveViewport.k, 0.05);
+            const offsetX = liveDragOffset?.x || 0;
+            const offsetY = liveDragOffset?.y || 0;
+            const nodeLeft = liveViewport.x + (node.position.x + offsetX) * scale;
+            const nodeTop = liveViewport.y + (node.position.y + offsetY) * scale;
+            const nodeWidth = node.width * scale;
+            const preferredLeft = nodeLeft + nodeWidth / 2;
             const halfToolbar = toolbarWidth / 2;
             const canClamp = toolbarWidth > 0 && toolbarWidth <= containerRect.width - 20;
             let left = canClamp ? Math.min(Math.max(preferredLeft, halfToolbar + 10), containerRect.width - halfToolbar - 10) : preferredLeft;
-            const above = nodeRect.top - containerRect.top - 30;
+            const above = nodeTop - 30;
             let top = Math.max(toolbarHeight + 8, Math.min(above, containerRect.height - 8));
-            for (const panel of container.querySelectorAll<HTMLElement>("[data-canvas-node-panel]")) {
-                const panelRect = panel.getBoundingClientRect();
-                const panelLeft = panelRect.left - containerRect.left;
-                const panelRight = panelRect.right - containerRect.left;
-                const panelTop = panelRect.top - containerRect.top;
-                const panelBottom = panelRect.bottom - containerRect.top;
-                if (left + halfToolbar <= panelLeft || left - halfToolbar >= panelRight || top <= panelTop || top - toolbarHeight >= panelBottom) continue;
-                if (panelLeft >= toolbarWidth + 18) left = panelLeft - halfToolbar - 8;
-                else if (containerRect.width - panelRight >= toolbarWidth + 18) left = panelRight + halfToolbar + 8;
-                else if (panelTop >= toolbarHeight + 16) top = panelTop - 8;
-                else if (containerRect.height - panelBottom >= toolbarHeight + 16) top = panelBottom + toolbarHeight + 8;
+            // 交互期只走轻量定位；面板碰撞读取会在 transform 后触发 layout，
+            // 提交完成后的下一次更新再恢复精确避让。
+            if (container.dataset.canvasViewportInteracting !== "true") {
+                for (const panel of container.querySelectorAll<HTMLElement>("[data-canvas-node-panel]")) {
+                    const panelRect = panel.getBoundingClientRect();
+                    const panelLeft = panelRect.left - containerRect.left;
+                    const panelRight = panelRect.right - containerRect.left;
+                    const panelTop = panelRect.top - containerRect.top;
+                    const panelBottom = panelRect.bottom - containerRect.top;
+                    if (left + halfToolbar <= panelLeft || left - halfToolbar >= panelRight || top <= panelTop || top - toolbarHeight >= panelBottom) continue;
+                    if (panelLeft >= toolbarWidth + 18) left = panelLeft - halfToolbar - 8;
+                    else if (containerRect.width - panelRight >= toolbarWidth + 18) left = panelRight + halfToolbar + 8;
+                    else if (panelTop >= toolbarHeight + 16) top = panelTop - 8;
+                    else if (containerRect.height - panelBottom >= toolbarHeight + 16) top = panelBottom + toolbarHeight + 8;
+                }
             }
             if (toolbarRef.current) {
                 toolbarRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`;
@@ -192,7 +205,8 @@ export function CanvasNodeToolbar({
             }
             setAnchor((current) => current?.left === left && current.top === top ? current : { left, top });
         };
-        const scheduleUpdate = () => {
+        const scheduleUpdate = (nextViewport?: ViewportTransform) => {
+            if (nextViewport) liveViewport = nextViewport;
             if (queued || disposed) return;
             queued = true;
             queueMicrotask(() => {
@@ -213,11 +227,16 @@ export function CanvasNodeToolbar({
         resizeObserver.observe(container);
         if (toolbarRef.current) resizeObserver.observe(toolbarRef.current);
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, scheduleUpdate);
+        const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
+            liveDragOffset = preview?.nodeIds.has(node.id) ? { x: preview.x, y: preview.y } : null;
+            scheduleUpdate();
+        });
         window.addEventListener("resize", measure);
         return () => {
             disposed = true;
             resizeObserver.disconnect();
             unsubscribeViewport();
+            unsubscribeDrag();
             window.removeEventListener("resize", measure);
         };
     }, [anchor === null, containerRef, node, viewport.k, viewport.x, viewport.y]);

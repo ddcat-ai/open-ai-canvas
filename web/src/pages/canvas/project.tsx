@@ -1774,7 +1774,9 @@ function CanvasViewportPage() {
 
             try {
                 const content = node.metadata?.content?.trim();
-                const resourceId = resourceIdFromStorageKey(node.metadata?.storageKey);
+                const resourceId = [CanvasNodeType.Image, CanvasNodeType.Video, CanvasNodeType.Audio].includes(node.type as CanvasNodeType)
+                    ? resourceIdFromStorageKey(node.metadata?.storageKey)
+                    : "";
                 // Resource-backed media must use the central access contract. This keeps
                 // copy operations on the configured CDN/OSS URL instead of copying the
                 // platform file endpoint or a stale URL persisted in canvas metadata.

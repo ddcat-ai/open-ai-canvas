@@ -70,8 +70,9 @@ describe("canvas screen-space background", () => {
         for (const viewport of viewports) {
             applyCanvasLiveViewport(container as unknown as HTMLDivElement, viewport, false);
             expect(world.style.transform).toBe(`translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.k / 0.5})`);
-            expect(properties.get("--canvas-live-scale")).toBe(String(viewport.k));
-            expect(properties.get("--canvas-live-inverse-scale")).toBe(String(1 / viewport.k));
+            // 交互期不改继承变量，避免整棵节点子树在每一帧强制重算样式。
+            expect(properties.has("--canvas-live-scale")).toBe(false);
+            expect(properties.has("--canvas-live-inverse-scale")).toBe(false);
             expect(gridWrites).toEqual([]);
         }
         expect(graphics).toEqual(viewports);
@@ -81,6 +82,8 @@ describe("canvas screen-space background", () => {
 
         container.dataset.canvasViewportInteracting = "false";
         applyCanvasLiveViewport(container as unknown as HTMLDivElement, viewports[0]);
+        expect(properties.get("--canvas-live-scale")).toBe("1");
+        expect(properties.get("--canvas-live-inverse-scale")).toBe("1");
         expect(world.style.willChange).toBe("");
         expect(previews).toEqual([viewports[0]]);
         expect(scrolls).toBe(1);

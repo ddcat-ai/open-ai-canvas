@@ -211,6 +211,14 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 	return err
 }
 
+func cloudAgentMediaAdmissionFailureMessage(err error) string {
+	const generic = "工具执行失败，请检查输入或稍后重试"
+	if detail := cloudAgentSafeToolError(err); detail != "" && detail != generic {
+		return "媒体生成未通过准入：" + detail + "；未提交生成任务，请修正后重新发起"
+	}
+	return "媒体生成未通过准入，未提交生成任务；请检查模型、能力和预算后重新发起"
+}
+
 func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cloudAgentRuntime, phase string, submitted, terminal bool, err error) error {
 	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 		if state.CallIndex < 0 || state.CallIndex >= len(state.Calls) {
@@ -251,6 +259,12 @@ func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cl
 			if terminal {
 				message = "媒体任务已提交，但结果处理失败；任务不会自动重试"
 				reason = "media_task_failed"
+			} else {
+				// Admission failures happen before a billable task is submitted. Keep the
+				// concrete safe reason in the terminal event; the old generic sentence
+				// made a correctable parameter/model problem indistinguishable from a
+				// budget or provider rejection.
+				message = cloudAgentMediaAdmissionFailureMessage(err)
 			}
 			current.FailureMessage = truncateRunes(message, 1000)
 			cloudAgentDropInterjections(run.ID, "本轮已结束："+truncateRunes(message, 120), state)

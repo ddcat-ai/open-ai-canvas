@@ -33,6 +33,10 @@ func cloudAgentWrite(name string) bool {
 // 该上限高于正常画布分页读取所需次数，但足以在异常循环继续消耗模型额度前止损。
 const cloudAgentMaxReadToolCallsPerRun = 32
 
+// 同一份缓存结果连续回放达到这个次数时只触发一次软收敛：下一步暂时收起只读工具，
+// 让模型使用已有事实继续回复。这里不直接结束运行，也不把 run 标为 failed。
+const cloudAgentMaxReadReplaysBeforeNudge = 4
+
 func cloudAgentReadToolCacheable(name string) bool {
 	switch name {
 	case "agent_profile_read", "canvas_get_state", "canvas_read_storyboard", "previs_scene_read", "skill_read_file", "model_list":
@@ -53,6 +57,18 @@ func cloudAgentReadToolReadOnly(name string) bool {
 	default:
 		return false
 	}
+}
+
+func cloudAgentToolsWithoutReadTools(tools []map[string]interface{}) []map[string]interface{} {
+	filtered := make([]map[string]interface{}, 0, len(tools))
+	for _, tool := range tools {
+		function, _ := tool["function"].(map[string]interface{})
+		if name := stringValue(function["name"]); cloudAgentReadToolReadOnly(name) || name == "canvas_inspect_image" {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	return filtered
 }
 
 func cloudAgentReadCacheKey(call cloudAgentCall) string {
@@ -141,6 +157,11 @@ func cloudAgentReadToolCached(repo *repository.Repository, userID string, state 
 				cached.ReplayCount = state.ToolReadReplays[key] + 1
 				state.ToolReadReplays[key] = cached.ReplayCount
 				state.ToolReadResults[key] = cached
+				if cached.ReplayCount >= cloudAgentMaxReadReplaysBeforeNudge && !state.ReadLoopNudge {
+					state.ReadLoopNudge = true
+					state.ReadLoopToolName = call.Function.Name
+					state.ReadLoopCount = cached.ReplayCount
+				}
 				if len(cached.Result) == 0 {
 					return nil, errors.New("缓存的 Agent 只读结果无效")
 				}
@@ -164,9 +185,8 @@ func cloudAgentReadToolCached(repo *repository.Repository, userID string, state 
 	if state.ReadToolCalls >= cloudAgentMaxReadToolCallsPerRun {
 		return nil, &cloudAgentReadLoopError{ToolName: call.Function.Name, Count: state.ReadToolCalls + 1, Budget: true, ReasonCode: "read_budget_exceeded"}
 	}
-	// Cache replays are not new reads. Only a cache miss consumes the bounded
-	// read budget; otherwise a model repeating the same skill/page would still
-	// terminate after 32 harmless acknowledgements.
+	// Cache replays have their own soft guard. Only a cache miss consumes the
+	// real-read budget; neither guard terminates the run.
 	state.ReadToolCalls++
 
 	state.readCacheExecution = true

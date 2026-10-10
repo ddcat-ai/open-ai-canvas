@@ -17,6 +17,7 @@ export function CanvasSyncStatus({ projectId, onLoadLatest, onOpenVersions }: { 
     const localPhase = progress?.localPhase;
     const localError = localPhase === "error";
     const localPending = localPhase === "pending";
+    const missingResources = progress?.errorKind === "resources";
     const retryScheduled = cloudError && progress?.message?.includes("自动重试");
     const saving = phase === "pending" || phase === "saving" || phase === "uploading";
     const reconciling = phase === "reconciling";
@@ -41,7 +42,9 @@ export function CanvasSyncStatus({ projectId, onLoadLatest, onOpenVersions }: { 
     const description = conflict
         ? progress?.message || "本地与云端存在冲突，当前编辑内容保持不变。"
         : cloudError
-          ? progress?.message || "本地内容仍然保留，云端暂未确认。"
+          ? missingResources
+              ? "检测到云端缺失素材；可以先保留原始草稿，再用本地版强制覆盖并移除失效素材引用。"
+              : progress?.message || "本地内容仍然保留，云端暂未确认。"
           : localError
             ? progress?.localError || "本地保存没有完成，请立即重试；当前编辑内容保持不变。"
             : reconciling
@@ -140,7 +143,13 @@ export function CanvasSyncStatus({ projectId, onLoadLatest, onOpenVersions }: { 
                     ) : cloudError ? (
                         <div className="canvas-sync-panel__callout">
                             <strong>{retryScheduled ? "本地内容仍在，正在等待重试" : "本地内容仍在，未覆盖云端"}</strong>
-                            <span>{retryScheduled ? "网络恢复后会自动重试；也可以点击“立即重试”。" : "请处理上面的错误后点击“立即重试”；在此之前本地内容不会被覆盖。"}</span>
+                            <span>
+                                {missingResources
+                                    ? "可点击“用本地版强制覆盖云端”；操作前会自动保留本地草稿，失效图片节点会保留布局和提示词。"
+                                    : retryScheduled
+                                      ? "网络恢复后会自动重试；也可以点击“立即重试”。"
+                                      : "请处理上面的错误后点击“立即重试”；在此之前本地内容不会被覆盖。"}
+                            </span>
                         </div>
                     ) : localError ? (
                         <div className="canvas-sync-panel__callout">
@@ -150,19 +159,39 @@ export function CanvasSyncStatus({ projectId, onLoadLatest, onOpenVersions }: { 
                     ) : null}
                     <div className="canvas-sync-panel__actions">
                         {cloudError ? (
-                            <Button
-                                type="primary"
-                                block
-                                icon={<RefreshCw className="size-3.5" />}
-                                loading={busy}
-                                onClick={() =>
-                                    void run(() => retryRemoteUserDataSync(projectId))
-                                        .then(() => setStatusOpen(false))
-                                        .catch(() => undefined)
-                                }
-                            >
-                                立即重试云端同步
-                            </Button>
+                            <>
+                                {!missingResources ? (
+                                    <Button
+                                        type="primary"
+                                        block
+                                        icon={<RefreshCw className="size-3.5" />}
+                                        loading={busy}
+                                        onClick={() =>
+                                            void run(() => retryRemoteUserDataSync(projectId))
+                                                .then(() => setStatusOpen(false))
+                                                .catch(() => undefined)
+                                        }
+                                    >
+                                        立即重试云端同步
+                                    </Button>
+                                ) : null}
+                                {missingResources ? (
+                                    <Button
+                                        type="primary"
+                                        danger
+                                        block
+                                        icon={<UploadCloud className="size-3.5" />}
+                                        loading={busy}
+                                        onClick={() =>
+                                            void run(() => overwriteRemoteCanvasProject(projectId))
+                                                .then(() => setStatusOpen(false))
+                                                .catch(() => undefined)
+                                        }
+                                    >
+                                        修复并强制覆盖云端
+                                    </Button>
+                                ) : null}
+                            </>
                         ) : localError ? (
                             <Button
                                 type="primary"

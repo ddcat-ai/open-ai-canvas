@@ -394,7 +394,7 @@ export function useCanvasProjectLifecycle({
         try { await persistLocalEdits(); } catch { message.error("本地保存失败，请重试"); return false; }
         try {
             const result = await forceOverwriteRemoteCanvasSync(projectId);
-            message.success(result.reboundNodes > 0 ? `已保存，并修复 ${result.reboundNodes} 处媒体与素材的绑定` : "素材关联已核对，画布已保存");
+            message.success(result.clearedResources > 0 ? `已强制保存，移除了 ${result.clearedResources} 个失效素材引用；本地草稿已保留` : result.reboundNodes > 0 ? `已保存，并修复 ${result.reboundNodes} 处媒体与素材的绑定` : "素材关联已核对，画布已保存");
         } catch (error) {
             message.error(`修复并保存失败：${error instanceof Error ? error.message : "未知错误"}`);
             return false;

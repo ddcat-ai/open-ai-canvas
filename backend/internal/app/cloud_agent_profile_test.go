@@ -370,6 +370,37 @@ func TestCloudAgentReadToolCacheReplaysRepeatedIdenticalReads(t *testing.T) {
 	}
 }
 
+func TestCloudAgentReadToolCacheSoftNudgesAfterRepeatedReplay(t *testing.T) {
+	state := &cloudAgentRuntime{Profile: cloudAgentProfileSnapshot{Layers: []AgentProfileLayer{{Scope: model.AgentProfileScopeUser, Content: "固定偏好"}}}}
+	call := cloudAgentCall{ID: "profile-read"}
+	call.Function.Name, call.Function.Arguments = "agent_profile_read", `{"scope":"user"}`
+
+	for index := 0; index < cloudAgentMaxReadReplaysBeforeNudge+1; index++ {
+		if _, err := cloudAgentReadToolCached(nil, "user", state, call); err != nil {
+			t.Fatalf("replay %d failed: %v", index+1, err)
+		}
+	}
+	if !state.ReadLoopNudge || state.ReadLoopToolName != "agent_profile_read" || state.ReadLoopCount != cloudAgentMaxReadReplaysBeforeNudge {
+		t.Fatalf("repeated replay did not trigger a soft nudge: %+v", state)
+	}
+	if state.ReadToolCalls != 1 {
+		t.Fatalf("cached replays must not consume real-read budget: %d", state.ReadToolCalls)
+	}
+}
+
+func TestCloudAgentToolsWithoutReadToolsKeepsWrites(t *testing.T) {
+	tools := []map[string]interface{}{
+		{"function": map[string]interface{}{"name": "canvas_get_state"}},
+		{"function": map[string]interface{}{"name": "model_list"}},
+		{"function": map[string]interface{}{"name": "canvas_apply_ops"}},
+		{"function": map[string]interface{}{"name": "ask_user"}},
+	}
+	filtered := cloudAgentToolsWithoutReadTools(tools)
+	if len(filtered) != 2 || stringValue(filtered[0]["function"].(map[string]interface{})["name"]) != "canvas_apply_ops" || stringValue(filtered[1]["function"].(map[string]interface{})["name"]) != "ask_user" {
+		t.Fatalf("soft read guard removed non-read tools: %#v", filtered)
+	}
+}
+
 func TestCloudAgentCanvasWriteInvalidatesOnlyCanvasReadResults(t *testing.T) {
 	state := &cloudAgentRuntime{
 		ToolReadResults: map[string]cloudAgentCachedToolResult{

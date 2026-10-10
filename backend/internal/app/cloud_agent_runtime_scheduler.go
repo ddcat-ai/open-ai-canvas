@@ -364,6 +364,7 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		return s.failCloudAgent(run, &state, fmt.Sprintf("达到 %d 次模型调用上限，本轮已停止", stepLimit))
 	}
 	cloudAgentDrainInterjections(run.ID, &state)
+	softReadGuard := state.ReadLoopNudge
 	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
 	// 它必须在压缩判定之前跑：图片是最贵的一类内容，先移出再评估 token 压力才有意义。
 	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, nil); changed {
@@ -414,6 +415,13 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 	}
 	if tokens > contextBudget.InputBudgetTokens {
 		return s.failCloudAgent(run, &state, cloudAgentContextBudgetMessage(contextBudget))
+	}
+	if softReadGuard {
+		// 只对紧接着的一次模型请求暂时收起只读工具。运行仍保持 running，
+		// 下一步模型可以回复、提问或执行有实际变化的写操作。
+		state.ReadLoopNudge = false
+		state.ReadLoopToolName = ""
+		state.ReadLoopCount = 0
 	}
 	req := CreateTaskRequest{ProjectID: state.Request.CanvasID, Type: "canvas_text", Operation: "cloud_agent_step", Prompt: state.Request.Prompt, Model: state.Request.Model, LogicalModelID: state.Request.LogicalModelID, Input: input}
 	return s.enqueueCloudAgentTask(run, &state, req, nil)

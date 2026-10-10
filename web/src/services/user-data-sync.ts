@@ -25,10 +25,11 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
-import { repairMissingCanvasAssets, repairMissingCanvasVideoPreviews, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
+import { repairMissingCanvasAssets, collectCanvasMediaAssetIds, rebindInconsistentCanvasAssets, type CanvasAssetRebindResult } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 import { applyAgentCanvasPatch, mergeAgentCanvasEditor, mergeThreeWayValue, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
-import { collectLocalMediaKeys, ensureRemoteResourceReferences } from "./user-data-sync-media";
+import { collectLocalMediaKeys, ensureRemoteResourceReferences, restoreRemoteTextNodeContents } from "./user-data-sync-media";
+import { clearMissingCanvasResourceIdsForOverwrite, repairMissingResourcesForOverwrite } from "./canvas-missing-resources";
 
 export { numberValue } from "./user-data-sync-media";
 
@@ -118,7 +119,7 @@ export async function loadCanvasProjectForEditing(id: string, options: { latest?
         let remote: CanvasProject;
         try {
             const knownRemote = verifiedProjects.has(id) ? acknowledgedProjects.get(id) : undefined;
-            remote = (await getRemoteCanvasProject(id, knownRemote)).project;
+            remote = await restoreRemoteTextNodeContents((await getRemoteCanvasProject(id, knownRemote)).project);
         } catch (error) {
             if (epoch !== sessionEpoch) throw new Error("账号已切换，请重新打开画布");
             const local = useCanvasStore.getState().openProject(id);
@@ -193,7 +194,7 @@ export async function refreshCanvasAfterAgent(id: string) {
     return withRemoteUserDataSyncExclusive(async () => {
         if (!activeRemoteUserId) throw new Error("请先登录再刷新 Agent 画布结果");
         const knownRemote = verifiedProjects.has(id) ? acknowledgedProjects.get(id) : undefined;
-        const { project } = await getRemoteCanvasProject(id, knownRemote);
+        const project = await restoreRemoteTextNodeContents((await getRemoteCanvasProject(id, knownRemote)).project);
         if (epoch !== sessionEpoch) throw new Error("账号已切换");
         const current = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
         const baseline = acknowledgedProjects.get(id);
@@ -729,7 +730,13 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
     await waitForRemoteProjectLoads();
     if (syncPromise) {
         syncQueued = true;
-        await syncPromise;
+        try {
+            await syncPromise;
+        } catch (error) {
+            // A failed automatic save must not cancel a later explicit repair.
+            if (!options.force && !options.repairMissingResources) throw error;
+        }
+        if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止旧会话保存");
         assertNoConflict();
         // The in-flight drain may have started before this explicit repair/force
         // request. Re-enter after it settles so the user's intent is not lost.
@@ -762,16 +769,12 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[] |
     }
 }
 
-/**
- * 修复媒体与素材的绑定，再按素材先于画布的顺序保存。
- * 素材修复可采用远端素材基线；画布始终携带原始 revision，不能绕过版本校验。
- */
 export async function overwriteRemoteCanvasProject(projectId: string) {
     if (!projectId.trim()) throw new Error("缺少画布 ID，无法覆盖云端");
-    await saveRemoteUserDataNow({ projectId, force: true });
+    return forceOverwriteRemoteCanvasSync(projectId);
 }
 
-export async function forceOverwriteRemoteCanvasSync(projectId?: string): Promise<CanvasAssetRebindResult> {
+export async function forceOverwriteRemoteCanvasSync(projectId?: string): Promise<CanvasAssetRebindResult & { clearedResources: number }> {
     const epoch = sessionEpoch;
     if (!activeRemoteUserId) throw new Error("尚未建立云端同步会话，请登录后重试");
     requireRemoteUserDataBaseline();
@@ -780,7 +783,8 @@ export async function forceOverwriteRemoteCanvasSync(projectId?: string): Promis
         if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止修复保存");
         requireRemoteUserDataBaseline();
         const selectedProjectIds = projectId === undefined ? undefined : new Set([projectId]);
-        await repairMissingCanvasVideoPreviews(selectedProjectIds);
+        if (projectId !== undefined && !useCanvasStore.getState().openProject(projectId)) throw new Error("画布不存在，无法覆盖云端");
+        const clearedResources = await repairMissingResourcesForOverwrite(selectedProjectIds);
         if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止修复保存");
         const projects = useCanvasStore.getState().projects;
         const claimedIds = [...collectCanvasMediaAssetIds(selectedProjectIds ? projects.filter((project) => selectedProjectIds.has(project.id)) : projects)];
@@ -794,9 +798,23 @@ export async function forceOverwriteRemoteCanvasSync(projectId?: string): Promis
         const merged = [...remoteAssets, ...useAssetStore.getState().assets.filter((asset) => !remoteById.has(asset.id))];
         const result = rebindInconsistentCanvasAssets(parseAssetRecordList(merged), selectedProjectIds);
         await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
-        return result;
+        return { ...result, clearedResources };
     });
-    await saveRemoteUserDataNow({ projectId, force: true, repairMissingResources: true });
+    try {
+        await saveRemoteUserDataNow({ projectId, force: true, repairMissingResources: true });
+    } catch (error) {
+        // The server is authoritative about resource locators. Retry once with
+        // the IDs returned in its diagnostic in case the client did not yet
+        // recognize a newly introduced locator field.
+        if (!(error instanceof ApiError) || error.reason !== "canvas_history_resources_missing") throw error;
+        const ids = Array.isArray(error.details?.resourceIds)
+            ? error.details.resourceIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+            : [];
+        if (!ids.length) throw error;
+        await clearMissingCanvasResourceIdsForOverwrite(projectId === undefined ? undefined : new Set([projectId]), new Set(ids));
+        await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+        await saveRemoteUserDataNow({ projectId, force: true, repairMissingResources: true });
+    }
     return rebind;
 }
 

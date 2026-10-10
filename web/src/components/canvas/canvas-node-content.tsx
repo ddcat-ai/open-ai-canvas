@@ -13,6 +13,7 @@ import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-refer
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { isResourceUrl } from "@/services/api/resources";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
@@ -59,7 +60,8 @@ export type CanvasNodeContentProps = {
 
 export function CanvasNodeContent(props: CanvasNodeContentProps) {
     if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.reduceMediaEffects} />;
-    // Keep the image renderer mounted while node LOD changes. Visibility still gates first load.
+    // Preserve the decoded image across LOD changes; only its surrounding
+    // controls and batch previews become lighter in overview mode.
     if (props.node.type === CanvasNodeType.Image && props.renderLOD !== "full" && (props.node.metadata?.content || props.node.metadata?.storageKey)) {
         return <ImageNodeContent {...props} />;
     }
@@ -98,7 +100,7 @@ function CanvasNodeShellContent({ node, theme }: { node: CanvasNodeData; theme: 
 
 function CanvasNodePreviewContent({ node, theme }: { node: CanvasNodeData; theme: CanvasTheme }) {
     if (node.type === CanvasNodeType.Image && (node.metadata?.content || node.metadata?.storageKey)) {
-        return <CachedResourceImage storageKey={node.metadata?.storageKey} src={node.metadata?.previewContent || node.metadata?.content} alt={node.title} loading="lazy" decoding="async" draggable={false} className="pointer-events-none block size-full select-none object-contain" fallback={<CanvasNodeShellContent node={node} theme={theme} />} />;
+        return <CachedResourceImage storageKey={node.metadata?.storageKey} src={node.metadata?.previewContent || node.metadata?.content} variant="thumbnail" alt={node.title} loading="lazy" decoding="async" draggable={false} className="pointer-events-none block size-full select-none object-contain" fallback={<CanvasNodeShellContent node={node} theme={theme} />} />;
     }
     if (node.type === CanvasNodeType.Video && (node.metadata?.content || node.metadata?.storageKey)) {
         return <CanvasVideoPreviewImage node={node} alt={node.title} loading="lazy" decoding="async" draggable={false} className="pointer-events-none block size-full select-none object-contain" fallback={<CanvasNodeShellContent node={node} theme={theme} />} />;
@@ -218,6 +220,11 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
     const fontSize = canvasTextFontSize(node.width, node.height, node.metadata?.fontSize);
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.65)}px`, color: theme.node.text, boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
+    const rawContent = node.metadata?.content || "";
+    const prompt = node.metadata?.prompt || "";
+    // 兼容已经被旧同步逻辑写成资源 URL 的文本节点：上传文本时 prompt
+    // 保存的是原文，可在远端修复完成前先恢复展示与编辑内容。
+    const textContent = isResourceUrl(rawContent) && prompt && !isResourceUrl(prompt) ? prompt : rawContent;
 
     return (
         <div className="flex h-full w-full flex-col overflow-hidden pt-10">
@@ -226,7 +233,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     ref={textareaRef}
                     className="thin-scrollbar m-0 block h-full w-full resize-none appearance-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent px-4 pb-4 pt-0 font-mono outline-none select-text"
                     style={textStyle}
-                    value={node.metadata?.content || ""}
+                    value={textContent}
                     references={mentionReferences}
                     highlightLabels={false}
                     onChange={(value) => onContentChange(node.id, value)}
@@ -247,7 +254,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                 />
             ) : (
                 <div className="thin-scrollbar block h-full w-full select-text overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 pb-4 pt-0 font-mono" style={textStyle} onWheel={(event) => event.stopPropagation()}>
-                    {node.metadata?.content || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
+                    {textContent || <span style={{ color: theme.node.placeholder }}>双击编辑文字</span>}
                 </div>
             )}
         </div>
