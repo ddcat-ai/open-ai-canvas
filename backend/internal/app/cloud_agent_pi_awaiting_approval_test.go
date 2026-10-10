@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +29,93 @@ func approvalPauseRoot(t *testing.T) (*Service, *gorm.DB, *CloudAgentRun) {
 		t.Fatal(err)
 	}
 	return s, db, root
+}
+
+func TestCloudAgentPiSessionModelApprovalPause(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		invalidPurpose bool
+	}{
+		{"approval wait is a pause", false},
+		{"unrelated model error remains a failure", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, db, root := approvalPauseRoot(t)
+			run, state := agentInterjectionState(t, s, root.ID)
+			approvalPauseStage(t, s, db, run, &state)
+			before, _ := agentInterjectionState(t, s, root.ID)
+			payload := approvalPauseModelPayload(t, []map[string]any{{"role": "user", "content": "继续"}})
+			if tc.invalidPurpose {
+				payload["purpose"] = json.RawMessage(`"invalid-purpose"`)
+			}
+			type callbackResult struct {
+				status int
+				paused bool
+				err    error
+			}
+			callback := make(chan callbackResult, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request cloudAgentPiProcessRequest
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					callback <- callbackResult{err: err}
+					http.Error(w, "invalid fixture request", 500)
+					return
+				}
+				raw, _ := json.Marshal(payload)
+				req, _ := http.NewRequestWithContext(r.Context(), "POST", request.BridgeURL+"/model", strings.NewReader(string(raw)))
+				req.Header.Set("Authorization", "Bearer "+request.BridgeToken)
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					callback <- callbackResult{err: err}
+					http.Error(w, "fixture callback failed", 500)
+					return
+				}
+				defer resp.Body.Close()
+				var result map[string]any
+				err = json.NewDecoder(resp.Body).Decode(&result)
+				callback <- callbackResult{status: resp.StatusCode, paused: result["pause"] == true, err: err}
+				w.Header().Set("Content-Type", "application/x-ndjson")
+				if resp.StatusCode != 200 {
+					_ = json.NewEncoder(w).Encode(map[string]any{"event": "runtime_error", "message": fmt.Sprint(result["error"])})
+					return
+				}
+				_, _ = fmt.Fprintln(w, `{"event":"settled"}`)
+			}))
+			defer server.Close()
+			t.Setenv("YINGCE_AGENT_URL", server.URL)
+			t.Setenv("YINGCE_AGENT_TOKEN", strings.Repeat("t", 32))
+			t.Setenv("YINGCE_AGENT_BRIDGE_HOST", "127.0.0.1")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := s.runCloudAgentPiSession(ctx, "user", root.ID)
+			select {
+			case got := <-callback:
+				if got.err != nil {
+					t.Fatal(got.err)
+				}
+				if tc.invalidPurpose {
+					if err == nil || got.status != 422 || got.paused {
+						t.Fatalf("real model error was suppressed: err=%v callback=%+v", err, got)
+					}
+				} else if err != nil || got.status != 200 || !got.paused {
+					t.Fatalf("approval became a runtime failure: err=%v callback=%+v", err, got)
+				}
+			default:
+				t.Fatalf("runtime callback not reached: %v", err)
+			}
+			after, stateAfter := agentInterjectionState(t, s, root.ID)
+			if after.Status != "waiting_approval" || stateAfter.Approval == nil || stateAfter.Approval.ID != "ap-1" || after.Revision != before.Revision || after.FailureMessage != "" {
+				t.Fatalf("pending approval was changed: status=%s revision=%d failure=%q", after.Status, after.Revision, after.FailureMessage)
+			}
+			var steps int64
+			if err := db.Model(&model.Task{}).Where("agent_run_id = ? AND operation = ?", root.ID, cloudAgentStepOperation).Count(&steps).Error; err != nil {
+				t.Fatal(err)
+			}
+			if steps != 0 {
+				t.Fatalf("approval wait scheduled %d model tasks", steps)
+			}
+		})
+	}
 }
 
 // approvalPauseStage 把运行摆进等待审批状态：挂起的工具调用与审批一一对应
