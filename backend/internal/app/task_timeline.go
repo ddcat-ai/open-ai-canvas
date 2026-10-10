@@ -29,6 +29,10 @@ const whisperLangEnv = "CANVAS_WHISPER_BASE_URL"
 // 结果写回任务（segments + srt）。任何失败都落到任务终态并携带用户可读原因。
 func (w *taskWorkerCoordinator) processTimelineTranscription(task *model.Task, ctx context.Context) error {
 	s := w.service
+	// 排队期间剪辑工作台可能已被停用，执行前按任务所属用户重新检查。
+	if err := s.RequirePluginForUser(task.UserID, PluginEditorShell); err != nil {
+		return w.failTimelineTask(task, "转写失败", err.Error())
+	}
 	baseURL := strings.TrimSpace(os.Getenv(whisperLangEnv))
 	if baseURL == "" {
 		return w.failTimelineTask(task, "转写失败", "未配置本地转写服务：请设置 CANVAS_WHISPER_BASE_URL 指向 whisper.cpp 服务")
@@ -205,6 +209,9 @@ func (s *Service) CreateTimelineTranscriptionTask(userID string, req TimelineTra
 	if err := s.RequireFeature(FeatureTimelineTranscription); err != nil {
 		return nil, err
 	}
+	if err := s.RequirePluginForUser(userID, PluginEditorShell); err != nil {
+		return nil, err
+	}
 	resourceID := strings.TrimSpace(req.ResourceID)
 	if resourceID == "" {
 		return nil, BadAuthRequest("必须指定待转写媒体")
@@ -265,6 +272,9 @@ type timelineRenderResult struct {
 func (s *Service) CreateTimelineRenderTask(userID string, req TimelineRenderCreateRequest) (*model.Task, error) {
 	if s.IsDraining() {
 		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
+	}
+	if err := s.RequirePluginForUser(userID, PluginEditorShell); err != nil {
+		return nil, err
 	}
 	plan := buildRenderPlan(req.Timeline)
 	if !plan.HasMedia {
