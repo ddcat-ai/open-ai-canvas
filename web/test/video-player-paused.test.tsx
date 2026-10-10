@@ -3,13 +3,13 @@ import { expect, test } from "bun:test";
 test("只有画布紧凑播放器增加独立入口，并使用原播放器的播放按钮", async () => {
     const source = await Bun.file(new URL("../src/components/video-player.tsx", import.meta.url)).text();
     expect(source).toMatch(/compactControls && \([\s\S]*?<PlayButton className="canvas-video-paused-play vds-button"/);
-    expect(source).toContain('aria-label={`播放 ${title}`}');
+    expect(source).toContain("aria-label={`播放 ${title}`}");
     expect(source).toContain('aria-hidden="true"');
 });
 
 test("中央按钮按暂停或结束状态显示，不依赖自动隐藏的控件栏", async () => {
     const css = await Bun.file(new URL("../src/components/video-player.css", import.meta.url)).text();
-    expect(css).toContain(':not([data-fullscreen]):is([data-paused], [data-ended]) .canvas-video-paused-play');
+    expect(css).toContain(":not([data-fullscreen]):is([data-paused], [data-ended]) .canvas-video-paused-play");
     expect(css).toMatch(/\.canvas-video-player \.canvas-video-paused-play\s*\{\s*display: none;/);
     const source = await Bun.file(new URL("../src/components/video-player.tsx", import.meta.url)).text();
     expect(source).toContain('event.target.closest(".canvas-video-paused-play")');
