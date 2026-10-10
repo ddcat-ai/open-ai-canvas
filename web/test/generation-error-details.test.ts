@@ -22,3 +22,22 @@ describe("safe upstream error details", () => {
         expect(generationErrorMessage("模型服务请求失败；上游：https://private.test")).toBe("网络异常。");
     });
 });
+
+describe("status-derived reasons", () => {
+    const withReason = (message: string, reason: string) => Object.assign(new Error(message), { reason });
+    test("keeps the readable backend message", () => {
+        const cases: Array<[string, string]> = [
+            ["conflict", "执行控制权已过期，请在当前页面重新接管"],
+            ["failed_precondition", "任务中断，请恢复任务后继续。"],
+            ["forbidden", "该插件已停用，请联系管理员。"],
+            ["quota_exceeded", "账号素材数量已达到 100 个上限"],
+        ];
+        for (const [reason, message] of cases) expect(generationErrorMessage(withReason(message, reason))).toBe(message);
+    });
+    test("falls back to the generic copy for empty or technical messages", () => {
+        expect(generationErrorMessage(withReason("", "conflict"))).toBe("请求状态已发生变化，请刷新后再试。");
+        expect(generationErrorMessage(withReason("internal_server_error", "internal"))).toBe("系统暂时无法完成生成，请稍后再试。");
+        expect(generationErrorMessage(withReason("错误 https://private.test", "forbidden"))).toBe("当前账号没有执行此操作的权限。");
+        expect(generationErrorMessage(withReason("模型服务暂时不可用（HTTP 500）", "internal"))).toBe("系统暂时无法完成生成，请稍后再试。");
+    });
+});
