@@ -119,7 +119,7 @@ export function AgentHeader({
                 </div>
             </div>
             <div className="agent-header-actions flex items-center gap-0.5" style={{ color: theme.node.muted }}>
-                <Button type="text" shape="circle" icon={<RotateCcw className="size-4" />} onClick={onResetLayout} aria-label="恢复 Agent 紧凑窗口" title="恢复默认窗口大小和位置" className="hidden sm:inline-flex" />
+                <Button type="text" shape="circle" icon={<RotateCcw className="size-4" />} onClick={onResetLayout} aria-label="恢复 Agent 默认窗口" title="恢复默认位置并拉满可用高度" className="hidden sm:inline-flex" />
                 <Button type="text" shape="circle" icon={<Download className="size-4" />} loading={exporting} onClick={onExport} aria-label="导出 Agent 调试记录" title="导出对话、工具参数、审批和错误（分享前请检查隐私）" />
                 <Button type="text" shape="circle" icon={<MessageSquarePlus className="size-4" />} onClick={onNew} aria-label="新建对话" title="新建对话" />
                 <Button type="text" shape="circle" icon={<History className="size-4" />} onClick={onHistory} aria-label="历史对话" title="历史对话" />
