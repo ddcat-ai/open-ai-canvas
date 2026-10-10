@@ -103,11 +103,6 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
-    const [videoReady, setVideoReady] = useState(false);
-
-    useEffect(() => {
-        setVideoReady(false);
-    }, [url]);
 
     useEffect(() => {
         const box = playerBoxRef.current;
@@ -142,14 +137,15 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
 
     return (
         <div ref={playerBoxRef} className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[var(--node-radius)] bg-black">
-            {preview ? (
+            {/* 播放地址解析后由播放器显示真实视频；独立的 canplay 状态不能再遮挡媒体和控件。 */}
+            {preview && !url ? (
                 <CanvasVideoPreviewImage
                     node={node}
                     alt={`${node.title || "视频"} 静态预览`}
                     loading="eager"
                     decoding="async"
                     draggable={false}
-                    className={`absolute inset-0 size-full select-none object-contain transition-opacity duration-150 ${videoReady ? "opacity-0" : "opacity-100"}`}
+                    className="absolute inset-0 size-full select-none object-contain"
                     loadingFallback={<LoaderCircle className="size-5 animate-spin text-white/55" />}
                     fallback={<Video className="size-7 text-white/40" />}
                 />
@@ -157,7 +153,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                 <MediaLoadingState icon={<LoaderCircle className="size-5 animate-spin" />} label={loading ? "正在加载视频" : "视频资源不可用"} />
             ) : null}
             {url ? (
-                <div className={`relative z-[1] transition-opacity duration-150 ${videoReady ? "opacity-100" : "opacity-0"}`} style={{ width: fitWidth, height: Math.round(fitHeight) }}>
+                <div className="relative z-[1]" style={{ width: fitWidth, height: Math.round(fitHeight) }}>
                     <VideoPlayer
                         key={url}
                         src={url}
@@ -170,7 +166,6 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                         className="h-full w-full rounded-[var(--node-radius)] bg-black"
                         dataCanvasNoZoom
                         compactControls
-                        onCanPlay={() => setVideoReady(true)}
                         onError={onError}
                     />
                     {activeEntry && activeEntry.text.trim() ? <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} /> : null}
