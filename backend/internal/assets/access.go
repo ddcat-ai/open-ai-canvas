@@ -144,6 +144,13 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		// A redirect cannot enforce our attachment and sandbox response headers.
 		access.Delivery = DeliveryProxy
 		access.FallbackReason = "attachment_required"
+	} else if options.Purpose == PurposeDownload && setting.Delivery.CDNAuthMode == "public" && storage.CDNEnabled(setting) {
+		// Public COS/OSS CDN deployments can forward this response override to
+		// their origin. Keeping it on the download-only URL lets images and
+		// videos continue to use their normal inline CDN URL for display.
+		access.URL, err = storage.PublicCDNObjectDownloadURL(setting, resource.ObjectKey, options.DownloadName)
+		access.Delivery = DeliveryCDN
+		access.ExpiresAt = nil
 	} else if options.Purpose == PurposeDownload {
 		// Cross-origin `a[download]` is only advisory. A real browser download must
 		// therefore be enforced by the object store response itself. Downloads use

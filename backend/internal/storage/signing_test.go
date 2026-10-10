@@ -76,6 +76,28 @@ func TestOneShotURLsKeepCurrentTimeSigningWithoutCacheOverride(t *testing.T) {
 	}
 }
 
+func TestPublicCDNObjectDownloadURLForcesAttachmentOnlyOnDownloadURL(t *testing.T) {
+	setting := Settings{CDNBaseURL: "https://media.example.com"}
+	value, err := PublicCDNObjectDownloadURL(setting, "users/u-1/image/test image.png", "下载图片.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Host != "media.example.com" || parsed.Path != "/users/u-1/image/test image.png" || !strings.HasPrefix(parsed.Query().Get("response-content-disposition"), "attachment") {
+		t.Fatalf("download URL = %q", value)
+	}
+	inline, err := OssCDNObjectURL(setting.CDNBaseURL, "users/u-1/image/test image.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsedInline, err := url.Parse(inline); err != nil || parsedInline.RawQuery != "" {
+		t.Fatalf("inline CDN URL = %q, %v", inline, err)
+	}
+}
+
 func mustParseQuery(t *testing.T, raw string) url.Values {
 	t.Helper()
 	parsed, err := url.Parse(raw)
