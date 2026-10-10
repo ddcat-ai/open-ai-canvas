@@ -175,6 +175,7 @@ export function CanvasViewport({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.code !== "Space") return;
             if (event.target instanceof Element && event.target.closest("input,textarea,select,button,[contenteditable='true']")) return;
+            if (event.target instanceof Element && event.target.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
             event.preventDefault();
             spacePressedRef.current = true;
             setIsSpacePressed(true);
@@ -264,6 +265,11 @@ export function CanvasViewport({
         // AntD 浮层通过 Portal 渲染到节点 DOM 之外；若不统一排除，会被误判为画布空白并捕获指针。
         if (target?.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
+        // 框选会阻止浏览器默认的焦点转移。空白点击必须先主动接回焦点，
+        // 否则焦点仍留在播放器上，之后的空格会继续切换视频播放状态。
+        if (isBackgroundClick && (event.button === 0 || event.button === 1)) {
+            event.currentTarget.focus({ preventScroll: true });
+        }
         const isTouch = event.pointerType === "touch";
 
         const pointerIntent = resolveCanvasPointerIntent({
@@ -449,6 +455,7 @@ export function CanvasViewport({
     return (
         <div
             ref={containerRef}
+            tabIndex={-1}
             data-canvas-viewport
             data-canvas-pan-state={isPanning ? "grabbing" : isSpacePressed || !boxSelectEnabled ? "grab" : undefined}
             className={`relative h-full w-full select-none overflow-hidden touch-none ${isPanning ? "cursor-grabbing" : isSpacePressed || !boxSelectEnabled ? "cursor-grab" : "canvas-cursor-select"}`}
