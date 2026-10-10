@@ -18,6 +18,28 @@
     --video-volume-slider-max-width: 48px;
 }
 
+/* 使用真实媒体状态，而不是控件栏的 idle 状态；暂停或结束后仍保留播放入口。
+   全屏继续使用原有完整控件，避免增加重叠按钮。 */
+.canvas-video-player .canvas-video-paused-play {
+    display: none;
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: calc(var(--canvas-video-control-size) + 12px);
+    height: calc(var(--canvas-video-control-size) + 12px);
+    border-radius: 50%;
+    background: var(--video-volume-bg);
+    color: var(--media-controls-color);
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.canvas-video-player[data-player-variant="compact"]:not([data-fullscreen]):is([data-paused], [data-ended]) .canvas-video-paused-play {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .canvas-video-player [data-media-provider] video {
     width: 100%;
     height: 100%;

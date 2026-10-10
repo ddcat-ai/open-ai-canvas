@@ -26,7 +26,8 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const stageLabel = workflow ? (workflow.stage === "planning" ? "拆解规划中" : `拆解中，共 ${workflow.total} 张图`) : node.metadata?.experimentalLayerPlan?.progress || (taskId ? generationTaskStageLabel(displayTask) : "正在创建任务");
     const elapsed = useTaskElapsed(workflow?.startedAt || node.metadata?.taskCreatedAt);
     return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
+        // 重生成保留旧媒体资源时，节点外壳仍可能是透明的；状态面板必须自行覆盖背景，避免连线透出。
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 rounded-[inherit] px-5 text-center" style={{ background: theme.node.fill, color: theme.node.activeStroke }}>
             {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
             <span className="text-[var(--fs-tiny)] font-semibold">{stageLabel}</span>
             {workflow ? (

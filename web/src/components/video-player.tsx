@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
-import { isVideoProvider, MediaPlayer, MediaProvider, type MediaPlayerInstance, type VideoMimeType } from "@vidstack/react";
+import { isVideoProvider, MediaPlayer, MediaProvider, PlayButton, type MediaPlayerInstance, type VideoMimeType } from "@vidstack/react";
+import { Play } from "lucide-react";
 import { DefaultVideoLayout, defaultLayoutIcons, type DefaultLayoutTranslations } from "@vidstack/react/player/layouts/default";
 import { detectVideoAudioTrack, detectVideoAudioTrackFromUrl } from "@/lib/video-poster";
 import "@vidstack/react/player/styles/base.css";
@@ -210,6 +211,13 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
             onKeyDown={stopCanvasControlInteraction}
         >
             <MediaProvider />
+            {compactControls && (
+                // 激活节点不代表正在播放。中央入口独立于自动隐藏的控件栏，
+                // 由播放器的暂停/结束状态显示，点击仍使用 Vidstack 的播放控制。
+                <PlayButton className="canvas-video-paused-play vds-button" aria-label={`播放 ${title}`}>
+                    <Play className="size-5 fill-current" aria-hidden="true" />
+                </PlayButton>
+            )}
             <DefaultVideoLayout
                 icons={layoutIcons}
                 translations={zhCNTranslations}
@@ -234,8 +242,9 @@ export function VideoPlayer({ src, mimeType, title = "视频", className, brandC
 }
 
 function isPlayerControlEvent(event: { target: EventTarget | null; nativeEvent?: Event }) {
+    if (event.target instanceof Element && event.target.closest(".canvas-video-paused-play")) return true;
     if (event.target instanceof Element && event.target.closest(".vds-controls,.vds-menu-items")) return true;
-    return event.nativeEvent?.composedPath?.().some((item) => item instanceof Element && Boolean(item.closest(".vds-controls,.vds-menu-items"))) || false;
+    return event.nativeEvent?.composedPath?.().some((item) => item instanceof Element && Boolean(item.closest(".vds-controls,.vds-menu-items,.canvas-video-paused-play"))) || false;
 }
 
 function isVolumeControlEvent(event: { target: EventTarget | null; nativeEvent?: Event }) {
