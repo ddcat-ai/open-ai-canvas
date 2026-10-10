@@ -475,6 +475,8 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 
 工作区左侧「创作」下方新增灵感页 `/inspirations`，展示全部提示词，按来源、分类和创作类型筛选，支持搜索、收藏、视图切换和分页；自建灵感支持新建、编辑、删除和 JSON 导入导出，改动只存在本地。
 
+生产 Nginx 对 `/inspirations` 与 `/inspirations/` 精确返回 SPA 入口，支持直接打开和刷新；`/inspirations/*.json` 继续提供静态目录数据，避免页面路径与同名目录冲突而跳转到容器端口。
+
 外部提示词由 `web/scripts/import-inspirations.mjs` 同步：`awesome-seedance`、好好学 AI 提示词库、YouMind 的两个姊妹库。脚本同时为画廊池生成本地缩略图（560px、webp、约 35KB 一张）。上游封面平均 400KB～700KB，直接引用一屏 11 张要拉 5MB 以上，换成本地缩略图后约 400KB。
 
 画廊池走 `public/inspirations/gallery-pool.json` 运行时拉取，不打进首屏 JS：几百条提示词正文压在包里是白背的，而这份数据只服务画廊一处。池子按来源等距抽取以横跨各分类，并且只收描述非空的条目，保证卡片三行版式不缺角；这些条目仍留在全量目录里供灵感页展示。
