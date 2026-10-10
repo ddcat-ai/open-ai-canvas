@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,7 +68,7 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if bridge.Model == nil || bridge.Tool == nil || bridge.Event == nil {
 		return errors.New("Agent bridge handlers are incomplete")
 	}
-	runtimeDir, err := RuntimeDir()
+	provision, err := Ensure(ctx)
 	if err != nil {
 		return err
 	}
@@ -84,8 +83,8 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if err != nil {
 		return fmt.Errorf("encode Agent runtime request: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "node", "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
-	cmd.Dir = runtimeDir
+	cmd := exec.CommandContext(ctx, provision.NodePath, "--max-old-space-size="+nodeMemoryMB(), filepath.Join(provision.Dir, "agent-runtime.mjs"))
+	cmd.Dir = provision.Dir
 	cmd.Stdin = strings.NewReader(string(payload))
 	// 环境变量白名单：只传 Node 运行所需的最少变量。HOME 与会话、工作目录
 	// 由运行时自己建的临时隔离目录提供，不使用服务端数据目录。
@@ -201,20 +200,9 @@ func BridgeCall(w http.ResponseWriter, r *http.Request, expectedToken string, ha
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+// RuntimeDir 只解析 pi 运行时目录。进程启动前的完整供给（含 node）走 Ensure。
 func RuntimeDir() (string, error) {
-	candidates := []string{os.Getenv("CANVAS_PI_RUNTIME_DIR"), "/app/backend/agent-runtime/pi"}
-	if _, source, _, ok := runtime.Caller(0); ok {
-		candidates = append(candidates, filepath.Clean(filepath.Join(filepath.Dir(source), "../../../agent-runtime/pi")))
-	}
-	for _, candidate := range candidates {
-		if candidate == "" {
-			continue
-		}
-		if info, err := os.Stat(filepath.Join(candidate, "agent-runtime.mjs")); err == nil && !info.IsDir() {
-			return candidate, nil
-		}
-	}
-	return "", errors.New("Agent runtime files are missing; set CANVAS_PI_RUNTIME_DIR")
+	return defaultProvisioner().resolveRuntimeDir(context.Background())
 }
 
 const (

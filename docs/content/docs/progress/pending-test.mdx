@@ -2969,6 +2969,106 @@ SSE 现在按 revision 变化发送紧凑快照，无变化只 heartbeat；客�
 
 - [ ] 在管理员后台存储资源页分别输入完整/部分用户名、昵称、邮箱和用户 ID，确认返回同一用户资源；再叠加类型、状态和存储位置筛选，确认分页与清空筛选正常。
 
+## 桌面壳：本地服务静态承载与孤儿退出（2026-10-04）
+
+- 已实现：后端新增 `CANVAS_STATIC_DIR`，非空时静态提供前端构建产物，SPA 深链回退 `index.html`，非导航类缺失资源如实 404，`/api` 路由与短代理语义不变；目录缺失或无入口时启动失败而不静默降级。
+- 已实现：后端新增 `CANVAS_EXIT_WITH_PARENT` / `CANVAS_PARENT_PID` 孤儿看门狗，父进程消失时走优雅关闭；缺少合法进程号时启动失败。
+- 自动验证：静态承载与看门狗专项测试通过（含目录穿越、写入方法、`/api` 不被劫持、看门狗仅在父进程退出后触发等用例）；`go vet` 与 `gofmt` 无输出；Windows 交叉编译与 vet 通过。
+- 已实现：新增 `apps/desktop/` Tauri 2 壳（启动页、回环空闲端口、`tauri-plugin-shell` sidecar、`/api/health/startup` 健康门、托盘、单实例、日志与偏好），窗口加载回环地址，不引入令牌身份、不放宽 CORS。
+- 已实现：打包链路 `scripts/stage-assets.sh`（`CGO_ENABLED=1` 构建 sidecar，目标平台与当前系统不一致时明确报错而不是产出假二进制）、`generate-icons.sh`、`build-dmg.sh`。
+- 自动验证：`cargo check --all-targets` 无 error/warning、`cargo test` 14 项通过；`bunx --bun tauri build --bundles app` 从零产出 `影策.app`（内含 1556 个前端 assets 与 65.9M 的 sidecar）；实机启动后壳自选端口 57364，健康门 200、`/projects/42/canvas` 深链 200、日志出现「本地服务已就绪，导航窗口」，结束壳后包内 sidecar 一并退出。
+
+仍待真实环境验收：
+
+- [ ] 用带 Developer ID 的凭据签名后完成公证与 DMG 产出，从 DMG 安装启动：启动页→健康门→主页链路正常，关闭窗口进托盘、重启本地服务、退出后无残留后端进程。
+- [ ] 壳被强制结束（如活动监视器强杀）后，后端应在一秒级内自行退出，不留下占用端口的孤儿进程。
+- [ ] 分享链接在桌面壳下可打开，并确认地址指向本次运行的本地端口。
+- [ ] Windows 平台的构建、sidecar 启动与无控制台窗口行为。
+- [ ] 真机验证前端静态资源的 MIME、缓存头和 wasm/媒体资源的实际加载。
+
+## 桌面壳窗口超出屏幕：按可用工作区自适应（2026-10-04）
+
+- 已修复：`tauri.conf.json` 与 `prefs.rs` 里写死的 1440×900 让窗口宽高都溢出屏幕（2408×1506 Retina 的逻辑桌面只有 1408×881，可用工作区 1408×803）。现在启动与恢复尺寸统一裁到当前显示器可用工作区的 92% 再居中；最小尺寸 960×640 在工作区更小时随之下调；窗口改为裁剪完成后才显示（`visible: false` + `show()`），不再先闪一下超屏窗口。
+- 已修复：ADR-0010 「窗口」一条的原文（「默认 1440×900，最小尺寸按设计文档的桌面断点实测确定」）两处都不成立——`docs/design/workspace-shell-design.mdx` 没有桌面断点，1440×900 是浏览器验收视口尺寸。ADR 已改为自适应口径并留修正记录，实施文档新增「窗口尺寸」小节。
+- 已实现：`prefs::WindowPrefs::fit_to` / `prefs::min_size` 为纯函数（有单测）；`lib.rs::monitor_work_area` 取工作区，拿不到显示器或平台返回 0 时不裁剪、不下调。
+- 已实现：macOS 未签名产物的放行步骤写入 `apps/desktop/README.md` 与根 `README.md`：`xattr -dr com.apple.quarantine` 去下载隔离、`codesign --force --deep --sign -` 重做 ad-hoc 签名，并如实说明 `spctl` 仍为 `rejected`（没有 Developer ID 就不会通过）。
+- 自动验证：`cargo check --all-targets` 无 error/warning、`cargo test` 18 项通过（新增 4 项：小屏裁剪、换屏后恢复受限、极小工作区同步下调下限、工作区缺失或为 0 时不裁剪）。
+- 实测：改完源码后开发会话自动重建重启，壳日志为 `窗口尺寸 1280×800 超出可用工作区 1408×803，调整为 1280×738`；同一数值与独立问 Finder 得到的桌面 `0,0,1408,881`（扣菜单栏与 Dock 后即 1408×803）一致。
+- 实测（macOS 26.5.1）：`xattr -dr com.apple.quarantine` 确实清除隔离属性；`codesign --force --deep --sign -` 把仅链接期签名的 bundle 变为完整 ad-hoc 签名（`Sealed Resources version=2 rules=13 files=1628`，`codesign --verify --deep` 返回 `valid on disk`，标识符从 `yingce_desktop-<hash>` 变为 `ai.ddcat.open-ai-canvas`）。
+
+仍待真实环境验收：
+
+- [ ] 关闭现存 `tauri dev` 会话后，从打包出的 `影策.app` 启动一次，确认窗口尺寸同样落在工作区内（打包产物与 dev 共用同一份配置与代码，但尚未单独看过）。
+- [ ] 在外接大屏上调整窗口尺寸后关闭，拔掉外接屏重启，确认恢复出的窗口不超出小屏（本次只验证了首次启动的裁剪）。
+- [ ] 把 `影策.app` 经压缩包或 AirDrop 传到另一台机器，按 README 步骤去隔离 + 重签名后确认能打开（本次只在本机验证了命令行为）。
+
+## 桌面壳打包版：智能体运行时未随包供给（2026-10-05）
+
+背景：用户反馈「打包后发现桌面版配置好模型后无法使用，创作页与画布智能体都不行，web 端可用」。探针实测后确认两层原因，第二层是壳的供给缺口。
+
+- 已定位（第一层）：桌面实例后端模型库为空（`model_channels` / `channel_models` / `logical_models` 均 0），用户配置的模型是浏览器本地个人渠道（`scope=user`）。Agent 只接受后端受管文本模型，前端对个人渠道回空 `channelId`，`/api/agent/runs` 直接 400「请选择后端受管文本模型」。直发探针复现：HTTP 400、`latency_ms=0~5`，与界面报错一致；换真实个人渠道 ID 得到「指定的渠道不存在」。web 端可用是因为它的后端有受管系统渠道。
+- 已定位（第二层，关键）：即使补上合法的系统渠道与能力配置，`/api/agent/runs` 回到 200、run 也会在 `1~2 秒`后落库为 `failed`（「Agent 执行中断」）。三种探针逐一复现：不设 `CANVAS_PI_RUNTIME_DIR` → `Agent runtime files are missing`；设了但 PATH 取 GUI 默认值 → `exec: "node": executable file not found in $PATH`；两者都补齐 → run 走到真实模型调用（探针渠道用占位 Key，报「模型服务鉴权失败」属预期），链路打通。
+- 已核实（机制）：`stage-assets.sh` 用 `-trimpath` 构建，`internal/agent/runtime` 的三个候选路径在打包产物里都落不到仓库的 `backend/agent-runtime/pi`；`tauri.conf.json` 的 `bundle.resources` 只映射 `resources/web`，壳也不注入 `CANVAS_PI_RUNTIME_DIR`、不随包提供 node。ADR-0010 写的「唯一子进程是 Go 后端」漏掉了后端自己拉起的 node 运行时。
+- 已记录：结论与复现命令效果写入 `docs/plans/desktop-shell-implementation.md` §5。
+- 已决策：运行时供给方式采用「pi 随包 + node 按需下载」。pi 运行时由 `stage-assets.sh` 打成 `resources/pi-runtime.tar.gz`（约 38M）经 `bundle.resources` 随包携带，壳解析出资源路径后注入 `CANVAS_PI_ARCHIVE`；node 由后端从官方 dist 下载并校验 `SHASUMS256.txt` 的 sha256，校验不过即失败。两者都先落到同级临时目录再原子改名，失败不留半成品。
+- 已决策：Agent 的模型来源策略保持现有边界不放宽，改为加引导；浏览器本地个人渠道仍不参与 Agent。
+- 已实现：新增 `backend/internal/agent/runtime` 的供给层（`provision.go` / `node_dist.go` / `download.go` / `extract.go`）：解析优先级为显式 `CANVAS_PI_RUNTIME_DIR` → 解包 `CANVAS_PI_ARCHIVE` → 仓库内 `backend/agent-runtime/pi`；node 依次尝试 `CANVAS_NODE_BIN` → PATH → 下载安装。`Run` 在拉起子进程前调一次 `Ensure`，不再依赖编译期路径。
+- 已实现：壳侧 `config.rs` 解析 `pi-runtime.tar.gz` 资源并写入 `ManagedBoot.pi_archive`，`server.rs` 注入 `CANVAS_PI_ARCHIVE`；同时把上次成功监听的端口记进 `desktop.json`，下次启动优先复用，被占用才另选空闲回环端口——修复了端口漂移导致浏览器本地模型配置与画布缓存换 origin 丢失的问题。
+- 已实现：`cloud_agent.go` 的 400 文案改为直接点明修法（「请选择后端受管文本模型：Agent 在后端执行，不接受浏览器自定义密钥或上游地址；请在「后台管理 → 模型渠道」添加启用文本能力的渠道」）；前端两处引导：发送前拦住无受管渠道的情况并给出可读错误；输入区上方在未配到受管渠道时长期显示一条提示（管理员带「打开模型渠道配置」入口，其他人提示联系管理员），可关闭。
+- 已记录：机制分析、临时绕行与修法写入 `docs/plans/desktop-shell-implementation.md` §5/§6；`apps/desktop/README.md` 新增「Agent 运行时供给」小节。
+- 自动验证：`go test ./internal/agent/runtime/... ./internal/handler/... ./internal/platform/... ./cmd/server/...` 全部 ok；`go vet`、`gofmt -l` 无输出；前端 `bunx --bun tsc --noEmit` 无输出；`cargo check --all-targets` 无 error/warning、`cargo test` 22 项通过；`bunx --bun tauri build --bundles app` 重新产出 `影策.app`（225M，内含 `pi-runtime.tar.gz` 39,771,799 B 与新 sidecar 与新前端）。
+- 实测（打包产物，PATH 里没有 node）：用干净 PATH（`/usr/bin:/bin:/usr/sbin:/sbin`）从包内启动 `canvas-server`，`/api/agent/runs` HTTP 200，日志依次为「首次运行，正在解包 pi 运行时：<包内>/Contents/Resources/pi-runtime.tar.gz」→「pi 运行时已解包：…/runtimes/pi/52a56cc3fffd」→「未找到 node，正在安装 node-v22.22.2-darwin-arm64.tar.gz」→「node 已安装：…/runtimes/node/v22.22.2/bin/node」，随后 run 走到真实模型调用（探针渠道是占位 Key，报「模型服务鉴权失败」属预期）。两层供给缺口均已闭合。
+- 已修复（打包版无法启动，第二处硬缺口）：
+  - 现象：从 Finder/`open` 启动打包产物，壳报「启动失败：本地服务在就绪前退出」，子进程退出码 1，日志只剩一行「未找到官方 plugin-packages 目录；请设置 CANVAS_OFFICIAL_PLUGIN_DIR」。
+  - 根因：壳拉起后端的进程工作目录是 `/`，而后端 `officialPluginPackageDir()` 的候选是 `CANVAS_OFFICIAL_PLUGIN_DIR` → 写死的 `/app/plugin-packages`（生产容器命中）→ 从工作目录逐级向上找 `plugin-packages`；三条路在打包形态下全落空。`newPluginRuntime` 把引导内置协议插件当启动必需，错误经 `main` 的 `log.Fatal` 退出。`tauri dev` 与仓库内跑 sidecar 都从仓库目录启动，能向上找到 `plugin-packages`，所以开发路径一直看不出这个缺口。
+  - 定位实测：包内 sidecar 在 cwd 为 `/`、`/tmp`、`$HOME` 时一律退出码 1；cwd 为仓库时正常；cwd 为 `/tmp` 但显式给 `CANVAS_OFFICIAL_PLUGIN_DIR` 正常；指向一个空目录也能正常启动。
+  - 修法：`stage-assets.sh` 把 `plugin-packages/*.yingce-plugin`（只取顶层包文件）暂存到 `resources/plugin-packages`，经 `bundle.resources` 随包携带；`config.rs` 新增 `resolve_plugin_dir`，`server.rs` 注入 `CANVAS_OFFICIAL_PLUGIN_DIR`。源码方式运行不注入，后端仍从工作目录向上找，行为不变。
+  - 实测（重打包后从窗口启动）：日志依次为「本地服务进程已拉起」→「backend listening」→「本地服务已就绪，导航窗口」，无插件目录警告；`/api/health/ready`、`/`、`/canvas/123` 均 200；`plugin_registry.json` 有 104 条，含 `a6api` / `adobe-firefly` / `agnes-image` / `official-payment-*` 等官方包；窗口就绪后后端记录到来自 127.0.0.1 的 `POST /api/ai/models` 200。
+  - 体积代价：`影策.app` 225M → 310.62 MiB（`plugin-packages` 101 个包 / 86M，其中 `official-payment-*` 五个占 85M 左右）。
+  - 已记录：`docs/plans/desktop-shell-implementation.md` §7、ADR-0010 修正记录、`apps/desktop/README.md` 新增「官方协议插件供给」小节。
+  - 已应验（端口复用）：连续两次启动打包版，第二次日志为「沿用上次端口 50491」，`desktop.json` 里 `port: 50491`。
+
+仍待真实环境验收：
+
+- [ ] 从重打包的 `影策.app`（现已能启动并导航到窗口）在界面里配好系统渠道，创作页对话入口与画布智能体各发一次消息，确认 run 能跑完（供给链路已用包内 `canvas-server` + 干净 PATH 验证过，但还没从窗口点下去跑完整对话）。
+- [x] 端口复用已应验：连续两次启动打包版，第二次日志为「沿用上次端口 50491」，`desktop.json` 里 `port: 50491`。仍待确认的是界面里已配置的模型在重启后是否仍在（这取决于用户是否已在窗口里配过）。
+
+## 受管模型价格档与协议缺失的提示补全（2026-10-05）
+
+背景：用户反馈桌面版「配置好模型后创作页与画布智能体都不能用」，先被判断为运行时/打包缺陷；截图与库内数据比对后确认是配置层，且前端提示不够指向性。
+
+- 已核实（模型未发布到创作端的原因）：`channel_models.price_configured = 0`、`channel_model_price_tiers` 只有一条 `enabled = 0` / `price_configured = 0` 的档；`sanitizeChannelModel` 的 `Available` 取 `len(publicTiers) > 0`，于是系统渠道模型进不了前端受管目录（`systemChannelModelChannels` 只保留 `available`），工作台只能回退到浏览器本地的个人渠道。
+- 已核实（不是价格问题）：`price_validation.go` 明确「0 表示免费」，真正让 `PTIER_000001` 失效的只有 `enabled = 0`。该值是模型导入的默认值（`ImportAdminChannelModels` 落 `Enabled: false, PriceConfigured: false`），只有「积分定价」里的「可供用户使用」开关会把它翻成 1。
+- 已核实（前端协议拦截比后端严，本轮按「只改提示」处理，不放宽拦截）：后端对空 `interfaceType` 是显式放行的（`provider_protocol.go` 返回 nil），文本与图片都还有遗留路径（`provider_text.go` 的 `/responses` → 404 时回退 `/chat/completions`；`provider_image.go` 的 OpenAI Images 遗留分支）。但 `generation-task.ts` 的 `assertBackendRuntimeConfigured` 对「无 `channelId` 且无 `interfaceType`」直接抛错，而用户渠道（`scope=user`）的 `channelId` 恒为空、协议要在「模型与能力」里手点一次，于是 baseUrl/key/模型名都填对了也提交不了。
+- 已实现：`generation-task.ts` 两处报错文案改为点名操作路径（「设置 → 个人渠道 → 模型与能力」中为该模型选择请求协议），不再只说「模型设置」。
+- 已实现：画布智能体引导条（`agent-model-source-hint.tsx`）的管理员分支改成一步到位的操作路径（「后台管理 → 模型渠道」编辑文本模型 →「积分定价」开启价格档的「可供用户使用」，单价 0 即免费），按钮文案改为「去开启价格档」；非管理员分支不变。
+- 已实现：后台模型编辑器「积分定价」页在「模型已启用但没有开启可供用户使用的价格档」时显示告警（`channel-model-editor.tsx`），避免再次出现「以为配好了其实没发布」。
+- 已决策（未采纳的方向）：不为个人渠道的模型自动补标准协议。协议会参与模型能力过滤（`filterModelsByCapability` 优先取协议能力），按模型名推断能力一旦判错会让模型从下拉里消失，代价高于让用户点一次协议。
+- 已决策（智能体边界不放宽）：Agent 的每次模型调用都转成平台文本任务走计费与渠道路由（见 `cloud_agent_pi_model.go` 文件头），预算要落到渠道模型的价格档上结算；个人渠道只有浏览器本地密钥、没有可结算的价格实体，因此继续要求后端受管渠道，只做引导不做兼容。
+- 自动验证：`tsc --noEmit` 退出码 0、`eslint` 对三个改动文件退出码 0、`gofmt -l` / `go build ./...` 通过；全仓 grep 确认没有测试或代码断言被改掉的旧文案。
+
+仍待验收：
+
+- [ ] 从 `影策.app` 里按新提示走一遍：后台「模型渠道」为 `deepseek-flash` 开启「可供用户使用」并保存 → 回「模型设置」重选系统渠道的 `deepseek-flash`（模型名不带「（渠道名）」后缀的那个）→ 创作页对话入口与画布智能体各发一次消息。首次触发智能体要解包 pi 运行时的十几秒属正常。
+- [ ] 若走个人渠道：在「设置 → 个人渠道 → 模型与能力」里为该模型选一次请求协议，再确认创作页可以提交。
+- [x] 上述前端文案改动已在 2026-10-05 的 DMG 重打包中带上：包内 `web/assets` 已命中新文案，旧文案已消失（见下节实测）。
+
+## macOS DMG 的拖拽安装形态（2026-10-05）
+
+背景：需要一份「能直接拖拽安装」的桌面产物。此前 `build-dmg.sh` 出的 DMG 里只有 `影策.app`、没有 `/Applications` 拖拽目标；`--skip-sign` 路径又完全跳过签名，产出的是仅链接期签名（linker-signed）的 bundle，拖进 `/Applications` 后会报「已损坏，无法打开」。
+
+- 已实现（`scripts/build-dmg.sh`）：新增 `make_dmg`，从暂存目录出包，DMG 根下同时放 `影策.app` 与 `Applications -> /Applications` 软链；Developer ID 路径与 `--skip-sign` 路径共用它。
+- 已实现（`sign_adhoc`）：`--skip-sign` 不再交出装完打不开的包——先签 `Contents/MacOS` 下的嵌套可执行文件（`yingce-desktop`、`canvas-server`），再 `codesign --force --deep --sign -` 签外层 bundle，最后 `codesign --verify --deep --strict` 自检。
+- 已实现（`apps/desktop/README.md`）：「macOS：安装与放行」改为先讲从 DMG 拖拽安装；说明 `--skip-sign` 已做完整 ad-hoc 签名，手工重签（原步骤 2）只在绕开脚本直接跑 `tauri build` 时才需要。
+- 实测（`bash scripts/build-dmg.sh --skip-sign` 全链路复跑）：前端 `built in 9.92s`，sidecar 与 `pi-runtime.tar.gz`（39M）与 101 个插件包重新暂存；`影策.app` 310.62 MiB；`影策.dmg` 221M。
+- 实测（镜像布局与签名）：挂载后卷内为 `Applications -> /Applications` 与 `影策.app`；`codesign -dv` 为 `Identifier=ai.ddcat.open-ai-canvas`、`flags=0x2(adhoc)`、`Sealed Resources version=2 rules=13 files=1730`，`codesign --verify --deep --strict` 报 `valid on disk` 与 `satisfies its Designated Requirement`；`xattr -r` 只有 `com.apple.provenance`、无 `com.apple.quarantine`。`spctl -a -vv` 仍会 rejected（ad-hoc 不是可信签名，预期）。
+- 已核实（包内前端是新的）：包内 `web/assets` 命中「创作端不会展示此模型」（`channels-page-*.js`）、「个人渠道 → 模型与能力」（`generation-task-*.js`）、「去开启价格档」（`project-*.js`），旧文案「当前模型未选择可用请求协议」已无命中。02:12 那次打包的产物仍是改动前的旧前端，本轮重打包才带上。
+
+仍待验收：
+
+- [ ] 从 DMG 拖进 `/Applications` 后双击启动，确认真机不出现 Gatekeeper 拦截且窗口能跑到就绪（本轮只验证了镜像布局、签名与包内容，没有真机拖装并启动）。
+- [ ] Developer ID 签名 + 公证路径（`APPLE_SIGNING_IDENTITY` + `notarytool`）本轮未跑，`make_dmg` 在该路径下的改动只在 `--skip-sign` 路径验证过。
+
 ## 平台技能策展
 
 SQLite 与 HTTP recorder 已验证；PostgreSQL 16／17、前端构建及浏览器中的开关、分类维护、市场／技能库筛选、分页与明暗主题待验证。

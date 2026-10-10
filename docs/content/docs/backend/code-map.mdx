@@ -120,7 +120,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | --- | --- | --- |
 | `service` | HTTP 稳定导入面 | **已变薄**：仅 `aliases_*.go` / `doc.go`（4 个文件） |
 | `app` | 组合根、跨域编排、尚未拆出的业务实现 | **承接原 service 实现**：`provider_*`、`task_*`、`project_*`、OSS/配额、渠道、管理后台等 |
-| `platform` | 运行时策略、功能开关、限流/并发协调、worker 与读缓存 | **已抽出**：`internal/platform`；`app/platform_bridge.go` 委托 |
+| `platform` | 运行时策略、功能开关、限流/并发协调、worker、读缓存与父进程看门狗 | **已抽出**：`internal/platform`；`app/platform_bridge.go` 委托 |
 | `kernel` | 结构化错误、错误码、ID 与通用字符串/配额换算 | **已抽出**：`internal/kernel` |
 | `generation` | 协议注册表和生成域边界 | **部分抽出**：`internal/generation` 提供协议注册入口；`provider_*` 执行簇仍在 `app` |
 | `outbound` | 出站 URL/Header 校验、SSRF 防护、HTTP 客户端 | **已抽出**：`internal/outbound` |
@@ -159,6 +159,13 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 - 旧版 `canvas-agent/` 和 Codex App/MCP 插件已删除；Agent 运行统一由后端云端控制面承载。
 - `docs/content/docs/`：产品、操作、开发和进度文档。
 - `docker-compose.local.yml`：本地前后端编排；`nginx.conf`：生产静态资源和 API 代理。
+
+## 桌面壳与本地服务
+
+- 桌面壳与 `web/`、`backend/` 平级：`apps/desktop/`（Tauri 2）。启动页在 `apps/desktop/splash/`，Rust 侧在 `apps/desktop/src-tauri/src/`，打包链路在 `apps/desktop/scripts/`。
+- 静态承载：后端 `CANVAS_STATIC_DIR` 静态提供前端构建产物，SPA 深链回退入口、拒绝越界路径、不改变 `/api` 语义：`backend/internal/handler/static_site.go`。
+- 孤儿看门狗：`backend/internal/platform/parent_watch.go`（POSIX 与 Windows 各一条实现），在 `cmd/server/main.go` 中按 `CANVAS_EXIT_WITH_PARENT` / `CANVAS_PARENT_PID` 开启，壳被强杀时后端自行退出。
+- 壳与后端的完整环境变量契约、逐项状态和验收方式见 `docs/plans/desktop-shell-implementation.md`；形态与边界见 ADR-0010。
 
 ## 修改原则
 

@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 桌面应用图标底图：品牌底色 + 仓库现有标识的放大副本（web/public/logo.svg）。
+       替换正式图标时保持 1024×1024 方形即可，scripts/generate-icons.sh 会重新生成整套尺寸。 -->
+  <rect width="1024" height="1024" rx="230" fill="#0007cd"/>
+  <g transform="translate(256 256) scale(8)" fill="#ffffff">
+    <path d="M6 8H36V16H14V36H28V44H6V8ZM58 20H36V28H50V48H28V56H58V20ZM24 27H40V37H24V27Z"/>
+  </g>
+</svg>

@@ -152,6 +152,22 @@ docker compose -f docker-compose.local.yml up -d --build
 
 前端业务 API 统一经 `web/src/services/api/request.ts` 调用。生产环境由 Nginx 托管前端并代理后端，公网只需暴露 web 入口；SSE 仅在明确的流式路径关闭代理缓冲。
 
+### 桌面壳（`apps/desktop/`）
+
+除浏览器外，仓库还包含一个桌面壳：Tauri 2 壳拉起同一个 Go 后端（sidecar），窗口直接加载本地服务地址（与 API 同源，不改 Cookie 与 CORS 语义）。它是独立构建单元，不与前端共享依赖。
+
+```bash
+cd apps/desktop
+bun install          # 只装 @tauri-apps/cli
+bun run tauri build  # 当前平台产物；需要本机有 CGO 能用的工具链
+```
+
+边界、环境变量、窗口尺寸策略与打包细节见 [`apps/desktop/README.md`](apps/desktop/README.md)。macOS 上未签名版本被 Gatekeeper 拦下时，去掉下载隔离标记即可：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/影策.app"
+```
+
 ## 服务器部署
 
 ### 源码构建（推荐）

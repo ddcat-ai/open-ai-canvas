@@ -1,0 +1,16 @@
+{
+  "name": "yingce-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "影策桌面壳（Tauri 2）。前端包在 web/，本目录只放壳与打包链路。",
+  "scripts": {
+    "tauri": "bunx --bun tauri",
+    "stage": "bash scripts/stage-assets.sh",
+    "icons": "bash scripts/generate-icons.sh",
+    "dmg": "bash scripts/build-dmg.sh"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

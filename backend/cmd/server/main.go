@@ -19,6 +19,7 @@ import (
 	"yingce/backend/internal/database"
 	"yingce/backend/internal/handler"
 	"yingce/backend/internal/logging"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 	"yingce/backend/internal/service"
 	"yingce/backend/internal/updaterclient"
@@ -34,6 +35,11 @@ func main() {
 	logging.Setup(logConfig)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if err := watchParentProcess(ctx, cancel); err != nil {
+		log.Fatal(err)
+	}
 	if err := run(ctx); err != nil {
 		log.Fatal(err)
 	}
@@ -42,6 +48,10 @@ func main() {
 func run(ctx context.Context) error {
 	dataDir := env("CANVAS_BACKEND_DATA_DIR", "data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return err
+	}
+	staticSite, err := staticSiteFromEnv()
+	if err != nil {
 		return err
 	}
 	db, err := database.Open(database.Config{
@@ -121,7 +131,7 @@ func run(ctx context.Context) error {
 	registerSystemStatusRoutes(api, status)
 	handler.RegisterOAuthCallbackRoutes(r, svc)
 	handler.RegisterCanvasAPI(api, svc)
-	r.NoRoute(handler.SystemProxyNoRouteHandler(svc))
+	r.NoRoute(handler.StaticSiteNoRouteHandler(svc, staticSite))
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -140,6 +150,9 @@ func run(ctx context.Context) error {
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpServer.Serve(listener) }()
 	slog.Info("backend listening", "addr", addr)
+	if staticSite != nil {
+		slog.Info("serving frontend static assets", "dir", staticSite.Root())
+	}
 
 	var serveFailure error
 	select {
@@ -215,6 +228,56 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s 必须是正数时长，例如 10m", key)
 	}
 	return parsed, nil
+}
+
+func envInt(key string, fallback int) (int, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s 必须是整数", key)
+	}
+	return parsed, nil
+}
+
+// staticSiteFromEnv 只在显式配置时启用静态承载；未设置等于回到「只提供 API」的既有形态。
+func staticSiteFromEnv() (*handler.StaticSite, error) {
+	dir := strings.TrimSpace(os.Getenv("CANVAS_STATIC_DIR"))
+	if dir == "" {
+		return nil, nil
+	}
+	site, err := handler.NewStaticSite(dir)
+	if err != nil {
+		// 健康门通过后再让窗口拿到全站 404 是更差的失败方式，这里直接快速失败。
+		return nil, fmt.Errorf("CANVAS_STATIC_DIR 配置无效：%w", err)
+	}
+	return site, nil
+}
+
+// watchParentProcess 为桌面壳托管场景启用孤儿看门狗：壳被强杀或崩溃时本地服务自行退出，
+// 否则会留下占用端口与数据目录的孤儿进程。正常退出由壳主动结束子进程，两条路径都需要。
+func watchParentProcess(ctx context.Context, cancel context.CancelFunc) error {
+	enabled, err := envBool("CANVAS_EXIT_WITH_PARENT", false)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return nil
+	}
+	pid, err := envInt("CANVAS_PARENT_PID", 0)
+	if err != nil {
+		return err
+	}
+	if pid <= 0 {
+		return errors.New("CANVAS_EXIT_WITH_PARENT=true 时必须提供正整数 CANVAS_PARENT_PID")
+	}
+	go platform.WatchParent(ctx, pid, platform.ParentWatchInterval, func() {
+		slog.Warn("父进程已退出，本地服务开始退出", "parent_pid", pid)
+		cancel()
+	})
+	return nil
 }
 
 const corsAllowedHeaders = "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Trace-ID, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format, X-Canvas-Upstream-Base-URL"

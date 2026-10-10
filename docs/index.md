@@ -34,10 +34,11 @@
 
 - [编辑器预设插件化实施规格](plans/editor-preset-plugin-implementation.md)：参考 open-vetta 万物皆可插件，把编辑器做成预设插件的分阶段实施计划（SDK v2、命令状态机、8 个 editor 预设插件（含 AI 助手）、后端转写/导出任务、权限执行校验、AI 对话式剪辑），含产品视图、接口草案与文件规划。
 - [编辑器实施 Runbook](plans/editor-implementation-runbook.md)：分步执行计划——M0~M6 里程碑 + 原子步明细（每步改动文件/验证/完成标准）、依赖关系、验证命令速查、高风险步与回退。解决「一次性实施效果差」：每步可验证、可回退、看得见进度。
+- [桌面壳实施文档](plans/desktop-shell-implementation.md)：ADR-0010 的落地细节——壳与本地服务的冻结契约（注入的环境变量、健康门、产物布局与退出语义）、逐项状态与已完成的端到端冒烟记录。
 
 ## 决策记录（`docs/adr/`）
 
-- [ADR-0001：编辑器整合边界](adr/0001-editor-integration-boundary.md)：借鉴 Concat 架构形态但以 TS 时间线状态机为真相源，不移植 Rust 引擎；媒体重活放 Go 后端。
+- [ADR-0001：编辑器整合边界](adr/0001-editor-integration-boundary.md)：借鉴 Concat 架构形态但以 TS 时间线状态机为真相源，不移植 Rust 引擎；媒体重活放 Go 后端。（原「不引入 Tauri/Electron 壳」一条已由 ADR-0010 推翻并取代。）
 - [ADR-0002：编辑命令协议](adr/0002-edit-command-protocol.md)：时间线唯一修改入口为可序列化编辑命令，手势 echo、有界快照撤销、防抖保存。
 - [ADR-0003：预览与导出分层](adr/0003-preview-export-layering.md)：交互近似预览 + 单一滤镜图计划驱动导出，禁止手写第二套滤镜串。
 - [ADR-0004：自动字幕转写服务化](adr/0004-autocaption-transcription-service.md)：转写为 Go 后端异步任务，结果写回字幕轨道。
@@ -46,6 +47,7 @@
 - [ADR-0007：AI 编辑交互](adr/0007-ai-editing-interaction.md)：对话式剪辑作为预设插件——AI 输出受约束命令 JSON（schema 校验 fail-closed），与手势命令同队列同撤销栈；≤3 条直接执行、批量改动 diff 预览待确认。
  - [ADR-0008：自研 UI 组件层与 AntD 替换](adr/0008-ui-component-layer-antd-replacement.md)：`components/ui` 重建为自研组件层（Celadon UI），吸收 dbx 契约形态（族目录+barrel）与 BoardUI 设计深度（语义状态矩阵/复合排版/RAC 原语/动效纪律/agentic 产品块），分阶段替换 AntD（依赖面 180 文件/41 导入）最终脱离；试点画布工具条/节点徽章，唯一实施计划见 [plans/ui-kit-rollout-plan.mdx](plans/ui-kit-rollout-plan.mdx)，活规范见 [plans/ui-design-system.mdx](plans/ui-design-system.mdx)。
 - [ADR-0009：媒体产出模型与选用模型分开记录](adr/0009-produced-model-separate-from-selection.md)：生成成功时冻结产出模型，选用模型继续随下拉变化；角标按当前目录解析展示名。
+- [ADR-0010：桌面壳与本地服务同源承载](adr/0010-desktop-shell-tauri-local-service.md)：桌面壳沿用 Orrery 的 Tauri 2 + 托管本地 sidecar 栈，但前端由同一个本地服务同源提供（新增可选 `CANVAS_STATIC_DIR`），避免跨源 Cookie/ITP 与为桌面另造令牌身份；壳负责空闲端口、健康门、托盘、单实例、孤儿看门狗与自更新。新增与 `web/`、`backend/` 平级的 `apps/desktop/`（含 `src-tauri/`）承载跨平台应用；推翻并取代 ADR-0001「不引入 Tauri/Electron 壳」。
 
 ## 本地协作文档（不随仓库分发）
 

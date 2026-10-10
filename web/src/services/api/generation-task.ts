@@ -145,7 +145,7 @@ export function prepareBackendToolGenerationTask(options: BackendToolGenerationO
             imageKeys.add(key);
         }
     }
-    if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议");
+    if (!logicalModelId && !requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择请求协议：请到「设置 → 个人渠道 → 模型与能力」中为该模型选择请求协议");
     const task: CreateTaskInput = {
         type: "canvas_text",
         operation: "text",
@@ -220,7 +220,7 @@ function assertBackendRuntimeConfigured(config: AiConfig, mode: BackendGeneratio
     if (resolveGenerationWorkflowExecution(config, mode)) return;
     if (logicalModelIDForConfig(config)) return;
     const requestConfig = resolveModelRequestConfig(config, config.model);
-    if (!requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择可用请求协议，请先在模型设置中选择协议插件");
+    if (!requestConfig.channelId && !requestConfig.interfaceType) throw new Error("当前模型未选择请求协议：请在「设置 → 个人渠道 → 模型与能力」中为该模型选择请求协议后重试");
 }
 
 function throwIfAborted(signal?: AbortSignal) {
