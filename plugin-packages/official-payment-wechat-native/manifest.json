@@ -24,6 +24,13 @@
   "configuration": {
     "fields": [
       {
+        "name": "displayName",
+        "type": "string",
+        "label": "前台支付名称",
+        "required": false,
+        "description": "积分中心展示的支付名称；留空则使用默认名称。"
+      },
+      {
         "name": "publicBaseUrl",
         "type": "url",
         "label": "服务器公网地址",

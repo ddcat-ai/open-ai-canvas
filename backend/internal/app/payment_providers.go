@@ -243,6 +243,15 @@ func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentPro
 	view.Configured = strings.TrimSpace(config.ConfigCipher) != ""
 	view.Enabled = view.Enabled && config.Enabled
 	view.CloseAfterMinutes = config.CloseAfterMinutes
+	if view.Configured {
+		values, err := s.decryptPaymentConfig(config)
+		if err != nil {
+			return view, config, err
+		}
+		if displayName := strings.TrimSpace(values["displayName"]); displayName != "" {
+			view.Name = displayName
+		}
+	}
 	return view, config, nil
 }
 

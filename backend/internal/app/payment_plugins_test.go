@@ -17,6 +17,18 @@ func TestBundledPaymentPluginsMatchHostProviders(t *testing.T) {
 		if err := protocol.ValidateManifest(manifest); err != nil {
 			t.Fatalf("validate %s: %v", manifest.Metadata.ID, err)
 		}
+		displayNameFields := 0
+		for _, field := range manifest.Configuration.Fields {
+			if field.Name == "displayName" {
+				displayNameFields++
+				if field.Type != "string" || field.Required {
+					t.Fatalf("plugin %s displayName field = %#v, want optional string", manifest.Metadata.ID, field)
+				}
+			}
+		}
+		if displayNameFields != 1 {
+			t.Fatalf("plugin %s displayName fields = %d, want 1", manifest.Metadata.ID, displayNameFields)
+		}
 		management := pluginManagement(manifest.Metadata.ID, PluginOriginSystem)
 		if management.Kind != PluginKindPayment || management.Origin != PluginOriginSystem || management.ActivationScope != PluginScopeSystem {
 			t.Fatalf("plugin %s management = %#v", manifest.Metadata.ID, management)

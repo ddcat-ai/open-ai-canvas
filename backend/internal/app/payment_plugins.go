@@ -92,6 +92,7 @@ func paymentNotificationFailure(providerID string) protocol.ManifestPaymentRespo
 
 func wechatPaymentConfiguration() protocol.ManifestConfiguration {
 	return protocol.ManifestConfiguration{Fields: []protocol.ManifestField{
+		{Name: "displayName", Type: "string", Label: "\u524d\u53f0\u652f\u4ed8\u540d\u79f0", Description: "\u79ef\u5206\u4e2d\u5fc3\u5c55\u793a\u7684\u652f\u4ed8\u540d\u79f0\uff1b\u7559\u7a7a\u5219\u4f7f\u7528\u9ed8\u8ba4\u540d\u79f0\u3002"},
 		{Name: "publicBaseUrl", Type: "url", Label: "服务器公网地址", Required: true, Description: "用于生成微信支付回调地址，必须可被微信访问。"},
 		{Name: "appId", Type: "string", Label: "AppID", Required: true},
 		{Name: "mchId", Type: "string", Label: "商户号", Required: true},
@@ -105,6 +106,7 @@ func wechatPaymentConfiguration() protocol.ManifestConfiguration {
 
 func alipayPaymentConfiguration() protocol.ManifestConfiguration {
 	return protocol.ManifestConfiguration{Fields: []protocol.ManifestField{
+		{Name: "displayName", Type: "string", Label: "\u524d\u53f0\u652f\u4ed8\u540d\u79f0", Description: "\u79ef\u5206\u4e2d\u5fc3\u5c55\u793a\u7684\u652f\u4ed8\u540d\u79f0\uff1b\u7559\u7a7a\u5219\u4f7f\u7528\u9ed8\u8ba4\u540d\u79f0\u3002"},
 		{Name: "publicBaseUrl", Type: "url", Label: "服务器公网地址", Required: true, Description: "用于生成支付宝异步通知和同步返回地址。"},
 		{Name: "appId", Type: "string", Label: "应用 AppID", Required: true},
 		{Name: "sellerId", Type: "string", Label: "支付宝商户 PID", Required: true},
