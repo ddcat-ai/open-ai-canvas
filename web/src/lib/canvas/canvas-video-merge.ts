@@ -1,6 +1,4 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import ffmpegCoreURL from "@ffmpeg/core?url";
-import ffmpegWasmURL from "@ffmpeg/core/wasm?url";
 import { fetchFile } from "@ffmpeg/util";
 import { getMediaBlob } from "@/services/file-storage";
 import { buildRecordingTranscodeArgs } from "./canvas-video-merge-args";
@@ -17,8 +15,13 @@ export async function loadFFmpeg(onProgress?: (progress: MergeVideoProgress) => 
             const ffmpeg = new FFmpeg();
             onProgress?.({ phase: "loading", progress: 0 });
             try {
-                // 核心资产随前端同源发布，避免自部署环境首次合并依赖第三方 CDN。
-                await ffmpeg.load({ coreURL: ffmpegCoreURL, wasmURL: ffmpegWasmURL });
+                // 从 CDN 加载 ffmpeg-core，避免 wasm 文件（30MB）超过部署平台单文件限制。
+                const coreVersion = "0.12.10";
+                const cdnBase = `https://unpkg.com/@ffmpeg/core@${coreVersion}/dist/umd`;
+                await ffmpeg.load({
+                    coreURL: `${cdnBase}/ffmpeg-core.js`,
+                    wasmURL: `${cdnBase}/ffmpeg-core.wasm`,
+                });
             } catch (cause) {
                 ffmpeg.terminate();
                 throw new Error("视频合并工具加载失败，请刷新页面后重试", { cause });

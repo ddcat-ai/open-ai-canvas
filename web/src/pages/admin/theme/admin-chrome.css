@@ -1,6 +1,24 @@
 /* Admin chrome: one layout language for every admin page.
  * Loaded after admin-ui.css so these rules win over per-page leftovers. */
 
+[data-admin-root] .admin-shell-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--admin-border, rgba(0, 0, 0, 0.08));
+    border-top-color: var(--admin-accent, #1677ff);
+    border-radius: 50%;
+    animation: admin-shell-spin 0.6s linear infinite;
+}
+
+@keyframes admin-shell-spin {
+    to { transform: rotate(360deg); }
+}
+
+.dark [data-admin-root] .admin-shell-loading-spinner {
+    border-color: var(--admin-border, rgba(255, 255, 255, 0.1));
+    border-top-color: var(--admin-accent, #1677ff);
+}
+
 [data-admin-root] {
     background: var(--admin-canvas);
     color: var(--admin-text);
