@@ -11,7 +11,9 @@
 }
 
 @keyframes admin-shell-spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .dark [data-admin-root] .admin-shell-loading-spinner {

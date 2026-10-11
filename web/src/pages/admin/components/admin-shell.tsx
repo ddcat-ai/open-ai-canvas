@@ -200,7 +200,9 @@ function AdminShellLayout() {
                                 <div className="flex flex-1 items-center justify-center" role="status">
                                     <div className="flex flex-col items-center gap-3">
                                         <div className="admin-shell-loading-spinner" />
-                                        <span className="text-sm" style={{ color: "var(--admin-text-tertiary)" }}>正在加载管理页面…</span>
+                                        <span className="text-sm" style={{ color: "var(--admin-text-tertiary)" }}>
+                                            正在加载管理页面…
+                                        </span>
                                     </div>
                                 </div>
                             }
