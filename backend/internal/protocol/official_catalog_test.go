@@ -810,3 +810,81 @@ func TestOfficialArkSeedreamParsesB64JSONAsDataURL(t *testing.T) {
 		})
 	}
 }
+
+func TestOfficialArkSeedanceDraftMode(t *testing.T) {
+	packages := []struct {
+		packageName string
+		providerID  string
+		namespace   string
+	}{
+		{packageName: "volcengine-ark-seedance.yingce-plugin", providerID: "volcengine-ark-video", namespace: "volcengine-ark-video"},
+		{packageName: "volcengine-ark-agent-plan-seedance.yingce-plugin", providerID: "volcengine-ark-agent-plan-video", namespace: "volcengine-ark-agent-plan-video"},
+	}
+	for _, test := range packages {
+		t.Run(test.providerID, func(t *testing.T) {
+			adapter := officialPackageAdapter(t, test.packageName, test.providerID)
+
+			// 常规请求不携带 draft 键，行为与旧版本一致。
+			plain, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model: "doubao-seedance-2-5-260628", Prompt: "walk", Resolution: "720p", Duration: 5,
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := manifestTestBody(t, plain)
+			if _, exists := body["draft"]; exists {
+				t.Fatalf("plain body must omit draft: %#v", body)
+			}
+			if body["resolution"] != "720p" {
+				t.Fatalf("plain resolution = %#v", body["resolution"])
+			}
+
+			// Step1：draft=true 生成 480p 样片。
+			create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model: "doubao-seedance-2-5-260628", Prompt: "walk", Resolution: "480p", Duration: 5,
+				ProviderOptions: map[string]map[string]any{test.namespace: {"draft": true}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body = manifestTestBody(t, create)
+			if body["draft"] != true {
+				t.Fatalf("draft create body = %#v", body)
+			}
+			if body["resolution"] != "480p" {
+				t.Fatalf("draft resolution = %#v", body["resolution"])
+			}
+
+			// Step2：draftTaskId 生成 1080p 正式版。content 仅携带 draft_task，
+			// 上游禁传键（ratio/duration/generate_audio/seed/camera_fixed）必须整体省略。
+			final, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+				Model: "doubao-seedance-2-5-260628", Prompt: "walk", Resolution: "1080p", AspectRatio: "16:9", Duration: 5, GenerateAudio: true,
+				ProviderOptions: map[string]map[string]any{test.namespace: {"draftTaskId": "cgt-2026-draft"}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body = manifestTestBody(t, final)
+			content, ok := body["content"].([]any)
+			if !ok || len(content) != 1 {
+				t.Fatalf("draft_task content = %#v", body["content"])
+			}
+			item, _ := content[0].(map[string]any)
+			if item["type"] != "draft_task" {
+				t.Fatalf("draft_task content item = %#v", item)
+			}
+			task, _ := item["draft_task"].(map[string]any)
+			if task["id"] != "cgt-2026-draft" {
+				t.Fatalf("draft_task id = %#v", task["id"])
+			}
+			if body["resolution"] != "1080p" {
+				t.Fatalf("draft final resolution = %#v", body["resolution"])
+			}
+			for _, key := range []string{"ratio", "duration", "generate_audio", "seed", "camera_fixed", "draft"} {
+				if _, exists := body[key]; exists {
+					t.Fatalf("draft final body must omit %s: %#v", key, body)
+				}
+			}
+		})
+	}
+}

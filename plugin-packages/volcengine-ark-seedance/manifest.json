@@ -5,7 +5,7 @@
   "version": "2.0.0",
   "author": "Volcengine / 影策",
   "description": "Volcengine Ark Seedance 独立请求协议插件。",
-  "documentation": "# Volcengine Ark Seedance\n\n该目录是独立官方协议插件源码。后端从生成的 `volcengine-ark-seedance.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Volcengine Ark Seedance 接口字段\n\n## 协议身份\n\n- 插件 ID：`volcengine-ark-seedance`。\n- Provider ID：`volcengine-ark-video`。\n- 能力：`video`。\n- 默认 Base URL：`https://ark.cn-beijing.volces.com`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /api/v3/contents/generations/tasks`。\n- 查询：`GET /api/v3/contents/generations/tasks/{{taskId}}`。\n- 取消：`DELETE /api/v3/contents/generations/tasks/{{taskId}}`。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | Ark endpoint/model ID。 |\n| `prompt` | string | 是 | `content[type=text].text` | 视频提示词。 |\n| `images` | media[] | 否 | `content[type=image_url]` | first_frame、last_frame、reference_image 等 role 原样映射。 |\n| `videos` | media[] | 否 | `content[type=video_url]` | reference_video。 |\n| `audios` | media[] | 否 | `content[type=audio_url]` | reference_audio/reference_voice。 |\n| `aspectRatio` | string | 否 | `ratio` | 输出画幅。 |\n| `resolution` | string | 否 | `resolution` | 输出分辨率档位。 |\n| `duration` | integer | 否 | `duration` | 输出时长秒数。 |\n| `generateAudio` | boolean | 否 | `generate_audio` | 是否生成音频。 |\n| `watermark` | boolean | 否 | `watermark` | 是否带水印。 |\n| `seed` | integer | 否 | `seed` | providerOptions seed。 |\n| `camera_fixed` | boolean | 否 | `camera_fixed` | providerOptions camera_fixed。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/api/v3/contents/generations/tasks\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.model` | `{\"$ref\":\"request.model\"}` |\n| `create.body.content` | `{\"$concatArrays\":[[{\"type\":\"text\",\"text\":{\"$ref\":\"request.prompt\"}}],{\"$map\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"in\":{\"type\":\"image_url\",\"image_url\":{\"url\":{\"$ref\":\"media.value\"}},\"role\":{\"$coalesce\":[{\"$ref\":\"media.role\"},\"reference_image\"]}}}},{\"$map\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.videos\"}},\"as\":\"media\",\"in\":{\"type\":\"video_url\",\"video_url\":{\"url\":{\"$ref\":\"media.value\"}},\"role\":{\"$coalesce\":[{\"$ref\":\"media.role\"},\"reference_video\"]}}}},{\"$map\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.audios\"}},\"as\":\"media\",\"in\":{\"type\":\"audio_url\",\"audio_url\":{\"url\":{\"$ref\":\"media.value\"}},\"role\":{\"$coalesce\":[{\"$ref\":\"media.role\"},\"reference_audio\"]}}}}]}` |\n| `create.body.ratio` | `{\"$coalesce\":[{\"$ref\":\"request.aspectRatio\"},\"16:9\"]}` |\n| `create.body.resolution` | `{\"$coalesce\":[{\"$ref\":\"request.resolution\"},\"720p\"]}` |\n| `create.body.duration` | `{\"$if\":{\"condition\":{\"$gt\":[{\"$ref\":\"request.duration\"},0]},\"then\":{\"$ref\":\"request.duration\"},\"else\":5}}` |\n| `create.body.generate_audio` | `{\"$ref\":\"request.generateAudio\"}` |\n| `create.body.watermark` | `{\"$ref\":\"request.watermark\"}` |\n| `create.body.seed` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-video.seed\"}}` |\n| `create.body.camera_fixed` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-video.camera_fixed\"}}` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/api/v3/contents/generations/tasks/{{taskId}}\"` |\n| `poll.contentType` | `\"application/json\"` |\n| `cancel.method` | `\"DELETE\"` |\n| `cancel.path` | `\"/api/v3/contents/generations/tasks/{{taskId}}\"` |\n| `cancel.contentType` | `\"application/json\"` |\n\n## Provider 扩展键\n\n- `providerOptions.volcengine-ark-video.camera_fixed`\n- `providerOptions.volcengine-ark-video.seed`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$coalesce\":[{\"$ref\":\"response.id\"},{\"$ref\":\"response.task_id\"},{\"$ref\":\"response.data.id\"},{\"$ref\":\"taskId\"}]}` |\n| `response.status` | `{\"$coalesce\":[{\"$ref\":\"response.status\"},{\"$ref\":\"response.data.status\"},\"pending\"]}` |\n| `response.message` | `{\"$coalesce\":[{\"$ref\":\"response.error.message\"},{\"$ref\":\"response.message\"},{\"$ref\":\"response.fail_reason\"}]}` |\n| `response.videos` | `{\"$coalesce\":[{\"$ref\":\"response.content.video_url\"},{\"$ref\":\"response.video_url\"},{\"$ref\":\"response.output.video_url\"},{\"$ref\":\"response.data.video_url\"}]}` |\n| `response.usage` | `{\"$ref\":\"response.usage\"}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.resultEphemeral` | `true` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n官方 Ark 推理接入：创建/查询/取消走 /api/v3/contents/generations/tasks；插件不根据图片下标推断首尾帧，role 由业务层确定。API Key 来自方舟推理接入控制台。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"volcengine-ark-seedance\",\n  \"name\": \"Volcengine Ark Seedance\",\n  \"version\": \"2.0.0\",\n  \"author\": \"Volcengine / 影策\",\n  \"description\": \"Volcengine Ark Seedance 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"volcengine-ark-video\",\n        \"label\": \"Volcengine Ark Seedance\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://ark.cn-beijing.volces.com\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"Ark endpoint/model ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"content[type=text].text\",\n            \"description\": \"视频提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"content[type=image_url]\",\n            \"description\": \"first_frame、last_frame、reference_image 等 role 原样映射。\"\n          },\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"content[type=video_url]\",\n            \"description\": \"reference_video。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"content[type=audio_url]\",\n            \"description\": \"reference_audio/reference_voice。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"ratio\",\n            \"description\": \"输出画幅。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution\",\n            \"description\": \"输出分辨率档位。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"duration\",\n            \"description\": \"输出时长秒数。\"\n          },\n          {\n            \"name\": \"generateAudio\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"generate_audio\",\n            \"description\": \"是否生成音频。\"\n          },\n          {\n            \"name\": \"watermark\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"watermark\",\n            \"description\": \"是否带水印。\"\n          },\n          {\n            \"name\": \"seed\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"seed\",\n            \"description\": \"providerOptions seed。\"\n          },\n          {\n            \"name\": \"camera_fixed\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"camera_fixed\",\n            \"description\": \"providerOptions camera_fixed。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                9\n              ]\n            },\n            \"message\": \"Seedance 最多支持 9 张参考图片\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.videos\"\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"Seedance 最多支持 3 个参考视频\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.audios\"\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"Seedance 最多支持 3 个参考音频\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$len\": {\n                        \"$ref\": \"request.audios\"\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$gt\": [\n                    {\n                      \"$add\": [\n                        {\n                          \"$len\": {\n                            \"$ref\": \"request.images\"\n                          }\n                        },\n                        {\n                          \"$len\": {\n                            \"$ref\": \"request.videos\"\n                          }\n                        }\n                      ]\n                    },\n                    0\n                  ]\n                }\n              ]\n            },\n            \"message\": \"Seedance 不支持纯音频或文本+音频，请同时添加参考图片或参考视频\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v3/contents/generations/tasks\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"content\": {\n              \"$concatArrays\": [\n                [\n                  {\n                    \"type\": \"text\",\n                    \"text\": {\n                      \"$ref\": \"request.prompt\"\n                    }\n                  }\n                ],\n                {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.images\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"type\": \"image_url\",\n                      \"image_url\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      },\n                      \"role\": {\n                        \"$coalesce\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"reference_image\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.videos\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"type\": \"video_url\",\n                      \"video_url\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      },\n                      \"role\": {\n                        \"$coalesce\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"reference_video\"\n                        ]\n                      }\n                    }\n                  }\n                },\n                {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$ref\": \"request.audios\"\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"type\": \"audio_url\",\n                      \"audio_url\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      },\n                      \"role\": {\n                        \"$coalesce\": [\n                          {\n                            \"$ref\": \"media.role\"\n                          },\n                          \"reference_audio\"\n                        ]\n                      }\n                    }\n                  }\n                }\n              ]\n            },\n            \"ratio\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.aspectRatio\"\n                },\n                \"16:9\"\n              ]\n            },\n            \"resolution\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.resolution\"\n                },\n                \"720p\"\n              ]\n            },\n            \"duration\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$gt\": [\n                    {\n                      \"$ref\": \"request.duration\"\n                    },\n                    0\n                  ]\n                },\n                \"then\": {\n                  \"$ref\": \"request.duration\"\n                },\n                \"else\": 5\n              }\n            },\n            \"generate_audio\": {\n              \"$ref\": \"request.generateAudio\"\n            },\n            \"watermark\": {\n              \"$ref\": \"request.watermark\"\n            },\n            \"seed\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-video.seed\"\n              }\n            },\n            \"camera_fixed\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-video.camera_fixed\"\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/api/v3/contents/generations/tasks/{{taskId}}\"\n        },\n        \"cancel\": {\n          \"method\": \"DELETE\",\n          \"path\": \"/api/v3/contents/generations/tasks/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.fail_reason\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.content.video_url\"\n              },\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.output.video_url\"\n              },\n              {\n                \"$ref\": \"response.data.video_url\"\n              }\n            ]\n          },\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "documentation": "# Volcengine Ark Seedance\n\n该目录是独立官方协议插件源码。后端从生成的 `volcengine-ark-seedance.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Volcengine Ark Seedance 接口字段\n\n## 协议身份\n\n- 插件 ID：`volcengine-ark-seedance`。\n- Provider ID：`volcengine-ark-video`。\n- 能力：`video`。\n- 默认 Base URL：`https://ark.cn-beijing.volces.com`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /api/v3/contents/generations/tasks`。\n- 查询：`GET /api/v3/contents/generations/tasks/{{taskId}}`。\n- 取消：`DELETE /api/v3/contents/generations/tasks/{{taskId}}`。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | Ark endpoint/model ID。 |\n| `prompt` | string | 是 | `content[type=text].text` | 视频提示词。 |\n| `images` | media[] | 否 | `content[type=image_url]` | first_frame、last_frame、reference_image 等 role 原样映射。 |\n| `videos` | media[] | 否 | `content[type=video_url]` | reference_video。 |\n| `audios` | media[] | 否 | `content[type=audio_url]` | reference_audio/reference_voice。 |\n| `aspectRatio` | string | 否 | `ratio` | 输出画幅。 |\n| `resolution` | string | 否 | `resolution` | 输出分辨率档位。 |\n| `duration` | integer | 否 | `duration` | 输出时长秒数。 |\n| `generateAudio` | boolean | 否 | `generate_audio` | 是否生成音频。 |\n| `watermark` | boolean | 否 | `watermark` | 是否带水印。 |\n| `seed` | integer | 否 | `seed` | providerOptions seed。 |\n| `camera_fixed` | boolean | 否 | `camera_fixed` | providerOptions camera_fixed。 |\n| `draft` | boolean | 否 | `draft` | providerOptions draft。样片模式：true 时仅支持 480p，生成低成本预览视频。 |\n| `draftTaskId` | string | 否 | `content[type=draft_task]` | providerOptions draftTaskId。基于样片任务生成 1080p 正式视频，其余参数由模型自动复用。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/api/v3/contents/generations/tasks\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.model` | `{\"$ref\":\"request.model\"}` |\n| `create.body.content` | `{\"$if\":{\"condition\":{\"$and\":[{\"$ne\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$ne\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":[{\"type\":\"draft_task\",\"draft_task\":{\"id\":{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"}}}],\"else\":{\"$concatArrays\":[[{\"type\":\"text\",\"text\":{\"$ref\":\"request.prompt\"}}],{\"$map\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.images\"}},\"as\":\"media\",\"in\":{\"type\":\"image_url\",\"image_url\":{\"url\":{\"$ref\":\"media.value\"}},\"role\":{\"$coalesce\":[{\"$ref\":\"media.role\"},\"reference_image\"]}}}},{\"$map\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.videos\"}},\"as\":\"media\",\"in\":{\"type\":\"video_url\",\"video_url\":{\"url\":{\"$ref\":\"media.value\"}},\"role\":{\"$coalesce\":[{\"$ref\":\"media.role\"},\"reference_video\"]}}}},{\"$map\":{\"from\":{\"$sortByOrder\":{\"$ref\":\"request.audios\"}},\"as\":\"media\",\"in\":{\"type\":\"audio_url\",\"audio_url\":{\"url\":{\"$ref\":\"media.value\"}},\"role\":{\"$coalesce\":[{\"$ref\":\"media.role\"},\"reference_audio\"]}}}}]}}}` |\n| `create.body.ratio` | `{\"$omitEmpty\":{\"$if\":{\"condition\":{\"$or\":[{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":{\"$coalesce\":[{\"$ref\":\"request.aspectRatio\"},\"16:9\"]},\"else\":null}}}` |\n| `create.body.resolution` | `{\"$switch\":{\"cases\":[{\"when\":{\"$and\":[{\"$ne\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$ne\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":\"1080p\"}],\"default\":{\"$coalesce\":[{\"$ref\":\"request.resolution\"},\"720p\"]}}}` |\n| `create.body.duration` | `{\"$omitEmpty\":{\"$if\":{\"condition\":{\"$or\":[{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":{\"$if\":{\"condition\":{\"$gt\":[{\"$ref\":\"request.duration\"},0]},\"then\":{\"$ref\":\"request.duration\"},\"else\":5}},\"else\":null}}}` |\n| `create.body.generate_audio` | `{\"$omitEmpty\":{\"$if\":{\"condition\":{\"$or\":[{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":{\"$ref\":\"request.generateAudio\"},\"else\":null}}}` |\n| `create.body.watermark` | `{\"$ref\":\"request.watermark\"}` |\n| `create.body.seed` | `{\"$omitEmpty\":{\"$if\":{\"condition\":{\"$or\":[{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-video.seed\"}},\"else\":null}}}` |\n| `create.body.camera_fixed` | `{\"$omitEmpty\":{\"$if\":{\"condition\":{\"$or\":[{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},null]},{\"$eq\":[{\"$ref\":\"request.providerOptions.volcengine-ark-video.draftTaskId\"},\"\"]}]},\"then\":{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-video.camera_fixed\"}},\"else\":null}}}` |\n| `create.body.draft` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-video.draft\"}}` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/api/v3/contents/generations/tasks/{{taskId}}\"` |\n| `poll.contentType` | `\"application/json\"` |\n| `cancel.method` | `\"DELETE\"` |\n| `cancel.path` | `\"/api/v3/contents/generations/tasks/{{taskId}}\"` |\n| `cancel.contentType` | `\"application/json\"` |\n\n## Provider 扩展键\n\n- `providerOptions.volcengine-ark-video.camera_fixed`\n- `providerOptions.volcengine-ark-video.seed`\n- `providerOptions.volcengine-ark-video.draft`\n- `providerOptions.volcengine-ark-video.draftTaskId`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$coalesce\":[{\"$ref\":\"response.id\"},{\"$ref\":\"response.task_id\"},{\"$ref\":\"response.data.id\"},{\"$ref\":\"taskId\"}]}` |\n| `response.status` | `{\"$coalesce\":[{\"$ref\":\"response.status\"},{\"$ref\":\"response.data.status\"},\"pending\"]}` |\n| `response.message` | `{\"$coalesce\":[{\"$ref\":\"response.error.message\"},{\"$ref\":\"response.message\"},{\"$ref\":\"response.fail_reason\"}]}` |\n| `response.videos` | `{\"$coalesce\":[{\"$ref\":\"response.content.video_url\"},{\"$ref\":\"response.video_url\"},{\"$ref\":\"response.output.video_url\"},{\"$ref\":\"response.data.video_url\"}]}` |\n| `response.usage` | `{\"$ref\":\"response.usage\"}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.resultEphemeral` | `true` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 样片模式（Seedance 2.5）\n\n- Step1：`providerOptions.volcengine-ark-video.draft = true`，仅支持 `resolution = 480p`，生成低成本预览样片；上游返回的任务 ID 即样片任务 ID（7 天内有效）。\n- Step2：`providerOptions.volcengine-ark-video.draftTaskId = <样片任务 ID>`，content 仅携带 `draft_task`，`resolution` 强制 `1080p`；`ratio/duration/generate_audio/seed/camera_fixed` 不发送，由模型自动复用 Step1 取值，重复传会触发上游报错。`watermark` 可重新指定。\n- 两步独立计费：Step1 按 480p 档、Step2 按 1080p 档，用量以各任务 `usage.completion_tokens` 为准。\n\n## 兼容边界\n\n官方 Ark 推理接入：创建/查询/取消走 /api/v3/contents/generations/tasks；插件不根据图片下标推断首尾帧，role 由业务层确定。API Key 来自方舟推理接入控制台。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"volcengine-ark-seedance\",\n  \"name\": \"Volcengine Ark Seedance\",\n  \"version\": \"2.0.0\",\n  \"author\": \"Volcengine / 影策\",\n  \"description\": \"Volcengine Ark Seedance 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"volcengine-ark-video\",\n        \"label\": \"Volcengine Ark Seedance\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://ark.cn-beijing.volces.com\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"Ark endpoint/model ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"content[type=text].text\",\n            \"description\": \"视频提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"content[type=image_url]\",\n            \"description\": \"first_frame、last_frame、reference_image 等 role 原样映射。\"\n          },\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"content[type=video_url]\",\n            \"description\": \"reference_video。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"content[type=audio_url]\",\n            \"description\": \"reference_audio/reference_voice。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"ratio\",\n            \"description\": \"输出画幅。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution\",\n            \"description\": \"输出分辨率档位。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"duration\",\n            \"description\": \"输出时长秒数。\"\n          },\n          {\n            \"name\": \"generateAudio\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"generate_audio\",\n            \"description\": \"是否生成音频。\"\n          },\n          {\n            \"name\": \"watermark\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"watermark\",\n            \"description\": \"是否带水印。\"\n          },\n          {\n            \"name\": \"seed\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"seed\",\n            \"description\": \"providerOptions seed。\"\n          },\n          {\n            \"name\": \"camera_fixed\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"camera_fixed\",\n            \"description\": \"providerOptions camera_fixed。\"\n          },\n          {\n            \"name\": \"draft\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"draft\",\n            \"description\": \"providerOptions draft。样片模式：true 时仅支持 480p，生成低成本预览视频。\"\n          },\n          {\n            \"name\": \"draftTaskId\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"content[type=draft_task]\",\n            \"description\": \"providerOptions draftTaskId。基于样片任务生成 1080p 正式视频，其余参数由模型自动复用。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.images\"\n                  }\n                },\n                9\n              ]\n            },\n            \"message\": \"Seedance 最多支持 9 张参考图片\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.videos\"\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"Seedance 最多支持 3 个参考视频\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.audios\"\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"Seedance 最多支持 3 个参考音频\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$len\": {\n                        \"$ref\": \"request.audios\"\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$gt\": [\n                    {\n                      \"$add\": [\n                        {\n                          \"$len\": {\n                            \"$ref\": \"request.images\"\n                          }\n                        },\n                        {\n                          \"$len\": {\n                            \"$ref\": \"request.videos\"\n                          }\n                        }\n                      ]\n                    },\n                    0\n                  ]\n                }\n              ]\n            },\n            \"message\": \"Seedance 不支持纯音频或文本+音频，请同时添加参考图片或参考视频\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v3/contents/generations/tasks\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"content\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$and\": [\n                    {\n                      \"$ne\": [\n                        {\n                          \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                        },\n                        null\n                      ]\n                    },\n                    {\n                      \"$ne\": [\n                        {\n                          \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                        },\n                        \"\"\n                      ]\n                    }\n                  ]\n                },\n                \"then\": [\n                  {\n                    \"type\": \"draft_task\",\n                    \"draft_task\": {\n                      \"id\": {\n                        \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                      }\n                    }\n                  }\n                ],\n                \"else\": {\n                  \"$concatArrays\": [\n                    [\n                      {\n                        \"type\": \"text\",\n                        \"text\": {\n                          \"$ref\": \"request.prompt\"\n                        }\n                      }\n                    ],\n                    {\n                      \"$map\": {\n                        \"from\": {\n                          \"$sortByOrder\": {\n                            \"$ref\": \"request.images\"\n                          }\n                        },\n                        \"as\": \"media\",\n                        \"in\": {\n                          \"type\": \"image_url\",\n                          \"image_url\": {\n                            \"url\": {\n                              \"$ref\": \"media.value\"\n                            }\n                          },\n                          \"role\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"reference_image\"\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    {\n                      \"$map\": {\n                        \"from\": {\n                          \"$sortByOrder\": {\n                            \"$ref\": \"request.videos\"\n                          }\n                        },\n                        \"as\": \"media\",\n                        \"in\": {\n                          \"type\": \"video_url\",\n                          \"video_url\": {\n                            \"url\": {\n                              \"$ref\": \"media.value\"\n                            }\n                          },\n                          \"role\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"reference_video\"\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    {\n                      \"$map\": {\n                        \"from\": {\n                          \"$sortByOrder\": {\n                            \"$ref\": \"request.audios\"\n                          }\n                        },\n                        \"as\": \"media\",\n                        \"in\": {\n                          \"type\": \"audio_url\",\n                          \"audio_url\": {\n                            \"url\": {\n                              \"$ref\": \"media.value\"\n                            }\n                          },\n                          \"role\": {\n                            \"$coalesce\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"reference_audio\"\n                            ]\n                          }\n                        }\n                      }\n                    }\n                  ]\n                }\n              }\n            },\n            \"ratio\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$or\": [\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          null\n                        ]\n                      },\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          \"\"\n                        ]\n                      }\n                    ]\n                  },\n                  \"then\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.aspectRatio\"\n                      },\n                      \"16:9\"\n                    ]\n                  },\n                  \"else\": null\n                }\n              }\n            },\n            \"resolution\": {\n              \"$switch\": {\n                \"cases\": [\n                  {\n                    \"when\": {\n                      \"$and\": [\n                        {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                            },\n                            null\n                          ]\n                        },\n                        {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                            },\n                            \"\"\n                          ]\n                        }\n                      ]\n                    },\n                    \"then\": \"1080p\"\n                  }\n                ],\n                \"default\": {\n                  \"$coalesce\": [\n                    {\n                      \"$ref\": \"request.resolution\"\n                    },\n                    \"720p\"\n                  ]\n                }\n              }\n            },\n            \"duration\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$or\": [\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          null\n                        ]\n                      },\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          \"\"\n                        ]\n                      }\n                    ]\n                  },\n                  \"then\": {\n                    \"$if\": {\n                      \"condition\": {\n                        \"$gt\": [\n                          {\n                            \"$ref\": \"request.duration\"\n                          },\n                          0\n                        ]\n                      },\n                      \"then\": {\n                        \"$ref\": \"request.duration\"\n                      },\n                      \"else\": 5\n                    }\n                  },\n                  \"else\": null\n                }\n              }\n            },\n            \"generate_audio\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$or\": [\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          null\n                        ]\n                      },\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          \"\"\n                        ]\n                      }\n                    ]\n                  },\n                  \"then\": {\n                    \"$ref\": \"request.generateAudio\"\n                  },\n                  \"else\": null\n                }\n              }\n            },\n            \"watermark\": {\n              \"$ref\": \"request.watermark\"\n            },\n            \"seed\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$or\": [\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          null\n                        ]\n                      },\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          \"\"\n                        ]\n                      }\n                    ]\n                  },\n                  \"then\": {\n                    \"$omitEmpty\": {\n                      \"$ref\": \"request.providerOptions.volcengine-ark-video.seed\"\n                    }\n                  },\n                  \"else\": null\n                }\n              }\n            },\n            \"camera_fixed\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$or\": [\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          null\n                        ]\n                      },\n                      {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.providerOptions.volcengine-ark-video.draftTaskId\"\n                          },\n                          \"\"\n                        ]\n                      }\n                    ]\n                  },\n                  \"then\": {\n                    \"$omitEmpty\": {\n                      \"$ref\": \"request.providerOptions.volcengine-ark-video.camera_fixed\"\n                    }\n                  },\n                  \"else\": null\n                }\n              }\n            },\n            \"draft\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-video.draft\"\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/api/v3/contents/generations/tasks/{{taskId}}\"\n        },\n        \"cancel\": {\n          \"method\": \"DELETE\",\n          \"path\": \"/api/v3/contents/generations/tasks/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.fail_reason\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.content.video_url\"\n              },\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.output.video_url\"\n              },\n              {\n                \"$ref\": \"response.data.video_url\"\n              }\n            ]\n          },\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
   "permissions": [
     "generation.run",
     "media.read"
@@ -125,6 +125,20 @@
             "required": false,
             "mapping": "camera_fixed",
             "description": "providerOptions camera_fixed。"
+          },
+          {
+            "name": "draft",
+            "type": "boolean",
+            "required": false,
+            "mapping": "draft",
+            "description": "providerOptions draft。样片模式：true 时仅支持 480p，生成低成本预览视频。"
+          },
+          {
+            "name": "draftTaskId",
+            "type": "string",
+            "required": false,
+            "mapping": "content[type=draft_task]",
+            "description": "providerOptions draftTaskId。基于样片任务生成 1080p 正式视频，其余参数由模型自动复用。"
           }
         ],
         "validations": [
@@ -213,141 +227,344 @@
               "$ref": "request.model"
             },
             "content": {
-              "$concatArrays": [
-                [
+              "$if": {
+                "condition": {
+                  "$and": [
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                        },
+                        null
+                      ]
+                    },
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                        },
+                        ""
+                      ]
+                    }
+                  ]
+                },
+                "then": [
                   {
-                    "type": "text",
-                    "text": {
-                      "$ref": "request.prompt"
+                    "type": "draft_task",
+                    "draft_task": {
+                      "id": {
+                        "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                      }
                     }
                   }
                 ],
-                {
-                  "$map": {
-                    "from": {
-                      "$sortByOrder": {
-                        "$ref": "request.images"
+                "else": {
+                  "$concatArrays": [
+                    [
+                      {
+                        "type": "text",
+                        "text": {
+                          "$ref": "request.prompt"
+                        }
+                      }
+                    ],
+                    {
+                      "$map": {
+                        "from": {
+                          "$sortByOrder": {
+                            "$ref": "request.images"
+                          }
+                        },
+                        "as": "media",
+                        "in": {
+                          "type": "image_url",
+                          "image_url": {
+                            "url": {
+                              "$ref": "media.value"
+                            }
+                          },
+                          "role": {
+                            "$coalesce": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "reference_image"
+                            ]
+                          }
+                        }
                       }
                     },
-                    "as": "media",
-                    "in": {
-                      "type": "image_url",
-                      "image_url": {
-                        "url": {
-                          "$ref": "media.value"
-                        }
-                      },
-                      "role": {
-                        "$coalesce": [
-                          {
-                            "$ref": "media.role"
+                    {
+                      "$map": {
+                        "from": {
+                          "$sortByOrder": {
+                            "$ref": "request.videos"
+                          }
+                        },
+                        "as": "media",
+                        "in": {
+                          "type": "video_url",
+                          "video_url": {
+                            "url": {
+                              "$ref": "media.value"
+                            }
                           },
-                          "reference_image"
-                        ]
-                      }
-                    }
-                  }
-                },
-                {
-                  "$map": {
-                    "from": {
-                      "$sortByOrder": {
-                        "$ref": "request.videos"
+                          "role": {
+                            "$coalesce": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "reference_video"
+                            ]
+                          }
+                        }
                       }
                     },
-                    "as": "media",
-                    "in": {
-                      "type": "video_url",
-                      "video_url": {
-                        "url": {
-                          "$ref": "media.value"
-                        }
-                      },
-                      "role": {
-                        "$coalesce": [
-                          {
-                            "$ref": "media.role"
+                    {
+                      "$map": {
+                        "from": {
+                          "$sortByOrder": {
+                            "$ref": "request.audios"
+                          }
+                        },
+                        "as": "media",
+                        "in": {
+                          "type": "audio_url",
+                          "audio_url": {
+                            "url": {
+                              "$ref": "media.value"
+                            }
                           },
-                          "reference_video"
-                        ]
+                          "role": {
+                            "$coalesce": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "reference_audio"
+                            ]
+                          }
+                        }
                       }
                     }
-                  }
-                },
-                {
-                  "$map": {
-                    "from": {
-                      "$sortByOrder": {
-                        "$ref": "request.audios"
-                      }
-                    },
-                    "as": "media",
-                    "in": {
-                      "type": "audio_url",
-                      "audio_url": {
-                        "url": {
-                          "$ref": "media.value"
-                        }
-                      },
-                      "role": {
-                        "$coalesce": [
-                          {
-                            "$ref": "media.role"
-                          },
-                          "reference_audio"
-                        ]
-                      }
-                    }
-                  }
+                  ]
                 }
-              ]
+              }
             },
             "ratio": {
-              "$coalesce": [
-                {
-                  "$ref": "request.aspectRatio"
-                },
-                "16:9"
-              ]
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$or": [
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.aspectRatio"
+                      },
+                      "16:9"
+                    ]
+                  },
+                  "else": null
+                }
+              }
             },
             "resolution": {
-              "$coalesce": [
-                {
-                  "$ref": "request.resolution"
-                },
-                "720p"
-              ]
+              "$switch": {
+                "cases": [
+                  {
+                    "when": {
+                      "$and": [
+                        {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                            },
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                            },
+                            ""
+                          ]
+                        }
+                      ]
+                    },
+                    "then": "1080p"
+                  }
+                ],
+                "default": {
+                  "$coalesce": [
+                    {
+                      "$ref": "request.resolution"
+                    },
+                    "720p"
+                  ]
+                }
+              }
             },
             "duration": {
-              "$if": {
-                "condition": {
-                  "$gt": [
-                    {
-                      "$ref": "request.duration"
-                    },
-                    0
-                  ]
-                },
-                "then": {
-                  "$ref": "request.duration"
-                },
-                "else": 5
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$or": [
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "$if": {
+                      "condition": {
+                        "$gt": [
+                          {
+                            "$ref": "request.duration"
+                          },
+                          0
+                        ]
+                      },
+                      "then": {
+                        "$ref": "request.duration"
+                      },
+                      "else": 5
+                    }
+                  },
+                  "else": null
+                }
               }
             },
             "generate_audio": {
-              "$ref": "request.generateAudio"
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$or": [
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "$ref": "request.generateAudio"
+                  },
+                  "else": null
+                }
+              }
             },
             "watermark": {
               "$ref": "request.watermark"
             },
             "seed": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.volcengine-ark-video.seed"
+                "$if": {
+                  "condition": {
+                    "$or": [
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "$omitEmpty": {
+                      "$ref": "request.providerOptions.volcengine-ark-video.seed"
+                    }
+                  },
+                  "else": null
+                }
               }
             },
             "camera_fixed": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.volcengine-ark-video.camera_fixed"
+                "$if": {
+                  "condition": {
+                    "$or": [
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          null
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          {
+                            "$ref": "request.providerOptions.volcengine-ark-video.draftTaskId"
+                          },
+                          ""
+                        ]
+                      }
+                    ]
+                  },
+                  "then": {
+                    "$omitEmpty": {
+                      "$ref": "request.providerOptions.volcengine-ark-video.camera_fixed"
+                    }
+                  },
+                  "else": null
+                }
+              }
+            },
+            "draft": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.volcengine-ark-video.draft"
               }
             }
           }

@@ -14,6 +14,8 @@ func TestArkVideoEstimateUsesOfficialDimensionsAndNoExtraFrames(t *testing.T) {
 		{"1.0 fast retains 1080", "doubao-seedance-1-0-pro-fast", "1080P", "16:9", 1920, 1088, false},
 		{"1.5", "doubao-seedance-1-5-pro", "720", "16:9", 1280, 720, false},
 		{"2.5", "doubao-seedance-2-5", "480p", "9:16", 480, 854, false},
+		{"2.5 样片 480p 横屏", "doubao-seedance-2-5-260628", "480p", "16:9", 854, 480, false},
+		{"2.5 样片正式版 1080p 竖屏", "doubao-seedance-2-5-260628", "1080p", "9:16", 1080, 1920, false},
 		{"4K widescreen", "doubao-seedance-2-0", "4K", "21:9", 4398, 1886, false},
 		{"4K classic", "doubao-seedance-2-0", "2160p", "4:3", 3326, 2494, false},
 		{"endpoint conservative size", "ep-custom", "720p", "21:9", 1504, 640, true},

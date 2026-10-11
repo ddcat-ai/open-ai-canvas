@@ -296,6 +296,11 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) && len(input.ReferenceAudios) > 0 && len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
 		return BadAuthRequest("火山方舟全模态参考不支持纯音频或文本+音频，请同时添加参考图片或参考视频")
 	}
+	// 样片 Step2（draftTaskId）复用样片任务的上游取值：时长/比例/分辨率等常规项不在本请求体重发，
+	// 只保留提示词长度与样片模式硬约束，避免"未传时长"被通用校验误杀。
+	if videoDraftTaskIDFromInput(input) != "" {
+		return validateVideoDraftMode(profile, input)
+	}
 	if len(input.ReferenceImages) < profile.References.MinImages {
 		return BadAuthRequest(fmt.Sprintf("当前视频模型至少需要 %d 张参考图", profile.References.MinImages))
 	}
@@ -330,6 +335,9 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if len(profile.Resolutions) > 0 && !isAutomaticVideoResolution(input.Config.VQuality) && videoResolutionNameRequest(profile, input.Config.VQuality) == "" {
 		return BadAuthRequest("输出分辨率不在当前模型支持范围内")
 	}
+	if err := validateVideoDraftMode(profile, input); err != nil {
+		return err
+	}
 	operation := metadataString(input.Metadata, "videoEditOperation")
 	if operation == "" {
 		if len(input.ReferenceImages) > 0 {
@@ -342,6 +350,73 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 		return BadAuthRequest("当前视频模型不支持该生成模式")
 	}
 	return nil
+}
+
+// validateVideoDraftMode 校验火山方舟样片模式请求：
+// draft=true 时仅允许 480p 样片生成；draftTaskId 携带样片任务 ID 时仅允许 1080p 正式版生成。
+// 上游对这两种形态的分辨率限制是硬约束，传错直接报错，这里提前拦截并给出明确原因。
+func validateVideoDraftMode(profile *VideoCapabilityConfig, input canvasGenerationInput) error {
+	if !model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) {
+		return nil
+	}
+	draft, draftTaskID := videoDraftOptions(input)
+	// Agent 提交路径把样片开关放在 config.videoDraft / config.videoDraftTaskId；与 metadata.providerOptions 等价。
+	if strings.TrimSpace(input.Config.VideoDraft) == "true" {
+		draft = true
+	}
+	if taskID := strings.TrimSpace(input.Config.VideoDraftTaskID); taskID != "" {
+		draftTaskID = taskID
+	}
+	if !draft && draftTaskID == "" {
+		return nil
+	}
+	if !profile.Draft.Supported {
+		return BadAuthRequest("当前视频模型不支持样片模式")
+	}
+	resolution := videoResolutionNameRequest(profile, input.Config.VQuality)
+	if draftTaskID != "" {
+		if !strings.EqualFold(resolution, "1080p") {
+			return BadAuthRequest("基于样片生成正式视频仅支持 1080p 分辨率")
+		}
+		return nil
+	}
+	if !strings.EqualFold(resolution, "480p") {
+		return BadAuthRequest("样片模式仅支持 480p 分辨率")
+	}
+	return nil
+}
+
+// videoDraftOptions 从 metadata.providerOptions 的协议命名空间读取样片参数，
+// 与 provider_protocol_request 的 providerOptions 提取口径保持一致。
+func videoDraftOptions(input canvasGenerationInput) (bool, string) {
+	namespaces, ok := input.Metadata["providerOptions"].(map[string]any)
+	if !ok {
+		return false, ""
+	}
+	options, ok := namespaces[input.Config.InterfaceType].(map[string]any)
+	if !ok {
+		return false, ""
+	}
+	draft := false
+	switch value := options["draft"].(type) {
+	case bool:
+		draft = value
+	case string:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		draft = err == nil && parsed
+	}
+	taskID, _ := options["draftTaskId"].(string)
+	return draft, strings.TrimSpace(taskID)
+}
+
+// videoDraftTaskIDFromInput 返回本请求携带的样片任务 ID（metadata.providerOptions 与
+// config.videoDraftTaskId 两个入口等价合并），非空即样片 Step2 正式版请求。
+func videoDraftTaskIDFromInput(input canvasGenerationInput) string {
+	_, taskID := videoDraftOptions(input)
+	if id := strings.TrimSpace(input.Config.VideoDraftTaskID); id != "" {
+		taskID = id
+	}
+	return taskID
 }
 
 func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInput) error {

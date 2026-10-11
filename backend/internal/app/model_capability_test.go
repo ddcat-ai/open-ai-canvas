@@ -413,3 +413,107 @@ func TestValidateVideoTaskRequiresDeclaredMinimumImages(t *testing.T) {
 		t.Fatalf("validateVideoTask() error = %v", err)
 	}
 }
+
+func TestSeedance25VideoCapabilityDeclaresDraftMode(t *testing.T) {
+	seedance25 := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-5-260628").Video
+	if !seedance25.Draft.Supported || seedance25.Draft.Default {
+		t.Fatalf("Seedance 2.5 draft capability = %#v", seedance25.Draft)
+	}
+	agentPlan := DefaultModelCapabilityConfigForModel("volcengine-ark-agent-plan-video", "doubao-seedance-2-5-260628").Video
+	if !agentPlan.Draft.Supported {
+		t.Fatalf("Seedance 2.5 agent plan draft capability = %#v", agentPlan.Draft)
+	}
+	seedance20 := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-0-260128").Video
+	if seedance20.Draft.Supported {
+		t.Fatalf("Seedance 2.0 must not declare draft capability: %#v", seedance20.Draft)
+	}
+	agnes := DefaultModelCapabilityConfigForModel("agnes-video", "agnes-video-2.5").Video
+	if agnes.Draft.Supported {
+		t.Fatalf("Agnes must not declare draft capability: %#v", agnes.Draft)
+	}
+}
+
+func TestValidateVideoDraftModeEnforcesSeedanceModelAndResolution(t *testing.T) {
+	seedance25 := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-5-260628").Video
+	seedance20 := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-0-260128").Video
+	base := canvasGenerationInput{
+		Prompt: "a girl walks",
+		Config: providerConfig{InterfaceType: "volcengine-ark-video", Model: "doubao-seedance-2-5-260628", VideoSeconds: "5", Size: "16:9", VQuality: "480p"},
+	}
+	metadata := func(options map[string]any) map[string]any {
+		return map[string]any{"providerOptions": map[string]any{"volcengine-ark-video": options}}
+	}
+
+	draft480 := base
+	draft480.Metadata = metadata(map[string]any{"draft": true})
+	if err := validateVideoTask(seedance25, draft480); err != nil {
+		t.Fatalf("validateVideoTask(draft 480p) error = %v", err)
+	}
+
+	draft720 := base
+	draft720.Config.VQuality = "720p"
+	draft720.Metadata = metadata(map[string]any{"draft": true})
+	if err := validateVideoTask(seedance25, draft720); err == nil || !strings.Contains(err.Error(), "480p") {
+		t.Fatalf("validateVideoTask(draft 720p) error = %v", err)
+	}
+
+	draftOn20 := base
+	draftOn20.Config.Model = "doubao-seedance-2-0-260128"
+	draftOn20.Metadata = metadata(map[string]any{"draft": true})
+	if err := validateVideoTask(seedance20, draftOn20); err == nil || !strings.Contains(err.Error(), "不支持样片模式") {
+		t.Fatalf("validateVideoTask(seedance 2.0 draft) error = %v", err)
+	}
+
+	final1080 := base
+	final1080.Config.VQuality = "1080p"
+	final1080.Metadata = metadata(map[string]any{"draftTaskId": "cgt-2026-draft"})
+	if err := validateVideoTask(seedance25, final1080); err != nil {
+		t.Fatalf("validateVideoTask(draftTaskId 1080p) error = %v", err)
+	}
+
+	final720 := final1080
+	final720.Config.VQuality = "720p"
+	if err := validateVideoTask(seedance25, final720); err == nil || !strings.Contains(err.Error(), "1080p") {
+		t.Fatalf("validateVideoTask(draftTaskId 720p) error = %v", err)
+	}
+
+	finalOn20 := final1080
+	if err := validateVideoTask(seedance20, finalOn20); err == nil || !strings.Contains(err.Error(), "不支持样片模式") {
+		t.Fatalf("validateVideoTask(seedance 2.0 draftTaskId) error = %v", err)
+	}
+}
+
+func TestValidateVideoDraftModeAcceptsConfigLevelFlag(t *testing.T) {
+	seedance25 := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-5-260628").Video
+	// Agent 提交路径把样片开关放在 config.videoDraft，校验必须与 metadata 路径等价。
+	fromConfig := canvasGenerationInput{
+		Prompt: "a girl walks",
+		Config: providerConfig{InterfaceType: "volcengine-ark-video", Model: "doubao-seedance-2-5-260628", VideoSeconds: "5", Size: "16:9", VQuality: "480p", VideoDraft: "true"},
+	}
+	if err := validateVideoTask(seedance25, fromConfig); err != nil {
+		t.Fatalf("validateVideoTask(config videoDraft 480p) error = %v", err)
+	}
+	fromConfig.Config.VQuality = "720p"
+	if err := validateVideoTask(seedance25, fromConfig); err == nil || !strings.Contains(err.Error(), "480p") {
+		t.Fatalf("validateVideoTask(config videoDraft 720p) error = %v", err)
+	}
+}
+
+func TestValidateVideoDraftModeAcceptsConfigLevelTaskID(t *testing.T) {
+	seedance25 := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-5-260628").Video
+	// Agent Step2 提交路径：样片任务 ID 放在 config.videoDraftTaskId，且不携带时长/比例/参考素材
+	//（上游自动复用样片取值），校验不得因常规项缺失而拒绝。
+	fromConfig := canvasGenerationInput{
+		Prompt: "a girl walks",
+		Config: providerConfig{InterfaceType: "volcengine-ark-video", Model: "doubao-seedance-2-5-260628", VQuality: "1080p", VideoDraftTaskID: "cgt-2026-draft"},
+	}
+	if err := validateVideoTask(seedance25, fromConfig); err != nil {
+		t.Fatalf("validateVideoTask(config videoDraftTaskId 1080p, no duration) error = %v", err)
+	}
+	// 非正式版分辨率仍然拒绝。
+	wrongResolution := fromConfig
+	wrongResolution.Config.VQuality = "720p"
+	if err := validateVideoTask(seedance25, wrongResolution); err == nil || !strings.Contains(err.Error(), "1080p") {
+		t.Fatalf("validateVideoTask(config videoDraftTaskId 720p) error = %v", err)
+	}
+}

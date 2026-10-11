@@ -306,6 +306,20 @@ func arkVideosAdapter() Adapter {
 	info := metadata("volcengine-ark-video", "火山方舟视频", "Volcengine Ark", CapabilityVideo, "POST /api/v3/contents/generations/tasks", "GET /api/v3/contents/generations/tasks/{task_id}", "application/json")
 	info.Parameters = videoParams()
 	return videoAdapter(info, func(r GenerationRequest) (RequestSpec, error) {
+		const namespace = "volcengine-ark-video"
+		// Step2：基于样片生成正式视频。content 仅携带 draft_task，prompt/素材/时长/比例
+		// 等由模型自动复用，重复传会触发上游参数冲突报错。
+		if draftTaskID := providerOptionString(r, namespace, "draftTaskId"); draftTaskID != "" {
+			body := map[string]any{
+				"model":      r.Model,
+				"content":    []any{map[string]any{"type": "draft_task", "draft_task": map[string]any{"id": draftTaskID}}},
+				"resolution": "1080p",
+			}
+			if r.Watermark {
+				body["watermark"] = true
+			}
+			return jsonSpec(http.MethodPost, "/api/v3/contents/generations/tasks", body), nil
+		}
 		if len(r.Images) > 9 || len(r.Videos) > 3 || len(r.Audios) > 3 {
 			return RequestSpec{}, fmt.Errorf("火山方舟全模态参考最多支持 9 张图片、3 个视频和 3 个音频")
 		}
@@ -329,8 +343,27 @@ func arkVideosAdapter() Adapter {
 		if r.Watermark {
 			body["watermark"] = true
 		}
+		if providerOptionBool(r, namespace, "draft") {
+			body["draft"] = true
+		}
 		return jsonSpec(http.MethodPost, "/api/v3/contents/generations/tasks", body), nil
 	})
+}
+
+func providerOptionString(r GenerationRequest, namespace string, key string) string {
+	value, _ := r.ProviderOptions[namespace][key].(string)
+	return strings.TrimSpace(value)
+}
+
+func providerOptionBool(r GenerationRequest, namespace string, key string) bool {
+	switch value := r.ProviderOptions[namespace][key].(type) {
+	case bool:
+		return value
+	case string:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		return err == nil && parsed
+	}
+	return false
 }
 
 func jimengVideosAdapter() Adapter {

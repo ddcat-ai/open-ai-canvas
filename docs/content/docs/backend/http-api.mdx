@@ -226,6 +226,8 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 `intent` 包含 `capability`（`text/image/video/audio`）、`operation`、`inputs`（素材类型到数量的映射）和 `options`（请求规格）。素材数量必须为 0–128 的整数，再按模型能力限制校验。视频规格包括 `vquality`、`size`、`videoSeconds`、布尔值 `videoGenerateAudio`，显式 `false` 必须保留。
 
+视频任务的 `metadata.providerOptions.<协议命名空间>` 透传供应商扩展键（如 `seed`、`camera_fixed`）。火山方舟 Seedance 2.5 样片模式新增两个键：`draft=true` 生成 480p 预览样片（仅 480p，其他分辨率被拒绝）；`draftTaskId=<样片任务 ID>` 通过 `content.draft_task` 基于样片生成 1080p 正式视频（仅 1080p，提示词/素材/时长/比例等由模型复用，重复传被拒绝）。两步各自独立计费；模型能力由渠道模型能力 JSON 的 `video.draft.supported` 声明，默认仅 seedance-2-5 系列注入。
+
 报价包含 `logicalModelId`（系统渠道直连为空）、`billingMode`、`quantity`、`amountMicrocredits`、`estimated`。视频 Token 报价另有 `videoTokenEstimate`：`formulaTokens`、`reservedTokens`、`outputWidth`、`outputHeight`、`framesPerSecond`、`outputSeconds`、`referenceSeconds`、`referenceDurationEstimated`、`dimensionsEstimated`、`reservationMarginPercent`。
 
 Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考素材数量不包含时长信息，带参考视频时统一按 15 秒估算并返回 `referenceDurationEstimated: true`。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。

@@ -20,6 +20,7 @@ type CloudAgentMediaSettings struct {
 	VideoGenerateAudio         *bool  `json:"videoGenerateAudio,omitempty"`
 	VideoWatermark             *bool  `json:"videoWatermark,omitempty"`
 	VideoArkPrivateAssetUpload *bool  `json:"videoArkPrivateAssetUpload,omitempty"`
+	VideoDraft                 *bool  `json:"videoDraft,omitempty"`
 }
 
 // updateCloudAgentMediaApproval rebuilds the complete prepared admission for an
@@ -52,8 +53,10 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 		args.VideoGenerateAudio = settings.VideoGenerateAudio
 		args.VideoWatermark = settings.VideoWatermark
 		args.VideoArkPrivateAssetUpload = settings.VideoArkPrivateAssetUpload
+		// 样片 Step2（正式版）的开关由样片任务 ID 表达，用户编辑不改写它，只改写 Step1 的 draft 位。
+		args.VideoDraft = settings.VideoDraft
 	}
-	if args.Mode == "image" && (settings.DurationSeconds != nil || settings.VideoGenerateAudio != nil || settings.VideoWatermark != nil || settings.VideoArkPrivateAssetUpload != nil) {
+	if args.Mode == "image" && (settings.DurationSeconds != nil || settings.VideoGenerateAudio != nil || settings.VideoWatermark != nil || settings.VideoArkPrivateAssetUpload != nil || settings.VideoDraft != nil) {
 		return BadAuthRequest("视频参数仅适用于视频生成审批")
 	}
 	raw, err := json.Marshal(args)
@@ -129,7 +132,7 @@ func replaceCloudAgentPreparedLeases(repo *repository.Repository, userID, runID,
 }
 
 func validateCloudAgentResolvedMediaOptions(requested, resolved map[string]any) error {
-	for _, key := range []string{"size", "videoSeconds", "vquality", "quality", "count", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"} {
+	for _, key := range []string{"size", "videoSeconds", "vquality", "quality", "count", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload", "videoDraft"} {
 		if value := stringValue(requested[key]); value != "" && !strings.EqualFold(value, stringValue(resolved[key])) {
 			return creationConflict("模型解析后的生成规格与审批参数不同，请重新读取目录并审批")
 		}
