@@ -744,3 +744,43 @@ func TestToolsUpgradeFromMain29PreservesMigrationChecksums(t *testing.T) {
 		t.Fatal("tools tables missing")
 	}
 }
+
+func TestMigrateSchemaUpgradeBackfillsBannerSortOrder(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-banner-sort-order-upgrade?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	// 模拟 v48 旧库：去掉 sort_order 列与索引，保留升级前已有的通知条。
+	if err := db.Migrator().DropIndex(&model.BannerAnnouncement{}, "SortOrder"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropColumn(&model.BannerAnnouncement{}, "SortOrder"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO banner_announcements (id, title, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", "legacy-banner", "旧库通知", "active", time.Now(), time.Now()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("version >= ?", 49).Delete(&schemaMigration{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatalf("upgrade from v48: %v", err)
+	}
+	if !db.Migrator().HasIndex(&model.BannerAnnouncement{}, "SortOrder") {
+		t.Fatal("upgraded database is missing the banner_announcements.sort_order index")
+	}
+	var nullRows int64
+	if err := db.Table("banner_announcements").Where("sort_order IS NULL").Count(&nullRows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if nullRows != 0 {
+		t.Fatalf("upgraded banners keep NULL sort_order: %d rows", nullRows)
+	}
+	status, err := ReadSchemaStatus(db)
+	if err != nil || !status.Ready || status.Current != CurrentSchemaVersion {
+		t.Fatalf("unexpected upgraded schema status: %+v, %v", status, err)
+	}
+}

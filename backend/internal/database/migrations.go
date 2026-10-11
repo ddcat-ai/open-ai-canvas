@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 49
+const CurrentSchemaVersion int64 = 50
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -163,6 +163,21 @@ var schemaMigrations = []migration{
 		}
 		return nil
 	}},
+	{version: 50, name: "banner_sort_order_backfill", checksum: "sha256:banner-sort-order-backfill-v50-20261011", apply: migrateBannerSortOrderBackfill},
+}
+
+// v49 only added the column: upgraded databases keep NULL sort_order on existing
+// banners (PostgreSQL sorts NULL last under ASC) and miss the model's index.
+func migrateBannerSortOrderBackfill(tx *gorm.DB) error {
+	if err := tx.Model(&model.BannerAnnouncement{}).Where("sort_order IS NULL").Update("sort_order", 0).Error; err != nil {
+		return fmt.Errorf("回填通知条排序：%w", err)
+	}
+	if !tx.Migrator().HasIndex(&model.BannerAnnouncement{}, "SortOrder") {
+		if err := tx.Migrator().CreateIndex(&model.BannerAnnouncement{}, "SortOrder"); err != nil {
+			return fmt.Errorf("创建通知条排序索引：%w", err)
+		}
+	}
+	return nil
 }
 
 func migratePrefixedIDSequenceReconcile(tx *gorm.DB) error {
