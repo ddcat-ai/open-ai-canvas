@@ -17,6 +17,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
     const audio = settings.videoGenerateAudio === undefined ? "" : String(settings.videoGenerateAudio);
     const watermark = settings.videoWatermark === undefined ? "" : String(settings.videoWatermark);
     const privateAssetUpload = settings.videoArkPrivateAssetUpload === undefined ? "" : String(settings.videoArkPrivateAssetUpload);
+    const draft = settings.videoDraft === undefined ? "" : String(settings.videoDraft);
     const requirements: ModelRequirements = {
         capability: "video",
         input: { textCount: initial.sourceNodeId ? 1 : 0, imageCount: initial.referenceNodeIds.length, videoCount: 0, audioCount: 0, characterCount: 0 },
@@ -44,10 +45,11 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
             videoGenerateAudio: settings.videoGenerateAudio,
             videoWatermark: settings.videoWatermark,
             videoArkPrivateAssetUpload: settings.videoArkPrivateAssetUpload,
+            videoDraft: settings.videoDraft,
         });
     };
 
-    const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", next: string) => {
+    const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload" | "videoDraft", next: string) => {
         if (disabled) return;
         const nextSettings: AgentMediaSettings = {
             ...settings,
@@ -57,6 +59,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
             videoGenerateAudio: key === "videoGenerateAudio" ? next === "true" : settings.videoGenerateAudio,
             videoWatermark: key === "videoWatermark" ? next === "true" : settings.videoWatermark,
             videoArkPrivateAssetUpload: key === "videoArkPrivateAssetUpload" ? next === "true" : settings.videoArkPrivateAssetUpload,
+            videoDraft: key === "videoDraft" ? next === "true" : settings.videoDraft,
         };
         const selected = resolveCompatibleModel(config, model, {
             ...requirements,
@@ -84,7 +87,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
             </div>
             {model ? (
                 <VideoSettingsPanel
-                    config={{ ...config, model, size: settings.size, videoSeconds: duration, vquality: settings.quality, videoGenerateAudio: audio, videoWatermark: watermark, videoArkPrivateAssetUpload: privateAssetUpload }}
+                    config={{ ...config, model, size: settings.size, videoSeconds: duration, vquality: settings.quality, videoGenerateAudio: audio, videoWatermark: watermark, videoArkPrivateAssetUpload: privateAssetUpload, videoDraft: draft }}
                     onConfigChange={changeOption}
                     theme={theme}
                     showTitle={false}

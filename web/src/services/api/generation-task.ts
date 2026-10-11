@@ -317,6 +317,14 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
     };
 }
 
+/** 解析当前模型 providerOptions 所属的协议命名空间（优先渠道模型声明的 protocol）。 */
+export function generationProtocolNamespace(config: AiConfig): string {
+    const channel = resolveModelChannel(config, config.model);
+    const model = modelOptionName(config.model);
+    const modelCost = channel.modelCosts?.find((item) => item.model === model);
+    return modelCost?.protocol || channel.interfaceType || "";
+}
+
 function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>) {
     const channel = resolveModelChannel(config, config.model);
     const model = modelOptionName(config.model);
@@ -330,6 +338,11 @@ function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>
         ? existing[protocol] as Record<string, unknown>
         : {};
     const defaults = modelCost?.defaultOptions && typeof modelCost.defaultOptions === "object" ? modelCost.defaultOptions : {};
+    // 样片模式与 seed/camera_fixed 走同一 providerOptions 协议命名空间；
+    // 调用方传入的 draftTaskId（基于样片生成正式视频）在 namespace 中原样保留。
+    if (config.videoDraft === "true" && modelCapabilityConfigFor(config, config.model).video?.draft?.supported === true) {
+        namespace.draft = true;
+    }
     if (!Object.keys(defaults).length && !Object.keys(namespace).length) return metadata;
     return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...namespace } } };
 }

@@ -97,6 +97,8 @@ export type VideoCapabilityConfig = {
     fixedScreenSpec?: VideoScreenSpecConfig;
     generateAudio: { supported: boolean; default: boolean };
     watermark: { supported: boolean; default: boolean };
+    // 样片模式：仅后端能力声明 supported 的模型（当前为 Seedance 2.5）显示开关。
+    draft?: { supported: boolean; default: boolean };
     operations: string[];
     defaultOperation: string;
 };
@@ -375,6 +377,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         defaultResolution: "720p",
         generateAudio: { supported: false, default: false },
         watermark: { supported: false, default: false },
+        draft: { supported: false, default: false },
         operations: ["text_to_video", "image_to_video"],
         defaultOperation: "text_to_video",
     };
@@ -399,6 +402,8 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     if (protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video") {
         video.watermark = { supported: true, default: false };
         video.operations.push("reference_to_video", "audio_to_video");
+        // 与后端 applySeedanceVideoCapability 同口径：Seedance 2.5 系列声明样片模式。
+        if (/seedance-2-5/i.test(model)) video.draft = { supported: true, default: false };
     }
     if (protocol === "novita-video") {
         video.references.maxImages = 1;

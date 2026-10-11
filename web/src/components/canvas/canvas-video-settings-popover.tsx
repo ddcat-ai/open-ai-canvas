@@ -10,7 +10,9 @@ type VideoPopoverProps = { config: AiConfig; onConfigChange: (key: keyof AiConfi
 export function CanvasVideoSettingsPopover({ config, onConfigChange, ...popover }: VideoPopoverProps) {
     const theme = canvasThemes[useActiveTheme()];
     const profile = modelCapabilityConfigFor(config, config.model).video;
+    const draft = profile?.draft?.supported === true && config.videoDraft === "true";
     const parts: string[] = [];
+    if (draft) parts.push("样片");
     if (profile?.resolutions.length) parts.push(videoResolutionLabel(resolveVideoResolutionValue(profile, config.vquality)));
     if (profile?.ratios.length) parts.push(videoSizeLabel(resolveVideoRatioValue(profile, config.size)));
     parts.push(videoSecondsLabel(config.videoSeconds));

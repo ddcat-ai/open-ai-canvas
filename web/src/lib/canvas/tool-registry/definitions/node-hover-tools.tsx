@@ -28,6 +28,9 @@ function canRetry(ctx: ToolContext) {
     const batchHasFailures = isImageBatchRoot(ctx) && (ctx.nodeMetadata?.batchFailedCount || (ctx.nodeMetadata?.status === "error" ? 1 : 0)) > 0;
     return (ctx.nodeMetadata?.status === "error" || (batchHasFailures && ctx.nodeMetadata?.status !== "loading")) && !requiresPromptChange;
 }
+function isDraftVideoNode(ctx: ToolContext) {
+    return isVideo(ctx) && ctx.nodeMetadata?.videoIsDraft === true && Boolean(ctx.nodeMetadata?.videoDraftTaskId);
+}
 
 export const nodeHoverToolbarTools: ToolDefinition[] = [
     // 基础工具组
@@ -115,6 +118,19 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx),
         disabled: (ctx) => ctx.extractingAudio || ctx.trimmingVideo,
         run: (ctx) => ctx.handlers.onNodeTrimVideoSegments(ctx.node!),
+    },
+    {
+        id: "draftFinal",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "基于样片生成 1080P 正式视频，提示词与参考素材自动复用",
+        displayLabel: "生成正式视频",
+        icon: <Clapperboard className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 28,
+        nodeToolbar: { group: "primary", order: 4, description: "复用样片的提示词与素材，生成 1080P 成片" },
+        applicable: (ctx) => isDraftVideoNode(ctx),
+        run: (ctx) => ctx.handlers.onNodeDraftFinal(ctx.node!),
     },
     {
         id: "saveAsset",

@@ -8,6 +8,7 @@ import { buildAudioGenerationMetadata, buildVideoGenerationMetadata, generationR
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { isDoubaoAudioConfig } from "@/lib/audio-generation";
+import { generationProtocolNamespace } from "@/services/api/generation-task";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
@@ -63,9 +64,10 @@ export async function executeVideoGeneration({
             producedModelCandidate: producedModelCandidateForGeneration(generationConfig),
             size: generationConfig.size,
             seconds: generationConfig.videoSeconds,
-            vquality: generationConfig.vquality,
+            vquality: generationConfig.videoDraft === "true" ? "480p" : generationConfig.vquality,
             generateAudio: generationConfig.videoGenerateAudio,
             watermark: generationConfig.videoWatermark,
+            videoDraft: generationConfig.videoDraft,
             references: generationReferenceUrls(generationContext),
             ...videoGenerationMetadata,
             ...styleMetadata,
@@ -206,4 +208,84 @@ function doubaoAudioPrompt(config: CanvasGenerationExecution["generationConfig"]
     const next = prompt.replace(/@音频(\d+)/g, "@Audio$1");
     const missing = Array.from({ length: audioCount }, (_, index) => `@Audio${index + 1}`).filter((marker) => !next.includes(marker));
     return missing.length ? `${missing.join(" ")} ${next}` : next;
+}
+
+export type DraftFinalVideoExecution = {
+    projectId: string;
+    draftNode: CanvasNodeData;
+    controller: AbortController;
+    config: CanvasGenerationExecution["generationConfig"];
+} & Pick<CanvasGenerationExecution, "setNodes" | "setConnections" | "startGenerationRequest" | "finishGenerationRequest" | "bindGenerationTask" | "applyGenerationTaskResult">;
+
+/**
+ * 基于样片生成 1080p 正式视频（Step2）。上游通过 content.draft_task 复用样片任务的
+ * 提示词、素材、时长与比例，因此这里不重交参考素材；价格档按 1080p 与样片任务的
+ * 生成模式选择，两步独立计费。
+ */
+export async function executeDraftFinalVideoGeneration({ projectId, draftNode, controller, config, setNodes, setConnections, startGenerationRequest, finishGenerationRequest, bindGenerationTask, applyGenerationTaskResult }: DraftFinalVideoExecution) {
+    const draftTaskId = String(draftNode.metadata?.videoDraftTaskId || "").trim();
+    if (!draftTaskId) throw new Error("样片节点缺少上游任务 ID，无法生成正式视频");
+    const draftModel = String(draftNode.metadata?.model || config.model);
+    const prompt = String(draftNode.metadata?.prompt || "").trim() || "基于样片生成正式视频";
+    const generationConfig: CanvasGenerationExecution["generationConfig"] = {
+        ...config,
+        model: draftModel,
+        vquality: "1080p",
+        videoDraft: "false",
+        size: draftNode.metadata?.size || config.size,
+        videoSeconds: draftNode.metadata?.seconds || config.videoSeconds,
+        videoGenerateAudio: draftNode.metadata?.generateAudio || config.videoGenerateAudio,
+        videoWatermark: draftNode.metadata?.watermark || config.videoWatermark,
+    };
+    const protocol = generationProtocolNamespace(generationConfig);
+    const spec = nodeSizeFromRatio(generationConfig.size, NODE_DEFAULT_SIZE[CanvasNodeType.Video].width, NODE_DEFAULT_SIZE[CanvasNodeType.Video].height) || NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+    const finalId = nanoid();
+    const finalNode: CanvasNodeData = {
+        id: finalId,
+        type: CanvasNodeType.Video,
+        title: `${draftNode.title || "正式视频"} · 正式`.slice(0, 40),
+        position: { x: draftNode.position.x + (draftNode.width || spec.width) + 96, y: draftNode.position.y },
+        width: spec.width,
+        height: spec.height,
+        metadata: {
+            status: NODE_STATUS_LOADING,
+            prompt,
+            model: generationConfig.model,
+            producedModelCandidate: producedModelCandidateForGeneration(generationConfig),
+            size: generationConfig.size,
+            seconds: generationConfig.videoSeconds,
+            vquality: "1080p",
+            generateAudio: generationConfig.videoGenerateAudio,
+            watermark: generationConfig.videoWatermark,
+            videoDraft: "false",
+            videoFinalOfDraftTaskId: draftTaskId,
+        },
+    };
+    setNodes((current) => [...current, finalNode]);
+    setConnections((current) => [...current, { id: nanoid(), fromNodeId: draftNode.id, toNodeId: finalId }]);
+    startGenerationRequest(finalId, draftNode.id, draftNode.id, controller);
+    try {
+        await runCanvasGenerationTaskToConsumer(
+            {
+                projectId,
+                nodeId: finalId,
+                mode: "video",
+                prompt,
+                config: generationConfig,
+                signal: controller.signal,
+                metadata: {
+                    sourceNodeId: draftNode.id,
+                    videoEditOperation: draftNode.metadata?.videoEditOperation as string | undefined,
+                    // Step2 唯一需要的新参数：样片任务 ID 走 providerOptions 协议命名空间。
+                    ...(protocol ? { providerOptions: { [protocol]: { draftTaskId } } } : {}),
+                },
+            },
+            {
+                bindTask: (task) => bindGenerationTask(finalId, task),
+                consumeTask: (task) => applyGenerationTaskResult(finalId, task),
+            },
+        );
+    } finally {
+        finishGenerationRequest(finalId, controller);
+    }
 }

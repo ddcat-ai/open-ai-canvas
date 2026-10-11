@@ -55,8 +55,10 @@ export function normalizeResolutionToken(value: string): string {
     const aliases: Record<string, string> = { low: "480p", auto: "720p", high: "720p", medium: "720p", "4k": "2160p", "": "720p" };
     return aliases[token] || `${token.replace(/p$/, "")}p`;
 }
-export function normalizeSeedanceResolution(value: string, model = ""): string {
+export function normalizeSeedanceResolution(value: string, model = "", draft = false): string {
     const requested = normalizeResolutionToken(value);
+    // 样片模式仅支持 480p；基于样片的正式版仅支持 1080p（上游硬约束）。
+    if (draft) return "480p";
     const supported = isSeedanceFastModel(model) ? ["480p", "720p"] : ["480p", "720p", "1080p", "2160p"];
     return supported.includes(requested) ? requested : "720p";
 }

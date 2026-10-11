@@ -131,7 +131,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const showProducedModel = showImageInfo && hasMediaContent && Boolean(producedModelStored);
     const isBatchRoot = data.type === CanvasNodeType.Image && Boolean(data.metadata?.isBatchRoot) && (batchCount > 1 || Boolean(data.metadata?.imageLayerGroup));
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
-    const showStatusTrack = Boolean(resourceLabel || data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly) || (hasMediaContent && !readOnly));
+    const isDraftVideo = data.type === CanvasNodeType.Video && Boolean(data.metadata?.videoIsDraft);
+    const showStatusTrack = Boolean(resourceLabel || data.metadata?.locked || isBatchRoot || (isBatchChild && !readOnly) || (hasMediaContent && !readOnly) || isDraftVideo);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const effectiveRenderLOD: CanvasNodeRenderLOD = renderLOD === "full" || hovered || isEditingContent || isEditingTitle || mediaActive ? "full" : renderLOD;
     const showChrome = effectiveRenderLOD === "full";
@@ -343,6 +344,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {showChrome && showStatusTrack ? (
                     <div className="absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 max-w-[calc(100%-24px)]">
                         {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
+                        {isDraftVideo ? <DraftVideoBadge theme={theme} expired={draftVideoExpired(data.metadata?.taskCreatedAt || data.metadata?.taskCompletedAt)} /> : null}
                         {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
                         {data.metadata?.imageLayerGroup && !readOnly ? <CanvasImageLayerControls node={data} /> : null}
@@ -473,6 +475,25 @@ function ResourceStorageBadge({ storageKey, active, theme }: { storageKey?: stri
 
 function NodeLockBadge({ theme }: { theme: CanvasTheme }) {
     return <span className="pointer-events-none grid size-7 shrink-0 place-items-center rounded-md border backdrop-blur" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.muted }} title="节点已锁定"><Lock className="size-3.5" /></span>;
+}
+
+// 上游样片任务 ID 自创建起 7 天内可用于生成正式视频。
+export function draftVideoExpired(completedAt?: string) {
+    if (!completedAt) return false;
+    const time = Date.parse(completedAt);
+    return Number.isFinite(time) && Date.now() - time > 6 * 24 * 60 * 60 * 1000;
+}
+
+function DraftVideoBadge({ theme, expired }: { theme: CanvasTheme; expired: boolean }) {
+    return (
+        <span
+            className="pointer-events-none inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-[var(--fs-tiny)] font-semibold leading-none backdrop-blur"
+            style={{ background: theme.toolbar.panel, borderColor: expired ? theme.toolbar.border : theme.accent.primary, color: expired ? theme.node.muted : theme.accent.primary }}
+            title={expired ? "样片任务已超过 6 天，可能已过 7 天有效期，无法再生成正式视频" : "样片（480P 预览）：确认后可在节点操作中生成 1080P 正式视频"}
+        >
+            样片
+        </span>
+    );
 }
 
 function BatchToggleBadge({ count, expanded, theme, onToggle }: { count: number; expanded: boolean; theme: CanvasTheme; onToggle: () => void }) {
