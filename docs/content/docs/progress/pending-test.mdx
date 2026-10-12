@@ -5,6 +5,16 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 创作页提交闸门只覆盖提交阶段
+
+- 已修复：`submit()` 的提交闸门原来一直持有到整条生成结束（只在 `finally` 释放，而 `finally` 要等任务出结果才执行），因此上一条还在生成时点发送会被 `tryAcquire()` **静默拒绝**——没有提示也没有反应，表现为「按钮在转、点不动」。重试走同一条 submit 路径，一并被挡住。
+- 已实现：闸门改为令牌制（`tryAcquire()` 返回令牌，`release(token)` 只对持有者生效，避免并发提交互相解锁）；任务一旦建成（`bindTask`）立刻放闸，与已有的 `busy` 释放时机对齐，因此上一条生成中也能继续提交下一条；被拒绝时改为给出提示，不再静默丢弃。
+- 说明：该闸门在 `4f18367`（v1.6.5）就已存在，不是本次改动引入；它只需要防住同一次创建任务被重复触发（连点、回车连击），不该跨越整个生成过程。
+- 实现位置：`web/src/pages/create/creation-submit-gate.ts`、`web/src/pages/create/index.tsx`，单测 `web/test/creation-submit-gate.test.ts`。
+- [x] 验证：`tsc --noEmit`、ESLint、`bun run build` 通过；`bun test` 2204 通过（唯一失败项 `agent-api-reliability` 在纯净上游基线上同样失败，与本改动无关）；闸门单测含「持有者令牌」并发用例。
+- [ ] 用户验收：真实登录态下先提交一条慢任务（视频），在它「生成中」时输入新提示词再提交一条，确认**第二条能正常创建**、两条并行推进、按钮在输入后恢复为「发送」；确认快速连点仍只会创建一条。
+- [ ] 未验证：`busy` 仍是布尔量，两条并发时按钮可能提前约 100ms 变可点（闸门仍会拦住并提示）；提交阶段本身卡住时闸门会一直被占，此时只给提示。
+
 ## 用户登录日志
 
 - 已实现：管理员菜单 `/admin/login-logs`、筛选分页详情、后端认证事件记录、schema v53、失败脱敏和会话/日志原子提交。
@@ -36,6 +46,7 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - 实现位置：筛选与批量勾选规则抽到 `web/src/pages/admin/components/channel-model-import-selection.ts`，弹窗接线在 `channel-model-manager.tsx`，配套 `web/test/channel-model-import-selection.test.ts`。
 - [x] 验证：`bun test test/channel-model-import-selection.test.ts` 9 项通过（空关键字返回全部、大小写不敏感、首尾空白、无命中返回空、全选并入去重、关键字外勾选保留、无关键字时与旧行为一致）；`tsc --noEmit`、ESLint、`bun run build` 均通过。
 - [ ] 用户验收：需要管理员登录且上游能返回大量模型才能打开该弹窗，因此**未做真实界面验收**。请在真实后台点「拉取模型」确认：搜索框位置与自动聚焦、输入关键字后列表实时收窄、全选/取消选中只影响匹配项、清空后恢复全部、以及几百个模型时的滚动与性能。
+
 
 ## 灵感页路由与导航
 
