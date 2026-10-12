@@ -154,6 +154,10 @@ func migrateTable[T any](name string) tableMigration {
 	return tableMigration{
 		name: name,
 		run: func(source *gorm.DB, target *gorm.DB, copyRows bool) (int, error) {
+			if !source.Migrator().HasTable(name) {
+				log.Printf("跳过 %s：源库中不存在该表", name)
+				return 0, nil
+			}
 			primaryKey, err := primaryKeyColumn[T](source)
 			if err != nil {
 				return 0, err
@@ -355,6 +359,8 @@ func verifyMigrationCoverage(db *gorm.DB) error {
 		}
 		delete(expected, migration.name)
 	}
+	// id_sequences 由 MigrateSchema 初始化、ReconcilePrefixedIDSequences 校准，跳过复制。
+	delete(expected, "id_sequences")
 	if len(expected) > 0 {
 		missing := make([]string, 0, len(expected))
 		for name := range expected {
@@ -381,7 +387,8 @@ func migrations() []tableMigration {
 		migrateTable[model.ModelChannel]("model_channels"),
 		migrateTable[model.ChannelModel]("channel_models"),
 		migrateTable[model.ChannelModelPriceTier]("channel_model_price_tiers"),
-		migrateTable[model.IDSequence]("id_sequences"),
+		// id_sequences 跳过：MigrateSchema 已创建初始序列行，复制会主键冲突。
+		// 迁移结束后 ReconcilePrefixedIDSequences 会根据业务表自动校准序列值。
 		migrateTable[model.LogicalModel]("logical_models"),
 		migrateTable[model.LogicalModelRevision]("logical_model_revisions"),
 		migrateTable[model.LogicalModelRoute]("logical_model_routes"),
