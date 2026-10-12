@@ -59,6 +59,31 @@ async function probe(ffmpeg: VideoConcatEngine, name: string) {
 }
 
 describe("canvas video concat with the shipped FFmpeg core", () => {
+    test("two 15s clips starting at 32kHz stay 30s instead of stretching audio to 42s", async () => {
+        const ffmpeg = await engine();
+        await source(ffmpeg, "one.mp4", 32000, 12288, "64x36", "red");
+        await source(ffmpeg, "two.mp4", 44100, 12288, "64x36", "blue");
+
+        // 同一原片顺序下，旧命令即使成功也会写出长于画面的音轨。
+        await ffmpeg.writeFile("concat.txt", "file 'one.mp4'\nfile 'two.mp4'");
+        expect(await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "legacy.mp4"])).toBe(0);
+        const legacy = await probe(ffmpeg, "legacy.mp4");
+        expect(Number(legacy.streams[0].duration)).toBeLessThan(30.2);
+        expect(Number(legacy.streams[1].duration)).toBeGreaterThan(41);
+
+        await ffmpeg.writeFile("result.mp4", await concatVideoFiles(ffmpeg, ["one.mp4", "two.mp4"]));
+        const result = await probe(ffmpeg, "result.mp4");
+        expect(result.streams[1].sample_rate).toBe("48000");
+        for (const stream of result.streams) expect(Math.abs(Number(stream.duration) - 30)).toBeLessThan(0.15);
+        expect(Math.abs(Number(result.format.duration) - 30)).toBeLessThan(0.15);
+        expect(await ffmpeg.exec(["-v", "error", "-xerror", "-i", "result.mp4", "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"])).toBe(0);
+        expect(await ffmpeg.exec(["-ss", "29", "-i", "result.mp4", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "tail.rgb"])).toBe(0);
+        const tail = (await ffmpeg.readFile("tail.rgb")) as Uint8Array;
+        expect(tail.length).toBe(64 * 36 * 3);
+        expect(tail[2]).toBeGreaterThan(240);
+        expect(tail[0]).toBeLessThan(10);
+    }, 20000);
+
     test("three 15s clips keep 45s of video AND audio across sample-rate and time-base changes", async () => {
         const ffmpeg = await engine();
         await source(ffmpeg, "one.mp4", 44100, 15360, "64x36", "red");
