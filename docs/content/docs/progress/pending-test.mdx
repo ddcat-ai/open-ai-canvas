@@ -20,6 +20,8 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - 已实现：搜索无命中时列表区显示「没有匹配「关键字」的模型」空态；汇总行额外显示匹配数与其中已勾选数。
 - 实现位置：筛选与批量勾选规则抽到 `web/src/pages/admin/components/channel-model-import-selection.ts`，弹窗接线在 `channel-model-manager.tsx`，配套 `web/test/channel-model-import-selection.test.ts`。
 - [x] 验证：`bun test test/channel-model-import-selection.test.ts` 9 项通过（空关键字返回全部、大小写不敏感、首尾空白、无命中返回空、全选并入去重、关键字外勾选保留、无关键字时与旧行为一致）；`tsc --noEmit`、ESLint、`bun run build` 均通过。
+- CI 回归修正：`admin-ui-regressions.test.ts` 的导入确认测试改为检查当前搜索结果的全选/取消接线与禁用条件，保留默认全选、明确确认和独立导入接口的断言。原断言仍检查搜索功能引入前的变量与回调，导致 `pretest` 失败；不修改产品行为。
+- 本次复验：`bun run pretest` 全部通过（57 项前置测试及 4 项画布网格测试）；搜索选择、LibTV 导入和图片素材分类共 23 项专项通过。未运行完整 CI、前端全量测试或构建。
 - [ ] 用户验收：需要管理员登录且上游能返回大量模型才能打开该弹窗，因此**未做真实界面验收**。请在真实后台点「拉取模型」确认：搜索框位置与自动聚焦、输入关键字后列表实时收窄、全选/取消选中只影响匹配项、清空后恢复全部、以及几百个模型时的滚动与性能。
 
 ## 灵感页路由与导航
