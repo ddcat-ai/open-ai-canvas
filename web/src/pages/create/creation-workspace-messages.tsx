@@ -2,7 +2,7 @@
 
 import { conversationTimeFormatter, type CreationMessage } from "./creation-types";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { Copy, Download, FileText, Film, Image as ImageIcon, Maximize2, Music2, Pencil, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
+import { Copy, Download, FileText, Film, Image as ImageIcon, Maximize2, Music2, Pencil, RefreshCw, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
 import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -24,6 +24,15 @@ import { Button } from "antd";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 
+/** 记录级删除：移除这条提示词与它的生成结果；已生成素材仍保留在资产里。 */
+function RecordDeleteAction({ onDelete }: { onDelete: () => void }) {
+    return (
+        <button type="button" className="creation-message-delete-action" aria-label="删除这条记录" title="删除这条记录（不会删除素材）" onClick={onDelete}>
+            <Trash2 />
+        </button>
+    );
+}
+
 export function CreationMessageView({
     item,
     shotNumber,
@@ -32,6 +41,7 @@ export function CreationMessageView({
     onEditUserMessage,
     onContinueCanvas,
     openingCanvas,
+    onDeleteRecord,
 }: {
     item: CreationMessage;
     shotNumber: number;
@@ -40,6 +50,7 @@ export function CreationMessageView({
     onEditUserMessage: (text: string) => void;
     onContinueCanvas: (ids?: string[]) => void;
     openingCanvas: boolean;
+    onDeleteRecord: () => void;
 }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     if (item.role === "user") return <CreationUserMessage item={item} shotNumber={shotNumber} onEditUserMessage={onEditUserMessage} />;
@@ -60,12 +71,15 @@ export function CreationMessageView({
                 ) : item.status === "done" ? (
                     <span className="creation-message-progress-copy">你的{mode === "video" ? "视频" : "图像"}已创建</span>
                 ) : null}
-                {item.status === "done" ? (
-                    <button type="button" className="creation-message-variant-action" onClick={onCreateVariant}>
-                        <RefreshCw />
-                        生成同款
-                    </button>
-                ) : null}
+                <span className="creation-message-heading-actions">
+                    {item.status === "done" ? (
+                        <button type="button" className="creation-message-variant-action" onClick={onCreateVariant}>
+                            <RefreshCw />
+                            生成同款
+                        </button>
+                    ) : null}
+                    <RecordDeleteAction onDelete={onDeleteRecord} />
+                </span>
                 {item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}
                 {stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}
             </>
@@ -78,6 +92,9 @@ export function CreationMessageView({
                 <strong>{brandName}</strong>
                 {item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}
                 {stateLabel ? <span className={`creation-message-state is-${item.status}`}>{stateLabel}</span> : null}
+                <span className="creation-message-heading-actions">
+                    <RecordDeleteAction onDelete={onDeleteRecord} />
+                </span>
             </>
         );
     const toolStatus: GenerationToolStatus = item.status === "pending" ? "running" : item.status === "error" ? "error" : item.status === "cancelled" ? "cancelled" : "completed";

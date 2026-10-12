@@ -39,6 +39,30 @@ export function creationVideoShotOrdinal(shots: CreationShotRailEntry[], item: C
     return own?.ordinal || 0;
 }
 
+/**
+ * 一条「生成记录」= 一条用户提示 + 其后到下一次用户提示之前的全部结果消息。
+ * 传入记录内任意一条消息 id；结果消息前没有用户提示的异常数据只算它自己。
+ */
+export function creationRecordRange(messages: CreationMessage[], messageId: string): { start: number; end: number } | null {
+    const index = messages.findIndex((message) => message.id === messageId);
+    if (index < 0) return null;
+    let start = index;
+    while (start > 0 && messages[start].role !== "user") start -= 1;
+    if (messages[start].role !== "user") return { start: index, end: index + 1 };
+    let end = start + 1;
+    while (end < messages.length && messages[end].role !== "user") end += 1;
+    return { start, end };
+}
+
+export function removeCreationRecord(messages: CreationMessage[], messageId: string): { messages: CreationMessage[]; removed: CreationMessage[] } | null {
+    const range = creationRecordRange(messages, messageId);
+    if (!range) return null;
+    return {
+        messages: [...messages.slice(0, range.start), ...messages.slice(range.end)],
+        removed: messages.slice(range.start, range.end),
+    };
+}
+
 export function completedCreationGenerationTask(runtime: CreationRuntime, input: { taskId: string; task?: GenerationTask; mode: "image" | "video"; prompt: string; result: BackendGenerationResult; conversationId: string; messageId: string; batchIndex?: number; batchCount?: number }): GenerationTask {
     const now = new Date().toISOString();
     const task = input.task ?? { id: input.taskId, type: input.mode, status: "succeeded" as const, prompt: input.prompt, attempts: 1, createdAt: now, updatedAt: now };

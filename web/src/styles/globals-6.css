@@ -175,6 +175,31 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .creation-home .creation-message-variant-action:hover { background: var(--creation-surface-hover); color: var(--creation-text); }
 .creation-home .creation-message-variant-action:focus-visible { outline: 2px solid var(--creation-accent); outline-offset: 1px; }
 .creation-home .creation-message-variant-action svg { width: var(--space-3); height: var(--space-3); }
+
+/* 记录操作组：把「生成同款」和删除按钮一起推到标题行右侧，删除按钮常显以便发现。 */
+.creation-home .creation-message-heading-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+}
+.creation-home .creation-message-heading-actions .creation-message-variant-action { margin-left: 0; }
+.creation-home .creation-message-delete-action {
+    display: inline-flex;
+    width: var(--space-7);
+    height: var(--space-7);
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--creation-border);
+    border-radius: var(--r-sm);
+    background: var(--creation-surface);
+    color: var(--creation-muted);
+    cursor: pointer;
+}
+.creation-home .creation-message-delete-action:hover { background: var(--creation-surface-hover); color: var(--status-error); }
+.creation-home .creation-message-delete-action:focus-visible { outline: 2px solid var(--creation-accent); outline-offset: 1px; }
+.creation-home .creation-message-delete-action svg { width: var(--space-3); height: var(--space-3); }
 @media (hover: hover) and (pointer: fine) {
     .creation-home .creation-assistant-message:not(:hover):not(:focus-within) .creation-message-variant-action { opacity: 0; }
     .creation-home .creation-message-variant-action { transition: opacity var(--motion-state) ease, background-color var(--motion-state) ease, color var(--motion-state) ease; }
