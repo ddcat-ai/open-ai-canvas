@@ -387,8 +387,9 @@ func migrations() []tableMigration {
 		migrateTable[model.ModelChannel]("model_channels"),
 		migrateTable[model.ChannelModel]("channel_models"),
 		migrateTable[model.ChannelModelPriceTier]("channel_model_price_tiers"),
-		// id_sequences 跳过：MigrateSchema 已创建初始序列行，复制会主键冲突。
+		// id_sequences：MigrateSchema 已创建初始序列行，复制会主键冲突。
 		// 迁移结束后 ReconcilePrefixedIDSequences 会根据业务表自动校准序列值。
+		{name: "id_sequences", run: func(_ *gorm.DB, _ *gorm.DB, _ bool) (int, error) { return 0, nil }},
 		migrateTable[model.LogicalModel]("logical_models"),
 		migrateTable[model.LogicalModelRevision]("logical_model_revisions"),
 		migrateTable[model.LogicalModelRoute]("logical_model_routes"),
