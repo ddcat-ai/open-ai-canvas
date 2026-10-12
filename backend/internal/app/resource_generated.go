@@ -6,8 +6,10 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -182,22 +184,30 @@ func downloadRemoteResource(rawURL string, maxBytes int64) (remoteResourcePayloa
 	if err != nil {
 		return remoteResourcePayload{}, err
 	}
-	client := OutboundHTTPClient(90 * time.Second)
+	client := OutboundHTTPClient(3 * time.Minute)
 	req, err := http.NewRequest(http.MethodGet, parsed.String(), nil)
 	if err != nil {
 		return remoteResourcePayload{}, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return remoteResourcePayload{}, err
+		// 把下载层网络错误统一映射为可公开的 502/504 文案，避免在恢复接口上被 failService
+		// 折叠成通用的“系统处理失败”。同时保留真实原因在 Cause 里供诊断日志追踪。
+		if errors.Is(err, context.DeadlineExceeded) {
+			return remoteResourcePayload{}, WrapAppError(http.StatusGatewayTimeout, "远程资源下载超时，请检查地址是否可访问或稍后重试", err)
+		}
+		return remoteResourcePayload{}, WrapAppError(http.StatusBadGateway, "远程资源下载失败，请检查地址是否可访问", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return remoteResourcePayload{}, fmt.Errorf("远程资源下载失败：%s", resp.Status)
+		return remoteResourcePayload{}, WrapAppError(http.StatusBadGateway, fmt.Sprintf("远程资源下载失败：%s", resp.Status), nil)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes))
 	if err != nil {
-		return remoteResourcePayload{}, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return remoteResourcePayload{}, WrapAppError(http.StatusGatewayTimeout, "远程资源下载超时，请检查地址是否可访问或稍后重试", err)
+		}
+		return remoteResourcePayload{}, WrapAppError(http.StatusBadGateway, "远程资源读取失败，请检查地址是否可访问", err)
 	}
 	if int64(len(data)) >= maxBytes {
 		return remoteResourcePayload{}, BadAuthRequest(fmt.Sprintf("远程资源必须小于 %s", formatStorageLimit(maxBytes)))

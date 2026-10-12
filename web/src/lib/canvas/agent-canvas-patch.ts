@@ -87,6 +87,52 @@ function mergeItems<T extends { id: string }>(items: T[], changes: Change<T>[]):
     return result.length === items.length && result.every((item, index) => item === items[index]) ? items : result;
 }
 
+/**
+ * Connection order is part of the canvas contract: it determines @图片N/
+ * @角色N slots. A three-way item merge cannot observe a reorder because the
+ * individual connection objects are unchanged, so apply the incoming order
+ * only when the editor has not reordered the same list locally.
+ */
+function mergeConnectionOrder(previous: CanvasConnection[], incoming: CanvasConnection[], editor: CanvasConnection[], merged: CanvasConnection[]) {
+    const targetIds = new Set([...previous, ...incoming, ...editor].map((connection) => connection.toNodeId));
+    const next = [...merged];
+    for (const targetId of targetIds) {
+        const targetOrder = (items: CanvasConnection[]) => items.filter((item) => item.toNodeId === targetId).map((item) => item.id);
+        const previousIds = targetOrder(previous);
+        const editorIds = targetOrder(editor);
+        // A local reorder for this target is an intentional edit and wins over
+        // the remote snapshot. Unrelated target connections can still merge.
+        const editorSharedIds = editorIds.filter((id) => previousIds.includes(id));
+        if (previousIds.length !== editorSharedIds.length || previousIds.some((id, index) => id !== editorSharedIds[index])) continue;
+
+        const mergedById = new Map(next.filter((item) => item.toNodeId === targetId).map((item) => [item.id, item]));
+        const ordered = incoming
+            .filter((item) => item.toNodeId === targetId)
+            .flatMap((item) => {
+                const current = mergedById.get(item.id);
+                if (!current) return [];
+                mergedById.delete(item.id);
+                return [current];
+            });
+        // Keep locally added connections that are absent from the incoming
+        // snapshot after the server-defined order of shared connections.
+        editor
+            .filter((item) => item.toNodeId === targetId)
+            .forEach((item) => {
+                const current = mergedById.get(item.id);
+                if (!current) return;
+                mergedById.delete(item.id);
+                ordered.push(current);
+            });
+        const slots = next.flatMap((item, index) => (item.toNodeId === targetId ? [index] : []));
+        slots.forEach((index, orderIndex) => {
+            const connection = ordered[orderIndex];
+            if (connection) next[index] = connection;
+        });
+    }
+    return next;
+}
+
 export function applyAgentCanvasPatch(project: CanvasProject, patch: AgentCanvasPatch): CanvasProject {
     if (patch.canvasId !== project.id || !Array.isArray(patch.nodes) || !Array.isArray(patch.connections)) throw new Error("画布增量不属于当前画布或格式无效");
     const byId = new Map(project.nodes.map((node) => [node.id, node]));
@@ -130,6 +176,7 @@ export function mergeAgentCanvasEditor(previous: CanvasProject, incoming: Canvas
             connections: changes(previous.connections, incoming.connections),
         },
     );
+    projected.connections = mergeConnectionOrder(previous.connections, incoming.connections, editorState.connections, projected.connections);
     const merged = { ...projected } as CanvasProject & Record<string, unknown>;
     const before = previous as CanvasProject & Record<string, unknown>;
     const after = incoming as CanvasProject & Record<string, unknown>;

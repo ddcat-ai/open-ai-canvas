@@ -2,7 +2,7 @@
 //
 // 同一份内联数据按内容摘要去重上传；上传失败时整批同步失败并进入重试，不写入半成品。
 
-import { resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
+import { getResourceBlob, isResourceUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { getImageBlob } from "@/services/image-storage";
 import { getMediaBlob } from "@/services/file-storage";
 
@@ -33,51 +33,91 @@ export function collectLocalMediaKeys(value: unknown, set = new Set<string>()): 
     return [...set];
 }
 
-export async function ensureRemoteResourceReferences<T>(value: T, uploaded = new Map<string, string>(), onUploaded?: () => void): Promise<T> {
+/**
+ * 修复早期版本已经把文本正文保存成资源 URL 的画布数据。
+ * 上传文本时 prompt 与正文相同，优先使用 prompt，避免一次额外的资源下载；
+ * 其他旧数据再从同一 storageKey 读取原始文件。
+ */
+export async function restoreRemoteTextNodeContents<T>(value: T, readText: (storageKey: string) => Promise<string | null> = readRemoteTextResource): Promise<T> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    if (!Array.isArray(record.nodes)) return value;
+    const nodes = await Promise.all(
+        record.nodes.map(async (item) => {
+            if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+            const node = item as Record<string, unknown>;
+            if (node.type !== "text" && node.type !== "markdown") return item;
+            const metadata = node.metadata;
+            if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return item;
+            const nextMetadata = { ...(metadata as Record<string, unknown>) };
+            const storageKey = typeof nextMetadata.storageKey === "string" ? nextMetadata.storageKey : "";
+            const content = typeof nextMetadata.content === "string" ? nextMetadata.content : "";
+            if (!resourceIdFromStorageKey(storageKey) || !isResourceUrl(content)) return item;
+            const prompt = typeof nextMetadata.prompt === "string" ? nextMetadata.prompt : "";
+            const restored = prompt && !isResourceUrl(prompt) ? prompt : await readText(storageKey);
+            if (!restored) return item;
+            return { ...node, metadata: { ...nextMetadata, content: restored, ...(prompt && !isResourceUrl(prompt) ? {} : { prompt: restored }) } };
+        }),
+    );
+    return { ...record, nodes } as T;
+}
+
+async function readRemoteTextResource(storageKey: string) {
+    try {
+        return (await getResourceBlob(storageKey))?.text() || null;
+    } catch {
+        return null;
+    }
+}
+
+export async function ensureRemoteResourceReferences<T>(value: T, uploaded = new Map<string, string>(), onUploaded?: () => void, preserveTextContent = false): Promise<T> {
     if (!value || typeof value !== "object") return value;
+    // 文本节点也会携带 file 资源的 storageKey。这个 key 用于素材归属和
+    // Agent 读取文件，不能因此把节点正文替换成 /api/resources/.../file。
+    const currentPreserveTextContent = preserveTextContent || (typeof (value as { type?: unknown }).type === "string" && (value as unknown as { type: string }).type === "text");
     if (Array.isArray(value)) {
         const result: unknown[] = [];
-        for (const item of value) result.push(await ensureRemoteResourceReferences(item, uploaded, onUploaded));
+        for (const item of value) result.push(await ensureRemoteResourceReferences(item, uploaded, onUploaded, currentPreserveTextContent));
         return result as T;
     }
 
     const next: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
-        next[key] = await ensureRemoteResourceReferences(child, uploaded, onUploaded);
+        next[key] = await ensureRemoteResourceReferences(child, uploaded, onUploaded, currentPreserveTextContent);
     }
 
     const storageKey = typeof next.storageKey === "string" ? next.storageKey : "";
     const remoteResourceId = resourceIdFromStorageKey(storageKey);
-    if (remoteResourceId) return applyResourceReference(next, storageKey) as T;
+    if (remoteResourceId) return applyResourceReference(next, storageKey, currentPreserveTextContent) as T;
 
     if (!isLocalStorageKey(storageKey)) {
         const inline = inlineMediaDataUrl(next);
         if (!inline) return next as T;
         const identity = await inlineMediaUploadIdentity(inline);
         const cached = uploaded.get(identity);
-        if (cached) return applyResourceReference(next, cached) as T;
+        if (cached) return applyResourceReference(next, cached, currentPreserveTextContent) as T;
         const resourceStorage = await uploadInlineDataUrl(inline, identity);
         uploaded.set(identity, resourceStorage);
         onUploaded?.();
-        return applyResourceReference(next, resourceStorage) as T;
+        return applyResourceReference(next, resourceStorage, currentPreserveTextContent) as T;
     }
 
     const cached = uploaded.get(storageKey);
-    if (cached) return applyResourceReference(next, cached) as T;
+    if (cached) return applyResourceReference(next, cached, currentPreserveTextContent) as T;
     const resourceStorage = await uploadLocalStorageKey(storageKey, next);
     uploaded.set(storageKey, resourceStorage);
     onUploaded?.();
-    return applyResourceReference(next, resourceStorage) as T;
+    return applyResourceReference(next, resourceStorage, currentPreserveTextContent) as T;
 }
 
-export function applyResourceReference(payload: Record<string, unknown>, storageKey: string) {
+export function applyResourceReference(payload: Record<string, unknown>, storageKey: string, preserveTextContent = false) {
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (!resourceId) {
         throw new Error(`远端资源引用无效：${storageKey}`);
     }
     const url = resourceFileUrl(resourceId);
     payload.storageKey = storageKey;
-    for (const key of ["content", "dataUrl", "url", "coverUrl"]) {
+    for (const key of preserveTextContent ? [] : ["content", "dataUrl", "url", "coverUrl"]) {
         if (typeof payload[key] === "string") payload[key] = url;
     }
     return payload;

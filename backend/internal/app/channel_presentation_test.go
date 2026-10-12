@@ -49,7 +49,7 @@ func TestChannelPresentationUsesModelLabelsAndPublicOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog) != 2 || catalog[0].ID != "second" || catalog[0].Name != "渠道second" || catalog[0].DisplayName != "渠道second" {
+	if len(catalog) != 2 || catalog[0].ID != "second" || catalog[0].Name != "" || catalog[0].DisplayName != "" {
 		t.Fatalf("public catalog: %#v", catalog)
 	}
 	legacy, err := svc.PublicSystemChannels()
@@ -74,7 +74,7 @@ func TestChannelPresentationUsesModelLabelsAndPublicOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog, err = svc.publicSystemChannelCatalog(nil)
-	if err != nil || catalog[0].Name != "渠道second" {
+	if err != nil || catalog[0].Name != "" || catalog[0].DisplayName != "" {
 		t.Fatalf("channel name: %v %v", catalog, err)
 	}
 	for _, invalid := range []int{-1, 1000000} {

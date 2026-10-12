@@ -20,6 +20,12 @@ const styleNode = node("style", CanvasNodeType.Text, {
 });
 
 describe("storyboard generation context", () => {
+    it("does not require a project style node", () => {
+        const context = resolveStoryboardGenerationContext([]);
+
+        expect(context.characters).toEqual([]);
+    });
+
     it("ignores standalone character-design workflows without a linked asset", () => {
         const context = resolveStoryboardGenerationContext([
             styleNode,

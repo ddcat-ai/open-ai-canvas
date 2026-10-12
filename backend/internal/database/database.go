@@ -8,6 +8,7 @@ import (
 
 	"yingce/backend/internal/logging"
 
+	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -39,7 +40,10 @@ func Open(config Config) (*gorm.DB, error) {
 		if dsn == "" {
 			return nil, errors.New("PostgreSQL 模式必须配置 DATABASE_URL")
 		}
-		return gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logging.GormLogger()})
+		return gorm.Open(postgres.New(postgres.Config{
+			DSN:          dsn,
+			OptionOpenDB: []stdlib.OptionOpenDB{stdlib.OptionBeforeConnect(configurePostgresConnection)},
+		}), &gorm.Config{Logger: logging.GormLogger()})
 	default:
 		return nil, fmt.Errorf("不支持的数据库驱动：%s", driver)
 	}

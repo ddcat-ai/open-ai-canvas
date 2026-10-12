@@ -13,6 +13,7 @@
     "newapi-channel-2",
     "system-update",
     "protocol-plugins",
-    "canvas-data-structure"
+    "canvas-data-structure",
+    "canvas-operations-sync"
   ]
 }

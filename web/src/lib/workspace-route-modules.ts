@@ -19,6 +19,8 @@ export function preloadWorkspaceRoute(pathnameOrSlug: string) {
     // 根路径就是创作页，预加载时仍映射到其内部模块名。
     const segments = pathnameOrSlug.replace(/^\//, "").split("/").filter(Boolean);
     const slug = segments[0] || "create";
+    // 具体画布项目由 /canvas/:id 自己加载；不要在认证恢复阶段额外预加载画布列表。
+    if (slug === "canvas" && segments.length > 1) return;
     if (slug === "projects" && segments.length > 1) {
         void workspaceRouteLoaders.projectDetail();
         return;

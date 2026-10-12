@@ -44,6 +44,32 @@ test("new nodes and reference connections are applied atomically", () => {
     expect(result.connections).toEqual([edge]);
 });
 
+test("Agent refresh applies server reference order when local connections were untouched", () => {
+    const imageOne = { id: "image-one", fromNodeId: "image-one", toNodeId: node.id };
+    const imageTwo = { id: "image-two", fromNodeId: "image-two", toNodeId: node.id };
+    const characterOne = { id: "character-one", fromNodeId: "character-one", toNodeId: node.id };
+    const characterTwo = { id: "character-two", fromNodeId: "character-two", toNodeId: node.id };
+    const previous = { ...project, connections: [characterOne, characterTwo, imageOne, imageTwo] };
+    const incoming = { ...previous, revision: 2, connections: [imageOne, imageTwo, characterOne, characterTwo] };
+    const merged = mergeAgentCanvasEditor(previous, incoming, previous.nodes, previous.connections, previous);
+
+    expect(merged.connections.map((connection) => connection.id)).toEqual(["image-one", "image-two", "character-one", "character-two"]);
+});
+
+test("Agent refresh preserves moving the first reference to the fifth position locally", () => {
+    const roleOne = { id: "role-one", fromNodeId: "role-one", toNodeId: node.id };
+    const imageTwo = { id: "image-two", fromNodeId: "image-two", toNodeId: node.id };
+    const roleThree = { id: "role-three", fromNodeId: "role-three", toNodeId: node.id };
+    const imageFour = { id: "image-four", fromNodeId: "image-four", toNodeId: node.id };
+    const imageFive = { id: "image-five", fromNodeId: "image-five", toNodeId: node.id };
+    const previous = { ...project, connections: [roleOne, imageTwo, roleThree, imageFour, imageFive] };
+    const incoming = { ...previous, revision: 2, connections: [imageFive, roleOne, imageTwo, roleThree, imageFour] };
+    const local = { ...previous, connections: [imageTwo, roleThree, imageFour, imageFive, roleOne] };
+    const merged = mergeAgentCanvasEditor(previous, incoming, local.nodes, local.connections, local);
+
+    expect(merged.connections.map((connection) => connection.id)).toEqual(["image-two", "role-three", "image-four", "image-five", "role-one"]);
+});
+
 test("deleted nodes and a newer task binding are not overwritten", () => {
     expect(() => applyAgentCanvasPatch({ ...project, nodes: [] }, patch)).toThrow("冲突");
     // A replacement task can have the same running status; its task identity is a fence.

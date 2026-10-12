@@ -73,8 +73,7 @@ type cloudAgentCachedToolResult struct {
 	Result        json.RawMessage `json:"result,omitempty"`
 	Error         string          `json:"error,omitempty"`
 	ArgumentError bool            `json:"argumentError,omitempty"`
-	// ReplayCount is diagnostic only. Replaying a cached read is harmless and
-	// must not fail the run; the per-run real-read budget limits cache misses.
+	// ReplayCount triggers a soft nudge for repeated results, never run failure.
 	ReplayCount int `json:"replayCount,omitempty"`
 }
 
@@ -100,9 +99,9 @@ func (e *cloudAgentReadLoopError) Error() string {
 		return "Agent 重复读取护栏已触发"
 	}
 	if e.Budget {
-		return fmt.Sprintf("Agent 本轮只读工具调用已达到安全上限（%d 次），本轮已停止以避免继续消耗模型调用；请使用已有结果继续，不要继续读取", e.Count)
+		return fmt.Sprintf("Agent 本轮只读工具调用已达到安全上限（%d 次），重复读取已软收敛；请使用已有结果继续，不要继续读取", e.Count)
 	}
-	return fmt.Sprintf("Agent 连续重复读取同一份%s结果，本轮已停止以避免继续消耗模型调用；请使用已有结果继续，不要再次读取", e.ToolName)
+	return fmt.Sprintf("Agent 连续重复读取同一份%s结果，重复读取已软收敛；请使用已有结果继续，不要再次读取", e.ToolName)
 }
 
 type cloudAgentApproval struct {
@@ -198,6 +197,11 @@ type cloudAgentRuntime struct {
 	// ReadToolCalls 记录本轮会读取运行时只读快照的工具调用次数。除了同参缓存护栏，
 	// 还需要一个跨参数的总上限，防止模型通过不断变化 offset/nodeIds 绕过重复读取保护。
 	ReadToolCalls int `json:"readToolCalls,omitempty"`
+	// ReadLoopNudge 是一次性的软收敛信号：下一步模型请求暂时不提供只读工具，
+	// 让 Agent 使用已有结果回复、提问或执行有实际变化的写操作。它不结束运行。
+	ReadLoopNudge    bool   `json:"readLoopNudge,omitempty"`
+	ReadLoopToolName string `json:"readLoopToolName,omitempty"`
+	ReadLoopCount    int    `json:"readLoopCount,omitempty"`
 	// PendingImageInspections 暂存"本批还有工具结果没入历史"的看图结果，等整批 tool
 	// 结果都入历史后合并成一条 user 图片消息（见 cloudAgentFlushPendingImages）。
 	//

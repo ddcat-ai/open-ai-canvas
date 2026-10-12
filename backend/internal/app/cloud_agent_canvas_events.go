@@ -240,7 +240,10 @@ func cloudAgentPatchCoversDocument(before, after map[string]any) bool {
 	content := func(doc map[string]any) map[string]any {
 		result := map[string]any{}
 		for key, value := range doc {
-			if key != "nodes" && key != "connections" && key != "updatedAt" && key != "viewport" {
+			if key != "nodes" && key != "connections" && key != "id" && key != "revision" && key != "createdAt" && key != "updatedAt" && key != "viewport" {
+				if (key == "title" || key == "projectId") && value == "" {
+					continue
+				}
 				result[key] = value
 			}
 		}

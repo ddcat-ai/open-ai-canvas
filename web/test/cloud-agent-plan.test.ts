@@ -40,11 +40,6 @@ describe("latestAgentPlanItems", () => {
     });
 });
 
-/**
- * 回归（2026-09-16）：运行中输入框是禁用的，模型在正文里提问用户根本答不了
- * （生产实测它连问 4 轮、白烧十几步）。`ask_user` 让本轮收尾并把问题结构化，
- * 这个选择器决定「现在该不该把选项面板亮给用户」。
- */
 describe("pendingAgentQuestion", () => {
     const question = { question: "选哪个模型？", options: [{ label: "H3文生视频" }, { label: "Seedance 2.5" }] };
 

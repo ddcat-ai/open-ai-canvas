@@ -48,9 +48,13 @@ export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewpo
         worldLayer.style.transform = `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.k / committedScale})`;
         worldLayer.style.willChange = container.dataset.canvasViewportInteracting === "true" ? "transform" : "";
     }
-    container.style.setProperty("--canvas-live-scale", String(viewport.k));
-    // 外置节点标题用同一帧逆倍率抵消世界层缩放，避免等待 React 提交后再校正尺寸。
-    container.style.setProperty("--canvas-live-inverse-scale", String(1 / Math.max(viewport.k, 0.05)));
+    // 交互期不要修改根容器上的继承变量。它们会让整棵节点 DOM 子树失效并
+    // 触发样式重算；交互结束后由 CanvasViewport 的 committed render 一次性校正。
+    // 标题和选框在交互期暂时跟随世界层缩放，换取连续帧的合成路径。
+    if (container.dataset.canvasViewportInteracting !== "true") {
+        container.style.setProperty("--canvas-live-scale", String(viewport.k));
+        container.style.setProperty("--canvas-live-inverse-scale", String(1 / Math.max(viewport.k, 0.05)));
+    }
     // 图形层必须逐帧跟随 DOM 世界层；浮层和滚动通知仍可按原频率节流。
     container.dispatchEvent(new CustomEvent<ViewportTransform>(CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT, { detail: viewport }));
     if (notify) {

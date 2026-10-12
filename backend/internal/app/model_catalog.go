@@ -169,10 +169,12 @@ func (s *Service) publicSystemChannelCatalog(intent *ModelRequestIntent) ([]Publ
 		}
 
 		if len(publicModels) > 0 {
+			// 系统渠道的真实名称属于内部部署信息（供应商、中转站、内部命名等），
+			// 不得通过普通用户可访问的创作目录泄漏。前端只依赖 ID 做分组，名称留空后由客户端统一展示为“系统模型”。
 			result = append(result, PublicChannelCatalog{
 				ID:          channel.ID,
-				Name:        channel.Name,
-				DisplayName: channel.Name,
+				Name:        "",
+				DisplayName: "",
 				SortOrder:   channel.SortOrder,
 				Models:      publicModels,
 			})

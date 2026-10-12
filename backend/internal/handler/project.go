@@ -10,7 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
+// RegisterLibraryRoutes 注册画布和短剧共用的个人资料库（画风、声音、角色），不受短剧功能开关限制。
+func RegisterLibraryRoutes(r *gin.RouterGroup, svc *service.Service) {
 	RegisterStyleProfileRoutes(r, svc)
 	r.GET("/voice-profiles", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -25,6 +26,11 @@ func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"profiles": profiles})
 	})
+	registerCharacterLibraryRoutes(r, svc)
+}
+
+// RegisterProjectRoutes 注册短剧项目接口，调用方负责挂短剧功能开关。
+func RegisterProjectRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerProjectCoreRoutes(r, svc)
 	registerProjectUnitRoutes(r, svc)
 	registerProjectAssetRoutes(r, svc)

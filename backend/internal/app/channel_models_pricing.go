@@ -144,6 +144,10 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 			}
 		case "vquality":
 			value = normalizeChannelModelTierResolution(value)
+		case "resolution", "resoluton":
+			// 兼容图片价格档的标准字段，以及历史接口误拼写 resoluton。
+			key = "resolution"
+			value = strings.ToLower(strings.TrimSpace(value))
 		case "videoSeconds":
 			seconds, err := strconv.Atoi(value)
 			if err != nil || seconds < 0 {
@@ -199,6 +203,9 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 	}
 	if _, exists := selector["vquality"]; exists && capability != "video" {
 		return nil, "", 0, BadAuthRequest("只有视频模型可以按分辨率配置价格档")
+	}
+	if _, exists := selector["resolution"]; exists && capability != "image" {
+		return nil, "", 0, BadAuthRequest("只有图片模型可以按分辨率配置价格档")
 	}
 	if _, exists := selector["videoSeconds"]; exists && capability != "video" {
 		return nil, "", 0, BadAuthRequest("只有视频模型可以按时长配置价格档")

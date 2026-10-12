@@ -248,6 +248,8 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if historyErr != nil {
 			return nil, false, historyErr
 		}
+		softReadGuard := state.ReadLoopNudge && !compactionSummary
+		softReadToolName, softReadCount := state.ReadLoopToolName, state.ReadLoopCount
 		if len(canonical.Messages) == 0 {
 			return nil, false, fmt.Errorf("no canonical messages")
 		}
@@ -263,6 +265,10 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if len(correction) > 0 {
 			// 纠偏上下文只用于这一次请求，不写回运行状态，避免下一步重复出现。
 			canonical.Messages = append(append([]map[string]any(nil), canonical.Messages...), correction...)
+		}
+		if softReadGuard {
+			// 只过滤本次请求，不回写长期工具目录；内部压缩不消耗纠偏机会。
+			cloudAgentApplyReadLoopNudge(&canonical, &state)
 		}
 		// 看图后的历史里有 resource: 图片占位，必须随请求带上获准图片清单，
 		// 否则预检以「模型协议引用了未获准的图片」拒绝（见 cloud_agent_pi_image_references.go）。
@@ -298,9 +304,21 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			LogicalModelID: state.Request.LogicalModelID,
 			Input:          input,
 		}
+		if softReadGuard {
+			state.ReadLoopNudge = false
+			state.ReadLoopToolName = ""
+			state.ReadLoopCount = 0
+		}
 		err = s.enqueueCloudAgentTask(run, &state, req, nil)
 		if errors.Is(err, repository.ErrCreationConflict) {
 			state.ActiveTaskID = ""
+			if softReadGuard {
+				// The CAS lost before the checkpoint was written. Preserve the
+				// one-shot guard for the retry so a conflict cannot reopen the loop.
+				state.ReadLoopNudge = true
+				state.ReadLoopToolName = firstNonEmpty(softReadToolName, "只读工具")
+				state.ReadLoopCount = max(1, softReadCount)
+			}
 			time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
 			continue
 		}
