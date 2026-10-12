@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "@/lib/plugins/builtin/editor/editor-shell";
 import {
     AlertTriangle,
     Check,

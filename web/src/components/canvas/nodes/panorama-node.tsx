@@ -11,7 +11,7 @@ import type { CanvasNodeData } from "@/types/canvas";
 type PanoramaNodeContentProps = {
     node: CanvasNodeData;
     theme: CanvasTheme;
-    reduceMediaEffects?: boolean;
+    disableMediaEffects?: boolean;
 };
 
 /** 节点外壳调用查看器能力的最小控制面；实现由 PanoramaViewport 注入。 */
@@ -44,15 +44,13 @@ function clampFov(value: number) {
  *    与既有的 DeferredMediaLoad「点击加载」是同一套交互习惯。
  * 2. **用原生 three 而不是 @react-three/fiber**。这里需要精确控制 dispose——
  *    上下文/纹理/几何体漏一个就逼近上限，节点还会被频繁增删。
- * 3. **性能模式下不提供激活入口**。错题本里多条崩溃出在画布高频渲染，
- *    reduceMediaEffects 时只给静态预览。
- * 4. **截图/四宫格导出走 preserveDrawingBuffer + 同步重渲染**。captureSquare
+ * 3. **截图/四宫格导出走 preserveDrawingBuffer + 同步重渲染**。captureSquare
  *    临时把 renderer 切到方形画幅再恢复，不依赖 rAF 时序；全屏展开时同一时刻
  *    只挂一个 viewer 实例（节点体退回静态预览），上下文数量不翻倍。
- * 5. **节点内不消费滚轮**，滚轮留给画布缩放；全屏覆盖层内画布缩放不存在，
+ * 4. **节点内不消费滚轮**，滚轮留给画布缩放；全屏覆盖层内画布缩放不存在，
  *    才用滚轮调视场角。
  */
-export function PanoramaNodeContent({ node, theme, reduceMediaEffects }: PanoramaNodeContentProps) {
+export function PanoramaNodeContent({ node, theme, disableMediaEffects }: PanoramaNodeContentProps) {
     const upstream = useUpstreamNodes(node.id);
     const actions = useCanvasNodeActions();
     const inherited = upstream.find((item) => getNodeResourceKind(item) === "image");
@@ -142,9 +140,9 @@ export function PanoramaNodeContent({ node, theme, reduceMediaEffects }: Panoram
             <img src={url} alt={node.title || "全景"} className="h-full w-full object-cover opacity-80" draggable={false} />
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,.85), rgba(0,0,0,.35))", boxShadow: "0 -1px 0 rgba(0,0,0,.25)" }}>
                 <span className="min-w-0 truncate text-white" style={{ fontSize: "var(--fs-label)", textShadow: "0 1px 3px rgba(0,0,0,.85)" }}>
-                    {failed ? "全景加载失败（图片可能不允许跨域读取）" : expanded ? "已展开全屏环视" : reduceMediaEffects ? "性能模式下仅显示预览" : `${projectionLabel} · 360° 全景`}
+                    {failed ? "全景加载失败（图片可能不允许跨域读取）" : expanded ? "已展开全屏环视" : disableMediaEffects ? "仅显示预览" : `${projectionLabel} · 360° 全景`}
                 </span>
-                {reduceMediaEffects || expanded ? null : (
+                {disableMediaEffects || expanded ? null : (
                     <button
                         type="button"
                         className="shrink-0 rounded-[var(--r-md)] px-2 py-1 font-medium text-white outline-none transition-colors"

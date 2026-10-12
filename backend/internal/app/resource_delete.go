@@ -46,7 +46,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	// 删除语义（产品约定，勿收紧）：
 	//   - purge=true 是用户在素材库确认后的「彻底删除」（单个 DELETE、批量删除、清空回收站），
 	//     不因画布、任务、项目或画布历史快照仍引用而拒绝；旧引用随之失效，画布保存时由
-	//     repairMissingResources 修复断链。
+	//     由统一 operations 提交前的资源完整性校验修复断链。
 	//   - purge=false 是内部普通删除：回收站（archived）素材同样直接删除，其余素材保留引用保护。
 	//   - 无论哪种，被其他素材复用的资源与物理对象都保留，物理删除一律经 Outbox 异步执行。
 	deleteReferencedResources := purge

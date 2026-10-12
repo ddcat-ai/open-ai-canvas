@@ -1,0 +1,11 @@
+/* 必须留在 utilities 层内：原聚焦阴影同样位于该层且使用 !important，
+   层外样式无法覆盖层内的 important 声明。 */
+@layer utilities {
+    .auth-scene-card .ant-input-affix-wrapper > :is(input, textarea).ant-input:focus,
+    .auth-scene-card .ant-input-affix-wrapper > :is(input, textarea).ant-input:focus-visible {
+        border-color: transparent !important;
+        outline: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+}

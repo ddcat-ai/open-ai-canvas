@@ -61,8 +61,9 @@ func TestUndoCloudAgentCanvasRestoresLatestMutationAndIsIdempotent(t *testing.T)
 		t.Fatalf("unexpected undo result: %+v", result)
 	}
 	restored, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
-	if restored.PayloadJSON != canvas.PayloadJSON {
-		t.Fatal("undo did not restore the exact before snapshot")
+	restoredDoc, err := creationDocument(restored.PayloadJSON)
+	if err != nil || cloudAgentCanvasHash(restoredDoc) != beforeHash {
+		t.Fatal("undo did not restore the semantic before snapshot")
 	}
 	result, err = s.UndoCloudAgentCanvas("user", run.ID, call.ID, beforeHash, "重复请求")
 	if err != nil || result["accepted"] != true {

@@ -69,7 +69,19 @@ func prepareCloudAgentCanvasMutation(repo *repository.Repository, userID, canvas
 	}
 	beforeHash := cloudAgentCanvasHash(doc)
 	if beforeHash != args.SnapshotHash {
-		return nil, &cloudAgentFieldArgumentError{error: &cloudAgentArgumentError{creationConflict("画布已变化，本次未写入；请重新读取并重新申请审批")}, Field: "snapshotHash", Issue: "stale_snapshot"}
+		// The tool call describes concrete node/connection operations. Rebase that
+		// operation list onto the current document instead of rejecting it because
+		// an unrelated browser save advanced the canvas revision.
+		latest, latestErr := repo.CanvasProjectForUser(userID, canvasID)
+		if latestErr != nil {
+			return nil, latestErr
+		}
+		canvas = latest
+		doc, err = creationDocument(canvas.PayloadJSON)
+		if err != nil {
+			return nil, err
+		}
+		beforeHash = cloudAgentCanvasHash(doc)
 	}
 	items, err := applyCloudAgentCanvasPlan(doc, args.Ops)
 	if err != nil {

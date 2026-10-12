@@ -9,11 +9,10 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
+import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
-import { readCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 import type { CanvasHistorySnapshot } from "./use-canvas-history";
@@ -94,9 +93,6 @@ export function useCanvasProjectLifecycle({
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const observedContentRef = useRef<CanvasHistorySnapshot | null>(null);
-    const loadLatestRef = useRef(false);
-    const historyRestoreRef = useRef<{ snapshotId: string; revision: number; resolve: () => void; reject: (error: unknown) => void } | null>(null);
-    const pendingReloadRef = useRef<{ promise: Promise<void>; resolve: () => void; reject: (error: unknown) => void } | null>(null);
     const editorReadyRef = useRef(false);
 
     useEffect(() => {
@@ -105,10 +101,7 @@ export function useCanvasProjectLifecycle({
         // Keep load intent on the refs until this attempt finishes. React Strict
         // Mode remounts the effect; consuming the flags here would turn "load
         // latest" into a normal open and immediately recreate the conflict.
-        const latest = loadLatestRef.current;
-        const historyRestore = historyRestoreRef.current;
-        const pendingReload = pendingReloadRef.current;
-        const keepEditor = editorReadyRef.current && (latest || Boolean(historyRestore));
+        const keepEditor = editorReadyRef.current;
         if (!keepEditor) {
             editorReadyRef.current = false;
             setProjectLoaded(false);
@@ -156,16 +149,12 @@ export function useCanvasProjectLifecycle({
 
         const load = async () => {
             const cachedProject = useCanvasStore.getState().projects.find((p) => p.id === projectId);
-            if (!latest && !historyRestore && cachedProject && cachedProject.nodes?.length) {
+            if (cachedProject && cachedProject.nodes?.length) {
                 // 本地已有该画布的持久化缓存：先以本地数据秒开渲染，彻底消除白屏与等待
                 applyRestoredProject(cachedProject);
             }
-            const loadedProject = await loadCanvasProjectForEditing(projectId, { latest, historyRestore: historyRestore || undefined, onLoad: applyRestoredProject });
+            const loadedProject = await loadCanvasProjectForEditing(projectId, { onLoad: applyRestoredProject });
             if (cancelled) return;
-            if (historyRestoreRef.current === historyRestore) {
-                historyRestoreRef.current = null;
-                historyRestore?.resolve();
-            }
             if (!loadedProject) {
                 if (!cachedProject) navigate("/canvas", { replace: true });
                 return;
@@ -188,24 +177,10 @@ export function useCanvasProjectLifecycle({
         void load()
             .then(() => {
                 if (cancelled) return;
-                loadLatestRef.current = false;
-                if (pendingReloadRef.current === pendingReload) {
-                    pendingReloadRef.current = null;
-                    pendingReload?.resolve();
-                }
             })
             .catch((error) => {
                 if (cancelled) return;
-                loadLatestRef.current = false;
-                if (historyRestoreRef.current === historyRestore) {
-                    historyRestoreRef.current = null;
-                    historyRestore?.reject(error);
-                }
-                if (pendingReloadRef.current === pendingReload) {
-                    pendingReloadRef.current = null;
-                    pendingReload?.reject(error);
-                }
-                if (useSyncProgressStore.getState().syncingProjects[projectId]?.phase !== "conflict") useSyncProgressStore.getState().setProjectProgress(projectId, { phase: "error", message: error instanceof Error ? error.message : "读取云端版本失败" });
+                useSyncProgressStore.getState().setProjectProgress(projectId, { phase: "error", message: error instanceof Error ? error.message : "读取云端版本失败" });
                 const detail = error instanceof Error ? error.message : "读取画布失败，请重试";
                 if (keepEditor) message.error(detail);
                 else setLoadError(detail);
@@ -289,11 +264,8 @@ export function useCanvasProjectLifecycle({
     }, [message, navigate]);
 
     const deleteCurrentProject = useCallback(async () => {
-        let drawingIds = nodesRef.current.flatMap((node) => node.type === "drawing" && node.metadata?.drawingId ? [node.metadata.drawingId] : []);
+        const drawingIds = nodesRef.current.flatMap((node) => node.type === "drawing" && node.metadata?.drawingId ? [node.metadata.drawingId] : []);
         try {
-            const drafts = await readCanvasSyncDrafts(projectId);
-            const preserved = new Set(drafts.flatMap((draft) => draft.project.nodes.flatMap((node) => node.metadata?.drawingId ? [node.metadata.drawingId] : [])));
-            drawingIds = drawingIds.filter((id) => !preserved.has(id));
             await deleteCanvasProjectsWithRemoteSync([projectId]);
         } catch (error) {
             message.error(error instanceof Error ? `删除画布失败：${error.message}` : "删除画布失败，请稍后重试");
@@ -335,41 +307,6 @@ export function useCanvasProjectLifecycle({
         if (options.flush !== false) await flushCanvasStorePersistence();
     }, [activeChatId, backgroundMode, canvasAppearance, chatSessions, connectionsRef, nodesRef, projectId, showImageInfo, updateProject, viewportRef]);
 
-    const reloadLatestCanvasProject = useCallback(async () => {
-        const pending = pendingReloadRef.current;
-        if (pending) return pending.promise;
-
-        // The load path writes a durable draft before replacing the editor. Waiting
-        // for the ordinary canvas queue here makes a viewport drag able to starve
-        // the cloud read, so only bring the latest editor snapshot into memory.
-        useSyncProgressStore.getState().setProjectProgress(projectId, { phase: "reconciling", message: "正在加载云端最新版本" });
-        try {
-            await persistLocalEdits({ flush: false });
-        } catch (error) {
-            useSyncProgressStore.getState().setProjectProgress(projectId, { phase: "error", message: error instanceof Error ? error.message : "准备加载云端版本失败" });
-            throw error;
-        }
-        let resolve!: () => void;
-        let reject!: (error: unknown) => void;
-        const promise = new Promise<void>((done, fail) => {
-            resolve = done;
-            reject = fail;
-        });
-        pendingReloadRef.current = { promise, resolve, reject };
-        loadLatestRef.current = true;
-        setLoadAttempt((value) => value + 1);
-        return promise;
-    }, [persistLocalEdits, projectId]);
-
-    const restoreCanvasProjectVersion = useCallback(async (snapshotId: string, revision: number) => {
-        await persistLocalEdits();
-        return new Promise<void>((resolve, reject) => {
-            historyRestoreRef.current?.reject(new Error("已有新的恢复请求"));
-            historyRestoreRef.current = { snapshotId, revision, resolve, reject };
-            setLoadAttempt((value) => value + 1);
-        });
-    }, [persistLocalEdits]);
-
     const saveCanvasProject = useCallback(async (options: { requireRemote?: boolean } = {}): Promise<boolean> => {
         try {
             await persistLocalEdits();
@@ -390,18 +327,6 @@ export function useCanvasProjectLifecycle({
         return true;
     }, [message, persistLocalEdits, projectId]);
 
-    const forceSaveCanvasProject = useCallback(async (): Promise<boolean> => {
-        try { await persistLocalEdits(); } catch { message.error("本地保存失败，请重试"); return false; }
-        try {
-            const result = await forceOverwriteRemoteCanvasSync(projectId);
-            message.success(result.clearedResources > 0 ? `已强制保存，移除了 ${result.clearedResources} 个失效素材引用；本地草稿已保留` : result.reboundNodes > 0 ? `已保存，并修复 ${result.reboundNodes} 处媒体与素材的绑定` : "素材关联已核对，画布已保存");
-        } catch (error) {
-            message.error(`修复并保存失败：${error instanceof Error ? error.message : "未知错误"}`);
-            return false;
-        }
-        return true;
-    }, [message, persistLocalEdits]);
-
     const clearCanvasFiles = useCallback(() => {
         cleanupCanvasFiles({ projectId, nodes: [], chatSessions: [] });
     }, [cleanupCanvasFiles, projectId]);
@@ -416,10 +341,7 @@ export function useCanvasProjectLifecycle({
         currentProject,
         deleteCurrentProject,
         renameCurrentProject,
-        reloadLatestCanvasProject,
-        restoreCanvasProjectVersion,
         saveCanvasProject,
-        forceSaveCanvasProject,
         updateProject,
     };
 }

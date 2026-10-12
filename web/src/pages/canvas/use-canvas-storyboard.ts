@@ -17,6 +17,7 @@ import {
     expandStoryboardTextMentions,
     storyboardRowsFromTask,
     storyboardPromptTemplateMetadata,
+    stripProjectStyleExecutionBlocks,
     withStoryboardOutputContract,
 } from "@/lib/canvas/canvas-project-domain";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
@@ -131,7 +132,11 @@ export function useCanvasStoryboard({
 
     const generateScriptRows = useCallback(async (nodeId: string, prompt: string, callerSignal?: AbortSignal) => {
         const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
-        if (!scriptNode || !prompt.trim()) return;
+        const cleanedPrompt = stripProjectStyleExecutionBlocks(prompt);
+        if (!scriptNode || !cleanedPrompt) {
+            if (scriptNode && !cleanedPrompt) message.warning("分镜脚本缺少剧情内容，无法生成");
+            return;
+        }
         if (storyboardRequests.current.has(nodeId) || scriptNode.metadata?.status === NODE_STATUS_LOADING) { message.warning("当前分镜正在处理，请等待原任务完成"); return false; }
         const lifetimeSignal = storyboardLifetime.current.signal;
         const signal = callerSignal ? AbortSignal.any([lifetimeSignal, callerSignal]) : lifetimeSignal;
@@ -153,7 +158,7 @@ export function useCanvasStoryboard({
         const shotDurationSeconds = shotDuration === "auto" ? 0 : Number(shotDuration);
         const shotCount = scriptNode.metadata?.storyboardShotCount || "auto";
         const requestedShotCount = shotCount === "auto" ? 0 : Number(shotCount);
-        const expandedPrompt = expandStoryboardTextMentions(prompt, buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current));
+        const expandedPrompt = expandStoryboardTextMentions(cleanedPrompt, buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current));
         const generationConfig = buildGenerationConfig(effectiveConfig, scriptNode, "text");
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
             navigateToSettings({ continueCreation: true });
@@ -167,7 +172,7 @@ export function useCanvasStoryboard({
                 skills: addedSkills,
             });
             assertCurrent();
-            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: prompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined, ...skillExecution.metadata } } : node));
+            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, composerContent: cleanedPrompt, status: NODE_STATUS_LOADING, taskStage: "正在创建任务", taskProgress: 0, errorDetails: undefined, ...skillExecution.metadata } } : node));
             assertCurrent();
             // 输入框内容只是剧情，拆镜要求与镜头数、每镜时长都必须随契约一起发出去。
             const storyboardPrompt = withStoryboardOutputContract(skillExecution.prompt, { shotCount: requestedShotCount, shotDurationSeconds });
@@ -183,7 +188,6 @@ export function useCanvasStoryboard({
                     prompt: storyboardPrompt,
                     canvasAssets: buildStoryboardAssetCatalog(nodesRef.current),
                     requirements: "输出可直接编辑并用于批量生成图片和视频的分镜表。",
-                    projectStyle: storyboardContext.projectStyle,
                     characters: storyboardContext.characters,
                     shotDurationSeconds,
                     shotCount: requestedShotCount,

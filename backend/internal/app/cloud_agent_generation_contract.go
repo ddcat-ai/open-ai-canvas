@@ -26,6 +26,7 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 			options.DurationSeconds = &a.Duration
 		}
 		options.GenerateAudio = a.VideoGenerateAudio
+		options.Watermark = a.VideoWatermark
 		if a.Quality != "" {
 			options.Resolution = &a.Quality
 		}
