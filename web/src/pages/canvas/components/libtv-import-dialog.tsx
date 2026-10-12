@@ -2,9 +2,9 @@ import { App, Button, Input, Modal, Tag } from "antd";
 import { CircleAlert, ExternalLink, Import, LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { buildLibTVImagePreviewUrl, buildLibTVVideoPreviewUrl, buildLibTVVideoSourceUrl, formatLibTVBatchTime, parseLibTVProjectUUID } from "@/lib/canvas/libtv-import";
+import { buildLibTVCanvasNodes, formatLibTVBatchTime, parseLibTVProjectUUID } from "@/lib/canvas/libtv-import";
 import { importLibTVCanvas, type LibTVImportResult } from "@/services/api/libtv";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
+import type { CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 
 type Props = {
     open: boolean;
@@ -14,36 +14,6 @@ type Props = {
     onClose: () => void;
     onApply: (nodes: CanvasNodeData[], connections: CanvasConnection[]) => Promise<void>;
 };
-
-function buildCanvasNodes(result: LibTVImportResult, viewport: ViewportTransform, viewportSize: { width: number; height: number }) {
-    const minX = Math.min(...result.nodes.map((node) => node.x));
-    const minY = Math.min(...result.nodes.map((node) => node.y));
-    const maxX = Math.max(...result.nodes.map((node) => node.x + node.width));
-    const maxY = Math.max(...result.nodes.map((node) => node.y + node.height));
-    const offsetX = (viewportSize.width / 2 - viewport.x) / viewport.k - (minX + maxX) / 2;
-    const offsetY = (viewportSize.height / 2 - viewport.y) / viewport.k - (minY + maxY) / 2;
-    return result.nodes.map<CanvasNodeData>((node) => ({
-        id: node.id,
-        type: node.type === "video" ? CanvasNodeType.Video : CanvasNodeType.Image,
-        title: node.title,
-        position: { x: node.x + offsetX, y: node.y + offsetY },
-        width: node.width,
-        height: node.height,
-        metadata: {
-            content: node.type === "video" ? buildLibTVVideoSourceUrl(node.content) : node.content,
-            previewContent: node.type === "image" ? buildLibTVImagePreviewUrl(node.content) : buildLibTVVideoPreviewUrl(node.content) || undefined,
-            prompt: node.prompt,
-            model: node.model,
-            status: node.status || "idle",
-            errorDetails: node.errorDetails,
-            naturalWidth: node.naturalWidth,
-            naturalHeight: node.naturalHeight,
-            durationMs: node.durationMs,
-            mimeType: node.mimeType,
-            importSource: node.metadata,
-        },
-    }));
-}
 
 export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onClose, onApply }: Props) {
     const { message } = App.useApp();
@@ -87,7 +57,7 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
         if (!result) return;
         setLoading(true);
         try {
-            await onApply(buildCanvasNodes(result, viewport, viewportSize), result.connections);
+            await onApply(buildLibTVCanvasNodes(result, viewport, viewportSize), result.connections);
             reset();
             onClose();
             message.success(`已导入 ${result.importedNodeCount} 个节点和 ${result.importedConnectionCount} 条连接`);
