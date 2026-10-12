@@ -15,7 +15,7 @@ type UseCanvasKeyboardOptions = {
     setCropNodeId: Dispatch<SetStateAction<string | null>>;
     setMaskEditNodeId: Dispatch<SetStateAction<string | null>>;
     setAnnotationNodeId: Dispatch<SetStateAction<string | null>>;
-    saveCanvasProject: () => unknown;
+    saveCanvasProject: (options?: { requireRemote?: boolean }) => unknown;
     zoomToActualSize: () => void;
     fitCanvasContent: () => void;
     fitCanvasSelection: () => void;
@@ -113,7 +113,7 @@ export function useCanvasKeyboard({
             if (isModifierShortcut && !event.altKey && key === "s") {
                 event.preventDefault();
                 event.stopPropagation();
-                if (!event.repeat) void saveCanvasProject();
+                if (!event.repeat) void saveCanvasProject({ requireRemote: false });
                 return;
             }
             if (isModifierShortcut && !event.altKey && key === "f") {

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"yingce/backend/internal/canvas"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -92,27 +93,29 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 }
 
 type cloudAgentMediaArgs struct {
-	Prepared              *cloudAgentPreparedMedia `json:"-"`
-	DraftRunID            string                   `json:"-"`
-	CharacterVersions     map[string]string        `json:"-"`
-	CharacterLabels       []string                 `json:"-"`
-	Mode                  string                   `json:"mode"`
-	Prompt                string                   `json:"prompt"`
-	LogicalModelID        string                   `json:"logicalModelId"`
-	ChannelID             string                   `json:"channelId"`
-	ChannelModelKey       string                   `json:"channelModelKey"`
-	Duration              int                      `json:"durationSeconds"`
-	Size                  string                   `json:"size"`
-	Quality               string                   `json:"quality"`
-	VideoGenerateAudio    *bool                    `json:"videoGenerateAudio"`
-	VideoStartFrameNodeID string                   `json:"videoStartFrameNodeId"`
-	VideoEndFrameNodeID   string                   `json:"videoEndFrameNodeId"`
-	SnapshotHash          string                   `json:"snapshotHash"`
-	NodeID                string                   `json:"nodeId"`
-	Title                 string                   `json:"title"`
-	SourceNodeID          string                   `json:"sourceNodeId"`
-	ReferenceNodeIDs      []string                 `json:"referenceNodeIds"`
-	ReferenceTransientIDs []string                 `json:"referenceTransientIds"`
+	Prepared                   *cloudAgentPreparedMedia `json:"-"`
+	DraftRunID                 string                   `json:"-"`
+	CharacterVersions          map[string]string        `json:"-"`
+	CharacterLabels            []string                 `json:"-"`
+	Mode                       string                   `json:"mode"`
+	Prompt                     string                   `json:"prompt"`
+	LogicalModelID             string                   `json:"logicalModelId"`
+	ChannelID                  string                   `json:"channelId"`
+	ChannelModelKey            string                   `json:"channelModelKey"`
+	Duration                   int                      `json:"durationSeconds"`
+	Size                       string                   `json:"size"`
+	Quality                    string                   `json:"quality"`
+	VideoGenerateAudio         *bool                    `json:"videoGenerateAudio"`
+	VideoWatermark             *bool                    `json:"videoWatermark"`
+	VideoArkPrivateAssetUpload *bool                    `json:"videoArkPrivateAssetUpload"`
+	VideoStartFrameNodeID      string                   `json:"videoStartFrameNodeId"`
+	VideoEndFrameNodeID        string                   `json:"videoEndFrameNodeId"`
+	SnapshotHash               string                   `json:"snapshotHash"`
+	NodeID                     string                   `json:"nodeId"`
+	Title                      string                   `json:"title"`
+	SourceNodeID               string                   `json:"sourceNodeId"`
+	ReferenceNodeIDs           []string                 `json:"referenceNodeIds"`
+	ReferenceTransientIDs      []string                 `json:"referenceTransientIds"`
 }
 
 type cloudAgentMediaPlan struct {
@@ -537,8 +540,8 @@ func validateCloudAgentMediaArgs(a cloudAgentMediaArgs, state *cloudAgentRuntime
 		if a.Duration != 0 {
 			return cloudAgentFieldError("durationSeconds", "invalid_value", "只有视频生成允许设置 durationSeconds；图片或音频生成请省略该字段")
 		}
-		if a.VideoGenerateAudio != nil {
-			return cloudAgentFieldError("videoGenerateAudio", "invalid_value", "videoGenerateAudio 仅适用于视频生成；图片或音频生成请省略该字段")
+		if a.VideoGenerateAudio != nil || a.VideoWatermark != nil || a.VideoArkPrivateAssetUpload != nil {
+			return cloudAgentFieldError("videoGenerateAudio", "invalid_value", "视频参数仅适用于视频生成；图片或音频生成请省略该字段")
 		}
 	}
 	if len(a.ReferenceNodeIDs) > 16 {
@@ -711,6 +714,9 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	if a.ChannelID != "" {
 		config["channelId"], config["channelModelKey"], config["model"] = a.ChannelID, a.ChannelModelKey, a.ChannelModelKey
 	}
+	if a.Mode == "video" && a.VideoArkPrivateAssetUpload != nil {
+		config["videoArkPrivateAssetUpload"] = strconv.FormatBool(*a.VideoArkPrivateAssetUpload)
+	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
 	// 首尾帧是结构化输入，不能只写进提示词；复用画布提交任务时的字段。
 	if a.VideoStartFrameNodeID != "" {
@@ -805,6 +811,20 @@ func applyCloudAgentResolvedMediaDefaults(req *CreateTaskRequest, plan *cloudAge
 			}
 			plan.Args.VideoGenerateAudio = &audio
 		}
+		if raw := stringValue(config["videoWatermark"]); raw != "" {
+			watermark, err := strconv.ParseBool(raw)
+			if err != nil {
+				return BadAuthRequest("模型目录返回的默认水印参数无效，未提交生成任务")
+			}
+			plan.Args.VideoWatermark = &watermark
+		}
+		if raw := stringValue(config["videoArkPrivateAssetUpload"]); raw != "" {
+			privateUpload, err := strconv.ParseBool(raw)
+			if err != nil {
+				return BadAuthRequest("模型目录返回的默认参考图同步参数无效，未提交生成任务")
+			}
+			plan.Args.VideoArkPrivateAssetUpload = &privateUpload
+		}
 	}
 	plan.Args.Prepared = nil
 	req.Input = input
@@ -812,7 +832,7 @@ func applyCloudAgentResolvedMediaDefaults(req *CreateTaskRequest, plan *cloudAge
 	return nil
 }
 
-func saveCloudAgentDocument(repo *repository.Repository, canvas *model.CanvasProject, doc map[string]any, policy RuntimePolicySetting) error {
+func saveCloudAgentDocument(repo *repository.Repository, project *model.CanvasProject, doc map[string]any, policy RuntimePolicySetting) error {
 	doc["updatedAt"] = time.Now().UTC().Format(time.RFC3339Nano)
 	raw, err := json.Marshal(doc)
 	if err != nil {
@@ -821,16 +841,98 @@ func saveCloudAgentDocument(repo *repository.Repository, canvas *model.CanvasPro
 	if len(raw) > 8<<20 {
 		return BadAuthRequest("画布大小超限")
 	}
-	usage, err := repo.UserStorageUsage(canvas.UserID)
+	usage, err := repo.UserStorageUsage(project.UserID)
 	if err != nil {
 		return err
 	}
-	if err = validateStructuredStorageQuotaWithPolicy(usage, "canvas", false, int64(len(raw)-len(canvas.PayloadJSON)), policy.Resource); err != nil {
+	if err = validateStructuredStorageQuotaWithPolicy(usage, "canvas", false, int64(len(raw)-len(project.PayloadJSON)), policy.Resource); err != nil {
 		return err
 	}
-	before := canvas.PayloadJSON
-	canvas.PayloadJSON = string(raw)
-	return saveCreationCanvasWithHistory(repo, canvas, before)
+	beforeDoc, err := creationDocument(project.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	operations := canvas.DiffCanvasDocuments(beforeDoc, doc)
+	if len(operations) == 0 {
+		return nil
+	}
+	baseRevision := project.Revision
+	request := canvas.CanvasOperationsRequest{BaseRevision: &baseRevision, Operations: operations, TrustedServerMutation: true}
+	request.MutationID = "agent-canvas:" + project.ID + ":" + canvas.CanvasOperationsDigest(request)
+	_, err = canvas.New(repo, nil).ApplyUserCanvasOperations(project.UserID, project.ID, request)
+	if err != nil {
+		return err
+	}
+	latest, err := repo.CanvasProjectForUser(project.UserID, project.ID)
+	if err != nil {
+		return err
+	}
+	*project = *latest
+	persistedDoc, err := creationDocument(latest.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	for key := range doc {
+		delete(doc, key)
+	}
+	for key, value := range persistedDoc {
+		doc[key] = value
+	}
+	return nil
+}
+
+func rebaseCloudAgentDocument(base, desired, latest map[string]any) map[string]any {
+	result := make(map[string]any, len(latest))
+	for key, value := range latest {
+		result[key] = value
+	}
+	for _, key := range []string{"nodes", "connections"} {
+		result[key] = rebaseCloudAgentCollection(base[key], desired[key], latest[key])
+	}
+	for key, value := range desired {
+		if key == "nodes" || key == "connections" || key == "revision" || key == "updatedAt" || key == "createdAt" || key == "id" {
+			continue
+		}
+		if !jsonValuesEqual(base[key], value) {
+			result[key] = value
+		}
+	}
+	return result
+}
+
+func rebaseCloudAgentCollection(baseValue, desiredValue, latestValue any) []map[string]any {
+	baseItems, desiredItems, latestItems := creationMaps(baseValue), creationMaps(desiredValue), creationMaps(latestValue)
+	baseByID, desiredByID := map[string]map[string]any{}, map[string]map[string]any{}
+	for _, item := range baseItems {
+		baseByID[stringValue(item["id"])] = item
+	}
+	for _, item := range desiredItems {
+		desiredByID[stringValue(item["id"])] = item
+	}
+	result := make([]map[string]any, 0, len(latestItems)+len(desiredItems))
+	seen := map[string]bool{}
+	for _, item := range latestItems {
+		id := stringValue(item["id"])
+		if desired, changed := desiredByID[id]; changed && !jsonValuesEqual(baseByID[id], desired) {
+			result = append(result, desired)
+		} else if _, removed := baseByID[id]; !removed || desiredByID[id] != nil {
+			result = append(result, item)
+		}
+		seen[id] = true
+	}
+	for _, item := range desiredItems {
+		id := stringValue(item["id"])
+		if !seen[id] && !jsonValuesEqual(baseByID[id], item) {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func jsonValuesEqual(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
 }
 
 // createCloudAgentMediaNode 为指定用户的画布保存计划中的媒体节点及引用连线。

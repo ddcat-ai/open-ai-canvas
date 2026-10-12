@@ -4,6 +4,34 @@ import type { CanvasNodeData } from "@/types/canvas";
 import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 
 export type AgentImageApproval = AgentMediaSettings & { prompt: string; referenceNodeIds: string[] };
+export type AgentVideoApproval = AgentImageApproval & { referenceTransientIds: string[]; sourceNodeId: string };
+
+export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoApproval | null {
+    const call = detail.call as { function?: { name?: string; arguments?: unknown } } | undefined;
+    if ((call?.function?.name || detail.toolName) !== "generate_media") return null;
+    const raw = call?.function?.arguments ?? detail.arguments;
+    try {
+        const args = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!args || args.mode !== "video" || typeof args.prompt !== "string") return null;
+        return {
+            logicalModelId: typeof args.logicalModelId === "string" ? args.logicalModelId : "",
+            channelId: typeof args.channelId === "string" ? args.channelId : "",
+            channelModelKey: typeof args.channelModelKey === "string" ? args.channelModelKey : "",
+            size: typeof args.size === "string" ? args.size : "",
+            quality: typeof args.quality === "string" ? args.quality : "",
+            durationSeconds: typeof args.durationSeconds === "number" && args.durationSeconds > 0 ? args.durationSeconds : undefined,
+            videoGenerateAudio: typeof args.videoGenerateAudio === "boolean" ? args.videoGenerateAudio : undefined,
+            videoWatermark: typeof args.videoWatermark === "boolean" ? args.videoWatermark : undefined,
+            videoArkPrivateAssetUpload: typeof args.videoArkPrivateAssetUpload === "boolean" ? args.videoArkPrivateAssetUpload : undefined,
+            prompt: args.prompt,
+            referenceNodeIds: Array.isArray(args.referenceNodeIds) ? args.referenceNodeIds.filter((id: unknown): id is string => typeof id === "string") : [],
+            referenceTransientIds: Array.isArray(args.referenceTransientIds) ? args.referenceTransientIds.filter((id: unknown): id is string => typeof id === "string") : [],
+            sourceNodeId: typeof args.sourceNodeId === "string" ? args.sourceNodeId : "",
+        };
+    } catch {
+        return null;
+    }
+}
 
 export function agentImageApproval(detail: Record<string, unknown>): AgentImageApproval | null {
     const call = detail.call as { function?: { name?: string; arguments?: unknown } } | undefined;
@@ -26,16 +54,22 @@ export function agentImageApproval(detail: Record<string, unknown>): AgentImageA
     }
 }
 
-export function agentApprovalModel(config: AiConfig, settings: AgentMediaSettings): string {
-    return selectableModelsByCapability(config, "image").find((model) => {
+export function agentApprovalModel(config: AiConfig, settings: AgentMediaSettings, capability: "image" | "video" = "image"): string {
+    return selectableModelsByCapability(config, capability).find((model) => {
         if (settings.logicalModelId) return logicalModelIDForConfig({ ...config, model }) === settings.logicalModelId;
         return resolveModelChannel(config, model).id === settings.channelId && modelOptionName(model) === settings.channelModelKey;
     }) || "";
 }
 
 export function agentApprovalMatchesSettings(argumentsValue: unknown, settings: AgentMediaSettings): boolean {
-    const approved = agentImageApproval({ toolName: "generate_media", arguments: argumentsValue });
-    return Boolean(approved && (["logicalModelId", "channelId", "channelModelKey", "size", "quality"] as const).every((key) => (approved[key] || "") === (settings[key] || "")));
+    const detail = { toolName: "generate_media", arguments: argumentsValue };
+    const approved = agentImageApproval(detail) || agentVideoApproval(detail);
+    if (!approved) return false;
+    return (["logicalModelId", "channelId", "channelModelKey", "size", "quality", "durationSeconds", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"] as const).every((key) => {
+        const left = approved[key];
+        const right = settings[key];
+        return (left === undefined ? "" : left) === (right === undefined ? "" : right);
+    });
 }
 
 export function agentApprovalModelSelection(config: AiConfig, model: string): Pick<AgentMediaSettings, "logicalModelId" | "channelId" | "channelModelKey"> {

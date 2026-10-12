@@ -53,13 +53,13 @@ export type CanvasNodeContentProps = {
     onReloadResource?: (node: CanvasNodeData) => void;
     onOpenTaskDetails?: (node: CanvasNodeData) => void;
     onToggleBatch?: () => void;
-    reduceMediaEffects?: boolean;
+    disableMediaEffects?: boolean;
     mediaActive?: boolean;
     onMediaPlayRequest?: (nodeId: string) => void;
 };
 
 export function CanvasNodeContent(props: CanvasNodeContentProps) {
-    if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.reduceMediaEffects} />;
+    if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.disableMediaEffects} />;
     // Preserve the decoded image across LOD changes; only its surrounding
     // controls and batch previews become lighter in overview mode.
     if (props.node.type === CanvasNodeType.Image && props.renderLOD !== "full" && (props.node.metadata?.content || props.node.metadata?.storageKey)) {

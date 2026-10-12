@@ -36,6 +36,7 @@
 | <img src="assets/fruivision.png" alt="浮瑞万相AI" width="160"> | 企业 | 浮瑞万相AI | 一家专注于AI视听的AI Native公司 | 暂无 |
 | <img src="assets/xmzm.png" alt="喜马抓马" width="160"> | 团队 | 喜马抓马 | 中国AI视听先锋厂牌/AI 视听全链路综合服务平台 | [himadrama.com](https://himadrama.com) |
 | <img src="assets/yuyutech.jpg" alt="羽宇科技" width="160"> | 企业 | 羽宇科技 | 一站式AI应用平台。提供模型算力入口、AI短剧视频制作（Studio）、企业数字员工（Agent）及内容出海（OPC）全栈解决方案。 | 暂无 |
+| <img src="assets/panda.jpg" alt="panda AI" width="160"> | 团队 | panda AI | API接口平台，面向个人开发者、技术团队与企业，稳定提供GPT、Gemini、grok等图片视频模型 | [api.pandatk.com](https://api.pandatk.com) |
 
 ### 3D 预演台赞助用户
 
@@ -404,7 +405,7 @@ cd docs && bun run types:check
 </td>
 <td width="50%" valign="top">
   <img src="assets/user-bensharp.jpg" alt="bensharp" width="56" align="left">
-  <strong>bensharp<br><sub>VV：jiahezuiai</sub></strong><br>
+  <strong>nancy<br><sub>VV：jiahezuiai</sub></strong><br>
   <a href="mailto:275008147@qq.com">275008147@qq.com</a><br>
   <em>在哪跌倒，就在哪睡一觉</em>
   <br clear="left">
@@ -448,6 +449,14 @@ cd docs && bun run types:check
   <a href="mailto:61731514@qq.com">61731514@qq.com</a><br>
   <a href="https://em8.top">亿媒网 em8.top</a><br>
   <em>全国10W+媒体、自媒体，助力企业品牌传播</em>
+  <br clear="left">
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+  <img src="assets/user-Wyatt_K.png" alt="Wyatt_K" width="56" align="left">
+  <strong>Wyatt_K</strong><br>
+  <em>千里之行，始于足下。</em>
   <br clear="left">
 </td>
 </tr>

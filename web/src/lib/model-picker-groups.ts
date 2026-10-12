@@ -15,6 +15,7 @@ export { isDirectSystemModel } from "@/lib/model-selection";
 export function modelChannelLabel(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
+    if (channel.scope === "system") return cost?.channelLabel?.trim() || "系统模型";
     return cost?.channelLabel?.trim() || channel.name || "未命名渠道";
 }
 
@@ -39,7 +40,7 @@ export function groupModelsForPicker(config: AiConfig, options: string[]): Model
             const key = JSON.stringify(["channel", channel.id]);
             groups.set(key, {
                 key,
-                label: channel.name || "未命名渠道",
+                label: channel.scope === "system" ? "系统模型" : channel.name || "未命名渠道",
                 icon: modelIcon(config, otherModels[0]),
                 scope: channel.id === PUBLIC_MODEL_CATALOG_ID ? "" : "我的模型",
                 kind: "channel",

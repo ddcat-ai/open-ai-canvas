@@ -362,7 +362,7 @@ export const useConfigStore = create<ConfigStore>()(
                         createModelChannel({
                             ...channel,
                             id: channel.id || `system-${index + 1}`,
-                            name: channel.name || `系统渠道 ${index + 1}`,
+                            name: "系统模型",
                             scope: "system",
                             apiKey: channel.apiKey || "system",
                         }),

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildNodeGenerationInputs, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { sameNodeSemanticData } from "@/lib/canvas/canvas-project-domain";
-import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS, shouldReduceCanvasMediaEffects } from "@/lib/canvas/canvas-performance-mode";
+import { canvasNodeRenderBudget, canvasNodeRenderPadding, CANVAS_MAX_RENDERED_CONNECTIONS } from "@/lib/canvas/canvas-render-budget";
 import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences, buildToolMentionReference, parseToolMentionTokens } from "@/lib/canvas/canvas-resource-references";
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasConnectionIndex, type CanvasIndexedConnection } from "@/lib/canvas/canvas-connection-index";
@@ -15,7 +15,7 @@ import { intersectsCanvasBounds, selectCanvasVisibleNodes } from "@/lib/canvas/c
 import type { Skill } from "@/services/api/skills";
 import type { Asset, ImageAsset } from "@/stores/use-asset-store";
 import type { PrevisScene } from "@/types/previs";
-import { CanvasNodeType, type CanvasConnection, type CanvasMediaPerformanceMode, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
 
 type DragPreview = { x: number; y: number; nodeIds: Set<string> } | null;
 
@@ -25,7 +25,6 @@ type UseCanvasRenderModelOptions = {
     assets: Asset[];
     viewport: ViewportTransform;
     viewportSize: { width: number; height: number };
-    mediaPerformanceMode: CanvasMediaPerformanceMode;
     selectedNodeIds: Set<string>;
     hoveredNodeId: string | null;
     dragPreview: DragPreview;
@@ -45,7 +44,6 @@ type UseCanvasRenderModelOptions = {
     emotionNodeId: string | null;
     previewNodeId: string | null;
     contextMenu: ContextMenuState | null;
-    versionCompareRootId: string | null;
     previsNodeId: string | null;
     scriptEditorNodeId: string | null;
     dialogNodeId: string | null;
@@ -57,7 +55,6 @@ export function useCanvasRenderModel({
     assets,
     viewport,
     viewportSize,
-    mediaPerformanceMode,
     selectedNodeIds,
     hoveredNodeId,
     dragPreview,
@@ -77,12 +74,10 @@ export function useCanvasRenderModel({
     emotionNodeId,
     previewNodeId,
     contextMenu,
-    versionCompareRootId,
     previsNodeId,
     scriptEditorNodeId,
     dialogNodeId,
 }: UseCanvasRenderModelOptions) {
-    const reduceMediaEffects = useMemo(() => shouldReduceCanvasMediaEffects(mediaPerformanceMode, nodes), [mediaPerformanceMode, nodes]);
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
     // These maps are consumed by both virtualization and node chrome. Building
     // them together keeps a metadata update from walking a 50k-node array six
@@ -143,16 +138,16 @@ export function useCanvasRenderModel({
     }, [collapsingBatchIds, nodeById, nodes]);
     const { batchChildCountById, batchMotionById, canvasImageNodes, collapsedBatchChildIds, frameChildrenById, renderHiddenNodeIds } = nodeDerivedData;
     const connectionLayerBounds = useMemo(() => {
-        const padding = (reduceMediaEffects ? 96 : 144) / Math.max(viewport.k, 0.05);
+        const padding = 144 / Math.max(viewport.k, 0.05);
         const left = -viewport.x / viewport.k - padding;
         const top = -viewport.y / viewport.k - padding;
         const width = viewportSize.width / viewport.k + padding * 2;
         const height = viewportSize.height / viewport.k + padding * 2;
         return { left, top, width: Math.max(2, width), height: Math.max(2, height) };
-    }, [reduceMediaEffects, viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
+    }, [viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
     const renderBounds = useMemo(() => {
-        const enterPadding = canvasNodeRenderPadding(reduceMediaEffects, false) / viewport.k;
-        const retainPadding = canvasNodeRenderPadding(reduceMediaEffects, true) / viewport.k;
+        const enterPadding = canvasNodeRenderPadding(false) / viewport.k;
+        const retainPadding = canvasNodeRenderPadding(true) / viewport.k;
         const viewLeft = -viewport.x / viewport.k;
         const viewTop = -viewport.y / viewport.k;
         const viewWidth = viewportSize.width / viewport.k;
@@ -162,7 +157,7 @@ export function useCanvasRenderModel({
             enter: { left: viewLeft - enterPadding, top: viewTop - enterPadding, right: viewLeft + viewWidth + enterPadding, bottom: viewTop + viewHeight + enterPadding },
             retain: { left: viewLeft - retainPadding, top: viewTop - retainPadding, right: viewLeft + viewWidth + retainPadding, bottom: viewTop + viewHeight + retainPadding },
         };
-    }, [reduceMediaEffects, viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
+    }, [viewport.k, viewport.x, viewport.y, viewportSize.height, viewportSize.width]);
     const layoutNodesRef = useRef<CanvasNodeData[]>(nodes);
     const layoutNodes = useMemo(() => {
         const retained = retainCanvasLayoutNodes(layoutNodesRef.current, nodes);
@@ -268,10 +263,6 @@ export function useCanvasRenderModel({
         if (!positionOnlyChange) semanticNodesRef.current = nodes;
         return semanticNodesRef.current;
     }, [nodes]);
-    const versionCompareNodes = useMemo(() => {
-        if (!versionCompareRootId) return [];
-        return nodes.filter((node) => (node.metadata?.versionOfNodeId || node.id) === versionCompareRootId).sort((a, b) => (a.metadata?.versionLabel || "").localeCompare(b.metadata?.versionLabel || ""));
-    }, [nodes, versionCompareRootId]);
 
     const selectedNodeIdForToolbar = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : null;
     const toolbarCandidate = selectedNodeIdForToolbar ? nodeById.get(selectedNodeIdForToolbar) || null : null;
@@ -440,7 +431,6 @@ export function useCanvasRenderModel({
         nodeById,
         nodeRenderLODById,
         previewNode,
-        reduceMediaEffects,
         relatedHighlight,
         resourceReferenceByNodeId,
         selectedNodeBounds,
@@ -451,7 +441,6 @@ export function useCanvasRenderModel({
         superResolveNode,
         toolbarNode,
         upscaleNode,
-        versionCompareNodes,
         visibleNodes,
     };
 }

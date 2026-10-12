@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -557,59 +556,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		okCanvasProject(c, project)
 	})
-	r.GET("/canvas-projects/:id/history", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		result, err := svc.CanvasHistory(user.ID, c.Param("id"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, result)
-	})
-	r.GET("/canvas-projects/:id/history/:snapshotId", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		snapshot, err := svc.CanvasHistorySnapshot(user.ID, c.Param("id"), c.Param("snapshotId"))
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, gin.H{"snapshot": snapshot, "project": json.RawMessage(snapshot.PayloadJSON)})
-	})
-	r.POST("/canvas-projects/:id/history/:snapshotId/restore", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		policy, available := loadRuntimePolicy(c, svc)
-		if !available || !enforceRateLimit(c, "canvas-write:"+user.ID, policy.Request.CanvasWritePerMinute, time.Minute) {
-			return
-		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
-		var req struct {
-			Revision *int64 `json:"revision"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			fail(c, http.StatusBadRequest, service.BadAuthRequest("恢复请求格式错误"))
-			return
-		}
-		project, err := svc.RestoreCanvasHistory(user.ID, c.Param("id"), c.Param("snapshotId"), req.Revision)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		slog.Info("canvas_restore", "request_id", RequestID(c), "trace_id", TraceID(c), "actor", user.ID, "canvas", c.Param("id"), "snapshot", c.Param("snapshotId"), "base_revision", *req.Revision, "revision", project.Revision)
-		ok(c, gin.H{"project": project})
-	})
-	r.PUT("/canvas-projects/:id", func(c *gin.Context) {
+	r.PATCH("/canvas-projects/:id/operations", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -620,58 +567,17 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
-		var req struct {
-			Project                json.RawMessage `json:"project"`
-			RepairMissingResources bool            `json:"repairMissingResources"`
-		}
+		var req service.CanvasOperationsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			fail(c, http.StatusBadRequest, err)
+			fail(c, http.StatusBadRequest, service.BadAuthRequest("画布操作请求格式错误"))
 			return
 		}
-		var identity struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal(req.Project, &identity) != nil || identity.ID != c.Param("id") {
-			fail(c, http.StatusBadRequest, service.BadAuthRequest("画布 ID 与请求路径不一致"))
-			return
-		}
-		var audit struct {
-			Revision    *int64            `json:"revision"`
-			Nodes       []json.RawMessage `json:"nodes"`
-			Connections []json.RawMessage `json:"connections"`
-		}
-		_ = json.Unmarshal(req.Project, &audit)
-		baseRevision := int64(-1)
-		if audit.Revision != nil {
-			baseRevision = *audit.Revision
-		}
-		var project service.UserDataSummary
-		if req.RepairMissingResources {
-			project, err = svc.RepairUserCanvasProject(user.ID, req.Project)
-		} else {
-			project, err = svc.UpsertUserCanvasProject(user.ID, req.Project)
-		}
-		defer func() {
-			nodesBefore, nodesAfter := -1, len(audit.Nodes)
-			if project.SaveAudit != nil {
-				nodesBefore, nodesAfter = project.SaveAudit.NodesBefore, project.SaveAudit.NodesAfter
-			}
-			// Metadata only: never log prompts, media URLs, cookies, or the canvas payload.
-			// 自动保存非常频繁：常规保存只在 debug 输出；节点减少（可能丢数据）或保存失败才提升级别。
-			level := slog.LevelDebug
-			switch {
-			case c.Writer.Status() >= http.StatusBadRequest:
-				level = slog.LevelWarn
-			case nodesBefore >= 0 && nodesAfter < nodesBefore:
-				level = slog.LevelInfo
-			}
-			slog.Log(c.Request.Context(), level, "canvas_save", "request_id", RequestID(c), "trace_id", TraceID(c), "actor", user.ID, "canvas", identity.ID, "base_revision", baseRevision, "revision", project.Revision, "nodes_before", nodesBefore, "nodes_after", nodesAfter, "connections", len(audit.Connections), "status", c.Writer.Status())
-		}()
+		project, err := svc.ApplyUserCanvasOperations(user.ID, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"project": project})
+		ok(c, gin.H{"project": project, "mutationId": req.MutationID})
 	})
 	r.DELETE("/canvas-projects/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

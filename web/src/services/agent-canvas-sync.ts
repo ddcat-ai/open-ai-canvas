@@ -14,15 +14,17 @@ type Options = {
 export function createAgentCanvasSync(options: Options) {
     let patches: AgentCanvasPatch[] = [];
     let needsRefresh = false;
-    let supportsPatches = false;
     let disposed = false;
     let running = false;
     let lastRefresh = -Infinity;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
         if (disposed || running || timer || (!patches.length && !needsRefresh)) return;
-        const wait = patches.length ? options.batchMs ?? 40 : Math.max(options.batchMs ?? 40, (options.refreshIntervalMs ?? 1000) - (Date.now() - lastRefresh));
-        timer = setTimeout(() => { timer = undefined; void flush(); }, wait);
+        const wait = patches.length ? (options.batchMs ?? 40) : Math.max(options.batchMs ?? 40, (options.refreshIntervalMs ?? 1000) - (Date.now() - lastRefresh));
+        timer = setTimeout(() => {
+            timer = undefined;
+            void flush();
+        }, wait);
     };
     const flush = async () => {
         if (disposed || running) return;
@@ -31,8 +33,11 @@ export function createAgentCanvasSync(options: Options) {
         patches = [];
         try {
             if (batch.length) {
-                try { await options.applyPatches(batch); }
-                catch { needsRefresh = true; }
+                try {
+                    await options.applyPatches(batch);
+                } catch {
+                    needsRefresh = true;
+                }
             }
             if (!disposed && needsRefresh && Date.now() - lastRefresh >= (options.refreshIntervalMs ?? 1000)) {
                 needsRefresh = false;
@@ -51,14 +56,33 @@ export function createAgentCanvasSync(options: Options) {
             if (disposed || (event.payload.canvasId && event.payload.canvasId !== options.canvasId)) return;
             const patch = event.payload.canvasPatch as AgentCanvasPatch | undefined;
             if (patch && patch.canvasId === options.canvasId) {
-                supportsPatches = true;
                 patches.push(patch);
-            } else if (event.type === "canvas_updated" || event.type === "canvas_undone" || (!supportsPatches && (event.type === "generation_task_created" || event.type === "tool_failed" || event.type === "run_failed" || (event.type === "tool_completed" && ["canvas_apply_ops", "generate_media"].includes(String(event.payload.toolName)))))) {
+            } else if (
+                !patches.length &&
+                (event.type === "canvas_updated" ||
+                    event.type === "canvas_undone" ||
+                    event.type === "generation_task_created" ||
+                    event.type === "tool_failed" ||
+                    event.type === "run_failed" ||
+                    (event.type === "tool_completed" && ["canvas_apply_ops", "generate_media"].includes(String(event.payload.toolName))))
+            ) {
+                // A patch may be dropped even after earlier patches succeeded.
+                // Keep the snapshot fallback available for every meaningful task
+                // boundary; refreshes remain rate-limited below.
                 needsRefresh = true;
             }
             schedule();
         },
-        reconcile() { if (!disposed) { needsRefresh = true; schedule(); } },
-        dispose() { disposed = true; if (timer) clearTimeout(timer); patches = []; },
+        reconcile() {
+            if (!disposed) {
+                needsRefresh = true;
+                schedule();
+            }
+        },
+        dispose() {
+            disposed = true;
+            if (timer) clearTimeout(timer);
+            patches = [];
+        },
     };
 }

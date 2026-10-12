@@ -29,7 +29,22 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
         if (!versionRootId || (node.metadata?.versionOfNodeId || node.id) !== versionRootId) return node;
         return { ...node, metadata: { ...node.metadata, versionPrimary: false } };
     });
-    // 同一任务的图片子节点使用稳定 ID；重放只补缺失项，不覆盖用户已移动、改名的图片。
+    const additionalById = new Map(additionalNodes.map((node) => [node.id, node]));
+    const committedWithAdditional = committed.map((node) => {
+        const refreshed = additionalById.get(node.id);
+        if (!refreshed) return node;
+        const manualSize = Boolean(node.metadata?.manualSize);
+        return {
+            ...refreshed,
+            title: node.title,
+            position: node.position,
+            width: manualSize ? node.width : refreshed.width,
+            height: manualSize ? node.height : refreshed.height,
+        };
+    });
     const existingIds = new Set(current.map((node) => node.id));
-    return [...committed, ...additionalNodes.filter((node) => !existingIds.has(node.id)).map((node) => ({ ...node, position: { x: node.position.x + merged.position.x - result.position.x, y: node.position.y + merged.position.y - result.position.y } }))];
+    return [
+        ...committedWithAdditional,
+        ...additionalNodes.filter((node) => !existingIds.has(node.id)).map((node) => ({ ...node, position: { x: node.position.x + merged.position.x - result.position.x, y: node.position.y + merged.position.y - result.position.y } })),
+    ];
 }

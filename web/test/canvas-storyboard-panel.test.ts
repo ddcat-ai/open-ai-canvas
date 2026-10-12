@@ -28,4 +28,10 @@ describe("storyboard prompt panel boundaries", () => {
         expect(project).toContain("onOpen={() => setScriptEditorNodeId(contentNode.id)}");
         expect(project).toContain("onGenerateScript={(prompt) => void generateScriptRows(contentNode.id, prompt)}");
     });
+
+    test("storyboard generation strips legacy style instructions without sending project style", () => {
+        const storyboard = source("use-canvas-storyboard.ts");
+        expect(storyboard).toContain("stripProjectStyleExecutionBlocks(prompt)");
+        expect(storyboard).not.toContain("projectStyle: storyboardContext.projectStyle");
+    });
 });

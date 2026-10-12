@@ -96,9 +96,9 @@ func TestCloudAgentCanvasPatchesPersistDraftSubmissionAndAllTerminalStates(t *te
 				}
 				previousRevision = delta["revision"]
 			}
-			history, err := s.CanvasHistory("user", "agent-canvas")
-			if err != nil || len(history.Snapshots) == 0 || float64(history.CurrentRevision) != previousRevision {
-				t.Fatalf("Agent save did not retain history/revision: %+v %v", history, err)
+			canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+			if err != nil || float64(canvas.Revision) != previousRevision {
+				t.Fatalf("Agent save did not retain current revision: %+v %v", canvas, err)
 			}
 			changes = creationMaps(completion["nodes"])
 			if len(changes) != 1 || len(creationMaps(completion["connections"])) != 0 {
@@ -123,6 +123,18 @@ func TestCloudAgentCanvasPatchesPersistDraftSubmissionAndAllTerminalStates(t *te
 				t.Fatal("terminal handling resubmitted a charged task")
 			}
 		})
+	}
+}
+
+func TestCloudAgentPatchCoversProjectedRowMetadata(t *testing.T) {
+	before := map[string]any{"nodes": []any{}, "connections": []any{}}
+	after := map[string]any{"id": "canvas", "revision": float64(2), "createdAt": "2026-10-11T00:00:00Z", "updatedAt": "2026-10-11T01:00:00Z", "title": "", "projectId": "", "nodes": []any{}, "connections": []any{}}
+	if !cloudAgentPatchCoversDocument(before, after) {
+		t.Fatal("database row metadata and empty projected fields should not force a refresh")
+	}
+	after["title"] = "新标题"
+	if cloudAgentPatchCoversDocument(before, after) {
+		t.Fatal("a changed canvas title must still force a refresh")
 	}
 }
 

@@ -148,7 +148,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                     node={node}
                     alt={`${node.title || "视频"} 静态预览`}
                     loading="eager"
-                    decoding="async"
+                    decoding="sync"
                     draggable={false}
                     className={`absolute inset-0 size-full select-none object-contain transition-opacity duration-150 ${videoReady ? "opacity-0" : "opacity-100"}`}
                     loadingFallback={<LoaderCircle className="size-5 animate-spin text-white/55" />}
@@ -276,14 +276,14 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
                         node={node}
                         alt={`${node.title || "视频"} 静态预览`}
                         loading="lazy"
-                        decoding="async"
+                        decoding="sync"
                         draggable={false}
                         className="pointer-events-none size-full select-none object-contain"
                         loadingFallback={<LoaderCircle className="size-5 animate-spin text-white/55" />}
                         fallback={<Video className="size-7 text-white/40" />}
                     />
                 ) : (
-                    <img src={localPreviewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" />
+                    <img src={localPreviewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="sync" draggable={false} className="pointer-events-none size-full select-none object-contain" />
                 )}
                 <VideoPreviewPlayButton title={node.title || "视频"} onPlay={onPlay} />
             </div>
@@ -637,7 +637,9 @@ export function RetainedCanvasImage({
             <img
                 src={currentDisplayedSrc || undefined}
                 alt={alt || ""}
-                decoding="async"
+                // 世界层每次缩放提交都会按新倍率重新栅格化；async 解码会让 Chromium 先画出
+                // 空白再补图（缩放时白闪）。图片已由 prepareCanvasImage 预解码，同步解码只阻塞栅格不阻塞主线程。
+                decoding="sync"
                 draggable={false}
                 onDragStart={(event) => event.preventDefault()}
                 className={`absolute inset-0 ${className}`}

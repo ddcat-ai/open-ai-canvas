@@ -59,6 +59,7 @@ export type CloudAgentFormAnswer = {
     fieldTitles?: Record<string, string>;
     skippedFields?: string[];
     useRecommendedDefaults?: boolean;
+    additionalNotes?: string;
 };
 export type CloudAgentChatMessage = {
     id: string;
@@ -141,6 +142,7 @@ export function parseCloudAgentFormAnswer(value: string): CloudAgentFormAnswer |
             fieldTitles: formAnswerRecord(record.fieldTitles),
             skippedFields: Array.isArray(record.skippedFields) ? record.skippedFields.filter((item): item is string => typeof item === "string") : [],
             useRecommendedDefaults: record.useRecommendedDefaults === true,
+            additionalNotes: typeof record.additionalNotes === "string" ? record.additionalNotes : undefined,
         };
     } catch {
         return undefined;
@@ -170,7 +172,10 @@ function AgentFormAnswerCard({ answer, theme }: { answer: CloudAgentFormAnswer; 
                             <span className="agent-form-answer-value">{answer.displayAnswers?.[key] || agentFormValueLabel(value)}</span>
                         </div>
                     ))}
+                    {answer.additionalNotes ? <div className="agent-form-answer-row"><span className="agent-form-answer-label">补充说明</span><span className="agent-form-answer-value">{answer.additionalNotes}</span></div> : null}
                 </div>
+            ) : answer.additionalNotes ? (
+                <div className="agent-form-answer-row"><span className="agent-form-answer-label">补充说明</span><span className="agent-form-answer-value">{answer.additionalNotes}</span></div>
             ) : (
                 <div className="agent-form-answer-note">已确认，按推荐方案继续</div>
             )}
@@ -1009,11 +1014,13 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
     const fieldDefaultValue = (field: CloudAgentFormField) => field.defaultValue || field.options?.find((option) => option.recommended)?.id || field.options?.find((option) => option.recommended)?.label || "";
     const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((field) => [field.id, fieldDefaultValue(field)])));
     const [customFields, setCustomFields] = useState<Record<string, boolean>>({});
+    const [additionalNotes, setAdditionalNotes] = useState("");
     const [validation, setValidation] = useState("");
 
     useEffect(() => {
         setValues(Object.fromEntries(fields.map((field) => [field.id, fieldDefaultValue(field)])));
         setCustomFields({});
+        setAdditionalNotes("");
         setValidation("");
     }, [question.questionId, fields]);
 
@@ -1042,6 +1049,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                 fieldTitles,
                 skippedFields: fields.filter((field) => !String(answers[field.id] || "").trim()).map((field) => field.id),
                 useRecommendedDefaults: useDefaults,
+                additionalNotes: additionalNotes.trim() || undefined,
             }),
         );
     };
@@ -1141,6 +1149,20 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                             </div>
                         );
                     })}
+                </div>
+                <div className="agent-question-field px-3 pb-2">
+                    <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">补充说明</label>
+                    <textarea
+                        id="agent-question-additional-notes"
+                        rows={2}
+                        value={additionalNotes}
+                        placeholder="还有需要特别说明的场景、人物、节奏或限制吗？"
+                        disabled={disabled}
+                        className="agent-question-input agent-question-textarea"
+                        onChange={(event) => setAdditionalNotes(event.target.value)}
+                        onMouseDown={stop}
+                        onPointerDown={stop}
+                    />
                 </div>
                 {validation ? <div className="agent-question-validation px-3 pb-1 text-[10px]">{validation}</div> : null}
                 <div className="agent-question-actions px-3 pb-2.5">

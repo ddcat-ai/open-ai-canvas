@@ -252,6 +252,53 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestCloudAgentVideoApprovalEditsAreValidatedAndApplied(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	run, _ := agentMediaRun(t, s, args, "request_approval")
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = s.repo.CloudAgent("user", run.ID)
+	state, err := cloudAgentDecode(run)
+	if err != nil || state.Approval == nil {
+		t.Fatalf("missing video approval: %v", err)
+	}
+	seconds := 8
+	audio := false
+	watermark := false
+	settings := CloudAgentMediaSettings{ChannelID: args.ChannelID, ChannelModelKey: args.ChannelModelKey, Size: args.Size, Quality: args.Quality, DurationSeconds: &seconds, VideoGenerateAudio: &audio, VideoWatermark: &watermark}
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", "", &settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(updated)
+	if err != nil || state.MediaTaskID == "" {
+		t.Fatalf("edited video approval did not submit: %v", err)
+	}
+	task, err := s.repo.TaskForUser("user", state.MediaTaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input canvasGenerationInput
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Config.VideoSeconds != "8" || input.Config.VideoGenerateAudio != "false" || input.Config.VideoWatermark != "false" {
+		t.Fatalf("approved video options were not applied: %+v", input.Config)
+	}
+	var count int64
+	db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
+	if count != 1 {
+		t.Fatalf("expected exactly one video task, got %d", count)
+	}
+}
+
 func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {

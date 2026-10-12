@@ -1,0 +1,69 @@
+---
+title: 画布 operations 同步协议
+description: 画布对象级写入、并发校验、幂等重放与删除边界
+---
+
+# 画布 operations 同步协议
+
+## 请求合同
+
+画布写入使用 `PATCH /api/canvas-projects/:id/operations`。请求体为：
+
+```json
+{
+  "mutationId": "客户端生成的稳定请求 ID",
+  "baseRevision": 12,
+  "operations": [
+    {
+      "type": "patch_node",
+      "id": "node-1",
+      "patch": { "metadata.prompt": "新的提示词" },
+      "before": { "metadata.prompt": "旧的提示词" }
+    }
+  ]
+}
+```
+
+`mutationId` 是重试身份，不是版本号。请求超时、响应丢失、断网、刷新或后台自动重试时，必须使用相同的 `mutationId`、`baseRevision` 和原始 `operations`。修改原始 payload 后复用 ID 会返回 `canvas_mutation_id_reused`。
+
+`baseRevision` 是生成请求时的已确认版本，用于记录和诊断。真正的并发校验在操作本身：字段补丁使用 `before`，对象更新或删除使用 `expected`，顶层字段使用 `beforeValue`。不同字段可以合并；同一字段或同一对象的基线不匹配时返回冲突。可选顶层字段不存在时，客户端必须在 JSON 中将 `value` 或 `beforeValue` 编码为 `null`，不能让 `undefined` 被序列化为缺失属性。服务端仅兼容早期客户端对这些可选字段省略属性的请求，并按 `null` 参与同样的基线校验。
+
+## 操作类型
+
+- `create_canvas`：只在画布不存在时创建，第一项必须是该操作。
+- `create_node`：显式新增节点，已有 ID 不会被覆盖。
+- `patch_node`：对已有节点按字段路径更新，节点缺失或字段基线不匹配都会失败。
+- `remove_node`：按完整对象基线删除节点，并删除关联连接。
+- `create_connection`：显式新增连接，两个端点必须存在。
+- `update_connection`：按连接对象基线更新，连接缺失或端点缺失都会失败。
+- `remove_connection`：按连接对象基线删除。
+- `set_field`：更新白名单中的画布字段，并校验 `beforeValue`；字段不存在时用 JSON `null` 表示删除或缺失基线。
+
+只有 create 操作可以创建实体。删除后的迟到编辑、媒体回写或 Agent 更新得到 `canvas_object_missing`，不会隐式重建节点、连接或画布。画布删除后的迟到请求同样不会重建画布；只有新的 `create_canvas` 才能显式重新创建。
+
+## 事务与 receipt
+
+服务端事务按以下顺序处理请求：锁定画布写入、创建或读取 receipt、核对请求摘要、读取当前画布、应用 operations、校验媒体引用、递增 revision、写入画布和完成 receipt。画布内容、revision、receipt 的结果 JSON 在同一事务提交，任一步失败都会回滚。
+
+`canvas_mutation_receipts` 使用 `(user_id, canvas_id, mutation_id)` 唯一约束。相同 ID 和相同摘要返回之前保存的确定性结果，不再次应用操作；相同 ID 和不同摘要返回冲突。receipt 不替代当前画布，也不保存整批版本历史。
+
+结构化容量校验仍在同一事务内使用事务 repository 读取实时用量，但只统计当前账号的素材/画布数量和 JSON 字节数。此路径使用 `UserStructuredStorageUsage`，不扫描任务正文、结果或 API 请求/响应日志；任务与日志配额继续使用原有完整统计。容量上限、创建数量限制、存储锁、CAS 和 receipt 原子提交不变，也不引入可能过期的配额缓存。
+
+## 浏览器 journal 与刷新
+
+浏览器在发送请求前把以下内容写入账号隔离的本地 journal：
+
+- 已确认的画布基线；
+- 原始 operations 请求及 mutationId；
+- 生成请求时的本地投影；
+- 创建时间。
+
+响应成功后删除对应未确认请求，并把服务端返回的完整画布保存为新基线。响应丢失时保留 journal，刷新后使用原始请求重放；请求发出后产生的新编辑不会改写原请求，而是在确认后从新基线生成下一批 operations。服务端完整读取或 Agent 刷新只能更新已确认基线，不能覆盖仍未确认的本地请求之后的修改。
+
+`viewport` 是本地视图状态，不进入 operations。媒体文件先完成资源登记，再提交引用画布的 operations，避免产生只有节点没有资源记录的远端状态。
+
+## Agent 和媒体回写
+
+普通编辑、Agent、媒体生成终态、预演台、创作提交、LibTV/TapNow 导入都必须经过同一 operations 服务。Agent 事件里的 `canvasPatch` 只是客户端通知：小变更携带有界对象增量；删除、重排、顶层字段变化或事件过大时使用 `requiresRefresh: true`，客户端重新读取后继续处理未确认 journal。
+
+媒体终态只更新仍存在且任务绑定未变化的节点。目标节点已删除、任务绑定已改变或资源不可用时，任务记录保留，画布不创建幽灵节点。
