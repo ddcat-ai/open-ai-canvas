@@ -164,6 +164,13 @@ async function run() {
             thinkingLevel: options?.reasoning ?? "off",
             contextUsage: session.getContextUsage(),
           }, options?.signal);
+          if (result.pause === true && result.reason === "awaiting_approval") {
+            pausedForApproval = true;
+            emit("approval_wait", { reason: result.reason });
+            stream.push({ type: "error", reason: "aborted", error: { ...partial, stopReason: "aborted", errorMessage: "paused for approval" } });
+            stream.end();
+            return;
+          }
           for (const text of result.steeringMessages ?? []) {
             await session.steer(text);
           }

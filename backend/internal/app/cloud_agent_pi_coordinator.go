@@ -342,7 +342,14 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	var pausedForApproval atomic.Bool
 	err = runCloudAgentPi(ctx, request, cloudAgentPiBridge{
 		Model: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
-			return s.cloudAgentPiModel(callCtx, userID, runID, payload)
+			result, err := s.cloudAgentPiModel(callCtx, userID, runID, payload)
+			// A model request can encounter durable approval state before the runtime
+			// receives a /tool pause. Keep the admission guard and pause this session.
+			if errors.Is(err, errCloudAgentAwaitingApproval) {
+				pausedForApproval.Store(true)
+				return map[string]any{"pause": true, "reason": "awaiting_approval"}, nil
+			}
+			return result, err
 		},
 		Tool: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
 			result, err := s.cloudAgentPiTool(callCtx, userID, runID, payload)
