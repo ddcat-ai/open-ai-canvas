@@ -117,6 +117,11 @@ func run(ctx context.Context) error {
 		slog.Warn("failed to set trusted proxies, using defaults", "error", err)
 	}
 	r.ForwardedByClientIP = true
+	// 可指定客户端 IP 头部（如 X-Real-IP），跳过 X-Forwarded-For 链，避免 frp 覆盖 CDN 的真实 IP。
+	if ipHeader := os.Getenv("CANVAS_CLIENT_IP_HEADER"); ipHeader != "" {
+		r.TrustedPlatform = ipHeader
+		slog.Info("using trusted platform header for client IP", "header", ipHeader)
+	}
 	// 访问日志：成功的查询类请求只在 debug 级别输出，避免轮询和列表查询把日志打爆。
 	r.Use(logging.AccessLog(redactCanvasSharePath), logging.Recovery())
 	r.Use(handler.RequestCorrelationMiddleware())
