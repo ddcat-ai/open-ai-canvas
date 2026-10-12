@@ -79,7 +79,8 @@ test("channel model fetch requires explicit selection before import", async () =
     ]);
     const component = compactSource(componentSource);
 
-    expect(apiSource).toContain("http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
+    expect(apiSource).toContain("http.post<{ models: string[]; upstreamPrices?: Record<string, string> }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
+    expect(apiSource).toContain("http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/sync-upstream-prices`)");
     expect(apiSource).toContain("http.post<{ models: string[]; added: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models })");
     expect(component).toContain('title="选择要导入的模型"');
     expect(component).toContain("默认已全选");
@@ -94,6 +95,10 @@ test("channel model fetch requires explicit selection before import", async () =
     expect(component).toContain("disabled={importing}");
     expect(component).toContain("importAdminChannelModels(channel.id, selectedFetchModels)");
     expect(component).toContain("disabled={!selectedFetchModels.length}");
+    // 上游价只以仅后台可见的列展示，并随导入预览带出。
+    expect(component).toContain('title: "上游价"');
+    expect(component).toContain("item.upstreamPriceNote");
+    expect(component).toContain("syncAdminChannelModelUpstreamPrices(channel.id)");
     expect(component).not.toContain("disabled: alreadyExists");
     expect(component).not.toContain("const result = await fetchAdminChannelModels(channel.id); await reload();");
     expect(adminCssSource).toContain(".admin-model-import-modal .channel-model-import-picker .ant-checkbox-checked");

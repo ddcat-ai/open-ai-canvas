@@ -303,6 +303,34 @@ func (r *Repository) SyncChannelModelNames(channelID string, now time.Time) erro
 	})
 }
 
+// UpdateChannelModelUpstreamPriceNotes 只刷新上游价备注列，不触碰价格档、价格版本与启用状态。
+func (r *Repository) UpdateChannelModelUpstreamPriceNotes(channelID string, notes map[string]string) (int64, error) {
+	if len(notes) == 0 {
+		return 0, nil
+	}
+	now := time.Now().UTC()
+	var updated int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := r.lockSystemChannelForModelMutation(tx, channelID); err != nil {
+			return err
+		}
+		for modelKey, note := range notes {
+			result := tx.Model(&model.ChannelModel{}).
+				Where("channel_id = ? AND model_key = ? AND COALESCE(upstream_price_note, '') <> ?", channelID, modelKey, note).
+				Updates(map[string]any{"upstream_price_note": note, "updated_at": now})
+			if result.Error != nil {
+				return result.Error
+			}
+			updated += result.RowsAffected
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return updated, nil
+}
+
 func (r *Repository) lockSystemChannelForModelMutation(tx *gorm.DB, channelID string) error {
 	query := tx.Select("id").Where("id = ? AND scope = ?", channelID, model.ChannelScopeSystem)
 	if r.Dialect() == "postgres" {

@@ -314,8 +314,8 @@ func TestImportAdminChannelModelsOnlyImportsSelectedModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(preview) != 2 {
-		t.Fatalf("preview models = %#v, want two models", preview)
+	if len(preview.Models) != 2 {
+		t.Fatalf("preview models = %#v, want two models", preview.Models)
 	}
 	var before int64
 	if err := db.Model(&model.ChannelModel{}).Where("channel_id = ?", channel.ID).Count(&before).Error; err != nil {

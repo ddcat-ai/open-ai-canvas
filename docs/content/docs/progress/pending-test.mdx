@@ -5,6 +5,48 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 后台读取上游模型价格
+
+- 已实现：后台「模型与资源 → 系统模型」新增「同步上游价」按钮，逐个上游读取公开的 `GET {站点根}/api/pricing`，把价格摘要写进渠道模型新增的**仅后台可见**字段 `upstream_price_note`，并在模型列表新增「上游价」列展示；拉取上游模型时也会同步把价格带入导入预览，并在导入新模型时一并写入。
+- 已实现：价格支持三种形态——`per_request`/`per_second` 的固定价、`video_pricing` 的每秒单价（取最低档并在文案标注分辨率）、按 token 计费只有倍率时显示「倍率 Nx」；分组倍率按 `group_ratio.default` 换算，倍率不为 1 时在文案里标注。
+- 已实现：该字段**不进公开投影**（`model_catalog.go` 的 `PublicChannelModel` 不含它），创作端模型选择器读不到，因此不会把进货价暴露给普通用户；刷新只写这一列，不触碰价格档、价格版本与启用状态。
+- 实现位置：解析与格式化 `backend/internal/app/channel_model_upstream_pricing.go`，预览/导入接线 `channel_models_catalog.go`，刷新落库 `repository/finance_channel_models.go`，路由 `handler/finance.go`，界面 `web/src/pages/admin/components/channel-model-manager.tsx`。
+- [x] 验证：`go test ./internal/app/ -run 'Upstream|FormatPrice'` 7 项通过，其中含用**真实上游 suanliai.top 返回条目**做的回归（`¥1.5/次`、`¥0.65/秒`、`¥0.68/秒`、`倍率 0.275x`）；`go test ./internal/database/ ./internal/repository/` 185 项通过。
+- [x] 验证：用**真实开发库副本**跑 `migrate-schema up`，schema 49 → 51、`ready:true`，新列为 `TEXT NOT NULL DEFAULT ''`，3 个渠道 8 个模型数据完好、旧行为空字符串；`tsc --noEmit`、ESLint、`bun run build` 通过。
+- [x] 已确认上游可读：`suanliai.top/api/pricing` 200（550 个模型）、`linkapi.ai/api/pricing` 200（157 个）、`img.yunfei.best/api/pricing` 200（32 个），均无需密钥。
+- [ ] 用户验收：真实后台点「同步上游价」，确认列表「上游价」列出现价格、文案与上游页面一致，且**创作端模型选择器里看不到该价格**（这是本功能的关键边界）。
+- [ ] 用户验收：导入一批新模型后确认价格已随导入写入；上游把价格口径改成汇率换算的 token 模型时，确认显示为「倍率 Nx」而不是错误的人民币金额。
+- [ ] 未验证：本机未安装 `backend/agent-runtime/pi` 的 node 依赖，`internal/app` 的 5 个 `TestCloudAgent*` 用例因 `Cannot find package 'undici'` 失败，与本功能无关，跑 `npm install` 后应恢复。
+
+## 系统模型「拉取模型」弹窗搜索
+
+- 已实现：后台「模型与资源 → 系统模型」点「拉取模型」后的选择弹窗新增搜索框（按模型标识做大小写不敏感的子串匹配，自动聚焦、可一键清空），因为部分上游端点会返回几百个模型。
+- 已实现：搜索时「全选 / 取消选中」只作用于**当前匹配**的集合，按钮文案同步显示匹配数量（如「全选匹配的 12 个」）；关键字之外的勾选状态保留。无关键字时行为与改动前完全一致。
+- 已实现：搜索无命中时列表区显示「没有匹配「关键字」的模型」空态；汇总行额外显示匹配数与其中已勾选数。
+- 实现位置：筛选与批量勾选规则抽到 `web/src/pages/admin/components/channel-model-import-selection.ts`，弹窗接线在 `channel-model-manager.tsx`，配套 `web/test/channel-model-import-selection.test.ts`。
+- [x] 验证：`bun test test/channel-model-import-selection.test.ts` 9 项通过（空关键字返回全部、大小写不敏感、首尾空白、无命中返回空、全选并入去重、关键字外勾选保留、无关键字时与旧行为一致）；`tsc --noEmit`、ESLint、`bun run build` 均通过。
+- [ ] 用户验收：需要管理员登录且上游能返回大量模型才能打开该弹窗，因此**未做真实界面验收**。请在真实后台点「拉取模型」确认：搜索框位置与自动聚焦、输入关键字后列表实时收窄、全选/取消选中只影响匹配项、清空后恢复全部、以及几百个模型时的滚动与性能。
+
+## 游客身份点击弹出登录框
+
+- 已实现：工作台侧栏底部与顶栏的游客身份由不可点击展示元素改为按钮（`aria-label="游客模式，点击登录"`），点击直接打开登录弹窗；两处共用同一弹窗组件与同一份文案。
+- 已实现：原创作页私有弹窗抽为共用组件 `web/src/components/auth/login-dialog.tsx`；创作页继续传专属标题「登录后开始创作」、说明「你的创作内容会保留。登录成功后，请再次点击生成。」与成功提示，游客入口使用默认文案。注册链接的 `next` 由固定 `/` 改为当前路径。
+- 说明：`web/src/components/layout/workspace-sidebar-footer.tsx` 定义了登录入口但全仓无渲染调用（死代码），此前工作台内除创作页发送外没有任何可见登录入口。本次未删除该文件。
+- [x] 验证：前端 `tsc --noEmit` 通过；ESLint 对四个改动文件无告警；浏览器控制台无错误。
+- [x] 验证：headless Chrome 打开首页，侧栏入口（x=12,y=413）与顶栏入口（x=672,y=18）分别点击后均出现标题「登录后继续」的弹窗，含用户名与密码输入框、关闭按钮；旧的不可点击游客元素计数为 0。
+- [x] 验证：创作页输入提示词后点击发送，仍弹出标题「登录后开始创作」并保留原说明文案，未被共用文案覆盖。
+- [ ] 用户验收：真实登录一次，确认登录成功后侧栏与顶栏立即切回账户态（头像、积分、公告恢复），弹窗关闭且不再出现游客入口。
+- [ ] 用户验收：窄屏（`sm` 以下）顶栏只剩图标时仍可点击；未登录状态下两个入口的键盘可达性（Tab 可见焦点、Enter 打开弹窗）与深色主题弹窗可读性。
+
+## 创作记录逐条删除
+
+- 已实现：创作页每条生成记录（用户提示词 + 它的结果消息）在结果标题行右侧提供删除按钮；删除按记录成对移除，不会留下孤立提示词或孤立结果。
+- 已实现：失败与已停止的记录点删除立即生效；有结果或仍在生成的记录先弹确认再删除。删除会取消本页仍在等待的任务，避免后台继续消耗额度；已上传或生成的素材仍保留在资产中。
+- 实现位置：范围算法 `web/src/pages/create/creation-conversations.ts`（`creationRecordRange` / `removeCreationRecord`），按钮在 `creation-workspace-messages.tsx`，删除编排在 `web/src/pages/create/index.tsx`（`deleteCreationRecord`），样式在 `styles/globals-6.css`。
+- [x] 验证：`tsc --noEmit` 无错误；ESLint 对改动文件无告警；`bun test test/creation-record-delete.test.ts` 7 项通过（范围反查、相邻记录不受影响、孤立结果、空列表等）。
+- [x] 验证：headless Chrome 种入 4 条记录（3 条失败视频 + 1 条成功图片）后真实点击：失败记录点删除立即消失且不弹确认，成功记录弹确认后删除，刷新后仍为删除后的 2 条。文本记录走同一入口同样可删，控制台错误为空。
+- [ ] 用户验收：真实画布/创作页中删除仍在生成的记录，确认后台任务停止、额度不再增长，且被删记录不会因任务回执重新出现。
+- [ ] 用户验收：深色主题与窄屏下删除按钮的位置、hover/focus 可见性，以及误删时的可接受程度（当前成功记录有确认、失败记录无确认）。
 ## 灵感页路由与导航
 
 - 已修复：Nginx 对 `/inspirations` 与 `/inspirations/` 精确返回 SPA 入口，避免同名静态目录触发带容器端口的 301；目录下的 JSON 仍按静态文件提供。

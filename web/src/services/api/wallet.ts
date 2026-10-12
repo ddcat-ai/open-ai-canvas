@@ -56,6 +56,8 @@ export type ChannelModel = {
     channelLabel?: string;
     tags?: ModelTag[];
     description?: string;
+    /** 上游价格摘要，仅后台可见：不进入公开目录，创作端模型选择器读不到。 */
+    upstreamPriceNote?: string;
     sortOrder?: number;
     icon: string;
     capability: "text" | "image" | "video" | "audio" | "";
@@ -295,7 +297,12 @@ export function listAdminChannelModels(channelId: string) {
 
 // 管理员从上游读取模型目录；确认导入后才会写入渠道模型，价格和启用仍需人工确认。
 export function fetchAdminChannelModels(channelId: string) {
-    return http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`);
+    return http.post<{ models: string[]; upstreamPrices?: Record<string, string> }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`);
+}
+
+/** 重新读取上游价格目录，刷新该渠道已有模型的上游价备注；返回被更新的条数。 */
+export function syncAdminChannelModelUpstreamPrices(channelId: string) {
+    return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/sync-upstream-prices`);
 }
 
 export function importAdminChannelModels(channelId: string, models: string[]) {

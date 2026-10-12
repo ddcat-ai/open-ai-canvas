@@ -38,14 +38,17 @@ type ChannelModelTag struct {
 }
 
 type ChannelModel struct {
-	ID                           string               `json:"id" gorm:"primaryKey;size:36"`
-	ChannelID                    string               `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
-	ModelKey                     string               `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key_active,priority:2,where:deleted_at IS NULL"`
-	ProviderModelKey             string               `json:"providerModelKey" gorm:"size:120"`
-	DisplayName                  string               `json:"displayName" gorm:"size:160"`
-	ChannelLabel                 string               `json:"channelLabel" gorm:"size:80;not null;default:''"`
-	Tags                         []ChannelModelTag    `json:"tags" gorm:"serializer:json;type:text;not null;default:'[]'"`
-	Description                  string               `json:"description" gorm:"size:500;not null;default:''"`
+	ID               string            `json:"id" gorm:"primaryKey;size:36"`
+	ChannelID        string            `json:"channelId" gorm:"size:36;index;uniqueIndex:idx_channel_model_key_active,priority:1,where:deleted_at IS NULL"`
+	ModelKey         string            `json:"modelKey" gorm:"size:120;uniqueIndex:idx_channel_model_key_active,priority:2,where:deleted_at IS NULL"`
+	ProviderModelKey string            `json:"providerModelKey" gorm:"size:120"`
+	DisplayName      string            `json:"displayName" gorm:"size:160"`
+	ChannelLabel     string            `json:"channelLabel" gorm:"size:80;not null;default:''"`
+	Tags             []ChannelModelTag `json:"tags" gorm:"serializer:json;type:text;not null;default:'[]'"`
+	Description      string            `json:"description" gorm:"size:500;not null;default:''"`
+	// UpstreamPriceNote 是最近一次从上游价格目录读到的价格摘要，只给后台看：
+	// 它不进入 PublicChannelModel 投影，终端模型选择器读不到这个字段。
+	UpstreamPriceNote            string               `json:"upstreamPriceNote" gorm:"size:200;not null;default:''"`
 	SortOrder                    int                  `json:"sortOrder" gorm:"not null;default:0"`
 	Icon                         string               `json:"icon" gorm:"size:80"`
 	Capability                   string               `json:"capability" gorm:"size:32;index"`

@@ -60,6 +60,12 @@ type AdminChannelModelFetchResult struct {
 	Added  int64    `json:"added"`
 }
 
+// AdminChannelModelPreview 是拉取预览：目录本身，外加尽力而为拉到的上游价格摘要（模型标识 -> 摘要）。
+type AdminChannelModelPreview struct {
+	Models         []string          `json:"models"`
+	UpstreamPrices map[string]string `json:"upstreamPrices,omitempty"`
+}
+
 type AdminChannelModelImportRequest struct {
 	Models []string `json:"models"`
 }
