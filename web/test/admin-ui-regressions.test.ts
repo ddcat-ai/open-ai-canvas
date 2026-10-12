@@ -86,10 +86,11 @@ test("channel model fetch requires explicit selection before import", async () =
     expect(component).toContain("setFetchPreviewOpen(true)");
     expect(component).toContain("setSelectedFetchModels(result.models)");
     expect(component).toContain("已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型");
-    expect(component).toContain("disabled={importing || allFetchModelsSelected}");
-    expect(component).toContain("onClick={() => setSelectedFetchModels(fetchPreviewModels)}");
-    expect(component).toContain("disabled={importing || selectedFetchModels.length === 0}");
-    expect(component).toContain("onClick={() => setSelectedFetchModels([])}");
+    // 搜索后批量选择只作用于可见模型，隐藏的勾选仍应保留。
+    expect(component).toContain("disabled={importing || !visibleFetchModels.length || allVisibleFetchModelsSelected}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels((current) => selectVisibleModels(current, visibleFetchModels))}");
+    expect(component).toContain("disabled={importing || selectedVisibleFetchCount === 0}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels((current) => deselectVisibleModels(current, visibleFetchModels))}");
     expect(component).toContain("取消全选");
     expect(component).toContain("disabled={importing}");
     expect(component).toContain("importAdminChannelModels(channel.id, selectedFetchModels)");
