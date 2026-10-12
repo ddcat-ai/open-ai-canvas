@@ -177,29 +177,15 @@ export function ProfilePane() {
                         </div>
                     </div>
 
-                    <Form
-                        form={profileForm}
-                        layout="vertical"
-                        initialValues={{ email: user.email || "" }}
-                        className="mt-4 max-w-md"
-                    >
+                    <Form form={profileForm} layout="vertical" initialValues={{ email: user.email || "" }} className="mt-4 max-w-md">
                         <Form.Item label="用户名">
                             <Input value={user.username} disabled />
                         </Form.Item>
-                        <Form.Item
-                            label="邮箱"
-                            name="email"
-                            rules={[{ type: "email", message: "邮箱格式不正确" }]}
-                        >
+                        <Form.Item label="邮箱" name="email" rules={[{ type: "email", message: "邮箱格式不正确" }]}>
                             <Input placeholder="user@example.com" />
                         </Form.Item>
                         <Form.Item>
-                            <Button
-                                type="primary"
-                                icon={<Save className="size-4" />}
-                                loading={savingProfile}
-                                onClick={handleSaveProfile}
-                            >
+                            <Button type="primary" icon={<Save className="size-4" />} loading={savingProfile} onClick={handleSaveProfile}>
                                 保存
                             </Button>
                         </Form.Item>
@@ -214,16 +200,8 @@ export function ProfilePane() {
                         <p>修改密码后需要重新登录。</p>
                     </div>
                 </div>
-                <Form
-                    form={passwordForm}
-                    layout="vertical"
-                    className="mt-2 max-w-md"
-                >
-                    <Form.Item
-                        label="当前密码"
-                        name="currentPassword"
-                        rules={[{ required: true, message: "请输入当前密码" }]}
-                    >
+                <Form form={passwordForm} layout="vertical" className="mt-2 max-w-md">
+                    <Form.Item label="当前密码" name="currentPassword" rules={[{ required: true, message: "请输入当前密码" }]}>
                         <Input.Password placeholder="输入当前密码" autoComplete="current-password" />
                     </Form.Item>
                     <Form.Item
@@ -253,11 +231,7 @@ export function ProfilePane() {
                         <Input.Password placeholder="再次输入新密码" autoComplete="new-password" />
                     </Form.Item>
                     <Form.Item>
-                        <Button
-                            icon={<KeyRound className="size-4" />}
-                            loading={savingPassword}
-                            onClick={handleChangePassword}
-                        >
+                        <Button icon={<KeyRound className="size-4" />} loading={savingPassword} onClick={handleChangePassword}>
                             修改密码
                         </Button>
                     </Form.Item>
