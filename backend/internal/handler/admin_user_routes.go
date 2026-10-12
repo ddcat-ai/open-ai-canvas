@@ -179,4 +179,28 @@ func registerAdminUserRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"ok": true})
 	})
+	r.GET("/admin/login-logs", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(user); err != nil {
+			failService(c, err)
+			return
+		}
+		page, pageSize, err := parsePaginationQuery(c, 20)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		limit := pageSize
+		offset := (page - 1) * pageSize
+		logs, total, err := svc.AllLoginLogs(c.Query("keyword"), c.Query("status"), c.Query("method"), limit, offset)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"logs": logs, "total": total})
+	})
 }

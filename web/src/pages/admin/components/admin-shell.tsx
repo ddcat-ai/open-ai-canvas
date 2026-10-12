@@ -84,6 +84,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
         label: "用户与运营",
         items: [
             { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/login-logs", label: "登录日志", description: "全体用户登录成功与失败", icon: <ShieldCheck className="size-4" /> },
             { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
             { path: "/admin/banner-announcements", label: "常驻通知", description: "首页顶部常驻滚动通知", icon: <Megaphone className="size-4" /> },
             { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },

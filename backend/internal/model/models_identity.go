@@ -51,6 +51,22 @@ type OAuthState struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
+type LoginLog struct {
+	ID            string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID        string     `json:"userId,omitempty" gorm:"index;size:36"`
+	Username      string     `json:"username" gorm:"size:80"`
+	SessionID     string     `json:"sessionId,omitempty" gorm:"index;size:36"`
+	Method        string     `json:"method" gorm:"index;size:24"`
+	Status        string     `json:"status" gorm:"index;size:16"`
+	FailureReason string     `json:"failureReason,omitempty" gorm:"size:120"`
+	IP            string     `json:"ip" gorm:"size:45"`
+	UserAgent     string     `json:"userAgent" gorm:"size:512"`
+	Location      string     `json:"location,omitempty" gorm:"size:120"`
+	LoginAt       time.Time  `json:"loginAt" gorm:"index"`
+	LogoutAt      *time.Time `json:"logoutAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt" gorm:"index"`
+}
+
 type EmailVerificationCode struct {
 	Attempts  int        `json:"-"`
 	ID        string     `json:"id" gorm:"primaryKey;size:36"`

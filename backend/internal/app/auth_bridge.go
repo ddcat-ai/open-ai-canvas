@@ -240,6 +240,14 @@ func (s *Service) ChangePassword(user *model.User, req ChangePasswordRequest) er
 	return s.authDomain().ChangePassword(user, req)
 }
 
+func (s *Service) LoginLogsByUser(userID string, limit, offset int) ([]model.LoginLog, int64, error) {
+	return s.authDomain().LoginLogsByUser(userID, limit, offset)
+}
+
+func (s *Service) AllLoginLogs(keyword, status, method string, limit, offset int) ([]model.LoginLog, int64, error) {
+	return s.authDomain().AllLoginLogs(keyword, status, method, limit, offset)
+}
+
 func hashPassword(password string) (string, error) {
 	return auth.HashPassword(password)
 }

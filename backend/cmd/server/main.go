@@ -107,6 +107,16 @@ func run(ctx context.Context) error {
 		slog.Info("storage migration completed", "tasks", summary.Tasks, "assets", summary.Assets, "projects", summary.Projects, "backup", summary.Backup)
 	}
 	r := gin.New()
+	// 配置可信代理：默认信任所有代理（frp/nginx/CDN），可通过 CANVAS_TRUSTED_PROXIES 限制。
+	trustedProxies := os.Getenv("CANVAS_TRUSTED_PROXIES")
+	if trustedProxies == "" {
+		trustedProxies = "0.0.0.0/0,::/0"
+	}
+	proxyList := strings.Split(trustedProxies, ",")
+	if err := r.SetTrustedProxies(proxyList); err != nil {
+		slog.Warn("failed to set trusted proxies, using defaults", "error", err)
+	}
+	r.ForwardedByClientIP = true
 	// 访问日志：成功的查询类请求只在 debug 级别输出，避免轮询和列表查询把日志打爆。
 	r.Use(logging.AccessLog(redactCanvasSharePath), logging.Recovery())
 	r.Use(handler.RequestCorrelationMiddleware())

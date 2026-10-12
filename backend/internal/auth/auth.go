@@ -41,8 +41,10 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	IP        string `json:"-"`
+	UserAgent string `json:"-"`
 }
 
 type PublicAuthSettings struct {
@@ -264,20 +266,25 @@ func (s *Service) LoginRateLimitSubject(account string) (string, error) {
 
 func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	account := strings.TrimSpace(req.Username)
+	now := time.Now()
+
+	// 查找用户——即使不存在也记录登录日志（失败）。
 	user, err := s.repo.UserByAccount(account)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.recordLoginLog("", account, "", "password", "failure", "invalid_credentials", req.IP, req.UserAgent, now)
 			return nil, kernel.Unauthorized("用户名、邮箱或密码不正确")
 		}
 		return nil, err
 	}
 	if user.Status != model.UserStatusActive {
+		s.recordLoginLog(user.ID, account, "", "password", "failure", "user_disabled", req.IP, req.UserAgent, now)
 		return nil, kernel.Forbidden("该账号已被禁用")
 	}
 	if !verifyPassword(req.Password, user.PasswordHash) {
+		s.recordLoginLog(user.ID, account, "", "password", "failure", "invalid_credentials", req.IP, req.UserAgent, now)
 		return nil, kernel.Unauthorized("用户名、邮箱或密码不正确")
 	}
-	now := time.Now()
 	user.LastLoginAt = &now
 	user.UpdatedAt = now
 	if err := s.repo.UpdateUserLoginTime(user.ID, now); err != nil {
@@ -287,7 +294,15 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 		return nil, err
 	}
 	s.host.RecordActivity(user.ID, "login", 1)
-	return s.createAuthSession(user)
+	result, err := s.createAuthSession(user)
+	if err != nil {
+		s.recordLoginLog(user.ID, account, "", "password", "failure", "session_error", req.IP, req.UserAgent, now)
+		return nil, err
+	}
+	// 成功——从 session cookie 中提取 sessionID 记录日志。
+	sessionID, _ := parseSessionCookie(result.Session)
+	s.recordLoginLog(user.ID, account, sessionID, "password", "success", "", req.IP, req.UserAgent, now)
+	return result, nil
 }
 
 func (s *Service) Logout(cookieValue string) error {
@@ -295,6 +310,8 @@ func (s *Service) Logout(cookieValue string) error {
 	if sessionID == "" {
 		return nil
 	}
+	// 回填登出时间（best-effort，不阻断登出流程）。
+	_ = s.repo.UpdateLoginLogLogout(sessionID, time.Now())
 	return s.repo.DeleteAuthSession(sessionID)
 }
 
@@ -435,4 +452,34 @@ func ValidateEmail(value string) error {
 		return kernel.BadAuthRequest("邮箱格式不正确")
 	}
 	return nil
+}
+
+// recordLoginLog 记录一条登录日志（best-effort，不阻断登录流程）。
+func (s *Service) recordLoginLog(userID, username, sessionID, method, status, failureReason, ip, userAgent string, loginAt time.Time) {
+	entry := &model.LoginLog{
+		ID:            kernel.NewID(),
+		UserID:        userID,
+		Username:      username,
+		SessionID:     sessionID,
+		Method:        method,
+		Status:        status,
+		FailureReason: failureReason,
+		IP:            ip,
+		UserAgent:     userAgent,
+		LoginAt:       loginAt,
+		CreatedAt:     time.Now(),
+	}
+	if err := s.repo.CreateLoginLog(entry); err != nil {
+		log.Printf("auth: failed to record login log: %v", err)
+	}
+}
+
+// LoginLogsByUser 查询指定用户的登录日志。
+func (s *Service) LoginLogsByUser(userID string, limit, offset int) ([]model.LoginLog, int64, error) {
+	return s.repo.LoginLogsByUser(userID, limit, offset)
+}
+
+// AllLoginLogs 查询全部登录日志（管理员）。
+func (s *Service) AllLoginLogs(keyword, status, method string, limit, offset int) ([]model.LoginLog, int64, error) {
+	return s.repo.AllLoginLogs(keyword, status, method, limit, offset)
 }

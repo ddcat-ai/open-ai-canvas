@@ -473,6 +473,30 @@ export function changePassword(input: { currentPassword: string; newPassword: st
     return http.post<{ ok: boolean }>("/auth/change-password", input);
 }
 
+export type LoginLogEntry = {
+    id: string;
+    userId?: string;
+    username: string;
+    sessionId?: string;
+    method: string;
+    status: string;
+    failureReason?: string;
+    ip: string;
+    userAgent: string;
+    location?: string;
+    loginAt: string;
+    logoutAt?: string;
+    createdAt: string;
+};
+
+export function getLoginLogs(params?: { page?: number; pageSize?: number }) {
+    return http.get<{ logs: LoginLogEntry[]; total: number }>("/auth/login-logs", { params });
+}
+
+export function getAdminLoginLogs(params?: { keyword?: string; status?: string; method?: string; page?: number; pageSize?: number }) {
+    return http.get<{ logs: LoginLogEntry[]; total: number }>("/admin/login-logs", { params });
+}
+
 export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean }) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input);
     invalidateAuthSessionCache();

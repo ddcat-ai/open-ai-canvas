@@ -29,6 +29,7 @@ func Models() []any {
 		&model.AgentMemorySetting{},
 		&model.User{},
 		&model.AuthSession{},
+		&model.LoginLog{},
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},

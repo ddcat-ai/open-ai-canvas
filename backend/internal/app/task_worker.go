@@ -51,6 +51,7 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s.startTextReplayCleanup(ctx)
 	s.startProviderCancellationReconciliation(ctx)
 	s.startBillingReviewAudit(ctx)
+	s.startLoginLogCleanup(ctx)
 	s.startAgentMemoryCompactScheduler()
 	s.runWorkerLoop(func(ctx context.Context) {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
