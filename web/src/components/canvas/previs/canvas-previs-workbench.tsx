@@ -24,7 +24,7 @@ import { type PrevisObject, type PrevisLight, type PrevisShot, type PrevisHumano
 import { resolvePrevisPlacementAnchor, resolvePrevisPlacement, type PrevisGroundPoint } from "@/lib/canvas/previs/previs-placement";
 import { uploadMediaFile } from "@/services/file-storage";
 import { saveRemoteUserDataNow, localSavedRemotePendingMessage } from "@/services/user-data-sync";
-import { Camera, Lightbulb, LampDesk, UserRound, Box, Circle, Cuboid, Square, FileUp, X, Undo2, Redo2, RotateCcw, Video, Save, Plus, WandSparkles, BoxSelect, Image as ImageIcon, Users, Route, Search } from "lucide-react";
+import { Camera, Lightbulb, LampDesk, UserRound, Box, Circle, Cuboid, Square, FileUp, X, Undo2, Redo2, Video, Save, Plus, WandSparkles, BoxSelect, Image as ImageIcon, Users, Route, Search } from "lucide-react";
 import { PrevisCanvasDock } from "./previs-canvas-dock";
 import { Dropdown } from "antd";
 import { nanoid } from "nanoid";
@@ -45,7 +45,7 @@ import { buildPrevisPathKeyframes } from "@/lib/canvas/previs/previs-path";
 import { recordPrevisDiagnostic } from "@/lib/canvas/previs/previs-diagnostics-recorder";
 import { shouldReinitializePrevisSession, isPrevisOutputSnapshotCurrent } from "@/lib/canvas/previs/previs-session";
 import { isPrevisPreviewRequestForWorkbench, previsPreviewRequestKey, type PrevisPreviewRequest } from "@/lib/canvas/previs/previs-preview";
-import { describePrevisSaveStatus, shouldOfferPrevisDraftRecovery, shouldBlockPrevisUnload, resolvePrevisCloseOutcome } from "@/lib/canvas/previs/previs-save-wiring";
+import { describePrevisSaveStatus, shouldBlockPrevisUnload, resolvePrevisCloseOutcome } from "@/lib/canvas/previs/previs-save-wiring";
 import { usePrevisSaveCoordinator } from "@/components/canvas/previs/use-previs-save-coordinator";
 import "./canvas-previs-workbench.css";
 import { useAssetStore, type ModelAsset } from "@/stores/use-asset-store";
@@ -183,11 +183,7 @@ export function CanvasPrevisWorkbench({
     }, [onChange, onFlush]);
 
     const closingRef = useRef(false);
-    const recoveryPromptedRef = useRef<string | null>(null);
-    const [retrying, setRetrying] = useState(false);
     const handledPreviewRequestsRef = useRef(new Set<string>());
-
-    // 按 scene.id 持有唯一 coordinator：flush 先把 request.scene 写回项目，再等持久化完成。
     const saveController = usePrevisSaveCoordinator({
         sceneId: scene?.id ?? null,
         initialScene: scene,
@@ -197,25 +193,6 @@ export function CanvasPrevisWorkbench({
     const saveControllerRef = useRef(saveController);
     saveControllerRef.current = saveController;
     const saveIndicator = describePrevisSaveStatus(saveController.progress);
-
-    const retrySave = async () => {
-        setRetrying(true);
-        try {
-            if (await saveController.retry()) {
-                recordPrevisDiagnostic("PREVIS_SAVE_RETRY_RECOVERED", { sceneId: draftRef.current?.id, revision: saveController.progress.revision, userInitiated: true });
-                message.success("已保存到项目");
-                return;
-            }
-            // 只有真的存在合法本地候选才敢说草稿已保留。
-            const draftStored = Boolean(saveController.restoreCandidate());
-            recordPrevisDiagnostic("PREVIS_SAVE_RETRY_FAILED", { sceneId: draftRef.current?.id, revision: saveController.progress.revision, draftStored, userInitiated: true });
-            if (!draftStored) recordPrevisDiagnostic("PREVIS_SAVE_DRAFT_UNAVAILABLE", { sceneId: draftRef.current?.id, revision: saveController.progress.revision });
-            if (draftStored) message.error("远端保存失败，本地草稿已保留，可稍后重试");
-            else message.error("远端和本地都未保存，请不要关闭预演台并继续重试");
-        } finally {
-            setRetrying(false);
-        }
-    };
 
     const writeDraft = useCallback((next: PrevisScene | null) => {
         draftRef.current = next;
@@ -232,7 +209,7 @@ export function CanvasPrevisWorkbench({
         onChangeRef.current(current);
     }, []);
 
-    /** 真实 canonical 提交：先交给 coordinator（本地草稿 + 远端保存），再镜像到项目。 */
+    /** 真实 canonical 提交：先交给 coordinator，再镜像到项目。 */
     const commitDraft = useCallback(() => {
         const current = draftRef.current;
         if (!current || initializedSceneIdRef.current !== current.id) return;
@@ -264,6 +241,7 @@ export function CanvasPrevisWorkbench({
         resetWorkbench();
     }, [open, resetWorkbench, scene, writeDraft]);
 
+    // 打开会话时检查合法本地恢复候选
     // 父级项目收到 Agent 的预演台语义补丁后，scene.id 不变但 updatedAt 会变化；
     // 不能只按 scene.id 忽略，否则打开着的工作台永远看不到 Agent 的修改。
     useEffect(() => {
@@ -280,40 +258,6 @@ export function CanvasPrevisWorkbench({
         setSelectedBone(null);
         setPlayhead(0);
         message.info("Agent 已更新预演场景");
-    }, [message, open, scene, setPlayhead, setSelectedBone, setSelectedLightId, setSelectedObjectId, writeDraft]);
-
-    // 打开会话时检查合法本地恢复候选：同一场景只提示一次，恢复/放弃都必须有明确结果。
-    useEffect(() => {
-        if (!open || !scene) return;
-        if (recoveryPromptedRef.current === scene.id) return;
-        recoveryPromptedRef.current = scene.id;
-
-        const controller = saveControllerRef.current;
-        const candidate = controller?.restoreCandidate() ?? null;
-        if (!controller || !candidate) return;
-        if (!shouldOfferPrevisDraftRecovery({ candidate, authoritativeScene: scene })) return;
-
-        modal.confirm({
-            title: "发现未保存的本地草稿",
-            content: `这个镜头存在一份比项目更新的本地草稿（修订 ${candidate.revision}）。恢复后会立即写回项目并保存。`,
-            okText: "恢复草稿",
-            cancelText: "放弃草稿",
-            closable: false,
-            mask: { closable: false },
-            keyboard: false,
-            onOk: () => {
-                if (!controller.restoreDraft(candidate)) {
-                    message.error("草稿恢复失败，已保留当前场景");
-                    return;
-                }
-                writeDraft(candidate.scene);
-                message.success("已恢复本地草稿并写回项目");
-            },
-            onCancel: () => {
-                if (controller.discardDraft()) message.success("已放弃本地草稿");
-                else message.error("草稿删除失败，下次打开可能仍会提示");
-            },
-        });
     }, [message, modal, open, scene, writeDraft]);
 
     const activeShot = draft?.shots?.find((item) => item.id === draft.activeShotId) || draft?.shots?.[0] || null;
@@ -412,6 +356,7 @@ export function CanvasPrevisWorkbench({
         [writeAndPublish],
     );
 
+    // 打开会话时检查合法本地恢复候选之后，挂载暂存手势生命周期。
     // 暂存手势的终止生命周期：常驻安装，非活跃时 end 为空操作。
     useEffect(
         () =>
@@ -522,31 +467,16 @@ export function CanvasPrevisWorkbench({
                 onClose();
                 return;
             }
-            if (decision.kind === "blocked") {
-                recordPrevisDiagnostic("PREVIS_CLOSE_BLOCKED", { sceneId: draftRef.current?.id, saveOutcome: "stay", revision: saveController.progress.revision, draftStored: saveController.progress.draftStored });
-                message.error(decision.message);
-                closingRef.current = false;
-                return;
-            }
-
-            // 确认框存续期间保持上锁，否则重复点击会叠出多个弹窗。
+            recordPrevisDiagnostic("PREVIS_CLOSE_BLOCKED", { sceneId: draftRef.current?.id, saveOutcome: "stay", revision: saveController.progress.revision });
             modal.confirm({
-                title: "远端保存失败",
+                title: "保存未完成",
                 content: decision.message,
-                okText: "仍然离开",
+                okText: "放弃修改并关闭",
                 cancelText: "留在预演台",
-                closable: false,
-                mask: { closable: false },
-                keyboard: false,
-                // 预演视口持续占用主线程时，zoom 离场要等 rAF 和 transitionend。
-                // 动画停在可见态后，点「留在预演台」确认框也不会消失。
-                transitionName: "",
-                maskTransitionName: "",
-                onOk: () => onClose(),
-                onCancel: () => {
-                    closingRef.current = false;
-                },
+                okButtonProps: { danger: true },
+                onOk: onClose,
             });
+            closingRef.current = false;
         })();
     };
 
@@ -1325,9 +1255,9 @@ export function CanvasPrevisWorkbench({
                 <span className={`previs-desk-save ${saveStatusClass}`} aria-live="polite">
                     {saveIndicator.label}
                 </span>
-                {saveIndicator.retryable ? (
-                    <button type="button" className="previs-desk-header-action" aria-label="重试保存" disabled={retrying || saveIndicator.busy} onClick={() => void retrySave()}>
-                        <RotateCcw className="size-3.5" />
+                {saveController.progress.status === "error" ? (
+                    <button type="button" className="previs-desk-header-action" onClick={() => void saveController.retrySave()}>
+                        <Save className="size-3.5" />
                         重试保存
                     </button>
                 ) : null}

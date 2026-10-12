@@ -382,14 +382,17 @@ async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: Genera
     for (let index = 0; index < images.length; index += 1) {
         const id = `${node.id}:task:${task.id}:image:${index}`;
         const existing = nodes.find((item) => item.id === id);
-        if (existing) {
-            children.push(existing);
-            continue;
-        }
-        const child = await buildGenerationTaskNodeResult({ ...node, id, title: `${node.title} · ${index + 1}`, parentId: undefined }, task, nodes, index);
+        const child = await buildGenerationTaskNodeResult(
+            existing ? { ...node, ...existing, id, title: existing.title, position: existing.position, width: existing.width, height: existing.height } : { ...node, id, title: `${node.title} · ${index + 1}`, parentId: undefined },
+            task,
+            nodes,
+            index,
+        );
         children.push({
             ...child,
-            position: imageGenerationChildPosition(resultNode.position, resultNode.width, child, index),
+            ...(existing
+                ? { title: existing.title, position: existing.position, width: existing.metadata?.manualSize ? existing.width : child.width, height: existing.metadata?.manualSize ? existing.height : child.height }
+                : { position: imageGenerationChildPosition(resultNode.position, resultNode.width, child, index) }),
             metadata: {
                 ...child.metadata,
                 assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
@@ -452,11 +455,6 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
     const children: CanvasNodeData[] = [];
     for (let index = 0; index < images.length; index += 1) {
         const id = `${node.id}:task:${task.id}:layer:${index}`;
-        const existing = nodes.find((item) => item.id === id);
-        if (existing) {
-            children.push(existing);
-            continue;
-        }
         const image = images[index];
         const stored: UploadedImage = image.storageKey
             ? {
@@ -469,6 +467,30 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
               }
             : await uploadImage(decoded.layers[index].blob);
         if (stored.pendingRemoteUpload) throw new Error("图层仅缓存在本机，服务端保存未完成；请重试保存结果");
+        const existing = nodes.find((item) => item.id === id);
+        const metadata = commitProducedModel(
+            {
+                ...(existing?.metadata || {}),
+                ...imageMetadata(stored),
+                assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
+                batchRootId: node.id,
+                imageLayer: { groupId: node.id, outputIndex: index, kind: decoded.layers[index].transparent ? "transparent" : "base" },
+                model: node.metadata?.model || task.model,
+                producedModel: task.model,
+            },
+            task.model,
+        );
+        if (existing) {
+            children.push({
+                ...existing,
+                type: CanvasNodeType.Image,
+                width: existing.metadata?.manualSize ? existing.width : size.width,
+                height: existing.metadata?.manualSize ? existing.height : size.height,
+                position: existing.position,
+                metadata,
+            });
+            continue;
+        }
         children.push({
             id,
             type: CanvasNodeType.Image,
@@ -478,17 +500,7 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
                 const position = imageGenerationChildPosition(node.position, size.width, size, index);
                 return { x: position.x + layoutPosition.x - firstPosition.x, y: position.y + layoutPosition.y - firstPosition.y };
             })(),
-            metadata: commitProducedModel(
-                {
-                    ...imageMetadata(stored),
-                    assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
-                    batchRootId: node.id,
-                    imageLayer: { groupId: node.id, outputIndex: index, kind: decoded.layers[index].transparent ? "transparent" : "base" },
-                    model: node.metadata?.model || task.model,
-                    producedModel: task.model,
-                },
-                task.model,
-            ),
+            metadata,
         });
     }
     const composite = await uploadImage(decoded.composite);

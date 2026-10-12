@@ -5,8 +5,6 @@ import {
     ArrowLeft,
     BarChart3,
     BellRing,
-    ChevronLeft,
-    ChevronRight,
     ChevronDown,
     CloudUpload,
     Coins,
@@ -24,6 +22,8 @@ import {
     Moon,
     Palette,
     Paintbrush,
+    PanelLeftClose,
+    PanelLeftOpen,
     PlugZap,
     RadioTower,
     RefreshCw,
@@ -172,20 +172,27 @@ function AdminShellLayout() {
                             </AdminTooltip>
                         </div>
                         <AdminNavigation collapsed={collapsed} />
-                        <div className="admin-sidebar-footer shrink-0">
-                            <AdminTooltip title={collapsed ? "返回创作台" : undefined} placement="right">
-                                <NavLink to="/" aria-label={collapsed ? "返回创作台" : undefined} className={cn("admin-nav-link", collapsed && "is-collapsed")}>
-                                    <Home className="size-4" strokeWidth={1.6} />
-                                    {!collapsed ? <span>返回创作台</span> : null}
-                                </NavLink>
-                            </AdminTooltip>
+                        <div className={cn("admin-sidebar-footer shrink-0", collapsed && "is-collapsed")}>
+                            <div className="admin-sidebar-footer-row">
+                                <AdminTooltip title={collapsed ? "返回创作台" : undefined} placement="right">
+                                    <NavLink to="/" aria-label={collapsed ? "返回创作台" : undefined} className={cn("admin-nav-link", collapsed && "is-collapsed")}>
+                                        <Home className="size-4" strokeWidth={1.6} />
+                                        {!collapsed ? <span>返回创作台</span> : null}
+                                    </NavLink>
+                                </AdminTooltip>
+                                {!collapsed ? (
+                                    <button type="button" className="admin-sidebar-collapse-toggle" onClick={toggleCollapsed} aria-label="收起侧栏" title="收起侧栏" aria-expanded={!collapsed}>
+                                        <PanelLeftClose className="size-4" strokeWidth={1.7} />
+                                    </button>
+                                ) : null}
+                            </div>
+                            {collapsed ? (
+                                <button type="button" className="admin-sidebar-collapse-toggle is-collapsed" onClick={toggleCollapsed} aria-label="展开侧栏" title="展开侧栏">
+                                    <PanelLeftOpen className="size-4" strokeWidth={1.7} />
+                                </button>
+                            ) : null}
                         </div>
                     </aside>
-                    <AdminTooltip title={collapsed ? "展开侧栏" : "收起侧栏"} placement="right">
-                        <button type="button" className={cn("admin-sidebar-edge-toggle hidden lg:grid", collapsed && "is-collapsed")} onClick={toggleCollapsed} aria-label={collapsed ? "展开侧栏" : "收起侧栏"} aria-expanded={!collapsed}>
-                            {collapsed ? <ChevronRight className="size-3.5" aria-hidden="true" /> : <ChevronLeft className="size-3.5" aria-hidden="true" />}
-                        </button>
-                    </AdminTooltip>
                     <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
                         <MobileAdminNavigation />
                         <Suspense

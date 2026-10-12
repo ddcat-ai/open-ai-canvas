@@ -2,9 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
-	"time"
 
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/canvas"
@@ -13,15 +11,17 @@ import (
 )
 
 type (
-	CanvasShareRequest   = canvas.CanvasShareRequest
-	CanvasShareStatus    = canvas.CanvasShareStatus
-	PublicCanvasShare    = canvas.PublicCanvasShare
-	AssetsSyncRequest    = canvas.AssetsSyncRequest
-	CanvasHistoryList    = canvas.CanvasHistoryList
-	UserDataSummary      = canvas.UserDataSummary
-	UserDataSnapshot     = canvas.UserDataSnapshot
-	CanvasLibrarySummary = canvas.CanvasLibrarySummary
-	CanvasLibraryPage    = canvas.CanvasLibraryPage
+	CanvasShareRequest      = canvas.CanvasShareRequest
+	CanvasShareStatus       = canvas.CanvasShareStatus
+	PublicCanvasShare       = canvas.PublicCanvasShare
+	AssetsSyncRequest       = canvas.AssetsSyncRequest
+	CanvasHistoryList       = canvas.CanvasHistoryList
+	UserDataSummary         = canvas.UserDataSummary
+	UserDataSnapshot        = canvas.UserDataSnapshot
+	CanvasLibrarySummary    = canvas.CanvasLibrarySummary
+	CanvasLibraryPage       = canvas.CanvasLibraryPage
+	CanvasOperationsRequest = canvas.CanvasOperationsRequest
+	CanvasOperation         = canvas.CanvasOperation
 )
 
 type canvasHost struct {
@@ -68,6 +68,23 @@ func (h canvasHost) WithStorageLock(fn func() error) error {
 	return fn()
 }
 
+func (h canvasHost) CanvasQuotaCheck(userID string) (func(*repository.Repository, bool, int64) error, error) {
+	if h.svc == nil {
+		return func(*repository.Repository, bool, int64) error { return nil }, nil
+	}
+	policy, err := h.svc.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	return func(repo *repository.Repository, creating bool, deltaBytes int64) error {
+		usage, err := repo.UserStructuredStorageUsage(userID)
+		if err != nil {
+			return err
+		}
+		return validateStructuredStorageQuotaWithPolicy(usage, "canvas", creating, deltaBytes, policy.Resource)
+	}, nil
+}
+
 func (h canvasHost) StructuredQuota(userID, kind string, creating bool, deltaBytes int64) error {
 	if h.svc == nil {
 		return nil
@@ -76,7 +93,7 @@ func (h canvasHost) StructuredQuota(userID, kind string, creating bool, deltaByt
 	if err != nil {
 		return err
 	}
-	usage, err := h.svc.repo.UserStorageUsage(userID)
+	usage, err := h.svc.repo.UserStructuredStorageUsage(userID)
 	if err != nil {
 		return err
 	}
@@ -91,7 +108,7 @@ func (h canvasHost) StructuredReplacementQuota(userID, kind string, count int, b
 	if err != nil {
 		return err
 	}
-	usage, err := h.svc.repo.UserStorageUsage(userID)
+	usage, err := h.svc.repo.UserStructuredStorageUsage(userID)
 	if err != nil {
 		return err
 	}
@@ -222,6 +239,10 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	return s.canvasDomain().UpsertUserCanvasProject(userID, raw)
 }
 
+func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasOperationsRequest) (UserDataSummary, error) {
+	return s.canvasDomain().ApplyUserCanvasOperations(userID, canvasID, req)
+}
+
 func (s *Service) RepairUserCanvasProject(userID string, raw json.RawMessage) (UserDataSummary, error) {
 	return s.canvasDomain().RepairUserCanvasProject(userID, raw)
 }
@@ -250,12 +271,28 @@ func saveCreationCanvasWithHistory(repo *repository.Repository, project *model.C
 	if before.PayloadJSON != previous || before.Revision != project.Revision {
 		return repository.ErrCreationConflict
 	}
-	project.UpdatedAt = time.Now().UTC()
-	err = canvas.SaveDocumentWithHistory(repo, before, project, "automatic")
-	if errors.Is(err, repository.ErrCanvasRevisionConflict) {
-		return repository.ErrCreationConflict
+	beforeDoc, err := creationDocument(before.PayloadJSON)
+	if err != nil {
+		return err
 	}
-	return err
+	desiredDoc, err := creationDocument(project.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	operations := canvas.DiffCanvasDocuments(beforeDoc, desiredDoc)
+	if len(operations) == 0 {
+		return nil
+	}
+	baseRevision := project.Revision
+	request := canvas.CanvasOperationsRequest{BaseRevision: &baseRevision, Operations: operations, TrustedServerMutation: true}
+	request.MutationID = "creation-canvas:" + project.ID + ":" + canvas.CanvasOperationsDigest(request)
+	result, err := canvas.New(repo, nil).ApplyUserCanvasOperations(project.UserID, project.ID, request)
+	if err != nil {
+		return err
+	}
+	project.Revision = result.Revision
+	project.UpdatedAt = result.UpdatedAt
+	return nil
 }
 
 func (s *Service) UserAssetsByIDs(userID string, ids []string) ([]json.RawMessage, error) {

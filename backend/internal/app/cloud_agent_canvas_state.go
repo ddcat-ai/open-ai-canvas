@@ -58,8 +58,19 @@ func cloudAgentNodeSnapshotMatches(doc map[string]any, nodeID, snapshotHash stri
 func cloudAgentCanvasHash(doc map[string]any) string {
 	content := make(map[string]any, len(doc))
 	for key, value := range doc {
-		if key != "viewport" && key != "updatedAt" {
-			content[key] = value
+		switch key {
+		case "id", "viewport", "updatedAt", "revision", "createdAt":
+			continue
+		case "title", "projectId":
+			if text, ok := value.(string); ok && strings.TrimSpace(text) == "" {
+				continue
+			}
+		}
+		content[key] = value
+	}
+	for _, key := range []string{"nodes", "connections"} {
+		if value, exists := content[key]; !exists || value == nil {
+			content[key] = []any{}
 		}
 	}
 	return creationHash(content)

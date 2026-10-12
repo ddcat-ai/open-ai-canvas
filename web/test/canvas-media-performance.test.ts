@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { canvasNodeRenderPadding, resolveActiveCanvasMediaNodeId } from "../src/lib/canvas/canvas-performance-mode";
+import { canvasNodeRenderPadding } from "../src/lib/canvas/canvas-render-budget";
 import { videoMetadata } from "../src/lib/canvas/canvas-generation-task-sync";
 import { canvasNodeVideoPreviewReference, canvasNodeVideoPreviewUrl, canvasVideoAssetPreviewUrl } from "../src/lib/canvas/canvas-media-preview";
 import { collectImageStorageKeys } from "../src/services/image-storage";
@@ -34,23 +34,6 @@ function node(id: string, type: CanvasNodeType): CanvasNodeData {
     return { id, type, title: id, position: { x: 0, y: 0 }, width: 320, height: 180, metadata: {} };
 }
 
-describe("canvas media activation", () => {
-    const nodes = [node("video", CanvasNodeType.Video), node("audio", CanvasNodeType.Audio), node("image", CanvasNodeType.Image)];
-    const nodeById = new Map(nodes.map((item) => [item.id, item]));
-
-    test("activates exactly one selected video or audio node", () => {
-        expect(resolveActiveCanvasMediaNodeId(new Set(["video"]), nodeById)).toBe("video");
-        expect(resolveActiveCanvasMediaNodeId(new Set(["audio"]), nodeById)).toBe("audio");
-    });
-
-    test("keeps media inactive for empty, multi-selection, and non-media selection", () => {
-        expect(resolveActiveCanvasMediaNodeId(new Set(), nodeById)).toBeNull();
-        expect(resolveActiveCanvasMediaNodeId(new Set(["video", "audio"]), nodeById)).toBeNull();
-        expect(resolveActiveCanvasMediaNodeId(new Set(["image"]), nodeById)).toBeNull();
-        expect(resolveActiveCanvasMediaNodeId(new Set(["missing"]), nodeById)).toBeNull();
-    });
-});
-
 describe("canvas dimension header rendering", () => {
     test("tracks live viewport scale without React width commits", () => {
         expect(canvasNodeSource).toContain("calc(var(--canvas-node-width) * var(--canvas-live-scale, 1))");
@@ -60,9 +43,8 @@ describe("canvas dimension header rendering", () => {
 
 describe("large canvas media rendering", () => {
     test("keeps rendered nodes mounted longer than newly entering nodes", () => {
-        expect(canvasNodeRenderPadding(true, false)).toBe(128);
-        expect(canvasNodeRenderPadding(true, true)).toBe(640);
-        expect(canvasNodeRenderPadding(false, true)).toBeGreaterThan(canvasNodeRenderPadding(false, false));
+        expect(canvasNodeRenderPadding(false)).toBe(192);
+        expect(canvasNodeRenderPadding(true)).toBe(384);
     });
 
     test("does not eagerly load or resize LibTV thumbnails", () => {
@@ -74,6 +56,12 @@ describe("large canvas media rendering", () => {
     test("keeps canvas node action context stable across viewport renders", () => {
         expect(canvasProjectSource).toContain("const canvasNodeActions = useMemo<CanvasNodeActionContextValue>");
         expect(canvasProjectSource).toContain("<CanvasNodeActionContext.Provider value={canvasNodeActions}>");
+    });
+
+    test("decodes canvas images synchronously so zoom re-rasterization never paints blank frames", () => {
+        const retainedImageSource = canvasNodeContentSource.match(/export function RetainedCanvasImage[\s\S]*?\n}\n/)?.[0] || "";
+        expect(retainedImageSource).toContain('decoding="sync"');
+        expect(retainedImageSource).not.toContain('decoding="async"');
     });
 
     test("keeps node shells visible while panning and zooming", () => {

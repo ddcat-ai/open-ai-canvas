@@ -376,99 +376,74 @@ paths:
       responses:
         "200":
           description: 信封 data.project 包含完整画布及服务端 revision
+        "304":
+          description: If-None-Match 命中当前 revision，正文为空
         "404":
           description: 画布不存在或不属于当前用户
-    put:
+    delete:
       tags: [canvas]
-      summary: 按 revision 保存画布内容
-      description: 新建传 revision 0，更新传读取到的版本；成功原子加 1。忽略客户端 viewport 和 remoteContentHash，updatedAt 由服务端生成。
+      summary: 显式删除当前用户画布
+      description: 删除后迟到的媒体回写和编辑操作不会重新创建画布；只有新的 create_canvas operation 可以显式创建同 ID 画布。
+      responses:
+        "200":
+          description: 画布已删除，信封 data.id 返回画布 ID
+        "401":
+          description: 未登录
+        "404":
+          description: 画布不存在或不属于当前用户
+  /canvas-projects/{id}/operations:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [canvas]
+      summary: 按对象或字段变更写入画布
+      description: |
+        请求只提交对象级或字段级 operations，不提交整批画布快照。
+        mutationId 是一次请求的幂等身份；响应丢失、断网、刷新或后台重试时必须复用同一个 mutationId 与原始 operations。
+        更新、删除和连接操作要求目标存在并通过对象基线校验；同一字段冲突不会覆盖远端修改。
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [project]
+              required: [mutationId, operations]
               properties:
-                project:
-                  type: object
-                  required: [id, revision]
-                  properties:
-                    id: { type: string }
-                    revision: { type: integer, format: int64, minimum: 0 }
-                  additionalProperties: true
+                mutationId:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                  description: 一次写入请求的幂等身份
+                baseRevision:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  description: 生成 operations 时已确认的画布 revision，用于诊断和响应
+                operations:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: object
+                    required: [type]
+                    additionalProperties: true
+                    description: create_canvas、create_node、patch_node、remove_node、create_connection、update_connection、remove_connection 或 set_field
       responses:
         "200":
-          description: 信封 data.project 返回摘要及递增后的 revision
+          description: 信封 data.project 返回当前画布摘要，data.mutationId 返回原 mutationId
         "400":
-          description: 请求、版本或素材引用不合法
+          description: 请求、字段、对象基线或素材引用格式不合法
+        "401":
+          description: 未登录
+        "404":
+          description: 画布不存在或不属于当前用户，且请求未包含显式 create_canvas
         "409":
-          description: 版本或资源状态冲突，原内容未被覆盖；保留草稿后加载最新版
+          description: 对象并发冲突或同一 mutationId 对应的请求摘要不同；原事务不会被覆盖
         "428":
-          description: 缺少 revision，需刷新客户端并重新读取
-  /canvas-projects/{id}/history:
-    get:
-      tags: [canvas]
-      summary: 读取当前画布版本与最近 20 份历史摘要
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: 信封 data 包含 currentRevision 和 snapshots；每项含 id、revision、title、nodeCount、connectionCount、payloadBytes、reason、contentUpdatedAt、createdAt，不含正文
-        "404":
-          description: 画布不存在或无权访问
-  /canvas-projects/{id}/history/{snapshotId}:
-    get:
-      tags: [canvas]
-      summary: 按需读取历史正文
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-        - in: path
-          name: snapshotId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: 信封 data 包含 snapshot 摘要和 project 正文
-        "404":
-          description: 画布或快照不存在、已过期或无权访问
-  /canvas-projects/{id}/history/{snapshotId}/restore:
-    post:
-      tags: [canvas]
-      summary: 备份当前内容并将历史内容恢复为新版本
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-        - in: path
-          name: snapshotId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [revision]
-              properties:
-                revision: { type: integer, format: int64, minimum: 1 }
-      responses:
-        "200":
-          description: 信封 data.project 返回恢复后的摘要及新 revision；当前 ID、归属与项目关联保留
-        "404":
-          description: 画布或快照不存在、已过期或无权访问
-        "409":
-          description: 当前版本或素材状态已变化，恢复未执行
-        "428":
-          description: 缺少当前 revision
+          description: 缺少执行所需的对象基线
   /public/welcome:
     get:
       tags: [meta]

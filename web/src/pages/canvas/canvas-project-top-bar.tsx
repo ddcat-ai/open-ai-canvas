@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CopyPlus, Focus, FolderKanban, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Tooltip } from "antd";
 
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
@@ -12,13 +12,9 @@ import type { CanvasShortDramaProgress } from "@/lib/canvas/canvas-short-drama";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import type { CanvasMediaPerformanceMode } from "@/types/canvas";
 import { CanvasShortcutsModal } from "./canvas-shortcuts-modal";
 
 type CanvasTopBarProps = {
-    syncStatus?: ReactNode;
-    versionsOpen: boolean;
-    onToggleVersions: () => void;
     title: string;
     titleDraft: string;
     isTitleEditing: boolean;
@@ -31,7 +27,6 @@ type CanvasTopBarProps = {
     onCreateProject: () => void;
     onDeleteProject: () => void;
     onSave: () => void | Promise<void>;
-    onForceSave: () => void;
     onImportImage: () => void;
     onImportLibTV: () => void;
     onImportTapNow: () => void;
@@ -39,8 +34,7 @@ type CanvasTopBarProps = {
     onRedo: () => void;
     onShare: () => void;
     shortcutRequestNonce: number;
-    mediaPerformanceMode: CanvasMediaPerformanceMode;
-    onMediaPerformanceModeChange: (mode: CanvasMediaPerformanceMode) => void;
+    syncIcon?: ReactNode;
     onOpenSearch: () => void;
     projectContext?: CanvasContextSummary & { projectId: string; projectName: string };
     onEnterFocusMode: () => void;
@@ -48,9 +42,6 @@ type CanvasTopBarProps = {
 };
 
 export function CanvasTopBar({
-    syncStatus,
-    versionsOpen,
-    onToggleVersions,
     title,
     titleDraft,
     isTitleEditing,
@@ -63,7 +54,6 @@ export function CanvasTopBar({
     onCreateProject,
     onDeleteProject,
     onSave,
-    onForceSave,
     onImportImage,
     onImportLibTV,
     onImportTapNow,
@@ -71,8 +61,7 @@ export function CanvasTopBar({
     onRedo,
     onShare,
     shortcutRequestNonce,
-    mediaPerformanceMode,
-    onMediaPerformanceModeChange,
+    syncIcon,
     onOpenSearch,
     projectContext,
     onEnterFocusMode,
@@ -118,20 +107,9 @@ export function CanvasTopBar({
                                     { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
                                     { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
                                     { key: "save", icon: <Save className="size-4" />, label: <MenuLabel text="保存" shortcut="⌘ S" />, onClick: () => void onSave() },
-                                    { key: "force-save", icon: <CloudUpload className="size-4" />, label: "修复素材关联并保存", onClick: onForceSave },
                                     { type: "divider" },
                                     { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
                                     { key: "search", icon: <Search className="size-4" />, label: <MenuLabel text="搜索节点" shortcut="⌘ F" />, onClick: onOpenSearch },
-                                    {
-                                        key: "performance",
-                                        icon: <Gauge className="size-4" />,
-                                        label: "媒体性能",
-                                        children: [
-                                            { key: "performance-auto", label: "自动性能", onClick: () => onMediaPerformanceModeChange("auto") },
-                                            { key: "performance-quality", label: "画质优先", onClick: () => onMediaPerformanceModeChange("quality") },
-                                            { key: "performance-fast", label: "性能优先", onClick: () => onMediaPerformanceModeChange("performance") },
-                                        ],
-                                    },
                                     { type: "divider" },
                                     { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
                                     { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
@@ -193,7 +171,7 @@ export function CanvasTopBar({
                             </div>
                         ) : null}
                     </div>
-                    {syncStatus}
+                    {syncIcon}
                 </div>
 
                 <div className="canvas-topbar-cluster canvas-topbar-tools-cluster pointer-events-auto flex items-center gap-1.5" style={dockStyle}>
@@ -221,23 +199,6 @@ export function CanvasTopBar({
                             <Button type="text" className="canvas-topbar-action canvas-topbar-import-button !h-10 !rounded-xl !px-2.5 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布">
                                 <span className="hidden lg:inline">导入第三方画布</span>
                             </Button>
-                        </Dropdown>
-                    </CanvasTopBarTooltip>
-                    <CanvasTopBarTooltip label="媒体性能模式">
-                        <Dropdown
-                            trigger={["click"]}
-                            menu={{
-                                selectable: true,
-                                selectedKeys: [mediaPerformanceMode],
-                                onClick: ({ key }) => onMediaPerformanceModeChange(key as CanvasMediaPerformanceMode),
-                                items: [
-                                    { key: "auto", label: "自动性能" },
-                                    { key: "quality", label: "画质优先" },
-                                    { key: "performance", label: "性能优先" },
-                                ],
-                            }}
-                        >
-                            <Button type="text" className="canvas-topbar-action !hidden !h-10 !w-10 !min-w-10 !rounded-xl !p-0 lg:!inline-flex" style={{ color: theme.node.text }} icon={<Gauge className="size-4" />} aria-label="媒体性能模式" />
                         </Dropdown>
                     </CanvasTopBarTooltip>
                     {user && creditsEnabled ? (
@@ -272,19 +233,6 @@ export function CanvasTopBar({
                             </Button>
                         </CanvasTopBarTooltip>
                     ) : null}
-                    <CanvasTopBarTooltip label="版本记录与本地草稿">
-                        <Button
-                            type="text"
-                            className="canvas-topbar-action canvas-topbar-version-button !h-10 !rounded-xl !px-2.5 !font-medium"
-                            style={{ color: theme.node.text, background: versionsOpen ? theme.toolbar.activeBg : undefined }}
-                            icon={<History className="size-4" />}
-                            aria-label="版本记录"
-                            aria-pressed={versionsOpen}
-                            onClick={onToggleVersions}
-                        >
-                            版本
-                        </Button>
-                    </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="分享画布">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" />
                     </CanvasTopBarTooltip>

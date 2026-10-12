@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { withStoryboardOutputContract } from "../src/lib/canvas/canvas-project-domain";
+import { stripProjectStyleExecutionBlocks, withStoryboardOutputContract } from "../src/lib/canvas/canvas-project-domain";
+
+describe("stripProjectStyleExecutionBlocks", () => {
+    test("removes repeated legacy style suffixes while preserving the original story", () => {
+        const prompt = "@图片1 冬天\n\n【项目画风执行规范】\n旧风格规范\n\n【项目画风执行规范】\n重复旧风格规范";
+
+        expect(stripProjectStyleExecutionBlocks(prompt)).toBe("@图片1 冬天");
+    });
+});
 
 // 画布「分镜脚本」节点与章节分镜都把用户输入原样交给模型，拆镜要求与 JSON 契约只能由调用方显式拼上：
 // 漏掉契约时模型按自然语言习惯回复（Markdown 表格、甚至续写正文），storyboardRowsFromTask 便报

@@ -71,19 +71,19 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 文本生成任务的 `metadata.edit = "layer-planning"` 使用图片参考时，服务端从当前用户归属的就绪资源读取实际像素并转换为内嵌图片，清除附带的旧 URL。图片数量与字节数沿用文本模型能力及资源读取上限；不允许其他用户资源或客户端内嵌内容替换资源文件。普通生成的签名 URL 策略保持不变，任务端点、账务与数据库结构沿用已有合同。
 
-## 画布资源完整性与 409
+## 画布资源完整性与 operations 写入
 
-画布写入在保存历史快照前校验当前文档中的资源引用；引用须属于当前用户且处于 `ready`。引用收集器递归遍历受支持的资源字段，因此 `nodes[节点 ID].metadata.videoPreview.storageKey` 等嵌套派生封面也会参与检查。历史快照保存会一并校验新版本引用；若资源在保存期间缺失或状态变化，事务回滚，画布 revision 不递增。
+画布 operations 应用前校验当前文档中的资源引用；引用须属于当前用户且处于 `ready`。引用收集器递归遍历受支持的资源字段，因此 `nodes[节点 ID].metadata.videoPreview.storageKey` 等嵌套派生封面也会参与检查。维护写入会保留必要的损坏文档审计信息；若资源在事务期间缺失或状态变化，事务回滚，画布 revision 不递增。
 
-HTTP 409 不能一概解释为 revision 冲突：普通版本冲突使用 `reason: conflict`；资源完整性失败使用 `reason: canvas_history_resources_missing`，并在 `details` 中返回 `resourceIds` 和 `missingResources`（含资源 ID、JSON 路径、节点 ID、引用类型及 `source`）。客户端应按 `reason` 分流，不解析 `msg` 猜测原因。显式资源修复写入仅允许历史 preimage 存在缺失资源，不允许新画布仍引用缺失资源，也不绕过 revision CAS。
+HTTP 409 不能一概解释为并发冲突：对象或字段基线冲突使用 `reason: conflict`；资源完整性失败使用 `reason: canvas_history_resources_missing`，并在 `details` 中返回 `resourceIds` 和 `missingResources`（含资源 ID、JSON 路径、节点 ID、引用类型及 `source`）。客户端应按 `reason` 分流，不解析 `msg` 猜测原因。普通 operations 不会绕过资源校验或 revision 语义，维护修复也不能把缺失主媒体写回为有效画布。
 
-运维扫描/修复仅处理当前画布中可安全清除的失效 `videoPreview`；不删除主媒体、不扫描并改写所有历史快照，也不替代备份。使用目标数据库对应的新版本二进制，先在维护窗口备份并执行只读扫描：
+运维扫描/修复仅处理当前画布中可安全清除的失效 `videoPreview`；不删除主媒体、不扫描并改写所有维护记录，也不替代备份。使用目标数据库对应的新版本二进制，先在维护窗口备份并执行只读扫描：
 
 ```sh
 CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-resources
 ```
 
-复核 JSON 报告后，只有 `repairable` 项可由明确授权的操作员再次运行 `repair-canvas-resources --apply`。命令要求显式配置 `CANVAS_BACKEND_DATA_DIR` 或 `DATABASE_URL`，逐画布按版本 CAS 保存并保留原始历史；有未解决主媒体/素材绑定问题时以非零退出，不会自动恢复或重传。发生并发编辑时停止并重新扫描，不能用强制覆盖代替恢复有效历史或重新上传。
+复核 JSON 报告后，只有 `repairable` 项可由明确授权的操作员再次运行 `repair-canvas-resources --apply`。命令要求显式配置 `CANVAS_BACKEND_DATA_DIR` 或 `DATABASE_URL`，逐画布按当前 revision CAS 保存并保留维护审计记录；有未解决主媒体/素材绑定问题时以非零退出，不会自动重传或重建节点。发生并发编辑时停止并重新扫描，不能用整批快照替换或绕过 operations 校验。
 
 ## 生成成功后的重试保存
 
@@ -213,24 +213,25 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 上传、工作流结构查询、取消查询和取消请求也不参与财务归属，即使日志被标记为可计费；它们不能代替生成请求承载订单金额。订单是否已结算以账单状态为准，保留人工核账后结算订单的统计能力。
 
-## 画布保存、历史与恢复
+## 画布保存与 operations 同步
 
-画布内容使用数据库递增的 `revision` 做乐观并发校验；`updatedAt` 仅用于展示，不作为版本依据。新建 `PUT /canvas-projects/:id` 的 `project.revision` 为 0，已有画布必须带上读取到的版本。数据库在同一次条件更新中匹配 ID、用户与版本，成功后返回 `data.project` 摘要及递增后的版本；缺失版本返回 428，陈旧版本返回 409，非法版本返回 400。客户端不能获取新版号后直接重发旧内容。
+画布写入统一使用 `PATCH /canvas-projects/:id/operations`。请求只携带对象级或字段级变更，不提交整批画布快照；`mutationId` 是一次写入的幂等身份，客户端在响应丢失、断网、刷新或后台重试时必须复用同一个 ID 和原始 `operations`。`baseRevision` 记录生成请求时的已确认基线版本，用于诊断和响应；字段/对象的 `before`、`expected`、`beforeValue` 是实际并发校验，允许不同字段合并，拒绝同字段覆盖和缺失对象更新。可选顶层字段缺失时必须显式编码为 JSON `null`；服务端仅对早期客户端省略这些可选字段的 `value` 或 `beforeValue` 按 `null` 兼容处理，并继续执行基线校验。
 
 | 接口 | 行为 |
 | --- | --- |
-| `GET /canvas-projects/:id` | 返回当前内容及权威版本号；响应包含基于数据库 `revision` 的弱 `ETag` 和 `Cache-Control: private, no-cache`。请求可用 `If-None-Match` 做条件读取，版本未变化时返回无正文的 `304`。 |
-| `GET /canvas-projects/:id/history` | 返回 `snapshots` 摘要与 `currentRevision`，不批量读取历史正文 |
-| `GET /canvas-projects/:id/history/:snapshotId` | 按需返回 `snapshot` 摘要和 `project` 历史正文 |
-| `POST /canvas-projects/:id/history/:snapshotId/restore` | 请求 `{ revision }` 为当前画布版本，成功返回新版本摘要；恢复前强制备份当前内容 |
+| `GET /canvas-projects/:id` | 返回当前完整画布及权威 `revision`；响应包含基于数据库版本的弱 `ETag` 和 `Cache-Control: private, no-cache`。请求可用 `If-None-Match` 做条件读取，版本未变化时返回 `304`。 |
+| `PATCH /canvas-projects/:id/operations` | 接收 `{ mutationId, baseRevision?, operations[] }`，返回当前项目摘要和 `mutationId`。支持 `create_canvas`、`create_node`、`patch_node`、`remove_node`、`create_connection`、`update_connection`、`remove_connection`、`set_field`。 |
+| `DELETE /canvas-projects/:id` | 显式删除画布。删除后迟到的更新不会重新创建画布；只有新的 `create_canvas` 操作可以显式创建同 ID 画布。 |
 
-历史接口先验证画布归属；无权访问、已删除画布或不存在的快照返回 404。恢复沿用画布写入限流和素材校验，在同一事务完成版本校验、备份、内容写入及历史资源保护。恢复保留当前画布 ID 和项目归属，生成新版本，不倒退版本号。升级前的内容无法补建历史。
+`create_node`、`create_connection` 和 `create_canvas` 是唯一的创建语义；更新、删除和连接操作都要求目标存在并通过对象基线校验。节点删除会同步移除关联连接，迟到媒体回写或编辑更新返回结构化冲突，不会复活已删除节点。请求摘要与确定性结果写入 `canvas_mutation_receipts`，画布内容、版本递增和 receipt 在同一数据库事务完成；同一 `mutationId` 和相同摘要返回原结果，摘要不同返回 `canvas_mutation_id_reused`。
 
-平移和缩放只持久化浏览器视口，内容 PUT 忽略客户端 `viewport` 和 `remoteContentHash`。前端遇到版本冲突（409/428）会先核对云端并尝试合并；无法合并时保留账号隔离的本地草稿、暂停该画布自动提交，并提供加载最新版和版本记录查看入口。载入最新版前草稿写入失败时停止替换，当前编辑内容保持不变；其他画布仍可保存。
+前端先把未确认请求和请求基线写入账号隔离的本地 journal，再发 HTTP 请求。journal 保存已确认基线、原始请求、请求生成时的本地投影和创建时间；刷新后只重放原请求，随后把请求之后的新编辑按新的基线生成下一批 operations。服务端返回完整画布时，客户端只合并仍未确认的本地 mutations，视口仍属于本地视图状态，不进入远端 operations。
 
-单画布读取会先查询归属用户的版本元数据，再判断 `If-None-Match`；命中时不会读取大型画布正文。未命中时返回完整项目 JSON。正文达到 1 KiB 且客户端声明接受 gzip 时响应使用 gzip 压缩，并带 `Vary: Accept-Encoding`；因此客户端应以 HTTP 状态码区分 `200` 正文和 `304` 未变化，不要把 `304` 当作业务错误。
+云端 Agent、媒体生成终态回写、预演台、创作提交以及 LibTV/TapNow 导入都复用同一 operations 服务。Agent 事件中的 `canvasPatch` 只是一种有界通知；过大、删除或无法完整表达的变更使用 `requiresRefresh: true`，客户端重新读取后按未确认请求继续重放。用户界面不提供版本记录、加载云端版、覆盖云端或手动重试入口，失败请求由后台自动重放并在同步状态中显示当前状态。
 
-云端 Agent 与创作任务的写入共用版本和历史事务；Agent `canvasPatch` 携带 `baseRevision`、`revision`，客户端只接受连续增量，跳过重复事件，缺口或同字段冲突时保留草稿并重新核对。删除、重排或顶层内容变化无法由增量完整表示时，事件携带 `requiresRefresh: true` 且不附 `canvasPatch`，客户端完整核对后才推进基线；撤销事件同样触发核对。保存日志仅记录请求/链路 ID、画布/用户 ID、版本、节点数量变化及 HTTP 状态，不记录正文、提示词或媒体 URL。
+平移和缩放只持久化浏览器视口，不生成远端 operations。保存日志仅记录请求/链路 ID、画布/用户 ID、版本、节点数量变化及 HTTP 状态，不记录正文、提示词或媒体 URL。
+
+operations 的结构化配额在提交事务内实时统计账号的素材/画布数量和 JSON 字节数，不为画布保存扫描任务正文及 API 请求/响应日志。接口请求、响应、容量上限及错误语义均不变；性能排查应分别记录成功写入、同请求重放和冲突请求的耗时，冲突请求提前退出不能代表完整提交耗时。
 
 ## 欢迎页开放配置
 

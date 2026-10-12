@@ -26,7 +26,7 @@ test("world-space approach is independent of viewport scaling", () => {
 test("only connection targets receive approach data; memo tracks it and selection does not activate tilt", () => {
     const source = readFileSync(new URL("../src/components/canvas/canvas-node.tsx", import.meta.url), "utf8");
     const layers = readFileSync(new URL("../src/pages/canvas/canvas-project-world-layers.tsx", import.meta.url), "utf8");
-    expect(source).toContain("isConnectionTarget && !reduceMediaEffects && !dragOffset");
+    expect(source).toContain("isConnectionTarget && !disableMediaEffects && !dragOffset");
     expect(source).toContain("previous.connectionApproach?.x === next.connectionApproach?.x");
     expect(source).toContain('data-connection-tilt={connectionTilt ? "true" : undefined}');
     expect(layers).toContain("props.connectionApproach?.nodeId === node.id ? props.connectionApproach.point : undefined");

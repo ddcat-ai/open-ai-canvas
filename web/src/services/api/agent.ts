@@ -9,6 +9,10 @@ export type AgentMediaSettings = {
     channelModelKey?: string;
     size: string;
     quality: string;
+    durationSeconds?: number;
+    videoGenerateAudio?: boolean;
+    videoWatermark?: boolean;
+    videoArkPrivateAssetUpload?: boolean;
 };
 export type AgentProfileScope = "user" | "project" | "canvas";
 

@@ -207,7 +207,14 @@ function reconcileCinematicEntities<T extends IdentifiedCanvasEntity>(previous: 
             continue;
         }
         const previousEntity = previousById.get(liveEntity.id);
-        if (!previousEntity) continue;
+        if (!previousEntity) {
+            // A generated entity may have been created after the previous
+            // snapshot. Keep the live branch visible so an ACK failure does not
+            // turn a recoverable local result into a silent deletion.
+            reconciled.push(liveEntity);
+            included.add(liveEntity.id);
+            continue;
+        }
         reconciled.push(previousEntity);
         included.add(previousEntity.id);
     }

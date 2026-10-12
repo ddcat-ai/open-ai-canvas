@@ -55,6 +55,14 @@ func (r *Repository) WithContext(ctx context.Context) *Repository {
 	return &Repository{db: r.db.WithContext(ctx)}
 }
 
+// Transaction exposes a repository scoped to one database transaction. Domain
+// services use it when a canvas mutation and its receipt must commit together.
+func (r *Repository) Transaction(fn func(*Repository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(New(tx))
+	})
+}
+
 func (r *Repository) Dialect() string {
 	return r.db.Dialector.Name()
 }
@@ -92,6 +100,26 @@ func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {
 		query = strings.ReplaceAll(query, ", '') AS BLOB))", ", ''))")
 	}
 	err := r.db.Raw(query, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID).Scan(&usage).Error
+	return usage, err
+}
+
+// UserStructuredStorageUsage reads only the counters and payload bytes used by
+// asset/canvas structured-data quotas. Keeping task and API-log accounting out of
+// this path avoids scanning unrelated large history rows on every canvas write.
+func (r *Repository) UserStructuredStorageUsage(userID string) (UserStorageUsage, error) {
+	var usage UserStorageUsage
+	query := `
+		SELECT
+			(SELECT COUNT(*) FROM assets WHERE user_id = ?) AS asset_count,
+			(SELECT COALESCE(SUM(length(CAST(COALESCE(payload_json, '') AS BLOB))), 0) FROM assets WHERE user_id = ?) AS asset_bytes,
+			(SELECT COUNT(*) FROM canvas_projects WHERE user_id = ?) AS canvas_count,
+			(SELECT COALESCE(SUM(length(CAST(COALESCE(payload_json, '') AS BLOB))), 0) FROM canvas_projects WHERE user_id = ?) AS canvas_bytes
+	`
+	if r.Dialect() == "postgres" {
+		query = strings.ReplaceAll(query, "length(CAST(COALESCE(", "octet_length(COALESCE(")
+		query = strings.ReplaceAll(query, ", '') AS BLOB))", ", ''))")
+	}
+	err := r.db.Raw(query, userID, userID, userID, userID).Scan(&usage).Error
 	return usage, err
 }
 

@@ -40,7 +40,7 @@ func (s *Service) RepairUserCanvasProject(userID string, raw json.RawMessage) (U
 }
 
 func canvasRevisionConflict() error {
-	return kernel.NewAppError(http.StatusConflict, "云端画布已有更新，已停止覆盖；请保留本地草稿并加载最新版本")
+	return kernel.NewAppError(http.StatusConflict, "云端画布已有更新，未确认操作会保留并按原请求自动重放")
 }
 
 type CanvasHistoryList struct {

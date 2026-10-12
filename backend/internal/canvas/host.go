@@ -14,6 +14,7 @@ type Host interface {
 	PrepareResourceDelivery(userID string, resource *model.Resource, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error)
 	WithStorageLock(fn func() error) error
 	StructuredQuota(userID, kind string, creating bool, deltaBytes int64) error
+	CanvasQuotaCheck(userID string) (func(*repository.Repository, bool, int64) error, error)
 	StructuredReplacementQuota(userID, kind string, count int, bytes int64) error
 	DeleteUserAssetWithResources(userID, assetID string, purge bool) error
 	PurgeUserAssetsWithResources(userID string, assetIDs []string) error
@@ -35,6 +36,9 @@ func (nopHost) WithStorageLock(fn func() error) error {
 		return nil
 	}
 	return fn()
+}
+func (nopHost) CanvasQuotaCheck(string) (func(*repository.Repository, bool, int64) error, error) {
+	return func(*repository.Repository, bool, int64) error { return nil }, nil
 }
 func (nopHost) StructuredQuota(string, string, bool, int64) error           { return nil }
 func (nopHost) StructuredReplacementQuota(string, string, int, int64) error { return nil }
