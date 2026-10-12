@@ -15,7 +15,7 @@ import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, vid
 import { inferVideoOperation, modelGroupReferenceLimits, resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
-import type { GenerationTask } from "@/services/api/task-center";
+import { cancelGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { loadCreationConversations, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
@@ -30,7 +30,7 @@ import { usePluginStore } from "@/stores/use-plugin-store";
 import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, reconcileCreationAttachmentLimits, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference, type CreationReferenceLimits } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 import { defaultCreationMode, modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
-import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
+import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages, removeCreationRecord } from "./creation-conversations";
 import { CreationComposer, CreationEmptySuggest, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
 import { CreationInspirationTunnel } from "./creation-inspiration-tunnel";
 import { declaredInspirationSources } from "@/lib/inspirations/catalog";
@@ -913,6 +913,42 @@ export default function CreatePage() {
         });
     };
 
+    /** 删除一条生成记录（提示词 + 它的结果）。素材保留；本页仍在等待的任务先取消，避免后台继续消耗额度。 */
+    const deleteCreationRecord = (recordId: string) => {
+        const conversation = conversationsRef.current.find((item) => item.id === activeIdRef.current);
+        if (!conversation) return;
+        const trimmed = removeCreationRecord(conversation.messages, recordId);
+        if (!trimmed) return;
+        const removedTaskIds = Array.from(new Set(trimmed.removed.flatMap((item) => item.taskIds || [])));
+        const apply = () => {
+            const next = updateCreationConversationSnapshot(conversationsRef.current, conversation.id, (item) => ({ ...item, messages: trimmed.messages, updatedAt: new Date().toISOString() }));
+            conversationsRef.current = next;
+            setConversations(next);
+            void saveCreationConversations(next).catch((error) => toast.error(error instanceof Error ? error.message : "记录删除保存失败"));
+            for (const taskId of removedTaskIds) {
+                // 只取消本页仍在等待的任务；更早的会话任务可能已经结束，交由任务中心处理。
+                if (!activeGenerationTaskIdsRef.current.delete(taskId)) continue;
+                void cancelGenerationTask(taskId).catch(() => undefined);
+            }
+            toast.success("记录已删除，素材仍保留");
+        };
+        // 失败与已停止的记录直接删；有结果或仍在生成时先确认，避免误删。
+        const hasLiveWork = trimmed.removed.some((item) => item.status === "done" || item.status === "pending" || item.status === "streaming");
+        if (!hasLiveWork) {
+            apply();
+            return;
+        }
+        modal.confirm({
+            className: "workspace-modal workspace-modal-compact",
+            title: "删除这条记录？",
+            content: "会从当前对话移除这条提示词与它的生成结果，已经上传或生成的素材仍保留在资产中。此操作不可撤销。",
+            okText: "删除记录",
+            okButtonProps: { danger: true },
+            cancelText: "保留",
+            onOk: apply,
+        });
+    };
+
     const renameConversationTitle = (conversation: CreationConversation, title: string) => {
         const nextTitle = title.trim().slice(0, 120);
         if (!nextTitle || nextTitle === conversation.title.trim()) return;
@@ -1114,6 +1150,7 @@ export default function CreatePage() {
                         onContinueCanvas={(ids) => void continueOnCanvas(ids)}
                         openingCanvas={openingCanvas}
                         onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                        onDeleteRecord={() => deleteCreationRecord(item.id)}
                     /></div>)}</div></section>
                 </main>
                 <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
