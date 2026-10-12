@@ -20,6 +20,8 @@ type (
 	RegistrationSettingRequest = auth.RegistrationSettingRequest
 	PublicRegistrationSetting  = auth.PublicRegistrationSetting
 	PasswordResetRequest       = auth.PasswordResetRequest
+	UpdateProfileRequest       = auth.UpdateProfileRequest
+	ChangePasswordRequest      = auth.ChangePasswordRequest
 	EmailSettingRequest        = auth.EmailSettingRequest
 	PublicEmailSetting         = auth.PublicEmailSetting
 	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
@@ -228,6 +230,14 @@ func (s *Service) ImportLibTV(userID, canvasProjectID, projectUUID string) (*Lib
 
 func (s *Service) ImportTapNow(userID, canvasProjectID, shareID string) (*TapNowImportResult, error) {
 	return s.authDomain().ImportTapNow(userID, canvasProjectID, shareID)
+}
+
+func (s *Service) UpdateProfile(user *model.User, req UpdateProfileRequest) (*model.User, error) {
+	return s.authDomain().UpdateProfile(user, req)
+}
+
+func (s *Service) ChangePassword(user *model.User, req ChangePasswordRequest) error {
+	return s.authDomain().ChangePassword(user, req)
 }
 
 func hashPassword(password string) (string, error) {

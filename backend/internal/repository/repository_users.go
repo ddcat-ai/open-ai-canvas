@@ -201,3 +201,12 @@ func (r *Repository) ResetUserPasswordWithEmailVerification(userID string, email
 func (r *Repository) DeleteExpiredEmailVerificationCodes(now time.Time) error {
 	return r.db.Delete(&model.EmailVerificationCode{}, "expires_at <= ? OR used_at IS NOT NULL", now).Error
 }
+
+func (r *Repository) UpdateUserProfile(userID string, updates map[string]any) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
+func (r *Repository) UpdateUserPassword(userID string, passwordHash string, now time.Time) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).
+		Updates(map[string]any{"password_hash": passwordHash, "updated_at": now}).Error
+}

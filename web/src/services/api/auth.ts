@@ -465,6 +465,14 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
+export function updateProfile(input: { displayName?: string; email?: string; avatarUrl?: string }) {
+    return http.patch<{ user: LocalUser }>("/auth/profile", input);
+}
+
+export function changePassword(input: { currentPassword: string; newPassword: string }) {
+    return http.post<{ ok: boolean }>("/auth/change-password", input);
+}
+
 export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean }) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input);
     invalidateAuthSessionCache();

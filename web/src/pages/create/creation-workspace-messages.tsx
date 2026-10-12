@@ -8,6 +8,7 @@ import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { WorkingDots } from "@/components/ai/working-indicator";
 import { generationErrorMessage } from "@/lib/generation-error";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { useEffect, useState } from "react";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { type CreationReference, displayCreationPrompt } from "./creation-references";
@@ -126,7 +127,7 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
     const copyText = useCopyText();
     const visiblePrompt = displayCreationPrompt(item.content, item.references || []);
     const user = useUserStore((state) => state.user);
-    const userAvatarUrl = user?.avatarUrl?.trim();
+    const userAvatarUrl = resolveAvatarUrl(user?.avatarUrl);
     return (
         <article className="creation-user-message">
             <div className="creation-user-message-meta">

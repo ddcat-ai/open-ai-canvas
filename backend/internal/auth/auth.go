@@ -66,7 +66,6 @@ type AuthSessionResult struct {
 
 type AuthUser struct {
 	model.User
-	AvatarURL        string `json:"avatarUrl,omitempty"`
 	IdentityProvider string `json:"identityProvider,omitempty"`
 	IdentityID       string `json:"identityId,omitempty"`
 	IdentityUsername string `json:"identityUsername,omitempty"`
@@ -337,10 +336,12 @@ func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	if err != nil {
 		return AuthUser{}, err
 	}
-	result.AvatarURL = identity.AvatarURL
 	result.IdentityProvider = identity.Provider
 	result.IdentityID = identity.Subject
 	result.IdentityUsername = identity.ProviderUsername
+	if result.AvatarURL == "" {
+		result.AvatarURL = identity.AvatarURL
+	}
 	return result, nil
 }
 

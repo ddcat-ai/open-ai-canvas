@@ -9,6 +9,7 @@ import { IdentityProviderBadge } from "@/components/layout/identity-provider-bad
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { applyUserSession } from "@/lib/user-session";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { cn } from "@/lib/utils";
 import { logout } from "@/services/api/auth";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -119,15 +120,15 @@ function MenuLink({ to, icon, label, onNavigate }: { to: string; icon: ReactNode
 
 function UserAvatar({ user, className }: { user: LocalUser; className: string }) {
     const [failed, setFailed] = useState(false);
-    const avatarUrl = /^https?:\/\//i.test(user.avatarUrl || "") ? user.avatarUrl : "";
+    const avatarUrl = resolveAvatarUrl(user.avatarUrl);
 
     useEffect(() => setFailed(false), [avatarUrl]);
 
     return (
         <span className={`relative grid shrink-0 place-items-center ${className}`}>
-            <span className="grid size-full place-items-center overflow-hidden rounded-md bg-transparent text-foreground/55">
+            <span className="relative grid size-full place-items-center overflow-hidden rounded-full bg-transparent text-foreground/55">
                 {avatarUrl && !failed ? (
-                    <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" onError={() => setFailed(true)} />
+                    <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" onError={() => setFailed(true)} />
                 ) : (
                     <CircleUserRound className="app-workspace-account-icon" aria-hidden />
                 )}

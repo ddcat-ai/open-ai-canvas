@@ -194,6 +194,8 @@ type (
 	OutboundHeader                         = app.OutboundHeader
 	ParameterSupport                       = app.ParameterSupport
 	PasswordResetRequest                   = app.PasswordResetRequest
+	UpdateProfileRequest                   = app.UpdateProfileRequest
+	ChangePasswordRequest                  = app.ChangePasswordRequest
 	PaymentCheckoutView                    = app.PaymentCheckoutView
 	PaymentOrderView                       = app.PaymentOrderView
 	PaymentProviderView                    = app.PaymentProviderView

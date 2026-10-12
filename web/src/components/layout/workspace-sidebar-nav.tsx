@@ -9,6 +9,7 @@ import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { resolveAvatarUrl } from "@/lib/avatar-url";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
@@ -64,7 +65,7 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
 function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null; onExpand: () => void; onCollapse: () => void }) {
     const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
-    const avatarUrl = /^https?:\/\//i.test(user?.avatarUrl || "") ? user?.avatarUrl : "";
+    const avatarUrl = resolveAvatarUrl(user?.avatarUrl);
     const profileName = user?.displayName || user?.username || "未登录";
 
     useEffect(() => setFailed(false), [avatarUrl]);

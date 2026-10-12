@@ -10,6 +10,7 @@ type User struct {
 	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
 	PhoneVerifiedAt *time.Time `json:"phoneVerifiedAt,omitempty"`
 	DisplayName     string     `json:"displayName" gorm:"size:80"`
+	AvatarURL       string     `json:"avatarUrl,omitempty" gorm:"size:512"`
 	Role            UserRole   `json:"role" gorm:"index;size:24"`
 	Status          UserStatus `json:"status" gorm:"index;size:24"`
 	PasswordHash    string     `json:"-"`

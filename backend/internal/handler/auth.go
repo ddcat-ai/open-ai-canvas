@@ -186,6 +186,46 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"user": publicUser, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
 	})
+	r.PATCH("/auth/profile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.UpdateProfileRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failService(c, errors.New("请求参数无效"))
+			return
+		}
+		updated, err := svc.UpdateProfile(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		publicUser, err := svc.PublicAuthUser(updated)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"user": publicUser})
+	})
+	r.POST("/auth/change-password", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.ChangePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failService(c, errors.New("请求参数无效"))
+			return
+		}
+		if err := svc.ChangePassword(user, req); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {
