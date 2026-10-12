@@ -1152,22 +1152,23 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             } else {
                 const operations = buildCanvasOperations(base, prepared);
                 if (!operations.length) {
-                    acknowledgedProjects.set(source.id, { ...prepared, revision: current.revision, remoteContentHash: await canvasContentHash(prepared) });
-                    verifiedProjects.add(source.id);
-                    continue;
+                    // 只读字段或缺省值的差异可能没有可提交操作，但不能直接退出并留下 saving。
+                    // 继续走下面的云端读取和本地持久化，确认版本后再结束；期间的新编辑仍保留。
+                    savedRevision = Number(current.revision);
+                } else {
+                    const request: CanvasOperationsRequest = {
+                        mutationId: newCanvasMutationId(),
+                        ...(base ? { baseRevision: base.revision } : {}),
+                        operations,
+                    };
+                    pendingCanvasMutations.set(source.id, { projectId: source.id, request, baseline: base, prepared, createdAt: new Date().toISOString() });
+                    await persistPendingCanvasMutationJournal();
+                    useSyncProgressStore.getState().setProjectProgress(source.id, { phase: "saving", message: base ? "正在提交画布操作" : "正在创建画布" });
+                    const response = await applyRemoteCanvasOperations(source.id, request);
+                    savedRevision = Number(response.project.revision);
+                    pendingCanvasMutations.delete(source.id);
+                    await persistPendingCanvasMutationJournal();
                 }
-                const request: CanvasOperationsRequest = {
-                    mutationId: newCanvasMutationId(),
-                    ...(base ? { baseRevision: base.revision } : {}),
-                    operations,
-                };
-                pendingCanvasMutations.set(source.id, { projectId: source.id, request, baseline: base, prepared, createdAt: new Date().toISOString() });
-                await persistPendingCanvasMutationJournal();
-                useSyncProgressStore.getState().setProjectProgress(source.id, { phase: "saving", message: base ? "正在提交画布操作" : "正在创建画布" });
-                const response = await applyRemoteCanvasOperations(source.id, request);
-                savedRevision = Number(response.project.revision);
-                pendingCanvasMutations.delete(source.id);
-                await persistPendingCanvasMutationJournal();
             }
             if (!Number.isSafeInteger(savedRevision)) throw new Error("服务端未返回有效画布版本");
             const remote = await restoreRemoteTextNodeContents((await getRemoteCanvasProject(source.id)).project);
@@ -1177,7 +1178,10 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             const acknowledged = { ...remote, viewport: latest.viewport || remote.viewport, remoteContentHash: remoteHash };
             acknowledgedProjects.set(source.id, acknowledged);
             verifiedProjects.add(source.id);
-            if (sameCanvasContent(latest, preparedForMutation)) {
+            // 本地媒体预览和提交后的资源 URL 可以不同，不能把地址转换误判成用户新编辑。
+            // 先核对保存前的本地快照，再确认本次规范化输入与已提交请求一致；旧队列重放
+            // 或等待期间真正发生的新编辑仍保留在本地，交给下一轮按原字段基线保存。
+            if (sameCanvasContent(latest, current) && sameCanvasContent(prepared, preparedForMutation)) {
                 useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => (project === latest ? acknowledged : project)) }));
             } else {
                 useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => (project === latest ? { ...project, revision: remote.revision, remoteContentHash: remoteHash } : project)) }));
