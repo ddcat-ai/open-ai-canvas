@@ -7,6 +7,7 @@ import { parseAssetRecord } from "@/lib/asset-record";
 import { parseAssetStorageDocumentRecovering, rebaseAssetSnapshot, serializeAssetStorageDocument, type AssetStorageDocument } from "@/lib/asset-storage-revision";
 import { parseCanvasStorageDocument } from "@/lib/canvas/canvas-storage-revision";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
+import { invalidateAssetCatalogQueries } from "@/lib/query-client";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { cleanupUnusedImages, collectImageStorageKeys, resolveImageUrl, uploadImage } from "@/services/image-storage";
@@ -325,6 +326,7 @@ export const useAssetStore = create<AssetStore>()(
                 const now = new Date().toISOString();
                 const id = nanoid();
                 set((state) => ({ assets: [parseAssetRecord({ ...asset, id, createdAt: now, updatedAt: now }), ...state.assets] }));
+                invalidateAssetCatalogQueries();
                 return id;
             },
             addGenerationAsset: (effectKey, asset, signal) => {
@@ -408,7 +410,7 @@ export const useAssetStore = create<AssetStore>()(
                             },
                         });
                     })(),
-                );
+                ).finally(() => invalidateAssetCatalogQueries());
             },
             updateAsset: (id, patch) =>
                 set((state) => ({

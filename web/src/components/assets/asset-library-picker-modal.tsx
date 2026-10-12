@@ -54,6 +54,8 @@ type Props = {
     allowCharacters?: boolean;
     /** 调用方能处理 onConfirm 的 pickedItems 时设为 true：远端分页里不在本地缓存的素材也可选。 */
     acceptRemoteItems?: boolean;
+    /** acceptRemoteItems 时，为远端条目计算不可选原因（例如当前创作模式不支持该媒体类型）。 */
+    remoteItemDisabledReason?: (item: AssetLibraryPickerItem) => string | undefined;
     /** 左侧「媒体类型」筛选项；只有一种类型或已由 remoteKind 固定时不展示该分组。 */
     mediaKinds?: AssetPickerMediaKind[];
     open: boolean;
@@ -95,6 +97,7 @@ export function AssetLibraryPickerModal({
     remoteKind,
     allowCharacters = false,
     acceptRemoteItems = false,
+    remoteItemDisabledReason,
     mediaKinds = DEFAULT_MEDIA_KINDS,
     open,
     items,
@@ -159,6 +162,10 @@ export function AssetLibraryPickerModal({
         enabled: remoteEnabled && open && sessionHydrated,
         // 切分类/翻页时保留上一页，避免加载间隙退回本地数据源、左侧分类被重置（点"角色"闪一下又跳回全部）。
         placeholderData: keepPreviousData,
+        // 每次打开素材弹窗都取最新远端列表：生成/上传后素材库应立即出现新素材，
+        // 不能因为默认 30s staleTime 命中旧缓存，逼用户刷新整页才能看到。
+        staleTime: 0,
+        refetchOnMount: "always",
     });
     // 调用方的 items 只是本地缓存，不代表可插入集合（分页结果大多不在缓存里）。能接收 pickedItems 的
     // 调用方（acceptRemoteItems）允许直接选远端条目；其余调用方保持"不在 items 里就不可选"的旧约束。
@@ -168,18 +175,20 @@ export function AssetLibraryPickerModal({
                 .filter((asset) => asset.kind !== "model" && (asset.kind !== "entity" || allowCharacters))
                 .map((asset) => {
                     const known = items.find((item) => item.id === asset.id);
-                    return {
+                    const remoteItem: AssetLibraryPickerItem = {
                         id: asset.id,
                         title: asset.title,
                         category: asset.category || "other",
                         archived: asset.status === "archived",
                         kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : asset.kind === "entity" ? "角色" : "文本",
                         searchText: (asset.tags ?? []).join(" "),
-                        ...(known || (acceptRemoteItems ? {} : { disabledReason: "此素材不适用于当前操作" })),
                         asset,
                     };
+                    if (known) return { ...remoteItem, disabledReason: known.disabledReason };
+                    if (acceptRemoteItems) return { ...remoteItem, disabledReason: remoteItemDisabledReason?.(remoteItem) };
+                    return { ...remoteItem, disabledReason: "此素材不适用于当前操作" };
                 }),
-        [acceptRemoteItems, allowCharacters, remoteQuery.data, items],
+        [acceptRemoteItems, allowCharacters, remoteItemDisabledReason, remoteQuery.data, items],
     );
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const pickedRemoteRef = useRef(new Map<string, AssetLibraryPickerItem>());

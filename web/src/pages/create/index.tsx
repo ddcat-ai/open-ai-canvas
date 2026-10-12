@@ -493,13 +493,17 @@ export default function CreatePage() {
         return assetIds;
     };
 
-    const handleLibrarySelect = (selectedIds: string[]) => {
+    const handleLibrarySelect = (selectedIds: string[], pickedItems?: AssetLibraryPickerItem[]) => {
+        // 远端分页里的素材大多不在本地缓存，必须用 pickedItems 兜底解析，
+        // 否则生成出来的图片会被判成“不可选”。
+        const pickedById = new Map((pickedItems || []).map((item) => [item.id, item]));
+        const resolveAsset = (id: string): Asset | undefined => assets.find((item) => item.id === id) || pickedById.get(id)?.asset;
         const next = selectedIds.flatMap((id): CreationAttachment[] => {
-            const asset = assets.find((item) => item.id === id);
+            const asset = resolveAsset(id);
             if (asset?.kind === "image") return [creationAttachmentFromAsset(asset)];
             if (asset?.kind === "video" && mode !== "image") return [creationAttachmentFromVideoAsset(asset)];
             if (asset?.kind === "audio" && mode !== "image") return [creationAttachmentFromAudioAsset(asset)];
-            const external = libraryItems.find((item) => item.id === id)?.external;
+            const external = (pickedById.get(id) || libraryItems.find((item) => item.id === id))?.external;
             return external ? [creationAttachmentFromExternalAsset(external)] : [];
         });
         if (!next.length) return;
@@ -1123,8 +1127,10 @@ export default function CreatePage() {
         <CreationLoginDialog open={loginDialogOpen} onClose={() => setLoginDialogOpen(false)} />
         {libraryOpen ? <Suspense fallback={null}><AssetLibraryPickerModal
             remoteLibrary
+            acceptRemoteItems
             open={libraryOpen}
             items={libraryItems}
+            remoteItemDisabledReason={(item) => creationLibraryDisabledReason(mode, item.asset?.kind, videoReferenceLimits)}
             categoryLabels={{ ...creationAssetCategoryLabels, ...externalAssetSources.categoryLabels }}
             folders={externalAssetSources.folders}
             initialSelectedIds={attachments.flatMap((item) => item.id.startsWith("asset:") ? [item.id.slice(6)] : item.id.startsWith("external:") ? [item.id] : [])}
