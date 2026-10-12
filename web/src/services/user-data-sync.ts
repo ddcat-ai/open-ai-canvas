@@ -1,16 +1,6 @@
 import { canonicalize } from "json-canonicalize";
 import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
-import {
-    deleteRemoteAssets,
-    deleteRemoteCanvasProject,
-    applyRemoteCanvasOperations,
-    getRemoteAsset,
-    getRemoteAssetsByIds,
-    getRemoteCanvasProject,
-    getRemoteUserDataSnapshot,
-    listRemoteAssetsPage,
-    upsertRemoteAsset,
-} from "@/services/api/user-data";
+import { deleteRemoteAssets, deleteRemoteCanvasProject, applyRemoteCanvasOperations, getRemoteAsset, getRemoteAssetsByIds, getRemoteCanvasProject, getRemoteUserDataSnapshot, listRemoteAssetsPage, upsertRemoteAsset } from "@/services/api/user-data";
 import type { CanvasOperation, CanvasOperationsRequest } from "@/services/api/user-data";
 import { ApiError } from "@/services/api/request";
 import { canvasContentHash, sameCanvasContent } from "@/lib/canvas/canvas-content";
@@ -91,6 +81,7 @@ async function loadPendingCanvasMutationJournal(scope = getActiveUserScope()) {
  * 1. 新画布请求在 create_canvas.patch 之后又追加了同字段 set_field（beforeValue 缺失或为 null），
  *    服务端先创建字段再校验基线，必然冲突；这些 set_field 与 patch 重复，直接移除。
  * 2. 已有画布的 set_field 因 undefined 被 JSON 丢弃属性，补回 JSON null 还原原始意图。
+ * 3. 节点补丁的 undefined 被序列化丢弃，造成空 patch/before；只从 journal 原始快照恢复，不能使用当前云端值替代基线。
  * 服务端校验失败会整笔回滚、不写 receipt，因此沿用原 mutationId 不会触发 canvas_mutation_id_reused。
  */
 export function repairPendingCanvasMutationRequest(request: CanvasOperationsRequest, baseline?: CanvasProject, prepared?: CanvasProject): CanvasOperationsRequest {
@@ -108,18 +99,32 @@ export function repairPendingCanvasMutationRequest(request: CanvasOperationsRequ
         changed = true;
         return false;
     });
-    const operations = kept.map((operation) => {
-        if (operation.type !== "set_field") return operation;
-        const hasBefore = Object.prototype.hasOwnProperty.call(operation, "beforeValue") && operation.beforeValue !== undefined;
-        const hasValue = Object.prototype.hasOwnProperty.call(operation, "value") && operation.value !== undefined;
-        if (hasBefore && hasValue) return operation;
-        changed = true;
-        return {
-            ...operation,
-            value: hasValue ? operation.value : canvasOperationValue(prepared?.[operation.field]),
-            beforeValue: hasBefore ? operation.beforeValue : canvasOperationValue(baseline?.[operation.field]),
-        };
-    });
+    const operations = kept
+        .map((operation) => {
+            if (operation.type === "patch_node" && (!Object.keys(operation.patch).length || !Object.keys(operation.before || {}).length)) {
+                const beforeNode = baseline?.nodes.find((node) => node.id === operation.id);
+                const afterNode = prepared?.nodes.find((node) => node.id === operation.id);
+                // 空补丁或空基线必然被服务端拒绝且没有成功回执，沿用原 mutationId 安全重试。
+                // 缺少原快照时不猜测旧值；有效请求不重新生成，以免改变已确认请求的摘要。
+                if (beforeNode && afterNode) {
+                    const diff = diffCanvasObject(beforeNode as unknown as Record<string, unknown>, afterNode as unknown as Record<string, unknown>);
+                    changed = true;
+                    if (!Object.keys(diff.patch).length) return undefined;
+                    return { ...operation, patch: diff.patch, before: diff.previous };
+                }
+            }
+            if (operation.type !== "set_field") return operation;
+            const hasBefore = Object.prototype.hasOwnProperty.call(operation, "beforeValue") && operation.beforeValue !== undefined;
+            const hasValue = Object.prototype.hasOwnProperty.call(operation, "value") && operation.value !== undefined;
+            if (hasBefore && hasValue) return operation;
+            changed = true;
+            return {
+                ...operation,
+                value: hasValue ? operation.value : canvasOperationValue(prepared?.[operation.field]),
+                beforeValue: hasBefore ? operation.beforeValue : canvasOperationValue(baseline?.[operation.field]),
+            };
+        })
+        .filter((operation): operation is CanvasOperation => operation !== undefined);
     return changed ? { ...request, operations } : request;
 }
 
@@ -480,13 +485,13 @@ export async function syncRemoteUserData(userId?: string | null) {
                     const local = localProjects.find((item) => item.id === project.id);
                     const remoteContentHash = await canvasContentHash(project);
                     const pending = pendingCanvasMutations.has(project.id);
-                    useSyncProgressStore.getState().setProjectProgress(project.id, { phase: pending ? "pending" : "done", cloudRevision: project.revision, pendingChanges: pending ? 1 : 0, message: pending ? "保留未确认画布操作，等待重放" : "已保存到云端" });
+                    useSyncProgressStore
+                        .getState()
+                        .setProjectProgress(project.id, { phase: pending ? "pending" : "done", cloudRevision: project.revision, pendingChanges: pending ? 1 : 0, message: pending ? "保留未确认画布操作，等待重放" : "已保存到云端" });
                     return { ...project, viewport: local?.viewport || project.viewport || { x: 0, y: 0, k: 1 }, remoteContentHash };
                 }),
             );
-            const orphanProjects = localProjects
-                .filter((project) => remoteDeletedProjects.has(project.id))
-                .map((project) => ({ ...project, remoteContentHash: project.remoteContentHash }));
+            const orphanProjects = localProjects.filter((project) => remoteDeletedProjects.has(project.id)).map((project) => ({ ...project, remoteContentHash: project.remoteContentHash }));
             // A revision-0 project can be absent from the cloud snapshot because its
             // create mutation has not been acknowledged yet. Keep it visible so the
             // pending journal can replay against the next session.
@@ -884,9 +889,11 @@ function diffCanvasObject(before: Record<string, unknown>, after: Record<string,
             Object.assign(previous, nested.previous);
             continue;
         }
-        if (hasBefore && hasAfter && canvasOperationValueEqual(oldValue, newValue)) continue;
-        previous[path] = hasBefore ? oldValue : null;
-        patch[path] = hasAfter ? newValue : null;
+        // undefined 在对象 JSON 中会被丢弃，导致 before 或 patch 为空。
+        // 服务端用 null 表示不存在/删除；缺省字段与 undefined 之间不需要发送修改。
+        if (canvasOperationValueEqual(canvasOperationValue(oldValue), canvasOperationValue(newValue))) continue;
+        previous[path] = canvasOperationValue(oldValue);
+        patch[path] = canvasOperationValue(newValue);
     }
     return { patch, previous };
 }
@@ -967,12 +974,8 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
     // 中央兜底：任何调用方只要把持久媒体写进画布，提交前都会先补齐素材记录与 assetId。
     // 页面级入口仍主动入库，以便立即反馈；这里负责阻止遗漏入口形成远端幽灵资源。
     const projectsBeforeRepair = useCanvasStore.getState().projects;
-    const selectedProjectIds = options.projectId === undefined
-        ? undefined
-        : new Set(typeof options.projectId === "string" ? [options.projectId] : options.projectId);
-    const syncProjectIds = selectedProjectIds === undefined
-        ? undefined
-        : new Set([...selectedProjectIds].filter((id) => projectsBeforeRepair.some((project) => project.id === id)));
+    const selectedProjectIds = options.projectId === undefined ? undefined : new Set(typeof options.projectId === "string" ? [options.projectId] : options.projectId);
+    const syncProjectIds = selectedProjectIds === undefined ? undefined : new Set([...selectedProjectIds].filter((id) => projectsBeforeRepair.some((project) => project.id === id)));
     const changedProjectIds = new Set(
         projectsBeforeRepair
             .filter((project) => !remoteDeletedProjects.has(project.id) && (syncProjectIds === undefined || syncProjectIds.has(project.id)) && (pendingCanvasMutations.has(project.id) || !sameCanvasContent(acknowledgedProjects.get(project.id), project)))
@@ -1031,11 +1034,12 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                             const url = resourceFileUrl(resourceId);
                             const displayUrl = result.kind === "image" ? result.data.dataUrl : result.data.url;
                             const coverUrl = result.coverUrl === displayUrl ? (result.kind === "image" ? url : "") : result.coverUrl;
-                            result = result.kind === "image"
-                                ? { ...result, coverUrl, data: { ...result.data, dataUrl: url } }
-                                : result.kind === "video"
-                                  ? { ...result, coverUrl, data: { ...result.data, url } }
-                                  : { ...result, coverUrl, data: { ...result.data, url } };
+                            result =
+                                result.kind === "image"
+                                    ? { ...result, coverUrl, data: { ...result.data, dataUrl: url } }
+                                    : result.kind === "video"
+                                      ? { ...result, coverUrl, data: { ...result.data, url } }
+                                      : { ...result, coverUrl, data: { ...result.data, url } };
                         }
                     }
                     return result;
@@ -1076,7 +1080,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                 merged = { ...merged, updatedAt: source.updatedAt };
                 mergedAssets.set(source.id, merged);
             }
-            useAssetStore.setState((state) => ({ assets: state.assets.map((item) => item.id === source.id ? merged : item) }));
+            useAssetStore.setState((state) => ({ assets: state.assets.map((item) => (item.id === source.id ? merged : item)) }));
         }
     }
 
@@ -1130,9 +1134,19 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             let savedRevision: number;
             if (pendingJournal) {
                 preparedForMutation = pendingJournal.prepared;
+                const repairedRequest = repairPendingCanvasMutationRequest(pendingJournal.request, pendingJournal.baseline, pendingJournal.prepared);
+                if (repairedRequest !== pendingJournal.request) {
+                    pendingJournal.request = repairedRequest;
+                    await persistPendingCanvasMutationJournal();
+                }
                 useSyncProgressStore.getState().setProjectProgress(source.id, { phase: "saving", message: "正在重放未确认的画布操作" });
-                const response = await applyRemoteCanvasOperations(source.id, pendingJournal.request);
-                savedRevision = Number(response.project.revision);
+                // 旧队列可能只记录了 undefined 与缺省值之间的无效变化，没有需要发送的修改。
+                if (pendingJournal.request.operations.length) {
+                    const response = await applyRemoteCanvasOperations(source.id, pendingJournal.request);
+                    savedRevision = Number(response.project.revision);
+                } else {
+                    savedRevision = Number(current.revision);
+                }
                 pendingCanvasMutations.delete(source.id);
                 await persistPendingCanvasMutationJournal();
             } else {
@@ -1164,9 +1178,9 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             acknowledgedProjects.set(source.id, acknowledged);
             verifiedProjects.add(source.id);
             if (sameCanvasContent(latest, preparedForMutation)) {
-                useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => project === latest ? acknowledged : project) }));
+                useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => (project === latest ? acknowledged : project)) }));
             } else {
-                useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => project === latest ? { ...project, revision: remote.revision, remoteContentHash: remoteHash } : project) }));
+                useCanvasStore.setState((state) => ({ projects: state.projects.map((project) => (project === latest ? { ...project, revision: remote.revision, remoteContentHash: remoteHash } : project)) }));
             }
             await flushCanvasStorePersistence();
             const currentAfterSave = useCanvasStore.getState().openProject(source.id);
@@ -1176,7 +1190,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
                 cloudRevision: Number(remote.revision),
                 pendingChanges: pending ? 1 : 0,
                 errorKind: undefined,
-                    message: pending ? "有新修改等待保存" : "已保存到云端",
+                message: pending ? "有新修改等待保存" : "已保存到云端",
             });
             if (pending) syncQueued = true;
         } catch (error) {
@@ -1185,7 +1199,7 @@ async function saveRemoteUserDataBatch(uploaded: Map<string, string>, options: {
             useSyncProgressStore.getState().setProjectProgress(source.id, {
                 phase: "error",
                 errorKind,
-                    pendingChanges: 1,
+                pendingChanges: 1,
                 message: error instanceof Error ? error.message : "云端同步失败，等待自动恢复",
             });
             errors.push(error);

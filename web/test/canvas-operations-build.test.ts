@@ -22,6 +22,31 @@ function canvas(patch: Partial<CanvasProject> = {}): CanvasProject {
 }
 
 describe("画布 operations 生成", () => {
+    test("节点可选字段的 undefined 在 JSON 请求中保留为 null 基线和删除值", () => {
+        const node = { id: "node", metadata: { title: undefined } } as unknown as CanvasProject["nodes"][number];
+        const changed = { ...node, metadata: { title: "新标题" } };
+        const added = JSON.parse(JSON.stringify(buildCanvasOperations(canvas({ nodes: [node] }), canvas({ nodes: [changed] }))));
+        expect(added).toEqual([{ type: "patch_node", id: "node", patch: { "metadata.title": "新标题" }, before: { "metadata.title": null } }]);
+        const removed = JSON.parse(JSON.stringify(buildCanvasOperations(canvas({ nodes: [changed] }), canvas({ nodes: [node] }))));
+        expect(removed).toEqual([{ type: "patch_node", id: "node", patch: { "metadata.title": null }, before: { "metadata.title": "新标题" } }]);
+        expect(buildCanvasOperations(canvas({ nodes: [node] }), canvas({ nodes: [{ ...node, metadata: {} }] }))).toEqual([]);
+    });
+
+    test("旧 journal 的空节点补丁从原快照恢复，保留 mutationId 和有效请求", () => {
+        const before = canvas({ nodes: [{ id: "node", metadata: {} }] as CanvasProject["nodes"] });
+        const after = canvas({ nodes: [{ id: "node", metadata: { title: "新标题" } }] as CanvasProject["nodes"] });
+        const broken = { mutationId: "node-mutation", operations: [{ type: "patch_node", id: "node", patch: { "metadata.title": "新标题" }, before: {} }] } as Parameters<typeof repairPendingCanvasMutationRequest>[0];
+        const repaired = repairPendingCanvasMutationRequest(broken, before, after);
+        expect(repaired.mutationId).toBe("node-mutation");
+        expect(repaired.operations).toEqual(buildCanvasOperations(before, after));
+        expect(repairPendingCanvasMutationRequest(repaired, before, after)).toBe(repaired);
+        expect(repairPendingCanvasMutationRequest(broken)).toBe(broken);
+
+        const deletion = { mutationId: "delete-field", operations: [{ type: "patch_node", id: "node", patch: {}, before: { "metadata.title": "新标题" } }] } as Parameters<typeof repairPendingCanvasMutationRequest>[0];
+        expect(repairPendingCanvasMutationRequest(deletion, after, before).operations).toEqual(buildCanvasOperations(after, before));
+        const noop = { ...broken, mutationId: "noop", operations: [{ ...broken.operations[0], patch: {} }] } as Parameters<typeof repairPendingCanvasMutationRequest>[0];
+        expect(repairPendingCanvasMutationRequest(noop, before, before).operations).toEqual([]);
+    });
     test("新画布只发 create_canvas，不追加会与创建字段冲突的 set_field", () => {
         const operations = buildCanvasOperations(undefined, canvas());
         expect(operations[0]?.type).toBe("create_canvas");
