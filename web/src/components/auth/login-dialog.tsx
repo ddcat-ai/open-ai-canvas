@@ -1,13 +1,30 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { App, Button, Input } from "antd";
 import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { getAuthSession, login } from "@/services/api/auth";
 
-export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * 工作台共用登录弹窗：游客在不同入口（创作页生成、侧栏与顶栏的游客身份）点开的是同一套表单。
+ * 登录成功后重新拉取会话写入用户 store，后续动作由调用方决定（创作页要求再次点击生成）。
+ */
+export function LoginDialog({
+    open,
+    onClose,
+    title = "登录后继续",
+    description = "登录后可保存创作、使用资产与云端同步。",
+    successMessage = "登录成功",
+}: {
+    open: boolean;
+    onClose: () => void;
+    title?: string;
+    description?: string;
+    successMessage?: string;
+}) {
     const { message } = App.useApp();
+    const location = useLocation();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -28,7 +45,7 @@ export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose:
             await login({ username: username.trim(), password });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
-            message.success("登录成功，请再次点击生成");
+            message.success(successMessage);
             onClose();
         } catch (error) {
             message.error(error instanceof Error ? error.message : "登录失败");
@@ -37,10 +54,12 @@ export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose:
         }
     };
 
+    const registerTo = `/register?next=${encodeURIComponent(location.pathname + location.search)}`;
+
     return (
-        <AppModal open={open} onCancel={onClose} title="登录后开始创作" footer={null} centered width="min(440px, calc(100vw - 32px))">
+        <AppModal open={open} onCancel={onClose} title={title} footer={null} centered width="min(440px, calc(100vw - 32px))">
             <div className="space-y-4">
-                <p className="text-sm text-foreground/60">你的创作内容会保留。登录成功后，请再次点击生成。</p>
+                <p className="text-sm text-foreground/60">{description}</p>
                 <form className="space-y-3" onSubmit={(event) => void submit(event)}>
                     <Input
                         size="large"
@@ -68,7 +87,7 @@ export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose:
                 </form>
                 <p className="text-center text-xs text-foreground/55">
                     还没有账号？{" "}
-                    <Link className="text-primary hover:underline" to="/register?next=%2F" onClick={onClose}>
+                    <Link className="text-primary hover:underline" to={registerTo} onClick={onClose}>
                         注册
                     </Link>
                 </p>

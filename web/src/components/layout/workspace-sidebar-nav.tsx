@@ -4,6 +4,7 @@ import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
+import { LoginDialog } from "@/components/auth/login-dialog";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
@@ -64,13 +65,22 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
 function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null; onExpand: () => void; onCollapse: () => void }) {
     const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [loginOpen, setLoginOpen] = useState(false);
     const avatarUrl = /^https?:\/\//i.test(user?.avatarUrl || "") ? user?.avatarUrl : "";
     const profileName = user?.displayName || user?.username || "未登录";
 
     useEffect(() => setFailed(false), [avatarUrl]);
 
     if (!user) {
-        return <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录"><span className="app-workspace-sidebar-profile-avatar"><CircleUserRound aria-hidden /></span>{!collapsed ? <span>游客模式</span> : null}</Link>;
+        return (
+            <>
+                <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="游客模式，点击登录" title="点击登录" onClick={() => setLoginOpen(true)}>
+                    <span className="app-workspace-sidebar-profile-avatar"><CircleUserRound aria-hidden /></span>
+                    {!collapsed ? <span>游客模式</span> : null}
+                </button>
+                <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+            </>
+        );
     }
 
     const avatar = avatarUrl && !failed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <CircleUserRound aria-hidden />;

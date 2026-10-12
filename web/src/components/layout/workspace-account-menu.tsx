@@ -2,8 +2,8 @@ import { Popover } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { CircleUserRound, Moon, Sun } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
 
+import { LoginDialog } from "@/components/auth/login-dialog";
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { UserAvatar } from "./user-avatar";
@@ -18,6 +18,7 @@ export function WorkspaceAccountMenu() {
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [loginOpen, setLoginOpen] = useState(false);
 
     if (!hydrated) {
         return <span className="size-9 animate-pulse rounded-[var(--r-md)] bg-foreground/[.06]" aria-hidden />;
@@ -51,5 +52,13 @@ export function WorkspaceAccountMenu() {
                 <UserAvatar user={user} className="size-6" />
             </button>
         </Popover></>
-    ) : <Link to="/login" className="inline-flex items-center gap-1.5 px-1.5 text-xs text-foreground/55" aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span className="hidden sm:inline">游客</span></Link>;
+    ) : (
+        <>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-[var(--r-md)] px-1.5 text-xs text-foreground/55 transition-colors hover:bg-surface-hover hover:text-foreground" aria-label="游客模式，点击登录" title="点击登录" onClick={() => setLoginOpen(true)}>
+                <CircleUserRound className="size-5" />
+                <span className="hidden sm:inline">游客</span>
+            </button>
+            <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+        </>
+    );
 }
