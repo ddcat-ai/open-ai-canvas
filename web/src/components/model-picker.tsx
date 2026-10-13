@@ -542,6 +542,11 @@ function modelAvailability(config: AiConfig, model: string): PublicChannelModelA
 
 function ModelAvailabilityBadge({ availability, available, showAvailability }: { availability?: PublicChannelModelAvailability; available: boolean; showAvailability: boolean }) {
     if (!showAvailability) return null;
+    const recentResults = availability?.recentResults ?? [];
+    const successCount = recentResults.filter(Boolean).length;
+    const failCount = recentResults.filter((item) => item === false).length;
+    const hasRuns = recentResults.length > 0;
+
     const label = availability?.dataState === "ready" && availability.rate24h !== null
         ? `${Math.round(availability.rate24h * 100)}%`
         : availability?.dataState === "insufficient"
@@ -549,12 +554,38 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
             : "暂无数据";
     const trend = availability?.trend7d || [];
     const trendSamples = trend.reduce((total, item) => total + item.sampleCount, 0);
-    const summary = availability
-        ? `当前${available ? "可用" : "不可用"}；近24小时${label}，样本 ${availability.sampleCount24h} 条`
-        : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
+    const summary = hasRuns
+        ? `最近${recentResults.length}次调用：${successCount}成功、${failCount}失败；当前${available ? "可用" : "不可用"}`
+        : availability
+            ? `当前${available ? "可用" : "不可用"}；近24小时${label}，暂无近期调用记录`
+            : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
+
     const content = availability ? (
         <div className="model-picker-availability-popover">
             <div className="model-picker-availability-popover-head">
+                <strong>最近 10 次调用</strong>
+                <span className={failCount > 0 ? "has-failures" : ""}>
+                    {hasRuns ? `${successCount} 成功 / ${failCount} 失败` : "暂无调用记录"}
+                </span>
+            </div>
+            <div className="model-picker-availability-popover-meta">
+                {hasRuns ? `共记录最近 ${recentResults.length} 次执行（绿=成功 红=失败 灰=无记录）` : "该模型近期尚无调用记录，默认展示10个空槽"}
+            </div>
+            <div className="model-picker-availability-track in-popover" aria-label="最近10次状态详情" style={{ margin: "6px 0 8px" }}>
+                {Array.from({ length: 10 }).map((_, idx) => {
+                    const hasRun = idx < recentResults.length;
+                    const isSuccess = hasRun ? recentResults[idx] : null;
+                    const stateClass = isSuccess === true ? "is-success" : isSuccess === false ? "is-failed" : "is-empty";
+                    return (
+                        <span
+                            key={idx}
+                            className={`model-picker-availability-pill in-popover ${stateClass}`}
+                            title={hasRun ? `第 ${idx + 1} 次：${isSuccess ? "成功" : "失败"}` : `槽位 ${idx + 1}：未发生调用`}
+                        />
+                    );
+                })}
+            </div>
+            <div className="model-picker-availability-popover-head" style={{ marginTop: 8 }}>
                 <strong>近24小时成功率</strong>
                 <span>{label}</span>
             </div>
@@ -565,7 +596,7 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
                     return <span key={item.day} className={`model-picker-availability-segment is-${item.dataState}`} title={`${item.day}：${dayLabel}，${item.sampleCount} 条`} style={item.rate === null ? undefined : { opacity: 0.35 + item.rate * 0.65 }} />;
                 })}
             </div>
-            <div className="model-picker-availability-popover-foot">7天分段趋势 · 悬停查看每日样本</div>
+            <div className="model-picker-availability-popover-foot">绿点=成功 · 红点=失败 · 灰点=空槽</div>
         </div>
     ) : null;
     return (
@@ -580,8 +611,17 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <span className="model-picker-availability-dot" aria-hidden="true" />
-                <span className="model-picker-availability-label">近24h {label}</span>
+                <span className="model-picker-availability-track" aria-label="最近10次调用状态">
+                    {Array.from({ length: 10 }).map((_, idx) => {
+                        const hasRun = idx < recentResults.length;
+                        const isSuccess = hasRun ? recentResults[idx] : null;
+                        const stateClass = isSuccess === true ? "is-success" : isSuccess === false ? "is-failed" : "is-empty";
+                        return <span key={idx} className={`model-picker-availability-pill ${stateClass}`} />;
+                    })}
+                </span>
+                <span className="model-picker-availability-label">
+                    {hasRuns ? `${successCount}/${recentResults.length}` : label}
+                </span>
             </span>
         </Popover>
     );

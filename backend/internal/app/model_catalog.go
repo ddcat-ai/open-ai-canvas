@@ -30,12 +30,13 @@ type ModelCatalogResponse struct {
 // without changing the binary current availability decision above it.
 // Rate24h is nil for no-data or insufficient-sample windows.
 type PublicModelAvailability struct {
-	Rate24h     *float64                         `json:"rate24h"`
-	SampleCount int                              `json:"sampleCount24h"`
-	Trend7d     []PublicModelAvailabilityDay     `json:"trend7d"`
-	DataState   PublicModelAvailabilityDataState `json:"dataState"`
-	ComputedAt  time.Time                        `json:"computedAt"`
-	DataThrough *time.Time                       `json:"dataThrough,omitempty"`
+	Rate24h       *float64                         `json:"rate24h"`
+	SampleCount   int                              `json:"sampleCount24h"`
+	Trend7d       []PublicModelAvailabilityDay     `json:"trend7d"`
+	RecentResults []bool                           `json:"recentResults"`
+	DataState     PublicModelAvailabilityDataState `json:"dataState"`
+	ComputedAt    time.Time                        `json:"computedAt"`
+	DataThrough   *time.Time                       `json:"dataThrough,omitempty"`
 }
 
 type PublicModelAvailabilityDataState string

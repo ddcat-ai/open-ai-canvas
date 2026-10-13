@@ -52,6 +52,18 @@ func (s *Service) publicModelAvailability(channels []PublicChannelCatalog, now t
 		return nil, err
 	}
 
+	recentLogs, _ := s.repo.PublicModelRecentLogs(channelIDs, 1000)
+	recentMap := make(map[publicModelAvailabilityKey][]bool)
+	for _, log := range recentLogs {
+		key := publicModelAvailabilityKey{channelID: log.ChannelID, modelKey: log.Model}
+		if _, ok := known[key]; !ok {
+			continue
+		}
+		if len(recentMap[key]) < 10 {
+			recentMap[key] = append(recentMap[key], log.Status == model.ApiCallStatusSucceeded)
+		}
+	}
+
 	last24 := make(map[publicModelAvailabilityKey]*publicModelAvailabilityAccumulator)
 	trend := make([]map[publicModelAvailabilityKey]*publicModelAvailabilityAccumulator, 7)
 	for index := range trend {
@@ -73,10 +85,17 @@ func (s *Service) publicModelAvailability(channels []PublicChannelCatalog, now t
 
 	for key := range known {
 		primary := last24[key]
+		results := make([]bool, len(recentMap[key]))
+		copy(results, recentMap[key])
+		// 将倒序取出的切片反转，使得从左到右表示时间演进（最右侧为最新一次调用）
+		for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
+			results[i], results[j] = results[j], results[i]
+		}
 		item := &PublicModelAvailability{
-			Trend7d:    make([]PublicModelAvailabilityDay, 0, 7),
-			DataState:  publicAvailabilityState(sampleCount(primary), publicModelAvailabilityMinimumSamples),
-			ComputedAt: now,
+			Trend7d:       make([]PublicModelAvailabilityDay, 0, 7),
+			RecentResults: results,
+			DataState:     publicAvailabilityState(sampleCount(primary), publicModelAvailabilityMinimumSamples),
+			ComputedAt:    now,
 		}
 		if primary != nil {
 			item.SampleCount = primary.total

@@ -802,6 +802,54 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     outline-offset: 2px;
 }
 
+.model-picker-availability-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 2.5px;
+    padding: 0 1px;
+}
+
+.model-picker-availability-pill {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 5px;
+    border-radius: 50%;
+    transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.model-picker-availability-pill.is-success {
+    background: #34c759;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #34c759 25%, transparent);
+}
+
+.model-picker-availability-pill.is-failed {
+    background: #ff3b30;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #ff3b30 25%, transparent);
+}
+
+.model-picker-availability-pill.is-empty {
+    background: color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.model-picker-availability-track.in-popover {
+    display: flex;
+    align-items: center;
+    gap: 3.5px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.model-picker-availability-pill.in-popover {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+}
+
+.model-picker-availability-popover-head span.has-failures {
+    color: #e5484d;
+}
+
 .model-picker-availability-dot {
     width: 6px;
     height: 6px;

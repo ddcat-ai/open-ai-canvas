@@ -68,14 +68,23 @@ func TestPublicModelAvailabilityUsesCreateAttemptsAndFixedSevenDayTrend(t *testi
 	if len(ready.Trend7d) != 7 {
 		t.Fatalf("trend length = %d, want 7", len(ready.Trend7d))
 	}
+	if len(ready.RecentResults) != 10 {
+		t.Fatalf("ready recent results length = %d, want 10", len(ready.RecentResults))
+	}
 
 	insufficient := availability[publicModelAvailabilityKey{channelID: "channel-1", modelKey: "model-b"}]
 	if insufficient == nil || insufficient.DataState != PublicModelAvailabilityInsufficient || insufficient.SampleCount != 2 || insufficient.Rate24h != nil {
 		t.Fatalf("insufficient availability = %#v", insufficient)
 	}
+	if len(insufficient.RecentResults) != 2 || insufficient.RecentResults[0] != false || insufficient.RecentResults[1] != true {
+		t.Fatalf("insufficient recent results = %#v, want [false, true]", insufficient.RecentResults)
+	}
 
 	noData := availability[publicModelAvailabilityKey{channelID: "channel-1", modelKey: "model-c"}]
 	if noData == nil || noData.DataState != PublicModelAvailabilityNoData || noData.SampleCount != 0 || noData.Rate24h != nil {
 		t.Fatalf("no-data availability = %#v", noData)
+	}
+	if len(noData.RecentResults) != 0 {
+		t.Fatalf("no-data recent results length = %d, want 0", len(noData.RecentResults))
 	}
 }
