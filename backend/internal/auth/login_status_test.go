@@ -35,7 +35,7 @@ func disableBeforeLoginWrite(t *testing.T, db *gorm.DB, userID string) *bool {
 	return &fired
 }
 
-func assertLoginPreservesDisable(t *testing.T, svc *Service, db *gorm.DB, fired *bool, result *AuthSessionResult) {
+func assertLoginPreservesDisable(t *testing.T, db *gorm.DB, fired *bool, loginErr error) {
 	t.Helper()
 	if !*fired {
 		t.Fatal("concurrent disable was not injected")
@@ -53,8 +53,15 @@ func assertLoginPreservesDisable(t *testing.T, svc *Service, db *gorm.DB, fired 
 	if user.LastLoginAt == nil || user.UpdatedAt.Before(*user.LastLoginAt) {
 		t.Error("login timestamps were not updated")
 	}
-	if _, err := svc.CurrentUser(result.Session); err == nil {
-		t.Error("disabled user can use the completed login session")
+	if loginErr == nil {
+		t.Error("login issued a session after concurrent disable")
+	}
+	var sessions int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", user.ID).Count(&sessions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 {
+		t.Error("disabled user received a login session")
 	}
 }
 
@@ -68,11 +75,8 @@ func TestPasswordLoginPreservesConcurrentDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 	fired := disableBeforeLoginWrite(t, db, "member")
-	result, err := svc.Login(LoginRequest{Username: "member", Password: "password"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertLoginPreservesDisable(t, svc, db, fired, result)
+	_, err = svc.Login(LoginRequest{Username: "member", Password: "password"})
+	assertLoginPreservesDisable(t, db, fired, err)
 }
 
 func TestLinuxDOLoginPreservesConcurrentDisable(t *testing.T) {
@@ -119,9 +123,6 @@ func TestLinuxDOLoginPreservesConcurrentDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 	fired := disableBeforeLoginWrite(t, db, "member")
-	result, err := svc.CompleteLinuxDOLogin("state-value", "code")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertLoginPreservesDisable(t, svc, db, fired, result.Session)
+	_, err = svc.CompleteLinuxDOLogin("state-value", "code", "")
+	assertLoginPreservesDisable(t, db, fired, err)
 }

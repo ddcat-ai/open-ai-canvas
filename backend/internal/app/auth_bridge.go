@@ -14,6 +14,7 @@ type (
 	EmailCodeCooldownError     = auth.EmailCodeCooldownError
 	RegisterRequest            = auth.RegisterRequest
 	LoginRequest               = auth.LoginRequest
+	LoginContext               = auth.LoginContext
 	PublicAuthSettings         = auth.PublicAuthSettings
 	AuthSessionResult          = auth.AuthSessionResult
 	AuthUser                   = auth.AuthUser
@@ -138,8 +139,8 @@ func (s *Service) LoginRateLimitSubject(account string) (string, error) {
 	return s.authDomain().LoginRateLimitSubject(account)
 }
 
-func (s *Service) Logout(cookieValue string) error {
-	return s.authDomain().Logout(cookieValue)
+func (s *Service) Logout(cookieValue string, contexts ...LoginContext) error {
+	return s.authDomain().Logout(cookieValue, contexts...)
 }
 
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
@@ -206,8 +207,8 @@ func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string
 	return s.authDomain().BeginLinuxDOLogin(nextPath, acceptedTerms)
 }
 
-func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDOCallbackResult, error) {
-	return s.authDomain().CompleteLinuxDOLogin(stateValue, code)
+func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (*LinuxDOCallbackResult, error) {
+	return s.authDomain().CompleteLinuxDOLogin(stateValue, code, cookieValue, contexts...)
 }
 
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {

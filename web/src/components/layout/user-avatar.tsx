@@ -1,11 +1,26 @@
 import { useEffect, useState } from "react";
-import { CircleUserRound } from "lucide-react";
+import { Bot, Camera, Cat, CircleUserRound, Clapperboard, Rabbit, Rocket, Sparkles, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isDefaultUserAvatarID, type DefaultUserAvatarID } from "@/lib/default-user-avatars";
+import { resolveUserAvatarURL } from "@/lib/user-avatar-url";
+import { apiBaseURL } from "@/services/api/request";
 import type { LocalUser } from "@/stores/use-user-store";
 
-export function UserAvatar({ user, className }: { user: LocalUser; className?: string }) {
+const defaultAvatarIcons: Record<DefaultUserAvatarID, LucideIcon> = {
+    person: CircleUserRound,
+    director: Clapperboard,
+    camera: Camera,
+    cat: Cat,
+    rabbit: Rabbit,
+    robot: Bot,
+    rocket: Rocket,
+    sparkles: Sparkles,
+};
+
+export function UserAvatar({ user, className, iconClassName }: { user: LocalUser; className?: string; iconClassName?: string }) {
     const [failed, setFailed] = useState(false);
-    const avatarUrl = /^https?:\/\//i.test(user.avatarUrl || "") ? user.avatarUrl : "";
+    const avatarUrl = user.avatarMode === "default" ? "" : resolveUserAvatarURL(user.avatarUrl, apiBaseURL);
+    const DefaultAvatarIcon = defaultAvatarIcons[isDefaultUserAvatarID(user.avatarPreset) ? user.avatarPreset : "person"];
 
     useEffect(() => setFailed(false), [avatarUrl]);
 
@@ -15,7 +30,7 @@ export function UserAvatar({ user, className }: { user: LocalUser; className?: s
             {avatarUrl && !failed ? (
                 <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" onError={() => setFailed(true)} />
             ) : (
-                <CircleUserRound className="size-full" aria-hidden />
+                <DefaultAvatarIcon className={cn("size-full", iconClassName)} aria-hidden />
             )}
         </span>
     );

@@ -2,6 +2,22 @@
 
 本文档是管理后台 UI 的追踪与回滚台账。后续每批 UI 调整都必须在实施时追加，不覆盖历史记录。
 
+## 用户登录日志筛选布局收敛
+
+- 问题：用户搜索与嵌套筛选容器分别换行，IP 输入被基础样式撑满一行，实际 1280px 视口占四排、工具栏高 168px。
+- 调整：所有控件改为页面私有响应式网格；筛选可用宽度至少 1080px 时单行，640px 以上安排为两行，窄屏双列分组；IP/日期宽度受网格约束，重置入口固定位置。保留原有 URL 参数、筛选请求和分页行为；下拉使用共享组件的 ariaLabel。
+- 文件：`web/src/pages/admin/login-logs/login-logs-page.tsx`、`login-logs-page.css`。不修改其他页面的共享工具栏或全局控件规则。
+- 修改前副本：`.local/ui-change-backups/login-log-filters/login-logs-page.tsx`；SHA-256 `9a7da4db4565763bfd787df678a33acbb27a95809325475b3da78f049f9a771d`。CSS 为新增文件。
+- 实页验证：1280×720 两行、工具栏 80px；1600×900 单行、工具栏 36px；390×844 不产生页面横向溢出。已检查控件无重叠、IP 筛选真实空结果与重置恢复。
+
+## 用户登录日志菜单与查询页
+
+- 目的：为管理员提供独立的登录、失败和主动退出事件查询。
+- 方向：复用现有请求明细的页面壳、筛选表格、分页和状态 token；详情使用 AppDrawer，无新全局覆盖或独立 HTML。
+- 文件：`web/src/pages/admin/login-logs/`、`web/src/services/api/login-logs.ts`；菜单 `admin-shell.tsx`、懒加载 `router.tsx`。
+- 原始基线：这两个既有文件在任务开始时无本地修改；通过 HEAD 保存到 `.local/ui-change-backups/login-logs/`。SHA-256：`admin-shell.tsx` 为 `3d287fdbac7642c318509a6724f9490ef646a06cbfb0feea50d7db11b51f27c1`；`router.tsx` 为 `66288193a703257e9e56c739fa044dc09e8b896168cbecfb0556f195db8dcf0a`。新增页面/API 无旧版本文件。
+- 验证：运行结果见本次交付；真实登录态明暗/窄屏验收列入 pending-test，不以 build 代替。
+
 ## 记录和回滚约定
 
 - 项目实际已存在 Git 工作树（工作树根目录为项目根），本次不初始化、不提交、不改写任何 Git 历史。

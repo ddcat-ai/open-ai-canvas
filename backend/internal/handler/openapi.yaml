@@ -27,6 +27,66 @@ tags:
   - name: admin
   - name: skills
 paths:
+  /admin/login-logs:
+    get:
+      tags: [admin]
+      summary: 管理员分页查询用户登录登出日志
+      description: 按时间倒序，保留用户快照；失败账号脱敏，无密码、验证码或会话凭据。
+      parameters:
+        - {in: query, name: keyword, schema: {type: string, maxLength: 160}, description: 用户名、昵称、脱敏账号或用户 ID}
+        - {in: query, name: event, schema: {type: string, enum: [login, logout]}}
+        - {in: query, name: method, schema: {type: string, enum: [password, email, sms, linuxdo, verification, unknown]}}
+        - {in: query, name: result, schema: {type: string, enum: [success, failed]}}
+        - {in: query, name: ip, schema: {type: string}, description: 精确匹配 IPv4 或 IPv6}
+        - {in: query, name: from, schema: {type: string, format: date-time}, description: 包含开始时刻，RFC3339}
+        - {in: query, name: to, schema: {type: string, format: date-time}, description: 包含结束时刻，RFC3339}
+        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, default: 20}}
+      responses:
+        "200":
+          description: 成功信封 data={logs,total,page,pageSize}
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer, enum: [0]}
+                  msg: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      logs: {type: array, items: {$ref: "#/components/schemas/LoginLog"}}
+                      total: {type: integer}
+                      page: {type: integer}
+                      pageSize: {type: integer}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "500": {$ref: "#/components/responses/Error"}
+  /admin/login-logs/{id}:
+    get:
+      tags: [admin]
+      summary: 管理员读取单条登录日志详情
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 成功信封 data.log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer, enum: [0]}
+                  msg: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      log: {$ref: "#/components/schemas/LoginLog"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "500": {$ref: "#/components/responses/Error"}
   /admin/settings/appearance/live2d:
     post:
       tags: [admin]
@@ -1056,6 +1116,202 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /auth/profile:
+    get:
+      tags: [auth]
+      summary: 当前用户个人信息及安全能力
+      description: 返回 user、hasPassword、emailEnabled、linuxdoEnabled 和可选 reauthenticatedUntil；个人头像选择覆盖第三方头像。内部密码散列与头像版本字段不返回。
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /auth/profile/avatar:
+    put:
+      tags: [auth]
+      summary: 保存当前用户头像
+      description: 真实 PNG/JPEG，最大 5 MiB、1600 万像素，居中裁剪并缩小到最大512像素PNG。响应 data.user 包含更新后的头像地址。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [auth]
+      summary: 使用系统默认头像
+      description: 清除本用户头像并保存 default 选择，后续第三方登录仍使用系统头像。返回 data.user。
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /auth/profile/avatar/default:
+    post:
+      tags: [auth]
+      summary: 选择系统头像
+      description: 保存选择并原子清除自定义图片，返回 data.user。系统头像由共享组件渲染；不接受客户端 URL 或任意图标标识。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preset]
+              properties:
+                preset:
+                  type: string
+                  enum: [person, director, camera, cat, rabbit, robot, rocket, sparkles]
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /auth/profile/avatar/{userId}:
+    get:
+      tags: [auth]
+      summary: 读取当前账号头像 PNG
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: v
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: 仅当前用户可读，private no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /auth/profile/password:
+    post:
+      tags: [auth]
+      summary: 修改或设置本地密码并撤销所有会话
+      description: 已有密码必须校验 currentPassword；纯第三方账号须在当前会话完成5分钟内的Linux.do重新授权核验。成功返回 data.changed=true 并清除会话 Cookie。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+                  maxLength: 72
+                  description: 至少8个Unicode字符，UTF-8字节长度不超过72
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /auth/profile/email-code:
+    post:
+      tags: [auth]
+      summary: 向新邮箱发送专用验证码
+      description: 验证当前密码或当前会话最近的Linux.do核验；新地址未被占用且不同于旧地址。返回 ticket、expiresIn=600、retryAfter=60；票据绑定用户/会话/凭据，仅profile_email用途有效。发送失败显式报错。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                currentPassword: { type: string, format: password }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /auth/profile/email:
+    post:
+      tags: [auth]
+      summary: 验证新邮箱并更新绑定
+      description: 原子校验邮箱唯一性、消费验证码、更新已验证邮箱并撤销全部会话；清除Cookie。返回changed=true及notificationStatus(sent/failed/not_needed)，failed仅表示已更新后的原邮箱通知失败。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket, emailCode]
+              properties:
+                ticket: { type: string }
+                emailCode: { type: string, pattern: "^[0-9]{6}$" }
+                currentPassword: { type: string, format: password }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /auth/profile/linuxdo/start:
+    get:
+      tags: [auth]
+      summary: 发起当前账号Linux.do身份重新核验
+      description: OAuth state绑定当前账号和当前会话，回调只接受原绑定subject；不创建账号或新登录会话。授权成功返回/settings?section=profile&reauth=success，失败返回reauth=error。
+      responses:
+        "302":
+          description: 跳转到第三方授权页面
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
   /auth/session:
     get:
       tags: [auth]
@@ -1300,6 +1556,24 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    LoginLog:
+      type: object
+      properties:
+        id: {type: string}
+        userId: {type: string, nullable: true}
+        username: {type: string, description: 事件时用户名快照}
+        displayName: {type: string}
+        account: {type: string, description: 用户名或脱敏的尝试账号}
+        event: {type: string, enum: [login, logout]}
+        method: {type: string, enum: [password, email, sms, linuxdo, verification, unknown]}
+        source: {type: string, enum: [login, registration, logout]}
+        result: {type: string, enum: [success, failed]}
+        ip: {type: string}
+        userAgent: {type: string, maxLength: 512, description: 客户端自报信息，不作为身份判断依据}
+        sessionRef: {type: string, description: 会话 ID 的单向哈希，仅关联历史事件，不含 Token}
+        reason: {type: string}
+        message: {type: string}
+        createdAt: {type: string, format: date-time}
     ToolMutation:
       type: object
       required: [type, label, prompt]

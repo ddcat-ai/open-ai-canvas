@@ -1,11 +1,12 @@
 import { App, Popover } from "antd";
 import { Switch } from "@/components/ui/base/switch";
-import { ChevronRight, CircleUserRound, LogIn, LogOut, Moon, ShieldCheck, Sun } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ChevronRight, LogIn, LogOut, Moon, ShieldCheck, Sun } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
+import { UserAvatar } from "@/components/layout/user-avatar";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { applyUserSession } from "@/lib/user-session";
@@ -69,7 +70,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     content={(
                         <div className="w-[232px] py-0.5">
                             <div className="flex items-center gap-3 border-b border-border/65 px-1 pb-3">
-                                <UserAvatar user={user} className="size-8" />
+                                <SidebarUserAvatar user={user} className="size-8" />
                                 <div className="min-w-0 flex-1">
                                     <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
                                     {creditsEnabled ? <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div> : null}
@@ -96,7 +97,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     )}
                 >
                     <button type="button" className={cn("app-workspace-account-button flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-surface-hover", accountClassName)} title={creditsEnabled ? `${user.displayName || user.username} · ${balance} 积分` : user.displayName || user.username}>
-                        <UserAvatar user={user} className="size-7" />
+                        <SidebarUserAvatar user={user} className="size-7" />
                         <span className={cn("min-w-0 flex-1 flex-col", expandedClassName)}>
                             <span className="truncate text-xs font-medium">{user.displayName || user.username}</span>
                             {creditsEnabled ? <span className="mt-0.5 block truncate text-[var(--fs-micro)] tabular-nums text-foreground/42">{balance} 积分</span> : null}
@@ -117,21 +118,10 @@ function MenuLink({ to, icon, label, onNavigate }: { to: string; icon: ReactNode
     return <Link to={to} onClick={onNavigate} className="flex h-9 items-center gap-2.5 rounded px-2 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">{icon}<span className="flex-1">{label}</span><ChevronRight className="!size-3 text-foreground/25" /></Link>;
 }
 
-function UserAvatar({ user, className }: { user: LocalUser; className: string }) {
-    const [failed, setFailed] = useState(false);
-    const avatarUrl = /^https?:\/\//i.test(user.avatarUrl || "") ? user.avatarUrl : "";
-
-    useEffect(() => setFailed(false), [avatarUrl]);
-
+function SidebarUserAvatar({ user, className }: { user: LocalUser; className: string }) {
     return (
         <span className={`relative grid shrink-0 place-items-center ${className}`}>
-            <span className="grid size-full place-items-center overflow-hidden rounded-md bg-transparent text-foreground/55">
-                {avatarUrl && !failed ? (
-                    <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" onError={() => setFailed(true)} />
-                ) : (
-                    <CircleUserRound className="app-workspace-account-icon" aria-hidden />
-                )}
-            </span>
+            <UserAvatar user={user} className="size-full rounded-md bg-transparent text-foreground/55" iconClassName="size-6 app-workspace-account-icon" />
             <IdentityProviderBadge user={user} compact className="absolute -bottom-1 -right-1" />
         </span>
     );

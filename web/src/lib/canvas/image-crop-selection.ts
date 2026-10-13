@@ -1,7 +1,16 @@
-import type { ImageCropRect } from "./image-operation-plan";
+import { assertPixelSize, type ImageCropRect, type PixelSize } from "./image-operation-plan";
 export type CropGrip = readonly [-1 | 0 | 1, -1 | 0 | 1];
 const limit = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const minimum = 0.06;
+
+export function centeredAspectSelection(size: PixelSize, aspect: number): ImageCropRect {
+    assertPixelSize(size);
+    if (!Number.isFinite(aspect) || aspect <= 0) throw new RangeError("裁剪比例无效");
+    const ratio = (aspect * size.height) / size.width;
+    const height = Math.min(1, 1 / ratio);
+    const width = height * ratio;
+    return { x: (1 - width) / 2, y: (1 - height) / 2, width, height };
+}
 
 export function translateSelection(box: ImageCropRect, dx: number, dy: number): ImageCropRect {
     return { width: box.width, height: box.height, x: limit(box.x + dx, 0, 1 - box.width), y: limit(box.y + dy, 0, 1 - box.height) };
@@ -29,7 +38,8 @@ export function resizeSelection(box: ImageCropRect, grip: CropGrip, dx: number, 
     const proposed = 1 + (dx * vx + dy * vy) / (vx * vx + vy * vy);
     const capacity = (anchor: number, fraction: number) => Math.min(fraction ? anchor / fraction : Infinity, fraction < 1 ? (1 - anchor) / (1 - fraction) : Infinity);
     const ceiling = Math.min(capacity(ax, fx) / box.width, capacity(ay, fy) / box.height);
-    const floor = Math.min(ceiling, Math.max(minimum / box.width, minimum / box.height));
+    // 以较长的归一化边限制最小尺寸，避免极宽/高原图的窄轴把缩小比例锁死。
+    const floor = Math.min(ceiling, minimum / Math.max(box.width, box.height));
     const factor = limit(proposed, floor, ceiling);
     const width = box.width * factor;
     const height = box.height * factor;

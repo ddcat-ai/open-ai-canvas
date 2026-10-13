@@ -7,6 +7,7 @@ import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/g
 import { MessageReasoning } from "@/components/ai/message-reasoning";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { WorkingDots } from "@/components/ai/working-indicator";
+import { UserAvatar } from "@/components/layout/user-avatar";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { useEffect, useState } from "react";
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -126,14 +127,19 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
     const copyText = useCopyText();
     const visiblePrompt = displayCreationPrompt(item.content, item.references || []);
     const user = useUserStore((state) => state.user);
-    const userAvatarUrl = user?.avatarUrl?.trim();
     return (
         <article className="creation-user-message">
             <div className="creation-user-message-meta">
                 {shotNumber > 0 ? <span className="creation-shot-badge">镜 {shotNumber}</span> : null}
                 {item.createdAt ? <time dateTime={item.createdAt}>{formatMessageTime(item.createdAt)}</time> : null}
                 <strong>{user?.displayName || "你"}</strong>
-                <span className="creation-user-avatar">{userAvatarUrl ? <img src={userAvatarUrl} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" /> : <UserRound />}</span>
+                {user ? (
+                    <UserAvatar user={user} className="creation-user-avatar" />
+                ) : (
+                    <span className="creation-user-avatar">
+                        <UserRound />
+                    </span>
+                )}
             </div>
             <div className="creation-user-message-copy-wrap">
                 <p>{visiblePrompt}</p>

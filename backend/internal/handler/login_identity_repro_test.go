@@ -37,7 +37,7 @@ func testLoginIdentityAttempts(t *testing.T, accounts []string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.SystemSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.LoginLog{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	sqlDB, _ := db.DB()
