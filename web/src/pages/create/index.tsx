@@ -349,7 +349,16 @@ export default function CreatePage() {
         let applyChain = Promise.resolve();
         let unsubscribe: () => void = () => {};
         void loadCreationRuntime()
-            .then((runtime) => {
+            .then(async (runtime) => {
+                if (cancelled) return;
+                try {
+                    const recentTasks = await runtime.listGenerationTasks(30);
+                    if (!cancelled && recentTasks.length) {
+                        applyChain = applyChain.then(() => applyTasks(recentTasks)).catch(warnSync);
+                    }
+                } catch {
+                    // 列表预拉取失败不阻断后续针对明确 ID 的实时轮询
+                }
                 if (cancelled) return;
                 unsubscribe = runtime.subscribeGenerationTasks(recoverableTaskIds, (task) => {
                     applyChain = applyChain.then(() => applyTasks([task])).catch(warnSync);

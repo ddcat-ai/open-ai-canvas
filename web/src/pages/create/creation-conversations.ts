@@ -64,7 +64,9 @@ export function attachCreationTaskContexts(tasks: GenerationTask[], conversation
         }
     }
     return tasks.map((task) => {
-        const context = contexts.get(task.id);
+        const context = contexts.get(task.id) ||
+            (task.retryOf ? contexts.get(task.retryOf) : undefined) ||
+            (task.attemptGroupId ? contexts.get(task.attemptGroupId) : undefined);
         return context ? { ...task, prompt: context.prompt, clientContext: context.clientContext } : task;
     });
 }
@@ -92,7 +94,11 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
         const messages = conversation.messages.map((message) => {
             const taskIds = new Set(message.taskIds || []);
             const matches = tasks
-                .filter((task) => taskIds.has(task.id) || (task.clientContext?.conversationId === conversation.id && task.clientContext.messageId === message.id))
+                .filter((task) =>
+                    taskIds.has(task.id) ||
+                    Boolean(task.retryOf && taskIds.has(task.retryOf)) ||
+                    Boolean(task.attemptGroupId && taskIds.has(task.attemptGroupId)) ||
+                    (task.clientContext?.conversationId === conversation.id && task.clientContext.messageId === message.id))
                 .sort((left, right) => (left.clientContext?.batchIndex || 0) - (right.clientContext?.batchIndex || 0));
             if (message.role === "assistant" && message.mode === "text") {
                 const recovery = runtime.recoverCreationTextTask(message, matches);
