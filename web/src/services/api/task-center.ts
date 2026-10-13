@@ -381,12 +381,11 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
             } catch (error) {
                 lastQueryError = error;
                 consecutiveFailures += 1;
-                // 连续失败说明查询通道已不可用，继续轮询只会空转到整体超时；
-                // 保留少量容忍度（约 10 秒）以跳过瞬时抖动后直接报错，便于用户尽早处理。
-                if (consecutiveFailures >= 5) {
-                    throw error instanceof Error ? error : new Error(String(error));
-                }
-                await delay(intervalMs, options?.signal);
+                // 查询失败只说明「状态同步通道」不稳，不代表上游任务失败：任务在服务端仍在推进，
+                // 稍后往往还能查到结果。因此这里绝不提前退出——只是把轮询降频，继续等到整体超时；
+                // 否则一次网络抖动就会把仍在生成的视频判死（后端随后成功，前端却已报错）。
+                const backoffMs = consecutiveFailures >= 5 ? Math.min(intervalMs * 5, 15000) : intervalMs;
+                await delay(backoffMs, options?.signal);
                 continue;
             }
             if (task.status === "succeeded") {

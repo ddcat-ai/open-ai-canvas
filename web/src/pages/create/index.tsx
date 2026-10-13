@@ -285,7 +285,13 @@ export default function CreatePage() {
         };
     }, [userId, userSessionHydrated]);
 
-    useEffect(() => () => abortRef.current?.abort(), []);
+    // 组件是否已卸载：卸载触发的 abort 与用户主动「停止」需要区分处理——
+    // 前者后台任务仍在跑，消息必须保留 pending 交给恢复监听；后者才是真的取消。
+    const unmountedRef = useRef(false);
+    useEffect(() => () => {
+        unmountedRef.current = true;
+        abortRef.current?.abort();
+    }, []);
 
     useEffect(() => {
         activeIdRef.current = activeId;
@@ -794,6 +800,12 @@ export default function CreatePage() {
             updateOriginAssistant((item) => ({ ...item, status: "done" }));
         } catch (error) {
             if (runtime.isGenerationTaskCancelled(error, requestLifecycle.signal)) {
+                // 组件卸载（刷新页面/切换路由）也会让 abort 触发，但上游任务仍在服务端继续推进。
+                // 此时不能把消息写成「已停止」或「失败」——否则用户刷新回来看到的是假失败，
+                // 而任务其实还在跑、最后还会成功。保留 pending 交给页面恢复监听接管并挂回结果。
+                if (unmountedRef.current && boundTaskIds.size > 0) {
+                    return;
+                }
                 updateOriginAssistant((item) => ({ ...item, status: "cancelled", content: "已停止" }));
                 return;
             }
