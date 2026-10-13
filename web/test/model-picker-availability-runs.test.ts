@@ -24,4 +24,9 @@ test("模型窗口渲染10个状态点的可用性指示条，区分成功、失
     expect(styles).toContain(".model-picker-availability-pill.is-success");
     expect(styles).toContain(".model-picker-availability-pill.is-failed");
     expect(styles).toContain(".model-picker-availability-pill.is-empty");
+
+    // 左侧目录/品牌栏中直接常驻挂载状态条，无需点进二级卡片即可直观感知模型可用性
+    expect(component).toContain("<ModelRecentHealthTrack availability={groupAvailability(config, group)} />");
+    expect(styles).toContain(".canvas-model-picker-brand-meta");
+    expect(styles).toContain(".canvas-model-picker-brand-copy .model-picker-availability-track");
 });
