@@ -92,7 +92,7 @@
         0 0 0 1px rgba(0, 0, 0, 0.07),
         0 28px 54px -26px rgba(0, 0, 0, 0.52);
     cursor: pointer;
-    /* 只有最前面那张能点，后面的点击会穿到页面上，不去抢焦点。 */
+    /* 透明或尚未就绪的卡片不拦截点击，可交互卡片由 disabled 状态放行。 */
     pointer-events: none;
     will-change: transform, opacity;
     /* 封面就绪前整张卡不可见。先露面板再填图，会出现"右边有图、左边还是空白面板"的观感；
@@ -116,7 +116,7 @@
     --card-enter-scale: 1;
 }
 
-.creation-tunnel-card.is-active {
+.creation-tunnel-card:not(:disabled) {
     pointer-events: auto;
 }
 
@@ -251,6 +251,7 @@
     transform: translateY(-50%) scale(0.96);
 }
 
+.creation-tunnel-card:focus-visible,
 .creation-gallery-arrow:focus-visible {
     outline: 2px solid var(--creation-accent, var(--user-accent));
     outline-offset: 3px;

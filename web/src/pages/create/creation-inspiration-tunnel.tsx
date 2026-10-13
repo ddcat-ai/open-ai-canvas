@@ -1,6 +1,6 @@
 // 创作页空态的纵深图片画廊：卡片沿 Z 轴前后排队，当前一张在最前、最大，
 // 其余依次后退缩小，像展厅里一排挂在纵深上的画。
-// 滚轮、左右按钮或自动轮播切换，切换靠 CSS transition 平滑过渡。
+// 点击侧面卡片、滚轮、左右按钮或自动轮播切换，切换靠 CSS transition 平滑过渡。
 // 卡片是带玻璃质感边框的实体面板，不做弧形、也不压成薄片。
 // 展示内容跟随下方输入框的创作类型：选视频就只排队视频灵感，选图片就只排队图片灵感。
 //
@@ -90,11 +90,7 @@ function pickBatch(pool: CreationInspiration[], size: number, mode: CreationMode
     return picked;
 }
 
-/**
- * 画廊只服务鼠标氛围：读屏与键盘用户走输入框和快捷入口创作，
- * 所以卡片整体对辅助技术隐藏、也不进 Tab 顺序；左右切换按钮仍可聚焦，
- * 当前展示的是哪一张由下面那条 aria-live 文本播报。
- */
+/** 点击侧面卡片切换预览，点击当前卡片使用提示词；可见卡片也支持键盘操作。 */
 export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: CreationMode; onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
     /**
      * 池子来自 gallery-pool.json，是单独一份静态 JSON，不打包。
@@ -204,7 +200,7 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
 
     return (
         <div className="creation-inspiration-tunnel" onPointerEnter={() => setPaused(true)} onPointerLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={() => setPaused(false)}>
-            <div ref={stageRef} className="creation-gallery-stage" aria-hidden="true">
+            <div ref={stageRef} className="creation-gallery-stage">
                 {shots.map((inspiration, index) => {
                     const id = catalogIdOf(inspiration);
                     // 相对当前卡片的距离，绕成最短路径，形成首尾相接的队列。
@@ -225,10 +221,19 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
                         <button
                             key={id}
                             type="button"
-                            tabIndex={-1}
+                            disabled={depth > MAX_DEPTH || !readyIds.has(id)}
+                            aria-hidden={depth > MAX_DEPTH || !readyIds.has(id) ? true : undefined}
+                            aria-label={`${depth === 0 ? "使用" : "查看"}创意：${inspiration.title}`}
+                            aria-current={depth === 0 ? "true" : undefined}
                             className={`creation-tunnel-card ${depth === 0 ? "is-active" : ""} ${readyIds.has(id) ? "is-ready" : ""}`}
                             style={style}
-                            onClick={() => onStartPrompt(inspiration.mode, inspiration.prompt)}
+                            onClick={() => {
+                                if (depth !== 0) {
+                                    setActive(index);
+                                    return;
+                                }
+                                onStartPrompt(inspiration.mode, inspiration.prompt);
+                            }}
                         >
                             <img
                                 src={inspiration.image}
@@ -271,7 +276,7 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
                 </span>
             </button>
 
-            {/* 卡片本身对辅助技术隐藏，切换结果靠这条播报传达。 */}
+            {/* 箭头、滚轮和卡片触发的切换结果统一播报。 */}
             <p className="creation-gallery-announce" aria-live="polite">
                 {current ? `${current.title}：${current.description}` : ""}
             </p>
