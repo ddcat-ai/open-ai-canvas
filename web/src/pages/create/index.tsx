@@ -1025,12 +1025,40 @@ export default function CreatePage() {
                  Boolean(t.clientContext?.conversationId && t.clientContext.conversationId === activeConversation?.id && (t.type.includes(item.mode || "") || Boolean(t.operation?.includes(item.mode || ""))))) &&
                 t.status === "succeeded"
             );
-            if (matchedTask) {
-                const contextual = attachCreationTaskContexts([matchedTask], conversations);
-                const persistedTasks = await materializeCreationTaskResults(runtime, contextual);
-                setConversations((current) => reconcileCreationTaskMessages(runtime, current, persistedTasks));
-                toast.success("检测到该任务已在后台生成成功，已自动为你恢复视频结果！");
-                return;
+            if (matchedTask && activeConversation) {
+                let resultUrls: string[] = [];
+                let resultStorageKeys: string[] = [];
+                if (matchedTask.resultJson) {
+                    try {
+                        const parsed = JSON.parse(matchedTask.resultJson);
+                        if (parsed.video?.url || parsed.video?.dataUrl) {
+                            resultUrls = [parsed.video.url || parsed.video.dataUrl];
+                        }
+                        if (parsed.video?.storageKey) {
+                            resultStorageKeys = [parsed.video.storageKey];
+                        }
+                        if (Array.isArray(parsed.images) && parsed.images.length) {
+                            resultUrls = parsed.images.map((img: { url?: string; dataUrl?: string }) => img.url || img.dataUrl).filter(Boolean);
+                            resultStorageKeys = parsed.images.map((img: { storageKey?: string }) => img.storageKey).filter(Boolean);
+                        }
+                    } catch {}
+                }
+                if (!resultUrls.length && matchedTask.previewUrl) {
+                    resultUrls = [matchedTask.previewUrl];
+                }
+                if (resultUrls.length || resultStorageKeys.length) {
+                    await updateConversationMessage(activeConversation.id, item.id, (current) => ({
+                        ...current,
+                        status: "done" as const,
+                        content: current.mode === "video" ? "视频已生成" : "图片已生成",
+                        error: undefined,
+                        resultUrls,
+                        resultStorageKeys,
+                        taskIds: Array.from(new Set([...(current.taskIds || []), matchedTask.id])),
+                    }));
+                    toast.success("已为你恢复该任务在后台生成的视频！");
+                    return;
+                }
             }
         } catch (error) {
             console.warn("检查后台完成状态失败，将继续执行重新生成流程", error);
