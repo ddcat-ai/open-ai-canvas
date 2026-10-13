@@ -14,7 +14,7 @@ import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge, Admin
 import { ChannelOrderDialog } from "./channel-order-dialog";
 import { ChannelModelCostSummary } from "./channel-model-cost-summary";
 import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
-import { deselectVisibleModels, filterImportModels, selectVisibleModels } from "./channel-model-import-selection";
+import { deselectVisibleModels, filterImportModels, normalizeFetchModelKey, selectExistingImportModels, selectVisibleModels } from "./channel-model-import-selection";
 import { duplicateChannelModelValues, type ChannelModelFormValues } from "./channel-model-editor-form";
 import { Select } from "@/components/ui/base/select";
 
@@ -95,7 +95,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 return;
             }
             setFetchPreviewModels(result.models);
-            setSelectedFetchModels(result.models);
+            setSelectedFetchModels(selectExistingImportModels(result.models, items.flatMap((item) => [item.modelKey, item.providerModelKey].filter(Boolean))));
             setFetchPreviewOpen(true);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "拉取模型失败");
@@ -265,20 +265,10 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
     const visibleFetchModels = filterImportModels(fetchPreviewModels, fetchKeyword);
     const allVisibleFetchModelsSelected = visibleFetchModels.length > 0 && visibleFetchModels.every((name) => selectedFetchModels.includes(name));
     const selectedVisibleFetchCount = visibleFetchModels.filter((name) => selectedFetchModels.includes(name)).length;
-    const fetchModelOptions = visibleFetchModels.map((name) => {
-        const alreadyExists = existingFetchModelKeys.has(normalizeFetchModelKey(name));
-        return {
-            label: alreadyExists ? (
-                <span className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 break-all">{name}</span>
-                    <span className="shrink-0 text-xs text-foreground/45">已存在</span>
-                </span>
-            ) : (
-                <span className="break-all">{name}</span>
-            ),
-            value: name,
-        };
-    });
+    const fetchModelOptions = visibleFetchModels.map((name) => ({
+        label: <span className="break-all">{name}</span>,
+        value: name,
+    }));
 
     return (
         <div className="admin-channel-model-manager">
@@ -469,7 +459,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 ]}
             >
                 <div className="space-y-3">
-                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，可批量全选或取消全选；已存在的模型不会重复导入。</p>
+                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认勾选已存在的模型，新模型默认不勾选；可批量全选或取消全选，已存在的模型不会重复导入。</p>
                     <Input
                         allowClear
                         autoFocus
@@ -550,11 +540,4 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
 
 function capabilityLabel(value: ChannelModel["capability"]) {
     return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value];
-}
-
-function normalizeFetchModelKey(value: string) {
-    return value
-        .trim()
-        .replace(/^models\//, "")
-        .toLowerCase();
 }

@@ -151,9 +151,6 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if len([]rune(description)) > 500 {
 		return nil, BadAuthRequest("模型描述不能超过 500 字")
 	}
-	if len([]rune(channelLabel)) > 80 {
-		return nil, BadAuthRequest("渠道展示名不能超过 80 字")
-	}
 	channel, err := s.repo.AdminSystemChannel(channelID)
 	if err != nil {
 		return nil, err
@@ -161,6 +158,13 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	modelKey, providerModelKey, capability, protocol, err := s.normalizeChannelModelContract(channel, req)
 	if err != nil {
 		return nil, err
+	}
+	// 空值表示跟随上游 ID；不把默认名称固化，避免上游重命名后遗留旧 ID。
+	if channelLabel == providerModelKey {
+		channelLabel = ""
+	}
+	if len([]rune(channelLabel)) > 80 {
+		return nil, BadAuthRequest("渠道展示名不能超过 80 字")
 	}
 	// 先检查同渠道重复模型，避免无关能力校验或生成无用序列号掩盖真正的冲突。
 	conflict, conflictErr := s.repo.ChannelModelByKeyIncludingDisabled(channelID, modelKey)
@@ -207,12 +211,12 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.ModelKey = modelKey
 	item.ProviderModelKey = providerModelKey
 	item.DisplayName = strings.TrimSpace(req.DisplayName)
+	if item.DisplayName == "" {
+		item.DisplayName = "未分类"
+	}
 	item.ChannelLabel = channelLabel
 	item.Tags = tags
 	item.Description = description
-	if item.DisplayName == "" {
-		item.DisplayName = modelKey
-	}
 	item.Icon = strings.TrimSpace(req.Icon)
 	item.Capability = capability
 	item.Protocol = protocol
@@ -387,7 +391,7 @@ func (s *Service) syncInitialChannelModels(channel *model.ModelChannel, names []
 		if idErr != nil {
 			return idErr
 		}
-		item := model.ChannelModel{ID: modelID, ChannelID: channel.ID, ModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceConfigured: false, UnitPriceMicrocredits: 0, PriceVersion: 1}
+		item := model.ChannelModel{ID: modelID, ChannelID: channel.ID, ModelKey: name, ProviderModelKey: name, DisplayName: "未分类", BillingMode: "fixed_request", Enabled: false, PriceConfigured: false, UnitPriceMicrocredits: 0, PriceVersion: 1}
 		if err := s.repo.SaveChannelModel(&item); err != nil {
 			return err
 		}

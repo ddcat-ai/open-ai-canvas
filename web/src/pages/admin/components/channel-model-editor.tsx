@@ -39,11 +39,13 @@ export function ChannelModelEditor({
 }) {
     const { message, modal } = App.useApp();
     const { references } = useAdminContext();
-    const displayNameOptions = [...new Set(references.channels.flatMap((item) => item.modelDisplayNames ?? []))]
+    const displayNameOptions = [...new Set(["未分类", ...references.channels.flatMap((item) => item.modelDisplayNames ?? [])])]
         .sort((a, b) => a.localeCompare(b, "zh-CN"))
         .map((value) => ({ value }));
+    const [groupSearch, setGroupSearch] = useState("");
     const [form] = Form.useForm<FormValues>();
     const [initialValues] = useState(() => draftValues ?? initialChannelModelValues(editing, protocols));
+    const previousUpstream = useRef(normalizeUpstreamModelKey(initialValues.providerModelKey || initialValues.modelKey));
     const [activeSection, setActiveSection] = useState<EditorSection>("identity");
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -81,6 +83,11 @@ export function ChannelModelEditor({
             setConfigurationChanged(true);
         } else if (changed.providerModelKey !== undefined || changed.modelKey !== undefined) {
             const values = form.getFieldsValue(true);
+            const upstream = normalizeUpstreamModelKey(values.providerModelKey || values.modelKey);
+            if (!values.channelLabel?.trim() || values.channelLabel.trim() === previousUpstream.current) {
+                form.setFieldValue("channelLabel", upstream);
+            }
+            previousUpstream.current = upstream;
             const next = updateChannelModelUpstreamCapabilities(values, protocols);
             if (next !== values) {
                 form.setFieldValue("capabilityConfig", next.capabilityConfig);
@@ -120,8 +127,8 @@ export function ChannelModelEditor({
             const payload = {
                 modelKey: values.modelKey.trim(),
                 providerModelKey: upstreamModel,
-                displayName: values.displayName?.trim() || values.modelKey.trim(),
-                channelLabel: values.channelLabel?.trim() || "",
+                displayName: values.displayName?.trim() || "未分类",
+                channelLabel: values.channelLabel?.trim() || upstreamModel,
                 tags: (values.tags || []).map((tag) => ({ text: tag.text.trim(), color: tag.color })),
                 description: values.description?.trim() || "",
                 icon: values.icon?.trim() || "",
@@ -263,16 +270,19 @@ export function ChannelModelEditor({
                                             <Form.Item name="providerModelKey" label="上游模型 ID" tooltip="实际发送给供应商；留空时使用产品模型标识。价格档可配置独立上游 ID，命中时优先于此处。">
                                                 <Input placeholder="留空则使用产品模型标识" />
                                             </Form.Item>
-                                            <Form.Item name="displayName" label="模型展示名（一级目录）" tooltip="跨所有系统渠道按此名称分组，例如 MiniMax H3。同名模型归入同一组，不改变调用 ID。">
+                                            <Form.Item name="displayName" label="模型展示名（一级目录）" tooltip="跨所有系统渠道按此名称分组；新模型默认未分类。同名模型归入同一组，不改变调用 ID。">
                                                 <AutoComplete
                                                     options={displayNameOptions}
-                                                    filterOption={(input, option) => Boolean(option?.value.toLowerCase().includes(input.toLowerCase()))}
-                                                    placeholder="选择已有分组或输入新名称"
+                                                    filterOption={(_, option) => Boolean(option?.value.toLowerCase().includes(groupSearch.trim().toLowerCase()))}
+                                                    onSearch={setGroupSearch}
+                                                    onFocus={() => setGroupSearch("")}
+                                                    onOpenChange={(open) => { if (open) setGroupSearch(""); }}
+                                                    placeholder="选择已有分组或输入新名称，默认为未分类"
                                                     allowClear
                                                 />
                                             </Form.Item>
-                                            <Form.Item name="channelLabel" label="渠道展示名（二级目录）" tooltip="此模型下的渠道选项，例如秘塔（满血渠道）。留空使用所属渠道名称。" rules={[{ max: 80, message: "渠道展示名不能超过 80 字" }]}>
-                                                <Input maxLength={80} placeholder="例如：正常渠道、优惠渠道-993、特惠渠道-730" />
+                                            <Form.Item name="channelLabel" label="渠道展示名（二级目录）" tooltip="默认跟随上游模型 ID；手动名称最多 80 字。" rules={[{ validator: async (_, value: string | undefined) => { if (value?.trim() !== modelUpstream && Array.from(value?.trim() || "").length > 80) throw new Error("渠道展示名不能超过 80 字"); } }]}>
+                                                <Input maxLength={80} placeholder={modelUpstream || "默认使用上游模型 ID"} />
                                             </Form.Item>
                                             <Form.Item name="icon" label="模型 Logo">
                                                 <ModelIconPicker />

@@ -35,7 +35,7 @@ test("same model display name groups all channels and preserves their prices", (
     expect(groups).toHaveLength(1);
     expect(config.channels.map((channel) => channel.modelCosts![0].description)).toEqual(["", "优惠渠道-993的使用说明", "特惠渠道-730的使用说明"]);
     expect(groups.map((group) => [group.label, group.kind, group.models.map((item) => [item.label, item.models])])).toEqual([
-        ["Seedance 2.0", "product", [["系统模型", ["a::seedance-2.0"]], ["优惠渠道-993", ["b::seedance-2.0"]], ["特惠渠道-730", ["c::seedance-2.0"]]]],
+        ["Seedance 2.0", "product", [["seedance-2.0", ["a::seedance-2.0"]], ["优惠渠道-993", ["b::seedance-2.0"]], ["特惠渠道-730", ["c::seedance-2.0"]]]],
     ]);
     expect(config.channels.map((channel) => priceTierSummaryLabel(priceTiersForCurrentSelection(channel.modelCosts![0].logicalPriceTiers!, "video", config)))).toEqual(["0.3 积分/秒", "0.3 积分/秒", "0.2 积分/秒"]);
 });
@@ -154,4 +154,19 @@ test("managed logical models and personal channels never become system product r
     expect(groups.map((item) => item.kind)).toEqual(["product", "channel", "channel"]);
     expect(groups[0].models).toHaveLength(1);
     expect(groupModelsForPicker(config, [])).toEqual([]);
+});
+
+test("new models share 未分类 while explicit groups equal to model IDs remain intact", () => {
+    const channels = systemChannelModelChannels([{ id: "upstream", name: "Provider", displayName: "Provider", models: [
+        model("upstream-a", 300000, "a", "未分类"),
+        model("upstream-b", 300000, "b", "未分类"),
+        model("upstream-c", 300000, "c", "c"),
+    ] }]);
+    const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels } }).config;
+    const groups = groupModelsForPicker(config, selectableModelsByCapability(config, "video"));
+    expect(groups.map((group) => group.label)).toEqual(["未分类", "c"]);
+    expect(groups[0].models.map((item) => [item.label, item.models])).toEqual([
+        ["upstream-a", ["upstream::a"]], ["upstream-b", ["upstream::b"]],
+    ]);
+    expect(groups[1].models[0].models).toEqual(["upstream::c"]);
 });

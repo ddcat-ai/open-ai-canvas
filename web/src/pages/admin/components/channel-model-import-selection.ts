@@ -18,3 +18,13 @@ export function deselectVisibleModels(current: string[], visible: string[]): str
     const hidden = new Set(visible);
     return current.filter((name) => !hidden.has(name));
 }
+
+/** 初始只勾选已存在模型，新模型由管理员主动勾选。 */
+export function selectExistingImportModels(models: string[], existingKeys: string[]): string[] {
+    const existing = new Set(existingKeys.map(normalizeFetchModelKey));
+    return models.filter((name) => existing.has(normalizeFetchModelKey(name)));
+}
+
+export function normalizeFetchModelKey(value: string): string {
+    return value.trim().replace(/^models\//, "").toLowerCase();
+}

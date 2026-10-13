@@ -82,9 +82,9 @@ test("channel model fetch requires explicit selection before import", async () =
     expect(apiSource).toContain("http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
     expect(apiSource).toContain("http.post<{ models: string[]; added: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models })");
     expect(component).toContain('title="选择要导入的模型"');
-    expect(component).toContain("默认已全选");
+    expect(component).toContain("默认勾选已存在的模型，新模型默认不勾选");
     expect(component).toContain("setFetchPreviewOpen(true)");
-    expect(component).toContain("setSelectedFetchModels(result.models)");
+    expect(component).toContain("setSelectedFetchModels(selectExistingImportModels(result.models,");
     expect(component).toContain("已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型");
     expect(component).toContain("disabled={importing || !visibleFetchModels.length || allVisibleFetchModelsSelected}");
     expect(component).toContain("onClick={() => setSelectedFetchModels((current) => selectVisibleModels(current, visibleFetchModels))}");

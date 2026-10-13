@@ -286,6 +286,9 @@ func TestFetchAdminChannelModelsReaddsDeletedModel(t *testing.T) {
 	if active.ID == deleted.ID || active.Enabled || active.PriceConfigured {
 		t.Fatalf("re-added model = %#v", active)
 	}
+	if active.DisplayName != "未分类" || active.ProviderModelKey != "model-a" {
+		t.Fatalf("discovered model defaults = %#v", active)
+	}
 	var total int64
 	if err := db.Unscoped().Model(&model.ChannelModel{}).Where("channel_id = ? AND model_key = ?", channel.ID, "model-a").Count(&total).Error; err != nil {
 		t.Fatal(err)
@@ -338,6 +341,24 @@ func TestImportAdminChannelModelsOnlyImportsSelectedModels(t *testing.T) {
 	}
 	if len(imported) != 1 || imported[0].ModelKey != "model-b" {
 		t.Fatalf("imported models = %#v, want only model-b", imported)
+	}
+	if imported[0].DisplayName != "未分类" || imported[0].ProviderModelKey != "model-b" {
+		t.Fatalf("imported defaults = %#v", imported)
+	}
+	// 已有分组即使与模型 ID 相同，也不能被重复导入重置。
+	if err := db.Model(&imported[0]).Updates(map[string]any{"display_name": "model-b", "channel_label": "手动名称"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err = svc.ImportAdminChannelModels(context.Background(), admin, channel.ID, []string{"model-b"})
+	if err != nil || result.Added != 0 {
+		t.Fatalf("duplicate import = %#v, %v", result, err)
+	}
+	var unchanged model.ChannelModel
+	if err := db.First(&unchanged, "id = ?", imported[0].ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.DisplayName != "model-b" || unchanged.ChannelLabel != "手动名称" {
+		t.Fatalf("duplicate import overwrote existing names: %#v", unchanged)
 	}
 }
 

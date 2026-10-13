@@ -45,8 +45,8 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
     return {
         modelKey: item?.modelKey || "",
         providerModelKey: upstreamModel,
-        displayName: item?.displayName || "",
-        channelLabel: item?.channelLabel || "",
+        displayName: item?.displayName || "未分类",
+        channelLabel: item?.channelLabel || upstreamModel,
         tags: item?.tags?.map((tag) => ({ ...tag })) || [],
         description: item?.description || "",
         icon: item?.icon || "",
