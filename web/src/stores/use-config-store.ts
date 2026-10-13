@@ -150,6 +150,7 @@ export type AiConfig = {
     videoGenerateAudio: string;
     videoWatermark: string;
     videoArkPrivateAssetUpload: string;
+    videoDraft: string;
     systemPrompt: string;
     models: string[];
     imageModels: string[];
@@ -204,6 +205,7 @@ export const defaultConfig: AiConfig = {
     videoGenerateAudio: "true",
     videoWatermark: "false",
     videoArkPrivateAssetUpload: "true",
+    videoDraft: "false",
     systemPrompt: "",
     models: [],
     imageModels: [],

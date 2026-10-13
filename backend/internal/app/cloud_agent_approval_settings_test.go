@@ -299,6 +299,62 @@ func TestCloudAgentVideoApprovalEditsAreValidatedAndApplied(t *testing.T) {
 	}
 }
 
+func TestCloudAgentVideoApprovalEditAppliesDraftMode(t *testing.T) {
+	s, db, a := agentMediaFixture(t)
+	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceVolcengineArkVideo), "seedance-2-5-lite")
+	for _, row := range []any{
+		&model.ChannelModel{ID: "draft-cm", ChannelID: "channel", ModelKey: "seedance-2-5-lite", DisplayName: "样片测试", Capability: "video", Protocol: model.ChannelInterfaceVolcengineArkVideo, CapabilityConfigJSON: mustEncodeModelCapabilityConfig(t, capability), BillingMode: "per_second", PriceConfigured: true, Enabled: true},
+		&model.ChannelModelPriceTier{ID: "draft-tier", ChannelModelID: "draft-cm", SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "per_second", UnitPriceMicrocredits: 1, PriceConfigured: true, Enabled: true},
+	} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.ChannelModelKey = "seedance-2-5-lite"
+	run, _ := agentMediaRun(t, s, a, "request_approval")
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = s.repo.CloudAgent("user", run.ID)
+	state, err := cloudAgentDecode(run)
+	if err != nil || state.Approval == nil {
+		t.Fatalf("missing video approval: %v", err)
+	}
+	// 不支持样片的模型在审批编辑里打开样片必须被拒：能力门控在编辑路径同样生效。
+	unsupported := true
+	legacySettings := CloudAgentMediaSettings{ChannelID: a.ChannelID, ChannelModelKey: "seedance-test", Size: a.Size, Quality: "480p", VideoDraft: &unsupported}
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", "", &legacySettings); err == nil {
+		t.Fatal("draft on non-draft model accepted")
+	}
+	draft := true
+	settings := CloudAgentMediaSettings{ChannelID: a.ChannelID, ChannelModelKey: "seedance-2-5-lite", Size: a.Size, Quality: "480p", VideoDraft: &draft}
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", "", &settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(updated)
+	if err != nil || state.MediaTaskID == "" {
+		t.Fatalf("draft approval did not submit: %v %+v", err, state.Events)
+	}
+	task, err := s.repo.TaskForUser("user", state.MediaTaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input canvasGenerationInput
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		t.Fatal(err)
+	}
+	if input.Config.VideoDraft != "true" || input.Config.VQuality != "480p" {
+		t.Fatalf("draft edit was not applied: %+v", input.Config)
+	}
+}
+
 func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {

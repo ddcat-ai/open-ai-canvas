@@ -2425,6 +2425,25 @@ func TestNewAPIChannel1VideoBodyMapsFramesAndReferences(t *testing.T) {
 	}
 }
 
+func TestProtocolRequestLiftsVideoDraftConfigToProviderOptions(t *testing.T) {
+	// Agent 提交路径：config.videoDraft / config.videoDraftTaskId 统一提升到协议命名空间，
+	// 与 metadata.providerOptions 等价，插件模板只认命名空间形态。
+	request := protocolRequestFromInput(canvasGenerationInput{
+		Mode:   "video",
+		Config: providerConfig{InterfaceType: "volcengine-ark-video", VideoDraft: "true", VideoDraftTaskID: "cgt-2026-draft"},
+	})
+	options := request.ProviderOptions["volcengine-ark-video"]
+	if options == nil {
+		t.Fatalf("provider options = %#v", request.ProviderOptions)
+	}
+	if value, _ := options["draft"].(bool); !value {
+		t.Fatalf("draft option = %#v", options["draft"])
+	}
+	if value, _ := options["draftTaskId"].(string); value != "cgt-2026-draft" {
+		t.Fatalf("draftTaskId option = %#v", options["draftTaskId"])
+	}
+}
+
 func TestProtocolRequestPreservesVideoImageIDsAndRoles(t *testing.T) {
 	request := protocolRequestFromInput(canvasGenerationInput{
 		Mode: "video",

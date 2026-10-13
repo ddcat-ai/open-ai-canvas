@@ -50,6 +50,7 @@ import { createStyleProfileSnapshot, resolveStyleProfile, serializeStyleProfile 
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasSubtitleDialog } from "@/components/canvas/canvas-subtitle-dialog";
 import { CanvasVideoFrameDialog } from "@/components/canvas/canvas-video-frame-dialog";
+import { CanvasDraftFinalDialog } from "@/components/canvas/canvas-draft-final-dialog";
 import { CanvasVideoSegmentDialog } from "@/components/canvas/canvas-video-segment-dialog";
 import { CanvasTimelineDialog } from "@/components/canvas/canvas-timeline-dialog";
 import { syncNodeSubtitlesToTimeline } from "@/lib/timeline/timeline-build";
@@ -143,6 +144,7 @@ import { useCanvasGenerationRetry } from "./use-canvas-generation-retry";
 import { useCanvasHistory } from "./use-canvas-history";
 import { useCanvasKeyboard } from "./use-canvas-keyboard";
 import { useCanvasMediaTools } from "./use-canvas-media-tools";
+import { useCanvasDraftFinal } from "./use-canvas-draft-final";
 import { useCanvasNodeEditor } from "./use-canvas-node-editor";
 import { useCanvasNodeOperations } from "./use-canvas-node-operations";
 import { useCanvasProjectLifecycle } from "./use-canvas-project-lifecycle";
@@ -270,6 +272,8 @@ function CanvasViewportPage() {
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [subtitleNodeId, setSubtitleNodeId] = useState<string | null>(null);
     const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
+    const [draftFinalNodeId, setDraftFinalNodeId] = useState<string | null>(null);
+    const [draftFinalSubmitting, setDraftFinalSubmitting] = useState(false);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
@@ -1477,6 +1481,7 @@ function CanvasViewportPage() {
     const isCanvasNodeMoving = isNodeDragging || Boolean(dragPreview?.nodeIds.size);
     const subtitleNode = subtitleNodeId ? nodeById.get(subtitleNodeId) || null : null;
     const timelineNode = timelineNodeId ? nodeById.get(timelineNodeId) || null : null;
+    const draftFinalNode = draftFinalNodeId ? nodeById.get(draftFinalNodeId) || null : null;
     const frameNode = frameDialogNodeId ? nodeById.get(frameDialogNodeId) || null : null;
     const segmentNode = segmentDialogNodeId ? nodeById.get(segmentDialogNodeId) || null : null;
     const textEditorNode = textEditorNodeId ? nodeById.get(textEditorNodeId) || null : null;
@@ -1915,6 +1920,28 @@ function CanvasViewportPage() {
     useEffect(() => {
         generateNodeRef.current = handleGenerateNode;
     }, [handleGenerateNode]);
+
+    const { submitDraftFinalVideo } = useCanvasDraftFinal({
+        projectId,
+        setNodes,
+        setConnections,
+        startGenerationRequest,
+        finishGenerationRequest,
+        bindGenerationTask,
+        applyGenerationTaskResult,
+    });
+    const submitDraftFinalFromDialog = useCallback(
+        async (node: CanvasNodeData) => {
+            setDraftFinalSubmitting(true);
+            try {
+                await submitDraftFinalVideo(node);
+            } finally {
+                setDraftFinalSubmitting(false);
+                setDraftFinalNodeId(null);
+            }
+        },
+        [submitDraftFinalVideo],
+    );
 
     const { enqueueGenerationBatch, retryFailedBatchItems, stopRemainingBatchItems } = useCanvasGenerationBatches({
         projectId,
@@ -3061,6 +3088,7 @@ function CanvasViewportPage() {
                                 onExtractVideoFrames={openVideoFrameExtractor}
                                 onExtractAudioFromVideo={(node) => void extractAudioFromVideo(node)}
                                 onTrimVideoSegments={openVideoSegmentExtractor}
+                                onDraftFinal={(node) => setDraftFinalNodeId(node.id)}
                                 onSubtitles={(node) => setSubtitleNodeId(node.id)}
                                 onTimeline={(node) => setTimelineNodeId(node.id)}
                                 extractingVideoFrames={toolbarNode?.id === extractingVideoFramesNodeId}
@@ -3171,6 +3199,8 @@ function CanvasViewportPage() {
                                     }}
                                 />
                             ) : null}
+
+                            {draftFinalNode ? <CanvasDraftFinalDialog node={draftFinalNode} config={effectiveConfig} submitting={draftFinalSubmitting} onClose={() => setDraftFinalNodeId(null)} onConfirm={(node) => void submitDraftFinalFromDialog(node)} /> : null}
 
                             {frameNode ? <CanvasVideoFrameDialog node={frameNode} open={Boolean(frameNode)} onClose={closeFrameDialog} onConfirm={(params) => void extractVideoFrames(frameNode, params)} /> : null}
 

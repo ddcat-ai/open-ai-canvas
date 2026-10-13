@@ -91,14 +91,16 @@ async function buildSeedanceAgentPlanPayload(config: ResolvedAiConfig, model: st
         : await buildSeedanceContent(config, prompt, references, videoReferences, audioReferences, deps, options);
     if (!content.length) throw new Error("请输入视频提示词，或连接参考图片/视频/音频");
     const profile = modelCapabilityConfigFor(config, model).video!;
+    const draft = profile.draft?.supported === true && boolConfig(config.videoDraft, false);
     return {
         model: modelOptionName(model),
         content,
         ratio: normalizeSeedanceRatio(config.size),
-        resolution: normalizeSeedanceResolution(config.vquality, modelOptionName(model)),
+        resolution: normalizeSeedanceResolution(config.vquality, modelOptionName(model), draft),
         duration: normalizeSeedanceDuration(config.videoSeconds),
         ...(profile.generateAudio.supported ? { generate_audio: boolConfig(config.videoGenerateAudio, profile.generateAudio.default) } : {}),
         ...(profile.watermark.supported ? { watermark: boolConfig(config.videoWatermark, profile.watermark.default) } : {}),
+        ...(draft ? { draft: true } : {}),
     };
 }
 

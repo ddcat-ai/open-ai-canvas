@@ -81,6 +81,10 @@ type providerConfig struct {
 	VQuality              string                 `json:"vquality"`
 	VideoGenerateAudio    string                 `json:"videoGenerateAudio"`
 	VideoWatermark        string                 `json:"videoWatermark"`
+	// 样片模式（Seedance 2.5）的 config 层入口："true" 时由协议请求构建统一提升到
+	// providerOptions.<协议>.draft，Agent 与画布两条提交路径共用同一份校验。
+	VideoDraft            string                 `json:"videoDraft"`
+	VideoDraftTaskID      string                 `json:"videoDraftTaskId"`
 	ArkPrivateAssetUpload string                 `json:"videoArkPrivateAssetUpload"`
 	AudioVoice            string                 `json:"audioVoice"`
 	AudioFormat           string                 `json:"audioFormat"`

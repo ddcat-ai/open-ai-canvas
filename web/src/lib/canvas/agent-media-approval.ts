@@ -23,6 +23,7 @@ export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoA
             videoGenerateAudio: typeof args.videoGenerateAudio === "boolean" ? args.videoGenerateAudio : undefined,
             videoWatermark: typeof args.videoWatermark === "boolean" ? args.videoWatermark : undefined,
             videoArkPrivateAssetUpload: typeof args.videoArkPrivateAssetUpload === "boolean" ? args.videoArkPrivateAssetUpload : undefined,
+            videoDraft: typeof args.videoDraft === "boolean" ? args.videoDraft : undefined,
             prompt: args.prompt,
             referenceNodeIds: Array.isArray(args.referenceNodeIds) ? args.referenceNodeIds.filter((id: unknown): id is string => typeof id === "string") : [],
             referenceTransientIds: Array.isArray(args.referenceTransientIds) ? args.referenceTransientIds.filter((id: unknown): id is string => typeof id === "string") : [],
@@ -65,7 +66,7 @@ export function agentApprovalMatchesSettings(argumentsValue: unknown, settings: 
     const detail = { toolName: "generate_media", arguments: argumentsValue };
     const approved = agentImageApproval(detail) || agentVideoApproval(detail);
     if (!approved) return false;
-    return (["logicalModelId", "channelId", "channelModelKey", "size", "quality", "durationSeconds", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"] as const).every((key) => {
+    return (["logicalModelId", "channelId", "channelModelKey", "size", "quality", "durationSeconds", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload", "videoDraft"] as const).every((key) => {
         const left = approved[key];
         const right = settings[key];
         return (left === undefined ? "" : left) === (right === undefined ? "" : right);

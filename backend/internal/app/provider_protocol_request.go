@@ -91,6 +91,28 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 			}
 		}
 	}
+	// 样片模式的 config 层入口（Agent 提交路径）：统一提升到协议命名空间，
+	// 与 metadata.providerOptions.draft / draftTaskId 等价，插件模板无需感知两种来源。
+	if strings.TrimSpace(input.Config.InterfaceType) != "" {
+		namespace := strings.TrimSpace(input.Config.InterfaceType)
+		if strings.TrimSpace(input.Config.VideoDraft) == "true" || strings.TrimSpace(input.Config.VideoDraftTaskID) != "" {
+			options := request.ProviderOptions[namespace]
+			if options == nil {
+				options = map[string]any{}
+				request.ProviderOptions[namespace] = options
+			}
+			if strings.TrimSpace(input.Config.VideoDraft) == "true" {
+				if _, exists := options["draft"]; !exists {
+					options["draft"] = true
+				}
+			}
+			if taskID := strings.TrimSpace(input.Config.VideoDraftTaskID); taskID != "" {
+				if _, exists := options["draftTaskId"]; !exists {
+					options["draftTaskId"] = taskID
+				}
+			}
+		}
+	}
 	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
 		options := make(map[string]any)
 		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {

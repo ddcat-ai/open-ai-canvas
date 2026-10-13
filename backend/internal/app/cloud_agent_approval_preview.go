@@ -501,6 +501,12 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 	if args.Quality != "" {
 		details = append(details, "质量："+truncateRunes(args.Quality, 40))
 	}
+	if args.Mode == "video" && args.VideoDraft != nil && *args.VideoDraft {
+		details = append(details, "样片模式：480P 低成本预览，确认满意后可出 1080P 正式版（两步独立计费）")
+	}
+	if args.Mode == "video" && strings.TrimSpace(args.VideoDraftTaskID) != "" {
+		details = append(details, "正式版：基于样片任务 "+truncateRunes(strings.TrimSpace(args.VideoDraftTaskID), 32)+" 升 1080P，提示词与参数自动复用（本步单独计费）")
+	}
 	if args.VideoGenerateAudio != nil {
 		value := "关闭"
 		if *args.VideoGenerateAudio {

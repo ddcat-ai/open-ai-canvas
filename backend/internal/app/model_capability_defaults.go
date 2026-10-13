@@ -166,8 +166,8 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Resolutions = []string{"768P", "2K"}
 		video.DefaultResolution = "768P"
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
-	case model.ChannelInterfaceAgnesVideo:
-		video = applyModelSpecificVideoCapability(video, protocol, modelName)
 	}
+	// 协议默认值之后统一应用模型级特例（agnes 官方上限、Seedance 2.5 样片模式等）。
+	video = applyModelSpecificVideoCapability(video, protocol, modelName)
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }

@@ -8,6 +8,7 @@ import { type CanvasTheme } from "@/lib/canvas-theme";
 import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDuration, videoDimensionsForRatioAndResolution, videoResolutionComparisonKey, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { CreditSymbol, formatCredits } from "@/constant/credits";
 
 const sizeOptions = [
     { value: "1280x720", label: "横屏", width: 1280, height: 720 },
@@ -20,7 +21,7 @@ const sizeOptions = [
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", value: string) => void;
+    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload" | "videoDraft", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     className?: string;
@@ -110,7 +111,9 @@ function JiMengVideoSettingsPanel({ config, profile, priceTiers, onConfigChange,
 
 function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChange, theme, showTitle, className }: VideoSettingsPanelProps & { profile: VideoCapabilityConfig; priceTiers: ReturnType<typeof modelPriceTiers> }) {
     const model = modelOptionName(config.model || config.videoModel);
-    const resolution = normalizeSeedanceResolution(config.vquality, model);
+    const draftSupported = profile.draft?.supported === true;
+    const draft = draftSupported && boolConfig(config.videoDraft, profile.draft?.default === true);
+    const resolution = normalizeSeedanceResolution(config.vquality, model, draft);
     const ratio = normalizeSeedanceRatio(config.size);
     const duration = normalizeSeedanceDuration(config.videoSeconds);
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
@@ -126,7 +129,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                     <div className="grid grid-cols-3 gap-1.5">
                         {profile.resolutions.map((value) => {
                             const item = { value, label: value.toUpperCase() };
-							const disabled = (item.value === "1080p" && isSeedanceFastModel(model)) || !hasPriceTierForVideoSelection(priceTiers, item.value, duration);
+							const disabled = (item.value === "1080p" && isSeedanceFastModel(model)) || (draft && item.value !== "480p") || !hasPriceTierForVideoSelection(priceTiers, item.value, duration);
                             return (
                                 <OptionPill key={item.value} selected={resolution === item.value} disabled={disabled} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                     {item.label}
@@ -135,6 +138,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                         })}
                     </div>
                     {isSeedanceFastModel(model) ? <div className="text-[var(--fs-tiny)] leading-4 opacity-55">fast 模型自动使用 720P</div> : null}
+                    {draft ? <div className="text-[var(--fs-tiny)] leading-4 opacity-55">样片模式仅支持 480P{draftTierPerSecondCredits(priceTiers, "480p") ? <>，约 {draftTierPerSecondCredits(priceTiers, "480p")} <CreditSymbol className="size-[1em]" /> /秒</> : null}；确认样片后再生成 1080P 正式视频</div> : null}
                 </SettingGroup>
                 <SettingGroup title="比例" color={theme.node.muted}>
                     <div className="grid grid-cols-4 gap-1.5">
@@ -167,6 +171,22 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                         {profile.watermark.supported ? <SwitchRow label="添加水印" checked={watermark} theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} /> : null}
                     </div>
                 </SettingGroup>
+                {draftSupported ? (
+                    <SettingGroup title="样片" color={theme.node.muted}>
+                        <div className="rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>
+                            <SwitchRow label="样片模式（先生成 480P 预览）" checked={draft} theme={theme} onChange={(checked) => {
+                                onConfigChange("videoDraft", String(checked));
+                                // 上游样片任务仅接受 480p，开启时同步锁定分辨率，避免提交被拒。
+                                if (checked) onConfigChange("vquality", "480p");
+                            }} />
+                        </div>
+                        {draft ? (
+                            <div className="text-[var(--fs-tiny)] leading-4 opacity-55">
+                                生成后在样片视频节点上点「生成正式视频」出 1080P 成片。两步独立计费：样片按 480P 档{draftTierPerSecondCredits(priceTiers, "480p") ? <>（约 {draftTierPerSecondCredits(priceTiers, "480p")} <CreditSymbol className="size-[1em]" /> /秒）</> : null}，正式版按 1080P 档{draftTierPerSecondCredits(priceTiers, "1080p") ? <>（约 {draftTierPerSecondCredits(priceTiers, "1080p")} <CreditSymbol className="size-[1em]" /> /秒）</> : null}；抽卡重生成只在便宜的样片阶段做，满意后再升正式版。
+                            </div>
+                        ) : null}
+                    </SettingGroup>
+                ) : null}
                 {isArkSeedance ? (
                     <SettingGroup title="参考图" color={theme.node.muted}>
                         <div className="rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>
@@ -296,6 +316,18 @@ function hasPriceTierForVideoSelection(tiers: ReturnType<typeof modelPriceTiers>
 
 function normalizeTierResolution(value: string) {
 	return videoResolutionComparisonKey(value);
+}
+
+// 样片计费提示用：按分辨率取所配 per_second 价格档的每秒积分（无匹配档时返回空串不展示）。
+function draftTierPerSecondCredits(tiers: ReturnType<typeof modelPriceTiers>, resolution: string) {
+	const normalized = normalizeTierResolution(resolution);
+	const tier = tiers.find((item) => {
+		const selector = item.selector || {};
+		const tierResolution = selector.vquality || item.resolution;
+		return item.billingMode === "per_second" && item.unitPriceMicrocredits > 0 && (tierResolution === "*" || !tierResolution || normalizeTierResolution(tierResolution) === normalized);
+	});
+	if (!tier) return "";
+	return formatCredits(tier.unitPriceMicrocredits, 2);
 }
 
 function DurationRangeControl({ value, min, max, step, theme, onChange }: { value: number; min: number; max: number; step: number; theme: CanvasTheme; onChange: (value: number) => void }) {

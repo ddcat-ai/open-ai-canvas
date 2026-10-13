@@ -13,6 +13,7 @@ export type AgentMediaSettings = {
     videoGenerateAudio?: boolean;
     videoWatermark?: boolean;
     videoArkPrivateAssetUpload?: boolean;
+    videoDraft?: boolean;
 };
 export type AgentProfileScope = "user" | "project" | "canvas";
 

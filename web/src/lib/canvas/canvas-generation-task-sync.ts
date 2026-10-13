@@ -228,7 +228,16 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             ...node,
             type: CanvasNodeType.Video,
             ...geometry,
-            metadata: applyGeneratedMediaResultMetadata(node, videoMetadata(video), { prompt, ...completedTaskMetadata(task) }, task.model),
+            metadata: applyGeneratedMediaResultMetadata(node, videoMetadata(video), {
+                prompt,
+                ...completedTaskMetadata(task),
+                // 样片任务成功后冻结样片身份：徽标与「生成正式视频」入口只认这个标记，
+                // 不受节点上后续开关变化影响；上游任务 ID 7 天内可用于生成正式版。
+                // 非样片生成（含关闭样片后的重生成）清除旧标记，避免徽标残留。
+                ...(node.metadata?.videoDraft === "true" && task.status === "succeeded"
+                    ? { videoIsDraft: true, videoDraftTaskId: task.providerRequestId }
+                    : { videoIsDraft: undefined, videoDraftTaskId: undefined }),
+            }, task.model),
         };
     }
 

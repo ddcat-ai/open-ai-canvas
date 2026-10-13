@@ -57,9 +57,10 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// canvas_create_character（角色卡打包创建，设定字段已压成一行描述）后为 25 个工具、29,938
 	// 字节；本轮加入 previs_scene_create 与 previs_apply_patch 后为 27 个工具、34,171 字节，
 	// 因此显式上调到 35,000；视频生成支持 Agent 设置首尾帧（#696）后为 35,050 字节，
-	// 再显式上调到 36,000，保留约2.7%的余量。新增工具或字段时请重新测量并有意识地
+	// 再显式上调到 36,000；样片两步流（videoDraft 工作法改写 + videoDraftTaskId 正式版
+	// 参数）后为 28 个工具、36,770 字节，显式上调到 37,500。新增工具或字段时请重新测量并有意识地
 	// 调整这个数字，而不是让 schema 悄悄膨胀（它每一步都要发、还在前缀最前面）。
-	if len(raw) > 36000 {
-		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 36000：请压缩描述或显式调整预算", len(raw))
+	if len(raw) > 37500 {
+		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 37500：请压缩描述或显式调整预算", len(raw))
 	}
 }

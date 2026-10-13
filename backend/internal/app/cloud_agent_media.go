@@ -108,6 +108,8 @@ type cloudAgentMediaArgs struct {
 	VideoGenerateAudio         *bool                    `json:"videoGenerateAudio"`
 	VideoWatermark             *bool                    `json:"videoWatermark"`
 	VideoArkPrivateAssetUpload *bool                    `json:"videoArkPrivateAssetUpload"`
+	VideoDraft                 *bool                    `json:"videoDraft"`
+	VideoDraftTaskID           string                   `json:"videoDraftTaskId"`
 	VideoStartFrameNodeID      string                   `json:"videoStartFrameNodeId"`
 	VideoEndFrameNodeID        string                   `json:"videoEndFrameNodeId"`
 	SnapshotHash               string                   `json:"snapshotHash"`
@@ -706,6 +708,14 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 			return CreateTaskRequest{}, nil, err
 		}
 	}
+	// 样片两步流分辨率归一化：Step1（draft）上游硬约束仅 480p，Step2（draftTaskId）固定 1080p。
+	// 在生成规格解析前归一，保证任务配置、节点 metadata 与审批卡片三处一致。
+	if a.Mode == "video" && strings.TrimSpace(a.VideoDraftTaskID) != "" {
+		a.VideoDraft = nil
+		a.Quality = "1080p"
+	} else if a.Mode == "video" && a.VideoDraft != nil && *a.VideoDraft {
+		a.Quality = "480p"
+	}
 	spec, err := cloudAgentGenerationSpec(a, refs, nil)
 	if err != nil {
 		return CreateTaskRequest{}, nil, err
@@ -716,6 +726,14 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	if a.Mode == "video" && a.VideoArkPrivateAssetUpload != nil {
 		config["videoArkPrivateAssetUpload"] = strconv.FormatBool(*a.VideoArkPrivateAssetUpload)
+	}
+	// config 层入口：Step1 带 draft 开关，Step2 带样片任务 ID（两步互斥），协议请求构建时提升到命名空间。
+	if a.Mode == "video" && strings.TrimSpace(a.VideoDraftTaskID) != "" {
+		config["videoDraftTaskId"] = strings.TrimSpace(a.VideoDraftTaskID)
+		config["vquality"] = "1080p"
+	} else if a.Mode == "video" && a.VideoDraft != nil && *a.VideoDraft {
+		config["videoDraft"] = "true"
+		config["vquality"] = "480p"
 	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
 	// 首尾帧是结构化输入，不能只写进提示词；复用画布提交任务时的字段。
@@ -978,6 +996,10 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 	meta["status"], meta["agentDraftRunId"], meta["referenceNodeIds"] = "idle", a.DraftRunID, a.ReferenceNodeIDs
 	if a.Mode == "video" {
 		meta["videoStartFrameNodeId"], meta["videoEndFrameNodeId"] = a.VideoStartFrameNodeID, a.VideoEndFrameNodeID
+		// 样片开关是节点级配置：设置面板与前端成功回写（样片徽标/草稿任务ID）都以 metadata.videoDraft 为准。
+		if a.VideoDraft != nil && *a.VideoDraft {
+			meta["videoDraft"] = "true"
+		}
 	}
 	meta["prompt"] = cloudAgentMediaComposerPrompt(a.Prompt, refs)
 	meta["composerContent"] = meta["prompt"]
@@ -1083,6 +1105,23 @@ func completeCloudAgentMediaNode(repo *repository.Repository, userID, canvasID, 
 		meta, _ := node["metadata"].(map[string]any)
 		if stringValue(meta["taskId"]) != task.ID {
 			return "", &cloudAgentMediaWritebackError{error: creationConflict("目标节点的任务绑定已变化，未覆盖现有内容"), reason: "task_binding_changed"}
+		}
+		// 样片任务（Step1）成功后回写草稿标记与上游任务 ID：节点「样片」徽标和
+		// 「生成正式视频」入口都依赖这两个字段，Agent 路径没有前端同步兜底。
+		var taskInput struct {
+			Config map[string]any `json:"config"`
+		}
+		draftTask := false
+		if err := json.Unmarshal([]byte(task.InputJSON), &taskInput); err == nil {
+			draftTask = stringValue(taskInput.Config["videoDraft"]) == "true"
+		}
+		if draftTask && task.Status == model.TaskStatusSucceeded && strings.TrimSpace(task.ProviderRequestID) != "" {
+			meta["videoIsDraft"] = true
+			meta["videoDraftTaskId"] = task.ProviderRequestID
+		} else {
+			// 节点跟随最新绑定的任务：重生成或失败时清掉旧样片标记，避免徽标与正式版入口残留。
+			delete(meta, "videoIsDraft")
+			delete(meta, "videoDraftTaskId")
 		}
 		meta["taskStatus"] = string(task.Status)
 		meta["status"] = "error"

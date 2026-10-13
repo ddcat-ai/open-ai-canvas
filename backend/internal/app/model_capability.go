@@ -91,8 +91,11 @@ type VideoCapabilityConfig struct {
 	FixedScreenSpec   *VideoScreenSpecConfig `json:"fixedScreenSpec,omitempty"`
 	GenerateAudio     VideoBooleanConfig     `json:"generateAudio"`
 	Watermark         VideoBooleanConfig     `json:"watermark"`
-	Operations        []string               `json:"operations"`
-	DefaultOperation  string                 `json:"defaultOperation"`
+	// Draft 声明模型是否支持样片模式：开启后以 480p 生成低成本预览，
+	// 再通过 content.draft_task 基于样片生成 1080p 正式视频。目前仅 Seedance 2.5 支持。
+	Draft            VideoBooleanConfig     `json:"draft"`
+	Operations       []string               `json:"operations"`
+	DefaultOperation string                 `json:"defaultOperation"`
 }
 
 type VideoScreenSpecConfig struct {
@@ -227,9 +230,19 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 }
 
 func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol string, modelName string) *VideoCapabilityConfig {
-	if profile == nil || model.ChannelInterfaceType(strings.TrimSpace(protocol)) != model.ChannelInterfaceAgnesVideo {
+	if profile == nil {
 		return profile
 	}
+	switch model.ChannelInterfaceType(strings.TrimSpace(protocol)) {
+	case model.ChannelInterfaceAgnesVideo:
+		return applyAgnesVideoCapability(profile, modelName)
+	case model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineArkAgentPlanVideo:
+		return applySeedanceVideoCapability(profile, modelName)
+	}
+	return profile
+}
+
+func applyAgnesVideoCapability(profile *VideoCapabilityConfig, modelName string) *VideoCapabilityConfig {
 	normalizedModel := strings.ToLower(strings.TrimSpace(modelName))
 	if normalizedModel != "agnes-video-2.5" && normalizedModel != "agnes-video-2.5-flash" {
 		return profile
@@ -262,6 +275,18 @@ func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol 
 	value.Watermark = VideoBooleanConfig{Supported: false, Default: false}
 	value.Operations = []string{"text_to_video", "image_to_video", "reference_to_video", "audio_to_video"}
 	value.DefaultOperation = "text_to_video"
+	return &value
+}
+
+// applySeedanceVideoCapability 为 Seedance 2.5 系列声明样片模式能力，口径与
+// video_token_billing 的 seedance-2-5 识别一致。其他模型默认不支持；
+// 管理员仍可通过渠道模型能力配置显式为后续新模型放开。
+func applySeedanceVideoCapability(profile *VideoCapabilityConfig, modelName string) *VideoCapabilityConfig {
+	if !strings.Contains(strings.ToLower(strings.TrimSpace(modelName)), "seedance-2-5") {
+		return profile
+	}
+	value := *profile
+	value.Draft = VideoBooleanConfig{Supported: true, Default: false}
 	return &value
 }
 

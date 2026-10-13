@@ -295,6 +295,14 @@ export type CanvasNodeMetadata = {
     vquality?: string;
     generateAudio?: string;
     watermark?: string;
+    /** 样片模式开关节点级覆盖（"true"/"false"），随生成提交为 providerOptions.draft。 */
+    videoDraft?: string;
+    /** 样片视频节点标记：任务成功后冻结，用于展示徽标和「生成正式视频」入口。 */
+    videoIsDraft?: boolean;
+    /** 样片任务的上游任务 ID（7 天内有效），Step2 通过 content.draft_task 引用。 */
+    videoDraftTaskId?: string;
+    /** Step2 正式版节点的来源样片任务 ID，用于链路追溯。 */
+    videoFinalOfDraftTaskId?: string;
     audioVoice?: string;
     audioFormat?: string;
     audioSpeed?: string;

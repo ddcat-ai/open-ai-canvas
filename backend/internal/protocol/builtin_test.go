@@ -630,3 +630,49 @@ func TestAsyncMediaPollRejectsUnsupportedCapability(t *testing.T) {
 		t.Fatal("text capability was accepted by async media parser")
 	}
 }
+
+func TestArkVideoAdapterSupportsDraftMode(t *testing.T) {
+	adapter, ok := Builtins().Get("volcengine-ark-video")
+	if !ok {
+		t.Fatal("adapter missing")
+	}
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:  "doubao-seedance-2-5-260628",
+		Prompt: "a girl walks",
+		ProviderOptions: map[string]map[string]any{"volcengine-ark-video": {"draft": true}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if body["draft"] != true {
+		t.Fatalf("draft body = %#v", body)
+	}
+
+	spec, err = adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:  "doubao-seedance-2-5-260628",
+		Prompt: "a girl walks",
+		ProviderOptions: map[string]map[string]any{"volcengine-ark-video": {"draftTaskId": "cgt-2026-draft"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = manifestTestBody(t, spec)
+	content, ok := body["content"].([]any)
+	if !ok || len(content) != 1 {
+		t.Fatalf("draft_task content = %#v", body["content"])
+	}
+	item, _ := content[0].(map[string]any)
+	task, _ := item["draft_task"].(map[string]any)
+	if item["type"] != "draft_task" || task["id"] != "cgt-2026-draft" {
+		t.Fatalf("draft_task content item = %#v", item)
+	}
+	if body["resolution"] != "1080p" {
+		t.Fatalf("draft final resolution = %#v", body["resolution"])
+	}
+	for _, key := range []string{"ratio", "duration", "generate_audio", "draft"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("draft final body must omit %s: %#v", key, body)
+		}
+	}
+}
