@@ -410,7 +410,21 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 	if input.Mask != nil && !profile.References.MaskSupported {
 		return BadAuthRequest("当前图片模型不支持蒙版编辑")
 	}
-	if profile.Size.Parameter != "none" && !profile.Size.AllowCustom && strings.TrimSpace(input.Config.Size) != "" && !containsCapabilityString(profile.Size.Values, input.Config.Size) {
+	quality := strings.TrimSpace(input.Config.Quality)
+	resolution := strings.TrimSpace(input.Config.ImageResolution)
+	if profile.Resolution.Supported && resolution != "" && !strings.EqualFold(resolution, "auto") && !strings.EqualFold(resolution, "any") && !containsCapabilityString(profile.Resolution.Values, resolution) {
+		return BadAuthRequest("图片分辨率不在当前模型支持范围内")
+	}
+	selectionTier := quality
+	if profile.Resolution.Supported {
+		selectionTier = resolution
+	}
+	// 比例型线路会在任务输入边界把画布比例换算成 preset 像素值（OpenAI Images 只收
+	// WIDTHxHEIGHT）。换算结果必须继续通过同一套尺寸与分辨率校验：先把已声明的 preset
+	// 像素值还原成对应比例，否则执行前的 provider 预检会把刚换算好的值判成不支持的尺寸。
+	resolvedRatio := imageSizeRatioForDeclaredPreset(profile, input.Config.Size, qualityForImageValidation(selectionTier, profile.Resolution.Default))
+	if profile.Size.Parameter != "none" && !profile.Size.AllowCustom && strings.TrimSpace(input.Config.Size) != "" &&
+		!containsCapabilityString(profile.Size.Values, input.Config.Size) && resolvedRatio == "" {
 		return BadAuthRequest("图片尺寸不在当前模型支持范围内")
 	}
 	if profile.Parameters == nil && profile.Size.Parameter == "size" && profile.Size.AllowCustom && strings.HasPrefix(modelName, "gpt-image-2") && !containsCapabilityString(profile.Size.Values, input.Config.Size) {
@@ -418,11 +432,10 @@ func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInp
 			return BadAuthRequest(err.Error())
 		}
 	}
-	quality := strings.TrimSpace(input.Config.Quality)
 	if profile.Quality.Supported && quality != "" && !strings.EqualFold(quality, "auto") && !strings.EqualFold(quality, "any") && !containsCapabilityString(profile.Quality.Values, quality) {
 		return BadAuthRequest("图片质量不在当前模型支持范围内")
 	}
-	if err := validateImagePresetSelection(profile, qualityForImageValidation(quality, profile.Quality.Default), firstNonEmpty(input.Config.Size, profile.Size.Default)); err != nil {
+	if err := validateImagePresetSelection(profile, qualityForImageValidation(selectionTier, firstNonEmpty(profile.Resolution.Default, profile.Quality.Default)), firstNonEmpty(resolvedRatio, input.Config.Size, profile.Size.Default)); err != nil {
 		return err
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count))
@@ -466,7 +479,7 @@ func validateImagePresetSelection(profile *ImageCapabilityConfig, quality, ratio
 	if profile.Size.Parameter != "aspect_ratio" || profile.Size.AllowCustom || len(profile.Size.Presets) == 0 || ratio == "auto" {
 		return nil
 	}
-	tier := imageResolutionTier(quality)
+	tier := imagePresetSelectionTier(profile, quality)
 	if tier == "" {
 		return nil
 	}

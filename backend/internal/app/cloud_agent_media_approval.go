@@ -78,14 +78,12 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 	if err != nil {
 		return err
 	}
-	var resolved struct {
-		Config map[string]any `json:"config"`
-	}
+	var resolved map[string]any
 	if err := json.Unmarshal([]byte(task.InputJSON), &resolved); err != nil {
 		return err
 	}
 	requested, _ := req.Input["config"].(map[string]any)
-	if err := validateCloudAgentResolvedMediaOptions(requested, resolved.Config); err != nil {
+	if err := validateCloudAgentResolvedMediaOptions(requested, resolved); err != nil {
 		return err
 	}
 	name, err := s.cloudAgentMediaModelName(args)

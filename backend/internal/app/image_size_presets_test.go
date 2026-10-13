@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"yingce/backend/internal/model"
 )
 
 func TestImageSizePresetsValidationAndRoundTrip(t *testing.T) {
@@ -54,9 +56,50 @@ func TestImageSizePresetsValidationAndRoundTrip(t *testing.T) {
 	}
 }
 
+func TestImageQualityDoesNotSelectResolutionPresets(t *testing.T) {
+	profile := DefaultImageCapabilityConfig("openai-image", "test")
+	profile.Size = ImageSizeConfig{Parameter: "aspect_ratio", Values: []string{"1:1"}, Default: "1:1", Presets: []ImageSizePreset{
+		{Tier: "1k", Ratio: "1:1", Size: "1024x1024", Width: 1024, Height: 1024},
+	}}
+	profile.Resolution = ImageResolutionConfig{Supported: false, Default: "auto"}
+	profile.Quality = ImageQualityConfig{Supported: true, Values: []string{"medium", "high", "max"}, Default: "medium"}
+	if err := validateImageCapabilityConfig(profile); err != nil {
+		t.Fatalf("quality-only capability rejected: %v", err)
+	}
+	for _, quality := range profile.Quality.Values {
+		input := canvasGenerationInput{Mode: "image", Prompt: "local test", Config: providerConfig{InterfaceType: "openai-image", Model: "test", Size: "1:1", Quality: quality, Count: "1"}}
+		raw := map[string]any{"config": map[string]any{"size": "1:1", "quality": quality}}
+		if err := validateImageTaskWithResolvedSize(raw, &input, profile); err != nil {
+			t.Fatalf("quality %q rejected: %v", quality, err)
+		}
+		if input.Config.Size != "1024x1024" || input.Config.Quality != quality {
+			t.Fatalf("quality changed preset or value: %+v", input.Config)
+		}
+	}
+	profile.Resolution.Supported = true
+	if err := validateImagePresetSelection(profile, "2k", "1:1"); err == nil {
+		t.Fatal("independent resolution must still reject an undeclared combination")
+	}
+}
+
+func TestResolveImageTaskSizeUsesRouteEncodingForDeclaredAlias(t *testing.T) {
+	profile := &ImageCapabilityConfig{
+		Size: ImageSizeConfig{Parameter: "aspect_ratio", Values: []string{"16:9"}, Default: "16:9", Presets: []ImageSizePreset{
+			{Tier: "1k", Ratio: "16:9", Size: "1824x1024"},
+		}},
+		Quality: ImageQualityConfig{Supported: true, Values: []string{"1k"}, Default: "1k"},
+	}
+	if got := resolveImageTaskSize(profile, string(model.ChannelInterfaceGrokImage), "1824x1024", "1k"); got != "16:9" {
+		t.Fatalf("aspect-ratio route got %q, want canonical ratio 16:9", got)
+	}
+	if got := resolveImageTaskSize(profile, string(model.ChannelInterfaceOpenAIImage), "32:18", "1k"); got != "1824x1024" {
+		t.Fatalf("pixel route got %q, want declared pixel size 1824x1024", got)
+	}
+}
+
 func TestImageSizePresetsEnforceResolutionRatioPair(t *testing.T) {
 	profile := DefaultImageCapabilityConfig("grok-image", "grok-imagine-image")
-	profile.Quality.Default = "1k"
+	profile.Resolution.Default = "1k"
 	profile.Size = ImageSizeConfig{Parameter: "aspect_ratio", Values: []string{"1:1", "16:9"}, Default: "1:1", Presets: []ImageSizePreset{
 		{Tier: "1k", Ratio: "1:1", Size: "1024x1024", Width: 1024, Height: 1024},
 		{Tier: "2k", Ratio: "16:9", Size: "2752x1536", Width: 2752, Height: 1536},
@@ -64,12 +107,12 @@ func TestImageSizePresetsEnforceResolutionRatioPair(t *testing.T) {
 	if err := validateImageCapabilityConfig(profile); err != nil {
 		t.Fatal(err)
 	}
-	profile.Quality.Default = "2k"
+	profile.Resolution.Default = "2k"
 	if err := validateImageCapabilityConfig(profile); err == nil || !strings.Contains(err.Error(), "默认图片分辨率") {
 		t.Fatalf("expected invalid default pair error, got %v", err)
 	}
-	profile.Quality.Default = "1k"
-	input := canvasGenerationInput{Config: providerConfig{Size: "1:1", Quality: "2k"}}
+	profile.Resolution.Default = "1k"
+	input := canvasGenerationInput{Config: providerConfig{Size: "1:1", ImageResolution: "2k"}}
 	if err := validateImageTask(profile, input); err == nil || !strings.Contains(err.Error(), "当前分辨率") {
 		t.Fatalf("expected pair validation error, got %v", err)
 	}
