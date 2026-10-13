@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import panelSource from "../src/components/canvas/canvas-cloud-agent-panel.tsx" with { type: "text" };
 import partsSource from "../src/components/canvas/canvas-cloud-agent-panel-parts.tsx" with { type: "text" };
-import avatarSource from "../src/components/canvas/live2d-avatar.tsx" with { type: "text" };
+
+// 同一路径一旦被 text 加载器注册，bun 1.3.9 的模块缓存会让其它测试的具名导入失效，这里直接读源码文本。
+const avatarSource = readFileSync(new URL("../src/components/canvas/live2d-avatar.tsx", import.meta.url), "utf8");
 
 test("Live2D launcher remains mounted while the Agent panel is open", () => {
     expect(panelSource).toContain("<AgentLauncher");
