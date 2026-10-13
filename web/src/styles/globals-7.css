@@ -1465,9 +1465,9 @@
 .app-user-workspace .creation-thread-stage,
 .app-user-workspace .creation-thread-composer { width: min(1066px, calc(100% - 48px)); }
 .app-user-workspace .creation-home .creation-thread-toolbar { min-height: 40px; padding: 4px 0; border-bottom: 0; }
-.app-user-workspace .creation-thread-scroll { background: transparent; }
+.app-user-workspace .creation-thread-scroll { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; background: transparent; }
 .app-user-workspace .creation-thread-stage { padding-top: 16px; padding-bottom: 12px; }
-.app-user-workspace .creation-thread-composer { padding: 4px 0 10px; background: transparent; }
+.app-user-workspace .creation-thread-composer { flex-shrink: 0 !important; position: relative; z-index: 30; padding: 4px 0 10px; background: transparent; }
 .app-user-workspace .creation-chat-composer.is-thread .creation-chat-writing-surface {
     min-height: 0 !important;
     padding: 8px 12px 0 !important;

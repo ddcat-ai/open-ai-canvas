@@ -270,9 +270,27 @@ export default function CreatePage() {
         const scope = getActiveUserScope();
         setHydrated(false);
         setConversationScope(null);
-        void loadCreationConversations<CreationConversation>().then((stored) => {
+        void loadCreationConversations<CreationConversation>().then(async (stored) => {
             if (cancelled || getActiveUserScope() !== scope || (useUserStore.getState().user?.id || null) !== userId) return;
-            const next = stored?.length ? stored : [newConversation()];
+            let next = stored?.length ? stored : [newConversation()];
+            // 自动深度恢复：若会话中存在未决或错误状态的助手消息，在水合阶段直接向服务端比对已完成任务；
+            // 只要后端任务实际上已经成功出片，立即将视频结果静默挂回会话，无需用户点击任何按钮或重新排队生成。
+            try {
+                const hasUnresolved = next.some((c) => c.messages.some((m) => m.role === "assistant" && (m.status === "error" || m.status === "pending")));
+                if (hasUnresolved) {
+                    const runtime = await loadCreationRuntime();
+                    const recentTasks = await runtime.listGenerationTasks(30);
+                    const succeededTasks = recentTasks.filter((t) => t.status === "succeeded");
+                    if (succeededTasks.length) {
+                        const contextual = attachCreationTaskContexts(succeededTasks, next);
+                        const persistedTasks = await materializeCreationTaskResults(runtime, contextual);
+                        next = reconcileCreationTaskMessages(runtime, next, persistedTasks);
+                    }
+                }
+            } catch (err) {
+                console.warn("创作会话初始化恢复失败，将保留已有会话状态", err);
+            }
+            if (cancelled || getActiveUserScope() !== scope || (useUserStore.getState().user?.id || null) !== userId) return;
             conversationsRef.current = next;
             setConversations(next);
             setActiveId(next[0].id);
@@ -285,7 +303,13 @@ export default function CreatePage() {
         };
     }, [userId, userSessionHydrated]);
 
-    useEffect(() => () => abortRef.current?.abort(), []);
+    // 组件是否已卸载：卸载触发的 abort 与用户主动「停止」需要区分处理——
+    // 前者后台任务仍在跑，消息必须保留 pending 交给恢复监听；后者才是真的取消。
+    const unmountedRef = useRef(false);
+    useEffect(() => () => {
+        unmountedRef.current = true;
+        abortRef.current?.abort();
+    }, []);
 
     useEffect(() => {
         activeIdRef.current = activeId;
@@ -296,11 +320,12 @@ export default function CreatePage() {
         if (hydrated && userSessionHydrated && conversationScope === getActiveUserScope()) void saveCreationConversations(conversations);
     }, [conversations, conversationScope, hydrated, userSessionHydrated]);
 
+    const hasUnresolvedMessage = useMemo(() => activeConversation?.messages.some((m) => m.role === "assistant" && (m.status === "pending" || m.status === "error")), [activeConversation]);
+
     useEffect(() => {
-        if (!hydrated || !recoveryTaskKey || !pendingTaskIds.length) return;
+        if (!hydrated || (!recoveryTaskKey && !hasUnresolvedMessage)) return;
         // 当前页面主动提交的任务由 submit 自己等待并收尾；恢复监听只接管刷新前遗留的任务，避免同一任务被双重轮询。
         const recoverableTaskIds = pendingTaskIds.filter((id) => !activeGenerationTaskIdsRef.current.has(id));
-        if (!recoverableTaskIds.length) return;
         let cancelled = false;
         const observationController = new AbortController();
         const applyTasks = async (tasks: GenerationTask[]) => {
@@ -315,7 +340,14 @@ export default function CreatePage() {
                     await runtime.consumeGenerationTaskMessage(task, task.clientContext!.messageId!, async ({ effectKey, resultUrls, resultStorageKeys }) => {
                         if (cancelled) return;
                         await updateConversationMessage(task.clientContext!.conversationId!, task.clientContext!.messageId!, (item) =>
-                            runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, status: "done" as const, ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}), ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}) })).value,
+                            runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({
+                                ...current,
+                                status: "done" as const,
+                                content: current.mode === "video" ? "视频已生成" : (current.content && current.content !== "生成失败" ? current.content : "图片已生成"),
+                                error: undefined,
+                                ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}),
+                                ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}),
+                            })).value,
                         );
                     }, { signal: observationController.signal, materialize: async () => task, materializedUrls: runtime.generationTaskMaterializedUrls, materializedStorageKeys: runtime.generationTaskMaterializedStorageKeys });
                 } catch (error) {
@@ -336,7 +368,16 @@ export default function CreatePage() {
         let applyChain = Promise.resolve();
         let unsubscribe: () => void = () => {};
         void loadCreationRuntime()
-            .then((runtime) => {
+            .then(async (runtime) => {
+                if (cancelled) return;
+                try {
+                    const recentTasks = await runtime.listGenerationTasks(30);
+                    if (!cancelled && recentTasks.length) {
+                        applyChain = applyChain.then(() => applyTasks(recentTasks)).catch(warnSync);
+                    }
+                } catch {
+                    // 列表预拉取失败不阻断后续针对明确 ID 的实时轮询
+                }
                 if (cancelled) return;
                 unsubscribe = runtime.subscribeGenerationTasks(recoverableTaskIds, (task) => {
                     applyChain = applyChain.then(() => applyTasks([task])).catch(warnSync);
@@ -348,7 +389,7 @@ export default function CreatePage() {
             observationController.abort();
             unsubscribe();
         };
-    }, [hydrated, recoveryTaskKey, toast]);
+    }, [hasUnresolvedMessage, hydrated, recoveryTaskKey, toast]);
 
     const loadAddedSkills = useCallback(() => {
         if (addedSkillsRequestedRef.current) return;
@@ -800,6 +841,12 @@ export default function CreatePage() {
             updateOriginAssistant((item) => ({ ...item, status: "done" }));
         } catch (error) {
             if (runtime.isGenerationTaskCancelled(error, requestLifecycle.signal)) {
+                // 组件卸载（刷新页面/切换路由）也会让 abort 触发，但上游任务仍在服务端继续推进。
+                // 此时不能把消息写成「已停止」或「失败」——否则用户刷新回来看到的是假失败，
+                // 而任务其实还在跑、最后还会成功。保留 pending 交给页面恢复监听接管并挂回结果。
+                if (unmountedRef.current && boundTaskIds.size > 0) {
+                    return;
+                }
                 updateOriginAssistant((item) => ({ ...item, status: "cancelled", content: "已停止" }));
                 return;
             }
@@ -949,6 +996,31 @@ export default function CreatePage() {
     const retryFailedMessage = async (item: CreationMessage, index: number) => {
         const previous = item.role === "assistant" ? activeConversation?.messages[index - 1] : item;
         if (!previous?.content || busy) return;
+
+        // 优先检查：如果后端任务实际上已经跑成功了，直接恢复结果，绝不重复生成扣费！
+        try {
+            const runtime = await loadCreationRuntime();
+            const recentTasks = await runtime.listGenerationTasks(30);
+            const targetTaskIds = new Set(item.taskIds || []);
+            const matchedTask = recentTasks.find((t) =>
+                (targetTaskIds.has(t.id) ||
+                 Boolean(t.retryOf && targetTaskIds.has(t.retryOf)) ||
+                 Boolean(t.attemptGroupId && targetTaskIds.has(t.attemptGroupId)) ||
+                 Boolean(t.clientContext?.messageId && t.clientContext.messageId === item.id) ||
+                 Boolean(t.clientContext?.conversationId && t.clientContext.conversationId === activeConversation?.id && (t.type.includes(item.mode || "") || Boolean(t.operation?.includes(item.mode || ""))))) &&
+                t.status === "succeeded"
+            );
+            if (matchedTask) {
+                const contextual = attachCreationTaskContexts([matchedTask], conversations);
+                const persistedTasks = await materializeCreationTaskResults(runtime, contextual);
+                setConversations((current) => reconcileCreationTaskMessages(runtime, current, persistedTasks));
+                toast.success("检测到该任务已在后台生成成功，已自动为你恢复视频结果！");
+                return;
+            }
+        } catch (error) {
+            console.warn("检查后台完成状态失败，将继续执行重新生成流程", error);
+        }
+
         const retryOf = item.taskIds?.[0];
         const restoreForRetry = () => {
             followLatestMessageRef.current = true;
@@ -1109,9 +1181,9 @@ export default function CreatePage() {
                     </details>
                 </div> : null}
                 </main>
-            </> : <div className="creation-thread-workbench">
+            </> : <div className="creation-thread-workbench relative flex h-full min-h-0 w-full flex-col overflow-hidden">
                 <CreationWorkspaceToolbar onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
-                <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">
+                <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar min-h-0 flex-1 overflow-y-auto">
                     <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <div key={item.id} id={`creation-shot-${item.id}`} className="creation-thread-message"><CreationMessageView
                         item={item}
                         shotNumber={creationVideoShotOrdinal(videoShots, item)}
@@ -1122,7 +1194,7 @@ export default function CreatePage() {
                         onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
                     /></div>)}</div></section>
                 </main>
-                <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
+                <section className="creation-thread-composer shrink-0"><CreationComposer {...composerProps} variant="thread" /></section>
             </div>}
         </div>
         <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onNew={startNewConversation} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} />
