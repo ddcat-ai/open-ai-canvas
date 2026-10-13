@@ -191,7 +191,7 @@ function seedanceDescription(item, category) {
     return SEEDANCE_CATEGORY_LABELS[category] ?? "";
 }
 
-function buildSeedanceEntries(raw) {
+export function buildSeedanceEntries(raw) {
     const unknown = new Set();
     const entries = raw
         .filter((item) => item.slug && item.posterUrl && item.promptFull && hasCjk(item.title) && !EXCLUDED_SEEDANCE_SLUGS.has(item.slug))
@@ -204,6 +204,7 @@ function buildSeedanceEntries(raw) {
                 title: item.title,
                 description: seedanceDescription(item, category),
                 image: item.posterUrl,
+                ...(item.mediaType === "video" && /^https?:\/\//i.test(item.mediaUrl ?? "") ? { videoUrl: item.mediaUrl } : {}),
                 mode: "video",
                 prompt: item.promptFull,
                 ...(category ? { category } : {}),
@@ -556,7 +557,9 @@ async function main() {
     console.log(`全量目录    : ${PUBLIC_DIR}`);
 }
 
-main().catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exit(1);
-});
+if (import.meta.main) {
+    main().catch((error) => {
+        console.error(error instanceof Error ? error.message : error);
+        process.exit(1);
+    });
+}

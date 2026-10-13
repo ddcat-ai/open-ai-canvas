@@ -1,5 +1,5 @@
 import { App, Button, Dropdown, Input } from "antd";
-import { Download, Heart, Import, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Download, Heart, Import, MoreHorizontal, Pencil, Play, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -385,6 +385,12 @@ export default function InspirationsPage() {
                                     >
                                         <div className="inspiration-card-cover">
                                             <img src={item.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                                            {item.mode === "video" && item.videoUrl ? (
+                                                <span className="inspiration-card-video">
+                                                    <Play className="size-3.5" aria-hidden="true" />
+                                                    可预览
+                                                </span>
+                                            ) : null}
                                             <span className="inspiration-card-source">{inspirationSourceOf(item).label}</span>
                                             <div className="inspiration-card-actions">
                                                 <Tooltip title={favorite ? "取消收藏" : "收藏"}>

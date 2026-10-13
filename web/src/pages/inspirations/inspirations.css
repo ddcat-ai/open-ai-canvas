@@ -81,6 +81,22 @@
     backdrop-filter: blur(10px);
 }
 
+.inspiration-card-video {
+    position: absolute;
+    top: var(--space-2, 8px);
+    left: var(--space-2, 8px);
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1, 4px);
+    padding: var(--space-1, 4px) var(--space-2, 8px);
+    border-radius: var(--r-full, 999px);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    font-size: var(--fs-tiny, 10px);
+    pointer-events: none;
+}
+
 /* 悬停才浮出的快捷操作，平时不干扰画面。 */
 .inspiration-card-actions {
     position: absolute;
