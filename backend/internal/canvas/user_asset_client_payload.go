@@ -31,6 +31,11 @@ func ClientAssetPayload(asset model.Asset) json.RawMessage {
 	if _, ok := payload["updatedAt"]; !ok {
 		payload["updatedAt"] = formatClientAssetTime(asset.UpdatedAt)
 	}
+	if asset.FolderID != "" {
+		if current, ok := payload["folderId"].(string); !ok || strings.TrimSpace(current) == "" {
+			payload["folderId"] = asset.FolderID
+		}
+	}
 	if data, ok := payload["data"].(map[string]any); ok {
 		kind, _ := payload["kind"].(string)
 		switch kind {
