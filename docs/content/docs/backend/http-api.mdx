@@ -5,6 +5,37 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 用户登录日志
+
+菜单“用户与运营 → 用户登录日志”，页面 `/admin/login-logs`。查询在 service 校验管理员权限：匿名 401、普通用户 403。
+
+- `GET /api/admin/login-logs`：支持 `keyword`（用户名、昵称、脱敏账号或用户 ID）、`event=login|logout`、`method=password|email|sms|linuxdo|verification|unknown`、`result=success|failed`、精确 `ip`、RFC3339 `from/to`（含边界）、`page/pageSize`。开始时间不能晚于结束时间。默认每页 20 条、时间倒序；成功 `data={logs,total,page,pageSize}`，空结果 `logs=[]`。
+- `GET /api/admin/login-logs/:id`：成功 `data={log}`；不存在返回 404。包含用户快照、时间、事件、来源、方式、IP、UA、安全原因码/文案和非凭据的关联会话标识。
+
+后端在密码、邮箱/短信验证码、Linux.do 登录、注册后自动登录及主动退出的真实认证路径记录，不提供客户端任意新增日志接口。`verification` 表示凭据/请求无效导致方式无法识别；`unknown` 表示上线前会话未保存方式。`source=registration` 标记注册自动登录。退出失败不清 Cookie，不再忽略撤销错误。刷新状态和会话自然过期不新增事件。浏览器/系统由页面根据 UA 展示，无法识别时明确标注；UA 是客户端自报信息。
+
+## 个人信息
+
+所有 `/auth/profile` 路径均要求当前活动用户的登录 Cookie，不能通过用户 ID 修改他人资料。
+
+| 路径 | 入参与结果 |
+| --- | --- |
+| `GET /auth/profile` | 返回 `user`、`hasPassword`、`emailEnabled`、`linuxdoEnabled` 和可选 `reauthenticatedUntil`；密码散列、头像图片正文、内部缓存版本均不在用户 JSON 中 |
+| `PUT /auth/profile/avatar` | multipart `file`，只接受真实 PNG/JPEG、最大 5 MiB；返回 `{ user }`，包含带版本的头像地址 |
+| `DELETE /auth/profile/avatar` | 清除个人头像并明确选择系统默认头像；第三方重新登录不会覆盖该选择；返回 `{ user }` |
+| `POST /auth/profile/avatar/default` | `{ preset }`，只接受 `person/director/camera/cat/rabbit/robot/rocket/sparkles`；保存选择并清除个人图片，返回 `{ user }` |
+| `GET /auth/profile/avatar/:userId` | 只读取本账号的 PNG，`Cache-Control: private, no-store`；账号之间拒绝读取 |
+| `POST /auth/profile/password` | `{ currentPassword, newPassword }`；新密码至少 8 个 Unicode 字符、UTF-8 不超过 72 字节；返回 `{ changed: true }` 并清除 Cookie、撤销全部会话 |
+| `POST /auth/profile/email-code` | `{ email, currentPassword }`；向未占用的新邮箱发送验证码，返回 `{ ticket, expiresIn, retryAfter }` |
+| `POST /auth/profile/email` | `{ ticket, emailCode, currentPassword }`；验证后更新邮箱及验证时间、撤销全部会话并清除 Cookie；返回 `{ changed: true, notificationStatus }` |
+| `GET /auth/profile/linuxdo/start` | 纯第三方账号重新核验身份的入口；绑定原用户和原会话，成功回到 `/settings?section=profile&reauth=success`，失败回到该页的 `reauth=error` 状态 |
+
+已有本地密码的账号必须验证当前密码。纯 Linux.do 账号设置密码或更换邮箱时，必须先完成同一会话内的重新授权，核验必须匹配原第三方用户标识；有效期为 5 分钟。邮箱验证码用途固定为 `profile_email`，绑定当前会话与凭据状态，6 位数字、10 分钟有效、最多 5 次核验；收件地址跨场景共享 60 秒发送冷却、每小时 5 次和每天 20 次额度。发送失败明确报错；邮件服务未启用时禁止更换邮箱。
+
+新邮箱验证之前保留原绑定。更新及验证码消费、登录会话撤销一起提交，唯一性检查在事务内重复执行。更新后向原邮箱发通知，`notificationStatus` 为 `sent`、`failed` 或 `not_needed`；`failed` 表示邮箱已更新、原邮箱通知失败，不能把已成功更新显示成未保存。接口使用现有业务错误信封和限流规则，密码、验证码和 ticket 不进入 URL。
+
+上传头像先通过共享裁剪弹窗选择 1:1 区域，支持拖动、缩放裁剪框、键盘调整与重置；确认后导出最大 512×512 的 PNG 到待保存预览，点击“保存头像”才上传。取消裁剪保留原头像；待保存图片可重新调整裁剪。选择系统头像使用现有 AppModal、Avatar 与主题 token，支持 8 个预设，确认后才写入服务端。
+
 ## Agent 画布权限与大事件
 
 自由画布和项目关联画布均使用 `canvas_projects`。Agent 运行时按登录账号和画布 ID 查询归属，不能把所属项目 ID 当作画布 ID；画布不存在、属于其他账号或数据库读取失败时，不声明读写及导出权限。

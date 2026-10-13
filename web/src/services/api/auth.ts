@@ -23,6 +23,8 @@ export type LocalUser = {
     phoneVerifiedAt?: string;
     displayName: string;
     avatarUrl?: string;
+    avatarMode?: "custom" | "default" | "";
+    avatarPreset?: string;
     identityProvider?: string;
     identityId?: string;
     identityUsername?: string;

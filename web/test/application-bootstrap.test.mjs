@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+import { fileURLToPath } from "node:url";
 
 import { isIsolatedPrevisRepro } from "../src/lib/dev-repro";
 
 // Execute the real entry point; replace only its font, network and UI side effects.
 async function prepareEntry(dev, pathname) {
     const build = await Bun.build({
-        entrypoints: [new URL("../src/main.tsx", import.meta.url).pathname],
+        entrypoints: [fileURLToPath(new URL("../src/main.tsx", import.meta.url))],
         target: "browser",
         format: "iife",
         define: { "import.meta.env.DEV": JSON.stringify(dev) },

@@ -1,0 +1,68 @@
+[data-admin-root] .admin-list-toolbar:has(.admin-login-log-filters) {
+    container-name: admin-login-log-toolbar;
+    container-type: inline-size;
+}
+
+[data-admin-root] .admin-list-toolbar-main:has(> .admin-login-log-filters) {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+[data-admin-root] .admin-list-toolbar:has(.admin-login-log-filters) > .admin-list-toolbar-actions:empty {
+    display: none;
+}
+
+.admin-login-log-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-login-log-filters > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none;
+}
+
+.admin-login-log-search,
+.admin-login-log-dates {
+    grid-column: 1 / -1;
+}
+
+.admin-login-log-filters > .admin-login-log-reset {
+    grid-column: 2;
+    justify-self: end;
+    width: auto !important;
+}
+
+@container admin-login-log-toolbar (min-width: 640px) {
+    .admin-login-log-filters {
+        grid-template-columns: minmax(180px, 1.7fr) minmax(100px, 1fr) minmax(128px, 1.2fr) minmax(88px, 1fr);
+    }
+
+    .admin-login-log-search {
+        grid-column: auto;
+    }
+
+    .admin-login-log-dates {
+        grid-column: span 2;
+    }
+
+    .admin-login-log-filters > .admin-login-log-reset {
+        grid-column: auto;
+    }
+}
+
+@container admin-login-log-toolbar (min-width: 1080px) {
+    .admin-login-log-filters {
+        grid-template-columns: minmax(180px, 1fr) 104px 140px 96px minmax(120px, 0.8fr) minmax(300px, 1.6fr) 80px;
+    }
+
+    .admin-login-log-dates {
+        grid-column: auto;
+    }
+}

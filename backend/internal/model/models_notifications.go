@@ -43,21 +43,23 @@ type SMSRecord struct {
 // Verification tickets are immutable, short-lived and purpose/target bound.
 // Only code HMACs and the hash of the high-entropy client ticket are persisted.
 type AuthVerification struct {
-	ID         string `gorm:"primaryKey;size:36"`
-	TokenHash  string `gorm:"size:64"`
-	Purpose    string `gorm:"size:24"`
-	Method     string `gorm:"size:24"`
-	UserID     string `gorm:"size:36"`
-	Email      string `gorm:"size:160"`
-	Phone      string `gorm:"size:24"`
-	EmailHash  string `gorm:"size:64"`
-	PhoneHash  string `gorm:"size:64"`
-	PolicyHash string `gorm:"size:64"`
-	Ready      bool
-	Attempts   int
-	ExpiresAt  time.Time `gorm:"index"`
-	UsedAt     *time.Time
-	CreatedAt  time.Time
+	SessionID      string `json:"-" gorm:"size:36"`
+	CredentialHash string `json:"-" gorm:"size:64"`
+	ID             string `gorm:"primaryKey;size:36"`
+	TokenHash      string `gorm:"size:64"`
+	Purpose        string `gorm:"size:24"`
+	Method         string `gorm:"size:24"`
+	UserID         string `gorm:"size:36"`
+	Email          string `gorm:"size:160"`
+	Phone          string `gorm:"size:24"`
+	EmailHash      string `gorm:"size:64"`
+	PhoneHash      string `gorm:"size:64"`
+	PolicyHash     string `gorm:"size:64"`
+	Ready          bool
+	Attempts       int
+	ExpiresAt      time.Time `gorm:"index"`
+	UsedAt         *time.Time
+	CreatedAt      time.Time
 }
 
 // Fixed window quotas and per-recipient cooldowns are shared by all instances.

@@ -5,6 +5,14 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 用户登录日志
+
+- 持久化：`backend/internal/model/models_login_log.go`、`repository/login_logs.go`；会话与日志原子提交在 `repository/account.go`，schema v53 在 `database/migrations.go`。
+- 认证采集：`backend/internal/auth/login_logs.go`、`auth.go`、`verification.go`、`linuxdo.go`；HTTP 上下文和提前拒绝采集在 `handler/admin_login_log_routes.go`。
+- 管理员查询：`app/admin_login_logs.go` → `service/aliases_login_logs.go` → `handler/admin_login_log_routes.go`。
+- 前端：`web/src/services/api/login-logs.ts`、`pages/admin/login-logs/`；菜单和懒加载接入 `admin-shell.tsx`、`router.tsx`。
+- 回归：auth/handler/database 的 `login_logs*_test.go`，前端 `web/test/login-log-device.test.ts`。
+
 ## 可美 KM Seedream
 
 - 声明式请求、响应与参数合同：`plugin-packages/km-kemei-seedream/manifest.json`、`docs/interface.md`；分发包：`plugin-packages/km-kemei-seedream.yingce-plugin`。
@@ -28,6 +36,10 @@ description: 从产品功能快速定位主要代码入口
 这是一张入口地图，不罗列所有文件。先找到功能所属层，再沿调用关系阅读。
 
 ## 前端页面
+
+头像裁剪复用 `components/image-crop-dialog.tsx`，原画布裁剪入口保留同一组件合同；`services/profile-avatar.ts` 校验 1:1 区域、导出有界 PNG，`lib/default-user-avatars.ts` 定义系统头像目录，`UserAvatar` 统一渲染系统预设或个人图片。schema v52 增加系统头像选择。
+
+个人信息：`web/src/pages/settings/profile-pane.tsx` 协调头像、密码、邮箱和第三方重新核验，`profile-validation.ts` 提供密码、图片与过期校验，`services/api/profile.ts` 使用统一 `http` 调用。共享头像在 `components/layout/user-avatar.tsx`。后端 `handler/auth_profile.go` 接收鉴权和受限请求，`app/auth_profile.go` / `profile_avatar.go` 组合 auth 域，`auth/account.go` / `avatar.go` / `linuxdo.go` 校验身份与头像内容，`repository/account.go` / `user_avatar.go` 处理会话撤销、邮箱唯一性、验证码消费和头像的事务保存，schema v51 安装个人信息及重新核验字段。
 
 云端 Agent：`web/src/components/canvas/canvas-cloud-agent-panel.tsx` 协调对话、Skills 和审批，`canvas-cloud-agent-settings.tsx` 编辑长期偏好与个人记忆，`services/api/agent.ts` 适配运行快照与事件流；画布手工编辑与引用同步共用 `web/src/lib/canvas/canvas-node-prompt.ts`，已有媒体结果只更新 `composerContent` 草稿，不覆盖生成结果和已提交提示词。后端 `handler/agent.go` 负责 HTTP 合同，`app/cloud_agent.go` 负责权限、幂等、可信历史，`app/cloud_agent_profile.go` / `repository/agent_profile.go` 管理用户、项目、画布偏好及 revision CAS，`app/cloud_agent_lessons.go` / `app/cloud_agent_memory_compact.go` / `repository/agent_lesson.go` / `handler/agent_lesson.go` 管理用户私有记忆的写入脱敏、召回注入、用户自审批与压缩优化，`web/src/pages/settings/agent-memory-pane.tsx` 是用户批准/添加/导入导出/压缩入口，`web/src/pages/admin/components/agent-lessons-panel.tsx` 是管理员按用户查看入口，`internal/prompts/agent-*-policy.md` 是随发布物编译、并在文档头声明 ID/版本的行为资源，`app/cloud_agent_policy.go` 编译本轮策略快照，`internal/canvas/capability/` 注册服务端节点能力和字段映射，`app/cloud_agent_canvas_state.go` 投影画布摘要和精读，`app/cloud_agent_runtime.go` / `app/cloud_agent_pi_coordinator.go` 负责可恢复编排，原生 Pi runtime 协议适配位于 `internal/agent/runtime/` 与 `agent-runtime/pi/agent-runtime.mjs`；`cloud_agent_pi_sessions` 独立保存原生 JSONL 会话，控制检查点仍由 Go 管理。工具根据能力定义生成 schema，并从固定技能快照渐进读取 `SKILL.md` / reference；`app/cloud_agent_media.go` 负责收费媒体任务适配，`app/task_creation.go` 执行预算 admission，运行沿用任务 Worker。节点新增需要能力描述符和真实画布实现；新生成模式还需任务适配器，不由偏好或技能 md 授权。协议见 HTTP API 专题，未确认的真实登录态与上游联调见待测试清单。
 

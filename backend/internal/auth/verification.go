@@ -30,9 +30,10 @@ type VerificationTicket struct {
 	RetryAfter int    `json:"retryAfter"`
 }
 type VerificationConfirm struct {
-	Ticket    string `json:"ticket"`
-	EmailCode string `json:"emailCode"`
-	SMSCode   string `json:"smsCode"`
+	LoginContext LoginContext `json:"-"`
+	Ticket       string       `json:"ticket"`
+	EmailCode    string       `json:"emailCode"`
+	SMSCode      string       `json:"smsCode"`
 }
 
 func (s *Service) verificationHash(value string) (string, error) {
@@ -283,7 +284,30 @@ func (s *Service) verifyTicket(purpose string, req VerificationConfirm) (*model.
 	}
 	return v, nil
 }
-func (s *Service) LoginVerification(req VerificationConfirm) (*AuthSessionResult, error) {
+func (s *Service) LoginVerification(req VerificationConfirm) (result *AuthSessionResult, err error) {
+	event := NewLoginLog("verification", "login", req.LoginContext)
+	defer func() {
+		if err != nil {
+			err = s.recordLoginFailure(event, err)
+		}
+	}()
+	if id, secret, ok := strings.Cut(req.Ticket, "."); ok && len(id) <= 36 && len(secret) == 64 {
+		candidate, lookupErr := s.repo.AuthVerification(id)
+		if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+			return nil, lookupErr
+		}
+		if lookupErr == nil && candidate.Purpose == "login" && hmac.Equal([]byte(candidate.TokenHash), []byte(HashToken(secret))) {
+			event.Method = candidate.Method
+			event.Account = MaskLoginAccount(kernel.FirstNonEmpty(candidate.Email, candidate.Phone))
+			if candidate.UserID != "" {
+				user, lookupErr := s.repo.User(candidate.UserID)
+				if lookupErr != nil {
+					return nil, lookupErr
+				}
+				loginLogUser(event, user)
+			}
+		}
+	}
 	v, err := s.verifyTicket("login", req)
 	if err != nil {
 		return nil, err
@@ -298,8 +322,8 @@ func (s *Service) LoginVerification(req VerificationConfirm) (*AuthSessionResult
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
-	s.host.RecordActivity(user.ID, "login", 1)
-	return s.createAuthSession(user)
+	event.Method = v.Method
+	return s.createAuthSession(user, event)
 }
 func (s *Service) BindVerification(actor *model.User, req VerificationConfirm) (*AuthUser, error) {
 	if actor == nil {
