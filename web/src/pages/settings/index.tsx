@@ -8,6 +8,7 @@ import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form"
 import { refreshSystemChannels } from "@/lib/user-session";
 import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { getUserOSSSetting } from "@/services/api/resources";
 import { ChannelSettingsPane, channelValidationError, focusInvalidChannelField, isChannelReady } from "./channel-settings-pane";
 import { ModelDefaultGrid } from "./model-default-grid";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
@@ -49,14 +50,20 @@ export default function SettingsPage() {
     const requestedSectionEnabled = requestedSection !== "runninghub" || runningHubPluginEnabled;
     const initialSection = isConfigSection(requestedSection) && requestedSectionEnabled ? requestedSection : "profile";
     const [activeTab, setActiveTab] = useState<ConfigSectionKey>(initialSection === "channels" && !customChannelsEnabled ? "profile" : initialSection);
+    const [allowUserS3, setAllowUserS3] = useState(true);
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
-    const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
-        .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled), [customChannelsEnabled, runningHubPluginEnabled]);
+    const visibleConfigSections = useMemo(
+        () =>
+            (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
+                .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
+                .filter((section) => section.key !== "storage" || allowUserS3),
+        [customChannelsEnabled, runningHubPluginEnabled, allowUserS3],
+    );
 
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
 
@@ -65,8 +72,23 @@ export default function SettingsPage() {
             setActiveTab(requestedSection);
             return;
         }
-        setActiveTab((current) => visibleConfigSections.some((section) => section.key === current) ? current : "profile");
+        setActiveTab((current) => (visibleConfigSections.some((section) => section.key === current) ? current : "profile"));
     }, [customChannelsEnabled, requestedSection, visibleConfigSections]);
+
+    useEffect(() => {
+        if (!userId) return;
+        let cancelled = false;
+        getUserOSSSetting()
+            .then((data) => {
+                if (!cancelled) setAllowUserS3(data.setting.allowUserS3);
+            })
+            .catch(() => {
+                if (!cancelled) setAllowUserS3(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [userId]);
 
     useEffect(() => {
         if (!userId) return;
@@ -106,9 +128,21 @@ export default function SettingsPage() {
     };
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
-        profile: <SettingsPane><ProfilePane /></SettingsPane>,
-        "login-logs": <SettingsPane><LoginLogsPane /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
+        profile: (
+            <SettingsPane>
+                <ProfilePane />
+            </SettingsPane>
+        ),
+        "login-logs": (
+            <SettingsPane>
+                <LoginLogsPane />
+            </SettingsPane>
+        ),
+        channels: (
+            <SettingsPane>
+                <ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} />
+            </SettingsPane>
+        ),
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">
@@ -122,7 +156,11 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        runninghub: <SettingsPane><RunningHubSettingsPane /></SettingsPane>,
+        runninghub: (
+            <SettingsPane>
+                <RunningHubSettingsPane />
+            </SettingsPane>
+        ),
         preferences: (
             <SettingsPane>
                 <div className="settings-pane-header">
@@ -155,7 +193,11 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        prompts: <SettingsPane fill><PromptPreferencesPane /></SettingsPane>,
+        prompts: (
+            <SettingsPane fill>
+                <PromptPreferencesPane />
+            </SettingsPane>
+        ),
         "agent-memory": (
             <SettingsPane>
                 <div className="settings-pane-header">
@@ -169,7 +211,11 @@ export default function SettingsPage() {
                 </div>
             </SettingsPane>
         ),
-        diagnostics: <SettingsPane><DiagnosticsPanel taskId={searchParams.get("taskId") || undefined} projectId={searchParams.get("projectId") || undefined} /></SettingsPane>,
+        diagnostics: (
+            <SettingsPane>
+                <DiagnosticsPanel taskId={searchParams.get("taskId") || undefined} projectId={searchParams.get("projectId") || undefined} />
+            </SettingsPane>
+        ),
         storage: (
             <SettingsPane>
                 <div className="settings-section">
@@ -184,8 +230,12 @@ export default function SettingsPage() {
             {shouldPromptContinue ? (
                 <div className="settings-topbar shrink-0">
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                        <Button icon={<ArrowLeft className="size-4" />} onClick={() => navigate(-1)}>返回创作</Button>
-                        <Button type="primary" onClick={finishConfig}>保存并返回</Button>
+                        <Button icon={<ArrowLeft className="size-4" />} onClick={() => navigate(-1)}>
+                            返回创作
+                        </Button>
+                        <Button type="primary" onClick={finishConfig}>
+                            保存并返回
+                        </Button>
                     </div>
                 </div>
             ) : null}
@@ -214,9 +264,7 @@ export default function SettingsPage() {
                 </aside>
                 <section className="settings-content flex min-h-0 min-w-0 flex-1 flex-col">
                     <div className="app-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5">
-                        <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>
-                            {panes[activeTab]}
-                        </div>
+                        <div className={`settings-pane-root ${activeTab === "prompts" ? "h-full w-full" : "mx-auto w-full max-w-none"}`}>{panes[activeTab]}</div>
                     </div>
                 </section>
             </div>
