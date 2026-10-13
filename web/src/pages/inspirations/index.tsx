@@ -386,7 +386,10 @@ export default function InspirationsPage() {
                                         <div className="inspiration-card-cover">
                                             <img src={item.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
                                             {item.mode === "video" && item.videoUrl ? (
-                                                <span className="inspiration-card-video"><Play className="size-3.5" aria-hidden="true" />可预览</span>
+                                                <span className="inspiration-card-video">
+                                                    <Play className="size-3.5" aria-hidden="true" />
+                                                    可预览
+                                                </span>
                                             ) : null}
                                             <span className="inspiration-card-source">{inspirationSourceOf(item).label}</span>
                                             <div className="inspiration-card-actions">
