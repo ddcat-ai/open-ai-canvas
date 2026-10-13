@@ -67,7 +67,14 @@ export function attachCreationTaskContexts(tasks: GenerationTask[], conversation
         const context = contexts.get(task.id) ||
             (task.retryOf ? contexts.get(task.retryOf) : undefined) ||
             (task.attemptGroupId ? contexts.get(task.attemptGroupId) : undefined);
-        return context ? { ...task, prompt: context.prompt, clientContext: context.clientContext } : task;
+        if (context) {
+            return { ...task, prompt: context.prompt, clientContext: context.clientContext };
+        }
+        // 关键兜底：即使前端本地消息丢失了 taskId 映射，若后端任务本身自带权威的 clientContext，直接保留供物化和反向对齐使用
+        if (task.clientContext?.conversationId && task.clientContext?.messageId) {
+            return task;
+        }
+        return task;
     });
 }
 
@@ -137,13 +144,40 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
     return changed ? next : conversations;
 }
 
-function creationTaskResultUrls(task: PersistedCreationTask) {
-    if (task.creationResultUrls?.length) return task.creationResultUrls;
+function creationTaskResultUrls(task: PersistedCreationTask | GenerationTask) {
+    const fromProps = (task as PersistedCreationTask).creationResultUrls;
+    if (fromProps?.length) return fromProps;
+    if (task.previewUrl) return [task.previewUrl];
+    if (task.resultJson) {
+        try {
+            const parsed = JSON.parse(task.resultJson);
+            if (parsed.video?.url || parsed.video?.dataUrl) {
+                return [parsed.video.url || parsed.video.dataUrl];
+            }
+            if (Array.isArray(parsed.images) && parsed.images.length) {
+                const urls = parsed.images.map((img: { url?: string; dataUrl?: string }) => img.url || img.dataUrl).filter(Boolean);
+                if (urls.length) return urls;
+            }
+        } catch {}
+    }
     return [];
 }
 
-function creationTaskResultStorageKeys(task: PersistedCreationTask) {
-    if (task.creationResultStorageKeys?.length) return task.creationResultStorageKeys;
+function creationTaskResultStorageKeys(task: PersistedCreationTask | GenerationTask) {
+    const fromProps = (task as PersistedCreationTask).creationResultStorageKeys;
+    if (fromProps?.length) return fromProps;
+    if (task.resultJson) {
+        try {
+            const parsed = JSON.parse(task.resultJson);
+            if (parsed.video?.storageKey) {
+                return [parsed.video.storageKey];
+            }
+            if (Array.isArray(parsed.images) && parsed.images.length) {
+                const keys = parsed.images.map((img: { storageKey?: string }) => img.storageKey).filter(Boolean);
+                if (keys.length) return keys;
+            }
+        } catch {}
+    }
     return [];
 }
 

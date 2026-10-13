@@ -270,9 +270,27 @@ export default function CreatePage() {
         const scope = getActiveUserScope();
         setHydrated(false);
         setConversationScope(null);
-        void loadCreationConversations<CreationConversation>().then((stored) => {
+        void loadCreationConversations<CreationConversation>().then(async (stored) => {
             if (cancelled || getActiveUserScope() !== scope || (useUserStore.getState().user?.id || null) !== userId) return;
-            const next = stored?.length ? stored : [newConversation()];
+            let next = stored?.length ? stored : [newConversation()];
+            // 自动深度恢复：若会话中存在未决或错误状态的助手消息，在水合阶段直接向服务端比对已完成任务；
+            // 只要后端任务实际上已经成功出片，立即将视频结果静默挂回会话，无需用户点击任何按钮或重新排队生成。
+            try {
+                const hasUnresolved = next.some((c) => c.messages.some((m) => m.role === "assistant" && (m.status === "error" || m.status === "pending")));
+                if (hasUnresolved) {
+                    const runtime = await loadCreationRuntime();
+                    const recentTasks = await runtime.listGenerationTasks(30);
+                    const succeededTasks = recentTasks.filter((t) => t.status === "succeeded");
+                    if (succeededTasks.length) {
+                        const contextual = attachCreationTaskContexts(succeededTasks, next);
+                        const persistedTasks = await materializeCreationTaskResults(runtime, contextual);
+                        next = reconcileCreationTaskMessages(runtime, next, persistedTasks);
+                    }
+                }
+            } catch (err) {
+                console.warn("创作会话初始化恢复失败，将保留已有会话状态", err);
+            }
+            if (cancelled || getActiveUserScope() !== scope || (useUserStore.getState().user?.id || null) !== userId) return;
             conversationsRef.current = next;
             setConversations(next);
             setActiveId(next[0].id);
@@ -302,11 +320,12 @@ export default function CreatePage() {
         if (hydrated && userSessionHydrated && conversationScope === getActiveUserScope()) void saveCreationConversations(conversations);
     }, [conversations, conversationScope, hydrated, userSessionHydrated]);
 
+    const hasUnresolvedMessage = useMemo(() => activeConversation?.messages.some((m) => m.role === "assistant" && (m.status === "pending" || m.status === "error")), [activeConversation]);
+
     useEffect(() => {
-        if (!hydrated || !recoveryTaskKey || !pendingTaskIds.length) return;
+        if (!hydrated || (!recoveryTaskKey && !hasUnresolvedMessage)) return;
         // 当前页面主动提交的任务由 submit 自己等待并收尾；恢复监听只接管刷新前遗留的任务，避免同一任务被双重轮询。
         const recoverableTaskIds = pendingTaskIds.filter((id) => !activeGenerationTaskIdsRef.current.has(id));
-        if (!recoverableTaskIds.length) return;
         let cancelled = false;
         const observationController = new AbortController();
         const applyTasks = async (tasks: GenerationTask[]) => {
@@ -370,7 +389,7 @@ export default function CreatePage() {
             observationController.abort();
             unsubscribe();
         };
-    }, [hydrated, recoveryTaskKey, toast]);
+    }, [hasUnresolvedMessage, hydrated, recoveryTaskKey, toast]);
 
     const loadAddedSkills = useCallback(() => {
         if (addedSkillsRequestedRef.current) return;
@@ -971,6 +990,31 @@ export default function CreatePage() {
     const retryFailedMessage = async (item: CreationMessage, index: number) => {
         const previous = item.role === "assistant" ? activeConversation?.messages[index - 1] : item;
         if (!previous?.content || busy) return;
+
+        // 优先检查：如果后端任务实际上已经跑成功了，直接恢复结果，绝不重复生成扣费！
+        try {
+            const runtime = await loadCreationRuntime();
+            const recentTasks = await runtime.listGenerationTasks(30);
+            const targetTaskIds = new Set(item.taskIds || []);
+            const matchedTask = recentTasks.find((t) =>
+                (targetTaskIds.has(t.id) ||
+                 Boolean(t.retryOf && targetTaskIds.has(t.retryOf)) ||
+                 Boolean(t.attemptGroupId && targetTaskIds.has(t.attemptGroupId)) ||
+                 Boolean(t.clientContext?.messageId && t.clientContext.messageId === item.id) ||
+                 Boolean(t.clientContext?.conversationId && t.clientContext.conversationId === activeConversation?.id && (t.type.includes(item.mode || "") || Boolean(t.operation?.includes(item.mode || ""))))) &&
+                t.status === "succeeded"
+            );
+            if (matchedTask) {
+                const contextual = attachCreationTaskContexts([matchedTask], conversations);
+                const persistedTasks = await materializeCreationTaskResults(runtime, contextual);
+                setConversations((current) => reconcileCreationTaskMessages(runtime, current, persistedTasks));
+                toast.success("检测到该任务已在后台生成成功，已自动为你恢复视频结果！");
+                return;
+            }
+        } catch (error) {
+            console.warn("检查后台完成状态失败，将继续执行重新生成流程", error);
+        }
+
         const retryOf = item.taskIds?.[0];
         const restoreForRetry = () => {
             followLatestMessageRef.current = true;
