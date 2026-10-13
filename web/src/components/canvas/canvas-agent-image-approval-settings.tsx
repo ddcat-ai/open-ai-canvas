@@ -6,7 +6,7 @@ import { agentApprovalModel, agentApprovalModelSelection, type AgentImageApprova
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
-import { PUBLIC_MODEL_CATALOG_ID, useEffectiveConfig } from "@/stores/use-config-store";
+import { PUBLIC_MODEL_CATALOG_ID, resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
 
 export function CanvasAgentImageApprovalSettings({ initial, value, onChange, theme, disabled }: {
     initial: AgentImageApproval;
@@ -29,12 +29,13 @@ export function CanvasAgentImageApprovalSettings({ initial, value, onChange, the
         if (disabled) return;
         const profile = modelCapabilityConfigFor(config, next).image;
         if (!profile) return;
-        const normalized = normalizeImageValue(profile, settings);
-        onChange({ ...agentApprovalModelSelection(config, next), size: normalized.size, quality: profile.quality.supported ? normalized.quality : "" });
+        const normalized = normalizeImageValue(profile, settings, resolveModelRequestConfig(config, next).interfaceType);
+        onChange({ ...agentApprovalModelSelection(config, next), size: normalized.size, imageResolution: normalized.imageResolution, imageParameters: normalized.imageParameters, quality: profile.quality.supported ? normalized.quality : "" });
     };
-    const changeOption = (key: "quality" | "size" | "transparentBackground" | "count", next: string) => {
-        if (disabled || (key !== "size" && key !== "quality")) return;
-        const options = { size: settings.size, quality: settings.quality, [key]: next };
+    const changeOption = (key: "quality" | "imageResolution" | "imageParameters" | "size" | "transparentBackground" | "count", next: string) => {
+        if (disabled || (key !== "size" && key !== "quality" && key !== "imageResolution" && key !== "imageParameters")) return;
+        if (key === "imageParameters") { onChange({ ...settings, imageParameters: next }); return; }
+        const options = { size: settings.size, imageResolution: settings.imageResolution, quality: settings.quality, [key]: next };
         const selected = resolveCompatibleModel(config, model, { ...requirements, imageSize: options.size, options: { ...options, count: 1 } });
         if (!selected) return;
         onChange({ ...agentApprovalModelSelection(config, selected), ...options });
@@ -44,8 +45,8 @@ export function CanvasAgentImageApprovalSettings({ initial, value, onChange, the
             <div className="text-xs" style={{ color: theme.node.muted }}>生成模型</div>
             <ModelPicker config={config} capability="image" value={model} onChange={changeModel} requirements={requirements} variant="creation" fullWidth showOptionPrices placeholder="选择生成模型" popoverClassName="agent-model-picker-popover" />
         </div>
-        {model ? <ImageSettingsPanel config={{ ...config, model, imageModel: model, size: settings.size, quality: settings.quality, count: "1" }} onConfigChange={changeOption} theme={theme} showTitle={false} showCount={false} showTransparent={false} className="min-w-0 space-y-3" /> : <p className="text-xs" style={{ color: theme.node.muted }}>当前模型不在可选目录中，可重新选择；提交时将重新校验模型与规格。</p>}
-        <p className="text-xs" style={{ color: theme.node.text }}>本次规格：{settings.size}{settings.quality ? ` · ${settings.quality}` : ""}</p>
+        {model ? <ImageSettingsPanel config={{ ...config, model, imageModel: model, size: settings.size, imageResolution: settings.imageResolution || "auto", imageParameters: settings.imageParameters, quality: settings.quality, count: "1" }} onConfigChange={changeOption} theme={theme} showTitle={false} showCount={false} showTransparent={false} className="min-w-0 space-y-3" /> : <p className="text-xs" style={{ color: theme.node.muted }}>当前模型不在可选目录中，可重新选择；提交时将重新校验模型与规格。</p>}
+        <p className="text-xs" style={{ color: theme.node.text }}>本次规格：{settings.size}{settings.imageResolution && settings.imageResolution !== "auto" ? ` · ${settings.imageResolution}` : ""}{settings.quality ? ` · ${settings.quality}` : ""}</p>
         <p className="text-xs" style={{ color: theme.node.muted }}>修改仅用于本次生成，费用按最终模型和规格计算。</p>
     </fieldset>;
 }

@@ -1,4 +1,5 @@
 import { normalizeAudioFormatForConfig, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
+import { imageParameterRequest } from "@/lib/image-parameters";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
@@ -321,6 +322,10 @@ function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>
     const channel = resolveModelChannel(config, config.model);
     const model = modelOptionName(config.model);
     const modelCost = channel.modelCosts?.find((item) => item.model === model);
+    if (modelCost?.capability === "image" && modelCost.capabilityConfig?.image?.parameters) {
+        const { providerOptions: _providerOptions, ...rest } = metadata || {};
+        return rest;
+    }
     const protocol = modelCost?.protocol || channel.interfaceType;
     if (!protocol) return metadata;
     const existing = metadata?.providerOptions && typeof metadata.providerOptions === "object" && !Array.isArray(metadata.providerOptions)
@@ -404,7 +409,9 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
     const workflow = resolveGenerationWorkflowExecution(config, mode);
     if (workflow) return workflowProviderConfig(config, requestConfig, workflow);
     const generationOptions = {
+        ...(mode === "image" ? { imageParameters: imageParameterRequest(modelCapabilityConfigFor(config, config.model).image!, config, true) } : {}),
         size: config.size,
+        imageResolution: omittedImageQuality(config.imageResolution),
         quality: omittedImageQuality(config.quality),
         transparentBackground: config.transparentBackground,
         count: config.count,
@@ -487,6 +494,10 @@ function workflowPublicExecution(workflow: GenerationWorkflowExecution) {
 }
 
 function logicalCapabilityOptions(config: AiConfig, mode: BackendGenerationMode) {
+    if (mode === "image") {
+        const values = imageParameterRequest(modelCapabilityConfigFor(config, config.model).image!, config, true);
+        if (values) return values;
+    }
     const channel = resolveModelChannel(config, config.model);
     const spec = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalCapabilitySpec;
     const candidates: Record<string, unknown> = mode === "image"

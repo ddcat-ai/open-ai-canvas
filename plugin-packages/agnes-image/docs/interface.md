@@ -70,17 +70,19 @@
 
 Agnes 官方图像端点，同步返回。文生图与图生图共用 /v1/images/generations：不传 image 为文生图，传 image 为图生图或多图合成。size 必填，取 1K/2K/3K/4K 档位或 WxH 精确尺寸；画面比例走独立的 ratio 字段。参考图放在 extra_body.image，支持公共 HTTPS URL 或 Data URI Base64。顶层 response_format 是官方明确列出的错误写法，输出格式只能声明在 extra_body.response_format。该端点不接受 n，单次请求固定返回一张图片，需要多张时由上层拆分为多个任务。
 
+## 动态图片参数
+
+`contributes.providers[].imageParameters` 是渠道模型、前台模型与生成界面共用的参数合同。`name` 为稳定身份，`type`、`values`、`min/max/step`、`default` 描述输入；`models` 限定适用上游模型，`enabled` 为初始启用状态。只有 `pricing: true` 的启用字段允许作为价格条件；其他参数仍参与生成。渠道可收窄范围，绑定与计价资格由插件拥有。`binding` 映射到统一请求或插件自己的 `providerOptions` 命名空间。
+
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
-
-以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "agnes-image",
   "name": "Agnes Image",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Agnes AI / 影策",
   "description": "Agnes Image 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -119,6 +121,37 @@ Agnes 官方图像端点，同步返回。文生图与图生图共用 /v1/images
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio"
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "1k",
+              "2k",
+              "4k"
+            ],
+            "default": "1k",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "default": 1
+          }
+        ],
         "parameters": [
           {
             "name": "model",

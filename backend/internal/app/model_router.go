@@ -167,7 +167,7 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 			if item.PricePolicy == "channel" && !channelModelHasActivePriceTier(channelModel) {
 				continue
 			}
-			capabilitySpec, specErr := channelModelCapabilitySpec(channelModel)
+			capabilitySpec, specErr := channelModelCapabilitySpec(channelModel, s.protocolRegistry())
 			if specErr != nil {
 				log.Printf("logical route omitted from catalog route_id=%s channel_model_id=%s: invalid capability: %v", route.ID, channelModel.ID, specErr)
 				continue
@@ -200,7 +200,12 @@ func (s *Service) ResolveLogicalModel(logicalModelID string, intent ModelRequest
 	if !ok {
 		return nil, BadAuthRequest("所选模型不可用")
 	}
-	intent.Options = mergeIntentDefaults(intent.Options, cached.Defaults)
+	intent = resolveModelRequestIntent(cached.ProductSpec, intent, cached.Defaults)
+	if parameters := cached.ProductSpec.ImageParameters; parameters != nil {
+		if _, err := resolveImageParameterValues(parameters, intent.Options); err != nil {
+			return nil, err
+		}
+	}
 	if match := MatchCapability(cached.ProductSpec, intent); !match.Matched {
 		return nil, BadAuthRequest("所选模型不支持当前请求：" + strings.Join(match.Reasons, "；"))
 	}
@@ -211,12 +216,12 @@ func (s *Service) ResolveLogicalModel(logicalModelID string, intent ModelRequest
 	selected := weightedRoute(eligible)
 	var priceTier *model.ChannelModelPriceTier
 	if cached.Model.PricePolicy == "channel" {
-		priceTier = channelModelPriceTierForIntent(selected.ChannelModel, intent)
+		priceTier = channelModelPriceTierForIntent(selected.ChannelModel, intent, selected.CapabilitySpec)
 		if priceTier == nil {
 			return nil, BadAuthRequest("当前模型尚未配置所选规格的价格")
 		}
 	}
-	return &RoutedModel{LogicalModel: cached.Model, Revision: cached.Revision, Route: selected.Route, ChannelModel: selected.ChannelModel, PriceTier: priceTier, Defaults: cached.Defaults}, nil
+	return &RoutedModel{LogicalModel: cached.Model, Revision: cached.Revision, Route: selected.Route, ChannelModel: selected.ChannelModel, CapabilitySpec: selected.CapabilitySpec, PriceTier: priceTier, Defaults: cached.Defaults, Intent: intent}, nil
 }
 
 func (s *Service) eligibleLogicalRoutes(routes []cachedLogicalRoute, intent ModelRequestIntent, tried map[string]bool, requirePriceTier bool) []cachedLogicalRoute {
@@ -229,7 +234,7 @@ func (s *Service) eligibleLogicalRoutes(routes []cachedLogicalRoute, intent Mode
 		if match := MatchCapability(route.CapabilitySpec, intent); !match.Matched {
 			continue
 		}
-		if requirePriceTier && channelModelPriceTierForIntent(route.ChannelModel, intent) == nil {
+		if requirePriceTier && channelModelPriceTierForIntent(route.ChannelModel, intent, route.CapabilitySpec) == nil {
 			continue
 		}
 		if route.Route.Priority > maxPriority {
@@ -254,8 +259,12 @@ func channelModelHasActivePriceTier(channelModel model.ChannelModel) bool {
 
 // channelModelPriceTierForIntent 使用“精确规格优先、通配规格兜底”的规则。SKU 选择器与
 // 运行意图使用同一组规范键，因而图片质量/画幅、视频分辨率/时长和生成操作都能独立定价。
-func channelModelPriceTierForIntent(channelModel model.ChannelModel, intent ModelRequestIntent) *model.ChannelModelPriceTier {
+func channelModelPriceTierForIntent(channelModel model.ChannelModel, intent ModelRequestIntent, specs ...CapabilitySpec) *model.ChannelModelPriceTier {
 	selector := skuSelectorForIntent(intent)
+	parameters := imagePriceParametersForChannel(channelModel, specs...)
+	if parameters != nil {
+		selector = imagePriceSelectorForParameters(parameters, intent)
+	}
 	bestScore := -1
 	var best *model.ChannelModelPriceTier
 	for index := range channelModel.PriceTiers {
@@ -263,7 +272,14 @@ func channelModelPriceTierForIntent(channelModel model.ChannelModel, intent Mode
 		if !tier.Enabled || !tier.PriceConfigured {
 			continue
 		}
-		matched, score := matchSKUSelector(skuSelectorForTier(*tier), selector)
+		tierSelector := skuSelectorForTier(*tier)
+		if parameters != nil {
+			tierSelector = model.DecodeSKUSelector(tier.SelectorJSON)
+			if validateImageParameterPriceSelector(parameters, tierSelector) != nil {
+				continue
+			}
+		}
+		matched, score := matchSKUSelector(tierSelector, selector)
 		if !matched {
 			continue
 		}
@@ -272,6 +288,44 @@ func channelModelPriceTierForIntent(channelModel model.ChannelModel, intent Mode
 		}
 	}
 	return best
+}
+
+// channelModelHasCompatiblePriceTier is only for catalog discovery: an option
+// omitted from the intent is still a choice, while every supplied selector
+// value must be compatible with at least one active, configured tier.
+func channelModelHasCompatiblePriceTier(channelModel model.ChannelModel, intent ModelRequestIntent, specs ...CapabilitySpec) bool {
+	requested := skuSelectorForIntent(intent)
+	parameters := imagePriceParametersForChannel(channelModel, specs...)
+	if parameters != nil {
+		requested = imagePriceSelectorForParameters(parameters, intent)
+	}
+	for _, tier := range channelModel.PriceTiers {
+		if !tier.Enabled || !tier.PriceConfigured {
+			continue
+		}
+		compatible := true
+		tierSelector := skuSelectorForTier(tier)
+		if parameters != nil {
+			tierSelector = model.DecodeSKUSelector(tier.SelectorJSON)
+			if validateImageParameterPriceSelector(parameters, tierSelector) != nil {
+				continue
+			}
+		}
+		for key, expected := range tierSelector {
+			expected = strings.TrimSpace(expected)
+			if expected == "" || expected == "*" {
+				continue
+			}
+			if actual, provided := requested[key]; provided && actual != expected {
+				compatible = false
+				break
+			}
+		}
+		if compatible {
+			return true
+		}
+	}
+	return false
 }
 
 func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
@@ -302,6 +356,11 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 			selector["videoGenerateAudio"] = audio
 		}
 	case "image":
+		for name, value := range intent.Options {
+			if value != nil {
+				selector[name] = fmt.Sprint(value)
+			}
+		}
 		if intent.Inputs["image"] > 0 {
 			selector["operation"] = "image_to_image"
 		} else {

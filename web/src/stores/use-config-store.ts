@@ -157,6 +157,8 @@ export type AiConfig = {
     textModels: string[];
     audioModels: string[];
     quality: string;
+    imageResolution: string;
+    imageParameters?: string;
     size: string;
     transparentBackground: string;
     count: string;
@@ -211,6 +213,7 @@ export const defaultConfig: AiConfig = {
     textModels: [],
     audioModels: [],
     quality: "auto",
+    imageResolution: "auto",
     size: "1:1",
     transparentBackground: "false",
     count: "1",

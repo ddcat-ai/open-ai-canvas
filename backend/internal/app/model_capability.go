@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"yingce/backend/internal/model"
+	protocolcontract "yingce/backend/internal/protocol"
 )
 
 // ModelCapabilityConfig 是模型能力声明，不包含供应商字段名；协议适配器负责把统一参数映射到上游请求。
@@ -38,13 +39,18 @@ type TextReferenceConfig struct {
 }
 
 type ImageCapabilityConfig struct {
-	References            ImageReferenceConfig `json:"references"`
-	Size                  ImageSizeConfig      `json:"size"`
-	Quality               ImageQualityConfig   `json:"quality"`
-	TransparentBackground VideoBooleanConfig   `json:"transparentBackground"`
-	ResponseFormat        ParameterSupport     `json:"responseFormat"`
-	OutputFormat          ParameterSupport     `json:"outputFormat"`
-	MaxOutputs            int                  `json:"maxOutputs"`
+	Parameters []protocolcontract.ImageParameter `json:"parameters"`
+	References ImageReferenceConfig              `json:"references"`
+	Size       ImageSizeConfig                   `json:"size"`
+	Resolution ImageResolutionConfig             `json:"resolution"`
+	Quality    ImageQualityConfig                `json:"quality"`
+	// ResolutionUsesQuality is reserved for protocols whose documented quality
+	// values are actually resolution tiers (for example Gemini imageSize).
+	ResolutionUsesQuality bool               `json:"resolutionUsesQuality,omitempty"`
+	TransparentBackground VideoBooleanConfig `json:"transparentBackground"`
+	ResponseFormat        ParameterSupport   `json:"responseFormat"`
+	OutputFormat          ParameterSupport   `json:"outputFormat"`
+	MaxOutputs            int                `json:"maxOutputs"`
 }
 
 type ImageReferenceConfig struct {
@@ -60,6 +66,7 @@ type ImageSizeConfig struct {
 	Default     string            `json:"default"`
 	AllowCustom bool              `json:"allowCustom"`
 	Presets     []ImageSizePreset `json:"presets,omitempty"`
+	DefaultTier string            `json:"defaultTier,omitempty"`
 }
 
 type ImageSizePreset struct {
@@ -71,6 +78,12 @@ type ImageSizePreset struct {
 }
 
 type ImageQualityConfig struct {
+	Supported bool     `json:"supported"`
+	Values    []string `json:"values"`
+	Default   string   `json:"default"`
+}
+
+type ImageResolutionConfig struct {
 	Supported bool     `json:"supported"`
 	Values    []string `json:"values"`
 	Default   string   `json:"default"`
@@ -147,7 +160,7 @@ func DecodeModelCapabilityConfig(raw string) (*ModelCapabilityConfig, error) {
 
 // normalizedChannelModelCapability 从持久化记录恢复渠道模型的权威能力合同。
 // 目录读取可以选择隔离损坏记录；任务创建等写路径必须把错误向上返回并失败关闭。
-func normalizedChannelModelCapability(channelModel *model.ChannelModel) (*ModelCapabilityConfig, error) {
+func normalizedChannelModelCapability(channelModel *model.ChannelModel, registries ...*protocolcontract.Registry) (*ModelCapabilityConfig, error) {
 	if channelModel == nil {
 		return nil, errors.New("渠道模型为空")
 	}
@@ -162,7 +175,7 @@ func normalizedChannelModelCapability(channelModel *model.ChannelModel) (*ModelC
 	if err != nil {
 		return nil, fmt.Errorf("解析渠道模型能力配置失败：%w", err)
 	}
-	normalized, err := NormalizeModelCapabilityConfigForModel(capability, string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config)
+	normalized, err := NormalizeModelCapabilityConfigForModel(capability, string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config, registries...)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +186,7 @@ func NormalizeModelCapabilityConfig(capability string, protocol string, input *M
 	return NormalizeModelCapabilityConfigForModel(capability, protocol, "", input)
 }
 
-func NormalizeModelCapabilityConfigForModel(capability string, protocol string, modelName string, input *ModelCapabilityConfig) (*ModelCapabilityConfig, error) {
+func NormalizeModelCapabilityConfigForModel(capability string, protocol string, modelName string, input *ModelCapabilityConfig, registries ...*protocolcontract.Registry) (*ModelCapabilityConfig, error) {
 	if capability != "text" && capability != "image" && capability != "video" {
 		return nil, nil
 	}
@@ -202,6 +215,27 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		if input == nil || input.Image == nil {
 			return nil, BadAuthRequest("请配置图片模型能力参数")
 		}
+		if len(registries) > 0 && registries[0] != nil {
+			if adapter, ok := registries[0].Resolve(protocol); ok && adapter.Metadata().ImageParameters != nil {
+				if err := resolveImageCapabilityParameters(input.Image, adapter.Metadata().ImageParameters, modelName); err != nil {
+					return nil, err
+				}
+			} else if input.Image.Parameters != nil {
+				return nil, BadAuthRequest("当前插件未声明图片参数合同，请先更新插件")
+			}
+		}
+		if input.Image.Parameters != nil {
+			if err := projectImageParameters(input.Image); err != nil {
+				return nil, err
+			}
+		} else {
+			normalizeLegacyImageResolutionConfig(protocol, input.Image)
+			input.Image.ResolutionUsesQuality = strings.TrimSpace(protocol) == string(model.ChannelInterfaceGeminiImage)
+		}
+		// 旧配置缺换算表时按声明的档位与比例补齐后再校验，保存即把旧线路归一化成当前形态。
+		if input.Image.Parameters == nil {
+			fillMissingImageSizePresets(input.Image, protocol)
+		}
 		value := &ModelCapabilityConfig{Version: 1, Image: input.Image}
 		if err := validateImageCapabilityConfig(value.Image); err != nil {
 			return nil, err
@@ -224,6 +258,71 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		return nil, err
 	}
 	return value, nil
+}
+
+// normalizeLegacyImageResolutionConfig projects legacy values only for protocols whose
+// shipped contracts prove that these exact quality values represented resolution tiers.
+// The projection is in-memory; persisted capabilities and historical task inputs are untouched.
+func normalizeLegacyImageResolutionConfig(protocol string, image *ImageCapabilityConfig) {
+	if image == nil || image.Resolution.Supported || !image.Quality.Supported {
+		return
+	}
+	allowed := legacyImageResolutionTiers(protocol)
+	if len(allowed) == 0 {
+		return
+	}
+	values := make([]string, 0, len(image.Quality.Values))
+	for _, value := range image.Quality.Values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if !allowed[value] {
+			return
+		}
+		values = append(values, value)
+	}
+	defaultValue := strings.ToLower(strings.TrimSpace(image.Quality.Default))
+	if len(values) == 0 || !allowed[defaultValue] || !containsCapabilityString(values, defaultValue) {
+		return
+	}
+	image.Resolution = ImageResolutionConfig{Supported: true, Values: values, Default: defaultValue}
+	image.Quality = ImageQualityConfig{Supported: false, Values: []string{}, Default: "auto"}
+}
+
+func legacyImageResolutionProtocol(protocol string) bool {
+	return len(legacyImageResolutionTiers(protocol)) > 0
+}
+
+func legacyImageResolutionTiers(protocol string) map[string]bool {
+	switch strings.TrimSpace(protocol) {
+	case string(model.ChannelInterfaceGrokImage):
+		return map[string]bool{"1k": true, "2k": true}
+	case "agnes-image":
+		return map[string]bool{"1k": true, "2k": true, "4k": true}
+	default:
+		return nil
+	}
+}
+
+// normalizeLegacyImageResolutionRequest adapts only old request fields for the same
+// proven protocols. Other plugins retain their own quality semantics.
+func normalizeLegacyImageResolutionRequest(protocol string, capability *ModelCapabilityConfig, config map[string]any) string {
+	if capability == nil || capability.Image == nil || !capability.Image.Resolution.Supported || capability.Image.Quality.Supported {
+		return ""
+	}
+	imageResolutionProtocol := strings.TrimSpace(protocol) == string(model.ChannelInterfaceGrokImage) || strings.TrimSpace(protocol) == "agnes-image"
+	if !imageResolutionProtocol {
+		return ""
+	}
+	legacy := strings.TrimSpace(metadataString(config, "quality"))
+	if !containsCapabilityString(capability.Image.Resolution.Values, legacy) {
+		return ""
+	}
+	if strings.TrimSpace(metadataString(config, "imageResolution")) != "" {
+		delete(config, "quality")
+		return ""
+	}
+	config["imageResolution"] = legacy
+	delete(config, "quality")
+	return legacy
 }
 
 func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol string, modelName string) *VideoCapabilityConfig {
@@ -304,6 +403,14 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		if image.Size.Parameter != "none" {
 			spec.Options["size"] = imageSizeOptionConstraint(image.Size)
 			spec.ImageSize = capabilityImageSizeFromConfig(image.Size)
+			if image.Parameters != nil && !image.Resolution.Supported {
+				size := image.Size
+				size.Presets = activeImageSizePresets(image)
+				spec.ImageSize = capabilityImageSizeFromConfig(size)
+			}
+		}
+		if image.Resolution.Supported {
+			spec.Options["imageResolution"] = anyValues(image.Resolution.Values)
 		}
 		if image.Quality.Supported {
 			spec.Options["quality"] = anyValues(image.Quality.Values)
@@ -314,6 +421,10 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 			spec.Options["transparentBackground"] = boolValues(false)
 		}
 		spec.Options["count"] = numericRange(1, float64(image.MaxOutputs), 1)
+		if image.Parameters != nil {
+			spec.Options = imageParameterConstraints(image.Parameters)
+			spec.ImageParameters = publicImageParameters(image.Parameters)
+		}
 	case "video":
 		if config.Video == nil {
 			return spec, BadAuthRequest("渠道视频模型尚未配置能力参数")
@@ -391,7 +502,7 @@ func capabilityImageSizeFromConfig(size ImageSizeConfig) *CapabilityImageSize {
 		tier := strings.ToLower(strings.TrimSpace(preset.Tier))
 		ratio := strings.TrimSpace(preset.Ratio)
 		value := strings.TrimSpace(preset.Size)
-		if tier == "" || ratio == "" || value == "" {
+		if ratio == "" || value == "" {
 			continue
 		}
 		result.Presets = append(result.Presets, CapabilityImageSizePreset{

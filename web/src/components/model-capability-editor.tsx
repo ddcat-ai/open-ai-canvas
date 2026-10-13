@@ -7,6 +7,8 @@ import type { ReactNode } from "react";
 
 import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
+import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
 import { cleanVideoScreenSpecValues, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 import { Select } from "@/components/ui/base/select";
@@ -35,16 +37,17 @@ type Props = {
     capability?: "text" | "image" | "video";
     model?: string;
     workflows?: ModelProtocolWorkflow[];
+    imageParameters?: ImageParameter[];
     disabled?: boolean;
     section?: "all" | "protocol" | "references";
 };
 
-export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", workflows = [], disabled = false, section = "all" }: Props) {
+export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", workflows = [], imageParameters, disabled = false, section = "all" }: Props) {
     if (capability === "text") {
         return <TextCapabilityEditor value={value} onChange={onChange} protocol={protocol} disabled={disabled} section={section} />;
     }
     if (capability === "image") {
-        return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} disabled={disabled} section={section} />;
+        return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} imageParameters={imageParameters} disabled={disabled} section={section} />;
     }
     const workflow = workflows.find((item) => item.id === model.trim().replace(/^models\//, "") && item.providerId === protocol);
     const storedProfile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol, model)).video!;
@@ -435,12 +438,23 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
     );
 }
 
-function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, section }: Required<Pick<Props, "model" | "disabled">> & Pick<Props, "value" | "onChange" | "protocol" | "section">) {
-    const profile = normalizeModelCapabilityConfig(value || { version: 1, image: defaultImageCapabilityConfig(protocol, model) }).image!;
+function ImageCapabilityEditor({ value, onChange, protocol, model, imageParameters, disabled, section }: Required<Pick<Props, "model" | "disabled">> & Pick<Props, "value" | "onChange" | "protocol" | "section" | "imageParameters">) {
+    const stored = normalizeModelCapabilityConfig(value || { version: 1, image: defaultImageCapabilityConfig(protocol, model) }).image!;
+    const profile = imageParameters ? resolveImageParameters(stored, imageParameters, model) : stored;
     const update = (patch: Partial<ImageCapabilityConfig>) => onChange?.({ version: 1, image: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<ImageCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateSize = (patch: Partial<ImageCapabilityConfig["size"]>) => update({ size: { ...profile.size, ...patch } });
     const updateQuality = (patch: Partial<ImageCapabilityConfig["quality"]>) => update({ quality: { ...profile.quality, ...patch } });
+
+    if (section !== "references" && profile.parameters) {
+        const definitions = imageParameters || profile.parameters;
+        const size = profile.parameters.find((p) => p.name === "size");
+        return <div className="space-y-4">
+            <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name === "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p), definitions) })} />
+            {size ? <ImageParameterSizeEditor profile={profile} definition={definitions.find((p) => p.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} /> : null}
+            <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name !== "size" && p.name !== "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p)) })} />
+        </div>;
+    }
 
     if (section === "references") {
         return (

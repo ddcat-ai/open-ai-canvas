@@ -75,6 +75,8 @@ type providerConfig struct {
 	Model                 string                 `json:"model"`
 	Size                  string                 `json:"size"`
 	Quality               string                 `json:"quality"`
+	ImageResolution       string                 `json:"imageResolution"`
+	ImageParameters       map[string]any         `json:"imageParameters,omitempty"`
 	TransparentBackground string                 `json:"transparentBackground"`
 	Count                 string                 `json:"count"`
 	VideoSeconds          string                 `json:"videoSeconds"`

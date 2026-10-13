@@ -104,6 +104,8 @@ type cloudAgentMediaArgs struct {
 	ChannelModelKey            string                   `json:"channelModelKey"`
 	Duration                   int                      `json:"durationSeconds"`
 	Size                       string                   `json:"size"`
+	ImageResolution            string                   `json:"imageResolution"`
+	ImageParameters            string                   `json:"imageParameters,omitempty"`
 	Quality                    string                   `json:"quality"`
 	VideoGenerateAudio         *bool                    `json:"videoGenerateAudio"`
 	VideoWatermark             *bool                    `json:"videoWatermark"`

@@ -39,17 +39,19 @@ V7 不支持 --v、--niji、--fast、--hd，且不发送 speed、quality、resol
 - 所有 URL 通过现有宿主 SSRF、跨域凭证隔离、大小/MIME 校验和资源保存。跨源图片不携带供应商 API Key。
 - 1K/2K 官方 CDN HTTP 403 与协议字段映射是两件事；新增插件不能保证消除 CDN 拦截。失败保留原任务恢复机制，不提交新的收费生成。
 
+## 动态图片参数
+
+`contributes.providers[].imageParameters` 是渠道模型、前台模型与生成界面共用的参数合同。`name` 为稳定身份，`type`、`values`、`min/max/step`、`default` 描述输入；`models` 限定适用上游模型，`enabled` 为初始启用状态。只有 `pricing: true` 的启用字段允许作为价格条件；其他参数仍参与生成。渠道可收窄范围，绑定与计价资格由插件拥有。`binding` 映射到统一请求或插件自己的 `providerOptions` 命名空间。
+
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
-
-以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "cangyuan-midjourney",
   "name": "沧元 Midjourney",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "沧元算力 / 影绘",
   "description": "独立适配 V7 与默认 V8.2 的 1K/2K 线路，按供应商合同创建、查询并提取全部图片。",
   "enabled": true,
@@ -89,6 +91,24 @@ V7 不支持 --v、--niji、--fast、--hd，且不发送 speed、quality、resol
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "binding": "aspectRatio"
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "step": 1,
+            "default": 1
+          }
+        ],
         "parameters": [
           {
             "name": "model",
@@ -483,6 +503,48 @@ V7 不支持 --v、--niji、--fast、--hd，且不发送 speed、quality、resol
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅比例",
+            "type": "string",
+            "binding": "aspectRatio"
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 1,
+            "step": 1,
+            "default": 1
+          },
+          {
+            "name": "speed",
+            "label": "生成速度",
+            "type": "string",
+            "binding": "providerOptions.cangyuan-midjourney-v82.speed",
+            "values": [
+              "relax",
+              "fast"
+            ],
+            "pricing": true
+          },
+          {
+            "name": "reference",
+            "label": "参考方式",
+            "type": "string",
+            "binding": "providerOptions.cangyuan-midjourney-v82.reference",
+            "values": [
+              "image",
+              "style",
+              "edit",
+              "moodboard",
+              "editor"
+            ]
+          }
+        ],
         "parameters": [
           {
             "name": "model",

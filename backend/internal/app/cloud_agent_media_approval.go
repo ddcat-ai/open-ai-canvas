@@ -15,6 +15,8 @@ type CloudAgentMediaSettings struct {
 	ChannelID                  string `json:"channelId,omitempty"`
 	ChannelModelKey            string `json:"channelModelKey,omitempty"`
 	Size                       string `json:"size"`
+	ImageResolution            string `json:"imageResolution,omitempty"`
+	ImageParameters            string `json:"imageParameters,omitempty"`
 	Quality                    string `json:"quality"`
 	DurationSeconds            *int   `json:"durationSeconds,omitempty"`
 	VideoGenerateAudio         *bool  `json:"videoGenerateAudio,omitempty"`
@@ -41,7 +43,8 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 		return BadAuthRequest("仅图片或视频生成审批支持修改模型和规格")
 	}
 	args.LogicalModelID, args.ChannelID, args.ChannelModelKey = settings.LogicalModelID, settings.ChannelID, settings.ChannelModelKey
-	args.Size, args.Quality = settings.Size, settings.Quality
+	args.Size, args.ImageResolution, args.Quality = settings.Size, settings.ImageResolution, settings.Quality
+	args.ImageParameters = settings.ImageParameters
 	if args.Mode == "video" {
 		if settings.DurationSeconds != nil {
 			if *settings.DurationSeconds < 0 {
@@ -128,9 +131,36 @@ func replaceCloudAgentPreparedLeases(repo *repository.Repository, userID, runID,
 	return repo.ReplaceCloudAgentResourceLeases(userID, runID, approvalID, ids, prepared.Quote.ExpiresAt)
 }
 
-func validateCloudAgentResolvedMediaOptions(requested, resolved map[string]any) error {
-	for _, key := range []string{"size", "videoSeconds", "vquality", "quality", "count", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"} {
-		if value := stringValue(requested[key]); value != "" && !strings.EqualFold(value, stringValue(resolved[key])) {
+func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]any) error {
+	resolvedOptions, _ := resolvedInput["capabilityOptions"].(map[string]any)
+	resolvedConfig, _ := resolvedInput["config"].(map[string]any)
+	if raw := requested["imageParameters"]; raw != nil {
+		var values map[string]any
+		if encoded, ok := raw.(string); ok {
+			if err := json.Unmarshal([]byte(encoded), &values); err != nil {
+				return creationConflict("图片参数格式无效")
+			}
+		} else {
+			values, _ = raw.(map[string]any)
+		}
+		for name, value := range values {
+			if resolvedOptions[name] != value {
+				return creationConflict("模型解析后的图片参数与审批内容不同")
+			}
+		}
+	}
+	for _, key := range []string{"size", "imageResolution", "videoSeconds", "vquality", "quality", "count", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"} {
+		requestedValue := stringValue(requested[key])
+		if key == "quality" && requestedValue != "" {
+			if _, declared := resolvedOptions[key]; !declared && !strings.EqualFold(requestedValue, stringValue(resolvedOptions["imageResolution"])) {
+				return creationConflict("所选图片模型未声明质量参数，请使用模型声明的图片分辨率或质量选项")
+			}
+		}
+		resolved := stringValue(resolvedOptions[key])
+		if resolved == "" {
+			resolved = stringValue(resolvedConfig[key])
+		}
+		if requestedValue != "" && !strings.EqualFold(requestedValue, resolved) {
 			return creationConflict("模型解析后的生成规格与审批参数不同，请重新读取目录并审批")
 		}
 	}

@@ -174,6 +174,12 @@ export function workflowFieldSubmissionChoices(field: WorkflowVideoFieldLike) {
     return workflowFieldChoiceValues(field);
 }
 
+export function workflowFieldIsRatioChoices(field: WorkflowVideoFieldLike, options = workflowFieldChoiceValues(field)) {
+    if (!workflowVideoFieldMatches(field, "aspectRatio")) return false;
+    const values = options.map(workflowFieldOptionValue).filter(Boolean);
+    return values.length > 1 && values.every((value) => value.toLowerCase() === "auto" || Boolean(workflowRatioPrefix(value)));
+}
+
 export function workflowRatioPrefix(value: string) {
     const match = value.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)(?:\s|\(|$)/);
     return match ? `${match[1]}:${match[2]}` : "";

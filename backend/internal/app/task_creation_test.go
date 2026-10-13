@@ -155,7 +155,7 @@ func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t 
 			"capabilityConfig": map[string]any{"image": map[string]any{"maxOutputs": 99}},
 		},
 		// capabilityOptions 是创作端表达的最终规格，必须覆盖旧页面缓存到 config 的同名值。
-		"capabilityOptions": map[string]any{"quality": "1k", "size": "1:1"},
+		"capabilityOptions": map[string]any{"imageResolution": "1k", "size": "1:1"},
 	}
 
 	resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
@@ -184,8 +184,57 @@ func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t 
 		t.Fatalf("apiFormat = %#v, want openai", got)
 	}
 	options := resolved["capabilityOptions"].(map[string]any)
-	if options["quality"] != config["quality"] || options["size"] != config["size"] || options["count"] != config["count"] {
+	if options["imageResolution"] != config["imageResolution"] || options["size"] != config["size"] || providerConfigOptionValue(options["count"]) != config["count"] {
 		t.Fatalf("capabilityOptions and provider config diverged: options=%#v config=%#v", options, config)
+	}
+}
+
+func TestResolveSystemChannelModelSelectionPricesImageResolutionAndQualityIndependently(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "gpt-image-2")
+	profile.Image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "2k"}, Default: "1k"}
+	profile.Image.Quality = ImageQualityConfig{Supported: true, Values: []string{"high", "max"}, Default: "high"}
+	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceOpenAIImage, profile, []model.ChannelModelPriceTier{
+		newSelectionPriceTier("2k-max", `{"operation":"text_to_image","imageResolution":"2k","quality":"max"}`, "provider-2k-max", "fixed_request"),
+	})
+
+	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+		"mode":   "image",
+		"config": map[string]any{"channelId": channel.ID, "model": channelModel.ModelKey, "imageResolution": "2k", "quality": "max", "size": "1:1"},
+	}, "canvas_image", "")
+	if err != nil {
+		t.Fatalf("resolveSystemChannelModelSelection() error = %v", err)
+	}
+	config := resolved["config"].(map[string]any)
+	if config["priceTierId"] != "2k-max" || config["imageResolution"] != "2k" || config["quality"] != "max" {
+		t.Fatalf("resolved request = %#v, want exact 2k-max tier and independent options", config)
+	}
+	options := resolved["capabilityOptions"].(map[string]any)
+	if options["imageResolution"] != "2k" || options["quality"] != "max" {
+		t.Fatalf("capabilityOptions = %#v, want independent imageResolution/quality", options)
+	}
+}
+
+func TestResolveSystemChannelModelSelectionImportsLegacyGrokResolutionWithCanonicalPrice(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
+	profile.Image.Resolution = ImageResolutionConfig{}
+	profile.Image.Quality = ImageQualityConfig{Supported: true, Values: []string{"1k", "2k"}, Default: "2k"}
+	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceGrokImage, profile, []model.ChannelModelPriceTier{
+		newSelectionPriceTier("legacy-2k", `{"imageResolution":"2k"}`, "provider-2k", "fixed_request"),
+	})
+
+	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+		"mode":   "image",
+		"config": map[string]any{"channelId": channel.ID, "model": channelModel.ModelKey, "quality": "2k", "size": "16:9"},
+	}, "canvas_image", "")
+	if err != nil {
+		t.Fatalf("legacy request was rejected: %v", err)
+	}
+	config := resolved["config"].(map[string]any)
+	if config["imageResolution"] != "2k" || config["quality"] != nil || config["priceTierId"] != "legacy-2k" || config["providerModelKey"] != "provider-2k" {
+		t.Fatalf("legacy request did not preserve its execution and pricing semantics: %#v", config)
+	}
+	if channelModel.CapabilityConfigJSON == "" || !strings.Contains(channelModel.CapabilityConfigJSON, `"quality":{"supported":true`) {
+		t.Fatal("fixture did not retain the persisted legacy capability JSON")
 	}
 }
 
@@ -232,7 +281,7 @@ func TestResolveSystemChannelModelSelectionAppliesServerDefaults(t *testing.T) {
 		t.Fatalf("resolveSystemChannelModelSelection() error = %v", err)
 	}
 	config := resolved["config"].(map[string]any)
-	if config["size"] != "1:1" || config["quality"] != "2k" || config["count"] != "1" || config["transparentBackground"] != "false" {
+	if config["size"] != "1:1" || config["imageResolution"] != "2k" || config["quality"] != nil || config["count"] != "1" || config["transparentBackground"] != nil {
 		t.Fatalf("server defaults were not applied: %#v", config)
 	}
 	encoded, err := json.Marshal(resolved)
@@ -376,10 +425,11 @@ func newSelectionPriceTier(id string, selector string, providerModelKey string, 
 func TestImageResolutionPricingOnSystemChannel(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGeminiImage), "gemini-image-model")
 	profile.Image.Quality = ImageQualityConfig{Supported: false, Default: "auto"}
+	profile.Image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "2k", "4k"}, Default: "1k"}
 	profile.Image.Size = ImageSizeConfig{
 		Parameter: "aspect_ratio",
 		Values:    []string{"1:1", "16:9"},
-		Default:   "1:1",
+		Default:   "16:9",
 		Presets: []ImageSizePreset{
 			{Tier: "1k", Ratio: "16:9", Size: "1824x1024", Width: 1824, Height: 1024},
 			{Tier: "2k", Ratio: "16:9", Size: "2752x1536", Width: 2752, Height: 1536},
@@ -387,9 +437,9 @@ func TestImageResolutionPricingOnSystemChannel(t *testing.T) {
 		},
 	}
 	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceGeminiImage, profile, []model.ChannelModelPriceTier{
-		newSelectionPriceTier("tier-1k", `{"quality":"1k"}`, "provider-1k", "fixed_request"),
-		newSelectionPriceTier("tier-2k", `{"quality":"2k"}`, "provider-2k", "fixed_request"),
-		newSelectionPriceTier("tier-4k", `{"quality":"4k"}`, "provider-4k", "fixed_request"),
+		newSelectionPriceTier("tier-1k", `{"imageResolution":"1k"}`, "provider-1k", "fixed_request"),
+		newSelectionPriceTier("tier-2k", `{"imageResolution":"2k"}`, "provider-2k", "fixed_request"),
+		newSelectionPriceTier("tier-4k", `{"imageResolution":"4k"}`, "provider-4k", "fixed_request"),
 	})
 
 	for _, tc := range []struct {
@@ -401,17 +451,16 @@ func TestImageResolutionPricingOnSystemChannel(t *testing.T) {
 		{"1k specified", "1k", "16:9", "tier-1k"},
 		{"2k specified", "2k", "16:9", "tier-2k"},
 		{"4k specified", "4k", "16:9", "tier-4k"},
-		{"auto specified", "auto", "16:9", "tier-1k"},
 		{"empty specified", "", "16:9", "tier-1k"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input := map[string]any{
 				"mode": "image",
 				"config": map[string]any{
-					"channelId": channel.ID,
-					"model":     channelModel.ModelKey,
-					"size":      tc.size,
-					"quality":   tc.quality,
+					"channelId":       channel.ID,
+					"model":           channelModel.ModelKey,
+					"size":            tc.size,
+					"imageResolution": tc.quality,
 				},
 			}
 			resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
@@ -423,5 +472,92 @@ func TestImageResolutionPricingOnSystemChannel(t *testing.T) {
 				t.Fatalf("priceTierId = %#v, want %s", cfg["priceTierId"], tc.wantTier)
 			}
 		})
+	}
+}
+
+func TestOpenAIAspectPresetSystemChannelPersistsPixelExecutionSize(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "gpt-image-2.5-4k")
+	profile.Image.Size = ImageSizeConfig{
+		Parameter: "aspect_ratio",
+		Values:    []string{"1:1", "9:16"},
+		Default:   "1:1",
+		Presets: []ImageSizePreset{
+			{Tier: "2k", Ratio: "1:1", Size: "2048x2048", Width: 2048, Height: 2048},
+			{Tier: "2k", Ratio: "9:16", Size: "1536x2752", Width: 1536, Height: 2752},
+			{Tier: "4k", Ratio: "1:1", Size: "2880x2880", Width: 2880, Height: 2880},
+			{Tier: "4k", Ratio: "9:16", Size: "2160x3840", Width: 2160, Height: 3840},
+		},
+	}
+	profile.Image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"2k", "4k"}, Default: "2k"}
+	profile.Image.Quality = ImageQualityConfig{Supported: false}
+	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceOpenAIImage, profile, []model.ChannelModelPriceTier{
+		newSelectionPriceTier("tier-2k", `{"imageResolution":"2k"}`, "provider-2k", "fixed_request"),
+		newSelectionPriceTier("tier-4k", `{"imageResolution":"4k"}`, "provider-4k", "fixed_request"),
+	})
+	input := map[string]any{
+		"mode": "image",
+		"config": map[string]any{
+			"channelId":       channel.ID,
+			"model":           channelModel.ModelKey,
+			"size":            "9:16",
+			"imageResolution": "2k",
+		},
+	}
+	resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+	if err != nil {
+		t.Fatalf("resolve error: %v", err)
+	}
+	if err := svc.ValidateTaskCapability(resolved); err != nil {
+		t.Fatalf("ValidateTaskCapability() error = %v", err)
+	}
+	cfg := resolved["config"].(map[string]any)
+	if cfg["priceTierId"] != "tier-2k" {
+		t.Fatalf("priceTierId = %#v, want tier-2k", cfg["priceTierId"])
+	}
+	if cfg["size"] != "1536x2752" {
+		t.Fatalf("config.size = %#v, want 1536x2752", cfg["size"])
+	}
+}
+
+// 受管逻辑模型流程的客户端只表达创作参数：config 里没有 interfaceType。协议必须由
+// 服务端路由记录回填，否则比例型 size 不会换算成像素，只认 WIDTHxHEIGHT 的上游会
+// 直接拒绝（线上表现为创建成功但生成 400 失败）。
+func TestRoutedLogicalImageTaskWithoutClientInterfaceTypePersistsPixelSize(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "gpt-image-2.5-4k")
+	profile.Image.Size = ImageSizeConfig{
+		Parameter: "aspect_ratio",
+		Values:    []string{"1:1", "9:16"},
+		Default:   "1:1",
+		Presets: []ImageSizePreset{
+			{Tier: "2k", Ratio: "1:1", Size: "2048x2048", Width: 2048, Height: 2048},
+			{Tier: "2k", Ratio: "9:16", Size: "1536x2752", Width: 1536, Height: 2752},
+		},
+	}
+	profile.Image.Quality = ImageQualityConfig{Supported: true, Values: []string{"2k"}, Default: "2k"}
+	svc, _, _, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceOpenAIImage, profile, nil)
+	tier := newSelectionPriceTier("tier-2k", `{"quality":"2k"}`, "provider-2k", "fixed_request")
+	tier.ChannelModelID = channelModel.ID
+	routed := &RoutedModel{ChannelModel: channelModel, PriceTier: &tier}
+
+	input := map[string]any{
+		"mode":   "image",
+		"prompt": "A simple gray circle on a white background.",
+		"config": map[string]any{
+			"channelId": channelModel.ChannelID,
+			"model":     channelModel.ModelKey,
+			"size":      "9:16",
+			"quality":   "2k",
+		},
+	}
+	resolved := applyRoutedProviderSelection(input, routed)
+	cfg := resolved["config"].(map[string]any)
+	if cfg["interfaceType"] != string(model.ChannelInterfaceOpenAIImage) {
+		t.Fatalf("config.interfaceType = %#v, want %s", cfg["interfaceType"], model.ChannelInterfaceOpenAIImage)
+	}
+	if err := svc.ValidateTaskCapability(resolved); err != nil {
+		t.Fatalf("ValidateTaskCapability() error = %v", err)
+	}
+	if cfg["size"] != "1536x2752" {
+		t.Fatalf("config.size = %#v, want 1536x2752", cfg["size"])
 	}
 }

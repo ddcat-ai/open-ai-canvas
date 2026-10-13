@@ -25,7 +25,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		return nil, err
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig); err != nil {
+		if _, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry()); err != nil {
 			return nil, err
 		}
 	}
@@ -58,7 +58,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	var videoProfile *VideoCapabilityConfig
 	switch capability {
 	case "image":
-		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig)
+		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -67,7 +67,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	case "video":
 		// 视频测试必须带上模型能力画像：声明式协议只按画像里的枚举回填分辨率名（如 480 -> 480p），
 		// 没有画像时会把裸数字发给上游，火山方舟等供应商会直接拒绝。
-		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig)
+		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -102,6 +102,15 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	}
 	if capability == "image" {
 		input.ImageCapability = imageProfile
+		if imageProfile.Parameters != nil {
+			input.Config.ImageParameters = imageParameterDefaults(imageProfile.Parameters)
+		}
+		if imageProfile.Resolution.Supported {
+			input.Config.ImageResolution = imageProfile.Resolution.Default
+		}
+		if err := applyImageParameterValues(&input.Config, imageProfile); err != nil {
+			return nil, err
+		}
 	}
 	if capability == "video" {
 		input.VideoCapability = videoProfile

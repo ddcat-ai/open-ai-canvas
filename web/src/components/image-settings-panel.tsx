@@ -1,5 +1,6 @@
 import { ImageSizePicker } from "./image-size-picker";
-import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
+import { ImageParameterFields } from "./image-parameter-fields";
+import { imageResolutionUsesQuality, imageSizePresets } from "@/lib/image-size-presets";
 import { type ReactNode } from "react";
 import { ConfigProvider } from "antd";
 import { Switch } from "@/components/ui/base/switch";
@@ -36,7 +37,7 @@ const aspectOptions: AspectOption[] = [
 
 type ImageSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "quality" | "size" | "transparentBackground" | "count", value: string) => void;
+    onConfigChange: (key: "quality" | "imageResolution" | "size" | "transparentBackground" | "count" | "imageParameters", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     showQuality?: boolean;
@@ -60,6 +61,7 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const activeSize = normalized.size;
     const activeQualityOptions = profile.quality.values.map((value) => ({ value, label: imageQualityLabel(value) }));
     const priceTiers = imageModelPriceTiers(config);
+    if (profile.parameters) return <ImageSettingsTheme theme={theme}><div className={className}>{showTitle ? <div className="mb-3 text-base font-semibold">图像设置</div> : null}<ImageParameterFields profile={profile} config={config} onChange={onConfigChange} showSize={showSize} showCount={showCount} showQuality={showQuality} showTransparent={showTransparent} /></div></ImageSettingsTheme>;
 
     return (
         <ImageSettingsTheme theme={theme}>

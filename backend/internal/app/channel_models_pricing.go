@@ -8,9 +8,44 @@ import (
 	"strings"
 
 	"yingce/backend/internal/model"
+	protocolcontract "yingce/backend/internal/protocol"
 )
 
-func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, rawCapabilityConfig string, capability string) error {
+func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, rawCapabilityConfig string, capability string, protocol string) error {
+	if capability == "image" {
+		config, err := DecodeModelCapabilityConfig(rawCapabilityConfig)
+		if err != nil || config == nil || config.Image == nil {
+			return BadAuthRequest("图片模型能力配置无效，无法校验价格档规格")
+		}
+		image := config.Image
+		if image.Parameters != nil {
+			for _, tier := range tiers {
+				if err := validateImageParameterPriceSelector(image.Parameters, tier.Selector); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		normalizeLegacyImageResolutionConfig(protocol, image)
+		for _, tier := range tiers {
+			if value := strings.TrimSpace(tier.Selector["imageResolution"]); value != "" && value != "*" && !image.Resolution.Supported {
+				return BadAuthRequest("价格档使用了未启用的图片分辨率条件")
+			}
+			if value := strings.TrimSpace(tier.Selector["imageResolution"]); value != "" && value != "*" && !containsCapabilityString(image.Resolution.Values, value) {
+				return BadAuthRequest("价格档分辨率不在该图片模型支持范围内：" + value)
+			}
+			if value := strings.TrimSpace(tier.Selector["quality"]); value != "" && value != "*" {
+				if image.Quality.Supported {
+					if !containsCapabilityString(image.Quality.Values, value) {
+						return BadAuthRequest("价格档质量不在该图片模型支持范围内：" + value)
+					}
+				} else if !legacyImageResolutionProtocol(protocol) || !image.Resolution.Supported || !containsCapabilityString(image.Resolution.Values, value) {
+					return BadAuthRequest("价格档使用了未启用的图片质量条件")
+				}
+			}
+		}
+		return nil
+	}
 	if capability != "video" {
 		return nil
 	}
@@ -80,7 +115,11 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 	result := make([]model.ChannelModelPriceTier, 0, len(inputs))
 	seen := make(map[string]bool, len(inputs))
 	for _, input := range inputs {
-		selector, resolution, videoSeconds, selectorErr := normalizeChannelModelTierSelector(capability, input)
+		var parameters []protocolcontract.ImageParameter
+		if req.CapabilityConfig != nil && req.CapabilityConfig.Image != nil {
+			parameters = req.CapabilityConfig.Image.Parameters
+		}
+		selector, resolution, videoSeconds, selectorErr := normalizeChannelModelTierSelector(capability, input, parameters)
 		if selectorErr != nil {
 			return nil, selectorErr
 		}
@@ -126,7 +165,27 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 	return result, nil
 }
 
-func normalizeChannelModelTierSelector(capability string, input ChannelModelPriceTierRequest) (map[string]string, string, int, error) {
+func normalizeChannelModelTierSelector(capability string, input ChannelModelPriceTierRequest, parameters ...[]protocolcontract.ImageParameter) (map[string]string, string, int, error) {
+	if capability == "image" && len(parameters) > 0 && parameters[0] != nil {
+		if input.VideoSeconds != 0 || input.Resolution != "" && input.Resolution != "*" {
+			return nil, "", 0, BadAuthRequest("图片价格不接受视频规格")
+		}
+		selector := make(map[string]string, len(input.Selector))
+		for name, value := range input.Selector {
+			name, value = strings.TrimSpace(name), strings.TrimSpace(value)
+			if name == "" || value == "" || value == "*" {
+				continue
+			}
+			if _, exists := selector[name]; exists {
+				return nil, "", 0, BadAuthRequest("价格档存在重复规格条件：" + name)
+			}
+			selector[name] = value
+		}
+		if err := validateImageParameterPriceSelector(parameters[0], selector); err != nil {
+			return nil, "", 0, err
+		}
+		return selector, "*", 0, nil
+	}
 	selector := make(map[string]string, len(input.Selector)+3)
 	for rawKey, rawValue := range input.Selector {
 		key := strings.TrimSpace(rawKey)
@@ -137,14 +196,21 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 		switch key {
 		case "operation":
 			value = strings.ToLower(value)
-		case "quality", "size":
+		case "quality", "imageResolution", "size":
 			value = strings.ToLower(value)
+			if value == "auto" || value == "any" {
+				value = "*"
+			}
+		case "resoluton":
+			// Normalize the historical misspelling at the input boundary.
+			key = "imageResolution"
+			value = strings.ToLower(strings.TrimSpace(value))
 			if value == "auto" || value == "any" {
 				value = "*"
 			}
 		case "vquality":
 			value = normalizeChannelModelTierResolution(value)
-		case "resolution", "resoluton":
+		case "resolution":
 			// 兼容图片价格档的标准字段，以及历史接口误拼写 resoluton。
 			key = "resolution"
 			value = strings.ToLower(strings.TrimSpace(value))
@@ -178,7 +244,12 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 				return nil, "", 0, BadAuthRequest("视频价格档音频条件必须为 true、false 或 *")
 			}
 		default:
-			return nil, "", 0, BadAuthRequest("价格档不支持规格字段：" + key)
+			if capability != "image" {
+				return nil, "", 0, BadAuthRequest("价格档不支持规格字段：" + key)
+			}
+		}
+		if existing, exists := selector[key]; exists && existing != value {
+			return nil, "", 0, BadAuthRequest("价格档存在重复规格条件：" + key)
 		}
 		selector[key] = value
 	}

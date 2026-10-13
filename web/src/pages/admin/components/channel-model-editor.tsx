@@ -14,7 +14,7 @@ import type { ModelChannel } from "@/stores/use-config-store";
 import { defaultPriceTier, normalizeUpstreamModelKey, priceTierPayloadFromForm } from "./channel-model-price-tier-form";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
 import { ChannelModelTagsEditor } from "./channel-model-tags-editor";
-import { changeChannelModelCapability, editorSectionForField, initialChannelModelValues, updateChannelModelUpstreamCapabilities, validateChannelModelPrices, validateChannelModelProtocol, type ChannelModelFormValues as FormValues, type EditorSection } from "./channel-model-editor-form";
+import { changeChannelModelCapability, changeChannelModelProtocol, editorSectionForField, initialChannelModelValues, updateChannelModelUpstreamCapabilities, validateChannelModelPrices, validateChannelModelProtocol, type ChannelModelFormValues as FormValues, type EditorSection } from "./channel-model-editor-form";
 
 export function ChannelModelEditor({
     channel,
@@ -77,11 +77,11 @@ export function ChannelModelEditor({
             form.setFieldsValue(changeChannelModelCapability(form.getFieldsValue(true), protocols));
             setConfigurationChanged(true);
         } else if (changed.protocol) {
-            form.setFieldValue("capabilityConfig", modelCapability === "audio" ? undefined : defaultModelCapabilityConfig(changed.protocol, providerModelKey.trim() || modelKey.trim()));
+            form.setFieldsValue(changeChannelModelProtocol(form.getFieldsValue(true), changed.protocol, protocols));
             setConfigurationChanged(true);
         } else if (changed.providerModelKey !== undefined || changed.modelKey !== undefined) {
             const values = form.getFieldsValue(true);
-            const next = updateChannelModelUpstreamCapabilities(values);
+            const next = updateChannelModelUpstreamCapabilities(values, protocols);
             if (next !== values) {
                 form.setFieldValue("capabilityConfig", next.capabilityConfig);
                 setConfigurationChanged(true);
@@ -127,7 +127,7 @@ export function ChannelModelEditor({
                 icon: values.icon?.trim() || "",
                 capability: values.capability,
                 protocol: values.protocol,
-                priceTiers: values.priceTiers.map((tier) => priceTierPayloadFromForm(values.capability, tier, upstreamModel)),
+                priceTiers: values.priceTiers.map((tier) => priceTierPayloadFromForm(values.capability, tier, upstreamModel, capabilityConfig)),
                 enabled: values.enabled !== false,
                 capabilityConfig,
             };
@@ -342,6 +342,7 @@ export function ChannelModelEditor({
                                                     model={providerModelKey || modelKey}
                                                     protocol={form.getFieldValue("protocol")}
                                                     section="references"
+                                                    imageParameters={protocols.find((item) => item.value === modelProtocol)?.imageParameters}
                                                     workflows={protocols.find((item) => item.value === modelProtocol)?.workflows}
                                                     value={capabilityConfig}
                                                     onChange={(next) => {
@@ -361,6 +362,7 @@ export function ChannelModelEditor({
                                                     model={providerModelKey || modelKey}
                                                     protocol={form.getFieldValue("protocol")}
                                                     section="protocol"
+                                                    imageParameters={protocols.find((item) => item.value === modelProtocol)?.imageParameters}
                                                     workflows={protocols.find((item) => item.value === modelProtocol)?.workflows}
                                                     value={capabilityConfig}
                                                     onChange={(next) => {

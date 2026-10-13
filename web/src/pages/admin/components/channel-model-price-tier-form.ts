@@ -1,5 +1,6 @@
-import { imageQualityLabel } from "@/lib/image-quality";
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
+import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
+import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
 
 export type PriceTierMatchMode = "default" | "advanced";
@@ -12,8 +13,10 @@ export function normalizeUpstreamModelKey(value: unknown): string {
 }
 
 export type PriceTierFormValues = {
+    imageSelector?: Record<string, string>;
     matchMode: PriceTierMatchMode;
     operation: string;
+    imageResolution: string;
     quality: string;
     size: string;
     resolution: string;
@@ -39,6 +42,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
     return {
         matchMode,
         operation: "*",
+        imageResolution: "*",
         quality: "*",
         size: "*",
         resolution: "*",
@@ -61,12 +65,21 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
     };
 }
 
-export function priceTierToForm(tier: ChannelModelPriceTier): PriceTierFormValues {
-    const selector = tier.selector || {};
-    const hasSpecificMatch = [selector.operation, selector.quality, selector.resolution, selector.size].some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
+export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabilityConfig, protocol?: string): PriceTierFormValues {
+    const selector = { ...(tier.selector || {}) };
+    const legacyResolution = selector.quality?.toLowerCase();
+    const legacyResolutionProtocol = protocol === "grok-image" || protocol === "agnes-image";
+    if (legacyResolutionProtocol && image?.resolution.supported && !image.quality.supported && legacyResolution && image.resolution.values.some((value) => value.toLowerCase() === legacyResolution) && !selector.imageResolution) {
+        selector.imageResolution = legacyResolution;
+        delete selector.quality;
+    }
+    const candidates = image?.parameters ? Object.values(selector) : [selector.operation, selector.imageResolution, selector.quality, selector.resolution, selector.size];
+    const hasSpecificMatch = candidates.some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
     return {
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
+        imageSelector: Object.fromEntries(Object.entries(selector).filter(([name]) => name !== "operation")),
+        imageResolution: selector.imageResolution || "*",
         quality: selector.quality || "*",
         size: selector.size || "*",
         resolution: selector.resolution || tier.resolution || "*",
@@ -104,7 +117,7 @@ export function legacyPriceTierToForm(item: ChannelModel): PriceTierFormValues {
     };
 }
 
-export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
+export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, capabilityConfig?: ModelCapabilityConfig) {
     if (tier.matchMode !== "advanced") return {};
     const selector: Record<string, string> = {};
     if (tier.operation && tier.operation !== "*") selector.operation = tier.operation;
@@ -112,8 +125,16 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
         if (tier.resolution && tier.resolution !== "*") selector.vquality = tier.resolution;
     }
     if (capability === "image") {
-        if (tier.quality && tier.quality !== "*") selector.quality = tier.quality;
-        if (tier.resolution && tier.resolution !== "*") selector.resolution = tier.resolution;
+        if (capabilityConfig?.image?.parameters) {
+            for (const field of capabilityConfig.image.parameters) {
+                if (field.enabled === false || !field.pricing) continue;
+                const value = tier.imageSelector?.[field.name];
+                if (value !== undefined && value !== "" && value !== "*") selector[field.name] = String(value);
+            }
+            return selector;
+        }
+        if (capabilityConfig?.image?.resolution.supported !== false && tier.imageResolution && tier.imageResolution !== "*") selector.imageResolution = tier.imageResolution;
+        if (capabilityConfig?.image?.quality.supported !== false && tier.quality && tier.quality !== "*") selector.quality = tier.quality;
         if (tier.size && tier.size !== "*") selector.size = tier.size;
     }
     return selector;
@@ -123,20 +144,16 @@ export function priceTierResolutionFromForm(capability: ModelCapabilityChoice, t
     return capability === "video" && tier.matchMode === "advanced" ? tier.resolution || "*" : "*";
 }
 
-export function imagePriceQualityOptions() {
-    return ["low", "medium", "high", "xhigh", "max", "auto", "1k", "2k", "4k"].map((value) => ({ label: imageQualityLabel(value), value }));
-}
-
 export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues) {
     void capability;
     void tier;
     return 0;
 }
 
-export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string) {
+export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string, capabilityConfig?: ModelCapabilityConfig) {
     const videoTokens = capability === "video" && tier.billingMode === "token";
     return {
-        selector: skuSelectorFromForm(capability, tier),
+        selector: skuSelectorFromForm(capability, tier, capabilityConfig),
         resolution: priceTierResolutionFromForm(capability, tier),
         videoSeconds: priceTierVideoSecondsFromForm(capability, tier),
         providerModelKey: tier.providerModelKey?.trim() || upstreamModel,

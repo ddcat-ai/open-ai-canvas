@@ -543,7 +543,11 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	}
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 	priceTierID, _ := config["priceTierId"].(string)
-	snapshotCreditCost(order, channelModelPriceTierForBilling(*channelModel, priceTierID, capability, intent), requestedBillingQuantity(capability, config), tokenEstimate)
+	costTier, err := s.channelModelPriceTierForBilling(*channelModel, priceTierID, capability, intent)
+	if err != nil {
+		return nil, err
+	}
+	snapshotCreditCost(order, costTier, requestedBillingQuantity(capability, config), tokenEstimate)
 	return order, nil
 }
 
@@ -587,7 +591,10 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	if err != nil {
 		return nil, err
 	}
-	tier := channelModelPriceTierForBilling(*item, priceTierID, capability, intents...)
+	tier, err := s.channelModelPriceTierForBilling(*item, priceTierID, capability, intents...)
+	if err != nil {
+		return nil, err
+	}
 	if tier == nil {
 		return nil, BadAuthRequest("当前模型尚未配置所选规格的用户积分价格")
 	}
@@ -657,24 +664,42 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	return order, nil
 }
 
-func channelModelPriceTierForBilling(channelModel model.ChannelModel, priceTierID string, capability string, intents ...ModelRequestIntent) *model.ChannelModelPriceTier {
+func (s *Service) channelModelPriceTierForBilling(channelModel model.ChannelModel, priceTierID string, capability string, intents ...ModelRequestIntent) (*model.ChannelModelPriceTier, error) {
+	intent := ModelRequestIntent{Capability: capability, Options: map[string]any{}}
+	if len(intents) > 0 {
+		intent = intents[0]
+		if normalizeCapability(intent.Capability) == "" {
+			intent.Capability = capability
+		}
+	}
+	var specs []CapabilitySpec
+	if normalizeCapability(capability) == "image" && strings.TrimSpace(channelModel.CapabilityConfigJSON) != "" {
+		spec, err := channelModelCapabilitySpec(channelModel, s.protocolRegistry())
+		if err != nil {
+			return nil, err
+		}
+		specs = append(specs, spec)
+		intent = normalizeImageSizeIntent(spec, intent)
+	}
 	if priceTierID != "" {
 		for index := range channelModel.PriceTiers {
 			tier := &channelModel.PriceTiers[index]
 			if tier.ID == priceTierID && tier.Enabled && tier.PriceConfigured {
-				return tier
+				if len(specs) > 0 && specs[0].ImageParameters != nil {
+					selector := model.DecodeSKUSelector(tier.SelectorJSON)
+					if err := validateImageParameterPriceSelector(specs[0].ImageParameters, selector); err != nil {
+						return nil, err
+					}
+					if matched, _ := matchSKUSelector(selector, imagePriceSelectorForParameters(specs[0].ImageParameters, intent)); !matched {
+						return nil, BadAuthRequest("价格档与实际图片参数不一致")
+					}
+				}
+				return tier, nil
 			}
 		}
-		return nil
+		return nil, nil
 	}
-	if len(intents) > 0 {
-		intent := intents[0]
-		if normalizeCapability(intent.Capability) == "" {
-			intent.Capability = capability
-		}
-		return channelModelPriceTierForIntent(channelModel, intent)
-	}
-	return channelModelPriceTierForIntent(channelModel, ModelRequestIntent{Capability: capability, Options: map[string]any{}})
+	return channelModelPriceTierForIntent(channelModel, intent, specs...), nil
 }
 
 func estimateTaskTokens(input map[string]any) tokenBillingEstimate {

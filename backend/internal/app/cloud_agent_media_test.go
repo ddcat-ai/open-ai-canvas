@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -568,6 +569,117 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 	if len(catalog.(map[string]any)["models"].([]map[string]any)) != 0 {
 		t.Fatal("no-match query fell back to incompatible models")
 	}
+}
+
+func TestCloudAgentImageCatalogTreatsUnselectedPricedOptionsAsCandidates(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	imageModel := seedAgentLogicalImageModel(t, s, db)
+	intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{}}
+
+	models, err := s.PublicLogicalModels(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != imageModel.ID || !models[0].Available || len(models[0].PriceTiers) != 9 {
+		t.Fatalf("unselected image options should expose the priced candidate and all 9 tiers: %#v", models)
+	}
+
+	adminModels, err := s.AdminLogicalModels(&model.User{ID: "admin", Role: model.UserRoleAdmin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adminModels) != 1 || len(adminModels[0].PriceTiers) != 9 {
+		t.Fatalf("admin projection should expose the route's 9 configured tiers: %#v", adminModels)
+	}
+
+	catalog, err := s.cloudAgentModelList(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(catalog)
+	if !strings.Contains(string(encoded), "\"logicalModelId\":\""+imageModel.ID+"\"") || strings.Count(string(encoded), "\"selector\":") != 9 {
+		t.Fatalf("agent catalog did not expose the candidate with 9 price tiers: %s", encoded)
+	}
+	defaultRoute, err := s.ResolveLogicalModel(imageModel.ID, intent)
+	if err != nil || defaultRoute.PriceTier == nil {
+		t.Fatalf("declared model defaults must resolve a priced specification: %v", err)
+	}
+	selectedIntent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{"imageResolution": "4k", "quality": "max"}}
+	routed, err := s.ResolveLogicalModel(imageModel.ID, selectedIntent)
+	if err != nil || routed.PriceTier == nil || routed.PriceTier.ID != "agent-image-4k-max" {
+		t.Fatalf("complete selection should resolve only its exact price tier: routed=%#v error=%v", routed, err)
+	}
+}
+
+func TestCloudAgentImageCatalogRejectsUnpricedExplicitCombination(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	imageModel := seedAgentLogicalImageModel(t, s, db)
+	if err := db.Where("channel_model_id = ? AND selector_json = ?", "agent-image-cm", "{\"imageResolution\":\"4k\",\"quality\":\"max\"}").Delete(&model.ChannelModelPriceTier{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.invalidateRouteCatalog()
+	intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{"imageResolution": "4k", "quality": "max"}}
+
+	models, err := s.PublicLogicalModels(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != imageModel.ID || models[0].Available {
+		t.Fatalf("supported but unpriced explicit combination must not be available: %#v", models)
+	}
+	catalog, err := s.cloudAgentModelList(&intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(catalog)
+	if strings.Contains(string(encoded), "\"logicalModelId\":\""+imageModel.ID+"\"") {
+		t.Fatalf("agent exposed a model with no price tier for the explicit combination: %s", encoded)
+	}
+	if _, err := s.ResolveLogicalModel(imageModel.ID, intent); err == nil {
+		t.Fatal("strict routing accepted an explicitly unpriced combination")
+	}
+}
+
+func seedAgentLogicalImageModel(t *testing.T, s *Service, db *gorm.DB) model.LogicalModel {
+	t.Helper()
+	if err := db.Create(&model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: "{\"frontendModelsEnabled\":true}"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ModelChannel{ID: "agent-image-channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Agent image test"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	config := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "gpt-image-2.5-sunburst")
+	config.Image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "2k", "4k"}, Default: "1k"}
+	config.Image.Quality = ImageQualityConfig{Supported: true, Values: []string{"medium", "high", "max"}, Default: "medium"}
+	if err := db.Create(&model.ChannelModel{ID: "agent-image-cm", ChannelID: "agent-image-channel", ModelKey: "gpt-image-2.5-sunburst", DisplayName: "Sunburst", Capability: "image", Protocol: model.ChannelInterfaceOpenAIImage, CapabilityConfigJSON: mustEncodeModelCapabilityConfig(t, config), BillingMode: "fixed_request", PriceConfigured: true, Enabled: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, resolution := range []string{"1k", "2k", "4k"} {
+		for _, quality := range []string{"medium", "high", "max"} {
+			selector := fmt.Sprintf("{\"imageResolution\":%q,\"quality\":%q}", resolution, quality)
+			if err := db.Create(&model.ChannelModelPriceTier{ID: "agent-image-" + resolution + "-" + quality, ChannelModelID: "agent-image-cm", SelectorKey: selector, SelectorJSON: selector, BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true}).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	spec, err := CapabilitySpecFromModelCapabilityConfig(config, "image")
+	if err != nil {
+		t.Fatal(err)
+	}
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imageModel := model.LogicalModel{ID: "agent-sunburst", Code: "agent-sunburst", Name: "Sunburst", Capability: "image", Enabled: true, ActiveRevisionID: "agent-sunburst-revision", PricePolicy: "channel", BillingMode: "fixed_request"}
+	revision := model.LogicalModelRevision{ID: imageModel.ActiveRevisionID, LogicalModelID: imageModel.ID, Version: 1, CapabilitySpecJSON: string(specJSON), DefaultOptionsJSON: "{}"}
+	route := model.LogicalModelRoute{ID: "agent-sunburst-route", LogicalModelRevisionID: revision.ID, ChannelModelID: "agent-image-cm", Enabled: true, Weight: 1}
+	for _, row := range []any{&imageModel, &revision, &route} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.invalidateRouteCatalog()
+	return imageModel
 }
 
 func TestCloudAgentMediaDraftReuseLifecycle(t *testing.T) {

@@ -199,6 +199,7 @@ export function synchronizeGenerationSpec(node: CanvasNodeData, patch: Partial<C
     if (Object.prototype.hasOwnProperty.call(patch, "composerContent") && typeof patch.composerContent === "string") next.prompt = patch.composerContent;
     else if (Object.prototype.hasOwnProperty.call(patch, "prompt") && typeof patch.prompt === "string") next.prompt = patch.prompt;
     if (Object.prototype.hasOwnProperty.call(patch, "model")) {
+        if (patch.model !== node.metadata?.model && !Object.prototype.hasOwnProperty.call(patch, "imageParameters")) delete next.options.imageParameters;
         const model = patch.model ? decodeChannelModel(patch.model) : null;
         next.modelSelection = model ? { kind: "channel", channelId: model.channelId, modelKey: model.model } : undefined;
         delete (metadata as Record<string, unknown>).logicalModelId;

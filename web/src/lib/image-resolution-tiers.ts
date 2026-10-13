@@ -1,4 +1,4 @@
-export type ImageResolutionTier = "1k" | "1.5k" | "2k" | "4k";
+export type ImageResolutionTier = string;
 
 export type ImageResolutionOption = {
     size: string;

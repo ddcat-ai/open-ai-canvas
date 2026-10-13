@@ -288,6 +288,8 @@ export type CanvasNodeMetadata = {
     workflowParameters?: Record<string, unknown>;
     size?: string;
     quality?: string;
+    imageResolution?: string;
+    imageParameters?: string;
     transparentBackground?: string;
     count?: number;
     textCount?: number;

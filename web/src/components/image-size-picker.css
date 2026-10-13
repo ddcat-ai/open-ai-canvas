@@ -109,6 +109,9 @@
 .image-size-presets-editor {
     container: image-presets / inline-size;
 }
+.image-size-preset-group.is-ungrouped {
+    grid-template-columns: minmax(0, 1fr);
+}
 .image-size-editor-intro {
     margin: 0 0 2px;
     color: var(--muted-foreground);
@@ -159,8 +162,8 @@
 }
 .image-size-preset-options {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 84px), 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr));
+    gap: 12px;
 }
 .image-size-preset-option-wrap {
     display: grid;
@@ -171,9 +174,9 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    gap: 3px;
+    gap: 6px;
     color: var(--muted-foreground);
-    font-size: var(--fs-tiny);
+    font-size: var(--fs-label);
     font-variant-numeric: tabular-nums;
 }
 .image-size-preset-dimensions label {
@@ -187,10 +190,15 @@
 .image-size-preset-dimensions .ant-input-number {
     width: 100%;
     min-width: 0;
+    padding-inline: 0;
 }
 .image-size-preset-dimensions .ant-input-number-input {
-    padding-inline: 5px;
-    font-size: var(--fs-tiny);
+    padding-inline: 6px;
+    color: var(--foreground);
+    font-size: var(--fs-body);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
 }
 .image-size-preset-option,
 .image-size-default-options button {
@@ -220,7 +228,7 @@
     flex: 0 0 auto;
 }
 .image-size-preset-option small {
-    color: var(--muted-foreground);
+    color: var(--foreground);
     font-size: var(--fs-label);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;

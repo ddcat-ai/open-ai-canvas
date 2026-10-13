@@ -11,6 +11,7 @@ export type CapabilityImageSize = {
     presets?: CapabilityImageSizePreset[];
 };
 export type CapabilitySpec = {
+    imageParameters?: import("@/lib/image-parameters").ImageParameter[];
     version: 1;
     capability: "text" | "image" | "video" | "audio";
     operations?: string[];

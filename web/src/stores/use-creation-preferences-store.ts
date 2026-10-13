@@ -6,8 +6,11 @@ import { scopedLocalStorage } from "@/lib/user-scope";
 export type CreationModePreference = "text" | "image" | "video";
 
 export type CreationImagePreferences = {
+    model?: string;
+    imageParameters?: string;
     ratio?: string;
     quality?: string;
+    imageResolution?: string;
     count?: string;
 };
 
@@ -41,8 +44,11 @@ function normalizeImagePreferences(value: unknown): CreationImagePreferences | u
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
     const raw = value as Record<string, unknown>;
     const preferences = {
+        ...(nonEmptyString(raw.model) ? { model: raw.model } : {}),
+        ...(nonEmptyString(raw.imageParameters) ? { imageParameters: raw.imageParameters } : {}),
         ...(nonEmptyString(raw.ratio) ? { ratio: raw.ratio } : {}),
         ...(nonEmptyString(raw.quality) ? { quality: raw.quality } : {}),
+        ...(nonEmptyString(raw.imageResolution) ? { imageResolution: raw.imageResolution } : {}),
         ...(nonEmptyString(raw.count) ? { count: raw.count } : {}),
     };
     return Object.keys(preferences).length ? preferences : undefined;

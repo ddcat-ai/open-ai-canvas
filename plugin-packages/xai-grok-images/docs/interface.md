@@ -71,17 +71,19 @@
 
 有参考图时改走 /v1/images/edits；resolution 只接受 1k/2k；像素尺寸会换算为 aspect_ratio。
 
+## 动态图片参数
+
+`contributes.providers[].imageParameters` 是渠道模型、前台模型与生成界面共用的参数合同。`name` 为稳定身份，`type`、`values`、`min/max/step`、`default` 描述输入；`models` 限定适用上游模型，`enabled` 为初始启用状态。只有 `pricing: true` 的启用字段允许作为价格条件；其他参数仍参与生成。渠道可收窄范围，绑定与计价资格由插件拥有。`binding` 映射到统一请求或插件自己的 `providerOptions` 命名空间。
+
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
-
-以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。
 
 ```json
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "xai-grok-images",
   "name": "xAI Grok Images",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "xAI / 影策",
   "description": "xAI Grok Images 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -120,6 +122,49 @@
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅比例",
+            "type": "string",
+            "binding": "aspectRatio",
+            "encoding": "ratio",
+            "values": [
+              "1:1",
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3",
+              "2:1",
+              "1:2"
+            ],
+            "default": "1:1"
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "binding": "resolution",
+            "values": [
+              "1k",
+              "2k"
+            ],
+            "default": "1k",
+            "pricing": true
+          },
+          {
+            "name": "count",
+            "label": "生成数量",
+            "type": "integer",
+            "binding": "imageCount",
+            "min": 1,
+            "max": 10,
+            "step": 1,
+            "default": 1
+          }
+        ],
         "parameters": [
           {
             "name": "model",

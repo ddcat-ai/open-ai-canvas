@@ -39,7 +39,7 @@ export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capabilit
     let bestScore = -1;
     let matched: ModelPriceTier[] = [];
     for (const tier of tiers) {
-        const selector = priceSelectorForTier(tier);
+        const selector = priceSelectorForTier(tier, Boolean(modelCapabilityConfigFor(config, config.model || config.imageModel).image?.parameters));
         const conditions = Object.entries(selector).filter(([, value]) => value && value !== "*");
         if (conditions.some(([key, value]) => requested[key] !== value)) continue;
         const score = conditions.length;
@@ -139,7 +139,14 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
     }
     if (capability === "image") {
         requested.operation = imagePriceOperation(requirements);
-        const options = { ...modelRequestOptions(config, "image"), ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
+        const options: Record<string, unknown> = { ...modelRequestOptions(config, "image"), ...requirements?.options, ...(requirements?.imageSize ? { size: requirements.imageSize } : {}) };
+        const profile = modelCapabilityConfigFor(config, config.model || config.imageModel)?.image;
+        if (profile?.parameters) {
+            for (const field of profile.parameters) {
+                if (field.enabled !== false && field.pricing && options[field.name] !== undefined) requested[field.name] = String(options[field.name]);
+            }
+            return requested;
+        }
         const imageQuality = String(options.quality ?? "").trim().toLowerCase();
         const imageSize = String(options.size ?? "").trim();
         Object.assign(requested, imagePriceSelector(imageQuality, imageSize, modelCapabilityConfigFor(config, config.model || config.imageModel)?.image));
@@ -152,8 +159,8 @@ function imagePriceOperation(requirements?: ModelRequirements) {
     return (input?.imageCount || 0) + (input?.characterCount || 0) > 0 ? "image_to_image" : "text_to_image";
 }
 
-function priceSelectorForTier(tier: ModelPriceTier) {
-    const selector = normalizeImagePriceSelector({ ...(tier.selector || {}) });
+function priceSelectorForTier(tier: ModelPriceTier, declaredParameters = false) {
+    const selector = normalizeImagePriceSelector({ ...(tier.selector || {}) }, declaredParameters);
     if (!Object.keys(selector).length) {
         const resolution = normalizeTierResolution(tier.resolution);
         if (resolution !== "*") selector.vquality = resolution;

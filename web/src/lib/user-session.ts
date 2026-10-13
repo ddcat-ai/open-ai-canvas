@@ -1,5 +1,6 @@
 import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
-import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog } from "@/services/api/logical-models";
+import { projectImageParameters, imageParametersForSpec } from "./image-parameters";
+import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
 import { scopedLocalStorage, setActiveUserScope, withUserScopedPersistenceSuppressed } from "@/lib/user-scope";
@@ -258,6 +259,11 @@ export function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<
         });
         projected.image.maxOutputs = maxNumericOption(spec.options?.count, 1);
         projected.image.transparentBackground = booleanOption(spec.options?.transparentBackground, defaults.transparentBackground);
+        if (spec.imageParameters)
+            projected.image = projectImageParameters(
+                projected.image,
+                imageParametersForSpec(spec).map((field) => ({ ...field, default: (defaults[field.name] as import("./image-parameters").ImageParameterValue | undefined) ?? field.default })),
+            );
     }
     if (spec.capability === "video" && projected.video) {
         projected.video.references.minImages = spec.inputs?.image?.min ?? 0;

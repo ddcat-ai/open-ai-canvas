@@ -12,7 +12,7 @@ import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
 
-export type BatchGenerationSettings = Pick<AiConfig, "model" | "imageModel" | "quality" | "size" | "transparentBackground" | "count"> & { cameraControl?: CameraControlOptions };
+export type BatchGenerationSettings = Pick<AiConfig, "model" | "imageModel" | "imageResolution" | "imageParameters" | "quality" | "size" | "transparentBackground" | "count"> & { cameraControl?: CameraControlOptions };
 
 type BatchGenerationSettingsDialogProps = {
     open: boolean;
@@ -35,7 +35,7 @@ export function BatchGenerationSettingsDialog({ open, config, rowCount, concurre
         }
     }, [config, open]);
 
-    const handleConfigChange = (key: "quality" | "size" | "transparentBackground" | "count", value: string) => {
+    const handleConfigChange = (key: "quality" | "imageResolution" | "imageParameters" | "size" | "transparentBackground" | "count", value: string) => {
         setGenerationConfig((current) => ({ ...current, [key]: value }));
     };
 
@@ -102,6 +102,8 @@ export function BatchGenerationSettingsDialog({ open, config, rowCount, concurre
                         onClick={() => onConfirm({
                             model: generationConfig.model,
                             imageModel: generationConfig.imageModel,
+                            imageResolution: generationConfig.imageResolution,
+                            imageParameters: generationConfig.imageParameters,
                             quality: generationConfig.quality,
                             size: generationConfig.size,
                             transparentBackground: generationConfig.transparentBackground,

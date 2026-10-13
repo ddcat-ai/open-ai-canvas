@@ -219,6 +219,29 @@ func TestRepriceTierFieldValidation(t *testing.T) {
 	}
 }
 
+func TestNormalizeChannelModelTierSelectorAcceptsLegacyTypoWithoutCollidingWithPixelTier(t *testing.T) {
+	for _, key := range []string{"resoluton"} {
+		t.Run(key, func(t *testing.T) {
+			selector, resolution, videoSeconds, err := normalizeChannelModelTierSelector("image", ChannelModelPriceTierRequest{
+				Selector: map[string]string{key: "2K"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selector["imageResolution"] != "2k" || selector[key] != "" || resolution != "*" || videoSeconds != 0 {
+				t.Fatalf("selector=%v resolution=%q videoSeconds=%d", selector, resolution, videoSeconds)
+			}
+		})
+	}
+}
+
+func TestImageTierSelectorDoesNotOverwriteIndependentResolution(t *testing.T) {
+	selector, _, _, err := normalizeChannelModelTierSelector("image", ChannelModelPriceTierRequest{Selector: map[string]string{"imageResolution": "1k", "resolution": "2k"}})
+	if err != nil || selector["imageResolution"] != "1k" || selector["resolution"] != "2k" {
+		t.Fatalf("selector = %#v, err=%v", selector, err)
+	}
+}
+
 func TestBatchRepricingRollsBackOnConcurrentChange(t *testing.T) {
 	for _, target := range []string{"model", "tier"} {
 		t.Run(target, func(t *testing.T) {

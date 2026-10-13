@@ -45,6 +45,8 @@ export function agentImageApproval(detail: Record<string, unknown>): AgentImageA
             channelId: typeof args.channelId === "string" ? args.channelId : "",
             channelModelKey: typeof args.channelModelKey === "string" ? args.channelModelKey : "",
             size: args.size,
+            ...(typeof args.imageResolution === "string" ? { imageResolution: args.imageResolution } : {}),
+            ...(typeof args.imageParameters === "string" ? { imageParameters: args.imageParameters } : {}),
             quality: typeof args.quality === "string" ? args.quality : "",
             prompt: args.prompt,
             referenceNodeIds: Array.isArray(args.referenceNodeIds) ? args.referenceNodeIds.filter((id: unknown): id is string => typeof id === "string") : [],

@@ -7,8 +7,23 @@ import { buildImageResolutionOptions, type ImageResolutionOption, type ImageReso
 
 import { resolveImageRequestSize, validateImageSize } from "@/services/api/image-validation";
 
-export function ImageSizePicker({ profile, size, quality, onChange }: { profile: ImageCapabilityConfig; size: string; quality?: string; onChange: (size: string, quality?: string) => void }) {
-    const IMAGE_RESOLUTIONS = imageResolutionTiers(profile);
+export function ImageSizePicker({
+    profile,
+    size,
+    quality,
+    imageResolution,
+    canSelectResolution,
+    onChange,
+}: {
+    profile: ImageCapabilityConfig;
+    size: string;
+    quality?: string;
+    imageResolution?: string;
+    canSelectResolution?: (resolution: string) => boolean;
+    onChange: (size: string, quality?: string, resolution?: string) => void;
+}) {
+    const ungrouped = Boolean(profile.parameters && !profile.resolution.supported);
+    const IMAGE_RESOLUTIONS = ungrouped ? [...new Set(imageSizePresets(profile).map((p) => p.tier))] : imageResolutionTiers(profile);
     const presets = imageSizePresets(profile).filter((preset) => imageTierAvailable(profile, preset.tier));
     const visibleTiers = IMAGE_RESOLUTIONS.filter((value) => presets.some((preset) => preset.tier === value));
     const [chosenTier, setChosenTier] = useState<ImageResolutionTier>("1k");
@@ -16,9 +31,12 @@ export function ImageSizePicker({ profile, size, quality, onChange }: { profile:
     const [custom, setCustom] = useState("");
     const [error, setError] = useState("");
     const qualityTier = IMAGE_RESOLUTIONS.find((value) => value === (quality || "").toLowerCase());
+    const resolutionTier = IMAGE_RESOLUTIONS.find((value) => value === (imageResolution || "").toLowerCase());
+    const selectedTier = profile.resolution.supported ? resolutionTier : qualityTier;
     const matches = (preset: ImageResolutionOption) => {
         if (imagePresetValue(profile, preset) !== size) return false;
         if (profile.size.parameter !== "aspect_ratio") return true;
+        if (profile.resolution.supported) return !resolutionTier || resolutionTier === preset.tier;
         if (imageResolutionUsesQuality(profile)) return imageQualityForTier(profile, preset.tier) === (quality || profile.quality.default);
         return !qualityTier || qualityTier === preset.tier;
     };
@@ -50,19 +68,26 @@ export function ImageSizePicker({ profile, size, quality, onChange }: { profile:
         presets.find((preset) => preset.size === resolvedLegacySize) ||
         (restoredCustom && imageTierAvailable(profile, restoredCustom.tier) ? restoredCustom : undefined);
     const available = (value: ImageResolutionTier) => imageTierAvailable(profile, value) && (profile.size.allowCustom || presets.some((preset) => preset.tier === value));
-    const tier =
-        (active && visibleTiers.includes(active.tier) ? active.tier : undefined) ||
-        (profile.size.parameter === "aspect_ratio" && imageResolutionUsesQuality(profile) ? visibleTiers.find((value) => imageQualityForTier(profile, value) === (quality || profile.quality.default)) : undefined) ||
-        (qualityTier && visibleTiers.includes(qualityTier) ? qualityTier : undefined) ||
-        (visibleTiers.includes(chosenTier) ? chosenTier : visibleTiers[0]) ||
-        "1k";
+    const tier = ungrouped
+        ? (IMAGE_RESOLUTIONS[0] ?? "")
+        : (active && visibleTiers.includes(active.tier) ? active.tier : undefined) ||
+          (profile.size.parameter === "aspect_ratio" && imageResolutionUsesQuality(profile) ? visibleTiers.find((value) => imageQualityForTier(profile, value) === (quality || profile.quality.default)) : undefined) ||
+          (selectedTier && visibleTiers.includes(selectedTier) ? selectedTier : undefined) ||
+          (visibleTiers.includes(chosenTier) ? chosenTier : visibleTiers[0]) ||
+          "1k";
     const choices = presets.filter((preset) => preset.tier === tier);
     const select = (preset: ImageResolutionOption) => {
         if (!available(preset.tier)) return;
+        if (profile.resolution.supported && canSelectResolution && !canSelectResolution(preset.tier)) return;
+        const resolution = profile.resolution.values.find((value) => value.toLowerCase() === preset.tier);
         setChosenTier(preset.tier);
         setCustomPreset(preset);
         setError("");
-        onChange(imagePresetValue(profile, preset), profile.size.parameter === "aspect_ratio" ? imageQualityForSelection(profile, preset.tier) : undefined);
+        onChange(
+            imagePresetValue(profile, preset),
+            profile.resolution.supported ? undefined : profile.size.parameter === "aspect_ratio" ? imageQualityForSelection(profile, preset.tier) : undefined,
+            profile.resolution.supported ? resolution || preset.tier : undefined,
+        );
     };
     const makeCustom = (next: ImageResolutionTier, ratio: string) => {
         const preset = imagePresetForRatio(next, ratio);
@@ -116,10 +141,43 @@ export function ImageSizePicker({ profile, size, quality, onChange }: { profile:
             setError(reason instanceof Error ? reason.message : "尺寸格式无效");
         }
     };
-    if (profile.size.parameter === "none") return null;
+    if (profile.size.parameter === "none")
+        return profile.resolution.supported ? (
+            <div className="image-size-picker">
+                <div className="image-size-label">分辨率</div>
+                <div className="image-size-tiers">
+                    {profile.resolution.values.map((value) => (
+                        <button type="button" key={value} aria-pressed={value === imageResolution} disabled={Boolean(canSelectResolution && !canSelectResolution(value))} onClick={() => onChange(size, undefined, value)}>
+                            {value.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        ) : null;
     return (
         <div className="image-size-picker">
-            {visibleTiers.length ? (
+            {profile.resolution.supported ? (
+                <>
+                    <div className="image-size-label">分辨率</div>
+                    <div className="image-size-tiers">
+                        {profile.resolution.values.map((value) => (
+                            <button
+                                type="button"
+                                key={value}
+                                aria-pressed={value === imageResolution}
+                                disabled={Boolean(canSelectResolution && !canSelectResolution(value))}
+                                onClick={() => {
+                                    const next = value.toLowerCase() as ImageResolutionTier;
+                                    if (size !== "auto" && visibleTiers.includes(next)) changeTier(next);
+                                    else onChange(size, undefined, value);
+                                }}
+                            >
+                                {value.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : !ungrouped && visibleTiers.length && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
                 <>
                     <div className="image-size-label">分辨率</div>
                     <div className="image-size-tiers">

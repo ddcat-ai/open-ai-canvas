@@ -208,6 +208,8 @@ describe("统一图片分辨率与宽高比", () => {
         expect(picker).not.toMatch(/<button[^>]*>4K/);
         expect(picker).toContain("换算参考");
         profile.size.parameter = "none";
+        expect(renderToStaticMarkup(<ImageSizePicker profile={profile} size="auto" onChange={() => {}} />)).toContain("分辨率");
+        profile.resolution.supported = false;
         expect(renderToStaticMarkup(<ImageSizePicker profile={profile} size="auto" onChange={() => {}} />)).toBe("");
     });
 

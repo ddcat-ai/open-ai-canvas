@@ -8,6 +8,8 @@ export type AgentMediaSettings = {
     channelId?: string;
     channelModelKey?: string;
     size: string;
+    imageResolution?: string;
+    imageParameters?: string;
     quality: string;
     durationSeconds?: number;
     videoGenerateAudio?: boolean;

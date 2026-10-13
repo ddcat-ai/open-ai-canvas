@@ -60,7 +60,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, []);
-    const normalizedImage = normalizeImageValue(imageProfile, config);
+    const normalizedImage = normalizeImageValue(imageProfile, config, requestConfig.interfaceType);
     const n = Number(normalizedImage.count);
     if (requestConfig.interfaceType === "gemini-image") {
         try {
@@ -73,7 +73,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
         try {
             const size = normalizedImage.size && normalizedImage.size !== "auto" ? normalizedImage.size : undefined;
             const aspectRatio = size?.includes(":") ? size : undefined;
-            const resolution = normalizeGrokImageResolution(normalizedImage.quality);
+            const resolution = normalizeGrokImageResolution(normalizedImage.imageResolution !== "auto" ? normalizedImage.imageResolution : normalizedImage.quality);
             const responseData = await postChannelJSON<ImageApiResponse>(
                 requestConfig,
                 aiApiUrl(requestConfig, "/images/generations"),
@@ -94,7 +94,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
         }
     }
     const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
-    const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
+    const requestSize = resolveImageRequestSize(imageProfile, imageProfile.resolution.supported ? normalizedImage.imageResolution : quality, normalizedImage.size);
     const isVolcengineArk = isVolcengineArkImageProtocol(requestConfig.interfaceType);
     const normalizedRequestSize = requestSize?.parameter === "size" && isVolcengineArk ? { ...requestSize, value: normalizeVolcengineArkImageSize(requestSize.value)! } : requestSize;
     try {
@@ -136,7 +136,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, references, mask);
-    const normalizedImage = normalizeImageValue(imageProfile, config);
+    const normalizedImage = normalizeImageValue(imageProfile, config, requestConfig.interfaceType);
     const n = Number(normalizedImage.count);
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     if (requestConfig.interfaceType === "gemini-image") {
@@ -154,7 +154,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             const imageUrl = await grokImageInputURL(references[0]);
             const size = normalizedImage.size && normalizedImage.size !== "auto" ? normalizedImage.size : undefined;
             const aspectRatio = size?.includes(":") ? size : undefined;
-            const resolution = normalizeGrokImageResolution(normalizedImage.quality);
+            const resolution = normalizeGrokImageResolution(normalizedImage.imageResolution !== "auto" ? normalizedImage.imageResolution : normalizedImage.quality);
             const response = await postChannelJSON<ImageApiResponse>(
                 requestConfig,
                 aiApiUrl(requestConfig, "/images/edits"),
@@ -178,7 +178,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (isVolcengineArkImageProtocol(requestConfig.interfaceType)) {
         if (mask) throw new Error("火山方舟图片协议不支持蒙版编辑，请移除蒙版后重试");
         const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
-        const sizeRequest = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
+        const sizeRequest = resolveImageRequestSize(imageProfile, imageProfile.resolution.supported ? normalizedImage.imageResolution : quality, normalizedImage.size);
         const requestSize = sizeRequest?.parameter === "size" ? { ...sizeRequest, value: normalizeVolcengineArkImageSize(sizeRequest.value)! } : sizeRequest;
         try {
             const images = await Promise.all(references.map((image) => imageToDataUrl(image)));
@@ -201,7 +201,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
         }
     }
     const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
-    const requestSize = resolveImageRequestSize(imageProfile, quality, normalizedImage.size);
+    const requestSize = resolveImageRequestSize(imageProfile, imageProfile.resolution.supported ? normalizedImage.imageResolution : quality, normalizedImage.size);
     const formData = new FormData();
     formData.set("model", requestConfig.model);
     formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));

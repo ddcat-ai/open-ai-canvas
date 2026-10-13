@@ -72,8 +72,9 @@ describe("image resolution tiers", () => {
 
         expect(profile.size.parameter).toBe("aspect_ratio");
         expect(profile.size.values).toEqual(["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"]);
-        expect(profile.quality.values).toEqual(["1k", "2k", "4k"]);
-        expect(normalizeImageValue(profile, { size: "3:4", quality: "4k", count: "4" })).toMatchObject({ size: "3:4", quality: "4k", count: "1" });
+        expect(profile.resolution.values).toEqual(["1k", "2k", "4k"]);
+        expect(profile.quality.supported).toBe(false);
+        expect(normalizeImageValue(profile, { size: "3:4", imageResolution: "4k", count: "4" })).toMatchObject({ size: "3:4", imageResolution: "4k", count: "1" });
 
         // 顶层 response_format 是官方明确列出的错误写法，output_format 会被上游直接拒绝。
         expect(profile.responseFormat.supported).toBe(false);

@@ -106,7 +106,7 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 		if decodeErr != nil || config == nil {
 			continue
 		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(items[index].Capability, string(items[index].Protocol), firstNonEmpty(items[index].ProviderModelKey, items[index].ModelKey), config)
+		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(items[index].Capability, string(items[index].Protocol), firstNonEmpty(items[index].ProviderModelKey, items[index].ModelKey), config, s.protocolRegistry())
 		if normalizeErr != nil || normalized == nil {
 			continue
 		}
@@ -171,9 +171,11 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig); err != nil {
-			return nil, err
+		validated, validateErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
+		if validateErr != nil {
+			return nil, validateErr
 		}
+		req.CapabilityConfig = validated
 	}
 	tiers, err := s.normalizeChannelModelPriceTiers(req, capability, protocol, providerModelKey)
 	if err != nil {
@@ -216,7 +218,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.Protocol = protocol
 	s.applyChannelModelPriceTierSummary(item, tiers)
 	if capability == "text" || capability == "image" || capability == "video" {
-		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig)
+		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -235,7 +237,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
-	if err := validateChannelModelTierCapabilities(tiers, item.CapabilityConfigJSON, capability); err != nil {
+	if err := validateChannelModelTierCapabilities(tiers, item.CapabilityConfigJSON, capability, string(protocol)); err != nil {
 		return nil, err
 	}
 	// 渠道模型及所有价格档必须同时落库，不能出现“能力已开放但规格价格尚未更新”的窗口。

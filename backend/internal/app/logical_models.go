@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 	"yingce/backend/internal/repository"
 )
 
@@ -187,7 +188,7 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 		if !channelOK {
 			return nil, errors.New("供应线路引用的渠道模型不存在")
 		}
-		capabilitySpec, specErr := channelModelCapabilitySpec(channelModel)
+		capabilitySpec, specErr := channelModelCapabilitySpec(channelModel, s.protocolRegistry())
 		if specErr != nil {
 			return nil, specErr
 		}
@@ -381,11 +382,11 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 			return nil, nil, nil, false, BadAuthRequest("前台模型只能同步系统渠道模型")
 		}
 		capability = normalizeCapability(source.Capability)
-		derivedSpec, specErr := channelModelCapabilitySpec(*source)
+		derivedSpec, specErr := channelModelCapabilitySpec(*source, s.protocolRegistry())
 		if specErr != nil {
 			return nil, nil, nil, false, specErr
 		}
-		derivedDefaults, defaultsErr := channelModelDefaultOptions(*source, derivedSpec)
+		derivedDefaults, defaultsErr := channelModelDefaultOptions(*source, derivedSpec, s.protocolRegistry())
 		if defaultsErr != nil {
 			return nil, nil, nil, false, defaultsErr
 		}
@@ -496,7 +497,7 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 		if modelErr != nil {
 			return nil, nil, nil, false, BadAuthRequest("供应线路引用的渠道模型不存在")
 		}
-		capabilitySpec, specErr := channelModelCapabilitySpec(*channelModel)
+		capabilitySpec, specErr := channelModelCapabilitySpec(*channelModel, s.protocolRegistry())
 		if specErr != nil {
 			return nil, nil, nil, false, specErr
 		}
@@ -532,6 +533,22 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 			return nil, nil, nil, false, BadAuthRequest("Token 计费仅支持文本和视频前台模型")
 		}
 	}
+	if capability == "image" && len(structuralRouteSpecs) > 0 {
+		// Rebuild labels, types and pricing eligibility from current routes. The
+		// frontend may restrict values, but cannot invent provider capabilities.
+		reconciled := effectiveImageParameterSpec(req.CapabilitySpec, structuralRouteSpecs)
+		if reconciled.ImageParameters != nil {
+			if err := validateProductSpecWithinRoutes(req.CapabilitySpec, structuralRouteSpecs); err != nil {
+				return nil, nil, nil, false, err
+			}
+			req.CapabilitySpec = reconciled
+			encodedSpec, encodeErr := json.Marshal(reconciled)
+			if encodeErr != nil {
+				return nil, nil, nil, false, encodeErr
+			}
+			revision.CapabilitySpecJSON = string(encodedSpec)
+		}
+	}
 	// 停用必须始终可执行，便于管理员立即阻止失效线路继续对外服务；重新启用时再强校验结构能力和计费可用性。
 	if req.Enabled {
 		if len(structuralRouteSpecs) == 0 {
@@ -563,9 +580,18 @@ func supportsLogicalModelTokenBilling(capability string, enabledRouteProtocols [
 }
 
 func normalizeLogicalDefaults(spec CapabilitySpec, defaults map[string]any) (map[string]any, error) {
+	if spec.Capability == "image" && spec.ImageParameters != nil {
+		parameters := append([]protocol.ImageParameter(nil), spec.ImageParameters...)
+		for index := range parameters {
+			parameters[index].Required = false
+		}
+		if _, err := resolveImageParameterValues(parameters, defaults); err != nil {
+			return nil, err
+		}
+	}
 	result := make(map[string]any, len(defaults))
 	for rawName, value := range defaults {
-		name := canonicalCapabilityOptionName(rawName)
+		name := canonicalModelOptionName(spec.Capability, rawName)
 		if _, exists := result[name]; exists {
 			return nil, BadAuthRequest("默认参数存在重复别名：" + name)
 		}
@@ -594,13 +620,13 @@ func defaultMap(value map[string]any) map[string]any {
 	return value
 }
 
-func channelModelCapabilitySpec(channelModel model.ChannelModel) (CapabilitySpec, error) {
+func channelModelCapabilitySpec(channelModel model.ChannelModel, registries ...*protocol.Registry) (CapabilitySpec, error) {
 	config, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
 	if err != nil {
 		return CapabilitySpec{}, BadAuthRequest("渠道模型能力配置无效，请先修复渠道模型")
 	}
 	if config != nil {
-		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config)
+		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config, registries...)
 		if err != nil {
 			return CapabilitySpec{}, err
 		}
@@ -673,18 +699,21 @@ func capabilitySpecWithPriceTiers(spec CapabilitySpec, channelModel model.Channe
 	return result
 }
 
-func channelModelDefaultOptions(channelModel model.ChannelModel, spec CapabilitySpec) (map[string]any, error) {
+func channelModelDefaultOptions(channelModel model.ChannelModel, spec CapabilitySpec, registries ...*protocol.Registry) (map[string]any, error) {
 	config, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
 	if err != nil {
 		return nil, BadAuthRequest("渠道模型能力配置无效，请先修复渠道模型")
 	}
 	if config != nil {
-		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config)
+		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config, registries...)
 		if err != nil {
 			return nil, err
 		}
 	}
 	defaults := make(map[string]any)
+	if spec.Capability == "image" && spec.ImageParameters != nil {
+		return normalizeLogicalDefaults(spec, imageParameterDefaults(spec.ImageParameters))
+	}
 	if config != nil {
 		switch normalizeCapability(channelModel.Capability) {
 		case "image":

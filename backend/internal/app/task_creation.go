@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 
 	"yingce/backend/internal/model"
@@ -275,7 +276,10 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 		}
 	}
 	for key, value := range routed.Defaults {
-		canonical := canonicalCapabilityOptionName(key)
+		canonical := canonicalModelOptionName(routed.Intent.Capability, key)
+		if !isProviderCapabilityOption(canonical) {
+			continue
+		}
 		if existing, exists := nextConfig[canonical]; !exists || existing == nil || strings.TrimSpace(fmt.Sprint(existing)) == "" {
 			nextConfig[canonical] = providerConfigOptionValue(value)
 		}
@@ -283,7 +287,7 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 	// 路由匹配和真实请求必须使用同一组参数；逻辑能力参数覆盖空的页面配置，但不携带供应链字段。
 	if options, ok := input["capabilityOptions"].(map[string]any); ok {
 		for key, value := range options {
-			canonical := canonicalCapabilityOptionName(key)
+			canonical := canonicalModelOptionName(routed.Intent.Capability, key)
 			if isProviderCapabilityOption(canonical) {
 				nextConfig[canonical] = providerConfigOptionValue(value)
 			}
@@ -298,6 +302,15 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 		providerModelKey = firstNonEmpty(routed.PriceTier.ProviderModelKey, providerModelKey)
 	}
 	nextConfig["providerModelKey"] = firstNonEmpty(providerModelKey, routed.ChannelModel.ModelKey)
+	if routed.Intent.Capability == "image" && routed.CapabilitySpec.ImageParameters != nil {
+		nextConfig["imageParameters"] = maps.Clone(routed.Intent.Options)
+		for _, key := range []string{"size", "quality", "imageResolution", "transparentBackground", "count"} {
+			delete(nextConfig, key)
+			if value, exists := routed.Intent.Options[key]; exists {
+				nextConfig[key] = providerConfigOptionValue(value)
+			}
+		}
+	}
 	input["config"] = nextConfig
 	return input
 }
@@ -325,6 +338,15 @@ func normalizeTaskInput(input map[string]any) (map[string]any, error) {
 	var normalized map[string]any
 	if err := json.Unmarshal(encoded, &normalized); err != nil {
 		return nil, BadAuthRequest("任务输入格式无效")
+	}
+	if config, ok := normalized["config"].(map[string]any); ok {
+		if encoded, ok := config["imageParameters"].(string); ok {
+			var parameters map[string]any
+			if err := json.Unmarshal([]byte(encoded), &parameters); err != nil || parameters == nil {
+				return nil, BadAuthRequest("图片扩展参数必须为有效对象")
+			}
+			config["imageParameters"] = parameters
+		}
 	}
 	if snapshot, ok := normalized["canvasSnapshot"]; ok {
 		normalized["canvasSnapshot"] = compactPersistedValue(snapshot)
@@ -460,14 +482,14 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 	// 不能让两份客户端数据分别驱动计费与真实上游请求。
 	if options, ok := input["capabilityOptions"].(map[string]any); ok {
 		for key, value := range options {
-			canonical := canonicalCapabilityOptionName(key)
+			canonical := canonicalModelOptionName(channelModel.Capability, key)
 			if isCapabilityOptionFor(channelModel.Capability, canonical) {
 				nextConfig[canonical] = value
 			}
 		}
 	}
 
-	capabilityConfig, err := normalizedChannelModelCapability(channelModel)
+	capabilityConfig, err := normalizedChannelModelCapability(channelModel, s.protocolRegistry())
 	if err != nil {
 		return input, InvalidModelSelection("指定的模型能力配置无效，请联系管理员")
 	}
@@ -489,6 +511,34 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 		capabilitySpec = &spec
 	}
 	applyChannelCapabilityDefaults(nextConfig, channelModel.Capability, capabilityConfig)
+	if capabilityConfig != nil && capabilityConfig.Image != nil && capabilityConfig.Image.Parameters != nil {
+		parameters := capabilityConfig.Image.Parameters
+		values := declaredImageParameterValues(nextConfig, parameters)
+		if explicit, ok := input["capabilityOptions"].(map[string]any); ok {
+			values = explicit
+		}
+		if value, ok := values["size"]; ok && capabilitySpec != nil && capabilityImageSizePresetMatches(*capabilitySpec, value, values) {
+			values = maps.Clone(values)
+			if ratio := imageSizeRatioForDeclaredPreset(capabilityConfig.Image, fmt.Sprint(value), fmt.Sprint(values["imageResolution"])); ratio != "" {
+				values["size"] = ratio
+			}
+		}
+		resolved, parameterErr := resolveImageParameterValues(parameters, values)
+		if parameterErr != nil {
+			return input, parameterErr
+		}
+		nextConfig["imageParameters"] = resolved
+		for _, p := range parameters {
+			if value, ok := resolved[p.Name]; ok && isCapabilityOptionFor("image", p.Name) {
+				nextConfig[p.Name] = providerConfigOptionValue(value)
+			}
+		}
+		for _, name := range []string{"size", "quality", "imageResolution", "transparentBackground"} {
+			if _, ok := resolved[name]; !ok {
+				delete(nextConfig, name)
+			}
+		}
+	}
 	input["config"] = nextConfig
 	var declaredOptions map[string]OptionConstraint
 	if capabilitySpec != nil {
@@ -510,7 +560,7 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 	}
 
 	pricingIntent := intent
-	if normalizeCapability(channelModel.Capability) == "image" {
+	if normalizeCapability(channelModel.Capability) == "image" && (capabilityConfig == nil || capabilityConfig.Image == nil || capabilityConfig.Image.Parameters == nil) {
 		pricingOptions := make(map[string]any, len(intent.Options)+2)
 		for k, v := range intent.Options {
 			pricingOptions[k] = v
@@ -527,9 +577,13 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 		pricingIntent.Options = pricingOptions
 	}
 
-	priceTier := channelModelPriceTierForIntent(*channelModel, pricingIntent)
+	var pricingSpecs []CapabilitySpec
+	if capabilitySpec != nil {
+		pricingSpecs = append(pricingSpecs, *capabilitySpec)
+	}
+	priceTier := channelModelPriceTierForIntent(*channelModel, pricingIntent, pricingSpecs...)
 	if priceTier == nil {
-		priceTier = channelModelPriceTierForIntent(*channelModel, intent)
+		priceTier = channelModelPriceTierForIntent(*channelModel, intent, pricingSpecs...)
 	}
 	if priceTier == nil || !ValidatePriceTierPrice(priceTier, channelModel.Capability, channelModel.Protocol) {
 		return input, ModelPriceNotConfigured("指定的模型未配置当前规格的有效价格")
@@ -559,6 +613,14 @@ func applyChannelCapabilityDefaults(config map[string]any, capability string, pr
 		if profile == nil || profile.Image == nil {
 			return
 		}
+		if profile.Image.Parameters != nil {
+			for _, parameter := range profile.Image.Parameters {
+				if parameter.IsEnabled() && parameter.Default != nil && isCapabilityOptionFor("image", parameter.Name) {
+					setDefault(parameter.Name, parameter.Default)
+				}
+			}
+			return
+		}
 		if profile.Image.Size.Parameter != "none" {
 			setDefault("size", profile.Image.Size.Default)
 		}
@@ -583,6 +645,11 @@ func applyChannelCapabilityDefaults(config map[string]any, capability string, pr
 
 func capabilityOptionsFromConfig(capability string, config map[string]any, declared map[string]OptionConstraint) map[string]any {
 	options := map[string]any{}
+	if capability == "image" {
+		if parameters, ok := config["imageParameters"].(map[string]any); ok {
+			return maps.Clone(parameters)
+		}
+	}
 	for key, value := range config {
 		canonical := canonicalCapabilityOptionName(key)
 		if !isCapabilityOptionFor(capability, canonical) || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {

@@ -22,6 +22,9 @@ import (
 
 func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
 	resolution := strings.TrimSpace(input.Config.VQuality)
+	if input.Mode == "image" {
+		resolution = strings.TrimSpace(input.Config.ImageResolution)
+	}
 	if input.Mode == "video" {
 		if declared := videoResolutionNameRequest(input.VideoCapability, resolution); declared != "" {
 			resolution = declared
@@ -32,19 +35,20 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		aspectRatio = normalizePixelSize(aspectRatio)
 	}
 	request := protocol.GenerationRequest{
-		Capability:    protocol.Capability(input.Mode),
-		Model:         input.Config.Model,
-		Prompt:        input.Prompt,
-		Instructions:  strings.TrimSpace(input.Config.SystemPrompt),
-		Images:        protocolImageReferences(input),
-		Videos:        protocolMediaReferences(input.ReferenceVideos, "video"),
-		Audios:        protocolMediaReferences(input.ReferenceAudios, "audio"),
-		AspectRatio:   aspectRatio,
-		Resolution:    resolution,
-		Quality:       input.Config.Quality,
-		GenerateAudio: parseBool(input.Config.VideoGenerateAudio, false),
-		Watermark:     parseBool(input.Config.VideoWatermark, false),
-		Operation:     firstNonEmpty(metadataString(input.Metadata, "videoEditOperation"), metadataString(input.Metadata, "videoOperation")),
+		ImageParameters: protocolImageParameterValues(input.Config.ImageParameters),
+		Capability:      protocol.Capability(input.Mode),
+		Model:           input.Config.Model,
+		Prompt:          input.Prompt,
+		Instructions:    strings.TrimSpace(input.Config.SystemPrompt),
+		Images:          protocolImageReferences(input),
+		Videos:          protocolMediaReferences(input.ReferenceVideos, "video"),
+		Audios:          protocolMediaReferences(input.ReferenceAudios, "audio"),
+		AspectRatio:     aspectRatio,
+		Resolution:      resolution,
+		Quality:         input.Config.Quality,
+		GenerateAudio:   parseBool(input.Config.VideoGenerateAudio, false),
+		Watermark:       parseBool(input.Config.VideoWatermark, false),
+		Operation:       firstNonEmpty(metadataString(input.Metadata, "videoEditOperation"), metadataString(input.Metadata, "videoOperation")),
 		Extra: map[string]any{
 			"videoSeconds":      input.Config.VideoSeconds,
 			"audioVoice":        input.Config.AudioVoice,
@@ -84,7 +88,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Watermark: request.Watermark, Format: input.Config.AudioFormat,
 	}
 	request.ProviderOptions = make(map[string]map[string]any)
-	if configured, ok := input.Metadata["providerOptions"].(map[string]any); ok {
+	if configured, ok := input.Metadata["providerOptions"].(map[string]any); ok && input.Config.ImageParameters == nil {
 		for namespace, raw := range configured {
 			if options, ok := raw.(map[string]any); ok {
 				request.ProviderOptions[strings.TrimSpace(namespace)] = options
@@ -100,6 +104,22 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		request.ProviderOptions[input.Config.InterfaceType] = options
 	}
 	return request
+}
+
+func protocolImageParameterValues(values map[string]any) map[string]any {
+	if values == nil {
+		return nil
+	}
+	result := make(map[string]any, len(values))
+	for name, value := range values {
+		// These fields are already encoded from the same validated intent. In
+		// particular size must retain the route's explicit pixel conversion.
+		if name == "size" {
+			continue
+		}
+		result[name] = value
+	}
+	return result
 }
 
 func protocolImageReferences(input canvasGenerationInput) []protocol.MediaReference {

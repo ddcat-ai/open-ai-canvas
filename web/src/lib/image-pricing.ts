@@ -3,7 +3,8 @@ import { isImageResolutionTier } from "./image-quality";
 import type { ImageCapabilityConfig } from "./model-capabilities";
 
 /** 旧图片价格档把 1K/2K/4K 存在 quality；只在读取价格条件时转换。 */
-export function normalizeImagePriceSelector(input: Record<string, string>) {
+export function normalizeImagePriceSelector(input: Record<string, string>, declaredParameters = false) {
+    if (declaredParameters) return { ...input };
     const selector = { ...input };
     for (const key of ["quality", "resolution", "size"] as const) {
         if (selector[key]) selector[key] = selector[key].trim().toLowerCase();
@@ -15,7 +16,11 @@ export function normalizeImagePriceSelector(input: Record<string, string>) {
     return selector;
 }
 
-export function imagePriceSelector(quality: string, size: string, profile?: ImageCapabilityConfig): Record<string, string> {
+export function imagePriceSelector(quality: string, size: string, profile?: ImageCapabilityConfig, imageResolution?: string): Record<string, string> {
+    if (profile?.parameters) {
+        const values: Record<string, string | undefined> = { quality, size, imageResolution };
+        return Object.fromEntries(profile.parameters.filter((p) => p.enabled !== false && p.pricing && values[p.name]).map((p) => [p.name, values[p.name]!])) as Record<string, string>;
+    }
     quality = quality.trim().toLowerCase();
     size = size.trim().toLowerCase();
     const selector: Record<string, string> = {};

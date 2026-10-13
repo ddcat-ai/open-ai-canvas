@@ -7,6 +7,7 @@ import { useNavigate, useLocation } from "react-router";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { imageParameterRequest, normalizeImageParameters } from "@/lib/image-parameters";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { continueCreationConversationOnCanvas } from "@/services/creation-canvas-conversation";
@@ -17,7 +18,7 @@ import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
 import { loadCreationConversations, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
-import { resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -116,6 +117,8 @@ export default function CreatePage() {
     const [ratio, setRatio] = useState("16:9");
     const [seconds, setSeconds] = useState("6");
     const [quality, setQuality] = useState("auto");
+    const [imageResolution, setImageResolution] = useState("auto");
+    const [imageParameters, setImageParameters] = useState("{}");
     const [videoQuality, setVideoQuality] = useState(config.vquality || "720");
     const [count, setCount] = useState(String(Math.max(1, Math.min(4, Number(config.count) || 1))));
     const [textStreaming, setTextStreaming] = useState(() => readComposerPref(TEXT_STREAMING_PREF_KEY, true));
@@ -162,11 +165,11 @@ export default function CreatePage() {
         videoSeconds: mode === "video" ? seconds : undefined,
         imageSize: mode === "image" ? ratio : undefined,
 		options: mode === "image"
-			? { size: ratio, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
+            ? imageParameterRequest(modelCapabilityConfigFor(config, preferredModel).image!, { ...config, size: ratio, imageResolution, quality, count, imageParameters }) ?? { size: ratio, imageResolution, quality, count: Number(count), transparentBackground: config.transparentBackground === "true" }
 			: mode === "video"
 				? { size: ratio, videoSeconds: Number(seconds), vquality: videoQuality }
 				: {},
-	}), [attachments, config.transparentBackground, count, hasPrompt, mode, quality, ratio, seconds, videoQuality]);
+    }), [attachments, config, preferredModel, count, hasPrompt, imageResolution, imageParameters, mode, quality, ratio, seconds, videoQuality]);
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
     const generationConfig = useMemo(() => mode === "video"
         ? creationVideoConfig(config, selectedModel, { ratio, seconds, videoQuality })
@@ -234,10 +237,14 @@ export default function CreatePage() {
         const normalized = normalizeImageValue(imageProfile, {
             size: saved?.ratio || imageProfile.size.default,
             quality: saved?.quality || imageProfile.quality.default,
+            imageResolution: saved?.imageResolution || imageProfile.resolution.default,
+            imageParameters: saved?.model === selectedModel ? saved.imageParameters : undefined,
             count: saved?.count || count,
         });
         setRatio(normalized.size);
         setQuality(normalized.quality);
+        setImageResolution(normalized.imageResolution || imageProfile.resolution.default);
+        setImageParameters(JSON.stringify(normalizeImageParameters(imageProfile.parameters, saved?.model === selectedModel ? saved.imageParameters : undefined)));
         setCount(normalized.count);
     }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, imageProfile]);
 
@@ -422,6 +429,10 @@ export default function CreatePage() {
     const setComposerQuality = (value: string) => {
         setQuality(value);
         if (mode === "image") rememberImageSettings({ quality: value });
+    };
+    const setComposerImageResolution = (value: string) => {
+        setImageResolution(value);
+        if (mode === "image") rememberImageSettings({ imageResolution: value });
     };
     const setComposerVideoQuality = (value: string) => {
         setVideoQuality(value);
@@ -701,11 +712,17 @@ export default function CreatePage() {
         const controller = new AbortController();
         const requestLifecycle = runtime.beginGenerationConsumer(controller.signal);
         abortRef.current = controller;
-        const normalizedImage = mode === "image" ? normalizeImageValue(imageProfile, { size: ratio, quality, count }) : undefined;
+        const normalizedImage = mode === "image"
+            ? imageProfile.parameters
+                ? { size: ratio, quality, imageResolution, imageParameters, count }
+                : normalizeImageValue(imageProfile, { size: ratio, quality, imageResolution, imageParameters, count }, resolveModelRequestConfig(config, selectedModel).interfaceType)
+            : undefined;
         const requestConfig = {
             ...generationConfig,
             model: selectedModel,
             imageModel: selectedModel,
+            imageResolution: normalizedImage?.imageResolution || imageResolution,
+            imageParameters: normalizedImage?.imageParameters || imageParameters,
             videoModel: selectedModel,
             textModel: selectedModel,
             ...(mode === "image"
@@ -1037,6 +1054,11 @@ export default function CreatePage() {
         setSeconds: setComposerSeconds,
         quality,
         setQuality: setComposerQuality,
+        imageResolution,
+        setImageResolution: setComposerImageResolution,
+        imageParameters,
+        setImageParameters: (value: string) => { setImageParameters(value); rememberImageSettings({ model: selectedModel, imageParameters: value }); },
+        setTransparentBackground: (value: string) => useConfigStore.getState().updateConfig("transparentBackground", value),
         videoQuality,
         setVideoQuality: setComposerVideoQuality,
         count,

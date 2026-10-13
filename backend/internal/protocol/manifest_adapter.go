@@ -32,10 +32,14 @@ func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (Reque
 	if len(a.manifest.Contributes.Providers) == 0 {
 		return RequestSpec{}, fmt.Errorf("plugin %s does not provide a provider", a.manifest.Metadata.ID)
 	}
-	if err := validateManifestRequest(a.manifest.Validations, c.Request); err != nil {
+	request, err := ApplyImageParameters(c.Request, a.manifest.Metadata.ImageParameters)
+	if err != nil {
 		return RequestSpec{}, err
 	}
-	return buildManifestOperation(a.manifest.Create, a.manifest.Auth, c.Request, "")
+	if err := validateManifestRequest(a.manifest.Validations, request); err != nil {
+		return RequestSpec{}, err
+	}
+	return buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
 }
 
 func (a manifestAdapter) BuildAgent(_ context.Context, c AgentRequestContext) (RequestSpec, error) {

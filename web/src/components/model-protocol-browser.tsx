@@ -28,6 +28,7 @@ export function ModelProtocolBrowser({
                 { label: "请求体", value: protocol.contentType },
                 { label: "响应", value: protocol.poll ? "异步轮询" : "同步响应" },
                 { label: "来源", value: protocol.media },
+                ...(protocol.imageParameters ? [{ label: "图片参数", value: protocol.imageParameters.map((p) => p.label).join("、") }] : []),
             ],
         }));
 

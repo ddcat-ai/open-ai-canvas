@@ -33,6 +33,8 @@ type ModelSelection struct {
 // node/task tags are the only mapping between the persisted canvas and task wire names.
 type Options struct {
 	Size                  *string `json:"size,omitempty" node:"size" task:"size" modes:"image,video"`
+	ImageResolution       *string `json:"imageResolution,omitempty" node:"imageResolution" task:"imageResolution" modes:"image"`
+	ImageParameters       *string `json:"imageParameters,omitempty" node:"imageParameters" task:"imageParameters" modes:"image"`
 	Quality               *string `json:"quality,omitempty" node:"quality" task:"quality" modes:"image"`
 	Count                 *int    `json:"count,omitempty" node:"count" task:"count" modes:"image"`
 	TransparentBackground *bool   `json:"transparentBackground,omitempty" node:"transparentBackground" task:"transparentBackground" modes:"image"`
@@ -124,6 +126,19 @@ func (s GenerationSpec) Validate() error {
 	if s.Options.Count != nil && *s.Options.Count < 1 {
 		return invalid("options.count", "数量必须为正整数")
 	}
+	if s.Options.ImageParameters != nil {
+		var parameters map[string]any
+		if err := json.Unmarshal([]byte(*s.Options.ImageParameters), &parameters); err != nil || parameters == nil {
+			return invalid("options.imageParameters", "图片参数必须为有效对象")
+		}
+		for _, value := range parameters {
+			switch value.(type) {
+			case string, bool, float64:
+			default:
+				return invalid("options.imageParameters", "图片参数仅支持文本、数字或布尔值")
+			}
+		}
+	}
 	ids := map[string]bool{}
 	orders := map[int]bool{}
 	for i, binding := range s.ReferenceBindings {
@@ -189,6 +204,15 @@ func OptionsFromTaskConfig(mode string, config map[string]any) (Options, error) 
 		switch field.Type.Elem().Kind() {
 		case reflect.String:
 			text, ok := raw.(string)
+			if !ok && field.Tag.Get("task") == "imageParameters" {
+				if parameters, object := raw.(map[string]any); object {
+					encoded, err := json.Marshal(parameters)
+					if err != nil {
+						return options, invalid("options.imageParameters", "参数无法序列化")
+					}
+					text, ok = string(encoded), true
+				}
+			}
 			if !ok {
 				return options, invalid("options."+field.Tag.Get("task"), "必须是字符串")
 			}
@@ -217,6 +241,12 @@ func (o Options) TaskConfig() map[string]any {
 	for i := 0; i < typ.NumField(); i++ {
 		if !value.Field(i).IsNil() {
 			result[typ.Field(i).Tag.Get("task")] = fmt.Sprint(value.Field(i).Elem().Interface())
+		}
+	}
+	if o.ImageParameters != nil {
+		var parameters map[string]any
+		if json.Unmarshal([]byte(*o.ImageParameters), &parameters) == nil && parameters != nil {
+			result["imageParameters"] = parameters
 		}
 	}
 	return result
