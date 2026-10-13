@@ -32,7 +32,7 @@ export const inspirationSources: Record<InspirationSourceId, InspirationSourceIn
         repository: "https://github.com/LearnPrompt/awesome-seedance",
         revision: HIGHLIGHT_REVISIONS.seedance,
         license: "CC BY 4.0",
-        notice: "视频提示词与封面来自 awesome-seedance（数据每日同步自 goodcase.ai），按 CC BY 4.0 署名使用。封面为原案例画面，不代表本平台生成结果。",
+        notice: "视频提示词与封面来自 awesome-seedance（数据每日同步自 goodcase.ai），提示词经中文翻译改编，按 CC BY 4.0 署名使用。封面为原案例画面，不代表本平台生成结果。",
     },
     haohaoxue: {
         label: "好好学 AI · 图片提示词",
@@ -40,7 +40,7 @@ export const inspirationSources: Record<InspirationSourceId, InspirationSourceIn
         repository: "https://www.haohaoxue.com/prompts/",
         revision: HIGHLIGHT_REVISIONS.haohaoxue,
         license: "站点公开数据 · robots.txt 允许抓取",
-        notice: "图片提示词中英双语正文与封面来自好好学 AI 提示词库（haohaoxue.com），该站 robots.txt 明确允许包括 ClaudeBot 在内的抓取。作者署名取数据内置的 author 字段。封面为原提示词示例图，不代表本平台生成结果。",
+        notice: "图片提示词中文正文与封面来自好好学 AI 提示词库（haohaoxue.com），该站 robots.txt 明确允许包括 ClaudeBot 在内的抓取。作者署名取数据内置的 author 字段。封面为原提示词示例图，不代表本平台生成结果。",
     },
     youmind: {
         label: "YouMind 提示词库 · CC BY 4.0",
@@ -48,7 +48,7 @@ export const inspirationSources: Record<InspirationSourceId, InspirationSourceIn
         repository: "https://github.com/YouMind-OpenLab/awesome-nano-banana-pro-prompts",
         revision: HIGHLIGHT_REVISIONS.youmind,
         license: "CC BY 4.0",
-        notice: "图片提示词与配图来自 YouMind OpenLab 的 awesome-nano-banana-pro-prompts 与 awesome-gpt-image-2 两个姊妹库（Nano Banana Pro / GPT Image 2 中文提示词），按 CC BY 4.0 署名使用。作者署名取条目内置的 author 字段。配图为原提示词的生成示例，不代表本平台生成结果。",
+        notice: "图片提示词与配图来自 YouMind OpenLab 的 awesome-nano-banana-pro-prompts 与 awesome-gpt-image-2 两个姊妹库（Nano Banana Pro / GPT Image 2 中文提示词），部分提示词经中文翻译改编，按 CC BY 4.0 署名使用。作者署名取条目内置的 author 字段。配图为原提示词的生成示例，不代表本平台生成结果。",
     },
 };
 

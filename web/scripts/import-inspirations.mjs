@@ -13,6 +13,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { localizeInspirationEntries } from "./inspiration-localization.mjs";
 
 const WEB_DIR = resolve(import.meta.dir, "..");
 const PUBLIC_DIR = join(WEB_DIR, "public", "inspirations");
@@ -487,6 +488,14 @@ async function main() {
     const selected = SOURCE_PIPELINES.filter((pipeline) => !options.only || options.only === pipeline.name);
     if (!selected.length) throw new Error(`--only 不认识的来源: ${options.only}`);
 
+    const translations = JSON.parse(readFileSync(join(WEB_DIR, "scripts", "data", "inspiration-prompts-zh.json"), "utf8"));
+    const localizedSources = new Map();
+    // 先检查所有选中来源的中文覆盖，再下载封面或写目录，避免半批更新后才发现缺译。
+    for (const pipeline of selected) {
+        const loaded = await pipeline.load(options);
+        localizedSources.set(pipeline.name, { ...loaded, entries: localizeInspirationEntries(loaded.entries, translations) });
+    }
+
     mkdirSync(PUBLIC_DIR, { recursive: true });
     const revisions = {};
     const counts = {};
@@ -508,7 +517,7 @@ async function main() {
             continue;
         }
 
-        const loaded = await pipeline.load(options);
+        const loaded = localizedSources.get(pipeline.name);
         const { entries } = loaded;
         if (!entries.length) throw new Error(`${pipeline.name} 没有解析出任何条目`);
         revisions[pipeline.name] = loaded.revision;
