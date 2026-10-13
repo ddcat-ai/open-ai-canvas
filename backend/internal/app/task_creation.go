@@ -246,6 +246,9 @@ func (s *Service) resolveTaskModelSelection(input map[string]any, logicalModelID
 		if err != nil {
 			return nil, input, err
 		}
+		if normalizeCapability(routed.Intent.Capability) == "image" && routed.Intent.Options != nil {
+			input["capabilityOptions"] = maps.Clone(routed.Intent.Options)
+		}
 		return routed, applyRoutedProviderSelection(input, routed), nil
 	}
 
@@ -296,6 +299,10 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 	nextConfig["channelId"] = routed.ChannelModel.ChannelID
 	nextConfig["model"] = routed.ChannelModel.ModelKey
 	nextConfig["channelModelKey"] = routed.ChannelModel.ModelKey
+	// 协议必须以服务端记录为唯一权威：受管逻辑模型流程的客户端只表达创作参数，不携带
+	// interfaceType；缺失会让依赖协议的尺寸换算（比例 → 像素）静默跳过，把 16:9 这类比例
+	// 原样发给只认 WIDTHxHEIGHT 的上游（OpenAI Images 直接拒绝）。
+	nextConfig["interfaceType"] = string(routed.ChannelModel.Protocol)
 	providerModelKey := routed.ChannelModel.ProviderModelKey
 	if routed.PriceTier != nil {
 		nextConfig["priceTierId"] = routed.PriceTier.ID
@@ -493,6 +500,13 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 	if err != nil {
 		return input, InvalidModelSelection("指定的模型能力配置无效，请联系管理员")
 	}
+	if legacyImageResolutionProtocol(string(channelModel.Protocol)) && capabilityConfig != nil && capabilityConfig.Image != nil && capabilityConfig.Image.Resolution.Supported {
+		legacyQuality := strings.ToLower(strings.TrimSpace(metadataString(nextConfig, "quality")))
+		if legacyQuality != "" && legacyQuality != "<nil>" && legacyQuality != "auto" && legacyQuality != "any" && !containsCapabilityString(capabilityConfig.Image.Resolution.Values, legacyQuality) {
+			return input, ModelCapabilityNotSupported("所选模型不支持当前图片分辨率：" + legacyQuality)
+		}
+	}
+	legacyImageResolutionTier := normalizeLegacyImageResolutionRequest(string(channelModel.Protocol), capabilityConfig, nextConfig)
 	if capabilityConfig != nil && capabilityConfig.Video != nil && capabilityConfig.Video.FixedScreenSpec != nil {
 		videoInput := canvasGenerationInput{Config: providerConfig{
 			Size: metadataString(nextConfig, "size"), VQuality: metadataString(nextConfig, "vquality"),
@@ -547,6 +561,15 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 	input["capabilityOptions"] = capabilityOptionsFromConfig(channelModel.Capability, nextConfig, declaredOptions)
 
 	intent := ModelRequestIntentFromTaskInput(input, taskType, operation)
+	if capabilitySpec != nil && normalizeCapability(intent.Capability) == "image" {
+		intent = normalizeImageSizeIntent(*capabilitySpec, intent)
+		input["capabilityOptions"] = maps.Clone(intent.Options)
+		for key, value := range intent.Options {
+			if isProviderCapabilityOption(key) {
+				nextConfig[key] = providerConfigOptionValue(value)
+			}
+		}
+	}
 	if normalizeCapability(intent.Capability) != normalizeCapability(channelModel.Capability) {
 		return input, ModelCapabilityNotSupported("所选模型与任务能力不匹配")
 	}
@@ -566,10 +589,18 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 			pricingOptions[k] = v
 		}
 		rawQuality := strings.ToLower(strings.TrimSpace(fmt.Sprint(nextConfig["quality"])))
-		if rawQuality != "" && rawQuality != "<nil>" && rawQuality != "auto" && rawQuality != "any" {
-			pricingOptions["quality"] = rawQuality
-		} else if pricingOptions["quality"] == nil || pricingOptions["quality"] == "" || pricingOptions["quality"] == "auto" {
-			pricingOptions["quality"] = "1k"
+		if legacyImageResolutionTier != "" {
+			// Match pre-split price tiers without forwarding the legacy quality field upstream.
+			pricingOptions["quality"] = strings.ToLower(legacyImageResolutionTier)
+		} else if capabilityConfig == nil || capabilityConfig.Image == nil || !capabilityConfig.Image.Resolution.Supported {
+			if rawQuality != "" && rawQuality != "<nil>" && rawQuality != "auto" && rawQuality != "any" {
+				pricingOptions["quality"] = rawQuality
+			} else if pricingOptions["quality"] == nil || pricingOptions["quality"] == "" || pricingOptions["quality"] == "auto" {
+				pricingOptions["quality"] = "1k"
+			}
+		}
+		if rawResolution := strings.ToLower(strings.TrimSpace(fmt.Sprint(nextConfig["imageResolution"]))); rawResolution != "" && rawResolution != "<nil>" && rawResolution != "auto" {
+			pricingOptions["imageResolution"] = rawResolution
 		}
 		if rawSize := strings.ToLower(strings.TrimSpace(fmt.Sprint(nextConfig["size"]))); rawSize != "" && rawSize != "<nil>" && rawSize != "auto" {
 			pricingOptions["size"] = rawSize
@@ -623,6 +654,9 @@ func applyChannelCapabilityDefaults(config map[string]any, capability string, pr
 		}
 		if profile.Image.Size.Parameter != "none" {
 			setDefault("size", profile.Image.Size.Default)
+		}
+		if profile.Image.Resolution.Supported {
+			setDefault("imageResolution", profile.Image.Resolution.Default)
 		}
 		if profile.Image.Quality.Supported {
 			setDefault("quality", profile.Image.Quality.Default)

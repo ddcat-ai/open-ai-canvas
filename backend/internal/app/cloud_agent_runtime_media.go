@@ -99,8 +99,7 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 	}
 	if media != nil {
 		requested, _ := req.Input["config"].(map[string]any)
-		resolved, _ := input["config"].(map[string]any)
-		if err := validateCloudAgentResolvedMediaOptions(requested, resolved); err != nil {
+		if err := validateCloudAgentResolvedMediaOptions(requested, input); err != nil {
 			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 		}
 	}

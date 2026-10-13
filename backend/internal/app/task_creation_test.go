@@ -134,8 +134,8 @@ func TestResolveTaskModelSelectionStillRequiresLogicalModelWithoutExplicitSystem
 func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
 	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceGrokImage, profile, []model.ChannelModelPriceTier{
-		newSelectionPriceTier("tier-1k", `{"operation":"text_to_image","quality":"1k"}`, "provider-image-1k", "fixed_request"),
-		newSelectionPriceTier("tier-2k", `{"operation":"text_to_image","quality":"2k"}`, "provider-image-2k", "fixed_request"),
+		newSelectionPriceTier("tier-1k", `{"operation":"text_to_image","imageResolution":"1k"}`, "provider-image-1k", "fixed_request"),
+		newSelectionPriceTier("tier-2k", `{"operation":"text_to_image","imageResolution":"2k"}`, "provider-image-2k", "fixed_request"),
 	})
 
 	input := map[string]any{
@@ -168,7 +168,7 @@ func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t 
 			t.Fatalf("config[%q] must be removed from a system-channel request: %#v", forbidden, config[forbidden])
 		}
 	}
-	if got := config["quality"]; got != "1k" {
+	if got := config["imageResolution"]; got != "1k" {
 		t.Fatalf("quality = %#v, want capabilityOptions value 1k", got)
 	}
 	if got := config["priceTierId"]; got != "tier-1k" {
@@ -270,7 +270,7 @@ func TestResolveSystemChannelModelSelectionMatchesMiniMax768PTier(t *testing.T) 
 func TestResolveSystemChannelModelSelectionAppliesServerDefaults(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
 	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceGrokImage, profile, []model.ChannelModelPriceTier{
-		newSelectionPriceTier("tier-default", `{"operation":"text_to_image","quality":"2k"}`, "provider-image-default", "fixed_request"),
+		newSelectionPriceTier("tier-default", `{"operation":"text_to_image","imageResolution":"2k"}`, "provider-image-default", "fixed_request"),
 	})
 
 	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
