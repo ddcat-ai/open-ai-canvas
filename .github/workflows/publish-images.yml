@@ -214,8 +214,11 @@ jobs:
         shell: bash
         run: |
           prerelease_args=()
-          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* || "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          latest_args=()
+          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* || ( "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ && "$GITHUB_REF_NAME" != "v1.6.6.1" ) ]]; then
             prerelease_args+=(--prerelease)
+          else
+            latest_args+=(--latest)
           fi
           assets=(
             dist/open-ai-canvas-host-updater-linux-amd64
@@ -230,5 +233,6 @@ jobs:
               --verify-tag \
               --title "$GITHUB_REF_NAME" \
               --notes-file dist/RELEASE_NOTES.md \
-              "${prerelease_args[@]}"
+              "${prerelease_args[@]}" \
+              "${latest_args[@]}"
           fi

@@ -1,0 +1,411 @@
+{
+ "episode": "E03",
+ "series": "冰域纪元",
+ "schema_ver": 2,
+ "lib_ver": "35库/2026-09",
+ "segment_mode": true,
+ "shared": {
+  "prefix_full": "电影质感3D漫剧，UE5渲染，Lumen全局光照，PBR物理材质，写实美型人物，皮肤SSS次表面散射，实体发丝，电影三点布光，浅景深，8K，竖屏9:16，",
+  "negative_global": "卡通，二次元，手绘，塑料皮肤，五官扭曲，手指畸形，文字，水印，模糊，皮克斯风格，迪士尼风格，3D动画风格，",
+  "lighting_ratio": "4:1",
+  "style_base": "A混E"
+ },
+ "assets": {
+  "CHR-2001-V1": {
+   "name": "苏晚",
+   "desc_block": "苏晚，24岁，165cm利落，深灰军棉衣束腰，马尾压毛线帽，指节冻红，怀里揣账本"
+  },
+  "CHR-2002-V1": {
+   "name": "老周",
+   "desc_block": "老周，50岁，170cm微驼，褪色工装棉袄，络腮胡结冰碴，掌柜算盘挂腰"
+  },
+  "CHR-2003-V1": {
+   "name": "哑妹",
+   "desc_block": "哑妹，16岁，158cm瘦小，不合身的男款旧棉袍袖口卷三折，围巾遮半脸只露一双眼睛"
+  },
+  "CHR-2004-V1": {
+   "name": "火头兵",
+   "desc_block": "火头兵，35岁，175cm壮硕，油渍围裙罩棉衣，手拎铁皮汤桶"
+  },
+  "SC-003-N": {
+   "name": "聚居区配给食堂·昏",
+   "env_block": "半地下食堂，长条木桌拼凑，铁皮炉火光摇曳，蒸汽在低顶凝成水珠，墙上贴配给清单"
+  }
+ },
+ "segments": [
+  {
+   "id": "P01",
+   "shots": [
+    "S03-001",
+    "S03-002",
+    "S03-003",
+    "S03-004",
+    "S03-005",
+    "S03-006"
+   ],
+   "hook": "哑妹无声的口型：不是我",
+   "tail_exempt": true,
+   "entry_snapshot": "段首建立",
+   "exit_snapshot": "段尾钩"
+  }
+ ],
+ "info_refs": [],
+ "shots": [
+  {
+   "shot_id": "S03-001",
+   "seq": 1,
+   "duration_s": 4.0,
+   "duration_mode": "中",
+   "shot_size": "WS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1",
+    "SC-003-N"
+   ],
+   "dialogue": [],
+   "vo": "配给制第三天，账本丢了",
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "食堂大全景：众人围长桌，苏晚推门而入立于光斑中，全场动作停滞半拍，炉火映侧脸",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "gaze_focus": "CHR-2001-V1"
+  },
+  {
+   "shot_id": "S03-002",
+   "seq": 2,
+   "duration_s": 3.5,
+   "duration_mode": "中",
+   "shot_size": "FS",
+   "camera_move": {
+    "type": "Tracking",
+    "motive": "跟随苏晚走位，维持全场视线接力的动势"
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1",
+    "SC-003-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "全景：苏晚走向主桌，众人视线随她移动转头，火头兵放下汤桶让出通道",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "gaze_focus": "CHR-2001-V1",
+   "transition_note": "苏晚入位启查账动线，跟随走位收全镜（editing/16 隔级切豁免·跟随动势），跟随收近"
+  },
+  {
+   "shot_id": "S03-003",
+   "seq": 3,
+   "duration_s": 3.0,
+   "duration_mode": "中",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1",
+    "SC-003-N"
+   ],
+   "dialogue": [
+    {
+     "who": "苏晚",
+     "text": "昨晚最后一笔，是谁签的？",
+     "offscreen": false,
+     "lip": "B"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中景：苏晚摊开空账本压在桌面，老周的手指僵在算盘上，哑妹的目光先移向老周（视线破组）",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "gaze_focus": "CHR-2002-V1",
+   "transition_note": "苏晚问话起拍，由全镜收中景落台词位（editing/16 隔级切豁免·对白轮替），直切"
+  },
+  {
+   "shot_id": "S03-004",
+   "seq": 4,
+   "duration_s": 2.0,
+   "duration_mode": "中",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-2003-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-2003-V1",
+    "SC-003-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中近景：哑妹围巾上方那双眼睛，睫毛颤动两次，视线钉在老周方向不肯移开",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "gaze_focus": "CHR-2002-V1",
+   "transition_note": "苏晚问话收、群像反应接，正反打轮替（editing/16 隔级切豁免·对白轮替），直切"
+  },
+  {
+   "shot_id": "S03-005",
+   "seq": 5,
+   "duration_s": 2.5,
+   "duration_mode": "中",
+   "shot_size": "CU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-2003-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-2003-V1"
+   ],
+   "dialogue": [
+    {
+     "who": "哑妹",
+     "text": "（口型无声）……不是我。",
+     "offscreen": false,
+     "lip": "C"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "近景：哑妹半脸特写，围巾边缘霜化成水痕，嘴唇在布料下绷紧欲言又止",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "transition_note": "哑妹口型无声揭示『不是我』，揭示镜跳近（editing/16 隔级切豁免·揭示镜），急推"
+  },
+  {
+   "shot_id": "S03-006",
+   "seq": 6,
+   "duration_s": 4.0,
+   "duration_mode": "中",
+   "shot_size": "WS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-2001-V1",
+    "CHR-2002-V1",
+    "CHR-2003-V1",
+    "CHR-2004-V1",
+    "SC-003-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "拉回食堂全景：所有视线从哑妹转向配给清单贴墙处，苏晚的手按上账本，炉火噼啪一声",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "gaze_focus": "画外：贴墙配给清单",
+   "transition_note": "视线破组后的全场兑现位：从哑妹的破组视线拉回全场汇聚点（㉟库§三.3）"
+  }
+ ],
+ "timeline": {
+  "content_s": 19.0
+ }
+}

@@ -588,11 +588,14 @@ export default function CreatePage() {
         const releaseRetryLock = () => {
             if (retryLockKey) retryPreparingRef.current.delete(retryLockKey);
         };
-        if (!submitGateRef.current.tryAcquire()) {
+        const submitToken = submitGateRef.current.tryAcquire();
+        if (!submitToken) {
+            // 以前这里是静默返回：上一条还在生成时点发送毫无反应，只能靠猜。
             releaseRetryLock();
+            toast.warning("上一条还在提交中，稍等片刻再发送");
             return;
         }
-        const releaseSubmitGate = () => submitGateRef.current.release();
+        const releaseSubmitGate = () => submitGateRef.current.release(submitToken);
         const text = prompt.trim();
         if (!text || busy || !activeConversation) {
             releaseRetryLock();
@@ -680,6 +683,9 @@ export default function CreatePage() {
             if (abortRef.current === controller) {
                 abortRef.current = null;
                 setBusy(false);
+                // 任务已经建出来了：提交阶段到此结束。立刻放闸，这样上一条还在生成时
+                // 也能继续提交下一条，不必等它跑完。
+                releaseSubmitGate();
             }
         };
         updateActive((conversation) => ({

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ModelLabel, ModelPicker } from "../src/components/model-picker";
 import { canvasThemes } from "../src/lib/canvas-theme";
+import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { requestCreditCost } from "../src/lib/model-pricing";
 import type { ModelRequirements } from "../src/lib/model-selection";
 import { createModelChannel, defaultConfig, normalizeConfigSnapshot } from "../src/stores/use-config-store";
@@ -58,7 +59,10 @@ test("candidate rows do not disguise missing prices as zero", () => {
 
 test("model rows preserve multiple promotional labels and colors without altering prices", () => {
     const config = fixture();
-    config.channels[0].modelCosts![0].tags = [{ text: "限时特价", color: "purple" }, { text: "官方1折", color: "gold" }];
+    config.channels[0].modelCosts![0].tags = [
+        { text: "限时特价", color: "purple" },
+        { text: "官方1折", color: "gold" },
+    ];
     for (const theme of [canvasThemes.light, canvasThemes.dark]) {
         const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={theme} creationVariant showConfiguredModelName={false} showPrice showDescription />);
         expect(markup).toContain('data-color="purple">限时特价');
@@ -67,7 +71,40 @@ test("model rows preserve multiple promotional labels and colors without alterin
     }
     config.channels[0].modelCosts![0].tags = [];
     const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.light} showDescription />);
-    expect(markup).not.toContain('aria-label="模型标签"');
+    expect(markup).not.toContain("限时特价");
+    expect(markup).not.toContain("官方1折");
+});
+
+test("video capability tag is derived from limits and precedes editable model tags", () => {
+    const config = fixture();
+    const cost = config.channels[0].modelCosts![0];
+    cost.capabilityConfig = defaultModelCapabilityConfig();
+    Object.assign(cost.capabilityConfig.video!.references, { maxImages: 30, maxVideos: 10, maxAudios: 10 });
+    cost.tags = [
+        { text: "限时特价", color: "purple" },
+        { text: "按次收费", color: "blue" },
+    ];
+
+    const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.light} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+
+    expect(markup).toContain('data-color="green">图×30 · 视×10 · 音×10');
+    expect(markup.indexOf("图×30 · 视×10 · 音×10")).toBeLessThan(markup.indexOf("限时特价"));
+    expect(markup.indexOf("限时特价")).toBeLessThan(markup.indexOf("按次收费"));
+});
+
+test("video capability tag omits zero limits while preserving editable model tags", () => {
+    const config = fixture();
+    const cost = config.channels[0].modelCosts![0];
+    cost.capabilityConfig = defaultModelCapabilityConfig();
+    Object.assign(cost.capabilityConfig.video!.references, { maxImages: 0, maxVideos: 0, maxAudios: 0 });
+    cost.tags = [{ text: "按次收费", color: "blue" }];
+
+    const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.light} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+
+    expect(markup).not.toContain("图×");
+    expect(markup).not.toContain("视×");
+    expect(markup).not.toContain("音×");
+    expect(markup).toContain('data-color="blue">按次收费');
 });
 
 test("the selected model and request estimate still require an exact specification match", () => {

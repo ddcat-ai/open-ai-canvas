@@ -26,6 +26,7 @@ tags:
   - name: agent
   - name: admin
   - name: skills
+  - name: workbench
 paths:
   /admin/login-logs:
     get:
@@ -1431,6 +1432,121 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+  /workbench/tools:
+    get:
+      tags: [workbench]
+      summary: 获取当前用户可用的工作台工具
+      parameters:
+        - in: query
+          name: kind
+          required: true
+          schema: { type: string, enum: [image, video] }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /workbench/tasks:
+    get:
+      tags: [workbench]
+      summary: 查询当前用户的工作台任务
+      parameters:
+        - in: query
+          name: kind
+          required: true
+          schema: { type: string, enum: [image, video] }
+        - in: query
+          name: activeOnly
+          schema: { type: boolean, default: false }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [workbench]
+      summary: 创建工作台生成任务
+      description: 仅接受模型选择意图、资源 ID、提示词和允许的生成参数；toolId 可选，服务端校验开关、所选工具、资源、模型能力和账单，不接受客户端 providerConfig、密钥或上游 URL。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, prompt, model, modelChoice, parameters, references]
+              properties:
+                kind: { type: string, enum: [image, video] }
+                toolId: { type: string }
+                presetId: { type: string }
+                prompt: { type: string, minLength: 1, maxLength: 32000 }
+                model: { type: string }
+                logicalModelId: { type: string }
+                modelChoice:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    logicalModelId: { type: string }
+                    modelName: { type: string }
+                workbench:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    kind: { type: string, enum: [image, video] }
+                    toolId: { type: string }
+                    presetId: { type: string }
+                parameters:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    size: { type: string }
+                    quality: { type: string }
+                    count: { type: integer, minimum: 1 }
+                    videoSeconds: { type: integer, minimum: 1 }
+                    ratio: { type: string }
+                    resolution: { type: string }
+                    generateAudio: { type: boolean }
+                    watermark: { type: boolean }
+                references:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [resourceId, kind, role]
+                    properties:
+                      resourceId: { type: string }
+                      kind: { type: string, enum: [image, video, audio] }
+                      role: { type: string, enum: [reference, first_frame, last_frame] }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /admin/workbench/tools:
+    get:
+      tags: [workbench, admin]
+      summary: 管理工作台工具目录
+      parameters:
+        - in: query
+          name: kind
+          schema: { type: string, enum: [image, video] }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "403":
           $ref: "#/components/responses/Error"
   /tasks:
     post:

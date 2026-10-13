@@ -12,6 +12,23 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestWorkbenchKindFromTaskInputRequiresWorkbenchMetadataAndMatchingTaskType(t *testing.T) {
+	input := map[string]any{
+		"mode":     "image",
+		"metadata": map[string]any{"source": "workbench", "workbenchKind": "image"},
+	}
+	if got := workbenchKindFromTaskInput(input, "canvas_image"); got != model.WorkbenchKindImage {
+		t.Fatalf("workbench kind = %q, want image", got)
+	}
+	if got := workbenchKindFromTaskInput(input, "canvas_video"); got != "" {
+		t.Fatalf("mismatched task type was classified as %q", got)
+	}
+	input["metadata"].(map[string]any)["source"] = "canvas"
+	if got := workbenchKindFromTaskInput(input, "canvas_image"); got != "" {
+		t.Fatalf("non-workbench task was classified as %q", got)
+	}
+}
+
 func TestTaskInputUsesWorkflowProvider(t *testing.T) {
 	tests := []struct {
 		name  string

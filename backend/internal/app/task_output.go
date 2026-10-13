@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -317,6 +318,202 @@ func publicTaskInputJSON(raw string) string {
 	if len(public) == 0 {
 		return ""
 	}
+	if workbench := publicWorkbenchInput(input); workbench != nil {
+		public["workbench"] = workbench
+	}
 	data, _ := json.Marshal(public)
 	return string(data)
+}
+
+func publicWorkbenchInput(input map[string]any) map[string]any {
+	metadata, ok := input["metadata"].(map[string]any)
+	if !ok || metadata["source"] != "workbench" {
+		return nil
+	}
+	kind := strings.TrimSpace(stringValue(metadata["workbenchKind"]))
+	if kind != model.WorkbenchKindImage && kind != model.WorkbenchKindVideo {
+		return nil
+	}
+	snapshot, _ := metadata["workbench"].(map[string]any)
+	result := map[string]any{
+		"kind":       kind,
+		"parameters": publicWorkbenchParameters(kind, snapshot, input),
+	}
+	if toolID := strings.TrimSpace(stringValue(metadata["workbenchToolId"])); toolID != "" {
+		result["toolId"] = toolID
+	}
+	if presetID := strings.TrimSpace(stringValue(metadata["workbenchPresetId"])); presetID != "" {
+		result["presetId"] = presetID
+	}
+	result["references"] = publicWorkbenchReferences(snapshot["references"], input)
+	return result
+}
+
+func publicWorkbenchParameters(kind string, snapshot, input map[string]any) map[string]any {
+	parameters, _ := snapshot["parameters"].(map[string]any)
+	config, _ := input["config"].(map[string]any)
+	result := map[string]any{}
+	if kind == model.WorkbenchKindImage {
+		copyWorkbenchTextParameter(result, "size", parameters["size"])
+		copyWorkbenchTextParameter(result, "quality", parameters["quality"])
+		if result["size"] == nil {
+			copyWorkbenchTextParameter(result, "size", config["size"])
+		}
+		if result["quality"] == nil {
+			copyWorkbenchTextParameter(result, "quality", config["quality"])
+		}
+		if value, ok := workbenchInteger(parameters["count"], 20); ok {
+			result["count"] = value
+		} else if value, ok := workbenchInteger(config["count"], 20); ok {
+			result["count"] = value
+		}
+		return result
+	}
+	if value, ok := workbenchInteger(parameters["seconds"], 3600); ok {
+		result["seconds"] = value
+	} else if value, ok := workbenchInteger(config["videoSeconds"], 3600); ok {
+		result["seconds"] = value
+	}
+	copyWorkbenchTextParameter(result, "ratio", firstWorkbenchValue(parameters["ratio"], config["size"]))
+	copyWorkbenchTextParameter(result, "resolution", firstWorkbenchValue(parameters["resolution"], config["vquality"]))
+	if value, ok := workbenchBoolean(firstWorkbenchValue(parameters["generateAudio"], config["videoGenerateAudio"])); ok {
+		result["generateAudio"] = value
+	}
+	if value, ok := workbenchBoolean(firstWorkbenchValue(parameters["watermark"], config["videoWatermark"])); ok {
+		result["watermark"] = value
+	}
+	return result
+}
+
+func firstWorkbenchValue(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func copyWorkbenchTextParameter(target map[string]any, key string, value any) {
+	text, ok := value.(string)
+	text = strings.TrimSpace(text)
+	if ok && text != "" && len(text) <= 64 && !strings.Contains(text, "://") && !strings.HasPrefix(strings.ToLower(text), "data:") {
+		target[key] = text
+	}
+}
+
+func workbenchInteger(value any, max int) (int, bool) {
+	var parsed int
+	switch number := value.(type) {
+	case float64:
+		parsed = int(number)
+		if float64(parsed) != number {
+			return 0, false
+		}
+	case int:
+		parsed = number
+	case int64:
+		parsed = int(number)
+		if int64(parsed) != number {
+			return 0, false
+		}
+	case json.Number:
+		var err error
+		parsed, err = strconv.Atoi(number.String())
+		if err != nil {
+			return 0, false
+		}
+	case string:
+		var err error
+		parsed, err = strconv.Atoi(strings.TrimSpace(number))
+		if err != nil {
+			return 0, false
+		}
+	default:
+		return 0, false
+	}
+	return parsed, parsed >= 1 && parsed <= max
+}
+
+func workbenchBoolean(value any) (bool, bool) {
+	switch flag := value.(type) {
+	case bool:
+		return flag, true
+	case string:
+		if strings.EqualFold(flag, "true") {
+			return true, true
+		}
+		if strings.EqualFold(flag, "false") {
+			return false, true
+		}
+	}
+	return false, false
+}
+
+func publicWorkbenchReferences(snapshotReferences any, input map[string]any) []map[string]any {
+	result := make([]map[string]any, 0, 20)
+	appendReference := func(value map[string]any, fallbackKind string) {
+		if len(result) >= 20 {
+			return
+		}
+		resourceID := strings.TrimSpace(stringValue(value["resourceId"]))
+		if resourceID == "" {
+			storageKey := strings.TrimSpace(stringValue(value["storageKey"]))
+			if strings.HasPrefix(storageKey, "resource:") {
+				resourceID = strings.TrimPrefix(storageKey, "resource:")
+			}
+		}
+		if resourceID == "" || strings.ContainsAny(resourceID, "/\\?#") {
+			return
+		}
+		kind := strings.TrimSpace(stringValue(value["kind"]))
+		if kind != "image" && kind != "video" && kind != "audio" {
+			kind = fallbackKind
+		}
+		if kind != "image" && kind != "video" && kind != "audio" {
+			return
+		}
+		item := map[string]any{"resourceId": resourceID, "kind": kind}
+		role := strings.TrimSpace(stringValue(value["role"]))
+		if role == "reference" || role == "first_frame" || role == "last_frame" {
+			item["role"] = role
+		}
+		if slotKey := safeWorkbenchSlotKey(stringValue(value["slotKey"])); slotKey != "" {
+			item["slotKey"] = slotKey
+		}
+		result = append(result, item)
+	}
+	if values, ok := snapshotReferences.([]any); ok {
+		for _, value := range values {
+			if item, ok := value.(map[string]any); ok {
+				appendReference(item, "")
+			}
+		}
+	}
+	if len(result) > 0 {
+		return result
+	}
+	for _, group := range []struct{ key, kind string }{{"referenceImages", "image"}, {"referenceVideos", "video"}, {"referenceAudios", "audio"}} {
+		values, _ := input[group.key].([]any)
+		for _, value := range values {
+			if item, ok := value.(map[string]any); ok {
+				appendReference(item, group.kind)
+			}
+		}
+	}
+	return result
+}
+
+func safeWorkbenchSlotKey(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 64 {
+		return ""
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '_' || character == '-' {
+			continue
+		}
+		return ""
+	}
+	return value
 }

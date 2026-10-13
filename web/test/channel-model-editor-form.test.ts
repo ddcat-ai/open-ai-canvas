@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "../src/lib/model-protocols";
-import { changeChannelModelCapability, editorSectionForField, initialChannelModelValues, updateChannelModelUpstreamCapabilities, validateChannelModelPrices, validateChannelModelProtocol } from "../src/pages/admin/components/channel-model-editor-form";
+import {
+    changeChannelModelCapability,
+    duplicateChannelModelValues,
+    editorSectionForField,
+    initialChannelModelValues,
+    updateChannelModelUpstreamCapabilities,
+    validateChannelModelPrices,
+    validateChannelModelProtocol,
+} from "../src/pages/admin/components/channel-model-editor-form";
 import { defaultPriceTier } from "../src/pages/admin/components/channel-model-price-tier-form";
+import type { ChannelModel, ChannelModelPriceTier } from "../src/services/api/wallet";
 
 const definition = (value: string, capability: ModelProtocolDefinition["capability"], enabled = true): ModelProtocolDefinition => ({ value, capability, enabled, label: value, create: "POST /test", contentType: "application/json", media: "url" });
 const protocols = [definition("disabled-text", "text", false), definition("text", "text"), definition("image", "image"), definition("video", "video")];
@@ -25,6 +34,70 @@ describe("channel model editor drafts", () => {
         expect(second.priceTiers[0].unitPrice).toBe(0);
         expect(second.modelKey).toBe("");
         expect(second.tags).toEqual([]);
+    });
+    test("duplicate drafts clear model IDs and inherited tier IDs while preserving custom routing and configuration", () => {
+        const tier = (id: string, providerModelKey: string, unitPriceMicrocredits: number): ChannelModelPriceTier => ({
+            id,
+            channelModelId: "source-id",
+            selector: {},
+            selectorKey: "{}",
+            resolution: "*",
+            videoSeconds: 0,
+            providerModelKey,
+            billingMode: "fixed_request",
+            unitPriceMicrocredits,
+            inputTokenPriceMicrocredits: 0,
+            outputTokenPriceMicrocredits: 0,
+            cachedTokenPriceMicrocredits: 0,
+            priceConfigured: true,
+            enabled: true,
+            priceVersion: 1,
+            createdAt: "2026-08-29T00:00:00Z",
+            updatedAt: "2026-08-29T00:00:00Z",
+        });
+        const item: ChannelModel = {
+            id: "source-id",
+            channelId: "channel-id",
+            modelKey: "product-video",
+            providerModelKey: "models/vendor-video",
+            displayName: "视频模型组",
+            channelLabel: "原渠道",
+            tags: [{ text: "稳定", color: "green" }],
+            description: "视频生成配置",
+            icon: "",
+            capability: "video",
+            protocol: "video",
+            billingMode: "fixed_request",
+            unitPriceMicrocredits: 1_000_000,
+            inputTokenPriceMicrocredits: 0,
+            outputTokenPriceMicrocredits: 0,
+            cachedTokenPriceMicrocredits: 0,
+            priceConfigured: true,
+            enabled: false,
+            priceVersion: 1,
+            priceTiers: [tier("default-tier", "vendor-video", 5_000_000), tier("custom-tier", "vendor-video-hq", 8_000_000)],
+            createdAt: "2026-08-29T00:00:00Z",
+            updatedAt: "2026-08-29T00:00:00Z",
+        };
+
+        const draft = duplicateChannelModelValues(item, protocols);
+
+        expect(draft).toMatchObject({
+            modelKey: "",
+            providerModelKey: "",
+            displayName: "视频模型组",
+            channelLabel: "原渠道",
+            tags: [{ text: "稳定", color: "green" }],
+            description: "视频生成配置",
+            capability: "video",
+            protocol: "video",
+            enabled: false,
+            priceTiers: [
+                { providerModelKey: "", unitPrice: 5 },
+                { providerModelKey: "vendor-video-hq", unitPrice: 8 },
+            ],
+        });
+        expect(draft.tags).not.toBe(item.tags);
     });
     test("missing catalogs do not invent a protocol", () => {
         expect(initialChannelModelValues(null, []).protocol).toBeUndefined();

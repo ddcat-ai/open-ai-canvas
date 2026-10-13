@@ -1,0 +1,6 @@
+interface:
+  display_name: "影视剧作工坊·分镜剧本"
+  short_description: "生成AI导演接力稿或完整分镜，并自动保存本地Markdown"
+  default_prompt: "使用 $影视剧作工坊-分镜剧本 解析我提供的小说或剧本，推荐横屏精品剧或竖屏系列短剧，按我选择的方式输出AI导演接力稿或完整执行分镜，并在对应本地目录保存一份Markdown文档。"
+policy:
+  allow_implicit_invocation: true

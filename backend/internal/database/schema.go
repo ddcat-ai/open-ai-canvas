@@ -105,6 +105,8 @@ func Models() []any {
 		&model.CanvasSnapshot{},
 		&model.CanvasSnapshotResource{},
 		&model.CanvasMutationReceipt{},
+		&model.WorkbenchTool{},
+		&model.WorkbenchPreset{},
 		&model.CanvasShare{},
 		&model.PromptTemplate{},
 		&model.UserPromptCustomization{},

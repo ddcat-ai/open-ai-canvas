@@ -1,0 +1,256 @@
+.admin-workbench-tools {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 14px;
+}
+.admin-workbench-tools-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.admin-workbench-tools-toolbar .ant-select {
+    width: 150px;
+}
+.admin-workbench-tools-toolbar .ant-input-affix-wrapper {
+    max-width: 360px;
+}
+.admin-workbench-tool-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+}
+.admin-workbench-tool-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: none;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--admin-layer-2);
+    color: var(--admin-text-muted);
+}
+.admin-workbench-tool-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.admin-workbench-tool-main strong,
+.admin-workbench-tool-main small {
+    display: block;
+}
+.admin-workbench-tool-main small {
+    max-width: 420px;
+    overflow: hidden;
+    color: var(--admin-text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-workbench-tool-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+.admin-workbench-tools-empty {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--admin-text-muted);
+}
+.admin-workbench-tool-editor .ant-modal-body {
+    max-height: min(76vh, 860px);
+    overflow: auto;
+}
+.admin-workbench-tool-form {
+    padding: 4px 2px;
+}
+.admin-workbench-tool-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 16px;
+}
+.admin-workbench-resource-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.admin-workbench-resource-upload {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--admin-border-subtle);
+    border-radius: 12px;
+    background: var(--admin-layer-1);
+}
+.admin-workbench-resource-preview {
+    display: grid;
+    width: 72px;
+    height: 72px;
+    flex: none;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--admin-layer-2);
+    color: var(--admin-text-muted);
+}
+.admin-workbench-resource-preview img,
+.admin-workbench-resource-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.admin-workbench-resource-actions {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+}
+.admin-workbench-resource-actions strong,
+.admin-workbench-resource-actions small {
+    display: block;
+}
+.admin-workbench-resource-actions small {
+    color: var(--admin-text-muted);
+}
+.admin-workbench-resource-actions > div {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+.admin-workbench-section-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 20px 0 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--admin-border-subtle);
+}
+.admin-workbench-section-title small {
+    color: var(--admin-text-muted);
+}
+.admin-workbench-contract-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.admin-workbench-contract-toolbar .ant-input-number,
+.admin-workbench-contract-toolbar .ant-input {
+    max-width: 180px;
+}
+.admin-workbench-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.admin-workbench-slot-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--admin-layer-2);
+}
+.admin-workbench-slot-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.25fr 130px 130px auto;
+    align-items: center;
+    gap: 8px;
+}
+.admin-workbench-slot-assets {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.admin-workbench-slot-assets small {
+    color: var(--admin-text-muted);
+}
+.admin-workbench-example-actions {
+    display: flex;
+    gap: 8px;
+    margin: 4px 0 12px;
+}
+.admin-workbench-example-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.admin-workbench-example-previews > div {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.admin-workbench-example-previews img,
+.admin-workbench-example-previews video {
+    width: 120px;
+    height: 84px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--admin-layer-2);
+}
+.admin-workbench-presets {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--admin-border-subtle);
+}
+.admin-workbench-presets > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.admin-workbench-presets > header strong,
+.admin-workbench-presets > header small {
+    display: block;
+}
+.admin-workbench-presets > header small {
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+}
+.admin-workbench-preset-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(140px, 1fr) minmax(240px, 2fr) auto auto;
+    align-items: start;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--admin-layer-2);
+}
+@media (max-width: 900px) {
+    .admin-workbench-slot-fields {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    .admin-workbench-contract-toolbar {
+        flex-wrap: wrap;
+    }
+}
+@media (max-width: 760px) {
+    .admin-workbench-tools-toolbar {
+        flex-wrap: wrap;
+    }
+    .admin-workbench-tools-toolbar .ant-input-affix-wrapper {
+        max-width: none;
+        flex: 1;
+    }
+    .admin-workbench-tool-grid,
+    .admin-workbench-resource-grid {
+        grid-template-columns: 1fr;
+    }
+    .admin-workbench-slot-fields {
+        grid-template-columns: 1fr 1fr;
+    }
+    .admin-workbench-preset-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .admin-workbench-preset-row textarea {
+        grid-column: 1/-1;
+    }
+}

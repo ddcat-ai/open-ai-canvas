@@ -378,6 +378,8 @@ function backendImageReference(image: ReferenceImage, override: Partial<Referenc
         ...(image.bytes ? { bytes: image.bytes } : {}),
         ...(image.width ? { width: image.width } : {}),
         ...(image.height ? { height: image.height } : {}),
+        ...(image.role ? { role: image.role } : {}),
+        ...(image.slotKey ? { slotKey: image.slotKey } : {}),
     };
 }
 
@@ -388,10 +390,12 @@ function backendMediaReference<T extends ReferenceVideo | ReferenceAudio>(media:
         type: override.type || media.type,
         url: override.url || "",
         storageKey: override.storageKey,
-        ...("bytes" in media && media.bytes ? { bytes: media.bytes } : {}),
+        ...(media.bytes ? { bytes: media.bytes } : {}),
         ...("width" in media && media.width ? { width: media.width } : {}),
         ...("height" in media && media.height ? { height: media.height } : {}),
         ...(media.durationMs ? { durationMs: media.durationMs } : {}),
+        ...(media.role ? { role: media.role } : {}),
+        ...(media.slotKey ? { slotKey: media.slotKey } : {}),
     } as T;
 }
 

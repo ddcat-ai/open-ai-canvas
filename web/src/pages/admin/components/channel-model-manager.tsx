@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Input, Modal, Popconfirm, Space } from "antd";
+import { App, Button, Checkbox, Input, Modal, Popconfirm, Space, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { ModelIcon } from "@/components/model-picker";
@@ -15,6 +15,7 @@ import { ChannelOrderDialog } from "./channel-order-dialog";
 import { ChannelModelCostSummary } from "./channel-model-cost-summary";
 import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
 import { deselectVisibleModels, filterImportModels, selectVisibleModels } from "./channel-model-import-selection";
+import { duplicateChannelModelValues, type ChannelModelFormValues } from "./channel-model-editor-form";
 import { Select } from "@/components/ui/base/select";
 
 export function ChannelModelManager({ channel, onChanged }: { channel: ModelChannel; onChanged: () => void | Promise<void> }) {
@@ -24,6 +25,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
     const [deletingSelected, setDeletingSelected] = useState(false);
     const [repriceItems, setRepriceItems] = useState<ChannelModel[]>([]);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
+    const [copyDraft, setCopyDraft] = useState<ChannelModelFormValues | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [fetching, setFetching] = useState(false);
@@ -73,6 +75,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
         void reload();
         void loadProtocols();
         setEditing(null);
+        setCopyDraft(null);
         setEditorOpen(false);
         setSelectedModelIds([]);
         setRepriceItems([]);
@@ -137,10 +140,17 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
 
     const startCreate = () => {
         setEditing(null);
+        setCopyDraft(null);
         setEditorOpen(true);
     };
     const startEdit = (item: ChannelModel) => {
         setEditing(item);
+        setCopyDraft(null);
+        setEditorOpen(true);
+    };
+    const startCopy = (item: ChannelModel) => {
+        setEditing(null);
+        setCopyDraft(duplicateChannelModelValues(item, availableProtocols));
         setEditorOpen(true);
     };
 
@@ -221,13 +231,16 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => <AdminStatusBadge label={enabled ? "启用" : "停用"} tone={enabled ? "success" : "neutral"} /> },
         {
             title: "操作",
-            width: 120,
+            width: 130,
             fixed: "right",
             render: (_, item) => (
-                <Space>
+                <Space size={4}>
                     <Button size="small" icon={<Pencil className="size-3.5" />} disabled={deletingSelected} onClick={() => startEdit(item)}>
                         编辑
                     </Button>
+                    <Tooltip title="复制模型">
+                        <Button size="small" aria-label={`复制模型 ${item.displayName || item.modelKey}`} disabled={deletingSelected} icon={<Copy className="size-3.5" />} onClick={() => startCopy(item)} />
+                    </Tooltip>
                     <Popconfirm title="删除模型" description="已被前台供应线路或进行中任务使用的模型不能删除；删除后模型不再显示，且不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
                         <Button size="small" danger disabled={deletingSelected} title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
                     </Popconfirm>
@@ -515,11 +528,16 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 <ChannelModelEditor
                     channel={channel}
                     editing={editing}
+                    draftValues={copyDraft ?? undefined}
                     protocols={availableProtocols}
                     protocolLoading={protocolLoading}
                     protocolError={protocolError}
                     onRetryProtocols={() => void loadProtocols()}
-                    onClose={() => setEditorOpen(false)}
+                    onClose={() => {
+                        setEditorOpen(false);
+                        setCopyDraft(null);
+                        setEditing(null);
+                    }}
                     onSaved={async () => {
                         await reload();
                         await onChanged();

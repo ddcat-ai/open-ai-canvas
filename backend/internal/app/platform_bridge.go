@@ -32,6 +32,8 @@ const (
 	FeatureSystemPlugins         = platform.FeatureSystemPlugins
 	FeatureInspirationSources    = platform.FeatureInspirationSources
 	FeatureTimelineTranscription = platform.FeatureTimelineTranscription
+	FeatureImageWorkbench        = platform.FeatureImageWorkbench
+	FeatureVideoWorkbench        = platform.FeatureVideoWorkbench
 )
 
 type platformHost struct {
