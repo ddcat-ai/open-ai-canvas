@@ -137,7 +137,7 @@ export default function CreatePage() {
     const activeGenerationTaskIdsRef = useRef(new Set<string>());
     const retryPreparingRef = useRef(new Set<string>());
     const submitGateRef = useRef(createCreationSubmitGate());
-    const pendingRetryRef = useRef<{ context: CreationRetryContext; lockKey: string } | null>(null);
+    const pendingRetryRef = useRef<{ context?: CreationRetryContext; lockKey?: string; promptText?: string } | null>(null);
     const [retrySequence, setRetrySequence] = useState(0);
     const [composerPreferencesInitialized, setComposerPreferencesInitialized] = useState(false);
     promptRef.current = prompt;
@@ -625,7 +625,7 @@ export default function CreatePage() {
         }
     }, [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, toast]);
 
-    const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
+    const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string, overridePrompt?: string) => {
         const releaseRetryLock = () => {
             if (retryLockKey) retryPreparingRef.current.delete(retryLockKey);
         };
@@ -634,8 +634,20 @@ export default function CreatePage() {
             return;
         }
         const releaseSubmitGate = () => submitGateRef.current.release();
-        const text = prompt.trim();
-        if (!text || busy || !activeConversation) {
+        const text = (overridePrompt || prompt).trim();
+        if (!text) {
+            releaseRetryLock();
+            releaseSubmitGate();
+            toast.warning("请输入创作提示词");
+            return;
+        }
+        if (busy) {
+            releaseRetryLock();
+            releaseSubmitGate();
+            toast.warning("当前有任务正在提交中，请稍候再试");
+            return;
+        }
+        if (!activeConversation) {
             releaseRetryLock();
             releaseSubmitGate();
             return;
@@ -863,7 +875,7 @@ export default function CreatePage() {
         const pending = pendingRetryRef.current;
         if (!pending) return;
         pendingRetryRef.current = null;
-        void submit(pending.context, pending.lockKey);
+        void submit(pending.context, pending.lockKey, pending.promptText);
     }, [retrySequence]);
 
     const startNewConversation = () => {
@@ -988,8 +1000,17 @@ export default function CreatePage() {
     };
 
     const retryFailedMessage = async (item: CreationMessage, index: number) => {
-        const previous = item.role === "assistant" ? activeConversation?.messages[index - 1] : item;
-        if (!previous?.content || busy) return;
+        const previous = item.role === "assistant"
+            ? activeConversation?.messages.slice(0, index).reverse().find((m) => m.role === "user")
+            : item;
+        if (!previous?.content) {
+            toast.warning("未找到原创作提示词，请在下方输入后重新生成");
+            return;
+        }
+        if (busy) {
+            toast.warning("当前有任务正在提交中，请稍候片刻再试");
+            return;
+        }
 
         // 优先检查：如果后端任务实际上已经跑成功了，直接恢复结果，绝不重复生成扣费！
         try {
@@ -1028,16 +1049,20 @@ export default function CreatePage() {
         };
         if (!retryOf) {
             restoreForRetry();
+            void submit(undefined, undefined, previous.content);
             return;
         }
-        if (retryPreparingRef.current.has(retryOf)) return;
+        if (retryPreparingRef.current.has(retryOf)) {
+            toast.info("正在准备重新生成，请稍候…");
+            return;
+        }
         retryPreparingRef.current.add(retryOf);
         try {
             const runtime = await loadCreationRuntime();
             const attemptGroupId = item.attemptGroupId || item.retryOf || retryOf;
             const context: CreationRetryContext = { ...(await runtime.createGenerationRetryContext(retryOf, attemptGroupId)), ...(item.taskIds && item.taskIds.length > 1 ? { retryContextsByBatchIndex: await runtime.createGenerationBatchRetryContexts(item.taskIds, attemptGroupId) } : {}) };
             restoreForRetry();
-            pendingRetryRef.current = { context, lockKey: retryOf };
+            pendingRetryRef.current = { context, lockKey: retryOf, promptText: previous.content };
             setRetrySequence((current) => current + 1);
         } catch (error) {
             retryPreparingRef.current.delete(retryOf);
