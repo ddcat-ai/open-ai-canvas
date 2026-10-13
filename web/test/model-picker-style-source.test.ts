@@ -35,13 +35,13 @@ test("每次打开菜单都展开当前选中模型所属目录，无有效选�
 });
 
 test("选择模型保留菜单及行内焦点，仍可通过 Escape 和外部点击关闭", async () => {
-    const component = await Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text();
+    const [component, popup] = await Promise.all([Bun.file(new URL("../src/components/model-picker.tsx", import.meta.url)).text(), Bun.file(new URL("../src/components/ui/workspace-popover.tsx", import.meta.url)).text()]);
     const selection = component.match(/onClick=\{\(\) => \{\s*if \(!model\) return;([\s\S]*?)\}\}/)?.[1] || "";
     expect(selection).toContain("onChange(model)");
     expect(selection).not.toContain("setOpen(false)");
     expect(selection).not.toContain("focus()");
     expect(component).toContain('event.key === "Escape"');
-    expect(component).toContain('window.addEventListener("pointerdown", closeOnOutsidePointer, true)');
+    expect(popup).toContain('document.addEventListener("pointerdown", outside, true)');
 });
 
 test("ModelPicker 样式独立加载，所有入口继承可用高度约束", async () => {

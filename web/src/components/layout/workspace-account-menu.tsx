@@ -1,4 +1,4 @@
-import { Popover } from "antd";
+import { WorkspacePopover as Popover } from "@/components/ui/workspace-popover";
 import { Switch } from "@/components/ui/base/switch";
 import { CircleUserRound, Moon, Sun } from "lucide-react";
 import { useState } from "react";
@@ -25,9 +25,7 @@ export function WorkspaceAccountMenu() {
 
     return user ? (
         <><Popover
-            trigger="click"
             placement="bottomRight"
-            arrow={false}
             rootClassName="workspace-account-popover"
             open={menuOpen}
             onOpenChange={setMenuOpen}
@@ -47,7 +45,7 @@ export function WorkspaceAccountMenu() {
                 </div>
             )}
         >
-            <button type="button" className="app-workspace-topbar-icon-button app-workspace-account-trigger" aria-label="账户菜单" title={user.displayName || user.username}>
+            <button type="button" className="app-workspace-topbar-icon-button app-workspace-account-trigger" aria-label="账户菜单" aria-expanded={menuOpen} title={user.displayName || user.username} onClick={() => setMenuOpen((open) => !open)}>
                 <UserAvatar user={user} className="size-6" />
             </button>
         </Popover></>
