@@ -505,6 +505,9 @@ func videoImageRole(input canvasGenerationInput, image providerMedia) string {
 }
 
 func videoImageRoleOrDefault(input canvasGenerationInput, image providerMedia, fallback string) string {
+	if image.Role == "first_frame" || image.Role == "last_frame" {
+		return image.Role
+	}
 	if metadataString(input.Metadata, "videoEditOperation") == "reference_to_video" {
 		return "reference_image"
 	}

@@ -1,0 +1,77 @@
+{
+ "title": "皇贵妃·捏脚 30s · 人工组接（HARD HUMAN LOCK）",
+ "total": 30,
+ "rhythm": "紧张",
+ "cuts": [
+  {
+   "id": "S01-001",
+   "duration": 3.4,
+   "shot_size": "大远景",
+   "motion": "固定机位",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-002",
+   "duration": 1.4,
+   "shot_size": "中景",
+   "motion": "沿榻沿水平横摇",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-003",
+   "duration": 3.4,
+   "shot_size": "全身",
+   "motion": "跟镜横向随动",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-004",
+   "duration": 1.4,
+   "shot_size": "特写",
+   "motion": "轻微升镜",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-005",
+   "duration": 3.4,
+   "shot_size": "中远景",
+   "motion": "缓慢推镜",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-006",
+   "duration": 1.4,
+   "shot_size": "大特写",
+   "motion": "固定机位",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-007",
+   "duration": 3.4,
+   "shot_size": "牛仔",
+   "motion": "机位抬升",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-008",
+   "duration": 7.4,
+   "shot_size": "中近景",
+   "motion": "固定机位（主打长镜）",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-009",
+   "duration": 1.4,
+   "shot_size": "微距",
+   "motion": "跟镜微动",
+   "jump_cut": false
+  },
+  {
+   "id": "S01-010",
+   "duration": 3.4,
+   "shot_size": "中景",
+   "motion": "缓慢横移离开",
+   "jump_cut": false
+  }
+ ]
+}

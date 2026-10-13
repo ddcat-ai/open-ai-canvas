@@ -1,0 +1,1185 @@
+{
+ "episode": "E01",
+ "series": "冰域纪元",
+ "schema_ver": 2,
+ "lib_ver": "19库/2026-09",
+ "segment_mode": true,
+ "shared": {
+  "prefix_full": "电影质感3D漫剧，UE5渲染，Lumen全局光照，PBR物理材质，写实美型人物，严格匹配参考图，皮肤SSS次表面散射，细微毛孔，实体发丝，RED V-RAPTOR X摄影机，电影三点布光，柔和AO阴影，浅景深，轻微胶片颗粒，8K，竖屏9:16，",
+  "negative_global": "真人照片，照片级写实，恐怖谷，塑料皮肤，油光假脸，过度美颜，五官扭曲，脸部变形，五官移位，手指畸形，多指少指，肢体穿模，网格撕裂，刺眼高光，死黑阴影，赛璐璐，手绘，卡通，黑色轮廓线，纸片头发，扁平贴图，骨骼畸形，广角拉伸，文字，水印，logo，大量噪点，模糊，低分辨率，多余肢体，丧尸形象直给，血肉模糊，真实政府标识",
+  "lighting_ratio": "6:1",
+  "style_base": "A混E"
+ },
+ "assets": {
+  "CHR-0001-V1": {
+   "name": "沈夜",
+   "desc_block": "沈夜，28岁，183cm精瘦挺拔，凌乱黑发鬓角沾灰，深棕眼窝凹陷带青黑，下颌青灰胡茬，鼻梁皮肤冻裂脱皮，深灰连帽抓绒外套磨白起球下摆磨损，袖口露出哑光黑露指手套，军绿防寒裤裤脚扎进高帮工装靴，领口磨损棕皮绳挂一枚银壳旧怀表"
+  },
+  "CHR-0002-V1": {
+   "name": "陈婶",
+   "desc_block": "陈婶，55岁，155cm佝偻干瘦，灰白发丝从藏蓝针织帽毛边下散出，眼角深纹，面色蜡黄，嘴唇干裂，军绿旧棉袄多处补丁、腰缠布绳，袖口露出发黑棉絮，腿缠灰布、脚上棉鞋裹塑料袋"
+  },
+  "SC-001-N": {
+   "name": "地下室庇护所·夜",
+   "env_block": "低矮地下室避难间：裸露混凝土顶板垂挂冰凌凝水，左侧一扇包铁门，右侧地面高度小窗井透入青灰夜光，中部折叠桌上一支粗蜡烛与黑色陶锅，背景靠墙木箱与蜂窝煤堆叠，白霜爬满砖墙，地面铺旧毛毯"
+  },
+  "PROP-001": {
+   "name": "午餐肉罐头",
+   "importance": "仪式道具",
+   "prop_block": "军绿色铁皮午餐肉罐头，标签磨损泛油渍边缘起卷，罐身中段一处凹陷，顶拉开环完好未启，铁皮接缝反冷光",
+   "visual_lock": false
+  },
+  "PROP-002": {
+   "name": "银壳旧怀表",
+   "importance": "贯穿道具",
+   "prop_block": "银壳怀表，壳面氧化发乌带细密划痕，白瓷表盘泛黄，指针静止，表链断裂用细麻绳续接，尺寸约拇指两节长",
+   "visual_lock": true,
+   "state_ledger": [
+    {
+     "episode": "E01",
+     "state": "指针停走（无电仍在走的伏笔载体）",
+     "shot": "S01-004",
+     "note": "P01段钩"
+    }
+   ]
+  }
+ },
+ "segments": [
+  {
+   "id": "P01",
+   "shots": [
+    "S01-001",
+    "S01-002",
+    "S01-003",
+    "S01-004"
+   ],
+   "hook": "怀表无电仍在走（PROP-002伏笔）",
+   "entry_snapshot": "集首：地下室夜，蜡烛未点，温度计-68，沈夜独坐桌旁",
+   "exit_snapshot": "烛光暖照，沈夜拇指拨开胸前银壳旧怀表盖，怀表金属微光，烛焰虚化光斑"
+  },
+  {
+   "id": "P02",
+   "shots": [
+    "S01-005",
+    "S01-006",
+    "S01-007",
+    "S01-008",
+    "S01-009",
+    "S01-010"
+   ],
+   "hook": "陈婶首次露脸求告：「就讨一小勺……孩子等不起了」",
+   "entry_snapshot": "承接P01出口：沈夜合上怀表，手按住桌上磨损午餐肉罐头，烛光暖照",
+   "exit_snapshot": "铁门拉开风雪灌入，陈婶立于门洞逆光成正脸，眼中含水光未落泪，孩子画外咳嗽"
+  },
+  {
+   "id": "P03",
+   "shots": [
+    "S01-011",
+    "S01-012",
+    "S01-013",
+    "S01-014",
+    "S01-015",
+    "S01-016"
+   ],
+   "hook": "让出最后一罐：「算了。人冻死了，东西也是死的。」",
+   "entry_snapshot": "承接P02：陈婶门洞逆光含泪求告，沈夜握罐低头，冷暖交界光",
+   "exit_snapshot": "陈婶双手捧半罐贴胸落泪，肉断面热气升腾被烛光染金边，罐身反光"
+  },
+  {
+   "id": "P04",
+   "shots": [
+    "S01-017",
+    "S01-018",
+    "S01-019",
+    "S01-020"
+   ],
+   "hook": "S级尾钩「别出声」",
+   "tail_exempt": true,
+   "entry_snapshot": "承接P03：陈婶捧罐贴胸，温度计骤跌至-80刻度，冰花爬满管壁，远处非人嚎鸣",
+   "exit_snapshot": "集尾钩：烛灭全黑，门缝一线冷光，极轻叩响"
+  }
+ ],
+ "info_refs": [
+  {
+   "info": "门外「它们」闻热气",
+   "by": "沈夜",
+   "shot": "S01-019"
+  },
+  {
+   "info": "PROP-002怀表无电仍在走",
+   "by": "沈夜",
+   "shot": "S01-004"
+  }
+ ],
+ "shots": [
+  {
+   "shot_id": "S01-001",
+   "seq": 1,
+   "duration_s": 3,
+   "duration_mode": "中",
+   "shot_size": "INS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "冰碴",
+    "mg": "温度计",
+    "bg": "虚化青灰墙"
+   },
+   "silhouette": "管形可辨",
+   "roles": [],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "SC-001-N"
+   ],
+   "dialogue": [],
+   "vo": "冰域纪元第47天，零下六十八度",
+   "sfx": [
+    "水银碎裂@1.5s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "悬念",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "壁挂式水银温度计极端特写，红柱压至零下68刻度，管壁爬满冰花，前景冰碴虚化，背景霜墙青灰，唯一光源为右侧小窗井冷光，末日极寒压抑氛围",
+    "lighting": "主光右后冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "水银缓降+冰花爬",
+    "L3": "静",
+    "L4": "冷雾飘"
+   },
+   "tier": "5s裁3s",
+   "amplitude": "极小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-002",
+   "seq": 2,
+   "duration_s": 5,
+   "duration_mode": "慢",
+   "shot_size": "FS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "冰凌虚化",
+    "mg": "沈夜蹲坐烤火",
+    "bg": "煤堆木箱覆霜"
+   },
+   "silhouette": "抱膝烤火可辨",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-0001-V1",
+    "SC-001-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "火苗噼啪"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "建立",
+   "prompt_ref": {
+    "lib": "01",
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "蹲坐桌前烤火，烛光唯一暖核，冷暖对冲，主光烛光暖调"
+   },
+   "video_layers": {
+    "L1": "小幅搓手",
+    "L2": "呵气白雾+烛焰摇曳+冰凌滴水",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s",
+   "amplitude": "小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-003",
+   "seq": 3,
+   "duration_s": 3,
+   "duration_mode": "中",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Push In",
+    "motive": "情绪收紧入内心"
+   },
+   "visual_layers": {
+    "fg": "桌沿",
+    "mg": "沈夜上半身",
+    "bg": "霜墙虚化"
+   },
+   "silhouette": "低头静坐可辨",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": "M27",
+   "props": [],
+   "assets": [
+    "CHR-0001-V1",
+    "SC-001-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "呼出白气成雾，情绪克制压抑，焦点人物双眼"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "呼吸起伏发丝微颤",
+    "L3": "缓慢向前推进透视自然变化",
+    "L4": "烛光辉光浮动"
+   },
+   "tier": "5s",
+   "amplitude": "极小",
+   "lip_sync": null,
+   "transition_note": "情绪推近递进第一级：烤火姿态镜独立成拍后收中景（editing/16 隔级切豁免·递进推近），叠化过渡"
+  },
+  {
+   "shot_id": "S01-004",
+   "seq": 4,
+   "duration_s": 3,
+   "duration_mode": "中",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "怀表",
+    "mg": "人物胸口",
+    "bg": "烛焰虚化光斑"
+   },
+   "silhouette": "抬手于胸前可辨",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": "M02",
+   "props": [
+    "PROP-002"
+   ],
+   "assets": [
+    "CHR-0001-V1",
+    "PROP-002"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "表盖咔哒@1s",
+    "表盖咔哒@2s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "拇指拨开胸前银壳旧怀表盖，怀表细节锐利金属微光，安静仪式感氛围，焦点人物与怀表"
+   },
+   "video_layers": {
+    "L1": "拇指开合怀表一次",
+    "L2": "链坠轻晃",
+    "L3": "静",
+    "L4": "烛斑闪"
+   },
+   "tier": "5s",
+   "amplitude": "小",
+   "lip_sync": null,
+   "transition_note": "递进推近第二级收胸上近景，引出怀表揭示（editing/16 隔级切豁免·递进推近+揭示镜），缓推"
+  },
+  {
+   "shot_id": "S01-005",
+   "seq": 5,
+   "duration_s": 2,
+   "duration_mode": "中",
+   "shot_size": "INS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "手罐",
+    "mg": null,
+    "bg": "压暗虚化"
+   },
+   "silhouette": "握罐手势可辨",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-001"
+   ],
+   "assets": [
+    "PROP-001",
+    "CHR-0001-V1"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "罐头磕桌@0.5s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "悬念",
+   "prompt_ref": {
+    "lib": "07",
+    "asset_copy": [],
+    "free": "戴哑光黑露指手套的手按住一罐磨损午餐肉罐头，罐身反光，指节皮肤纹理清晰，末日物资珍贵氛围"
+   },
+   "video_layers": {
+    "L1": "掂罐一下按回",
+    "L2": "手套毛边轻摆",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁3s",
+   "amplitude": "小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-006",
+   "seq": 6,
+   "duration_s": 2,
+   "duration_mode": "中",
+   "shot_size": "CU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": null,
+    "mg": "面部",
+    "bg": "全暗轮廓光"
+   },
+   "silhouette": "正侧45°可辨",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": "M15",
+   "props": [],
+   "assets": [
+    "CHR-0001-V1"
+   ],
+   "dialogue": [],
+   "vo": "这是我最后的食物",
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "瞳孔中映两点烛火光斑，眼神稳定坚定，轮廓光勾边，焦点双眼，瞳孔单点眼神光"
+   },
+   "video_layers": {
+    "L1": "眨眼一次",
+    "L2": "瞳中烛点轻晃",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁2s",
+   "amplitude": "极小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-007",
+   "seq": 7,
+   "duration_s": 2,
+   "duration_mode": "快",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "虚化沈夜肩线",
+    "mg": "震动门板",
+    "bg": "楼梯井暗"
+   },
+   "silhouette": "门框垂直线压迫",
+   "roles": [],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "SC-001-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "拍门三连@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "转折",
+   "prompt_ref": {
+    "lib": "16",
+    "asset_copy": [],
+    "free": "包铁旧门被震得门缝落灰，窥视构图，危机将至氛围，暗部保留细节"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "门板震颤+灰尘簌落",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁2s",
+   "amplitude": null,
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-008",
+   "seq": 8,
+   "duration_s": 1,
+   "duration_mode": "快",
+   "shot_size": "ECU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": null,
+    "mg": "眼部",
+    "bg": "全暗"
+   },
+   "silhouette": "眼部局部",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": "M59",
+   "props": [],
+   "assets": [
+    "CHR-0001-V1"
+   ],
+   "dialogue": [
+    {
+     "who": "陈婶",
+     "text": "沈小哥……开开门……",
+     "offscreen": true,
+     "lip": "B"
+    }
+   ],
+   "vo": null,
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "转折",
+   "prompt_ref": {
+    "lib": "06",
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "眼球侧转向瞳孔收缩，睫毛结细霜，瞳孔内环境光反射高光，紧张氛围，焦点双眼"
+   },
+   "video_layers": {
+    "L1": "眼球转声源",
+    "L2": "睫毛颤瞳孔收缩",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁1s",
+   "amplitude": "极小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-009",
+   "seq": 9,
+   "duration_s": 4,
+   "duration_mode": "慢",
+   "shot_size": "FS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "门闩",
+    "mg": "陈婶逆光半剪影",
+    "bg": "楼梯井雪雾"
+   },
+   "silhouette": "佝偻抱臂哆嗦强可读",
+   "roles": [
+    "CHR-0002-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-0002-V1",
+    "SC-001-N"
+   ],
+   "dialogue": [
+    {
+     "who": "陈婶",
+     "text": "小满烧了两天了……求您……",
+     "offscreen": false,
+     "lip": "B"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "风灌入呼啸"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "转折",
+   "prompt_ref": {
+    "lib": "17",
+    "asset_copy": [
+     "CHR-0002-V1"
+    ],
+    "free": "铁门拉开风雪灌入，立于门洞逆光中成半剪影，发梢挂雪粒，门外冷蓝门内暖烛交界，轮廓光勾边；剪影说话(背逆光)"
+   },
+   "video_layers": {
+    "L1": "剪影人物缓步迈入",
+    "L2": "雪粒飘飞衣摆抖",
+    "L3": "静",
+    "L4": "风灌入烛影摇"
+   },
+   "tier": "5s",
+   "amplitude": "小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-010",
+   "seq": 10,
+   "transition_note": "揭示镜：009剪影故意隐脸→010首次露脸，动作节拍打断对话节拍，属法则四INS外例外（方案对比表已录）",
+   "duration_s": 4,
+   "duration_mode": "中",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "烛焰虚影",
+    "mg": "陈婶正脸",
+    "bg": "门洞冷光"
+   },
+   "silhouette": "缩颈抱肩可辨",
+   "roles": [
+    "CHR-0002-V1"
+   ],
+   "micro_expr": "M22",
+   "props": [],
+   "assets": [
+    "CHR-0002-V1"
+   ],
+   "dialogue": [
+    {
+     "who": "陈婶",
+     "text": "就讨一小勺……孩子等不起了",
+     "offscreen": false,
+     "lip": "A"
+    }
+   ],
+   "vo": null,
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "exemption": "台词反检优先于MCU区间(17字需4s)，Step3已记录",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0002-V1"
+    ],
+    "free": "眼中含水光但未落泪，隐忍委屈表情，主光左上45度烛光暖调，焦点人物双眼，瞳孔单点眼神光，【需附参考图】"
+   },
+   "video_layers": {
+    "L1": "说话口型",
+    "L2": "唇颤发丝贴额",
+    "L3": "静",
+    "L4": "前景烛虚影晃"
+   },
+   "tier": "5s裁4s",
+   "amplitude": "极小",
+   "lip_sync": "A"
+  },
+  {
+   "shot_id": "S01-011",
+   "seq": 11,
+   "duration_s": 3,
+   "duration_mode": "中",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "陈婶后脑虚化",
+    "mg": "沈夜侧脸低头",
+    "bg": "暗"
+   },
+   "silhouette": "低头侧脸+握罐轮廓",
+   "roles": [
+    "CHR-0001-V1",
+    "CHR-0002-V1"
+   ],
+   "micro_expr": "M07",
+   "props": [
+    "PROP-001"
+   ],
+   "assets": [
+    "CHR-0001-V1",
+    "CHR-0002-V1"
+   ],
+   "dialogue": [
+    {
+     "who": "沈夜",
+     "text": "陈婶，这是我最后一罐。",
+     "offscreen": false,
+     "lip": "A"
+    }
+   ],
+   "vo": null,
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": "05",
+    "asset_copy": [
+     "CHR-0001-V1",
+     "CHR-0002-V1"
+    ],
+    "free": "越肩视角焦点沈夜侧脸低头，握罐指节入画下缘，冷暖交界光"
+   },
+   "video_layers": {
+    "L1": "说话口型+下颌绷紧",
+    "L2": "前景后脑微晃",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁3s",
+   "amplitude": "小",
+   "lip_sync": "A",
+   "transition_note": "对白节拍轮替：陈婶恳求收、沈夜回应起，正反打机位交换（editing/16 隔级切豁免·对白轮替），直切"
+  },
+  {
+   "shot_id": "S01-012",
+   "seq": 12,
+   "duration_s": 2,
+   "duration_mode": "快",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "沈夜靴尖",
+    "mg": "陈婶跪姿",
+    "bg": "霜墙"
+   },
+   "silhouette": "跪姿强可读",
+   "roles": [
+    "CHR-0002-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-0002-V1",
+    "SC-001-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "膝落闷响@0.8s",
+    "孩子画外咳嗽"
+   ],
+   "cut_point": "膝头触毯瞬间",
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "转折",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0002-V1"
+    ],
+    "free": "低机位微仰，双膝跪进地面旧毛毯，肩头雪粒弹起毯面凹陷，接触阴影真实，尊严崩塌的静默张力"
+   },
+   "video_layers": {
+    "L1": "跪落一次成型",
+    "L2": "雪粒弹起毯面凹陷",
+    "L3": "静",
+    "L4": "烛影扫过"
+   },
+   "tier": "5s裁2s",
+   "amplitude": "中",
+   "lip_sync": null,
+   "transition_note": "同景别换视点直切：过肩沈夜切陈婶跪姿，膝落闷响钉节拍（editing/16 隔级切豁免·动作节拍打断），直切"
+  },
+  {
+   "shot_id": "S01-013",
+   "seq": 13,
+   "duration_s": 1.5,
+   "duration_mode": "快",
+   "shot_size": "INS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "手",
+    "mg": "罐",
+    "bg": "全暗烛光反光"
+   },
+   "silhouette": "攥拳可辨",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-001"
+   ],
+   "assets": [
+    "PROP-001",
+    "CHR-0001-V1"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "铝罐细响@0.5s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "转折",
+   "prompt_ref": {
+    "lib": "07",
+    "asset_copy": [],
+    "free": "俯视戴哑光黑露指手套的手攥紧午餐肉罐至罐身轻微变形，指节发白，内心拉锯氛围"
+   },
+   "video_layers": {
+    "L1": "攥紧罐变形",
+    "L2": "手套边缘微颤",
+    "L3": "静",
+    "L4": "背景反光移"
+   },
+   "tier": "5s裁1.5s",
+   "amplitude": "小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-014",
+   "seq": 14,
+   "duration_s": 2,
+   "duration_mode": "快",
+   "shot_size": "CU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": null,
+    "mg": "面部",
+    "bg": "暗"
+   },
+   "silhouette": "低眉闭口",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": "M91",
+   "props": [],
+   "assets": [
+    "CHR-0001-V1"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风声一瞬静默"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "转折",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "眉心紧锁嘴唇抿紧目光沉重下垂，脸上烛焰被风吹晃，艰难抉择情绪，焦点双眼，瞳孔单点眼神光"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "眉心缓收+喉结滚动",
+    "L3": "静",
+    "L4": "火光被风吹晃一下回稳"
+   },
+   "tier": "5s裁2s",
+   "amplitude": "极小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-015",
+   "seq": 15,
+   "transition_note": "主体变更：014为沈夜面部、015主体为递出的双手（新视觉主体自013 INS建立），CU→MS为情绪落动作的下放，非跳级",
+   "duration_s": 3,
+   "duration_mode": "中",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "陈婶枯手抬起",
+    "mg": "递罐双手",
+    "bg": "冷蓝门光"
+   },
+   "silhouette": "两手相递强可读",
+   "roles": [
+    "CHR-0001-V1",
+    "CHR-0002-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-001"
+   ],
+   "assets": [
+    "PROP-001",
+    "CHR-0001-V1",
+    "CHR-0002-V1"
+   ],
+   "dialogue": [],
+   "vo": "算了。人冻死了，东西也是死的。",
+   "sfx": [
+    "罐盖崩开@0.6s"
+   ],
+   "cut_point": "罐盖崩开瞬间",
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": "31",
+    "asset_copy": [],
+    "free": "一双戴哑光黑露指手套的年轻男性的手把一罐打开的午餐肉掰成两半递向画面左侧，肉断面升起热气被烛光染成金边，前景一只枯瘦布满冻疮的手抬起承接，冷暖对比，接触阴影真实"
+   },
+   "video_layers": {
+    "L1": "撬盖掰半递出",
+    "L2": "热气升腾",
+    "L3": "静",
+    "L4": "门缝冷风使烛焰拉长"
+   },
+   "tier": "10s段1升格",
+   "amplitude": "中",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-016",
+   "seq": 16,
+   "duration_s": 3,
+   "duration_mode": "中",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "罐身反光",
+    "mg": "陈婶面部",
+    "bg": "烛焰虚化"
+   },
+   "silhouette": "捧物贴身姿态",
+   "roles": [
+    "CHR-0002-V1"
+   ],
+   "micro_expr": "M94",
+   "props": [
+    "PROP-001"
+   ],
+   "assets": [
+    "CHR-0002-V1",
+    "PROP-001"
+   ],
+   "dialogue": [
+    {
+     "who": "陈婶",
+     "text": "……谢谢。",
+     "offscreen": false,
+     "lip": "A"
+    }
+   ],
+   "vo": null,
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0002-V1"
+    ],
+    "free": "双手捧半罐贴胸，一道泪沿深纹缓落，嘴唇微颤，被救赎的瞬间，焦点双眼，【需附参考图】"
+   },
+   "video_layers": {
+    "L1": "捧罐贴胸+轻词口型",
+    "L2": "泪落一道+唇颤",
+    "L3": "静",
+    "L4": "罐身反光移"
+   },
+   "tier": "5s裁3s",
+   "amplitude": "极小",
+   "lip_sync": "A",
+   "transition_note": "递罐→捧罐动作衔接推近至面部（editing/16 隔级切豁免·动作衔接推近），直切"
+  },
+  {
+   "shot_id": "S01-017",
+   "seq": 17,
+   "duration_s": 2,
+   "duration_mode": "快",
+   "shot_size": "INS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "管",
+    "mg": "刻度",
+    "bg": "墙霜"
+   },
+   "silhouette": "管形",
+   "roles": [],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "SC-001-N"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "玻璃应力脆响@0.4s",
+    "远处非人低哑嚎鸣"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "悬念",
+   "prompt_ref": {
+    "asset_copy": [],
+    "free": "壁挂式水银温度计极端特写，水银柱跌向零下80刻度，管壁冰花快速蔓延成网，危机异变氛围，青冷色调骤降"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "水银再跌+冰花爬满网",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁2s",
+   "amplitude": null,
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-018",
+   "seq": 18,
+   "duration_s": 2,
+   "duration_mode": "快",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": null,
+    "mg": "双人侧影同向望画左",
+    "bg": "暗"
+   },
+   "silhouette": "两头同向转动可辨",
+   "roles": [
+    "CHR-0001-V1",
+    "CHR-0002-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-0001-V1",
+    "CHR-0002-V1"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "第二声嚎鸣更近@0.8s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "悬念",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0001-V1",
+     "CHR-0002-V1"
+    ],
+    "free": "双人同框侧影同时扭头望向画面左侧门外，一暖一冷两色光各亮半边脸，烛焰压低，同步恐惧构图"
+   },
+   "video_layers": {
+    "L1": "双人同步缓转头",
+    "L2": "臂后拢半步",
+    "L3": "静",
+    "L4": "烛焰压低"
+   },
+   "tier": "5s裁2s",
+   "amplitude": "小",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S01-019",
+   "seq": 19,
+   "duration_s": 2,
+   "duration_mode": "快",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": null,
+    "mg": "面部",
+    "bg": "全暗"
+   },
+   "silhouette": "正侧脸",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": "M53",
+   "props": [],
+   "assets": [
+    "CHR-0001-V1"
+   ],
+   "dialogue": [],
+   "vo": "它们闻到活人的热气了。",
+   "sfx": [],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "悬念",
+   "prompt_ref": {
+    "asset_copy": [
+     "CHR-0001-V1"
+    ],
+    "free": "眼底冷意眉下压视线锁定画左，碎发贴脸，瞳中烛焰被风拉斜，危险预判氛围，焦点双眼"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "瞳孔微缩+瞳中火光拉斜+碎发缓飘",
+    "L3": "静",
+    "L4": null
+   },
+   "tier": "5s裁2s",
+   "amplitude": "极小",
+   "lip_sync": null,
+   "transition_note": "双人同望收至沈夜正侧脸，VO 逼近感递进（editing/16 隔级切豁免·递进推近），缓推"
+  },
+  {
+   "shot_id": "S01-020",
+   "seq": 20,
+   "duration_s": 4,
+   "duration_mode": "骤停",
+   "shot_size": "CU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "手掌入画",
+    "mg": "熄灭中的烛芯余烬",
+    "bg": "纯黑+门缝冷光线"
+   },
+   "silhouette": "灭烛手势→黑",
+   "roles": [
+    "CHR-0001-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-0001-V1",
+    "SC-001-N"
+   ],
+   "dialogue": [
+    {
+     "who": "沈夜",
+     "text": "别出声。抱紧小满。",
+     "offscreen": true,
+     "lip": "B"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "门板极轻叩响@3.2s"
+   ],
+   "cut_point": "烛芯最后一星火苗熄灭瞬间",
+   "transition_out": {
+    "type": "Smash Cut",
+    "ref": null
+   },
+   "narrative_func": "尾钩",
+   "prompt_ref": {
+    "asset_copy": [],
+    "free": "一只手入画吹灭蜡烛的瞬间，画面九分黑，仅存两点橙红余烬与一线门缝青冷光，黑暗中白色呼吸气浮动，极致低照度悬念"
+   },
+   "video_layers": {
+    "L1": "手掌入画吹灭",
+    "L2": "火苗熄灭+烟缕+呼吸白气",
+    "L3": "静",
+    "L4": "余烬明灭"
+   },
+   "tier": "5s裁4s·首尾帧",
+   "amplitude": "小",
+   "lip_sync": null,
+   "transition_note": "主体由面部变更至灭烛手势特写，收束入黑（editing/16 隔级切豁免·主体变更），直切"
+  }
+ ],
+ "timeline": {
+  "content_s": 53.5,
+  "with_titlecard_s": 56.5,
+  "reel_check": "通过（见集索引）"
+ }
+}

@@ -1,0 +1,12 @@
+{
+  "total": 15,
+  "editing_mode": "b",
+  "cuts": [
+    {"id": "S1", "duration": 4.0, "shot_size": "全景/远景（WS/LS）", "motion": "固定", "主体": "张三", "朝向": "左", "切点": "动接动：开门动作峰值", "叙事功能": "建立"},
+    {"id": "S2", "duration": 3.0, "shot_size": "中景（MS）", "motion": "推镜", "主体": "张三", "朝向": "左", "切点": "动作推进"},
+    {"id": "S3", "duration": 2.0, "shot_size": "特写（CU）", "motion": "固定", "主体": "张三", "朝向": "左", "切点": "反应镜：情绪落点"},
+    {"id": "S4", "duration": 1.0, "shot_size": "插入镜头（Insert Shot）", "motion": "固定", "kind": "INS", "叙事功能": "INS 桥镜：钟表滴答（时间压力）"},
+    {"id": "S5", "duration": 2.0, "shot_size": "特写（CU）", "motion": "固定", "主体": "张三", "朝向": "左", "切点": "INS 后回到反应"},
+    {"id": "S6", "duration": 3.0, "shot_size": "中景（MS）", "motion": "摇镜", "主体": "李四", "朝向": "右", "切点": "换主体：对话反打"}
+  ]
+}

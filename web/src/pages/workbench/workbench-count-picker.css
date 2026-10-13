@@ -1,0 +1,45 @@
+.workbench-count-picker {
+    display: grid;
+    gap: 10px;
+}
+.workbench-count-picker > span {
+    font-size: 12px;
+    font-weight: 580;
+    color: var(--wb-text);
+}
+.workbench-count-picker > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.workbench-count-picker button {
+    min-width: 36px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--wb-edge);
+    border-radius: 8px;
+    background: var(--wb-surface);
+    color: var(--wb-text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+.workbench-count-picker button:hover {
+    border-color: var(--wb-text-muted);
+    background: var(--wb-hover);
+}
+.workbench-count-picker button.is-active {
+    border-color: var(--user-primary, #5b5fc7);
+    background: var(--user-primary, #5b5fc7);
+    color: white;
+}
+.workbench-count-picker .ant-input-number {
+    width: 72px;
+    height: 32px;
+}
+.workbench-count-picker .ant-input-number input {
+    height: 30px;
+    text-align: center;
+}

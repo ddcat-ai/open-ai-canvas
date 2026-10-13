@@ -2,6 +2,11 @@ package service
 
 import "yingce/backend/internal/app"
 
+const (
+	WorkbenchKindImage = app.WorkbenchKindImage
+	WorkbenchKindVideo = app.WorkbenchKindVideo
+)
+
 type (
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
@@ -340,6 +345,11 @@ type (
 	UpdateProjectUnitRequest               = app.UpdateProjectUnitRequest
 	UpdateUserRequest                      = app.UpdateUserRequest
 	UpdateWorkflowStepRequest              = app.UpdateWorkflowStepRequest
+	WorkbenchToolInput                     = app.WorkbenchToolInput
+	WorkbenchPresetInput                   = app.WorkbenchPresetInput
+	WorkbenchToolView                      = app.WorkbenchToolView
+	WorkbenchPresetView                    = app.WorkbenchPresetView
+	WorkbenchTaskInput                     = app.WorkbenchTaskInput
 	UserAnnouncementFeed                   = app.UserAnnouncementFeed
 	UserAssetPage                          = app.UserAssetPage
 	UserAssetPageFilter                    = app.UserAssetPageFilter

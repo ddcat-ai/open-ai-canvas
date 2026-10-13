@@ -18,6 +18,9 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 
 	wanted := map[string]bool{
 		"GET /api/openapi.yaml":             false,
+		"GET /api/workbench/tools":          false,
+		"GET /api/workbench/tasks":          false,
+		"POST /api/workbench/tasks":         false,
 		"GET /api/projects":                 false,
 		"POST /api/tasks":                   false,
 		"POST /api/tasks/:id/recover-media": false,

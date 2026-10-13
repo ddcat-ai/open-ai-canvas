@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 53
+const CurrentSchemaVersion int64 = 54
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -29,6 +29,9 @@ const prefixedIDSequenceReconcileChecksum = "sha256:prefixed-id-sequence-reconci
 const skillLibraryCategoriesChecksum = "sha256:skill-library-categories-v39-20260926"
 const builtinSkillTombstonesChecksum = "sha256:builtin-skill-tombstones-v40-20260927"
 const resourceThumbnailChecksum = "sha256:resource-thumbnail-v41-20260927"
+const workbenchToolsMigrationName = "workbench_tools_and_presets"
+const workbenchToolsMigrationChecksum = "sha256:workbench-tools-presets-v54-20261014"
+const legacyWorkbenchToolsMigrationChecksum = "sha256:workbench-tools-presets-v51-20261014"
 
 const postgresSchemaMigrationLockID int64 = 73123910420260830
 
@@ -177,6 +180,9 @@ var schemaMigrations = []migration{
 	}},
 	{version: 53, name: "user_login_logs", checksum: "sha256:user-login-logs-v53", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.LoginLog{})
+	}},
+	{version: 54, name: workbenchToolsMigrationName, checksum: workbenchToolsMigrationChecksum, apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.WorkbenchTool{}, &model.WorkbenchPreset{}, &model.Task{})
 	}},
 }
 
@@ -507,6 +513,47 @@ func migrateSchemaV12(tx *gorm.DB) error {
 	return nil
 }
 
+func normalizeLegacyWorkbenchMigration(tx *gorm.DB) error {
+	var legacy schemaMigration
+	if err := tx.First(&legacy, "version = ?", 51).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return fmt.Errorf("读取旧工作台迁移记录：%w", err)
+	}
+	if legacy.Name != workbenchToolsMigrationName || legacy.Checksum != legacyWorkbenchToolsMigrationChecksum {
+		return nil
+	}
+
+	var later []schemaMigration
+	if err := tx.Where("version > ?", legacy.Version).Order("version asc").Find(&later).Error; err != nil {
+		return fmt.Errorf("读取旧工作台迁移后的记录：%w", err)
+	}
+	if len(later) > 0 {
+		return fmt.Errorf("数据库迁移 51 使用旧工作台身份，但已存在后续迁移记录 %d；拒绝自动改写迁移账本", later[0].Version)
+	}
+	if !tx.Migrator().HasTable(&model.WorkbenchTool{}) || !tx.Migrator().HasTable(&model.WorkbenchPreset{}) {
+		return fmt.Errorf("数据库迁移 51 记录为旧工作台迁移，但工作台表不完整；请从备份恢复后再升级")
+	}
+
+	result := tx.Model(&schemaMigration{}).
+		Where("version = ? AND name = ? AND checksum = ?", legacy.Version, legacy.Name, legacy.Checksum).
+		Updates(map[string]any{
+			"version":  workbenchToolsMigrationVersion,
+			"name":     workbenchToolsMigrationName,
+			"checksum": workbenchToolsMigrationChecksum,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("归一化旧工作台迁移记录：%w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("归一化旧工作台迁移记录影响 %d 行，拒绝继续启动", result.RowsAffected)
+	}
+	return nil
+}
+
+const workbenchToolsMigrationVersion int64 = 54
+
 func MigrateSchema(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if tx.Dialector.Name() == "postgres" {
@@ -516,6 +563,9 @@ func MigrateSchema(db *gorm.DB) error {
 		}
 		if err := tx.AutoMigrate(&schemaMigration{}); err != nil {
 			return fmt.Errorf("初始化数据库迁移记录：%w", err)
+		}
+		if err := normalizeLegacyWorkbenchMigration(tx); err != nil {
+			return err
 		}
 		plan, err := migrationsForDatabase(tx)
 		if err != nil {

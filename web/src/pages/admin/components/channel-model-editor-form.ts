@@ -4,7 +4,7 @@ import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets"
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
-import { defaultPriceTier, legacyPriceTierToForm, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
+import { defaultPriceTier, legacyPriceTierToForm, normalizeUpstreamModelKey, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 
 export type ChannelModelFormValues = {
     modelKey: string;
@@ -44,6 +44,17 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         priceTiers: item ? (item.priceTiers?.length ? item.priceTiers.map(priceTierToForm) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()],
         enabled: item?.enabled ?? true,
         capabilityConfig: capability === "audio" ? undefined : normalizeModelCapabilityConfig(item?.capabilityConfig || defaultModelCapabilityConfig(protocol, upstreamModel)),
+    };
+}
+
+export function duplicateChannelModelValues(item: ChannelModel, protocols: ModelProtocolDefinition[]): ChannelModelFormValues {
+    const values = initialChannelModelValues(item, protocols);
+    const sourceUpstream = normalizeUpstreamModelKey(item.providerModelKey || item.modelKey);
+    return {
+        ...values,
+        modelKey: "",
+        providerModelKey: "",
+        priceTiers: values.priceTiers.map((tier) => (normalizeUpstreamModelKey(tier.providerModelKey) === sourceUpstream ? { ...tier, providerModelKey: "" } : tier)),
     };
 }
 

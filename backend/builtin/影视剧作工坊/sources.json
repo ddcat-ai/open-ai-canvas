@@ -1,0 +1,12 @@
+{
+ "sources": [
+  {"name": "源A-上游技能包（skill_inspect2 影视剧作工坊）", "path": ""},
+  {"name": "源B-导演全流程原始文档（母书存档+新增来源_20260928）", "path": ""},
+  {"name": "源C-场景与人物模块融合版（29种成品基准等）", "path": ""},
+  {"name": "源D1-chaoge·AI导演Skill完整版3线路", "path": ""},
+  {"name": "源D2-chaoge·导演Skill3.0超级AI客", "path": ""},
+  {"name": "源D3-chaoge·相关Skill", "path": ""},
+  {"name": "源D4-chaoge·转分镜剧本Skill(AB版)", "path": ""}
+ ],
+ "note": "可移植来源登记模板。下载包用户可在本机填写有权读取的来源目录，或通过临时根目录参数检索；内置 Agent 不运行该脚本，也不会写回母源。"
+}

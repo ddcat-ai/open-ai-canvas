@@ -1,0 +1,8 @@
+{
+ "name": "影视剧作工坊",
+ "version": "1.1.6",
+ "built": "2026-10-03",
+ "modules": 16,
+ "machine_scripts": 31,
+ "provenance": "内容源自漫剧导演全流程 v66、chaoge-storyboard v1.4.0 等 8 个上游包；出处见各文件落位说明"
+}

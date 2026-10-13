@@ -1,0 +1,27 @@
+{
+  "series": "冰域纪元",
+  "ledger_ver": 1,
+  "updated_episode": "E01",
+  "schema_ref": "season-continuity.md §一~§五",
+  "hook_ledger": [
+    {"episode": "E01", "hook_shot": "S01-020", "content": "黑暗门板被轻叩「别出声」", "level": "S",
+     "responded_in": null, "response_mode": null, "status": "待回应"}
+  ],
+  "knowledge_ledger": [
+    {"info": "PROP-002怀表无电仍在走", "viewer_since": "E01",
+     "characters": {"沈夜": {"since": "一直", "note": "仪式感持有者"}, "陈婶": {"since": "E04"}}},
+    {"info": "门外「它们」闻热气", "viewer_since": "E01",
+     "characters": {"沈夜": {"since": "E01", "note": "台词点破S01-019"}, "陈婶": {"since": "E02", "note": "hears"}}}
+  ],
+  "life_ledger": [
+    {"asset": "CHR-0001-V1", "name": "沈夜", "status": "存活", "changed_at": null, "visual_confirmed": true, "note": ""},
+    {"asset": "CHR-0002-V1", "name": "陈婶", "status": "存活", "changed_at": null, "visual_confirmed": true, "note": ""}
+  ],
+  "foreshadow_ledger": [
+    {"id": "F-001", "planted": "E01-004", "content": "怀表无电仍走（异样）", "plan_episode": "E03", "actual_episode": null, "status": "在途"}
+  ],
+  "relation_axis": [
+    {"pair": "沈夜↔陈婶", "stages": ["陌生", "戒备", "信任", "裂痕", "生死之交"],
+     "by_episode": {"E01": "戒备→信任第一格（让出半罐）"}}
+  ]
+}

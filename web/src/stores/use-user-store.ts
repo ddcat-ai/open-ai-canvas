@@ -39,6 +39,8 @@ export type FeatureAvailability = {
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
     inspirationSourcesVisible: boolean;
+    imageWorkbenchEnabled: boolean;
+    videoWorkbenchEnabled: boolean;
     configured?: boolean;
     updatedBy?: string;
     updatedAt?: string;
@@ -54,6 +56,8 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,
     inspirationSourcesVisible: true,
+    imageWorkbenchEnabled: false,
+    videoWorkbenchEnabled: false,
 };
 
 type UserStore = {

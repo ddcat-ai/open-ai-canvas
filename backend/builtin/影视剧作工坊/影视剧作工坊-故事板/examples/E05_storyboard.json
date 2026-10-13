@@ -1,0 +1,402 @@
+{
+ "episode": "E05",
+ "series": "冰域纪元",
+ "schema_ver": 2,
+ "lib_ver": "35库/2026-09",
+ "segment_mode": true,
+ "shared": {
+  "prefix_full": "电影质感3D漫剧，UE5渲染，Lumen全局光照，PBR物理材质，写实美型人物，皮肤SSS次表面散射，实体发丝，电影三点布光，浅景深，8K，竖屏9:16，Chen Kaige epic cinema style, Chinese literati painting aesthetics, blue-green landscape (qinglu shanshui) ink-wash color grading, gold and crimson Tang palace palette turning cold cyan-gray in later acts, single-source dramatic chiaroscuro, high light ratio with deep shadow, symmetrical and centripetal composition, vast negative space with small figures at frame edge, long take with slow-motion ceremonial moment, Peking opera costume with gold thread embroidery, silk anisotropic sheen, bronze patina, lacquerware multi-layer reflection, UE5 restrained single-source Lumen lighting, Arnold photorealistic subsurface scattering skin beneath opera makeup, melancholic grandeur, ultra detailed, 9:16 vertical cinematic",
+  "negative_global": "卡通，二次元，手绘，塑料皮肤，五官扭曲，手指畸形，文字，水印，模糊，皮克斯风格，迪士尼风格，3D动画风格，",
+  "lighting_ratio": "4:1",
+  "style_base": "A混E + ㊱卡二（陈凯歌）"
+ },
+ "assets": {
+  "CHR-1001-V1": {
+   "name": "秦烈",
+   "desc_block": "秦烈，30岁，185cm宽肩窄腰，短黑发结霜，断眉疤痕，玄铁锁子甲外罩灰狼皮大氅，腰悬制式长刀，牛皮战靴踏雪"
+  },
+  "CHR-1002-V1": {
+   "name": "胡骑斥候",
+   "desc_block": "胡骑斥候，26岁，178cm精悍，皮帽压眉，羊皮袄束革带，左手圆盾右手弯刀，颊侧冻红斑"
+  },
+  "SC-002-N": {
+   "name": "雪谷隘口·晨",
+   "env_block": "两壁夹峙的雪谷隘口，晨光斜切谷底，积雪没踝，风卷雪雾贴地掠过，远处松林挂凌"
+  },
+  "PROP-101": {
+   "name": "制式长刀",
+   "importance": "贯穿道具",
+   "prop_block": "制式直刃长刀，刀身冷锻暗纹，刃口崩缺一处，木柄缠浸油革条，鲛皮鞘口磨白",
+   "visual_lock": true,
+   "state_ledger": [
+    {
+     "episode": "E02",
+     "state": "刃口新增崩缺",
+     "shot": "S05-004",
+     "note": "格挡反震所致"
+    }
+   ]
+  },
+  "PROP-102": {
+   "name": "圆盾",
+   "importance": "一次性道具",
+   "prop_block": "胡式木芯圆盾，包铁边缘，盾面箭痕累累"
+  }
+ },
+ "segments": [
+  {
+   "id": "P01",
+   "shots": [
+    "S05-001",
+    "S05-002",
+    "S05-003",
+    "S05-004",
+    "S05-005",
+    "S05-006"
+   ],
+   "hook": "号角响了，人还没数完",
+   "tail_exempt": true,
+   "entry_snapshot": "段首建立",
+   "exit_snapshot": "段尾钩"
+  }
+ ],
+ "info_refs": [],
+ "shots": [
+  {
+   "shot_id": "S05-001",
+   "seq": 1,
+   "duration_s": 4.0,
+   "duration_mode": "中",
+   "shot_size": "WS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-1001-V1",
+    "CHR-1002-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-101",
+    "PROP-102"
+   ],
+   "assets": [
+    "CHR-1001-V1",
+    "CHR-1002-V1",
+    "SC-002-N",
+    "PROP-101",
+    "PROP-102"
+   ],
+   "dialogue": [],
+   "vo": "雪谷第七日，斥候找到了他",
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "战后原野大全景，横七竖八的倒伏人影散布冻土，残旗斜插泥中，远山烟尘未散，天光压低",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S05-002",
+   "seq": 2,
+   "duration_s": 3.5,
+   "duration_mode": "中",
+   "shot_size": "FS",
+   "camera_move": {
+    "type": "Dolly In",
+    "motive": "随突进压缩空间，压迫感升级"
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-1001-V1",
+    "CHR-1002-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-101",
+    "PROP-102"
+   ],
+   "assets": [
+    "CHR-1001-V1",
+    "CHR-1002-V1",
+    "SC-002-N",
+    "PROP-101",
+    "PROP-102"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "全景：将领拖刀独行，甲叶摩擦作响，两名伤兵相互搀扶坐起，脚下冻土翻出枯草",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "突进斜劈+侧身闪避",
+    "L3": "大氅扬雪刀光过处雪粒炸开",
+    "L4": "雪雾被刀风推开"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "transition_note": "突进压迫递进：随冲刺压缩空间（editing/16 隔级切豁免·动势递进），跟推"
+  },
+  {
+   "shot_id": "S05-003",
+   "seq": 3,
+   "duration_s": 3.0,
+   "duration_mode": "快",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Pan",
+    "motive": "跟随对战场面横移保持双人同框"
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-1001-V1",
+    "CHR-1002-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-101",
+    "PROP-102"
+   ],
+   "assets": [
+    "CHR-1001-V1",
+    "CHR-1002-V1",
+    "PROP-101",
+    "PROP-102"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中景：军医抽紧布条缠扎上臂，伤兵下颌绷紧，指节扣进泥土，肩甲裂口外露，呼吸急促",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "硬碰+转腰再劈（脚蹬地腿发力腰胯传导完整发力链）",
+    "L3": "盾面震颤手臂后撤",
+    "L4": "雪雾随冲击扩散"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "transition_note": "对峙双人同框横移收近（editing/16 隔级切豁免·跟随动势），横移收近"
+  },
+  {
+   "shot_id": "S05-004",
+   "seq": 4,
+   "duration_s": 1.5,
+   "duration_mode": "快",
+   "shot_size": "INS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-1001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-101"
+   ],
+   "assets": [
+    "CHR-1001-V1",
+    "PROP-101"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "布条大特写，粗麻纤维被抽紧打结，布面吸湿后颜色转深，边缘毛糙起絮，严格匹配道具参考图",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "刃身高频微颤渐止（惯性收势）",
+    "L3": "刃面雪粒滑落",
+    "L4": "静"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S05-005",
+   "seq": 5,
+   "duration_s": 2.0,
+   "duration_mode": "快",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-1001-V1",
+    "CHR-1002-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-1001-V1",
+    "CHR-1002-V1",
+    "PROP-102"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中近景：将领胸部以上，卸甲的手停在半空，呼吸白雾断断续续，眼神落在画外残旗方向",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "呼吸起伏",
+    "L2": "刀缓缓抬至起手位（重兵器起手慢）",
+    "L3": "发丝结霜颤动",
+    "L4": "静"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null
+  },
+  {
+   "shot_id": "S05-006",
+   "seq": 6,
+   "duration_s": 2.5,
+   "duration_mode": "骤停",
+   "shot_size": "CU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-1001-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-1001-V1",
+    "PROP-101"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "近景：将领面部，颧骨淤青泛紫，唇色发白，瞳孔缓慢收缩——画外收兵号角，两息死寂",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "瞳孔骤缩后定格",
+    "L3": "睫毛霜粒微颤",
+    "L4": "雪雾骤停"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "transition_note": "对峙高潮由近景推至特写（editing/16 隔级切豁免·高潮递进），急推"
+  }
+ ],
+ "timeline": {
+  "content_s": 16.5
+ }
+}

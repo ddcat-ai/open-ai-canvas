@@ -31,6 +31,34 @@ func TestTaskForOutputRedactsRoutingAndSecrets(t *testing.T) {
 	}
 }
 
+func TestTaskOutputIncludesOnlySafeWorkbenchRestoreData(t *testing.T) {
+	task := model.Task{InputJSON: `{"mode":"video","metadata":{"source":"workbench","workbenchKind":"video","workbenchToolId":"tool-1","workbenchPresetId":"preset-1","workbench":{"kind":"video","parameters":{"seconds":8,"ratio":"16:9","resolution":"1080p","generateAudio":true},"references":[{"resourceId":"resource-1","kind":"image","role":"first_frame","slotKey":"subject"}]}},"config":{"apiKey":"private-key","videoSeconds":"8","size":"16:9","vquality":"1080p"},"referenceImages":[{"resourceId":"resource-1","storageKey":"resource:resource-1","role":"first_frame","slotKey":"subject"}]}`}
+	publicJSON := publicTaskInputJSON(task.InputJSON)
+	var output map[string]any
+	if err := json.Unmarshal([]byte(publicJSON), &output); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := output["config"]; exists {
+		t.Fatal("provider config leaked from workbench restore data")
+	}
+	workbench, ok := output["workbench"].(map[string]any)
+	if !ok || workbench["kind"] != "video" {
+		t.Fatalf("workbench restore data missing: %#v", output)
+	}
+	parameters, ok := workbench["parameters"].(map[string]any)
+	if !ok || parameters["seconds"] != float64(8) || parameters["ratio"] != "16:9" || parameters["generateAudio"] != true {
+		t.Fatalf("workbench parameters not preserved safely: %#v", workbench)
+	}
+	references, ok := workbench["references"].([]any)
+	if !ok || len(references) != 1 {
+		t.Fatalf("workbench references missing: %#v", workbench)
+	}
+	reference := references[0].(map[string]any)
+	if reference["resourceId"] != "resource-1" || reference["kind"] != "image" || reference["role"] != "first_frame" || reference["slotKey"] != "subject" {
+		t.Fatalf("safe reference fields not preserved: %#v", reference)
+	}
+}
+
 func TestTaskMediaPreviewUsesSafeMediaURLs(t *testing.T) {
 	previewURL, previewKind := taskMediaPreview(`{"images":["data:image/png;base64,AAAA","/api/resources/resource-1/file"],"video":"https://cdn.example.com/output.mp4"}`, "video")
 	if previewURL != "/api/resources/resource-1/file" || previewKind != "image" {

@@ -7,5 +7,5 @@ import "embed"
 // The Markdown packages live outside internal Go packages so they are easy to
 // review and maintain as product content while remaining embedded in binaries.
 //
-//go:embed *
+//go:embed all:*
 var FS embed.FS

@@ -1,0 +1,449 @@
+{
+ "episode": "E04",
+ "series": "冰域纪元",
+ "schema_ver": 2,
+ "lib_ver": "35库/2026-09",
+ "segment_mode": true,
+ "shared": {
+  "prefix_full": "电影质感3D漫剧，UE5渲染，Lumen全局光照，PBR物理材质，写实美型人物，皮肤SSS次表面散射，实体发丝，电影三点布光，浅景深，8K，竖屏9:16，Chen Kaige epic cinema style, Chinese literati painting aesthetics, blue-green landscape (qinglu shanshui) ink-wash color grading, gold and crimson Tang palace palette turning cold cyan-gray in later acts, single-source dramatic chiaroscuro, high light ratio with deep shadow, symmetrical and centripetal composition, vast negative space with small figures at frame edge, long take with slow-motion ceremonial moment, Peking opera costume with gold thread embroidery, silk anisotropic sheen, bronze patina, lacquerware multi-layer reflection, UE5 restrained single-source Lumen lighting, Arnold photorealistic subsurface scattering skin beneath opera makeup, melancholic grandeur, ultra detailed, 9:16 vertical cinematic",
+  "negative_global": "卡通，二次元，手绘，塑料皮肤，五官扭曲，手指畸形，文字，水印，模糊，皮克斯风格，迪士尼风格，3D动画风格，",
+  "lighting_ratio": "4:1",
+  "style_base": "A混E + ㊱卡二（陈凯歌）"
+ },
+ "assets": {
+  "CHR-3001-V1": {
+   "name": "林拾",
+   "desc_block": "林拾，27岁，180cm清瘦，左眉旧疤，指腹老茧，深灰斗篷下藏短弩，眼神警觉"
+  },
+  "CHR-3002-V1": {
+   "name": "药铺掌柜",
+   "desc_block": "药铺掌柜，60岁，168cm佝偻，山羊胡花白，靛蓝棉袍套袖，指尖药渍黄染"
+  },
+  "SC-004-N": {
+   "name": "南关药铺后巷·夜",
+   "env_block": "窄后巷，一盏气死风灯挂檐下，墙根药材筐摞叠，雪水沿瓦当滴落成线"
+  },
+  "PROP-301": {
+   "name": "青白玉佩",
+   "importance": "贯穿道具",
+   "prop_block": "青白玉佩，云纹双面雕，玉色温润带一道暗裂，原配红绳结完好",
+   "visual_lock": true,
+   "state_ledger": [
+    {
+     "episode": "E04",
+     "state": "红绳结断裂，改用素布条缠系",
+     "shot": "S04-003",
+     "note": "打斗遗损，身份信物隐患"
+    }
+   ]
+  },
+  "PROP-302": {
+   "name": "药囊",
+   "importance": "一次性道具",
+   "prop_block": "靛蓝布药囊，抽绳磨毛，囊底药渍晕染"
+  },
+  "WARD-3001-01": {
+   "name": "游方行脚套",
+   "role": "CHR-3001-V1",
+   "episodes": [
+    "E01",
+    "E04"
+   ]
+  },
+  "WARD-3001-02": {
+   "name": "夜行潜入套",
+   "role": "CHR-3001-V1",
+   "episodes": [
+    "E04"
+   ]
+  }
+ },
+ "segments": [
+  {
+   "id": "P01",
+   "shots": [
+    "S04-001",
+    "S04-002",
+    "S04-003",
+    "S04-004",
+    "S04-005",
+    "S04-006"
+   ],
+   "hook": "玉佩换了系法——他准备夜探了",
+   "tail_exempt": true,
+   "entry_snapshot": "段首建立",
+   "exit_snapshot": "段尾钩"
+  }
+ ],
+ "info_refs": [],
+ "shots": [
+  {
+   "shot_id": "S04-001",
+   "seq": 1,
+   "duration_s": 3.5,
+   "duration_mode": "中",
+   "shot_size": "FS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-3001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-301"
+   ],
+   "assets": [
+    "CHR-3001-V1",
+    "SC-004-N",
+    "PROP-301"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "全景：林拾立于后巷灯下，斗篷束紧，胸前玉佩随呼吸起伏映灯火",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "wardrobe": {
+    "CHR-3001-V1": "WARD-3001-01"
+   }
+  },
+  {
+   "shot_id": "S04-002",
+   "seq": 2,
+   "duration_s": 3.0,
+   "duration_mode": "中",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-3001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-301",
+    "PROP-302"
+   ],
+   "assets": [
+    "CHR-3001-V1",
+    "SC-004-N",
+    "PROP-301"
+   ],
+   "dialogue": [
+    {
+     "who": "药铺掌柜",
+     "text": "三钱止血散，夜路小心。",
+     "offscreen": false,
+     "lip": "B"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中景：林拾与掌柜交割药囊，掌柜袖手接过，玉佩在两人之间晃了一晃",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "wardrobe": {
+    "CHR-3001-V1": "WARD-3001-01"
+   },
+   "transition_note": "药铺交易开场收至掌柜递药台词位（editing/16 隔级切豁免·动作衔接推近），直切"
+  },
+  {
+   "shot_id": "S04-003",
+   "seq": 3,
+   "duration_s": 1.5,
+   "duration_mode": "中",
+   "shot_size": "INS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-3001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-301"
+   ],
+   "assets": [
+    "CHR-3001-V1",
+    "PROP-301"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "玉佩特写：红绳结应声崩断，玉佩坠向雪地前被一只手凌空攥住，细节严格匹配道具参考图",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "绳结绷断+凌空攥握",
+    "L3": "断绳两截飘落",
+    "L4": "灯焰摇曳"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "wardrobe": {
+    "CHR-3001-V1": "WARD-3001-01"
+   }
+  },
+  {
+   "shot_id": "S04-004",
+   "seq": 4,
+   "duration_s": 2.0,
+   "duration_mode": "中",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-3001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-301"
+   ],
+   "assets": [
+    "CHR-3001-V1",
+    "SC-004-N",
+    "PROP-301"
+   ],
+   "dialogue": [],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中近景：林拾换上夜行短打，束袖绑腿，掌心摊开攥住的玉佩凝视，指节收紧",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "wardrobe": {
+    "CHR-3001-V1": "WARD-3001-02"
+   },
+   "costume_change": true
+  },
+  {
+   "shot_id": "S04-005",
+   "seq": 5,
+   "duration_s": 3.0,
+   "duration_mode": "中",
+   "shot_size": "MS",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-3001-V1",
+    "CHR-3002-V1"
+   ],
+   "micro_expr": null,
+   "props": [],
+   "assets": [
+    "CHR-3001-V1",
+    "CHR-3002-V1",
+    "SC-004-N"
+   ],
+   "dialogue": [
+    {
+     "who": "林拾",
+     "text": "今晚的事，你没见过我。",
+     "offscreen": false,
+     "lip": "B"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中景：掌柜递来素布条，林拾就灯缠系玉佩于腕，两人目光未交各怀心事",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "wardrobe": {
+    "CHR-3001-V1": "WARD-3001-02"
+   },
+   "transition_note": "林拾警告台词起拍，由近景回中景让出动作空间（editing/16 隔级切豁免·对白轮替），直切"
+  },
+  {
+   "shot_id": "S04-006",
+   "seq": 6,
+   "duration_s": 2.5,
+   "duration_mode": "中",
+   "shot_size": "MCU",
+   "camera_move": {
+    "type": "Static",
+    "motive": null
+   },
+   "visual_layers": {
+    "fg": "雪雾颗粒",
+    "mg": "人物动作层",
+    "bg": "虚化雪山"
+   },
+   "silhouette": "轮廓可辨",
+   "roles": [
+    "CHR-3001-V1"
+   ],
+   "micro_expr": null,
+   "props": [
+    "PROP-301"
+   ],
+   "assets": [
+    "CHR-3001-V1",
+    "PROP-301"
+   ],
+   "dialogue": [
+    {
+     "who": "林拾",
+     "text": "（低声）爹，快了。",
+     "offscreen": false,
+     "lip": "A"
+    }
+   ],
+   "vo": null,
+   "sfx": [
+    "风雪环境声@0s"
+   ],
+   "transition_out": {
+    "type": "Cut",
+    "ref": null
+   },
+   "narrative_func": "推进",
+   "prompt_ref": {
+    "lib": null,
+    "asset_copy": [],
+    "free": "中近景：腕上布条缠系的玉佩贴腕渐显上摇至林拾侧脸，眉间旧疤被灯焰照亮半边",
+    "lighting": "主光侧逆冷调"
+   },
+   "video_layers": {
+    "L1": "静",
+    "L2": "主体动作",
+    "L3": "次级动态",
+    "L4": "环境飘雪"
+   },
+   "tier": "5s档",
+   "amplitude": "中",
+   "lip_sync": null,
+   "wardrobe": {
+    "CHR-3001-V1": "WARD-3001-02"
+   },
+   "transition_note": "『爹，快了』低语收胸上近景，口型A方案（editing/16 隔级切豁免·对白轮替），缓推"
+  }
+ ],
+ "timeline": {
+  "content_s": 15.5
+ }
+}
