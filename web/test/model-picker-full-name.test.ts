@@ -40,3 +40,17 @@ test("模型选择器各布局位置都不再用固定宽度压掉模型名", as
     const launchpad = styles.match(/\.app-user-workspace \.creation-launchpad \.creation-model-picker\.canvas-composer-model-picker \{[^}]*width[^}]*\}/)?.[0] || "";
     expect(launchpad).toContain("fit-content");
 });
+
+test("模型选择器弹窗内左侧列表与右侧卡片名称均完整展示，不被省略号截断或被『系统模型』覆盖", async () => {
+    const { component, styles } = await pickerSources();
+
+    // 弹窗内左侧品牌列表项允许换行，不被 white-space: nowrap 与 ellipsis 截断
+    expect(styles).not.toContain(".canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }");
+
+    // 弹窗右侧模型选项名称允许换行，不被 white-space: nowrap 截断
+    expect(styles).not.toContain(".canvas-model-picker-option-name { flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }");
+    expect(styles).toContain(".canvas-model-picker-option-name {\n    flex: 1 1 10rem;\n    min-width: 0;\n    white-space: normal;\n    overflow-wrap: anywhere;\n    word-break: break-word;\n    line-height: 1.35;\n}");
+
+    // 右侧模型选项不应把直连系统模型的标题短路覆盖成无意义的通用字「系统模型」
+    expect(component).toContain('modelGroup.label !== "系统模型"');
+});

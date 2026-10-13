@@ -234,7 +234,7 @@ export function ModelPicker({
                                             theme={theme}
                                             creationVariant
                                             showConfiguredModelName={showConfiguredModelName}
-                                            label={group.kind === "product" ? modelGroup.label : undefined}
+                                            label={group.kind === "product" && modelGroup.label && modelGroup.label !== "系统模型" ? modelGroup.label : undefined}
                                             requirements={requirements}
                                             showPrice={showOptionPrices && creditsEnabled}
                                             disabledReason={disabledReason}
@@ -450,7 +450,9 @@ function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapab
 
 function pickerModelDisplayName(config: AiConfig, model: string, showConfiguredModelName: boolean) {
     const name = showConfiguredModelName ? configuredModelDisplayName(config, model) : modelDisplayName(config, model);
-    return isDirectSystemModel(config, model) ? `${name} · ${modelChannelLabel(config, model)}` : name;
+    if (!isDirectSystemModel(config, model)) return name;
+    const channelLabel = modelChannelLabel(config, model);
+    return channelLabel && channelLabel !== "系统模型" ? `${name} · ${channelLabel}` : name;
 }
 
 function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredModelName: boolean) {

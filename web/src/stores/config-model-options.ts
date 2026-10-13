@@ -44,7 +44,7 @@ export function modelDisplayName(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const displayName = channel.modelCosts?.find((item) => item.model === model)?.displayName?.trim();
     if (displayName) return displayName;
-    return channel.scope === "system" ? "系统模型" : model;
+    return model || (channel.scope === "system" ? "系统模型" : "");
 }
 
 export function modelIcon(config: AiConfig, value: string) {
