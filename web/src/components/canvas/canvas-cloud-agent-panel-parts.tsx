@@ -65,7 +65,15 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
             {live ? (
-                <Live2DAvatar url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)} width={width} height={height} reducedMotion={reducedMotion} fallback={<FluidOrb size={60} color="#7164f6" />} onReady={() => setLive2DError("")} onError={setLive2DError} />
+                <Live2DAvatar
+                    url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)}
+                    width={width}
+                    height={height}
+                    reducedMotion={reducedMotion}
+                    fallback={<FluidOrb size={60} color="#7164f6" />}
+                    onReady={() => setLive2DError("")}
+                    onError={setLive2DError}
+                />
             ) : appearanceResolved ? (
                 <FluidOrb size={60} color="#7164f6" />
             ) : (
@@ -75,7 +83,11 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
                 </span>
             )}
             {appearance.launcherLabel ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
-            {live && live2DError ? <span className="sr-only" role="status">{live2DError}</span> : null}
+            {live && live2DError ? (
+                <span className="sr-only" role="status">
+                    {live2DError}
+                </span>
+            ) : null}
             <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
             {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}
         </motion.button>

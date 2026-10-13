@@ -26,5 +26,8 @@ export function selectExistingImportModels(models: string[], existingKeys: strin
 }
 
 export function normalizeFetchModelKey(value: string): string {
-    return value.trim().replace(/^models\//, "").toLowerCase();
+    return value
+        .trim()
+        .replace(/^models\//, "")
+        .toLowerCase();
 }

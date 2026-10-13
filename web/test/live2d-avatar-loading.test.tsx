@@ -4,15 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Live2DAvatar } from "../src/components/canvas/live2d-avatar";
 
 function renderLoadingAvatar(reducedMotion = false) {
-    return renderToStaticMarkup(
-        <Live2DAvatar
-            url="/api/public/appearance/live2d/model-id/model.model3.json"
-            width={165}
-            height={220}
-            reducedMotion={reducedMotion}
-            fallback={<span data-default-avatar>默认球</span>}
-        />,
-    );
+    return renderToStaticMarkup(<Live2DAvatar url="/api/public/appearance/live2d/model-id/model.model3.json" width={165} height={220} reducedMotion={reducedMotion} fallback={<span data-default-avatar>默认球</span>} />);
 }
 
 test("Live2D first render shows loading rather than the failure fallback", () => {
