@@ -326,7 +326,7 @@ func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	if err = json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
 		t.Fatal(err)
 	}
-	if task.Operation != "image_to_image" || len(input.ReferenceImages) != 1 || input.Config.Count != "1" || input.Config.Quality != "2k" {
+	if task.Operation != "image_to_image" || len(input.ReferenceImages) != 1 || input.Config.Count != "1" || input.Config.ImageResolution != "2k" || input.Config.Quality != "" {
 		t.Fatal("image generation contract was lost")
 	}
 	canvas, _ := s.repo.CanvasProjectForUser("user", "agent-canvas")
@@ -596,9 +596,15 @@ func TestCloudAgentImageCatalogTreatsUnselectedPricedOptionsAsCandidates(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, _ := json.Marshal(catalog)
-	if !strings.Contains(string(encoded), "\"logicalModelId\":\""+imageModel.ID+"\"") || strings.Count(string(encoded), "\"selector\":") != 9 {
-		t.Fatalf("agent catalog did not expose the candidate with 9 price tiers: %s", encoded)
+	var logicalEntry map[string]any
+	for _, entry := range catalog.(map[string]any)["models"].([]map[string]any) {
+		if entry["selection"].(map[string]any)["logicalModelId"] == imageModel.ID {
+			logicalEntry = entry
+			break
+		}
+	}
+	if logicalEntry == nil || len(logicalEntry["priceTiers"].([]PublicLogicalModelPriceTier)) != 9 {
+		t.Fatalf("agent catalog did not expose the logical candidate with 9 price tiers: %#v", logicalEntry)
 	}
 	defaultRoute, err := s.ResolveLogicalModel(imageModel.ID, intent)
 	if err != nil || defaultRoute.PriceTier == nil {

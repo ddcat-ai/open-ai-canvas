@@ -169,7 +169,7 @@ func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t 
 		}
 	}
 	if got := config["imageResolution"]; got != "1k" {
-		t.Fatalf("quality = %#v, want capabilityOptions value 1k", got)
+		t.Fatalf("imageResolution = %#v, want capabilityOptions value 1k", got)
 	}
 	if got := config["priceTierId"]; got != "tier-1k" {
 		t.Fatalf("priceTierId = %#v, want server-selected tier-1k", got)

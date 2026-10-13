@@ -77,7 +77,7 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 			name := canonicalModelOptionName(capability, key)
 			// auto/any 表示调用方不指定质量或图片分辨率；不能把它当作模型必须声明的
 			// 枚举值，否则未列出 auto 的模型会被错误判定为参数不支持。
-			if name == "quality" {
+			if name == "quality" || name == "imageResolution" {
 				if normalized, ok := value.(string); ok && (strings.EqualFold(strings.TrimSpace(normalized), "auto") || strings.EqualFold(strings.TrimSpace(normalized), "any")) {
 					continue
 				}
@@ -115,7 +115,7 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 
 func normalizeModelRequestOption(name string, value any) any {
 	canonicalName := canonicalCapabilityOptionName(name)
-	if canonicalName == "quality" || canonicalName == "size" {
+	if canonicalName == "quality" || canonicalName == "size" || canonicalName == "imageResolution" {
 		if text, ok := value.(string); ok {
 			return strings.ToLower(strings.TrimSpace(text))
 		}
@@ -480,6 +480,8 @@ func capabilityOptionLabel(name string) string {
 		return "画面尺寸"
 	case "quality":
 		return "生成质量"
+	case "imageResolution":
+		return "图片分辨率"
 	case "transparentBackground":
 		return "透明背景"
 	case "count":
@@ -623,7 +625,7 @@ func canonicalModelOptionName(capability, value string) string {
 func isCapabilityOptionFor(capability string, name string) bool {
 	switch normalizeCapability(capability) {
 	case "image":
-		return name == "size" || name == "quality" || name == "transparentBackground" || name == "count"
+		return name == "size" || name == "quality" || name == "imageResolution" || name == "transparentBackground" || name == "count"
 	case "video":
 		return name == "size" || name == "videoSeconds" || name == "vquality" || name == "videoGenerateAudio" || name == "videoWatermark"
 	case "audio":

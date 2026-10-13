@@ -183,6 +183,7 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 		channelModelByID[channelModel.ID] = channelModel
 	}
 	admin := AdminLogicalModel{PublicLogicalModel: publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: map[string]any{}}, false), Enabled: item.Enabled, ActiveRevisionID: graph.Revision.ID, RevisionVersion: graph.Revision.Version, Routes: []AdminLogicalRoute{}}
+	projectionRoutes := make([]cachedLogicalRoute, 0, len(graph.Routes))
 	for _, route := range graph.Routes {
 		channelModel, channelOK := channelModelByID[route.ChannelModelID]
 		if !channelOK {
@@ -194,6 +195,9 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 		}
 		_, channelOK = systemChannelByID[channelModel.ChannelID]
 		structurallyAvailable := route.Enabled && route.Weight > 0 && channelModel.Enabled && channelOK
+		if structurallyAvailable {
+			projectionRoutes = append(projectionRoutes, cachedLogicalRoute{Route: route, CapabilitySpec: capabilitySpec, ChannelModel: channelModel})
+		}
 		billingAvailable := item.PricePolicy != "unified" || item.BillingMode != "token" || supportsTokenBilling(item.Capability, channelModel.Protocol)
 		available := structurallyAvailable && billingAvailable && (item.PricePolicy != "channel" || channelModel.PriceConfigured)
 		admin.Routes = append(admin.Routes, AdminLogicalRoute{ID: route.ID, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, ChannelModelKey: channelModel.ModelKey, ChannelModelName: channelModel.DisplayName, Enabled: route.Enabled, Priority: route.Priority, Weight: route.Weight, Available: available, structurallyAvailable: structurallyAvailable, CapabilitySpec: capabilitySpec})
@@ -207,9 +211,8 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 	if err != nil {
 		return nil, err
 	}
-	admin.PublicLogicalModel = publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: defaults}, false)
-	// publicLogicalModel above has no route list; admin routes are already attached
-	// and the enriched product spec is the source used by the editor.
+	admin.PublicLogicalModel = publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: defaults, Routes: projectionRoutes}, false)
+	// Admin and creator share the sanitized price projection of active routes.
 	admin.CapabilitySpec = productSpec
 	admin.DefaultOptions = defaults
 	structuralRouteSpecs := structuralAdminRouteSpecs(admin.Routes)

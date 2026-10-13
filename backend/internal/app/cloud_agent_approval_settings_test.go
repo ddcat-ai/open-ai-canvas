@@ -184,12 +184,12 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := state.Approval.ID
-	settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "grok-image-alternative", Size: "16:9", Quality: "1k"}
+	settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "grok-image-alternative", Size: "16:9", ImageResolution: "1k"}
 	for _, invalid := range []CloudAgentMediaSettings{
-		{ChannelID: "channel", ChannelModelKey: "missing", Size: "16:9", Quality: "1k"},
-		{ChannelID: "channel", ChannelModelKey: "text-test", Size: "16:9", Quality: "1k"},
+		{ChannelID: "channel", ChannelModelKey: "missing", Size: "16:9", ImageResolution: "1k"},
+		{ChannelID: "channel", ChannelModelKey: "text-test", Size: "16:9", ImageResolution: "1k"},
 		{LogicalModelID: "mixed", ChannelID: "channel", ChannelModelKey: settings.ChannelModelKey, Size: "16:9"},
-		{ChannelID: "channel", ChannelModelKey: settings.ChannelModelKey, Size: "invalid-size", Quality: "1k"},
+		{ChannelID: "channel", ChannelModelKey: settings.ChannelModelKey, Size: "invalid-size", ImageResolution: "1k"},
 		{ChannelID: "channel", ChannelModelKey: settings.ChannelModelKey, Size: "16:9", Quality: "invalid-quality"},
 	} {
 		if err := s.DecideCloudAgentApproval("user", run.ID, id, "approve", "", &invalid); err == nil {
@@ -242,7 +242,7 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
 		t.Fatal(err)
 	}
-	if input.Config.Model != settings.ChannelModelKey || input.Config.Size != settings.Size || input.Config.Quality != settings.Quality || task.Prompt != approvedArgs.Prompt || len(input.ReferenceImages) != 1 {
+	if input.Config.Model != settings.ChannelModelKey || input.Config.Size != settings.Size || input.Config.ImageResolution != settings.ImageResolution || input.Config.Quality != settings.Quality || task.Prompt != approvedArgs.Prompt || len(input.ReferenceImages) != 1 {
 		t.Fatalf("approved inputs were lost: %+v", input.Config)
 	}
 	var count int64
