@@ -66,6 +66,8 @@ export type CreationInspiration = {
     title: string;
     description: string;
     image: string;
+    /** 上游案例的视频直链；缺省表示只有提示词与封面。 */
+    videoUrl?: string;
     mode: CreationMode;
     prompt: string;
     /** 中文正文，双语来源才有（好好学 AI 的中英双语条目）。 */

@@ -6,6 +6,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { catalogIdOf, inspirationSourceOf, type CreationInspiration } from "@/lib/inspirations/catalog";
 import { isCustomInspiration } from "@/lib/inspirations/resolve";
 import { modeLabels } from "@/pages/create/creation-types";
+import { InspirationMediaPreview } from "./inspiration-media-preview";
 
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -44,9 +45,7 @@ export function InspirationDetailModal({
         <AppModal open={Boolean(item)} onCancel={onClose} width={880} title={null} footer={null}>
             {item ? (
                 <div className="flex max-h-[76vh] flex-col">
-                    <div className="relative shrink-0 overflow-hidden" style={{ borderRadius: "var(--r-xl, 14px)" }}>
-                        <img src={item.image} alt="" className="h-56 w-full object-cover sm:h-64" referrerPolicy="no-referrer" />
-                    </div>
+                    <InspirationMediaPreview key={`${catalogIdOf(item)}:${item.mode}:${item.videoUrl ?? ""}`} item={item} />
 
                     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
                         <div className="flex flex-wrap items-start justify-between gap-3">
