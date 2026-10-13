@@ -102,7 +102,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
                 changed = true;
                 return { ...message, ...recovery };
             }
-            if (message.role !== "assistant" || message.status !== "pending") return message;
+            if (message.role !== "assistant" || (message.status !== "pending" && message.status !== "error")) return message;
             const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
             if (!matches.length || (expectedTaskCount > 0 && matches.length < expectedTaskCount) || matches.some((task) => task.status === "queued" || task.status === "running")) return message;
 
@@ -119,6 +119,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
                 const content = message.mode === "video" ? "视频已生成" : failedCount ? `${resultStorageKeys.length || resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成";
                 return { ...message, status: "done" as const, content, ...(resultUrls.length ? { resultUrls } : {}), ...(resultStorageKeys.length ? { resultStorageKeys } : {}), error: undefined, taskIds: nextTaskIds };
             }
+            if (message.status === "error") return message;
             if (matches.every((task) => task.status === "cancelled")) {
                 return { ...message, status: "cancelled" as const, content: "已停止", error: undefined, taskIds: nextTaskIds };
             }

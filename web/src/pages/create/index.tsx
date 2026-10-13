@@ -321,7 +321,14 @@ export default function CreatePage() {
                     await runtime.consumeGenerationTaskMessage(task, task.clientContext!.messageId!, async ({ effectKey, resultUrls, resultStorageKeys }) => {
                         if (cancelled) return;
                         await updateConversationMessage(task.clientContext!.conversationId!, task.clientContext!.messageId!, (item) =>
-                            runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({ ...current, status: "done" as const, ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}), ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}) })).value,
+                            runtime.applyGenerationConsumerEffect(item, effectKey, (current) => ({
+                                ...current,
+                                status: "done" as const,
+                                content: current.mode === "video" ? "视频已生成" : (current.content && current.content !== "生成失败" ? current.content : "图片已生成"),
+                                error: undefined,
+                                ...(resultUrls.length ? { resultUrls: Array.from(new Set([...(current.resultUrls || []), ...resultUrls])) } : {}),
+                                ...(resultStorageKeys.length ? { resultStorageKeys: Array.from(new Set([...(current.resultStorageKeys || []), ...resultStorageKeys])) } : {}),
+                            })).value,
                         );
                     }, { signal: observationController.signal, materialize: async () => task, materializedUrls: runtime.generationTaskMaterializedUrls, materializedStorageKeys: runtime.generationTaskMaterializedStorageKeys });
                 } catch (error) {
