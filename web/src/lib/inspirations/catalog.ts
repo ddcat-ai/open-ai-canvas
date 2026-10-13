@@ -68,7 +68,7 @@ export type CreationInspiration = {
     image: string;
     mode: CreationMode;
     prompt: string;
-    /** 中文正文，双语来源才有（好好学 AI 的中英双语条目）。 */
+    /** 自定义双语条目的中文正文；内置目录已将中文统一存入 prompt。 */
     promptZh?: string;
     /** 上游分类 id，标签表见 public/inspirations/manifest.json。 */
     category?: string;
