@@ -274,7 +274,7 @@ export function ModelPicker({
                 <button
                     ref={triggerRef}
                     type="button"
-                    className={cn("canvas-composer-model-picker", fullWidth ? "w-full" : "min-w-36 max-w-full", className)}
+                    className={cn("canvas-composer-model-picker", fullWidth ? "w-full" : "canvas-model-picker-fit", className)}
                     aria-haspopup="listbox"
                     aria-expanded={open}
                     aria-label={placeholder}
@@ -285,7 +285,7 @@ export function ModelPicker({
                         <span className="canvas-model-picker-trigger-icon" style={{ background: theme.toolbar.itemHover }}>
                             <ModelIcon config={config} model={current} />
                         </span>
-                        <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
+                        <span className="canvas-model-picker-name min-w-0 flex-1">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} quote={routeQuote} compact /> : null}
                     </span>
                     <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />

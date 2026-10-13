@@ -8,7 +8,11 @@
 @layer utilities {
 
 .creation-model-picker.canvas-composer-model-picker {
-        width: min(210px, 25vw);
+        /* 按模型名自适应宽度：模型名普遍较长（如 004系列/minimax_h3(8图3音频)），
+           固定 210px 会把名称截断。这里改为由内容撑开，只保留上限避免挤坏同一行的其他控件。 */
+        width: fit-content;
+        max-width: min(420px, 46vw);
+        min-width: 144px;
         height: 36px;
         border: 1px solid var(--creation-border);
         border-radius: 8px;
@@ -144,7 +148,7 @@
         height: 48px;
         min-width: 0;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 10px;
         border: 1px solid rgba(255, 255, 255, .12);
         border-radius: 14px;
@@ -176,7 +180,10 @@ html:not(.dark) .creation-model-picker.canvas-composer-model-picker:hover,
 html:not(.dark) .creation-model-picker.canvas-composer-model-picker[aria-expanded="true"] { background: #e7eaee; border-color: rgba(32, 37, 45, .22); }
 
 .creation-model-picker.canvas-composer-model-picker {
-        width: min(328px, 30vw);
+        /* 按名称自适应，避免长模型名被截断；30vw 仍作为视口上限兜底。 */
+        width: fit-content;
+        max-width: min(360px, 30vw);
+        min-width: 0;
         justify-content: flex-start;
         font-size: 15px;
     }
@@ -201,22 +208,26 @@ html:not(.dark) .creation-model-picker.canvas-composer-model-picker[aria-expande
     }
     .creation-chat-composer .creation-model-picker.canvas-composer-model-picker:hover,
 .creation-chat-composer .creation-model-picker.canvas-composer-model-picker[aria-expanded="true"] { border-color: rgba(255, 255, 255, .12); background: #272b32; transform: translateY(-1px); }
-    .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: min(196px, 26vw); justify-content: flex-start; }
+    .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: fit-content; max-width: min(280px, 26vw); min-width: 0; justify-content: flex-start; }
     .creation-chat-composer .creation-model-picker .canvas-model-picker-trigger-icon { width: 19px; height: 19px; border-radius: 5px; }
 
     html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { border-color: transparent; background: #f1f3f5; color: #262b32; }
     html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-model-picker:hover { border-color: rgba(20, 26, 35, .2); background: #e9edf1; }
     @media (max-width: 800px) {
 .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { height: 34px; padding: 0 8px; font-size: 11px; }
-.creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: min(152px, 48vw); }
+.creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: fit-content; max-width: min(260px, 48vw); min-width: 0; }
 
 .creation-model-picker.canvas-composer-model-picker {
-            width: min(194px, 62vw);
+            /* 窄屏同样按名称自适应：原来固定 min(194px, 62vw) 会把长名截断，
+               受限于视口时用 62vw 作为上限兜底。 */
+            width: fit-content;
+            max-width: min(360px, 62vw);
+            min-width: 0;
             height: 34px;
         }
 
 .creation-model-picker.canvas-composer-model-picker { height: 42px; border-radius: 12px; padding: 0 11px; font-size: 12px; }
-.creation-model-picker.canvas-composer-model-picker { width: min(150px, 44vw); }
+.creation-model-picker.canvas-composer-model-picker { width: fit-content; max-width: min(320px, 44vw); min-width: 0; }
 }
 
     .canvas-composer-tools .canvas-model-picker-label > span:nth-child(n + 2) {
@@ -238,8 +249,7 @@ html:not(.dark) .creation-model-picker.canvas-composer-model-picker[aria-expande
 
     .canvas-composer-model-picker {
         align-items: center;
-        appearance: none;
-        background: color-mix(in srgb, var(--workspace-surface-strong) 94%, var(--workspace-accent) 6%);
+        appearance: none;        background: color-mix(in srgb, var(--workspace-surface-strong) 94%, var(--workspace-accent) 6%);
         border: 0;
         border-radius: 9px;
         color: var(--foreground);
@@ -505,7 +515,7 @@ html:not(.dark) .canvas-composer-model-picker[aria-expanded="true"] {
     color: var(--creation-text);
     transform: none;
 }
-.creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: min(180px, 30vw); justify-content: flex-start; }
+.creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: fit-content; max-width: min(280px, 30vw); min-width: 0; justify-content: flex-start; }
 .creation-chat-composer .creation-model-picker .canvas-model-picker-trigger-icon { width: 16px; height: 16px; border-radius: 4px; background: transparent !important; }
 
 html:not(.dark) .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { background: transparent; color: var(--creation-muted); }
@@ -538,7 +548,7 @@ html:not(.dark) .creation-model-picker-heading strong { color: #20242a; }
 html:not(.dark) .creation-model-picker-menu .canvas-model-picker-option > span:first-child > span:first-child { background: rgba(28, 32, 37, .06) !important; }
 @media (max-width: 680px) {
 .creation-chat-composer .creation-model-picker.canvas-composer-model-picker { height: 29px; padding: 0 6px; font-size: 10px; }
-.creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: min(136px, 42vw); }
+.creation-chat-composer .creation-model-picker.canvas-composer-model-picker { width: fit-content; max-width: min(240px, 42vw); min-width: 0; }
 }
 
 .creation-home .creation-chat-composer .creation-model-picker.canvas-composer-model-picker {
@@ -902,7 +912,11 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     border: 0 !important;
 }
 .app-user-workspace .creation-launchpad .creation-model-picker.canvas-composer-model-picker {
-    width: min(232px, 60cqw) !important;
+    /* 原先固定 min(232px, 60cqw)，长模型名会被截断成「004系列/minimax_h...」。
+       改为按名称自适应，上限保证不会挤坏同一行的设置/时长/清空等控件。 */
+    width: fit-content !important;
+    max-width: min(420px, 46vw) !important;
+    min-width: 0;
 }
 /* 模型与渠道共用菜单高度约束，长列表在各自区域滚动。 */
 .app-user-workspace .creation-model-picker-menu.is-brand-list {
@@ -961,3 +975,24 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-model-picker-surface .canvas-model-picker-option:nth-child(3n) > span:first-child > span:first-child { color: #d57b16; }
 .creation-model-picker-surface .canvas-model-picker-option:nth-child(4n) > span:first-child > span:first-child { color: #25845d; }
 .creation-model-picker-surface .canvas-model-picker-option .model-picker-price { font-size: var(--fs-tiny); }
+
+/*
+ * 模型名完整显示：模型标识普遍较长（如 004系列/minimax_h3(8图3音频)、
+ * 004系列/sd2.5(30-0-10卡脸4-30秒/720P)），固定宽度会把名称截断成
+ * 「004系列/minimax_h...」，用户无法分辨同系列的多个模型。
+ * 这里让按钮按内容自适应宽度，仅保留上限避免挤坏同一行的其他控件。
+ */
+.canvas-composer-model-picker.canvas-model-picker-fit {
+    width: fit-content;
+    max-width: min(420px, 46vw);
+    min-width: 9rem;
+}
+
+.canvas-composer-model-picker .canvas-model-picker-name {
+    /* 名称不做省略号截断：宽度已由 fit-content + max-width 控制，
+       真到上限时宁可让文字在按钮内换行，也不要把模型名截掉。 */
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+    text-align: left;
+}
