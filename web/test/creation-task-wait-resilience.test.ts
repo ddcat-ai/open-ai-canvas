@@ -46,12 +46,16 @@ test("页面卸载不再把后台仍在执行的任务写成失败或已停止",
     expect(cancelledIndex).toBeGreaterThan(guardIndex);
 });
 
-test("被误判为失败的历史消息，在后端任务实际成功时能够重新恢复为成功并展示产物", () => {
-    const source = compactSource(moduleGroupSource("pages/create/creation-conversations.ts"));
-    const reconcileLoop = sourceSection(source, "export function reconcileCreationTaskMessages(", "function creationTaskResultUrls(");
+test("页面水合阶段通过 autoRecoverCreationMessages 全自动静默恢复成功产物", () => {
+    const source = compactSource(moduleGroupSource("pages/create/index.tsx"));
+    const conversationsSource = compactSource(moduleGroupSource("pages/create/creation-conversations.ts"));
 
-    // 关键回归点：过去只允许 status === 'pending' 的消息重敛，导致之前因网络抖动被写成 error 的消息即使后端成功也无法恢复。
-    // 现在放开 message.status === 'error'，并在有成功产物时更新为 status: 'done'。
-    expect(reconcileLoop).toContain('message.status !== "pending" && message.status !== "error"');
-    expect(reconcileLoop).toContain('status: "done" as const');
+    // 水合加载时直接调用 autoRecoverCreationMessages 并持久化
+    expect(source).toContain("autoRecoverCreationMessages(next, recentTasks)");
+    expect(source).toContain("void saveCreationConversations(next)");
+
+    // autoRecoverCreationMessages 实现必须直接提取产物并翻转为 done
+    expect(conversationsSource).toContain("export function autoRecoverCreationMessages");
+    expect(conversationsSource).toContain('status: "done" as const');
+    expect(conversationsSource).toContain('content: message.mode === "video" ? "视频已生成" : "图片已生成"');
 });

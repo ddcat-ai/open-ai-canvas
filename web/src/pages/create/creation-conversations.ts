@@ -185,3 +185,46 @@ export function conversationTimestamp(value: string) {
     const timestamp = new Date(value).getTime();
     return Number.isFinite(timestamp) ? timestamp : 0;
 }
+
+export function autoRecoverCreationMessages(conversations: CreationConversation[], recentTasks: GenerationTask[]): { conversations: CreationConversation[]; recoveredCount: number } {
+    const succeededTasks = recentTasks.filter((t) => t.status === "succeeded");
+    if (!succeededTasks.length) return { conversations, recoveredCount: 0 };
+    let recoveredCount = 0;
+
+    const next = conversations.map((conversation) => {
+        let conversationChanged = false;
+        const messages = conversation.messages.map((message) => {
+            if (message.role !== "assistant" || (message.status !== "pending" && message.status !== "error")) {
+                return message;
+            }
+            const targetTaskIds = new Set(message.taskIds || []);
+            const matchedTask = succeededTasks.find((t) =>
+                (targetTaskIds.has(t.id) ||
+                 Boolean(t.retryOf && targetTaskIds.has(t.retryOf)) ||
+                 Boolean(t.attemptGroupId && targetTaskIds.has(t.attemptGroupId)) ||
+                 Boolean(t.clientContext?.messageId && t.clientContext.messageId === message.id) ||
+                 Boolean(t.clientContext?.conversationId && t.clientContext.conversationId === conversation.id && (t.type.includes(message.mode || "") || Boolean(t.operation?.includes(message.mode || "")))))
+            );
+            if (!matchedTask) return message;
+
+            const resultUrls = creationTaskResultUrls(matchedTask);
+            const resultStorageKeys = creationTaskResultStorageKeys(matchedTask);
+            if (!resultUrls.length && !resultStorageKeys.length) return message;
+
+            conversationChanged = true;
+            recoveredCount++;
+            return {
+                ...message,
+                status: "done" as const,
+                content: message.mode === "video" ? "视频已生成" : "图片已生成",
+                error: undefined,
+                resultUrls,
+                resultStorageKeys,
+                taskIds: Array.from(new Set([...(message.taskIds || []), matchedTask.id])),
+            };
+        });
+        return conversationChanged ? { ...conversation, messages, updatedAt: new Date().toISOString() } : conversation;
+    });
+
+    return { conversations: recoveredCount > 0 ? next : conversations, recoveredCount };
+}

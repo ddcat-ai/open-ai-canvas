@@ -30,7 +30,7 @@ import { usePluginStore } from "@/stores/use-plugin-store";
 import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, reconcileCreationAttachmentLimits, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference, type CreationReferenceLimits } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromAudio, creationAttachmentFromAudioAsset, creationAttachmentFromDocument, creationAttachmentFromExternalAsset, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentFromVideoAsset, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
 import { defaultCreationMode, modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
-import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
+import { attachCreationTaskContexts, autoRecoverCreationMessages, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
 import { CreationComposer, CreationEmptySuggest, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
 import { CreationInspirationTunnel } from "./creation-inspiration-tunnel";
 import { declaredInspirationSources } from "@/lib/inspirations/catalog";
@@ -280,11 +280,10 @@ export default function CreatePage() {
                 if (hasUnresolved) {
                     const runtime = await loadCreationRuntime();
                     const recentTasks = await runtime.listGenerationTasks(30);
-                    const succeededTasks = recentTasks.filter((t) => t.status === "succeeded");
-                    if (succeededTasks.length) {
-                        const contextual = attachCreationTaskContexts(succeededTasks, next);
-                        const persistedTasks = await materializeCreationTaskResults(runtime, contextual);
-                        next = reconcileCreationTaskMessages(runtime, next, persistedTasks);
+                    const recovery = autoRecoverCreationMessages(next, recentTasks);
+                    if (recovery.recoveredCount > 0) {
+                        next = recovery.conversations;
+                        void saveCreationConversations(next);
                     }
                 }
             } catch (err) {
@@ -355,7 +354,16 @@ export default function CreatePage() {
                     console.warn("创作任务结果挂载失败，将使用已物化结果收敛消息状态", error);
                 }
             }
-            if (!cancelled) setConversations((current) => reconcileCreationTaskMessages(runtime, current, persistedTasks));
+            if (!cancelled) {
+                setConversations((current) => {
+                    const direct = autoRecoverCreationMessages(current, tasks);
+                    if (direct.recoveredCount > 0) {
+                        void saveCreationConversations(direct.conversations);
+                        return direct.conversations;
+                    }
+                    return reconcileCreationTaskMessages(runtime, current, persistedTasks);
+                });
+            }
         };
         const warnSync = (error: unknown) => {
             if (cancelled || observationController.signal.aborted) return;
