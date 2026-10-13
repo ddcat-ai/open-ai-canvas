@@ -111,6 +111,8 @@ export type ResourceAccess = {
     actualVariant: ResourceAccessVariant;
     url: string;
     delivery: "cdn" | "origin" | "platform-local" | "platform-proxy";
+    storageProvider?: "local" | "s3" | "aliyun" | "tencent" | "qiniu" | string;
+    bucket?: string;
     issuedAt: string;
     expiresAt?: string;
     refreshAt: string;
@@ -423,10 +425,22 @@ function enqueueResourceAccess(entry: Omit<PendingResourceAccess, "resolve" | "r
     });
 }
 
+export const knownResourceStorageProviders = new Map<string, { provider: string; bucket?: string }>();
+
+export function queryKnownResourceProvider(storageKey?: string): { provider: string; bucket?: string } | undefined {
+    const id = resourceIdFromStorageKey(storageKey);
+    if (!id) return undefined;
+    return knownResourceStorageProviders.get(id);
+}
+
 async function completeResourceAccessBatchEntry(entry: PendingResourceAccess, item: ResourceAccessBatchItem | undefined) {
     if (entry.generation !== accessGeneration || entry.scope !== getActiveUserScope()) throw resourceAccessAbortError();
     if (!item?.access?.url) throw new Error(item?.error?.msg || "后端未返回资源访问地址");
     const value = item.access;
+    if (value.storageProvider || value.delivery) {
+        const provider = value.storageProvider || (value.delivery === "platform-local" ? "local" : "oss");
+        knownResourceStorageProviders.set(entry.payload.resourceId, { provider, bucket: value.bucket });
+    }
     const cachedEntry = { value, expiresAt: resourceAccessCacheExpiry(value) } satisfies CachedResourceAccess;
     if (cachedEntry.expiresAt > Date.now()) {
         accessCache.set(entry.key, cachedEntry);

@@ -1,10 +1,12 @@
 import { App, Button, Input, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Download, Eye, Search, Trash2 } from "lucide-react";
+import { Download, Eye, Search, Trash2, HardDrive, Cloud } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { cn } from "@/lib/utils";
+import { moveAdminResourceToLocal } from "@/services/api/auth";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { adminResourceFileUrl, deleteAdminResources, downloadAdminResource, getAdminStorageStats, listAdminResources, type AdminStorageResource, type AdminStorageStats } from "@/services/api/admin-storage";
@@ -34,9 +36,32 @@ export default function StorageResourcesPanel() {
     const [downloadingId, setDownloadingId] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [deleting, setDeleting] = useState(false);
+    const [movingId, setMovingId] = useState("");
     const [refreshKey, setRefreshKey] = useState(0);
     const requestSequence = useRef(0);
     const hasFilters = Boolean(keyword || userQuery || kind !== "all" || status !== "all" || provider !== "all");
+
+    const confirmMoveToLocal = (resource: AdminStorageResource) => {
+        modal.confirm({
+            title: "转移至服务器存储？",
+            content: `将从对象存储（${resource.bucket || resource.provider}）下载该文件保存至服务器磁盘，并自动清理 OSS 远端文件以停止计费。资源链接与业务引用保持不变。确定转移？`,
+            okText: "确定转移",
+            cancelText: "取消",
+            centered: true,
+            onOk: async () => {
+                setMovingId(resource.id);
+                try {
+                    await moveAdminResourceToLocal(resource.id);
+                    message.success("已成功转移至服务器并清理云端文件！");
+                    setRefreshKey((k) => k + 1);
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "转移至服务器失败");
+                } finally {
+                    setMovingId("");
+                }
+            },
+        });
+    };
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         const next = new URLSearchParams(searchParams);
@@ -120,17 +145,49 @@ export default function StorageResourcesPanel() {
             },
             { title: "类型", dataIndex: "kind", width: 92, render: (value) => kindLabel(value) },
             { title: "状态", dataIndex: "status", width: 104, render: (value) => <AdminStatusBadge label={statusLabel(value)} tone={statusTone(value)} /> },
-            { title: "存储", dataIndex: "provider", width: 110, render: (value) => providerLabel(value) },
+            {
+                title: "存储位置",
+                width: 140,
+                render: (_, resource) => {
+                    const isLocal = resource.provider === "local";
+                    return (
+                        <div className="flex flex-col gap-0.5">
+                            <span className={cn("inline-flex items-center gap-1 font-medium text-xs", isLocal ? "text-emerald-600 dark:text-emerald-400" : "text-sky-600 dark:text-sky-400")}>
+                                {isLocal ? <HardDrive className="size-3.5" /> : <Cloud className="size-3.5" />}
+                                {isLocal ? "服务器" : "OSS"}
+                            </span>
+                            {!isLocal && resource.bucket ? (
+                                <span className="text-[11px] text-foreground/45 truncate max-w-[120px]" title={resource.bucket}>
+                                    {resource.bucket}
+                                </span>
+                            ) : null}
+                        </div>
+                    );
+                },
+            },
             { title: "大小", dataIndex: "size", width: 110, render: (value) => <span className="tabular-nums">{formatBytes(value)}</span> },
             { title: "规格", width: 135, render: (_, resource) => resourceDimensions(resource) },
             { title: "创建时间", dataIndex: "createdAt", width: 170, render: formatTime },
             {
                 title: "操作",
-                width: 220,
+                width: 270,
                 align: "right",
                 fixed: "right",
                 render: (_, resource) => (
                     <div className="flex justify-end gap-1">
+                        {resource.provider !== "local" ? (
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<HardDrive className="size-3.5" />}
+                                loading={movingId === resource.id}
+                                disabled={resource.status !== "ready"}
+                                onClick={() => confirmMoveToLocal(resource)}
+                                title="转存至服务器并清理云端文件"
+                            >
+                                转至服务器
+                            </Button>
+                        ) : null}
                         <Button type="text" size="small" icon={<Eye className="size-3.5" />} disabled={resource.status !== "ready"} onClick={() => setPreviewing(resource)}>
                             预览
                         </Button>
@@ -144,7 +201,7 @@ export default function StorageResourcesPanel() {
                 ),
             },
         ],
-        [downloadingId, deleting],
+        [downloadingId, deleting, movingId],
     );
 
     const download = async (resource: AdminStorageResource) => {

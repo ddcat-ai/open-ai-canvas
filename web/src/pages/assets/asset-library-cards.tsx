@@ -9,6 +9,8 @@ import { type AssetKind } from "@/stores/use-asset-store";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
 import { assetCategoryLabel } from "@/lib/asset-category";
+import { cn } from "@/lib/utils";
+import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
 import { type LibraryAsset, assetKindIcons } from "./asset-library-format";
 import { assetKindLabel, assetProjectLabel, assetSummary, formatAssetClock, formatAssetTime } from "./asset-library-format";
 
@@ -115,6 +117,8 @@ export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen,
     const clock = asset.kind === "video" || asset.kind === "audio" ? formatAssetClock(asset.data.durationMs) : null;
     const showPlay = asset.kind === "video";
     const isLight = asset.kind === "audio" || asset.kind === "text" || asset.kind === "model";
+    const storageKey = "data" in asset && asset.data && "storageKey" in asset.data ? (asset.data.storageKey as string | undefined) : undefined;
+    const storageLoc = resourceStorageLocation(storageKey);
     return (
         <AssetLibraryCardMedia className={isLight ? "assets-cover is-light" : "assets-cover"}>
             <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={`查看素材：${asset.title}`}>
@@ -151,6 +155,17 @@ export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen,
                     {kind ? assetKindLabel(kind) : "素材"}
                 </span>
                 {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : asset.kind === "entity" ? null : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
+                {storageKey ? (
+                    <span
+                        className={cn(
+                            "assets-cover-badge !font-medium",
+                            storageLoc === "oss" ? "!bg-sky-500/85 !text-white" : storageLoc === "server" ? "!bg-emerald-600/85 !text-white" : "!bg-amber-600/85 !text-white",
+                        )}
+                        title={resourceStorageTitle(storageKey)}
+                    >
+                        {resourceStorageLabel(storageKey)}
+                    </span>
+                ) : null}
                 {asset.portraitCertified ? <span className="assets-cover-badge is-category">人像认证</span> : null}
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}

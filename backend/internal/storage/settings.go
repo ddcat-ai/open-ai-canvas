@@ -12,26 +12,30 @@ const (
 	s3Provider           = "s3"
 	defaultOSSPathPrefix = "open-ai-canvas"
 	resourceAccessURLTTL = 4 * time.Hour
+
+	VideoStorageTargetLocal = "local"
+	VideoStorageTargetOSS   = "oss"
 )
 
 type Settings struct {
-	Delivery          DeliverySettings `json:"delivery"`
-	Enabled           bool             `json:"enabled"`
-	Provider          string           `json:"provider"`
-	Region            string           `json:"region"`
-	Endpoint          string           `json:"endpoint"`
-	CDNBaseURL        string           `json:"cdnBaseUrl"`
-	Bucket            string           `json:"bucket"`
-	AccessKeyID       string           `json:"accessKeyId"`
-	AccessKeySecret   string           `json:"accessKeySecret"`
-	PublicBaseURL     string           `json:"publicBaseUrl"`
-	PathPrefix        string           `json:"pathPrefix"`
-	S3Preset          string           `json:"s3Preset"`
-	PathStyle         bool             `json:"pathStyle"`
-	SessionToken      string           `json:"sessionToken"`
-	StorageLocationID string           `json:"storageLocationId"`
-	AllowUserS3       bool             `json:"allowUserS3"`
-	Runtime           RuntimePolicy    `json:"-"`
+	Delivery            DeliverySettings `json:"delivery"`
+	Enabled             bool             `json:"enabled"`
+	Provider            string           `json:"provider"`
+	Region              string           `json:"region"`
+	Endpoint            string           `json:"endpoint"`
+	CDNBaseURL          string           `json:"cdnBaseUrl"`
+	Bucket              string           `json:"bucket"`
+	AccessKeyID         string           `json:"accessKeyId"`
+	AccessKeySecret     string           `json:"accessKeySecret"`
+	PublicBaseURL       string           `json:"publicBaseUrl"`
+	PathPrefix          string           `json:"pathPrefix"`
+	S3Preset            string           `json:"s3Preset"`
+	PathStyle           bool             `json:"pathStyle"`
+	SessionToken        string           `json:"sessionToken"`
+	StorageLocationID   string           `json:"storageLocationId"`
+	AllowUserS3         bool             `json:"allowUserS3"`
+	VideoStorageTarget  string           `json:"videoStorageTarget"` // "local" | "oss", 默认为 "local"
+	Runtime             RuntimePolicy    `json:"-"`
 	// 平台切换云厂商后仍需读取历史资源，因此仅归档非当前厂商的访问密钥。
 	ArchivedCredentials map[string]Credentials `json:"archivedCredentials,omitempty"`
 }
@@ -86,6 +90,10 @@ func NormalizeSettings(value Settings) Settings {
 	value.S3Preset = strings.ToLower(strings.TrimSpace(value.S3Preset))
 	if value.S3Preset == "" {
 		value.S3Preset = "custom"
+	}
+	value.VideoStorageTarget = strings.ToLower(strings.TrimSpace(value.VideoStorageTarget))
+	if value.VideoStorageTarget != VideoStorageTargetOSS {
+		value.VideoStorageTarget = VideoStorageTargetLocal
 	}
 	value.SessionToken = strings.TrimSpace(value.SessionToken)
 	value.StorageLocationID = strings.TrimSpace(value.StorageLocationID)

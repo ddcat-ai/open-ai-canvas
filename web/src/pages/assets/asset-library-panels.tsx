@@ -393,7 +393,7 @@ export function assetArchiveFacts(asset: LibraryAsset) {
 export function StorageTag({ asset }: { asset: LibraryAsset }) {
     if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio" && asset.kind !== "model") return null;
     const location = resourceStorageLocation(asset.data.storageKey);
-    const color = location === "oss" ? "green" : location === "local" ? "gold" : "default";
+    const color = location === "oss" ? "blue" : location === "server" || location === "local" ? "green" : "default";
     return (
         <Tag color={color} className="m-0 text-[var(--fs-label)]" title={resourceStorageTitle(asset.data.storageKey)}>
             {resourceStorageLabel(asset.data.storageKey)}

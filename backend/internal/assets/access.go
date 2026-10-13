@@ -49,6 +49,8 @@ type ResourceAccess struct {
 	ActualVariant    ResourceVariant `json:"actualVariant"`
 	URL              string          `json:"url"`
 	Delivery         DeliveryMode    `json:"delivery"`
+	StorageProvider  string          `json:"storageProvider,omitempty"`
+	Bucket           string          `json:"bucket,omitempty"`
 	IssuedAt         time.Time       `json:"issuedAt"`
 	ExpiresAt        *time.Time      `json:"expiresAt"`
 	RefreshAt        time.Time       `json:"refreshAt"`
@@ -127,6 +129,7 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		return nil, kernel.Forbidden("资源授权已过期")
 	}
 	access := &ResourceAccess{ResourceID: resource.ID, RequestedVariant: options.Variant, ActualVariant: VariantOriginal,
+		StorageProvider: resource.Provider, Bucket: resource.Bucket,
 		IssuedAt: now, ExpiresAt: &expires, RefreshAt: now.Add(expires.Sub(now) * 4 / 5), Revision: resource.ETag + ":" + resource.PlaybackStatus + ":" + storage.DeliveryRevision(setting)}
 	if options.Variant == VariantPlayback {
 		if resource.Provider == "local" && resource.PlaybackStatus == model.PlaybackStatusReady && resource.PlaybackObjectKey != "" {

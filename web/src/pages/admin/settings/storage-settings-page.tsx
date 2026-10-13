@@ -1,8 +1,8 @@
 import { AdminPageFrame } from "../components/admin-shell";
-import { AlertTriangle, RefreshCw, Database, RotateCcw, HardDrive, Cloud, Check, ShieldCheck, Server, BadgeCheck, Save, Globe2, LocateFixed, KeyRound, Wifi } from "lucide-react";
+import { AlertTriangle, RefreshCw, Database, RotateCcw, HardDrive, Cloud, Check, ShieldCheck, Server, BadgeCheck, Save, Globe2, LocateFixed, KeyRound, Wifi, Film } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select, Switch } from "@/pages/admin/ui/controls";
-import { App, Form, Skeleton, Button, Input } from "antd";
+import { App, Form, Skeleton, Button, Input, Radio } from "antd";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -451,6 +451,20 @@ export default function StorageSettingsPage() {
                                     <div className="admin-storage-provider-note">
                                         <Cloud className="size-4" aria-hidden="true" />
                                         <span>{providerGuidance(draftMode)}</span>
+                                    </div>
+
+                                    <div className="admin-storage-form-section">
+                                        <FormSectionTitle icon={<Film className="size-4" />} title="生成视频存储策略" description="决定生成的视频文件保存在服务器本地还是上传至对象存储（OSS）。" />
+                                        <Form.Item
+                                            name="videoStorageTarget"
+                                            label="生成视频保存位置"
+                                            extra="视频文件体积普遍较大（每条 10MB~100MB+），保存在服务器本地可完全免除 OSS 存储费与昂贵的下行流量费。"
+                                        >
+                                            <Radio.Group className="flex flex-col gap-2">
+                                                <Radio value="local">保存在服务器（默认推荐，节省 OSS 流量与存储费）</Radio>
+                                                <Radio value="oss">保存在 OSS（上传至云端对象存储桶）</Radio>
+                                            </Radio.Group>
+                                        </Form.Item>
                                     </div>
 
                                     <div className="admin-storage-form-section">
