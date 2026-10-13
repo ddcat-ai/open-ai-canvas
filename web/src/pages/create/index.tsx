@@ -980,6 +980,48 @@ export default function CreatePage() {
         });
     };
 
+    /** 删除一条生成记录（提示词 + 它的结果）。素材保留；本页仍在等待的任务先取消，避免后台继续消耗额度。 */
+    const deleteCreationRecord = (recordId: string) => {
+        const conversation = conversationsRef.current.find((item) => item.id === activeIdRef.current);
+        if (!conversation) return;
+        const trimmed = removeCreationRecord(conversation.messages, recordId);
+        if (!trimmed) return;
+        const removedTaskIds = Array.from(new Set(trimmed.removed.flatMap((item) => item.taskIds || [])));
+        const apply = () => {
+            const next = updateCreationConversationSnapshot(conversationsRef.current, conversation.id, (item) => ({ ...item, messages: trimmed.messages, updatedAt: new Date().toISOString() }));
+            conversationsRef.current = next;
+            setConversations(next);
+            void saveCreationConversations(next).catch((error) => toast.error(error instanceof Error ? error.message : "记录删除保存失败"));
+            for (const taskId of removedTaskIds) {
+                // 只取消本页仍在等待的任务；更早的会话任务可能已经结束，交由任务中心处理。
+                if (!activeGenerationTaskIdsRef.current.delete(taskId)) continue;
+                void cancelGenerationTask(taskId).catch(() => undefined);
+            }
+            toast.success("记录已删除，素材仍保留");
+        };
+        // 只要记录中包含已成功产物（status=done、有结果链接或存储键）或正在生成的任务，必须弹出确认窗口防误删。
+        const hasLiveWork = trimmed.removed.some((item) =>
+            item.status === "done" ||
+            Boolean(item.resultUrls?.length) ||
+            Boolean(item.resultStorageKeys?.length) ||
+            item.status === "pending" ||
+            item.status === "streaming"
+        );
+        if (!hasLiveWork) {
+            apply();
+            return;
+        }
+        modal.confirm({
+            title: "确定删除这条生成记录？",
+            content: "该记录包含已生成的成果。删除后将从当前会话中移除，但在素材库中仍会保留原素材。此操作不可撤销。",
+            okText: "确定删除",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            centered: true,
+            onOk: apply,
+        });
+    };
+
     const renameConversationTitle = (conversation: CreationConversation, title: string) => {
         const nextTitle = title.trim().slice(0, 120);
         if (!nextTitle || nextTitle === conversation.title.trim()) return;
