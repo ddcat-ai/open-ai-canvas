@@ -1175,9 +1175,9 @@ export default function CreatePage() {
                     </details>
                 </div> : null}
                 </main>
-            </> : <div className="creation-thread-workbench">
+            </> : <div className="creation-thread-workbench relative flex h-full min-h-0 w-full flex-col overflow-hidden">
                 <CreationWorkspaceToolbar onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
-                <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar">
+                <main ref={threadScrollRef} onScroll={handleThreadScroll} className="creation-thread-scroll creation-scrollbar min-h-0 flex-1 overflow-y-auto">
                     <section className="creation-thread-stage"><div className="creation-results">{activeConversation.messages.map((item, index) => <div key={item.id} id={`creation-shot-${item.id}`} className="creation-thread-message"><CreationMessageView
                         item={item}
                         shotNumber={creationVideoShotOrdinal(videoShots, item)}
@@ -1188,7 +1188,7 @@ export default function CreatePage() {
                         onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
                     /></div>)}</div></section>
                 </main>
-                <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
+                <section className="creation-thread-composer shrink-0"><CreationComposer {...composerProps} variant="thread" /></section>
             </div>}
         </div>
         <CreationHistoryDrawer open={historyOpen} conversations={historyConversations} activeId={activeConversation.id} onNew={startNewConversation} onClose={() => setHistoryOpen(false)} onSelect={selectConversation} onDelete={confirmDeleteConversation} onRename={renameConversationTitle} />
