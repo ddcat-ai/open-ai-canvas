@@ -16,6 +16,8 @@ export function AssetsBatchBar({
     count,
     isTrash = false,
     allSelected,
+    busy = false,
+    pageLoading = false,
     onSelectAll,
     onClear,
     onExport,
@@ -26,6 +28,8 @@ export function AssetsBatchBar({
     count: number;
     isTrash?: boolean;
     allSelected: boolean;
+    busy?: boolean;
+    pageLoading?: boolean;
     onSelectAll: () => void;
     onClear: () => void;
     onExport: () => void;
@@ -36,33 +40,33 @@ export function AssetsBatchBar({
     return (
         <div className="assets-batch-bar" role="toolbar" aria-label="批量操作">
             <span className="assets-batch-count">
-                已选择 <strong>{count}</strong> 个素材
+                已选择 <strong>{count}</strong> 个素材 · 点击卡片多选，Shift 连选
             </span>
             <div className="assets-batch-actions">
-                <Button size="small" icon={<CheckCheck className="size-3.5" />} disabled={allSelected} onClick={onSelectAll}>
-                    全选
+                <Button size="small" icon={<CheckCheck className="size-3.5" />} disabled={allSelected || busy || pageLoading} onClick={onSelectAll}>
+                    全选本页
                 </Button>
-                <Button size="small" onClick={onClear}>
+                <Button size="small" disabled={busy} onClick={onClear}>
                     取消选择
                 </Button>
                 {isTrash ? (
                     <>
-                        <Button size="small" type="primary" icon={<RotateCcw className="size-3.5" />} onClick={onRestore}>
+                        <Button size="small" type="primary" disabled={!count || busy} icon={<RotateCcw className="size-3.5" />} onClick={onRestore}>
                             还原已选
                         </Button>
-                        <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
+                        <Button size="small" danger disabled={!count || busy} icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
                             彻底删除已选
                         </Button>
                     </>
                 ) : (
                     <>
-                        <Button size="small" icon={<Download className="size-3.5" />} onClick={onExport}>
+                        <Button size="small" disabled={!count || busy} icon={<Download className="size-3.5" />} onClick={onExport}>
                             导出
                         </Button>
-                        <Button size="small" icon={<Trash2 className="size-3.5 text-amber-500" />} onClick={onArchive}>
+                        <Button size="small" disabled={!count || busy} icon={<Trash2 className="size-3.5 text-amber-500" />} onClick={onArchive}>
                             移入回收站
                         </Button>
-                        <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
+                        <Button size="small" danger disabled={!count || busy} icon={<Trash2 className="size-3.5" />} onClick={onDelete}>
                             彻底删除
                         </Button>
                     </>

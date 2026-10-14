@@ -30,6 +30,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { createAssetFolder, deleteAssetFolder, listAssetFolders, updateAssetFolder, type AssetFolder, moveRemoteAssetsToFolder } from "@/services/api/user-data";
 import { assetCountMap, assetSearchText, readAssetGridDensity, assetKindIcons } from "./asset-library-format";
 import { ASSET_GRID_DENSITY_KEY, type LibraryAsset } from "./asset-library-format";
+import { selectAssetIds } from "./asset-library-selection";
 
 export { ASSET_GRID_DENSITY_KEY, type LibraryAsset, assetKindIcons } from "./asset-library-format";
 
@@ -94,6 +95,9 @@ export default function AssetsPage() {
     const [deletingAsset, setDeletingAsset] = useState<LibraryAsset | null>(null);
     const [archivingAsset, setArchivingAsset] = useState<LibraryAsset | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [selecting, setSelecting] = useState(false);
+    const selectionAnchor = useRef<string | undefined>(undefined);
+    const [batchWorking, setBatchWorking] = useState(false);
     const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
     const [batchArchiveOpen, setBatchArchiveOpen] = useState(false);
     const [batchUploadOpen, setBatchUploadOpen] = useState(false);
@@ -123,7 +127,6 @@ export default function AssetsPage() {
     const activeAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status !== "archived"), [allLibraryAssets]);
     const trashAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status === "archived"), [allLibraryAssets]);
     const validAssets = viewMode === "trash" ? trashAssets : activeAssets;
-    const selectedAssets = useMemo(() => validAssets.filter((asset) => selectedIds.includes(asset.id)), [selectedIds, validAssets]);
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
         return validAssets.filter((asset) => {
@@ -137,7 +140,7 @@ export default function AssetsPage() {
     }, [validAssets, keyword, kindFilter, categoryFilter, folderFilter]);
 
     const assetPageQuery = useQuery({
-        queryKey: [...ASSET_LIBRARY_QUERY_KEY, page, pageSize, viewMode, kindFilter, categoryFilter, folderFilter, debouncedKeyword],
+        queryKey: [...ASSET_LIBRARY_QUERY_KEY, userId, page, pageSize, viewMode, kindFilter, categoryFilter, folderFilter, debouncedKeyword],
         queryFn: ({ signal }) => loadAssetLibraryPage({
             page,
             pageSize,
@@ -168,6 +171,7 @@ export default function AssetsPage() {
     const visibleAssets = useMemo(() => useRemotePage ? remotePageAssets : localVisibleAssets, [useRemotePage, remotePageAssets, localVisibleAssets]);
     const visibleAssetIds = useMemo(() => visibleAssets.map((asset) => asset.id), [visibleAssets]);
     const allFilteredSelected = visibleAssetIds.length > 0 && visibleAssetIds.every((id) => selectedIds.includes(id));
+    const selectionMode = selecting || selectedIds.length > 0;
     const totalAssets = useRemotePage ? remoteTotal : filteredAssets.length;
     const kindCounts = useMemo(() => assetCountMap(kindOptions, useRemotePage ? assetPageQuery.data?.kindCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind), [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, useRemotePage, viewMode]);
     const categoryCounts = useMemo(() => assetCountMap(categoryOptions, useRemotePage ? assetPageQuery.data?.categoryCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"), [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, useRemotePage, viewMode]);
@@ -183,9 +187,18 @@ export default function AssetsPage() {
     }, [gridDensity]);
 
     useEffect(() => {
-        const existingIds = new Set(validAssets.map((asset) => asset.id));
-        setSelectedIds((current) => current.filter((id) => existingIds.has(id)));
-    }, [validAssets]);
+        setSelectedIds([]);
+        setSelecting(false);
+        selectionAnchor.current = undefined;
+    }, [userId, viewMode, keyword, kindFilter, categoryFilter, folderFilter]);
+
+    const selectAsset = (id: string, selected: boolean, range = false) => {
+        if (batchWorking || assetPageQuery.isFetching) return;
+        setSelecting(true);
+        const anchorId = range ? selectionAnchor.current : undefined;
+        setSelectedIds((current) => selectAssetIds(current, visibleAssetIds, id, selected, anchorId));
+        selectionAnchor.current = id;
+    };
 
     const folderSelectOptions = useMemo(() => [
         { label: "未分类", value: "" },
@@ -444,57 +457,28 @@ export default function AssetsPage() {
         }
     };
 
-    const restoreAsset = async (asset: LibraryAsset) => {
+    const changeAssetStatus = async (ids: string[], status: "archived" | "confirmed") => {
+        if (!ids.length || batchWorking) return;
+        const assetIds = [...ids];
+        const action = status === "archived" ? "移入回收站" : "还原";
+        let locallyUpdated = false;
+        setBatchWorking(true);
         try {
-            await ensureAssetsInStore([asset.id]);
-            updateAsset(asset.id, { status: "confirmed" });
+            await ensureAssetsInStore(assetIds);
+            for (const id of assetIds) updateAsset(id, { status });
             await flushAssetStorePersistence();
+            locallyUpdated = true;
             await saveRemoteUserDataNow();
-            message.success(`已还原素材「${asset.title}」`);
+            setSelectedIds((current) => current.filter((id) => !assetIds.includes(id)));
+            setArchivingAsset(null);
+            setBatchArchiveOpen(false);
+            message.success(`已${action} ${assetIds.length} 个素材`);
+            void invalidateAssetLibrary();
         } catch (error) {
-            message.warning(localSavedRemotePendingMessage("已在本地还原", error));
-        }
-    };
-
-    const batchRestore = async () => {
-        if (!selectedIds.length) return;
-        try {
-            await ensureAssetsInStore(selectedIds);
-            for (const id of selectedIds) updateAsset(id, { status: "confirmed" });
-            const count = selectedIds.length;
-            setSelectedIds([]);
-            await flushAssetStorePersistence();
-            await saveRemoteUserDataNow();
-            message.success(`已还原 ${count} 个素材`);
-        } catch (error) {
-            message.warning(localSavedRemotePendingMessage("已在本地还原", error));
-        }
-    };
-
-    const archiveAsset = async (asset: LibraryAsset) => {
-        try {
-            await ensureAssetsInStore([asset.id]);
-            updateAsset(asset.id, { status: "archived" });
-            await flushAssetStorePersistence();
-            await saveRemoteUserDataNow();
-            message.success(`已将「${asset.title}」移入回收站`);
-        } catch (error) {
-            message.warning(localSavedRemotePendingMessage("已移入回收站", error));
-        }
-    };
-
-    const batchArchive = async () => {
-        if (!selectedIds.length) return;
-        try {
-            await ensureAssetsInStore(selectedIds);
-            for (const id of selectedIds) updateAsset(id, { status: "archived" });
-            const count = selectedIds.length;
-            setSelectedIds([]);
-            await flushAssetStorePersistence();
-            await saveRemoteUserDataNow();
-            message.success(`已将 ${count} 个素材移入回收站`);
-        } catch (error) {
-            message.warning(localSavedRemotePendingMessage("已移入回收站", error));
+            if (locallyUpdated) message.warning(localSavedRemotePendingMessage(`已在本地${action}`, error));
+            else message.error(error instanceof Error ? error.message : `${action}失败`);
+        } finally {
+            setBatchWorking(false);
         }
     };
 
@@ -522,19 +506,33 @@ export default function AssetsPage() {
     };
 
     const exportSelectedAssets = async () => {
-        if (!selectedAssets.length) return;
-        await exportAssets(selectedAssets);
+        if (!selectedIds.length || batchWorking) return;
+        const ids = [...selectedIds];
+        setBatchWorking(true);
+        try {
+            await loadAssetsForUse(ids);
+            const byId = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
+            await exportAssets(ids.map((id) => byId.get(id)!));
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "导出失败");
+        } finally {
+            setBatchWorking(false);
+        }
     };
 
     const confirmBatchDelete = async () => {
-        if (!selectedAssets.length) return;
+        if (!selectedIds.length || batchWorking) return;
+        const ids = [...selectedIds];
+        setBatchWorking(true);
         try {
-            await deleteAssetsWithRemoteSync(selectedAssets.map((asset) => asset.id));
-            message.success(`已彻底删除 ${selectedAssets.length} 个素材`);
+            await deleteAssetsWithRemoteSync(ids);
+            message.success(`已彻底删除 ${ids.length} 个素材`);
             setSelectedIds([]);
             setBatchDeleteOpen(false);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "批量删除失败");
+        } finally {
+            setBatchWorking(false);
         }
     };
 
@@ -624,6 +622,13 @@ export default function AssetsPage() {
                                 options={assetGridDensityOptions}
                                 onChange={(value) => setGridDensity(parseAssetGridDensity(value))}
                             />
+                            <Button aria-pressed={selectionMode} onClick={() => {
+                                setSelecting(!selectionMode);
+                                setSelectedIds([]);
+                                selectionAnchor.current = undefined;
+                            }} disabled={batchWorking}>
+                                {selectionMode ? "退出多选" : "批量选择"}
+                            </Button>
                         </CollectionToolbar>
                 </div>
 
@@ -714,15 +719,17 @@ export default function AssetsPage() {
                                     </div>
                                 </div>
                             ) : null}
-                            {selectedAssets.length ? (
+                            {selectionMode ? (
                                 <AssetsBatchBar
-                                    count={selectedAssets.length}
+                                    count={selectedIds.length}
                                     isTrash={viewMode === "trash"}
                                     allSelected={allFilteredSelected}
+                                    busy={batchWorking}
+                                    pageLoading={assetPageQuery.isFetching}
                                     onSelectAll={() => setSelectedIds((current) => Array.from(new Set([...current, ...visibleAssetIds])))}
-                                    onClear={() => setSelectedIds([])}
+                                    onClear={() => { setSelectedIds([]); selectionAnchor.current = undefined; }}
                                     onExport={() => void exportSelectedAssets()}
-                                    onRestore={() => void batchRestore()}
+                                    onRestore={() => void changeAssetStatus(selectedIds, "confirmed")}
                                     onArchive={() => setBatchArchiveOpen(true)}
                                     onDelete={() => setBatchDeleteOpen(true)}
                                 />
@@ -744,14 +751,15 @@ export default function AssetsPage() {
                                                     key={asset.id}
                                                     asset={asset}
                                                     selected={selectedIds.includes(asset.id)}
+                                                    selectionMode={selectionMode}
                                                     isTrash={viewMode === "trash"}
                                                     retentionDays={retentionDays}
-                                                    onSelect={(selected) => setSelectedIds((current) => (selected ? [...new Set([...current, asset.id])] : current.filter((id) => id !== asset.id)))}
+                                                    onSelect={(selected, range) => selectAsset(asset.id, selected, range)}
                                                     onOpen={() => setPreviewAsset(asset)}
                                                     onEdit={() => void openEdit(asset)}
                                                     onCopy={copyAssetText}
                                                     onDownload={downloadImage}
-                                                    onRestore={() => void restoreAsset(asset)}
+                                                    onRestore={() => void changeAssetStatus([asset.id], "confirmed")}
                                                     onArchive={() => setArchivingAsset(asset)}
                                                     onDelete={() => setDeletingAsset(asset)}
                                                     folderOptions={folderSelectOptions}
@@ -959,13 +967,14 @@ export default function AssetsPage() {
                 className="library-modal library-confirm-modal"
                 title="移入回收站"
                 open={Boolean(archivingAsset)}
-                onCancel={() => setArchivingAsset(null)}
+                onCancel={() => { if (!batchWorking) setArchivingAsset(null); }}
                 onOk={() => {
                     if (archivingAsset) {
-                        void archiveAsset(archivingAsset);
-                        setArchivingAsset(null);
+                        void changeAssetStatus([archivingAsset.id], "archived");
                     }
                 }}
+                confirmLoading={batchWorking}
+                cancelButtonProps={{ disabled: batchWorking }}
                 okText="移入回收站"
                 cancelText="取消"
             >
@@ -975,15 +984,14 @@ export default function AssetsPage() {
                 className="library-modal library-confirm-modal"
                 title="批量移入回收站"
                 open={batchArchiveOpen}
-                onCancel={() => setBatchArchiveOpen(false)}
-                onOk={() => {
-                    void batchArchive();
-                    setBatchArchiveOpen(false);
-                }}
+                onCancel={() => { if (!batchWorking) setBatchArchiveOpen(false); }}
+                onOk={() => void changeAssetStatus(selectedIds, "archived")}
+                confirmLoading={batchWorking}
+                cancelButtonProps={{ disabled: batchWorking }}
                 okText="移入回收站"
                 cancelText="取消"
             >
-                确定将已选择的 {selectedAssets.length} 个素材移入回收站吗？移入后可随时在回收站批量还原。
+                确定将已选择的 {selectedIds.length} 个素材移入回收站吗？移入后可随时在回收站批量还原。
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
@@ -1001,13 +1009,15 @@ export default function AssetsPage() {
                 className="library-modal library-confirm-modal"
                 title="批量彻底删除素材"
                 open={batchDeleteOpen}
-                onCancel={() => setBatchDeleteOpen(false)}
+                onCancel={() => { if (!batchWorking) setBatchDeleteOpen(false); }}
                 onOk={() => void confirmBatchDelete()}
+                confirmLoading={batchWorking}
+                cancelButtonProps={{ disabled: batchWorking }}
                 okText="彻底删除"
                 okButtonProps={{ danger: true }}
                 cancelText="取消"
             >
-                确定彻底删除已选择的 {selectedAssets.length} 个素材吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
+                确定彻底删除已选择的 {selectedIds.length} 个素材吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
             </Modal>
         </>
     );

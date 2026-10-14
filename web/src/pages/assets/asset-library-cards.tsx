@@ -3,6 +3,7 @@
 // 纯展示组件，数据与操作回调由素材库页面传入。
 
 import { Dropdown, type MenuProps } from "antd";
+import type { MouseEvent } from "react";
 import { AlertTriangle, AudioLines, Box, Copy, Download, FileText, FolderOpen, MoreHorizontal, PencilLine, Play, RotateCcw, Trash2 } from "lucide-react";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { type AssetKind } from "@/stores/use-asset-store";
@@ -37,6 +38,7 @@ export function AssetCard({
     selected,
     isTrash = false,
     retentionDays = 30,
+    selectionMode = false,
     onSelect,
     onOpen,
     onEdit,
@@ -52,7 +54,8 @@ export function AssetCard({
     selected: boolean;
     isTrash?: boolean;
     retentionDays?: number;
-    onSelect: (selected: boolean) => void;
+    selectionMode?: boolean;
+    onSelect: (selected: boolean, range?: boolean) => void;
     onOpen: () => void;
     onEdit: () => void;
     onCopy: (asset: LibraryAsset) => void;
@@ -75,10 +78,17 @@ export function AssetCard({
               { key: "archive", icon: <Trash2 className="size-3.5 text-amber-500" />, label: "移入回收站", onClick: onArchive },
               { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "彻底删除", onClick: onDelete },
           ];
+    const handleCardClick = (event: MouseEvent<HTMLButtonElement>) => {
+        if (selectionMode || event.shiftKey || event.ctrlKey || event.metaKey) {
+            onSelect(!selected, event.shiftKey);
+            return;
+        }
+        onOpen();
+    };
     return (
         <AssetLibraryCard selected={selected}>
-            <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={onOpen} menuItems={menuItems} />
-            <button type="button" className="asset-collection-body block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
+            <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={handleCardClick} menuItems={menuItems} />
+            <button type="button" className="asset-collection-body block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={handleCardClick}>
                 <div className="flex min-w-0 items-center justify-between gap-2">
                     <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>
                         {asset.title}
@@ -109,7 +119,21 @@ export function isKnownAssetKind(kind: unknown): kind is AssetKind {
     return kind === "image" || kind === "video" || kind === "audio" || kind === "model" || kind === "text" || kind === "entity";
 }
 
-export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen, menuItems }: { asset: LibraryAsset; selected: boolean; isTrash?: boolean; onSelect: (selected: boolean) => void; onOpen: () => void; menuItems: MenuProps["items"] }) {
+export function AssetCover({
+    asset,
+    selected,
+    isTrash = false,
+    onSelect,
+    onOpen,
+    menuItems,
+}: {
+    asset: LibraryAsset;
+    selected: boolean;
+    isTrash?: boolean;
+    onSelect: (selected: boolean, range?: boolean) => void;
+    onOpen: (event: MouseEvent<HTMLButtonElement>) => void;
+    menuItems: MenuProps["items"];
+}) {
     const kind = isKnownAssetKind(asset.kind) ? asset.kind : undefined;
     const KindIcon = kind ? assetKindIcons[kind] : FileText;
     const clock = asset.kind === "video" || asset.kind === "audio" ? formatAssetClock(asset.data.durationMs) : null;
@@ -155,7 +179,14 @@ export function AssetCover({ asset, selected, isTrash = false, onSelect, onOpen,
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}
             {asset.kind === "audio" && !isTrash ? <AudioPlayButton asset={asset} className="absolute bottom-2 left-2" /> : null}
-            <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={(event) => onSelect(event.target.checked)} className="assets-select-check" aria-label={`选择 ${asset.title}`} />
+            <input
+                type="checkbox"
+                checked={selected}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => onSelect(event.target.checked, (event.nativeEvent as globalThis.MouseEvent).shiftKey)}
+                className="assets-select-check"
+                aria-label={`选择 ${asset.title}`}
+            />
             <Dropdown trigger={["click"]} menu={{ items: menuItems }}>
                 <button type="button" className="assets-cover-more" aria-label="更多素材操作" title="更多操作">
                     <MoreHorizontal className="size-4" />
