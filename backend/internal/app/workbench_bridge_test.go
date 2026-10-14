@@ -6,12 +6,12 @@ func TestResolveWorkbenchProviderConfigMapsWorkbenchParameters(t *testing.T) {
 	service := &Service{}
 
 	image, err := service.resolveWorkbenchProviderConfig(WorkbenchKindImage, "image-model", "logical-image", "", map[string]any{
-		"size": "1024x1024", "quality": "high", "count": 2,
+		"size": "1024x1024", "quality": "high", "imageResolution": "2k", "count": 2,
 	}, map[string]any{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range map[string]any{"model": "image-model", "size": "1024x1024", "quality": "high", "count": "2"} {
+	for key, want := range map[string]any{"model": "image-model", "size": "1024x1024", "quality": "high", "imageResolution": "2k", "count": "2"} {
 		if image[key] != want {
 			t.Errorf("image config[%q] = %#v, want %#v", key, image[key], want)
 		}

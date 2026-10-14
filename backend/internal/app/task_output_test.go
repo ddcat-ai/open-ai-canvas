@@ -59,6 +59,22 @@ func TestTaskOutputIncludesOnlySafeWorkbenchRestoreData(t *testing.T) {
 	}
 }
 
+func TestTaskOutputRestoresWorkbenchImageResolution(t *testing.T) {
+	task := model.Task{InputJSON: `{"mode":"image","metadata":{"source":"workbench","workbenchKind":"image","workbench":{"kind":"image","parameters":{"size":"1824x1024","imageResolution":"2k","quality":"auto","count":1}}},"config":{"size":"1824x1024","imageResolution":"2k","quality":"auto","count":"1"}}`}
+	var output map[string]any
+	if err := json.Unmarshal([]byte(publicTaskInputJSON(task.InputJSON)), &output); err != nil {
+		t.Fatal(err)
+	}
+	workbench, ok := output["workbench"].(map[string]any)
+	if !ok {
+		t.Fatalf("workbench restore data missing: %#v", output)
+	}
+	parameters, ok := workbench["parameters"].(map[string]any)
+	if !ok || parameters["imageResolution"] != "2k" {
+		t.Fatalf("image resolution not preserved for restore: %#v", workbench)
+	}
+}
+
 func TestTaskMediaPreviewUsesSafeMediaURLs(t *testing.T) {
 	previewURL, previewKind := taskMediaPreview(`{"images":["data:image/png;base64,AAAA","/api/resources/resource-1/file"],"video":"https://cdn.example.com/output.mp4"}`, "video")
 	if previewURL != "/api/resources/resource-1/file" || previewKind != "image" {

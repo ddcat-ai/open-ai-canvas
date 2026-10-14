@@ -158,7 +158,7 @@ func TestWorkbenchTaskRejectsUnknownParametersAndClientConfig(t *testing.T) {
 
 func TestWorkbenchTaskCanBeCreatedWithoutTool(t *testing.T) {
 	s, _, _ := newWorkbenchTest(t)
-	request := TaskInput{Kind: KindImage, Prompt: "A glass greenhouse at sunrise", Model: "image-model", LogicalModelID: "logical", Parameters: map[string]any{"size": "1024x1024", "count": 1}}
+	request := TaskInput{Kind: KindImage, Prompt: "A glass greenhouse at sunrise", Model: "image-model", LogicalModelID: "logical", Parameters: map[string]any{"size": "1024x1024", "imageResolution": "2k", "count": 1}}
 	resolved, err := s.ResolveTask("user", request)
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +174,8 @@ func TestWorkbenchTaskCanBeCreatedWithoutTool(t *testing.T) {
 		t.Fatalf("tool-less task contains a tool id: %#v", metadata)
 	}
 	snapshot := metadata["workbench"].(map[string]any)
-	if snapshot["kind"] != KindImage || snapshot["parameters"].(map[string]any)["count"] != 1 {
+	parameters := snapshot["parameters"].(map[string]any)
+	if snapshot["kind"] != KindImage || parameters["count"] != 1 || parameters["imageResolution"] != "2k" {
 		t.Fatalf("workbench parameters not snapshotted: %#v", snapshot)
 	}
 	if resolved.TaskType != "canvas_image" || resolved.Operation != "image" {

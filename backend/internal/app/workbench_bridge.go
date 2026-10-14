@@ -152,7 +152,7 @@ func (s *Service) WorkbenchTasks(userID, kind string, activeOnly bool, limit int
 func (s *Service) resolveWorkbenchProviderConfig(kind, modelName, logicalModelID, channelID string, parameters map[string]any, input map[string]any) (map[string]any, error) {
 	config := map[string]any{"mode": kind}
 	if kind == WorkbenchKindImage {
-		for _, key := range []string{"size", "quality", "count"} {
+		for _, key := range []string{"size", "quality", "imageResolution", "count"} {
 			if value, exists := parameters[key]; exists {
 				config[key] = providerConfigOptionValue(value)
 			}

@@ -215,7 +215,8 @@ jobs:
         run: |
           prerelease_args=()
           latest_args=()
-          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* || ( "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ && "$GITHUB_REF_NAME" != "v1.6.6.1" ) ]]; then
+          # A fourth numeric component is a formal patch release; prerelease tags must use an explicit suffix.
+          if [[ "$GITHUB_REF_NAME" == *-* || "$GITHUB_REF_NAME" == *.rc* ]]; then
             prerelease_args+=(--prerelease)
           else
             latest_args+=(--latest)

@@ -7,7 +7,7 @@ import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
 import { formatPriceRange, modelQuoteDescription, modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection } from "@/lib/model-pricing";
 import { compatibleModelInGroup, configuredModelDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
-import { groupModelsForPicker, isDirectSystemModel, modelChannelLabel } from "@/lib/model-picker-groups";
+import { groupModelsForPicker, isDirectSystemModel, modelChannelLabel, type ModelPickerGroup } from "@/lib/model-picker-groups";
 import { cn } from "@/lib/utils";
 import { modelDisplayName, modelIcon, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -190,7 +190,13 @@ export function ModelPicker({
                             const groupCurrent = group.models.find((item) => item.models.includes(current));
                             return <button key={group.key} type="button" data-model-picker-item className={cn("canvas-model-picker-brand", groupCurrent && "is-active")} aria-pressed={Boolean(groupCurrent)} onClick={() => { setActiveGroupKey(group.key); focusMenuOption(); }}>
                                 <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
-                                <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
+                                <span className="canvas-model-picker-brand-copy">
+                                    <strong>{group.label}</strong>
+                                    <small className="canvas-model-picker-brand-meta">
+                                        <span className="canvas-model-picker-brand-subtext">{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</span>
+                                        <ModelRecentHealthTrack availability={groupAvailability(config, group)} />
+                                    </small>
+                                </span>
                                 <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
                             </button>;
                         })}
@@ -200,7 +206,13 @@ export function ModelPicker({
                         {optionGroups.map((group) => {
                             return <button key={group.key} type="button" className={cn("canvas-model-picker-brand", activeGroupKey === group.key && "is-active")} aria-pressed={activeGroupKey === group.key} onClick={() => setActiveGroupKey(group.key)}>
                                 <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
-                                <span className="canvas-model-picker-brand-copy"><strong>{group.label}</strong><small>{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</small></span>
+                                <span className="canvas-model-picker-brand-copy">
+                                    <strong>{group.label}</strong>
+                                    <small className="canvas-model-picker-brand-meta">
+                                        <span className="canvas-model-picker-brand-subtext">{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</span>
+                                        <ModelRecentHealthTrack availability={groupAvailability(config, group)} />
+                                    </small>
+                                </span>
                                 <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
                             </button>;
                         })}
@@ -554,8 +566,50 @@ function modelAvailability(config: AiConfig, model: string): PublicChannelModelA
     return channel.modelCosts?.find((item) => item.model === modelOptionName(model))?.availability;
 }
 
+function groupAvailability(config: AiConfig, group: ModelPickerGroup): PublicChannelModelAvailability | undefined {
+    for (const mg of group.models) {
+        for (const m of mg.models) {
+            const avail = modelAvailability(config, m);
+            if (avail) return avail;
+        }
+    }
+    return undefined;
+}
+
+export function ModelRecentHealthTrack({ availability, inPopover = false }: { availability?: PublicChannelModelAvailability; inPopover?: boolean }) {
+    const recentResults = availability?.recentResults ?? [];
+    const successCount = recentResults.filter(Boolean).length;
+    const failCount = recentResults.filter((item) => item === false).length;
+    const hasRuns = recentResults.length > 0;
+    const title = hasRuns
+        ? `最近 ${recentResults.length} 次调用：${successCount} 成功，${failCount} 失败`
+        : "近期暂无调用记录";
+
+    return (
+        <span className={cn("model-picker-availability-track", inPopover && "in-popover")} title={title} aria-label={title}>
+            {Array.from({ length: 10 }).map((_, idx) => {
+                const hasRun = idx < recentResults.length;
+                const isSuccess = hasRun ? recentResults[idx] : null;
+                const stateClass = isSuccess === true ? "is-success" : isSuccess === false ? "is-failed" : "is-empty";
+                return (
+                    <span
+                        key={idx}
+                        className={cn("model-picker-availability-pill", inPopover && "in-popover", stateClass)}
+                        title={inPopover ? (hasRun ? `第 ${idx + 1} 次：${isSuccess ? "成功" : "失败"}` : `槽位 ${idx + 1}：未发生调用`) : undefined}
+                    />
+                );
+            })}
+        </span>
+    );
+}
+
 function ModelAvailabilityBadge({ availability, available, showAvailability }: { availability?: PublicChannelModelAvailability; available: boolean; showAvailability: boolean }) {
     if (!showAvailability) return null;
+    const recentResults = availability?.recentResults ?? [];
+    const successCount = recentResults.filter(Boolean).length;
+    const failCount = recentResults.filter((item) => item === false).length;
+    const hasRuns = recentResults.length > 0;
+
     const label = availability?.dataState === "ready" && availability.rate24h !== null
         ? `${Math.round(availability.rate24h * 100)}%`
         : availability?.dataState === "insufficient"
@@ -563,12 +617,27 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
             : "暂无数据";
     const trend = availability?.trend7d || [];
     const trendSamples = trend.reduce((total, item) => total + item.sampleCount, 0);
-    const summary = availability
-        ? `当前${available ? "可用" : "不可用"}；近24小时${label}，样本 ${availability.sampleCount24h} 条`
-        : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
+    const summary = hasRuns
+        ? `最近${recentResults.length}次调用：${successCount}成功、${failCount}失败；当前${available ? "可用" : "不可用"}`
+        : availability
+            ? `当前${available ? "可用" : "不可用"}；近24小时${label}，暂无近期调用记录`
+            : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
+
     const content = availability ? (
         <div className="model-picker-availability-popover">
             <div className="model-picker-availability-popover-head">
+                <strong>最近 10 次调用</strong>
+                <span className={failCount > 0 ? "has-failures" : ""}>
+                    {hasRuns ? `${successCount} 成功 / ${failCount} 失败` : "暂无调用记录"}
+                </span>
+            </div>
+            <div className="model-picker-availability-popover-meta">
+                {hasRuns ? `共记录最近 ${recentResults.length} 次执行（绿=成功 红=失败 灰=无记录）` : "该模型近期尚无调用记录，默认展示10个空槽"}
+            </div>
+            <div style={{ margin: "6px 0 8px" }}>
+                <ModelRecentHealthTrack availability={availability} inPopover />
+            </div>
+            <div className="model-picker-availability-popover-head" style={{ marginTop: 8 }}>
                 <strong>近24小时成功率</strong>
                 <span>{label}</span>
             </div>
@@ -579,7 +648,7 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
                     return <span key={item.day} className={`model-picker-availability-segment is-${item.dataState}`} title={`${item.day}：${dayLabel}，${item.sampleCount} 条`} style={item.rate === null ? undefined : { opacity: 0.35 + item.rate * 0.65 }} />;
                 })}
             </div>
-            <div className="model-picker-availability-popover-foot">7天分段趋势 · 悬停查看每日样本</div>
+            <div className="model-picker-availability-popover-foot">绿点=成功 · 红点=失败 · 灰点=空槽</div>
         </div>
     ) : null;
     return (
@@ -594,8 +663,10 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <span className="model-picker-availability-dot" aria-hidden="true" />
-                <span className="model-picker-availability-label">近24h {label}</span>
+                <ModelRecentHealthTrack availability={availability} />
+                <span className="model-picker-availability-label">
+                    {hasRuns ? `${successCount}/${recentResults.length}` : label}
+                </span>
             </span>
         </Popover>
     );

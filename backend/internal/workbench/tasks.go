@@ -194,7 +194,7 @@ func (s *Service) ResolveTask(userID string, req TaskInput) (*TaskResolution, er
 
 func normalizeTaskParameters(kind string, params map[string]any) (map[string]any, error) {
 	allowed := map[string]map[string]bool{
-		KindImage: {"size": true, "quality": true, "count": true},
+		KindImage: {"size": true, "quality": true, "imageResolution": true, "count": true},
 		KindVideo: {"seconds": true, "ratio": true, "resolution": true, "generateAudio": true, "watermark": true},
 	}[kind]
 	if allowed == nil {
@@ -206,7 +206,7 @@ func normalizeTaskParameters(kind string, params map[string]any) (map[string]any
 			return nil, kernel.BadAuthRequest("生成参数包含不支持字段: " + key)
 		}
 		switch key {
-		case "size", "quality", "ratio", "resolution":
+		case "size", "quality", "imageResolution", "ratio", "resolution":
 			text, ok := value.(string)
 			text = strings.TrimSpace(text)
 			if !ok || len(text) > 64 || strings.Contains(text, "://") || strings.HasPrefix(strings.ToLower(text), "data:") {

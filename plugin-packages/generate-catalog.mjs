@@ -1117,6 +1117,55 @@ add({
   })
 });
 
+// 千问 AI 平台（QianWenAI MAAS）是阿里独立的 MaaS 站点，网关域名是
+// maas.qianwenaiapi.com，与百炼的 dashscope.aliyuncs.com 不是同一入口，因此单列一个插件。
+// 它同样走多模态图像端点 multimodal-generation/generation，报文形状与百炼一致
+// （input.messages[].content[].image + text），但不能复用百炼插件：改 Base URL 后仍指向
+// dashscope.aliyuncs.com，请求会打到没有开通该模型的站点。
+const qianwenaiMaasImageSizes = [
+  ["1:1", "1024*1024"], ["3:4", "960*1280"], ["4:3", "1280*960"], ["2:3", "1024*1536"], ["3:2", "1536*1024"],
+  ["9:16", "864*1536"], ["16:9", "1536*864"],
+  ["1024x1024", "1024*1024"], ["1024x1536", "1024*1536"], ["1536x1024", "1536*1024"],
+  ["1024x1280", "1024*1280"], ["1280x1024", "1280*1024"], ["960x1280", "960*1280"], ["1280x960", "1280*960"]
+];
+
+add({
+  id: "qianwenai-maas-image", providerId: "qianwenai-maas-image", name: "QianWenAI MAAS", vendor: "Alibaba QianWenAI", capability: "image",
+  baseUrl: "https://maas.qianwenaiapi.com", auth: bearer, params: imageParams, requiresPublicMediaUrls: false,
+  notes: "千问 AI 平台（QianWenAI MAAS）多模态图像端点（multimodal-generation 异步任务）。文生图与图生图共用同一入口：不传 image 为文生图，传参考图为图生图。参考图通过 input.messages[].content[].image 传输（优先 Base64 data URL）。size 采用“宽*高”，未登记的档位省略并由模型自动推荐；enable_thinking 固定为 false，因为官方要求非流式调用关闭思考模式。",
+  create: jsonCreate("/api/v1/services/aigc/multimodal-generation/generation", {
+    model: ref("request.model"),
+    input: {
+      messages: [{
+        role: "user",
+        content: {
+          $concatArrays: [
+            map(sorted(ref("request.images")), "media", { image: coalesce(ref("media.dataUrl"), ref("media.url")) }),
+            [{ text: ref("request.prompt") }]
+          ]
+        }
+      }]
+    },
+    parameters: {
+      size: omit({ $switch: { cases: qianwenaiMaasImageSizes.map(([ratio, size]) => ({ when: eq(ref("request.aspectRatio"), ratio), then: size })), default: null } }),
+      n: conditional(gt({ $toInt: ref("request.imageCount") }, 0), { $toInt: ref("request.imageCount") }, 1),
+      prompt_extend: true,
+      enable_thinking: false,
+      negative_prompt: omit(ref("request.providerOptions.qianwenai-maas-image.negative_prompt")),
+      seed: omit(ref("request.providerOptions.qianwenai-maas-image.seed")),
+      watermark: omit(ref("request.watermark"))
+    }
+  }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
+  poll: { method: "GET", path: "/api/v1/tasks/{{taskId}}", originPath: true },
+  response: asyncResponse("image", {
+    taskId: coalesce(ref("response.output.task_id"), ref("response.task_id"), ref("taskId")),
+    status: coalesce(ref("response.output.task_status"), ref("response.status"), "pending"),
+    message: coalesce(ref("response.output.message"), ref("response.message")),
+    images: map(ref("response.output.choices.0.message.content"), "item", { url: omit(ref("item.image")) }),
+    errorPaths: ["code", "output.code"], messagePaths: ["message", "output.message"]
+  })
+});
+
 for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, requestShape] of [
   ["dashscope-qwen-native", "DashScope Qwen Native", "Alibaba Cloud", "text", "https://dashscope.aliyuncs.com", "/api/v1/services/aigc/text-generation/generation", null, "input+parameters"],
   ["minimax-text-native", "MiniMax Text Native", "MiniMax", "text", "https://api.minimax.chat", "/v1/text/chatcompletion_v2", null, "messages+tokens_to_generate"],

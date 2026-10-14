@@ -184,6 +184,7 @@ export type PublicChannelModelAvailability = {
     rate24h: number | null;
     sampleCount24h: number;
     trend7d: PublicChannelModelAvailabilityDay[];
+    recentResults?: boolean[];
     dataState: "ready" | "insufficient" | "no_data";
     computedAt: string;
     dataThrough?: string;

@@ -616,12 +616,26 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.canvas-model-picker-brand-copy small {
-    overflow: hidden;
+.canvas-model-picker-brand-copy small,
+.canvas-model-picker-brand-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     color: color-mix(in srgb, currentColor 55%, transparent);
     font-size: 10px;
+    line-height: 1.4;
+}
+.canvas-model-picker-brand-subtext {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.canvas-model-picker-brand-copy .model-picker-availability-track {
+    flex-shrink: 0;
+    padding: 0;
 }
 .canvas-model-picker-brand-arrow {
     width: 14px;
@@ -805,6 +819,54 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     outline-offset: 2px;
 }
 
+.model-picker-availability-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 2.5px;
+    padding: 0 1px;
+}
+
+.model-picker-availability-pill {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 5px;
+    border-radius: 50%;
+    transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.model-picker-availability-pill.is-success {
+    background: #34c759;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #34c759 25%, transparent);
+}
+
+.model-picker-availability-pill.is-failed {
+    background: #ff3b30;
+    box-shadow: 0 0 0 1px color-mix(in srgb, #ff3b30 25%, transparent);
+}
+
+.model-picker-availability-pill.is-empty {
+    background: color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.model-picker-availability-track.in-popover {
+    display: flex;
+    align-items: center;
+    gap: 3.5px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.model-picker-availability-pill.in-popover {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+}
+
+.model-picker-availability-popover-head span.has-failures {
+    color: #e5484d;
+}
+
 .model-picker-availability-dot {
     width: 6px;
     height: 6px;
@@ -916,8 +978,8 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--user-ink); text-align: left; transition: none; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--user-surface-muted); color: var(--user-ink-muted); }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy small { color: var(--user-ink-muted); font-size: 10px; }
+.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy strong { font-size: 13px; font-weight: 650; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.35; }
+.app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-copy small { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--user-ink-muted); font-size: 10px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-brand-arrow { width: 15px; height: 15px; color: var(--user-ink-soft); transform: rotate(-90deg); }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-secondary-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 9px; }
 .app-user-workspace .creation-model-picker-menu .canvas-model-picker-back { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--user-border); border-radius: 9px; background: var(--user-surface-muted); color: var(--user-ink-muted); }
@@ -948,8 +1010,8 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 .creation-model-picker-surface .canvas-model-picker-brand { display: flex; min-height: 58px; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 13px; padding: 8px 10px; background: transparent; color: var(--foreground); text-align: left; transition: none; }
 .creation-model-picker-surface .canvas-model-picker-brand-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--workspace-surface-hover); color: var(--foreground); }
 .creation-model-picker-surface .canvas-model-picker-brand-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
-.creation-model-picker-surface .canvas-model-picker-brand-copy strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.creation-model-picker-surface .canvas-model-picker-brand-copy small { color: color-mix(in srgb, var(--foreground) 55%, transparent); font-size: 10px; }
+.creation-model-picker-surface .canvas-model-picker-brand-copy strong { font-size: 13px; font-weight: 650; white-space: normal; overflow-wrap: anywhere; word-break: break-word; line-height: 1.35; }
+.creation-model-picker-surface .canvas-model-picker-brand-copy small { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: color-mix(in srgb, var(--foreground) 55%, transparent); font-size: 10px; }
 .creation-model-picker-surface .canvas-model-picker-brand-arrow { width: 15px; height: 15px; color: color-mix(in srgb, var(--foreground) 48%, transparent); transform: rotate(-90deg); }
 .creation-model-picker-surface .canvas-model-picker-secondary-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 9px; }
 .creation-model-picker-surface .canvas-model-picker-back { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--workspace-border); border-radius: 9px; background: var(--workspace-surface-hover); color: var(--foreground); }

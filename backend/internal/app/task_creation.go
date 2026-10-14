@@ -533,8 +533,8 @@ func (s *Service) resolveSystemChannelModelSelection(input map[string]any, taskT
 		}
 		if value, ok := values["size"]; ok && capabilitySpec != nil && capabilityImageSizePresetMatches(*capabilitySpec, value, values) {
 			values = maps.Clone(values)
-			if ratio := imageSizeRatioForDeclaredPreset(capabilityConfig.Image, fmt.Sprint(value), fmt.Sprint(values["imageResolution"])); ratio != "" {
-				values["size"] = ratio
+			if encoded := imageSizeValueForDeclaredPreset(capabilityConfig.Image, fmt.Sprint(value), stringValue(values["imageResolution"])); encoded != "" {
+				values["size"] = encoded
 			}
 		}
 		resolved, parameterErr := resolveImageParameterValues(parameters, values)

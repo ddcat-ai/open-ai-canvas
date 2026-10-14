@@ -490,6 +490,20 @@ func validateImagePresetSelection(profile *ImageCapabilityConfig, quality, ratio
 	return newModelCapabilityArgumentError("size", "unsupported_value", BadAuthRequest("当前分辨率不支持所选图片宽高比"))
 }
 
+func imageSizeValueForDeclaredPreset(profile *ImageCapabilityConfig, size string, quality string) string {
+	if profile == nil {
+		return ""
+	}
+	preset, ok := declaredImageSizePreset(profile.Size.Presets, size, quality, imagePresetDefaultTier(profile))
+	if !ok {
+		return ""
+	}
+	if profile.Size.Parameter == "size" {
+		return strings.TrimSpace(preset.Size)
+	}
+	return normalizeDeclaredImageRatio(preset.Ratio)
+}
+
 // imageSizeRatioForDeclaredPreset 把已声明的 preset 像素值还原成它对应的比例。比例型线路
 // 会把画布比例换算成 preset 像素值（OpenAI Images 只收 WIDTHxHEIGHT），换算结果必须继续
 // 通过同一套尺寸与分辨率校验。只认当前档位的 preset，避免用低档价格取到高档像素。

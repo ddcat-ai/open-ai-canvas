@@ -30,7 +30,10 @@ function MaskEditor({ dataUrl, config, onClose, onConfirm }: MaskEditorProps) {
     const [diameter, setDiameter] = useState(100);
     const [mode, setMode] = useState("paint");
     const [prompt, setPrompt] = useState("");
-    const [settings, setSettings] = useState(config);
+    const [settings, setSettings] = useState(() => {
+        const model = config.imageModel || config.model;
+        return { ...config, model, imageModel: model };
+    });
     const [error, setError] = useState("");
     const [strokeCount, setStrokeCount] = useState(0);
     const theme = canvasThemes[useActiveTheme()];
@@ -61,8 +64,8 @@ function MaskEditor({ dataUrl, config, onClose, onConfirm }: MaskEditorProps) {
         let maskDataUrl: string;
         try { maskDataUrl = exportEditMask(size.width, size.height, strokes.current); }
         catch (failure) { setError(failure instanceof Error ? failure.message : "遮罩生成失败"); return; }
-        const { model, imageModel, quality, count, transparentBackground } = settings;
-        onConfirm({ prompt: prompt.trim(), maskDataUrl, generationConfig: { model, imageModel, size: settings.size, quality, count, transparentBackground } });
+        const { model, quality, count, transparentBackground } = settings;
+        onConfirm({ prompt: prompt.trim(), maskDataUrl, generationConfig: { model, imageModel: model, size: settings.size, quality, count, transparentBackground } });
     };
     return (
         <AppModal open centered title="局部重绘" className="workspace-modal workspace-modal-wide" onCancel={onClose} onOk={submit} okText="AI 修改" okButtonProps={{ disabled: !size }}>
@@ -96,7 +99,7 @@ function MaskEditor({ dataUrl, config, onClose, onConfirm }: MaskEditorProps) {
                     </div>
                     <label className="flex flex-col gap-2 text-sm">修改要求<Input.TextArea rows={4} value={prompt} placeholder="描述选中区域需要发生的变化" onChange={(event) => { setPrompt(event.target.value); setError(""); }} /></label>
                     <Collapse defaultActiveKey={["settings"]} items={[{ key: "settings", label: "生成设置", children: <div className="space-y-4">
-                        <ModelPicker config={settings} value={settings.imageModel || settings.model} capability="image" fullWidth showSelectedPrice={false} onChange={(model) => setSettings((previous) => ({ ...previous, ...defaultImageParamsForModel(previous, model), imageModel: model, model }))} />
+                        <ModelPicker config={settings} value={settings.model} capability="image" fullWidth showSelectedPrice={false} onChange={(model) => setSettings((previous) => ({ ...previous, ...defaultImageParamsForModel(previous, model), imageModel: model, model }))} />
                         <ImageSettingsPanel config={settings} theme={theme} showTitle={false} showCount={false} bypassPriceGuard onConfigChange={(key, value) => setSettings((previous) => ({ ...previous, [key]: value }))} />
                     </div> }]} />
                     {error || loadError ? <p role="alert" className="text-sm text-destructive">{error || loadError}</p> : null}

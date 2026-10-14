@@ -36,8 +36,10 @@ export function imageParameterAccepts(field: ImageParameter, value: unknown): va
     return !field.values?.length || field.values.includes(value as ImageParameterValue);
 }
 
-export function imageParameterDefaults(parameters: ImageParameter[] = []) {
-    return Object.fromEntries(parameters.filter((p) => p.enabled !== false && p.default !== undefined).map((p) => [p.name, p.default!])) as Record<string, ImageParameterValue>;
+// 后端把插件未声明参数的能力切片序列化为 null（Go nil slice），默认参数语法
+// 只兜 undefined，读路径必须显式归一，避免 null.filter 渲染崩溃。
+export function imageParameterDefaults(parameters?: ImageParameter[] | null) {
+    return Object.fromEntries((parameters || []).filter((p) => p.enabled !== false && p.default !== undefined).map((p) => [p.name, p.default!])) as Record<string, ImageParameterValue>;
 }
 
 export function parseImageParameters(value: unknown): Record<string, ImageParameterValue> {
@@ -52,10 +54,11 @@ export function parseImageParameters(value: unknown): Record<string, ImageParame
     return Object.fromEntries(Object.entries(value).filter(([, v]) => typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v))));
 }
 
-export function normalizeImageParameters(parameters: ImageParameter[] = [], input: unknown = {}) {
+export function normalizeImageParameters(parameters?: ImageParameter[] | null, input: unknown = {}) {
+    const fields = parameters || [];
     const values = parseImageParameters(input);
-    const result = imageParameterDefaults(parameters);
-    for (const field of parameters) {
+    const result = imageParameterDefaults(fields);
+    for (const field of fields) {
         if (field.enabled !== false && imageParameterAccepts(field, values[field.name])) result[field.name] = values[field.name];
     }
     return result;

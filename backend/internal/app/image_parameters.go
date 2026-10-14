@@ -262,6 +262,36 @@ func imageParameterValue(p protocol.ImageParameter, value any) any {
 	return value
 }
 
+func imageParameterUnsupportedMessage(p protocol.ImageParameter) string {
+	message := "图片参数超出支持范围：" + p.Label
+	if len(p.Values) > 0 {
+		values := make([]string, 0, min(len(p.Values), 12))
+		for _, value := range p.Values[:min(len(p.Values), 12)] {
+			values = append(values, fmt.Sprint(value))
+		}
+		message += "；支持值：" + strings.Join(values, "、")
+		if len(p.Values) > len(values) {
+			message += "等"
+		}
+	} else if p.Min != nil || p.Max != nil {
+		message += fmt.Sprintf("；范围：%s-%s", formatImageParameterBound(p.Min), formatImageParameterBound(p.Max))
+	}
+	if p.Default != nil {
+		message += "；默认值：" + fmt.Sprint(p.Default)
+	}
+	if p.Binding == "aspectRatio" && p.Encoding == "pixels" {
+		message += "；若使用比例，按 model_list 的 imageSize.presets 选择对应像素尺寸"
+	}
+	return message
+}
+
+func formatImageParameterBound(value *float64) string {
+	if value == nil {
+		return "不限"
+	}
+	return strconv.FormatFloat(*value, 'f', -1, 64)
+}
+
 func imageParameterAdmissionError(field, issue, message string) error {
 	return NewModelError(ErrCodeModelCapabilityNotSupported, message).WithDetails(map[string]any{
 		"field":   field,
@@ -285,7 +315,7 @@ func resolveImageParameterValues(parameters []protocol.ImageParameter, values ma
 		}
 		value = imageParameterValue(p, value)
 		if !p.Accepts(value) {
-			return nil, imageParameterAdmissionError(p.Name, "unsupported_value", "图片参数超出支持范围："+p.Label)
+			return nil, imageParameterAdmissionError(p.Name, "unsupported_value", imageParameterUnsupportedMessage(p))
 		}
 		if value != nil && value != "" {
 			result[name] = value

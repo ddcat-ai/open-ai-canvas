@@ -83,6 +83,27 @@ describe("image resolution tiers", () => {
         expect(profile.references.maskSupported).toBe(false);
     });
 
+    test("声明式图片模型保留独立分辨率选择", () => {
+        const profile = defaultImageCapabilityConfig("openai-image", "gpt-image-2.5");
+        profile.parameters = [
+            { name: "size", label: "画幅 / 尺寸", type: "string", values: ["auto", "1824x1024", "2752x1536"], default: "1824x1024", encoding: "pixels" },
+            { name: "imageResolution", label: "分辨率", type: "string", values: ["1k", "2k"], default: "1k" },
+        ];
+        profile.resolution = { supported: true, values: ["1k", "2k"], default: "1k" };
+        profile.size = {
+            parameter: "size",
+            values: ["auto", "1824x1024", "2752x1536"],
+            default: "1824x1024",
+            allowCustom: false,
+            presets: [
+                { tier: "1k", ratio: "16:9", size: "1824x1024", width: 1824, height: 1024 },
+                { tier: "2k", ratio: "16:9", size: "2752x1536", width: 2752, height: 1536 },
+            ],
+        };
+
+        expect(normalizeImageValue(profile, { size: "2752x1536", imageResolution: "2k" })).toMatchObject({ size: "2752x1536", imageResolution: "2k" });
+    });
+
     test("识别适合全景图的 2:1 自定义尺寸", () => {
         const options = buildImageResolutionOptions(["1440x720", "2048x1024", "3840x1920"]);
 

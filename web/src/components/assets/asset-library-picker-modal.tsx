@@ -54,6 +54,8 @@ type Props = {
     allowCharacters?: boolean;
     /** 调用方能处理 onConfirm 的 pickedItems 时设为 true：远端分页里不在本地缓存的素材也可选。 */
     acceptRemoteItems?: boolean;
+    /** 远端条目不依赖本地缓存，仍需按调用方当前能力校验。 */
+    remoteItemDisabledReason?: (asset: Asset) => string | undefined;
     /** 左侧「媒体类型」筛选项；只有一种类型或已由 remoteKind 固定时不展示该分组。 */
     mediaKinds?: AssetPickerMediaKind[];
     open: boolean;
@@ -95,6 +97,7 @@ export function AssetLibraryPickerModal({
     remoteKind,
     allowCharacters = false,
     acceptRemoteItems = false,
+    remoteItemDisabledReason,
     mediaKinds = DEFAULT_MEDIA_KINDS,
     open,
     items,
@@ -166,20 +169,15 @@ export function AssetLibraryPickerModal({
         () =>
             (remoteQuery.data?.assets || [])
                 .filter((asset) => asset.kind !== "model" && (asset.kind !== "entity" || allowCharacters))
-                .map((asset) => {
-                    const known = items.find((item) => item.id === asset.id);
-                    return {
-                        id: asset.id,
-                        title: asset.title,
-                        category: asset.category || "other",
-                        archived: asset.status === "archived",
-                        kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : asset.kind === "entity" ? "角色" : "文本",
-                        searchText: (asset.tags ?? []).join(" "),
-                        ...(known || (acceptRemoteItems ? {} : { disabledReason: "此素材不适用于当前操作" })),
+                .map((asset) =>
+                    remoteAssetToPickerItem(
                         asset,
-                    };
-                }),
-        [acceptRemoteItems, allowCharacters, remoteQuery.data, items],
+                        items.find((item) => item.id === asset.id),
+                        acceptRemoteItems,
+                        remoteItemDisabledReason?.(asset),
+                    ),
+                ),
+        [acceptRemoteItems, allowCharacters, remoteItemDisabledReason, remoteQuery.data, items],
     );
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const pickedRemoteRef = useRef(new Map<string, AssetLibraryPickerItem>());
@@ -646,6 +644,20 @@ export function AssetLibraryPickerModal({
             </div>
         </AppModal>
     );
+}
+
+export function remoteAssetToPickerItem(asset: Asset, known: AssetLibraryPickerItem | undefined, acceptRemoteItems: boolean, disabledReason?: string): AssetLibraryPickerItem {
+    return {
+        id: asset.id,
+        title: asset.title,
+        category: asset.category || "other",
+        archived: asset.status === "archived",
+        kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : asset.kind === "entity" ? "角色" : "文本",
+        searchText: (asset.tags ?? []).join(" "),
+        ...known,
+        disabledReason: known?.disabledReason || (!known && !acceptRemoteItems ? "此素材不适用于当前操作" : disabledReason),
+        asset,
+    };
 }
 
 // 角色卡、3D 模型等非媒体条目没有媒体类型，媒体筛选生效时不参与匹配。

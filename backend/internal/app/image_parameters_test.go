@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,36 @@ func imageParameterTestAdapter(t *testing.T, packageID, providerID string) proto
 	}
 	t.Fatal("provider missing")
 	return nil
+}
+
+func TestImageParameterRatioUsesDeclaredPixelPreset(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("openai-image", "GPT Image 2.5")
+	profile.Image.Parameters = []protocol.ImageParameter{{
+		Name: "size", Label: "画幅 / 尺寸", Type: "string",
+		Values: []any{"auto", "1824x1024", "1024x1824", "1024x1024"}, Default: "1824x1024",
+		Binding: "aspectRatio", Encoding: "pixels", Pricing: true,
+	}}
+	profile.Image.Size = ImageSizeConfig{
+		Parameter: "size", Values: []string{"auto", "1824x1024", "1024x1824", "1024x1024"}, Default: "1824x1024",
+		Presets: []ImageSizePreset{
+			{Tier: "1k", Ratio: "16:9", Size: "1824x1024"},
+			{Tier: "1k", Ratio: "9:16", Size: "1024x1824"},
+			{Tier: "1k", Ratio: "1:1", Size: "1024x1024"},
+		},
+	}
+	if got := imageSizeValueForDeclaredPreset(profile.Image, "16:9", ""); got != "1824x1024" {
+		t.Fatalf("ratio was not encoded by the declared preset: %q", got)
+	}
+	if got := imageSizeValueForDeclaredPreset(profile.Image, "1024x1824", ""); got != "1024x1824" {
+		t.Fatalf("pixel preset was not preserved: %q", got)
+	}
+	values := map[string]any{"size": imageSizeValueForDeclaredPreset(profile.Image, "16:9", "")}
+	if _, err := resolveImageParameterValues(profile.Image.Parameters, values); err != nil {
+		t.Fatalf("encoded preset was rejected by image parameter admission: %v", err)
+	}
+	if _, err := resolveImageParameterValues(profile.Image.Parameters, map[string]any{"size": "16:9"}); err == nil || !strings.Contains(err.Error(), "支持值") || !strings.Contains(err.Error(), "imageSize.presets") {
+		t.Fatalf("unsupported ratio error lacks actionable correction guidance: %v", err)
+	}
 }
 
 func TestImageParametersResolutionOnlyAndLogicalReconciliation(t *testing.T) {

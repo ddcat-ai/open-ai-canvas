@@ -356,11 +356,15 @@ func publicWorkbenchParameters(kind string, snapshot, input map[string]any) map[
 	if kind == model.WorkbenchKindImage {
 		copyWorkbenchTextParameter(result, "size", parameters["size"])
 		copyWorkbenchTextParameter(result, "quality", parameters["quality"])
+		copyWorkbenchTextParameter(result, "imageResolution", parameters["imageResolution"])
 		if result["size"] == nil {
 			copyWorkbenchTextParameter(result, "size", config["size"])
 		}
 		if result["quality"] == nil {
 			copyWorkbenchTextParameter(result, "quality", config["quality"])
+		}
+		if result["imageResolution"] == nil {
+			copyWorkbenchTextParameter(result, "imageResolution", config["imageResolution"])
 		}
 		if value, ok := workbenchInteger(parameters["count"], 20); ok {
 			result["count"] = value
