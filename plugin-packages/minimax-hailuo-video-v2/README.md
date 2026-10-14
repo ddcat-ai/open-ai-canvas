@@ -4,6 +4,7 @@
 
 重点修复：
 
+- `duration` 支持 4-30 秒整数，默认 5 秒。
 - `resolution` 直接来自统一分辨率，不再遗漏。
 - 比例写入上游实际使用的 `ratio`；首尾帧模式强制 `adaptive`。
 - `watermark` 映射为 `aigc_watermark`。

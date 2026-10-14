@@ -28,7 +28,7 @@ export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose:
             await login({ username: username.trim(), password });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
-            message.success("登录成功，请再次点击生成");
+            message.success("登录成功，可以继续创作了");
             onClose();
         } catch (error) {
             message.error(error instanceof Error ? error.message : "登录失败");
@@ -40,7 +40,7 @@ export function CreationLoginDialog({ open, onClose }: { open: boolean; onClose:
     return (
         <AppModal open={open} onCancel={onClose} title="登录后开始创作" footer={null} centered width="min(440px, calc(100vw - 32px))">
             <div className="space-y-4">
-                <p className="text-sm text-foreground/60">你的创作内容会保留。登录成功后，请再次点击生成。</p>
+                <p className="text-sm text-foreground/60">你的创作内容会保留。登录成功后，即可继续创作或创建画布。</p>
                 <form className="space-y-3" onSubmit={(event) => void submit(event)}>
                     <Input
                         size="large"

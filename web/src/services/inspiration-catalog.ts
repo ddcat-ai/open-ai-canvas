@@ -1,8 +1,7 @@
 /**
  * 全量灵感目录的运行时加载。
  *
- * 3MB 量级的目录不能打进主 JS，全量留给灵感页按需拉取；
- * 首页纵深画廊的池子同理，连提示词正文有几百 KB，走 gallery-pool.json，
+ * 3MB 量级的目录不打进主 JS，首页灵感大厅进入可视区域附近后按需拉取；
  * 浏览器 HTTP 缓存之外再做一层内存缓存，同一次会话只请求一遍。
  */
 import { curatedInspirations, type CreationInspiration, type InspirationSourceId } from "@/lib/inspirations/catalog";

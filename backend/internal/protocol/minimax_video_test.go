@@ -2,8 +2,52 @@ package protocol
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 )
+
+func TestMiniMaxVideoDurationOptions(t *testing.T) {
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
+	for _, parameter := range adapter.Metadata().Parameters {
+		if parameter.Name != "duration" {
+			continue
+		}
+		if len(parameter.Values) != 27 {
+			t.Fatalf("duration options = %v, want every second from 4 through 30", parameter.Values)
+		}
+		for index, value := range parameter.Values {
+			if value != strconv.Itoa(index+4) {
+				t.Fatalf("duration option %d = %q", index, value)
+			}
+		}
+		return
+	}
+	t.Fatal("duration parameter is missing")
+}
+
+func TestMiniMaxVideoDurationRange(t *testing.T) {
+	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")
+	for seconds := 4; seconds <= 30; seconds++ {
+		t.Run(strconv.Itoa(seconds), func(t *testing.T) {
+			spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "MiniMax-H3", Prompt: "a clip", Duration: seconds}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if duration := manifestTestBody(t, spec)["duration"]; duration != float64(seconds) {
+				t.Fatalf("upstream duration = %#v, want %d", duration, seconds)
+			}
+		})
+	}
+	for _, seconds := range []int{3, 31} {
+		t.Run("reject-"+strconv.Itoa(seconds), func(t *testing.T) {
+			_, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "MiniMax-H3", Prompt: "a clip", Duration: seconds}})
+			if err == nil || !strings.Contains(err.Error(), "duration 必须在 4-30 秒之间") {
+				t.Fatalf("duration %d error = %v", seconds, err)
+			}
+		})
+	}
+}
 
 func TestMiniMaxVideoFailureMessages(t *testing.T) {
 	adapter := officialPackageAdapter(t, "minimax-hailuo-video-v2.yingce-plugin", "minimax-video")

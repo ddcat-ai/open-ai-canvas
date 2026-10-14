@@ -45,7 +45,6 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
         {
             items: [
                 { ...toolItem("create", "/"), id: "home", title: "创作" },
-                { ...toolItem("inspirations", "/inspirations"), title: "灵感" },
                 { ...toolItem("projects", "/projects"), title: "短剧制作" },
                 { ...toolItem("canvas", "/canvas"), title: "自由画布" },
             ],
@@ -338,6 +337,7 @@ export function workspaceNavActiveId(pathname: string, section?: string | null) 
     const segments = pathname.split("/").filter(Boolean);
     if (segments[0] === "toolbox" && segments[1]) return `toolbox-${segments[1]}`;
     const slug = segments[0] || "home";
+    if (slug === "create") return "home";
     return slug === "settings" && section ? `settings:${section}` : slug;
 }
 

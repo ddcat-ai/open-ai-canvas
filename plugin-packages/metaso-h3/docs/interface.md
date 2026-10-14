@@ -25,6 +25,7 @@ POST `https://metaso.cn/api/minimax/v2/video_generation`
 }
 ```
 
+- `MiniMax-H3` 的 duration 支持 4–30 秒整数；`MiniMax-H3-Max` 仍按秘塔账户开放能力选择 5–15 秒。
 - content 必须包含一个非空 text 项。
 - 首尾帧（first_frame/last_frame）与多模态参考（reference_*）互斥。
 - 图片 ≤ 9 张、视频 ≤ 3 段、音频 ≤ 3 段；请求体总大小 ≤ 64 MB。
@@ -70,7 +71,7 @@ status 取值：queued / running / succeeded / failed / cancelled。
   "apiVersion": "yingce.plugin/v2",
   "id": "metaso-h3",
   "name": "METASO MiniMax H3",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "METASO",
   "description": "秘塔 METASO MiniMax H3 文生视频/图生视频协议插件（异步任务）。",
   "permissions": [
@@ -149,7 +150,7 @@ status 取值：queued / running / succeeded / failed / cancelled。
             "type": "integer",
             "required": false,
             "mapping": "duration/seconds",
-            "description": "时长秒数（4-15）。"
+            "description": "时长秒数（4-30）。"
           },
           {
             "name": "aspectRatio",

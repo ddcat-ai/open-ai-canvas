@@ -485,28 +485,24 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 
 开启时一级分类也可在后台新增、改名、排序、停用和选择图示，未归入技能仍有默认入口。
 
-## 创作首页纵深画廊与灵感库
+## 创作首页、最近画布与灵感大厅
 
-创作页空态是直线纵深图片画廊：11 张横版卡片沿 Z 轴前后排队，当前一张在最前、最大，其余依次后退缩小并左右对称。滚轮、两侧按钮和自动轮播都能切换，切换只动 `transform` 与 `opacity`。卡片带玻璃描边、圆角和投影，底部是「行动点 / 标题 / 描述」三段信息，只有最前那张露出。队列跟随输入框的创作类型：选图片只排图片灵感，选视频只排视频灵感，选文本用本项目原创条目。每次进场和每次换类型都重新随机抽一批，并记住最近出现过哪些，走完一轮自动换批。
+根路径 `/` 与 `/create` 共用创作首页。空态首屏提供紧凑标题、文本/图片/视频/Agent 模式、真实提示词输入区和快捷创作入口。下方一行展示创建画布与最近更新的 4 个画布，支持打开、查看全部和窄屏横向浏览；读取失败提供重试，创建后明确区分本机保存与云端同步。
 
-工作区左侧「创作」下方新增灵感页 `/inspirations`，展示全部提示词，按来源、分类和创作类型筛选，支持搜索、收藏、视图切换和分页；自建灵感支持新建、编辑、删除和 JSON 导入导出，改动只存在本地。
+灵感大厅合并到创作首页下方，不再提供独立灵感导航或 `/inspirations` 页面路由。类型与搜索常驻，来源、分类、收藏/隐藏和排序收拢在更多筛选中；默认每页 12 条。新建、编辑、隐藏/恢复、收藏与 JSON 导入导出继续保留，本地改动按账号 scope 持久化。使用灵感会关闭详情、回填首页提示词并返回输入区，不自动生成。
 
-内置灵感的提示词统一提供中文正文：详情阅读、复制、编辑和一键带入创作使用同一份中文内容，首页画廊保持一致。已有中文来源直接采用中文版本，其余外文正文翻译后随静态目录发布，不需要客户等待在线翻译。模型名、引用标记和模板参数保留原有用途。上游原页仍可从来源链接访问。
+内置提示词统一提供中文正文，详情阅读、复制、编辑和回填创作使用同一份中文内容。已有中文来源直接采用中文版本，其余外文正文翻译后随静态目录发布；模型名、引用标记和模板参数保留原有用途。来源及原页链接显示遵循后台来源展示开关。
 
-译文维护在 `web/scripts/data/inspiration-prompts-zh.json`，记录原文 SHA-256；导入脚本在写入目录前校验原文版本。上游正文更新或新增条目时需补齐匹配的译文，缺译会停止导入，避免重新发布英文提示词。
+译文维护在 `web/scripts/data/inspiration-prompts-zh.json`，记录原文 SHA-256；导入脚本写入目录前校验原文版本，缺译会停止导入。
 
-生产 Nginx 对 `/inspirations` 与 `/inspirations/` 精确返回 SPA 入口，支持直接打开和刷新；`/inspirations/*.json` 继续提供静态目录数据，避免页面路径与同名目录冲突而跳转到容器端口。
-
-外部提示词由 `web/scripts/import-inspirations.mjs` 同步：`awesome-seedance`、好好学 AI 提示词库、YouMind 的两个姊妹库。脚本同时为画廊池生成本地缩略图（560px、webp、约 35KB 一张）。上游封面平均 400KB～700KB，直接引用一屏 11 张要拉 5MB 以上，换成本地缩略图后约 400KB。
-
-画廊池走 `public/inspirations/gallery-pool.json` 运行时拉取，不打进首屏 JS：几百条提示词正文压在包里是白背的，而这份数据只服务画廊一处。池子按来源等距抽取以横跨各分类，并且只收描述非空的条目，保证卡片三行版式不缺角；这些条目仍留在全量目录里供灵感页展示。
+外部提示词由 `web/scripts/import-inspirations.mjs` 同步。`web/public/inspirations/*.json` 继续提供静态目录数据，灵感大厅进入可视区域附近后才按需加载全量目录，浏览器缓存与会话内缓存避免重复请求；封面保持稳定比例，加载失败显示占位内容。
 
 ### 相关实现
 
-- `web/src/pages/create/creation-inspiration-tunnel.tsx`、`creation-inspiration-tunnel.css`：纵深画廊组件与样式。
-- `web/src/pages/inspirations/`：灵感页、详情弹窗、编辑弹窗与样式。
-- `web/src/lib/inspirations/`：来源登记表、条目类型与解析、原创条目、上游版本号（`catalog.ts`、`resolve.ts`、`source-revisions.ts`）。
-- `web/src/services/inspiration-catalog.ts`：全量目录与画廊池的运行时加载和内存缓存。
+- `web/src/pages/create/index.tsx`、`creation-product.css`：首页组合、提示词回填与紧凑布局。
+- `web/src/pages/create/creation-recent-canvases.tsx`：最近画布查询、创建与快捷入口。
+- `web/src/pages/inspirations/`：内嵌灵感大厅、详情/编辑弹窗与样式。
+- `web/src/lib/inspirations/`：来源登记、条目类型、解析、原创条目与上游版本。
+- `web/src/services/inspiration-catalog.ts`：静态目录的运行时加载与内存缓存。
 - `web/src/stores/use-inspiration-store.ts`：自建、覆盖、隐藏与收藏的本地持久化。
-- `web/scripts/import-inspirations.mjs`：外部来源同步、缩略图生成与画廊池落盘。
-- `web/public/inspirations/`、`web/public/inspiration-thumbs/`：全量目录、画廊池与本地缩略图。
+- `web/scripts/import-inspirations.mjs`：外部来源同步、缩略图生成与目录落盘。

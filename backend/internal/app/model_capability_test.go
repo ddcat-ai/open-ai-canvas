@@ -144,6 +144,30 @@ func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T)
 	}
 }
 
+func TestDefaultMiniMaxVideoCapabilitySupportsThirtySecondGeneration(t *testing.T) {
+	for _, protocol := range []string{"minimax-video", "metaso-h3"} {
+		t.Run(protocol, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel(protocol, "MiniMax-H3").Video
+			if profile == nil || profile.Duration.Default != 5 {
+				t.Fatalf("MiniMax duration profile = %#v", profile)
+			}
+			for _, seconds := range []int{3, 4, 15, 16, 20, 30, 31} {
+				t.Run(fmt.Sprint(seconds), func(t *testing.T) {
+					input := canvasGenerationInput{Mode: "video", Prompt: "a clip", Config: providerConfig{InterfaceType: protocol, Model: "MiniMax-H3", VideoSeconds: fmt.Sprint(seconds), Size: "16:9", VQuality: "768P"}}
+					err := validateVideoTask(profile, input)
+					valid := seconds >= 4 && seconds <= 30
+					if valid && err != nil {
+						t.Fatalf("validateVideoTask(%d seconds): %v", seconds, err)
+					}
+					if !valid && (err == nil || !strings.Contains(err.Error(), "视频时长不在当前模型支持范围内")) {
+						t.Fatalf("validateVideoTask(%d seconds) error = %v", seconds, err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestDefaultMiniMaxVideoCapabilitySupportsReferenceGeneration(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("minimax-video", "MiniMax-H3")
 	if profile == nil || profile.Video == nil {

@@ -104,7 +104,7 @@ describe("Volcengine Ark full-modal references", () => {
     test("显式首帧与项目角色参考图使用不同角色", async () => {
         let requestBody: unknown;
         const deps = {
-            transport: { post: async (_url: string, body: unknown) => (requestBody = body, { id: "task-1" }) },
+            transport: { post: async (_url: string, body: unknown) => ((requestBody = body), { id: "task-1" }) },
             response: videoResponseTools,
         } as unknown as VideoProviderDeps;
         const images = [
@@ -134,7 +134,7 @@ describe("Seedance /videos image roles", () => {
     test("reference_to_video does not promote the first character image to image_url", async () => {
         let requestBody: Record<string, unknown> = {};
         const deps = {
-            transport: { post: async (_url: string, body: unknown) => (requestBody = body as Record<string, unknown>, { id: "task-1" }) },
+            transport: { post: async (_url: string, body: unknown) => ((requestBody = body as Record<string, unknown>), { id: "task-1" }) },
             response: videoResponseTools,
         } as unknown as VideoProviderDeps;
         const config = { ...defaultConfig, baseUrl: "https://video.example.com/v1", model: "seedance-2.0", videoModel: "seedance-2.0" };
@@ -160,6 +160,19 @@ describe("Seedance /videos image roles", () => {
 });
 
 describe("MiniMax explicit reference roles", () => {
+    test("preserves supported durations through 30 seconds in the upstream request", async () => {
+        for (const seconds of [4, 15, 16, 20, 30]) {
+            let requestBody: unknown;
+            const deps = {
+                transport: { post: async (_url: string, body: unknown) => ((requestBody = body), { task_id: "minimax-task-1" }) },
+                response: videoResponseTools,
+            } as unknown as VideoProviderDeps;
+            const config = { ...defaultConfig, baseUrl: "https://api.minimax.io", videoSeconds: String(seconds), vquality: "768P", size: "16:9" };
+            await createMiniMaxVideoTask(deps, config as never, "MiniMax-H3", "a clip", [], [], []);
+            expect((requestBody as { duration: number }).duration).toBe(seconds);
+        }
+    });
+
     test("project assets use reference_image and reference_audio instead of first frame", async () => {
         let requestBody: unknown;
         const deps = {
