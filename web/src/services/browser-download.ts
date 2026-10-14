@@ -1,3 +1,5 @@
+import { suppressBeforeUnloadGuard } from "@/stores/use-sync-progress-store";
+
 import {
     getResourceAccess,
     resolveResourceAccessURL,
@@ -34,6 +36,9 @@ export async function downloadBrowserMedia({ fileName, storageKey, url, variant 
     anchor.rel = "noopener noreferrer";
     anchor.style.display = "none";
     document.body.appendChild(anchor);
+    // 跨域地址不会遵守 download 属性，点击会被当成一次导航；放行 beforeunload
+    // 守卫，避免画布同步中弹出「离开此网站」确认框，让下载直接开始。
+    suppressBeforeUnloadGuard();
     anchor.click();
     anchor.remove();
 }
