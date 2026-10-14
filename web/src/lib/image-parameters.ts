@@ -132,7 +132,7 @@ export function projectImageParameters(profile: ImageCapabilityConfig, parameter
                           (!active.has("imageResolution") || !active.get("imageResolution")?.values?.length || active.get("imageResolution")!.values!.includes(p.tier)),
                   ),
               }
-            : { parameter: "none", values: [], default: "auto", allowCustom: false },
+            : { ...profile.size, parameter: "none", values: [], default: "auto", allowCustom: false },
     };
 }
 
@@ -148,16 +148,25 @@ export function updateImageParameterSchema(profile: ImageCapabilityConfig, param
     const resolution = parameters.find((field) => field.name === "imageResolution");
     const size = profile.resolution.supported && resolution?.enabled === false ? { ...profile.size, defaultTier: profile.resolution.default } : profile.size;
     const next = projectImageParameters({ ...profile, size }, parameters);
-    const previous = profile.parameters?.find((field) => field.name === "imageResolution")?.values || [];
-    const added = next.resolution.supported ? next.resolution.values.filter((tier) => !previous.includes(tier)) : [];
-    return initializeImageRatioDefaults(next, definitions, added);
+    const sizeField = parameters.find((field) => field.name === "size");
+    const wasSizeEnabled = profile.parameters?.some((field) => field.name === "size" && field.enabled !== false);
+    const added = next.resolution.supported ? next.resolution.values.filter((tier) => !wasSizeEnabled || !profile.resolution.supported || !profile.resolution.values.includes(tier)) : [];
+    // 在投影裁剪旧档位前提取已选比例；像素支持值通过已有精确预设还原比例。
+    const values = sizeField?.values || [];
+    const ratios = [
+        ...new Set([
+            ...values.filter((value): value is string => typeof value === "string" && /^\d+:\d+$/.test(value)),
+            ...(profile.size.presets || []).filter((preset) => !values.length || values.includes(preset.ratio) || values.includes(preset.size)).map((preset) => preset.ratio),
+        ]),
+    ];
+    return initializeImageRatioDefaults(next, definitions, added, ratios.length ? ratios : DEFAULT_IMAGE_RATIOS);
 }
 
-export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, definitions: ImageParameter[], tiers?: string[]): ImageCapabilityConfig {
+export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, definitions: ImageParameter[], tiers?: string[], preferredRatios = DEFAULT_IMAGE_RATIOS): ImageCapabilityConfig {
     const field = profile.parameters?.find((p) => p.name === "size");
     const definition = definitions.find((p) => p.name === "size");
     if (!field || field.enabled === false || !definition) return profile;
-    const ratios = DEFAULT_IMAGE_RATIOS.filter((ratio) => imageParameterAccepts(definition, ratio));
+    const ratios = preferredRatios.filter((ratio) => imageParameterAccepts(definition, ratio));
     if (!ratios.length) return profile;
     if (!profile.resolution.supported && field.encoding !== "pixels" && tiers === undefined) {
         return projectImageParameters(
@@ -171,9 +180,10 @@ export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, def
         .flatMap((tier) =>
             ratios.flatMap((ratio) => {
                 try {
-                    return [imagePresetForRatio(tier, ratio)];
+                    return [{ ...imagePresetForRatio(tier, ratio), ratio }];
                 } catch {
-                    return [];
+                    // 保留待填写项，避免没有换算规则的档位静默丢失已选比例。
+                    return [{ tier, ratio, width: 0, height: 0, size: "" }];
                 }
             }),
         );

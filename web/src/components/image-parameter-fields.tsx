@@ -4,7 +4,7 @@ import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { ImageSizePicker } from "./image-size-picker";
 import { IMAGE_RESOLUTIONS, imageSingleSizeTier, imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
 import { Select } from "@/components/ui/base/select";
-import { imageHostControls, imageParameterAccepts, imageParameterRequest, parseImageParameters, projectImageParameters, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
+import { imageHostControls, imageParameterAccepts, imageParameterRequest, parseImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -310,9 +310,10 @@ export function ImageParameterSizeEditor({ profile, definition, disabled, onChan
     const tiers = grouped ? profile.resolution.values : [singleTier ?? ""];
     const updateField = (patch: Partial<ImageParameter>) =>
         onChange(
-            projectImageParameters(
+            updateImageParameterSchema(
                 profile,
                 profile.parameters!.map((p) => (p.name === "size" ? { ...p, ...patch } : p)),
+                [definition],
             ),
         );
     const updateSize = (size: ImageCapabilityConfig["size"]) => {
