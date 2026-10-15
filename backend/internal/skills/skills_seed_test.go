@@ -12,6 +12,22 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestBuiltinPackagesUseSelectableCategories(t *testing.T) {
+	categories := make(map[string]bool)
+	for _, category := range skillCategories() {
+		categories[category.Value] = true
+	}
+	packages, err := loadBuiltinSkillPackages(nil)
+	if err != nil {
+		t.Fatalf("load builtin skills required for server startup: %v", err)
+	}
+	for _, item := range packages {
+		if !categories[item.skill.Tag] {
+			t.Errorf("builtin skill %s uses category %q missing from the catalog filters", item.skill.ID, item.skill.Tag)
+		}
+	}
+}
+
 // 总纲名录里写死的 `cards/…` 路径会被 Agent 直接交给 skill_read_file；
 // 包里缺卡时只会在运行时报「读取参考资料失败」，所以在这里提前拦住。
 func TestBuiltinPackagesShipReferencedCards(t *testing.T) {
