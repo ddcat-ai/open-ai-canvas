@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"yingce/backend/internal/model"
@@ -28,6 +29,17 @@ func TestTaskForOutputRedactsRoutingAndSecrets(t *testing.T) {
 	}
 	if input["resourceId"] != "resource-1" {
 		t.Fatalf("resource identity was not preserved: %#v", input)
+	}
+}
+
+func TestTaskForOutputRedactsHistoricalFailure(t *testing.T) {
+	task := model.Task{Error: `模型服务暂时不可用（HTTP 503）；上游：{"error":{"code":"model_not_found","message":"request id abc at https://private.example/task_abc123"}}`, ProviderCancelError: "取消失败 task_abc123"}
+	output := taskForOutput(task)
+	if strings.Contains(output.Error, "private.example") || strings.Contains(output.Error, "request id") || strings.Contains(output.Error, "task_abc123") || !strings.Contains(output.Error, "更换模型") {
+		t.Fatalf("unsafe task error: %q", output.Error)
+	}
+	if strings.Contains(output.ProviderCancelError, "task_abc123") {
+		t.Fatalf("unsafe cancel error: %q", output.ProviderCancelError)
 	}
 }
 

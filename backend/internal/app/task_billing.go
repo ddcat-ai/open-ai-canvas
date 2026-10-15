@@ -80,14 +80,14 @@ func (c *taskBillingCoordinator) RefundBilling(orderID string, errorText string)
 	if orderID == "" {
 		return nil
 	}
-	return c.repo.RefundBillingOrder(orderID, truncateRunes(errorText, 1000))
+	return c.repo.RefundBillingOrder(orderID, truncateRunes(redactUpstreamAddress(errorText), 1000))
 }
 
 func (c *taskBillingCoordinator) MarkBillingUncertain(orderID string, errorText string) error {
 	if orderID == "" {
 		return nil
 	}
-	return c.repo.MarkBillingUncertain(orderID, truncateRunes(errorText, 1000))
+	return c.repo.MarkBillingUncertain(orderID, truncateRunes(redactUpstreamAddress(errorText), 1000))
 }
 
 // CheckRetryEligibility 收敛失败/取消任务重试前的计费状态校验。

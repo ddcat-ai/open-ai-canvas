@@ -2,6 +2,13 @@ export const CONTENT_MODERATION_ERROR_CODE = "sensitive_words_detected";
 
 export const CONTENT_MODERATION_MESSAGE = "内容审核未通过，本次平台积分未扣除或已退还。请修改提示词后重新生成。";
 
+const UPSTREAM_LINK_PLACEHOLDER = "[链接已隐藏]";
+const UPSTREAM_HOST_PLACEHOLDER = "[地址已隐藏]";
+const UPSTREAM_URL_PATTERN = /https?:\/\/[^\s<>"'，。；）]+/gi;
+const UPSTREAM_NETWORK_OPERATION_PATTERN = /\b(?:dial|read|write|proxyconnect)\s+tcp\s+\S+/gi;
+const UPSTREAM_IPV4_PATTERN = /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g;
+const USER_VISIBLE_TASK_ID_PATTERN = /\btask[_-][a-z0-9][a-z0-9_-]{2,}\b/gi;
+
 const DEFAULT_GENERATION_ERROR_MESSAGE = "生成失败，请稍后重试。";
 const NETWORK_ERROR_MESSAGE = "网络异常。";
 const MODEL_CAPABILITY_ERROR_MESSAGE = "所选模型不支持当前生成方式或输入，请切换模型或调整输入后重试。";
@@ -27,6 +34,19 @@ const REASON_MESSAGES: Record<string, string> = {
     internal: "系统暂时无法完成生成，请稍后再试。",
 };
 
+// 用户可见文案（画布失败原因、积分流水备注）不能出现上游地址；
+// 与后端 redactUpstreamAddress 保持同一套占位符。
+export function redactUpstreamAddress(value: string) {
+    if (!value.trim()) return value;
+    return value
+        .replace(UPSTREAM_URL_PATTERN, UPSTREAM_LINK_PLACEHOLDER)
+        .replace(UPSTREAM_NETWORK_OPERATION_PATTERN, (match) => {
+            const fields = match.split(/\s+/);
+            return fields.length >= 2 ? `${fields[0]} ${fields[1]} ${UPSTREAM_HOST_PLACEHOLDER}:` : UPSTREAM_HOST_PLACEHOLDER;
+        })
+        .replace(UPSTREAM_IPV4_PATTERN, UPSTREAM_HOST_PLACEHOLDER);
+}
+
 export type GenerationFailureMetadata = {
     errorDetails: string;
     generationErrorCode?: string;
@@ -44,7 +64,15 @@ export function generationFailureMetadata(error: unknown, prompt: string): Gener
 }
 
 export function generationErrorMessage(error: unknown) {
-    const raw = rawGenerationError(error);
+    const original = rawGenerationError(error);
+    const upstreamIndex = original.indexOf("；上游：");
+    if (upstreamIndex >= 0) {
+        const prefix = original.slice(0, upstreamIndex).trim();
+        if (isContentModerationError(prefix)) return CONTENT_MODERATION_MESSAGE;
+        const hint = actionableUpstreamReason(original.slice(upstreamIndex + "；上游：".length));
+        if (hint) return sanitizeUserVisibleError(prefix ? `${prefix}；${hint}` : hint);
+    }
+    const raw = sanitizeUserVisibleError(original);
     if (isContentModerationError(raw)) return contentModerationMessage(raw);
 
     const reason = structuredErrorReason(error);
@@ -74,11 +102,28 @@ export function generationErrorMessage(error: unknown) {
 }
 
 function contentModerationMessage(raw: string) {
-    const detailIndex = raw.indexOf("；上游：");
-    // 保留服务端过滤后的拒绝原因，同时保持平台审核的积分提示及重试保护。
-    return detailIndex >= 0 && !containsInfrastructureDetails(raw)
-        ? CONTENT_MODERATION_MESSAGE + raw.slice(detailIndex)
-        : CONTENT_MODERATION_MESSAGE;
+    return CONTENT_MODERATION_MESSAGE;
+}
+
+function sanitizeUserVisibleError(value: string) {
+    const redacted = redactUpstreamAddress(value);
+    const marker = "；上游：";
+    const index = redacted.indexOf(marker);
+    const prefix = index >= 0 ? redacted.slice(0, index) : redacted;
+    const detail = index >= 0 ? redacted.slice(index + marker.length) : "";
+    const actionable = actionableUpstreamReason(detail);
+    const result = actionable ? `${prefix}${prefix ? "；" : ""}${actionable}` : prefix;
+    return result.replace(USER_VISIBLE_TASK_ID_PATTERN, "[任务标识已隐藏]");
+}
+
+function actionableUpstreamReason(value: string) {
+    const lower = value.toLowerCase();
+    const image = lower.includes("image") || lower.includes("图片") || lower.includes("file") || lower.includes("参考图");
+    const tooLarge = lower.includes("too large") || lower.includes("exceed") || lower.includes("超过") || lower.includes("25mb") || lower.includes("25 mb");
+    if (image && tooLarge) return "参考图片超过模型支持的大小限制，请压缩图片后重试。";
+    if (lower.includes("model_not_found") || lower.includes("model not found") || lower.includes("无可用渠道")) return "当前模型暂无可用渠道，请更换模型或联系管理员。";
+    if (image && (lower.includes("unsupported size") || lower.includes("图片尺寸不支持") || lower.includes("unsupported format") || lower.includes("图片格式不支持"))) return "参考图片的尺寸或格式不符合模型要求，请调整图片后重试。";
+    return "";
 }
 
 export function generationErrorCode(error: unknown) {

@@ -113,6 +113,11 @@ func (s *Service) AdminUserLedger(actor *model.User, userID string, entryType st
 	if err != nil {
 		return nil, err
 	}
+	for index := range entries {
+		if strings.TrimSpace(entries[index].Note) != "" {
+			entries[index].Note = userFacingTaskError(entries[index].Note)
+		}
+	}
 	return &WalletSummary{Account: *account, Entries: entries, Total: total, Page: page, Limit: limit}, nil
 }
 

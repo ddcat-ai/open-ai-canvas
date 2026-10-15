@@ -132,6 +132,11 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 	if err != nil {
 		return nil, err
 	}
+	for index := range entries {
+		if strings.TrimSpace(entries[index].Note) != "" {
+			entries[index].Note = userFacingTaskError(entries[index].Note)
+		}
+	}
 	policy, err := s.publicCreditPolicy(user.ID)
 	if err != nil {
 		return nil, err

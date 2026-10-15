@@ -119,7 +119,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		Model:                     task.Model,
 		ProviderRequestID:         task.ProviderRequestID,
 		ProviderCancelStatus:      task.ProviderCancelStatus,
-		ProviderCancelError:       task.ProviderCancelError,
+		ProviderCancelError:       sanitizeUserVisibleError(task.ProviderCancelError),
 		ProviderCancelAttempts:    task.ProviderCancelAttempts,
 		ProviderCancelRequestedAt: task.ProviderCancelRequestedAt,
 		ProviderCancelledAt:       task.ProviderCancelledAt,
@@ -293,6 +293,12 @@ func taskForOutput(task model.Task) *model.Task {
 	task.CanRecoverMedia = task.MediaRecoveryJSON != "" && task.Status == model.TaskStatusFailed
 	task.Diagnostic = taskExecutionDiagnostic(&task)
 	task.InputJSON = publicTaskInputJSON(task.InputJSON)
+	// Task.Error 可能来自历史记录中的“前置原因；上游：原文”。
+	// 普通用户任务接口只返回可行动提示，完整上游诊断留在后台请求日志。
+	if strings.TrimSpace(task.Error) != "" {
+		task.Error = userFacingTaskError(task.Error)
+	}
+	task.ProviderCancelError = sanitizeUserVisibleError(task.ProviderCancelError)
 	// 普通任务接口只暴露前台模型身份；渠道模型和供应线路属于管理员内部信息。
 	task.LogicalModelRevisionID = ""
 	task.RouteID = ""

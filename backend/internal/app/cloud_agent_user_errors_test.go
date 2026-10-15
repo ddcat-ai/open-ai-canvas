@@ -16,11 +16,13 @@ func TestUserFacingTaskErrorMatchesCanvasNodeClassification(t *testing.T) {
 	for _, tc := range []struct{ name, raw, want string }{
 		{"connection reset", `Post "https://ai.cangyuansuanli.cn/v1/images/generations": read tcp 192.168.1.7:61229->154.12.46.253:443: read: connection reset by peer`, "网络异常。"},
 		{"dial", `dial tcp 10.0.0.1:443: connect: connection refused`, "网络异常。"},
-		{"upstream 500 with reason", "模型服务暂时不可用（HTTP 500）；上游：Upstream gateway error", "模型服务暂时不可用（HTTP 500）；上游：Upstream gateway error"},
+		{"upstream 500 with reason", "模型服务暂时不可用（HTTP 500）；上游：Upstream gateway error", "模型服务暂时不可用（HTTP 500）"},
 		{"bare 502", "HTTP 502 Bad Gateway", "网络异常。"},
 		{"rate limit", "HTTP 429", "服务当前繁忙，请稍后重试。"},
 		{"auth", "status 401", "生成服务鉴权失败，请检查渠道配置。"},
 		{"provider json", `接口请求失败：{"error":{"message":"图片尺寸不支持"}}`, "图片尺寸不支持"},
+		{"model unavailable hint", `模型服务暂时不可用（HTTP 503）；上游：{"error":{"code":"model_not_found","message":"request id abc"}}`, "模型服务暂时不可用（HTTP 503）；当前模型暂无可用渠道，请更换模型或联系管理员。"},
+		{"large image hint", `模型服务拒绝请求；上游：image file too large: 25MB`, "模型服务拒绝请求；参考图片超过模型支持的大小限制，请压缩图片后重试。"},
 		{"moderation", "sensitive_words_detected", taskErrorModerationMessage},
 		{"storage", "参考图片上传失败：bucket denied", "参考素材上传到对象存储失败，请检查对象存储配置后重试。"},
 		{"readable chinese", "模型服务拒绝了请求，请检查模型和参数", "模型服务拒绝了请求，请检查模型和参数"},
@@ -31,6 +33,13 @@ func TestUserFacingTaskErrorMatchesCanvasNodeClassification(t *testing.T) {
 				t.Fatalf("got %q want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestUserFacingTaskErrorHidesTaskIdentifier(t *testing.T) {
+	got := userFacingTaskError("任务失败（任务 task_abc123）")
+	if strings.Contains(got, "task_abc123") || strings.Contains(got, "上游") {
+		t.Fatalf("internal task details leaked: %q", got)
 	}
 }
 

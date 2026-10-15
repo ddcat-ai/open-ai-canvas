@@ -34,8 +34,28 @@ var (
 
 // userFacingTaskError 把任务里保存的原始错误转换成用户能看懂的中文原因。
 func userFacingTaskError(raw string) string {
+	return sanitizeUserVisibleError(classifyUserFacingTaskError(raw))
+}
+
+func classifyUserFacingTaskError(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
+		return taskErrorDefaultMessage
+	}
+	if index := strings.Index(raw, "；上游："); index >= 0 {
+		prefix := strings.TrimSpace(raw[:index])
+		if taskErrorIsModeration(prefix) {
+			return taskErrorModerationMessage
+		}
+		if hint := actionableUpstreamReason(raw[index+len("；上游："):]); hint != "" {
+			if prefix != "" {
+				return prefix + "；" + hint
+			}
+			return hint
+		}
+		if prefix != "" {
+			return prefix
+		}
 		return taskErrorDefaultMessage
 	}
 	if taskErrorIsModeration(raw) {
@@ -166,9 +186,6 @@ func taskErrorIsModeration(value string) bool {
 }
 
 func taskErrorModerationText(raw string) string {
-	if index := strings.Index(raw, "；上游："); index >= 0 && !taskErrorInfrastructurePattern.MatchString(raw) {
-		return taskErrorModerationMessage + raw[index:]
-	}
 	return taskErrorModerationMessage
 }
 
@@ -182,6 +199,28 @@ func taskErrorStorageMessage(value string) string {
 		return "参考素材上传到对象存储失败，请检查对象存储配置后重试。"
 	}
 	return ""
+}
+
+// Only known upstream failure classes become user hints; never echo upstream text.
+func actionableUpstreamReason(value string) string {
+	lower := strings.ToLower(value)
+	image := strings.Contains(lower, "image") || strings.Contains(lower, "图片") || strings.Contains(lower, "file") || strings.Contains(lower, "参考图")
+	tooLarge := strings.Contains(lower, "too large") || strings.Contains(lower, "exceed") || strings.Contains(lower, "超过") || strings.Contains(lower, "25mb") || strings.Contains(lower, "25 mb")
+	switch {
+	case image && tooLarge:
+		return "参考图片超过模型支持的大小限制，请压缩图片后重试。"
+	case strings.Contains(lower, "model_not_found") || strings.Contains(lower, "model not found") || strings.Contains(lower, "无可用渠道"):
+		return "当前模型暂无可用渠道，请更换模型或联系管理员。"
+	case image && (strings.Contains(lower, "unsupported size") || strings.Contains(lower, "图片尺寸不支持") || strings.Contains(lower, "unsupported format") || strings.Contains(lower, "图片格式不支持")):
+		return "参考图片的尺寸或格式不符合模型要求，请调整图片后重试。"
+	}
+	return ""
+}
+
+var userVisibleTaskID = regexp.MustCompile("(?i)\\btask[_-][a-z0-9][a-z0-9_-]{2,}\\b")
+
+func sanitizeUserVisibleError(value string) string {
+	return userVisibleTaskID.ReplaceAllString(redactUpstreamAddress(value), "[任务标识已隐藏]")
 }
 
 func taskErrorHasStatus(value string, statuses ...string) bool {
