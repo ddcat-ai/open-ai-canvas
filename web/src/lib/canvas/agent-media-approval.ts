@@ -6,6 +6,27 @@ import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, selectab
 export type AgentImageApproval = AgentMediaSettings & { prompt: string; referenceNodeIds: string[] };
 export type AgentVideoApproval = AgentImageApproval & { referenceTransientIds: string[]; sourceNodeId: string };
 
+/**
+ * 审批详情里只有这些字段属于后端 mediaSettings；prompt 与引用节点由服务端持有。
+ * 展开完整审批对象会把 prompt 回传，被后端 DisallowUnknownFields 拒绝（json: unknown field "prompt"），
+ * 表现为“审批未确认，请重试”，所以回传前先窄化。
+ */
+export function agentMediaSettings(value: AgentMediaSettings): AgentMediaSettings {
+    return {
+        logicalModelId: value.logicalModelId,
+        channelId: value.channelId,
+        channelModelKey: value.channelModelKey,
+        size: value.size,
+        imageResolution: value.imageResolution,
+        imageParameters: value.imageParameters,
+        quality: value.quality,
+        durationSeconds: value.durationSeconds,
+        videoGenerateAudio: value.videoGenerateAudio,
+        videoWatermark: value.videoWatermark,
+        videoArkPrivateAssetUpload: value.videoArkPrivateAssetUpload,
+    };
+}
+
 export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoApproval | null {
     const call = detail.call as { function?: { name?: string; arguments?: unknown } } | undefined;
     if ((call?.function?.name || detail.toolName) !== "generate_media") return null;

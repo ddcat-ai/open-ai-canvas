@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { AGENT_APPROVAL_SUPERSEDED_BY_NODE, agentApprovalMatchesSettings, agentApprovalModel, agentApprovalModelSelection, agentApprovalTargetGenerating, agentImageApproval, agentMediaApprovalTargetNodeId, agentVideoApproval } from "../src/lib/canvas/agent-media-approval";
+import { AGENT_APPROVAL_SUPERSEDED_BY_NODE, agentApprovalMatchesSettings, agentApprovalModel, agentApprovalModelSelection, agentApprovalTargetGenerating, agentImageApproval, agentMediaApprovalTargetNodeId, agentMediaSettings, agentVideoApproval } from "../src/lib/canvas/agent-media-approval";
 import type { CanvasNodeData } from "../src/types/canvas";
 import { createModelChannel, defaultConfig, encodeChannelModel } from "../src/stores/use-config-store";
 
@@ -46,6 +46,30 @@ describe("video generation approval settings", () => {
         expect(approval?.durationSeconds).toBe(8);
         expect(approval?.videoGenerateAudio).toBe(true);
         expect(approval?.referenceNodeIds).toEqual(["image"]);
+    });
+});
+
+describe("approval media settings sent back to the backend", () => {
+    const mediaKeys = ["channelId", "channelModelKey", "durationSeconds", "imageParameters", "imageResolution", "logicalModelId", "quality", "size", "videoArkPrivateAssetUpload", "videoGenerateAudio", "videoWatermark"];
+
+    it("drops prompt and reference nodes that the decision API rejects", () => {
+        const approval = agentVideoApproval({ toolName: "generate_media", arguments: { mode: "video", prompt: "镜头运动", size: "9:16", quality: "720p", durationSeconds: 8, channelId: "platform", channelModelKey: "seedance-test", referenceNodeIds: ["image"], referenceTransientIds: ["tmp-image"], sourceNodeId: "shot-1" } });
+        expect(approval).not.toBeNull();
+        const settings = agentMediaSettings(approval!);
+        expect(Object.keys(settings).sort()).toEqual(mediaKeys);
+        expect(JSON.stringify(settings)).not.toContain("prompt");
+        expect(settings.durationSeconds).toBe(8);
+        expect(settings.channelModelKey).toBe("seedance-test");
+    });
+
+    it("keeps image settings without leaking prompt or reference nodes", () => {
+        const approval = agentImageApproval({ toolName: "generate_media", arguments: { mode: "image", prompt: "产品图", size: "1024x1024", quality: "high", channelId: "platform", channelModelKey: "gpt-image-2", referenceNodeIds: ["product"] } });
+        expect(approval).not.toBeNull();
+        const settings = agentMediaSettings(approval!);
+        expect(Object.keys(settings).sort()).toEqual(mediaKeys);
+        expect(settings.size).toBe("1024x1024");
+        expect(settings.quality).toBe("high");
+        expect(settings.channelModelKey).toBe("gpt-image-2");
     });
 });
 

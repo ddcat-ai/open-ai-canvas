@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import { VideoSettingsPanel } from "@/components/video-settings-panel";
 import type { CanvasTheme } from "@/lib/canvas-theme";
-import { agentApprovalModel, agentApprovalModelSelection, type AgentVideoApproval } from "@/lib/canvas/agent-media-approval";
+import { agentApprovalModel, agentApprovalModelSelection, agentMediaSettings, type AgentVideoApproval } from "@/lib/canvas/agent-media-approval";
 import { modelCapabilityConfigFor, normalizeVideoValue } from "@/lib/model-capabilities";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
@@ -11,7 +11,7 @@ import { PUBLIC_MODEL_CATALOG_ID, useEffectiveConfig } from "@/stores/use-config
 export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabled, onChange }: { initial: AgentVideoApproval; value?: AgentMediaSettings; theme: CanvasTheme; disabled: boolean; onChange: (value: AgentMediaSettings) => void }) {
     const effective = useEffectiveConfig();
     const config = useMemo(() => ({ ...effective, channels: effective.channels.filter((channel) => channel.scope === "system" || channel.id === PUBLIC_MODEL_CATALOG_ID) }), [effective]);
-    const settings = value || initial;
+    const settings = agentMediaSettings(value || initial);
     const model = agentApprovalModel(config, settings, "video");
     const duration = String(settings.durationSeconds || initial.durationSeconds || "");
     const audio = settings.videoGenerateAudio === undefined ? "" : String(settings.videoGenerateAudio);

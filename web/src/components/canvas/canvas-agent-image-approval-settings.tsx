@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
 import type { CanvasTheme } from "@/lib/canvas-theme";
-import { agentApprovalModel, agentApprovalModelSelection, type AgentImageApproval } from "@/lib/canvas/agent-media-approval";
+import { agentApprovalModel, agentApprovalModelSelection, agentMediaSettings, type AgentImageApproval } from "@/lib/canvas/agent-media-approval";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
@@ -17,7 +17,7 @@ export function CanvasAgentImageApprovalSettings({ initial, value, onChange, the
 }) {
     const effective = useEffectiveConfig();
     const config = useMemo(() => ({ ...effective, channels: effective.channels.filter((channel) => channel.scope === "system" || channel.id === PUBLIC_MODEL_CATALOG_ID) }), [effective]);
-    const settings = value || initial;
+    const settings = agentMediaSettings(value || initial);
     const model = agentApprovalModel(config, settings);
     const requirements: ModelRequirements = {
         capability: "image",
