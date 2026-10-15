@@ -322,9 +322,9 @@ func visibleAPICallLogQuery(query *gorm.DB) *gorm.DB {
 	return query.Where("api_call_logs.request_kind <> ?", "poll")
 }
 
-func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, error) {
+func (r *Repository) AsyncMediaAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, error) {
 	var root model.ApiCallLog
-	query := r.db.Where("capability = ? AND request_kind = ?", "video", "create")
+	query := r.db.Where("capability = ? AND request_kind = ?", log.Capability, "create")
 	if log.TaskID != "" {
 		query = query.Where("task_id = ?", log.TaskID)
 	} else {
@@ -334,6 +334,12 @@ func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, 
 		return nil, err
 	}
 	return &root, nil
+}
+
+// VideoAPICallRoot 保留旧调用面的兼容别名。
+func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, error) {
+	log.Capability = "video"
+	return r.AsyncMediaAPICallRoot(log)
 }
 
 // whereTimeRange compares instants. SQLite stores time.Time as offset text, so a

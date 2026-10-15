@@ -253,6 +253,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		return readErr
 	}
 	task.MediaRecoveryJSON, task.MediaStage = latestMedia.MediaRecoveryJSON, latestMedia.MediaStage
+	task.ProviderRequestID, task.PollStage = latestMedia.ProviderRequestID, latestMedia.PollStage
 	var deliveryFailure *mediaRecoveryError
 	if task.MediaRecoveryJSON != "" || errors.As(err, &deliveryFailure) {
 		return s.finishTaskMediaRecovery(task, result, err)
@@ -279,9 +280,13 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		default:
 		}
 		decryptedInput, decryptErr := s.decryptTaskInputJSON(task.InputJSON)
-		if decryptErr == nil && s.shouldDeferVideoProviderTask(*task, decryptedInput, err) {
+		if decryptErr == nil && s.shouldDeferProviderTask(*task, decryptedInput, err) {
 			stage := "后台仍在生成"
-			message := "前台等待结束，上游视频仍在生成，将继续回查原任务"
+			message := "前台等待结束，上游任务仍在生成，将继续回查原任务"
+			if strings.HasPrefix(task.Type, "canvas_image") {
+				stage = "后台仍在生成图片"
+				message = "前台等待结束，上游图片仍在生成，将继续回查原任务"
+			}
 			var pendingErr providerStatePendingError
 			if errors.As(err, &pendingErr) {
 				stage = "等待上游任务同步"
@@ -293,7 +298,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 			_ = s.log(task.UserID, task.ID, "info", message, task.PollStage)
 			return nil
 		}
-		if newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
+		if isVideoTaskType(task.Type) && newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
 			err = errors.New("上游任务长时间未同步，已停止自动查询，请确认渠道任务状态后重试。")
 		}
 		if errors.Is(err, context.DeadlineExceeded) || deadlineExpired {
@@ -397,15 +402,18 @@ func taskExecutionTimeoutWithPolicy(taskType string, policy RuntimeTaskPolicy) t
 	}
 }
 
-func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
+func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string, err error) bool {
 	providerRequestID := strings.TrimSpace(task.ProviderRequestID)
-	if providerRequestID == "" || (!strings.HasPrefix(task.Type, "canvas_video") && !strings.HasPrefix(task.Type, "video_")) {
+	if providerRequestID == "" {
 		return false
 	}
 	deferSignal := errors.Is(err, context.DeadlineExceeded)
 	var pendingErr providerStatePendingError
 	if errors.As(err, &pendingErr) {
-		deferSignal = strings.TrimSpace(pendingErr.TaskID) == providerRequestID && !newAPIChannel2TaskSyncExpired(task, err, time.Now())
+		deferSignal = strings.TrimSpace(pendingErr.TaskID) == providerRequestID
+		if deferSignal && isVideoTaskType(task.Type) {
+			deferSignal = !newAPIChannel2TaskSyncExpired(task, err, time.Now())
+		}
 	}
 	if !deferSignal {
 		return false
@@ -415,7 +423,34 @@ func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput s
 		return false
 	}
 	resolved, resolveErr := s.resolveProviderConfig(input.Config)
-	return resolveErr == nil && resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+	if resolveErr != nil {
+		return false
+	}
+	if isVideoTaskType(task.Type) || input.Mode == "video" {
+		return resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+	}
+	if input.Mode != "image" && !strings.HasPrefix(task.Type, "canvas_image") {
+		return false
+	}
+	return s.imageProviderSupportsTaskResume(resolved.InterfaceType)
+}
+
+func isVideoTaskType(taskType string) bool {
+	return strings.HasPrefix(taskType, "canvas_video") || strings.HasPrefix(taskType, "video_")
+}
+
+// shouldDeferVideoProviderTask 保留给旧测试和内部调用方；新逻辑统一覆盖视频与异步图片。
+func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
+	return s.shouldDeferProviderTask(task, decryptedInput, err)
+}
+
+func (s *Service) imageProviderSupportsTaskResume(interfaceType string) bool {
+	interfaceType = strings.TrimSpace(interfaceType)
+	if isVolcengineJiMengProtocol(interfaceType) || isRunningHubInterface(interfaceType) {
+		return true
+	}
+	metadata, ok := s.protocolMetadata(interfaceType)
+	return ok && strings.TrimSpace(metadata.Poll) != ""
 }
 
 func newAPIChannel2TaskSyncExpired(task model.Task, err error, now time.Time) bool {

@@ -52,6 +52,38 @@ func TestVideoPollLogSchedulesNextCheckThirtySecondsLater(t *testing.T) {
 	}
 }
 
+func TestImagePollLogMergesIntoCreateLog(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:image-poll-merge?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Task{}, &model.ApiCallLog{}, &model.ModelPricing{}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "image-task-1", UserID: "user-1", Type: "canvas_image", Status: model.TaskStatusRunning}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ApiCallLog{ID: "image-create-1", UserID: task.UserID, TaskID: task.ID, Capability: "image", RequestKind: "create", ProviderRequestID: "image-provider-1", Status: model.ApiCallStatusSucceeded, CreatedAt: time.Now()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{repo: repository.New(db)}
+	if err := service.LogAPICall(model.ApiCallLog{
+		ID: "image-poll-1", UserID: task.UserID, TaskID: task.ID, Capability: "image", RequestKind: "poll",
+		ProviderRequestID: "image-provider-1", ProviderStatus: "completed", Status: model.ApiCallStatusSucceeded,
+		StatusCode: 200, CreatedAt: time.Now(), ResponseBody: `{"status":"completed"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var root model.ApiCallLog
+	if err := db.First(&root, "id = ?", "image-create-1").Error; err != nil {
+		t.Fatal(err)
+	}
+	if root.PollCount != 1 || root.ProviderStatus != "completed" || root.Status != model.ApiCallStatusSucceeded {
+		t.Fatalf("image create log was not merged: %#v", root)
+	}
+}
+
 func TestEnsureFailedProviderAttemptLoggedFillsPreflightGapOnce(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:provider-preflight-log?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

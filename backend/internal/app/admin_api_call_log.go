@@ -54,7 +54,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			stdlog.Printf("provider task state update failed: task_id=%s provider_request_id=%s error=%v", log.TaskID, log.ProviderRequestID, err)
 		}
 	}
-	if merged, err := s.mergeVideoAPICallLog(log); err != nil {
+	if merged, err := s.mergeAsyncMediaAPICallLog(log); err != nil {
 		return err
 	} else if merged {
 		return nil
@@ -76,16 +76,16 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	return s.repo.Create(&log)
 }
 
-func (s *Service) mergeVideoAPICallLog(log model.ApiCallLog) (bool, error) {
+func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) {
 	// Delivery is a separate outcome: a failed download must not rewrite a
 	// successful generation request as failed.
-	if log.Capability != "video" || log.RequestKind != "poll" {
+	if (log.Capability != "video" && log.Capability != "image") || log.RequestKind != "poll" {
 		return false, nil
 	}
 	if log.TaskID == "" && log.ProviderRequestID == "" {
 		return false, nil
 	}
-	root, err := s.repo.VideoAPICallRoot(log)
+	root, err := s.repo.AsyncMediaAPICallRoot(log)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
