@@ -145,7 +145,9 @@ export function AssetCover({
                 {asset.kind === "audio" ? (
                     <AudioWaveCover asset={asset} />
                 ) : asset.kind === "entity" && (asset.category === "environment" || asset.category === "prop") ? (
-                    <div className="assets-cover-fallback"><span>{assetCategoryLabel(asset.category)} · 待生成图片</span></div>
+                    <div className="assets-cover-fallback">
+                        <span>{assetCategoryLabel(asset.category)} · 待生成图片</span>
+                    </div>
                 ) : asset.kind === "entity" ? (
                     <CharacterAssetCover asset={asset} />
                 ) : asset.kind === "text" ? (

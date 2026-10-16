@@ -246,7 +246,10 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                         </div>
                     </div>
                     {asset.kind === "entity" && (asset.category === "environment" || asset.category === "prop") ? (
-                        <div className="asset-archive-preview-note"><p>{String(asset.data.definition.description || "待生成图片")}</p><p>{String(asset.data.definition.prompt || "")}</p></div>
+                        <div className="asset-archive-preview-note">
+                            <p>{String(asset.data.definition.description || "待生成图片")}</p>
+                            <p>{String(asset.data.definition.prompt || "")}</p>
+                        </div>
                     ) : asset.kind === "entity" ? (
                         <CharacterArchive asset={asset} />
                     ) : (

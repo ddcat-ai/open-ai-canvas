@@ -394,10 +394,17 @@ function acceptRemoteAssets(remoteAssets: Asset[], refresh = false) {
         const baseline = acknowledgedAssets.get(asset.id);
         const dirty = local && !sameEntitySnapshot(baseline, local);
         if (dirty && !refresh) continue;
-        const next = dirty && local ? parseAssetRecordList(rebaseAssetSnapshot({
-            document: { state: { assets: [asset] }, version: 0, storageRevision: 0, tombstones: { assets: {} } },
-            baseAssets: baseline ? [baseline] : [], localAssets: [local], baseRevision: 0,
-        }).state.assets)[0] : asset;
+        const next =
+            dirty && local
+                ? parseAssetRecordList(
+                      rebaseAssetSnapshot({
+                          document: { state: { assets: [asset] }, version: 0, storageRevision: 0, tombstones: { assets: {} } },
+                          baseAssets: baseline ? [baseline] : [],
+                          localAssets: [local],
+                          baseRevision: 0,
+                      }).state.assets,
+                  )[0]
+                : asset;
         acknowledgedAssets.set(asset.id, asset);
         verifiedAssets.add(asset.id);
         current.set(asset.id, next);
