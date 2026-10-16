@@ -8,6 +8,7 @@ import type { ColumnsType } from "antd/es/table";
 import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
+import { CanvasTextLeaseIndicator, useCanvasTextLease } from "./use-canvas-text-lease";
 import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
 import { ModelPicker } from "@/components/model-picker";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
@@ -126,7 +127,7 @@ export function CanvasScriptNodeContent({
     onRemoveRow: (rowId: string) => void;
     onUpdateRow: (rowId: string, patch: Partial<StoryboardRow>) => void;
     onEditAssets: (rowId: string) => void;
-    onPromptChange: (prompt: string) => void;
+    onPromptChange: (prompt: string) => boolean | void;
     onGenerateScript: (prompt: string) => void;
     onModelChange: (model: string) => void;
     onShotDurationChange: (duration: StoryboardShotDuration) => void;
@@ -137,11 +138,12 @@ export function CanvasScriptNodeContent({
     workspaceMode?: CanvasWorkspaceMode;
 }) {
     const theme = canvasThemes[useActiveTheme()];
+    const textLease = useCanvasTextLease(node.id);
     const effectiveConfig = useEffectiveConfig();
     const generationConfig = buildGenerationConfig(effectiveConfig, node, "text");
     const simpleMode = workspaceMode === "simple";
     const rows = node.metadata?.storyboard?.rows || [];
-    const [prompt, setPrompt] = useState(node.metadata?.composerContent || "");
+    const prompt = node.metadata?.composerContent || "";
     const [scrollTop, setScrollTop] = useState(0);
     const composerHeightChangeRef = useRef(onComposerHeightChange);
     const reportedComposerHeightRef = useRef<number | null>(null);
@@ -394,11 +396,12 @@ export function CanvasScriptNodeContent({
                     className="thin-scrollbar h-full min-h-0 w-full touch-pan-y resize-none overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border bg-transparent px-3 py-2 text-sm leading-5 outline-none transition placeholder:opacity-45 focus:ring-1"
                     style={{ borderColor: theme.node.stroke, color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties}
                     value={prompt}
+                    readOnly={textLease.blocked || Boolean(node.metadata?.locked)}
                     placeholder="输入剧本或剧情，以及总时长等要求，自动拆分为镜头"
                     onContentSizeChange={resizePrompt}
                     onChange={(value) => {
-                        setPrompt(value);
-                        onPromptChange(value);
+                        if (textLease.blocked || node.metadata?.locked || onPromptChange(value) === false) return false;
+                        return true;
                     }}
                     onKeyDown={(event) => {
                         if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -411,6 +414,7 @@ export function CanvasScriptNodeContent({
                     onWheel={(event) => event.stopPropagation()}
                 />
                 <div className="flex min-w-0 items-center justify-end gap-2" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                    <CanvasTextLeaseIndicator nodeId={node.id} />
                     <Tooltip title="脚本生成需要文本理解与结构化输出能力，仅展示文本模型；视频/图片模型无法生成分镜表" placement="topLeft">
                         <div className="mr-auto min-w-36 max-w-56 flex-1">
                             <ModelPicker

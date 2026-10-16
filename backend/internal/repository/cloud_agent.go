@@ -57,7 +57,16 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 			run.Title = parent.Title
 		}
 	}
-	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(run).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(run).Error; err != nil {
+			return err
+		}
+		// The marker excludes completed Pi carriers (still text_replay) from
+		// reservation scans. It is not a cached busy/idle or permission flag.
+		return tx.Exec(`UPDATE tasks SET agent_execution_ready = true
+			WHERE id = ? AND user_id = ? AND operation = 'cloud_agent' AND agent_execution_ready = false
+			AND EXISTS (SELECT 1 FROM cloud_agent_executions e WHERE e.id = tasks.id AND e.user_id = tasks.user_id)`, run.ID, run.UserID).Error
+	})
 }
 
 // CloudAgent 在同一个只读事务里读取执行行和它的事件/消息行。分开读的话，并发写入

@@ -1,9 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { applyGeneratedMediaResultMetadata, applyGenerationTaskResultToNodes, generationTaskOutputsApplied, shouldRecoverCanvasImageOutputs, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { useAssetStore, withAssetStorePersistenceSuppressed, type ImageAsset } from "@/stores/use-asset-store";
+
+const initialAssets = useAssetStore.getState().assets;
+afterEach(() => withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: initialAssets })));
+
+function imageAsset(id: string, storageKey: string): ImageAsset {
+    return { id, kind: "image", title: id, coverUrl: "/image.png", tags: [], createdAt: "", updatedAt: "", data: { dataUrl: "", storageKey, width: 640, height: 480, bytes: 10, mimeType: "image/png" } };
+}
 
 function videoNode(assetId: string, storageKey: string): CanvasNodeData {
     return {
@@ -24,10 +32,34 @@ describe("applyGeneratedMediaResultMetadata", () => {
         expect(shouldRecoverCanvasImageOutputs(old)).toBe(true);
         expect(generationTaskOutputsApplied(old, task)).toBe(false);
         expect(shouldRecoverCanvasImageOutputs({ ...old, metadata: { ...old.metadata, generationOutputCount: 4 } })).toBe(false);
-        expect(generationTaskOutputsApplied({ ...old, metadata: { ...old.metadata, generationOutputCount: 4 } }, task)).toBe(true);
+        const completed = { ...old, metadata: { ...old.metadata, generationOutputCount: 4, storageKey: "resource:old" } };
+        expect(generationTaskOutputsApplied(completed, task)).toBe(false);
+        withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [imageAsset("asset", "resource:old")] }));
+        expect(generationTaskOutputsApplied({ ...completed, metadata: { ...completed.metadata, assetId: "asset" } }, task)).toBe(true);
         expect(shouldRecoverCanvasImageOutputs({ ...old, metadata: { ...old.metadata, batchRootId: "root" } })).toBe(false);
         expect(shouldRecoverCanvasImageOutputs({ ...old, metadata: { ...old.metadata, producedModel: "other-model" } })).toBe(false);
         expect(resetGenerationTaskMetadata({ generationOutputCount: 4 }).generationOutputCount).toBeUndefined();
+    });
+    test("交付完成必须匹配资源与素材，不能只凭成功状态、数量或旧素材 ID", () => {
+        const node = { ...videoNode("asset", "resource:new"), type: CanvasNodeType.Image, metadata: { assetId: "asset", storageKey: "resource:new", content: "/new.png", status: "success" as const, taskId: "task", generationOutputCount: 1 } };
+        const task = { id: "task", type: "canvas_image", status: "succeeded" as const, prompt: "", attempts: 1, createdAt: "", updatedAt: "", resultJson: JSON.stringify({ images: [{ dataUrl: "/new.png", storageKey: "resource:new" }] }) };
+        const staleAsset = { ...imageAsset("asset", "resource:old"), metadata: { taskId: "task", nodeId: node.id } };
+        withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [staleAsset] }));
+        expect(generationTaskOutputsApplied(node, task)).toBe(false);
+        withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [imageAsset("asset", "resource:new")] }));
+        expect(generationTaskOutputsApplied(node, task)).toBe(true);
+        expect(generationTaskOutputsApplied({ ...node, metadata: { ...node.metadata, assetId: "missing" } }, task)).toBe(false);
+    });
+    test("图层组恢复检查每个现存子图绑定，已删除图层不需要复活", () => {
+        const root: CanvasNodeData = { ...videoNode("composite", "resource:composite"), type: CanvasNodeType.Image, metadata: { assetId: "composite", storageKey: "resource:composite", content: "/composite.png", status: "success", taskId: "task", generationOutputCount: 2, batchChildIds: ["child", "deleted"], imageLayerGroup: { width: 640, height: 480, layers: [{ nodeId: "child", x: 0, y: 0, visible: true }] } } };
+        const child: CanvasNodeData = { ...root, id: "child", metadata: { batchRootId: root.id, content: "/child.png", storageKey: "resource:child" } };
+        const task = { id: "task", type: "canvas_image", status: "succeeded" as const, prompt: "", attempts: 1, createdAt: "", updatedAt: "", resultJson: JSON.stringify({ images: [{ dataUrl: "/first.png" }, { dataUrl: "/second.png" }] }) };
+        withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [imageAsset("composite", "resource:composite"), imageAsset("child-asset", "resource:child")] }));
+        expect(generationTaskOutputsApplied(root, task, [root, child])).toBe(false);
+        const boundChild = { ...child, metadata: { ...child.metadata, assetId: "child-asset" } };
+        expect(generationTaskOutputsApplied(root, task, [root, boundChild])).toBe(true);
+        const ordinaryBatch = { ...root, metadata: { ...root.metadata, imageLayerGroup: undefined } };
+        expect(generationTaskOutputsApplied(ordinaryBatch, task, [ordinaryBatch, boundChild])).toBe(false);
     });
     test("多图提交保留保存期间的移动和改名，重复提交不新增或覆盖图片", () => {
         const before = { ...videoNode("", ""), type: CanvasNodeType.Image, metadata: { taskId: "task" } };

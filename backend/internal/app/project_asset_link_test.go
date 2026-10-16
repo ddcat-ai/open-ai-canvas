@@ -92,6 +92,9 @@ func TestLinkProjectAssetCreatesAssetFromUploadedResource(t *testing.T) {
 	if payload.Data.Source != AssetSourceCanvas {
 		t.Errorf("payload.source = %q, want canvas", payload.Data.Source)
 	}
+	if _, err := assetFromJSON("user-1", json.RawMessage(asset.PayloadJSON)); err != nil {
+		t.Fatalf("uploaded asset must persist a complete library document: %v; %s", err, asset.PayloadJSON)
+	}
 }
 
 // TestLinkProjectAssetMissingResourceKeepsFailingClosed 资源与资产都不存在时仍应报错，

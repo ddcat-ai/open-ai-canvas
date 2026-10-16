@@ -67,3 +67,39 @@ export function fenceRejectedTaskTimestampMutation(request: CanvasOperationsRequ
     }
     return changed ? { ...request, operations } : undefined;
 }
+
+/**
+ * v1.6.8.5 overwrote before["metadata.taskId"] with the node's NEW taskId even
+ * when the same patch was binding that task. Such a request claims "taskId is
+ * already X, set it to X", which the server rejects forever. A real diff never
+ * emits equal before/patch values, so that signature identifies the bug.
+ *
+ * Only call after an explicit HTTP 409 canvas_field_conflict rejection (the
+ * transaction rolled back without a receipt). Restores the original baseline
+ * value from the journal snapshot; the caller must assign a new mutationId.
+ */
+export function repairLegacyTaskIdFence(request: CanvasOperationsRequest, baseline?: CanvasProject, prepared?: CanvasProject): CanvasOperationsRequest | undefined {
+    if (!baseline || !prepared || baseline.id !== prepared.id) return undefined;
+    let changed = false;
+    const operations: CanvasOperationsRequest["operations"] = [];
+    for (const operation of request.operations) {
+        if (operation.type !== "patch_node" || !operation.before || !owns(operation.patch, taskIdField) || !owns(operation.before, taskIdField)) {
+            operations.push(operation);
+            continue;
+        }
+        const nextTaskId = operation.patch[taskIdField];
+        if (operation.before[taskIdField] !== nextTaskId) {
+            operations.push(operation);
+            continue;
+        }
+        const baseNode = baseline.nodes.find((node) => node.id === operation.id);
+        const nextNode = prepared.nodes.find((node) => node.id === operation.id);
+        // Without the original snapshot the true baseline is unknown; never guess.
+        if (!baseNode || !nextNode || typeof nextTaskId !== "string" || !nextTaskId || nextNode.metadata?.taskId !== nextTaskId) return undefined;
+        const originalTaskId = baseNode.metadata?.taskId ?? null;
+        if (originalTaskId === nextTaskId) return undefined;
+        operations.push({ ...operation, before: { ...operation.before, [taskIdField]: originalTaskId } });
+        changed = true;
+    }
+    return changed ? { ...request, operations } : undefined;
+}

@@ -55,7 +55,21 @@ export type CanvasOperationsRequest = {
     mutationId: string;
     baseRevision?: number;
     operations: CanvasOperation[];
+    editProofs?: CanvasEditProof[];
 };
+
+export type CanvasEditProof = { nodeId: string; sessionId: string; token: string };
+export type CanvasEditLease = { nodeId: string; sessionId: string; expiresAt: string };
+export type CanvasAgentActivity = { runId: string; status: string; cleanupPending: boolean };
+export type CanvasSyncStatus = { revision: number; serverTime: string; leases: CanvasEditLease[]; agent?: CanvasAgentActivity | null };
+
+export function getCanvasSyncStatus(id: string, signal?: AbortSignal) {
+    return http.get<CanvasSyncStatus>(`/canvas-projects/${encodeURIComponent(id)}/sync-status`, { signal, timeout: 8000 });
+}
+
+export function changeCanvasEditLease(id: string, proof: CanvasEditProof, action: "acquire" | "renew" | "release") {
+    return http.post<{ serverTime: string; lease?: CanvasEditLease; token?: string }>(`/canvas-projects/${encodeURIComponent(id)}/edit-lease`, { ...proof, action }, { timeout: 8000 });
+}
 
 export function listRemoteCanvasProjectsPage(options: { page: number; pageSize: number; projectId?: string; query?: string; sort?: string; signal?: AbortSignal }) {
     return http.get<{ projects: CanvasLibrarySummary[]; page: number; pageSize: number; total: number; hasMore: boolean }>("/canvas-projects", {

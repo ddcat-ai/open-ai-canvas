@@ -1,0 +1,35 @@
+.storyboard-assets-cell-preview {
+    overflow: hidden;
+}
+
+.storyboard-asset-thumbnail {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    place-items: center;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.storyboard-asset-thumbnail > .cached-resource-image-shell {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.storyboard-asset-thumbnail img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    object-fit: cover;
+}

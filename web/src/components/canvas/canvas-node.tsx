@@ -4,6 +4,7 @@ import { AlertCircle, BookOpenCheck, CheckCircle2, ChevronRight, Clapperboard, C
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasImageLayerControls } from "./canvas-image-layer-controls";
+import { CanvasTextLeaseIndicator, useCanvasTextLease } from "./use-canvas-text-lease";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
@@ -116,6 +117,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useActiveTheme()];
+    const textLease = useCanvasTextLease(data.id, drawingProjectId);
     const [hovered, setHovered] = useState(false);
     const [isEditingContent, setIsEditingContent] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -178,6 +180,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     }, [isEditingContent]);
 
     const commitTitle = () => {
+        if (textLease.blocked) { setIsEditingTitle(false); return; }
         const next = titleDraft.trim();
         setIsEditingTitle(false);
         if (!next) {
@@ -216,15 +219,16 @@ export const CanvasNode = React.memo(function CanvasNode({
                 scale={scale}
                 dimensionLabel={mediaDimensionLabel}
                 active={isSelected || isFocusRelated}
-                editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}
+                editable={!readOnly && !textLease.blocked && !data.metadata?.locked && Boolean(onTitleChange)}
                 editing={isEditingTitle}
                 draft={titleDraft}
                 theme={theme}
-                onDraftChange={setTitleDraft}
+                onDraftChange={(value) => { if (textLease.blocked) return; setTitleDraft(value); onTitleChange?.(data.id, value); }}
                 onEdit={() => setIsEditingTitle(true)}
                 onCommit={commitTitle}
                 onCancel={() => { setTitleDraft(data.title); setIsEditingTitle(false); }}
             /> : null}
+            {showChrome ? <div className="pointer-events-none absolute left-0 top-full pt-1"><CanvasTextLeaseIndicator nodeId={data.id} canvasId={drawingProjectId} /></div> : null}
             <div
                 className="canvas-node-shell relative h-full w-full overflow-visible rounded-[var(--node-radius)]"
                 data-node-state={nodeState}
@@ -272,7 +276,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onOpenTextEditor?.(data);
                         return;
                     }
-                    if (readOnly || data.type !== CanvasNodeType.Text) return;
+                    if (readOnly || textLease.blocked || data.metadata?.locked || data.type !== CanvasNodeType.Text) return;
                     event.stopPropagation();
                     setIsEditingContent(true);
                 }}
@@ -299,6 +303,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         theme={theme}
                         renderLOD={effectiveRenderLOD}
                         isEditingContent={isEditingContent}
+                        contentReadOnly={readOnly || textLease.blocked || Boolean(data.metadata?.locked)}
                         textareaRef={textareaRef}
                         isBatchRoot={isBatchRoot}
                         batchCount={batchCount}
@@ -590,6 +595,7 @@ function NodeExternalHeader({ node, scale, dimensionLabel, active, editable, edi
                     <input
                         autoFocus
                         value={draft}
+                        readOnly={!editable}
                         className="h-6 min-w-20 max-w-[190px] flex-1 truncate rounded bg-transparent px-1.5 text-xs font-medium outline-none"
                         style={{ background: "transparent", color: theme.node.text }}
                         onChange={(event) => onDraftChange(event.target.value)}

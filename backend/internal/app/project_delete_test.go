@@ -22,6 +22,7 @@ func newProjectDeleteTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.Project{},
 		&model.ProjectUnit{},
 		&model.CanvasProject{},
+		&model.CanvasEditLease{},
 		&model.CanvasSnapshot{},
 		&model.CanvasSnapshotResource{},
 		&model.CanvasShare{},

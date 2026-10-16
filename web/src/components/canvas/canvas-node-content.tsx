@@ -37,6 +37,7 @@ export type CanvasNodeContentProps = {
     theme: CanvasTheme;
     renderLOD?: CanvasNodeRenderLOD;
     isEditingContent: boolean;
+    contentReadOnly?: boolean;
     textareaRef: RefObject<HTMLTextAreaElement | null>;
     isBatchRoot: boolean;
     batchCount: number;
@@ -216,7 +217,7 @@ function DrawingContent({ node, theme, drawingProjectId }: CanvasNodeContentProp
     );
 }
 
-function TextContent({ node, theme, isEditingContent, textareaRef, mentionReferences, onContentChange, onStopEditing }: CanvasNodeContentProps) {
+function TextContent({ node, theme, isEditingContent, contentReadOnly, textareaRef, mentionReferences, onContentChange, onStopEditing }: CanvasNodeContentProps) {
     const fontSize = canvasTextFontSize(node.width, node.height, node.metadata?.fontSize);
     const textStyle = { fontSize: `${fontSize}px`, lineHeight: `${Math.round(fontSize * 1.65)}px`, color: theme.node.text, boxSizing: "border-box" } as CSSProperties;
     const richTextHTML = useMemo(() => canvasRichTextHTML(node.metadata?.richText), [node.metadata?.richText]);
@@ -234,6 +235,7 @@ function TextContent({ node, theme, isEditingContent, textareaRef, mentionRefere
                     className="thin-scrollbar m-0 block h-full w-full resize-none appearance-none overflow-y-auto whitespace-pre-wrap break-words border-none bg-transparent px-4 pb-4 pt-0 font-mono outline-none select-text"
                     style={textStyle}
                     value={textContent}
+                    readOnly={contentReadOnly}
                     references={mentionReferences}
                     highlightLabels={false}
                     onChange={(value) => onContentChange(node.id, value)}

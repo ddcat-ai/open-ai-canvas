@@ -121,7 +121,7 @@ func (s *Service) CreateWorkbenchTask(userID string, req WorkbenchTaskInput, tra
 	if err != nil {
 		return nil, err
 	}
-	providerConfig, err := s.resolveWorkbenchProviderConfig(req.Kind, resolved.Model, resolved.LogicalModelID, resolved.ChannelID, resolved.Parameters, resolved.Input)
+	providerConfig, err := s.resolveWorkbenchProviderConfig(req.Kind, resolved.Operation, resolved.Model, resolved.LogicalModelID, resolved.ChannelID, resolved.Parameters, resolved.Input)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (s *Service) WorkbenchTasks(userID, kind string, activeOnly bool, limit int
 	return s.TasksWithOptions(userID, TaskListOptions{Limit: limit, ActiveOnly: activeOnly, WorkbenchKind: kind})
 }
 
-func (s *Service) resolveWorkbenchProviderConfig(kind, modelName, logicalModelID, channelID string, parameters map[string]any, input map[string]any) (map[string]any, error) {
+func (s *Service) resolveWorkbenchProviderConfig(kind, operation, modelName, logicalModelID, channelID string, parameters map[string]any, input map[string]any) (map[string]any, error) {
 	config := map[string]any{"mode": kind}
 	if kind == WorkbenchKindImage {
 		for _, key := range []string{"size", "quality", "imageResolution", "count"} {
@@ -181,7 +181,12 @@ func (s *Service) resolveWorkbenchProviderConfig(kind, modelName, logicalModelID
 	config["channelId"] = channelID
 	config["model"] = modelName
 	input["config"] = config
-	resolved, err := s.resolveSystemChannelModelSelection(input, "canvas_"+kind, "")
+	// Match CreateTask's JSON shape so reference counts affect admission and pricing.
+	normalizedInput, err := normalizeTaskInput(input)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := s.resolveSystemChannelModelSelection(normalizedInput, "canvas_"+kind, operation)
 	if err != nil {
 		return nil, err
 	}

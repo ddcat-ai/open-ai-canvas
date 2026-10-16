@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 const cloudAgentOperation = "cloud_agent"
@@ -523,6 +524,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 				s.startCloudAgentPi(userID, existing.ID)
 			}
 			return run, runErr
+		}
+		var busy *repository.CanvasAgentBusyError
+		if errors.As(err, &busy) {
+			return nil, &AppError{Status: 409, Code: 409, Reason: "canvas_agent_busy", Message: err.Error(),
+				Details: map[string]any{"canvasId": req.CanvasID, "agent": busy.Activity}}
 		}
 		return nil, err
 	}

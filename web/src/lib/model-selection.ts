@@ -7,6 +7,7 @@ import { modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, selectab
 export type ModelInputSummary = {
     textCount: number;
     imageCount: number;
+    referenceImageCount?: number;
     videoCount: number;
     audioCount: number;
     characterCount: number;
@@ -436,9 +437,10 @@ export function modelGroupReferenceLimits(config: AiConfig, selected: string, ca
 
 export function inferVideoOperation(input: ModelInputSummary) {
     const visualInputCount = input.imageCount + input.characterCount;
-    // 图片或角色决定图生视频主模式，音频只作为附加参考，不应把组合请求
+    // 显式普通参考图使用参考模式；未提供角色统计的入口沿用原有数量语义。
+    // 首尾帧图片或角色决定图生视频主模式，音频只作为附加参考，不应把组合请求
     // 提升为全模态参考；纯音频输入才使用独立的 audio_to_video 能力。
-    if (input.videoCount > 0 || visualInputCount > 2) return "reference_to_video";
+    if (input.videoCount > 0 || (input.referenceImageCount ?? 0) > 0 || visualInputCount > 2) return "reference_to_video";
     if (visualInputCount > 0) return "image_to_video";
     if (input.audioCount > 0) return "audio_to_video";
     return "text_to_video";

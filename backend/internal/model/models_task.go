@@ -7,6 +7,9 @@ import (
 )
 
 type Task struct {
+	// Only EnsureCloudAgent sets this after creating the execution in the same
+	// transaction. Ordinary task saves must not reset it from a stale snapshot.
+	AgentExecutionReady          bool                     `json:"-" gorm:"not null;default:false;<-:create"`
 	AgentRunID                   string                   `json:"agentRunId,omitempty" gorm:"size:36;index"`
 	GenerationID                 string                   `json:"generationId,omitempty" gorm:"size:36;index"`
 	ApprovalID                   string                   `json:"approvalId,omitempty" gorm:"size:160"`

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { fenceRejectedTaskTimestampMutation } from "@/lib/canvas/canvas-task-mutation";
+import { fenceRejectedTaskTimestampMutation, repairLegacyTaskIdFence } from "@/lib/canvas/canvas-task-mutation";
 import type { CanvasOperationsRequest } from "@/services/api/user-data";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 
@@ -139,5 +139,32 @@ describe("fenceRejectedTaskTimestampMutation", () => {
     test("returns undefined if no timestamp operation changes", () => {
         expect(fenceRejectedTaskTimestampMutation({ ...request(), operations: [] }, canvas(), canvas(newTime))).toBeUndefined();
         expect(fenceRejectedTaskTimestampMutation(request({ "metadata.prompt": "new" }, { "metadata.prompt": "old" }), canvas(), canvas(newTime))).toBeUndefined();
+    });
+});
+
+describe("repairLegacyTaskIdFence", () => {
+    const bind = (before: Record<string, unknown> = { "metadata.taskId": "task-new", "metadata.taskUpdatedAt": null, "metadata.status": "idle" }) =>
+        request({ "metadata.taskId": "task-new", "metadata.taskUpdatedAt": newTime, "metadata.status": "loading" }, before);
+
+    test("restores the original taskId baseline when v1.6.8.5 wrote the new id into before", () => {
+        const original = bind();
+        const saved = structuredClone(original);
+        const result = repairLegacyTaskIdFence(original, canvas(null, null), canvas(newTime, "task-new"));
+        expect(result?.operations[0]).toEqual({ ...original.operations[0], before: { "metadata.taskId": null, "metadata.taskUpdatedAt": null, "metadata.status": "idle" } });
+        expect(original).toEqual(saved);
+        expect(repairLegacyTaskIdFence(result!, canvas(null, null), canvas(newTime, "task-new"))).toBeUndefined();
+        expect(repairLegacyTaskIdFence(original, canvas(null, "task-old"), canvas(newTime, "task-new"))?.operations[0]).toMatchObject({ before: { "metadata.taskId": "task-old" } });
+        const absent = canvas(null, null);
+        delete absent.nodes[0]!.metadata!.taskId;
+        expect(repairLegacyTaskIdFence(original, absent, canvas(newTime, "task-new"))?.operations[0]).toMatchObject({ before: { "metadata.taskId": null } });
+    });
+
+    test("never guesses without matching snapshots and leaves valid requests alone", () => {
+        expect(repairLegacyTaskIdFence(bind())).toBeUndefined();
+        expect(repairLegacyTaskIdFence(bind(), { ...canvas(null, null), nodes: [] }, canvas(newTime, "task-new"))).toBeUndefined();
+        expect(repairLegacyTaskIdFence(bind(), canvas(null, null), canvas(newTime, "task-other"))).toBeUndefined();
+        expect(repairLegacyTaskIdFence(bind(), canvas(null, "task-new"), canvas(newTime, "task-new"))).toBeUndefined();
+        expect(repairLegacyTaskIdFence(bind({ "metadata.taskId": null }), canvas(null, null), canvas(newTime, "task-new"))).toBeUndefined();
+        expect(repairLegacyTaskIdFence(request(), canvas(), canvas(newTime))).toBeUndefined();
     });
 });

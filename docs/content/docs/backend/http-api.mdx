@@ -5,6 +5,19 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 视频工作台的生成模式
+
+`POST /api/workbench/tasks` 的视频任务根据已校验的 `references` 推导操作类型，客户端不需要提交泛化的 `video` 操作：
+
+| 输入 | 操作 |
+| --- | --- |
+| 无媒体素材 | `text_to_video` |
+| 仅首帧或尾帧图片，可附带音频 | `image_to_video` |
+| 普通参考图、参考视频，或包含普通参考图的组合 | `reference_to_video` |
+| 仅音频 | `audio_to_video` |
+
+图片的 `role=first_frame/last_frame` 表示帧约束；`reference` 或未指定角色表示普通参考，不能静默改成首帧。模式、素材数量和参数共同参与模型能力校验及价格档选择；不支持的组合在创建任务和计费前拒绝。执行输入的 `metadata.videoEditOperation` 与任务操作保持一致，并保留帧素材标识。浏览器自定义渠道的工作台任务使用同一模式规则，其他入口沿用各自的意图解析。
+
 ## 用户登录日志
 
 菜单“用户与运营 → 用户登录日志”，页面 `/admin/login-logs`。查询在 service 校验管理员权限：匿名 401、普通用户 403。
@@ -127,6 +140,12 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 请求明细保留上游生成与结果下载的独立状态，新增 `upload`、`local_save`、`register` 内部非计费明细；列表和详情通过 `mediaStage` 展示交付摘要。`recordType=request` 排除这些保存明细和下载，`all` 查看全部阶段，`download` 仍仅查看下载。视频下载失败不会再覆盖生成请求的成功记录。
 
 此恢复能力接入声明式媒体协议返回 URL/data URL 的任务路径；旧协议自行下载、协议二进制下载端点以及无恢复记录的历史失败任务不自动补录。历史任务需先核实上游结果可用性、资源归属及原账单，再单独制定修复动作。
+
+## 素材读取合同
+
+素材详情、批量读取、分页列表和用户数据快照统一返回完整素材记录。`id`、`kind`、`title`、分类、状态和主版本以素材表列为准；媒体内容保留在 `data` 中。项目上传资源转换为素材时即写入该合同，媒体大小使用 `data.bytes`；只有存储键的媒体仍返回字符串类型的 `url`（图片为 `dataUrl`），可以为空，由 `storageKey` 定位资源。
+
+已有项目上传素材的资源元数据在读取时组装为同一合同，真实大小从已记录的 `size` 映射为 `bytes`。该过程不创建新素材 ID，也不为缺少资源定位或真实文件大小的素材伪造有效数据。
 
 ## 素材彻底删除
 
@@ -257,6 +276,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 `create_node`、`create_connection` 和 `create_canvas` 是唯一的创建语义；更新、删除和连接操作都要求目标存在并通过对象基线校验。节点删除会同步移除关联连接，迟到媒体回写或编辑更新返回结构化冲突，不会复活已删除节点。请求摘要与确定性结果写入 `canvas_mutation_receipts`，画布内容、版本递增和 receipt 在同一数据库事务完成；同一 `mutationId` 和相同摘要返回原结果，摘要不同返回 `canvas_mutation_id_reused`。
 
 前端先把未确认请求和请求基线写入账号隔离的本地 journal，再发 HTTP 请求。journal 保存已确认基线、原始请求、请求生成时的本地投影和创建时间；刷新后只重放原请求，随后把请求之后的新编辑按新的基线生成下一批 operations。服务端返回完整画布时，客户端只合并仍未确认的本地 mutations，视口仍属于本地视图状态，不进入远端 operations。
+
+打开画布时，旧浏览器缓存与云端更新按会话原基线三方合并，再同时更新编辑器与缓存。不能先把最新云端版本设为基线、再直接提交旧缓存，否则其他设备或 Agent 新增而缓存中没有的节点会被误判为删除。已落盘的明确删除请求仍按原 journal 重放；同字段冲突停止合并。对于没有可验证内容哈希、又与云端不同的旧缓存，合并前在当前账号的 localforage 中保存最多三份恢复副本（`yingce:canvas-unverified-recovery:<canvasId>`）；副本落盘失败时不替换本地内容、不发送推导删除。
 
 云端 Agent、媒体生成终态回写、预演台、创作提交以及 LibTV/TapNow 导入都复用同一 operations 服务。Agent 事件中的 `canvasPatch` 只是一种有界通知；过大、删除或无法完整表达的变更使用 `requiresRefresh: true`，客户端重新读取后按未确认请求继续重放。用户界面不提供版本记录、加载云端版、覆盖云端或手动重试入口，失败请求由后台自动重放并在同步状态中显示当前状态。
 

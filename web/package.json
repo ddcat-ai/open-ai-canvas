@@ -93,6 +93,7 @@
         "@types/three": "0.185.4",
         "@vitejs/plugin-react": "^6.0.3",
         "eslint": "9.39.5",
+        "happy-dom": "20.14.6",
         "prettier": "^3.9.5",
         "typescript": "^7.0.2",
         "vite": "^8.1.5"

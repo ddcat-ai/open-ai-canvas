@@ -199,7 +199,7 @@ func (s *Service) assetFromUploadedResource(userID string, resourceID string, ti
 			"storageKey": "resource:" + resource.ID,
 			"mimeType":   resource.MimeType,
 			"kind":       resource.Kind,
-			"size":       resource.Size,
+			"bytes":      resource.Size,
 			"width":      resource.Width,
 			"height":     resource.Height,
 			"durationMs": resource.DurationMs,
@@ -226,6 +226,7 @@ func (s *Service) assetFromUploadedResource(userID string, resourceID string, ti
 		CreatedAt:   resource.CreatedAt,
 		UpdatedAt:   resource.UpdatedAt,
 	}
+	asset.PayloadJSON = string(clientAssetPayload(*asset))
 	// 不在此预落库：资产创建交给 LinkProjectAsset 的事务统一提交，
 	// 事务失败时与链接一起回滚，避免留下“有资产无链接”的孤儿记录。
 	return asset, nil

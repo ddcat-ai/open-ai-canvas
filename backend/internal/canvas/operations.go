@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"yingce/backend/internal/model"
 )
 
 var canvasOperationFields = []string{"title", "projectId", "chatSessions", "activeChatId", "starterMode", "appearance", "backgroundMode", "showImageInfo", "previsScenes", "timeline"}
@@ -19,10 +20,11 @@ var canvasOptionalOperationFields = map[string]struct{}{"projectId": {}, "starte
 // Agent and media callbacks. MutationID is the retry identity: a lost response
 // must be replayed with the same ID and payload.
 type CanvasOperationsRequest struct {
-	MutationID            string            `json:"mutationId"`
-	BaseRevision          *int64            `json:"baseRevision,omitempty"`
-	Operations            []CanvasOperation `json:"operations"`
-	TrustedServerMutation bool              `json:"-"`
+	MutationID            string                  `json:"mutationId"`
+	BaseRevision          *int64                  `json:"baseRevision,omitempty"`
+	Operations            []CanvasOperation       `json:"operations"`
+	EditProofs            []model.CanvasEditProof `json:"editProofs,omitempty"`
+	TrustedServerMutation bool                    `json:"-"`
 }
 
 var (
@@ -44,6 +46,8 @@ type CanvasOperation struct {
 }
 
 func CanvasOperationsDigest(req CanvasOperationsRequest) string {
+	// A committed mutation remains replayable after its transient lease expires.
+	req.EditProofs = nil
 	raw, _ := json.Marshal(req)
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])

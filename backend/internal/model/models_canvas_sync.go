@@ -2,6 +2,22 @@ package model
 
 import "time"
 
+type CanvasEditProof struct {
+	NodeID    string `json:"nodeId"`
+	SessionID string `json:"sessionId"`
+	Token     string `json:"token"`
+}
+
+// One row per node is replaced only while holding the parent canvas row lock.
+type CanvasEditLease struct {
+	UserID    string    `json:"-" gorm:"primaryKey;size:36"`
+	CanvasID  string    `json:"-" gorm:"primaryKey;size:80"`
+	NodeID    string    `json:"nodeId" gorm:"primaryKey;size:160"`
+	SessionID string    `json:"sessionId" gorm:"size:160"`
+	Token     string    `json:"-" gorm:"size:80"`
+	ExpiresAt time.Time `json:"expiresAt" gorm:"index"`
+}
+
 // CanvasMutationReceipt makes a client retry observable without making the
 // canvas document carry an ever-growing list of request IDs. The receipt is a
 // recovery hint; the mutation itself remains idempotent because applying the

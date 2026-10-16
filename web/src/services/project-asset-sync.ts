@@ -87,7 +87,7 @@ export async function retryCanvasAssetSyncAfterRateLimit<T>(operation: () => Pro
 export function ensureCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions) {
     const scope = getActiveUserScope();
     const taskIdentity = options.taskId || options.node.metadata?.taskId || options.node.metadata?.storageKey || options.node.id;
-    const identity = options.node.metadata?.imageLayerGroup || options.node.metadata?.layerExtraction ? `${taskIdentity}:${options.node.metadata.storageKey || ""}` : taskIdentity;
+    const identity = options.node.metadata?.imageLayerGroup || options.node.metadata?.layerExtraction || options.node.metadata?.emotionEdit?.editRegion ? `${taskIdentity}:${options.node.metadata.storageKey || ""}` : taskIdentity;
     const key = [scope, options.domainProjectId || "personal", options.canvasId, options.node.id, identity].join(":");
     const pending = pendingAssetSyncs.get(key);
     if (pending) return pending;

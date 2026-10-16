@@ -477,6 +477,68 @@ paths:
           description: 未登录
         "404":
           description: 画布不存在或不属于当前用户
+  /canvas-projects/{id}/sync-status:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      tags: [canvas]
+      summary: 读取当前用户画布版本、输入租约及 Agent 占用状态
+      description: 需要登录并拥有画布。仅返回 revision、服务端时间、有效租约和 Agent 控制字段，不返回 token、完整画布或 Agent 对话正文；客户端前台约每两秒、后台约每十五秒非重叠查询，离线暂停，失败逐步退避至三十秒，版本变化后再读取正文。
+      responses:
+        "200":
+          description: 信封 data 含 revision、serverTime、leases 和可空的 agent；每项租约含 nodeId、sessionId、expiresAt，agent 只含 runId、status、cleanupPending
+        "401":
+          description: 未登录
+        "404":
+          description: 画布不存在或不属于当前用户
+  /canvas-projects/{id}/edit-lease:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    post:
+      tags: [canvas]
+      summary: 获取、续期或释放节点文字编辑租约
+      description: 需要登录并拥有画布。服务端有效期 30 秒，实际输入才获取；续期与释放必须携带当前 token。请求最大 2048 字节，每用户每分钟最多 240 次；过期持有者不能影响新持有者。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, nodeId, sessionId]
+              properties:
+                action:
+                  type: string
+                  enum: [acquire, renew, release]
+                nodeId:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                sessionId:
+                  type: string
+                  minLength: 1
+                  maxLength: 160
+                token:
+                  type: string
+                  maxLength: 80
+      responses:
+        "200":
+          description: 信封 data 含 serverTime；获取及续期额外返回 lease 和 token，释放不返回 token
+        "400":
+          description: 参数无效
+        "401":
+          description: 未登录
+        "404":
+          description: 画布不存在或不属于当前用户
+        "409":
+          description: reason 为 canvas_edit_lease_conflict；节点被其他窗口占用或证明已过期
+        "429":
+          description: 请求超过频率限制
   /canvas-projects/{id}/operations:
     parameters:
       - in: path
@@ -508,6 +570,17 @@ paths:
                   format: int64
                   minimum: 0
                   description: 生成 operations 时已确认的画布 revision，用于诊断和响应
+                editProofs:
+                  type: array
+                  maxItems: 500
+                  description: 本次修改涉及节点的编辑证明，节点不可重复；不计入 mutation 摘要，原请求 receipt 可在租约过期后重放
+                  items:
+                    type: object
+                    required: [nodeId, sessionId, token]
+                    properties:
+                      nodeId: { type: string, minLength: 1, maxLength: 160 }
+                      sessionId: { type: string, minLength: 1, maxLength: 160 }
+                      token: { type: string, minLength: 1, maxLength: 80 }
                 operations:
                   type: array
                   minItems: 1
@@ -527,7 +600,7 @@ paths:
         "404":
           description: 画布不存在或不属于当前用户，且请求未包含显式 create_canvas
         "409":
-          description: 对象并发冲突或同一 mutationId 对应的请求摘要不同；原事务不会被覆盖
+          description: 对象并发冲突、同一 mutationId 对应的请求摘要不同或编辑证明失效（reason 为 canvas_edit_lease_conflict）；原事务不会被覆盖
         "428":
           description: 缺少执行所需的对象基线
   /public/welcome:
@@ -795,6 +868,7 @@ paths:
     post:
       tags: [agent]
       summary: 创建一轮云端 Agent 任务
+      description: 同一画布同时只允许一轮执行。排队、运行、等待审批及终态收尾均占用；服务端在创建任务和预留积分前以事务串行校验。浏览器断开不释放占用，同一轮幂等恢复不受影响。
       requestBody:
         required: true
         content:
@@ -807,7 +881,7 @@ paths:
         "400":
           description: 参数、能力、模型或预算不符合要求，未创建任务
         "409":
-          description: 幂等键已用于不同请求
+          description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；未创建任务或预留积分，不自动重试。
   /agent/runs/{id}:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -849,7 +923,7 @@ paths:
         "200":
           description: 信封 data.run（新的 ID）
         "409":
-          description: 父轮仍在执行或幂等键冲突
+          description: 父轮仍在执行、幂等键冲突，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；不自动重试。
   /agent/runs/{id}/interjections:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
