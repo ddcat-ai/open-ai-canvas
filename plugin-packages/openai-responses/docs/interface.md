@@ -22,7 +22,7 @@
 | 统一字段 | 类型 | 必填 | 上游映射 | 说明 |
 | --- | --- | --- | --- | --- |
 | `model` | string | 是 | `model` | 上游模型 ID。 |
-| `messages` | message[] | 是 | `provider message container` | 包含历史消息和当前用户输入。 |
+| `messages` | message[] | 是 | `input` | 过滤 system 消息；保留消息角色、顺序和字符串 content；内容块 text 转为 input_text，image_url 转为 input_image，并将 image_url.url 映射为字符串 image_url；其他类型内容块保持原值。 |
 | `instructions` | string | 否 | `system/instructions` | 系统指令。 |
 | `temperature` | number | 否 | `temperature` | 采样温度。 |
 | `top_p` | number | 否 | `top_p` | 核采样参数。 |
@@ -42,7 +42,7 @@
 | `create.path` | `"/responses"` |
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
-| `create.body.input` | `{"$filter":{"from":{"$ref":"request.messages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}}` |
+| `create.body.input` | `{"$map":{"from":{"$filter":{"from":{"$ref":"request.messages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}},"as":"message","in":{"$merge":[{"$ref":"message"},{"content":{"$if":{"condition":{"$ref":"message.content.0.type"},"then":{"$map":{"from":{"$ref":"message.content"},"as":"part","in":{"$switch":{"cases":[{"when":{"$eq":[{"$ref":"part.type"},"text"]},"then":{"type":"input_text","text":{"$ref":"part.text"}}},{"when":{"$eq":[{"$ref":"part.type"},"image_url"]},"then":{"type":"input_image","image_url":{"$ref":"part.image_url.url"}}}],"default":{"$ref":"part"}}}}},"else":{"$ref":"message.content"}}}}]}}}` |
 | `create.body.instructions` | `{"$omitEmpty":{"$ref":"request.instructions"}}` |
 | `create.body.temperature` | `{"$omitEmpty":{"$ref":"request.providerOptions.openai-response.temperature"}}` |
 | `create.body.top_p` | `{"$omitEmpty":{"$ref":"request.providerOptions.openai-response.top_p"}}` |
@@ -116,7 +116,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "openai-responses",
   "name": "OpenAI Responses",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "OpenAI / 影策",
   "description": "OpenAI Responses 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -236,17 +236,90 @@
               "$ref": "request.model"
             },
             "input": {
-              "$filter": {
+              "$map": {
                 "from": {
-                  "$ref": "request.messages"
+                  "$filter": {
+                    "from": {
+                      "$ref": "request.messages"
+                    },
+                    "as": "message",
+                    "where": {
+                      "$ne": [
+                        {
+                          "$ref": "message.role"
+                        },
+                        "system"
+                      ]
+                    }
+                  }
                 },
                 "as": "message",
-                "where": {
-                  "$ne": [
+                "in": {
+                  "$merge": [
                     {
-                      "$ref": "message.role"
+                      "$ref": "message"
                     },
-                    "system"
+                    {
+                      "content": {
+                        "$if": {
+                          "condition": {
+                            "$ref": "message.content.0.type"
+                          },
+                          "then": {
+                            "$map": {
+                              "from": {
+                                "$ref": "message.content"
+                              },
+                              "as": "part",
+                              "in": {
+                                "$switch": {
+                                  "cases": [
+                                    {
+                                      "when": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "part.type"
+                                          },
+                                          "text"
+                                        ]
+                                      },
+                                      "then": {
+                                        "type": "input_text",
+                                        "text": {
+                                          "$ref": "part.text"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "when": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "part.type"
+                                          },
+                                          "image_url"
+                                        ]
+                                      },
+                                      "then": {
+                                        "type": "input_image",
+                                        "image_url": {
+                                          "$ref": "part.image_url.url"
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "default": {
+                                    "$ref": "part"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "$ref": "message.content"
+                          }
+                        }
+                      }
+                    }
                   ]
                 }
               }
