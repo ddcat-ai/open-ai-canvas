@@ -410,7 +410,9 @@ export function buildNodeMentionReferences(node: CanvasNodeData, nodes: CanvasNo
 
 export function buildCanvasNodeMentionReferenceMap(nodes: CanvasNodeData[], connections: CanvasConnection[], targetNodes: CanvasNodeData[] = nodes) {
     const resolve = buildCanvasResourceInputResolver(nodes, connections);
-    return new Map(targetNodes.map((node) => [node.id, labelResourceNodes(resolve(node.id), true)]));
+    // 与 getMentionResourceNodes 同口径：无入边的资源节点保留自身作为 @图片1 槽位，
+    // 否则 @ 菜单搜不到节点自己，而生成时该引用又能解析，两边互相矛盾。
+    return new Map(targetNodes.map((node) => [node.id, labelResourceNodes(resolve(node.id, true), true)]));
 }
 
 /** 批次关系属于分组，不是媒体输入；展示与提交共用这一份输入顺序解析。 */
