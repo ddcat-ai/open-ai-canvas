@@ -38,7 +38,7 @@
     .editor-slider::-webkit-slider-runnable-track {
         height: 4px;
         border-radius: 2px;
-        background: var(--director-sequencer-border);
+        background: var(--previs-sequencer-border);
         box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
     }
     .editor-slider::-webkit-slider-thumb {
@@ -48,8 +48,8 @@
         height: 14px;
         width: 14px;
         border-radius: 9999px;
-        background: var(--director-dock-fg-strong);
-        border: 2px solid var(--director-sequencer-surface);
+        background: var(--previs-dock-fg-strong);
+        border: 2px solid var(--previs-sequencer-surface);
         box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
         transition: transform 0.12s ease;
     }
@@ -59,15 +59,15 @@
     .editor-slider::-moz-range-track {
         height: 4px;
         border-radius: 2px;
-        background: var(--director-sequencer-border);
+        background: var(--previs-sequencer-border);
         box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3);
     }
     .editor-slider::-moz-range-thumb {
         height: 14px;
         width: 14px;
         border-radius: 9999px;
-        background: var(--director-dock-fg-strong);
-        border: 2px solid var(--director-sequencer-surface);
+        background: var(--previs-dock-fg-strong);
+        border: 2px solid var(--previs-sequencer-surface);
         box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
     }
 }

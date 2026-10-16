@@ -49,7 +49,7 @@ function SlotStack({ slots, emptyHint }: { slots: EditorSlotRegistration[]; empt
     if (allowed.length === 0 && denied.length === 0) {
         return (
             <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 px-4 text-center">
-                <p className="max-w-md text-sm text-[var(--director-dock-fg)]">{emptyHint}</p>
+                <p className="max-w-md text-sm text-[var(--previs-dock-fg)]">{emptyHint}</p>
             </div>
         );
     }
@@ -68,7 +68,7 @@ function SlotStack({ slots, emptyHint }: { slots: EditorSlotRegistration[]; empt
                     <div
                         key={slot.id}
                         title={`插件 ${slot.pluginId} 缺少 ${missing ?? "注册"}，已按 fail-closed 拒绝渲染`}
-                        className="flex min-h-8 shrink-0 items-center gap-2 bg-[var(--director-danger)]/10 px-3 text-[11px] text-[var(--director-danger)]"
+                        className="flex min-h-8 shrink-0 items-center gap-2 bg-[var(--previs-danger)]/10 px-3 text-[11px] text-[var(--previs-danger)]"
                     >
                         <AlertTriangle className="size-3 shrink-0" />
                         <span className="truncate">
@@ -96,7 +96,7 @@ function PanelTabs({
     trailing?: React.ReactNode;
 }) {
     return (
-        <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-1.5">
+        <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-1.5">
             {tabs.map((tab) => (
                 <button
                     key={tab.id}
@@ -104,8 +104,8 @@ function PanelTabs({
                     onClick={() => onChange(tab.id)}
                     className={`h-7 rounded-md px-2.5 text-xs transition-colors ${
                         active === tab.id
-                            ? "bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
-                            : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                            ? "bg-[var(--previs-dock-active-surface)] text-[var(--previs-dock-fg-strong)]"
+                            : "text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                     }`}
                 >
                     {tab.label}
@@ -136,14 +136,14 @@ function EditorTopBar({
     const canRedo = (history?.redoStack.length ?? 0) > 0;
 
     return (
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-3">
             <button
                 type="button"
                 aria-label="撤销"
                 title="撤销（Cmd/Ctrl+Z）"
                 onClick={undo}
                 disabled={!canUndo}
-                className="grid size-8 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-35"
+                className="grid size-8 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:pointer-events-none disabled:opacity-35"
             >
                 <Undo2 className="size-4" />
             </button>
@@ -153,7 +153,7 @@ function EditorTopBar({
                 title="重做（Cmd/Ctrl+Shift+Z）"
                 onClick={redo}
                 disabled={!canRedo}
-                className="grid size-8 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-35"
+                className="grid size-8 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:pointer-events-none disabled:opacity-35"
             >
                 <Redo2 className="size-4" />
             </button>
@@ -161,13 +161,13 @@ function EditorTopBar({
             <div className="flex items-center gap-1.5">
                 <span className="grid size-8 place-items-center" title={saveError ?? (saving ? "保存中" : isDirty ? "有未保存的更改" : "已保存")}>
                     {saveError ? (
-                        <AlertTriangle className="size-4 text-[var(--director-danger)]" aria-label="保存失败" />
+                        <AlertTriangle className="size-4 text-[var(--previs-danger)]" aria-label="保存失败" />
                     ) : saving ? (
-                        <Loader2 className="size-4 animate-spin text-[var(--director-dock-fg)]" aria-label="保存中" />
+                        <Loader2 className="size-4 animate-spin text-[var(--previs-dock-fg)]" aria-label="保存中" />
                     ) : isDirty ? (
-                        <CircleDot className="size-3.5 text-[var(--director-warning)]" aria-label="未保存" />
+                        <CircleDot className="size-3.5 text-[var(--previs-warning)]" aria-label="未保存" />
                     ) : (
-                        <Check className="size-4 text-[var(--director-success)]" aria-label="已保存" />
+                        <Check className="size-4 text-[var(--previs-success)]" aria-label="已保存" />
                     )}
                 </span>
                 <button
@@ -178,8 +178,8 @@ function EditorTopBar({
                     onClick={onToggleAi}
                     className={`grid size-8 place-items-center rounded-md transition-colors ${
                         aiOpen
-                            ? "bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
-                            : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                            ? "bg-[var(--previs-dock-active-surface)] text-[var(--previs-dock-fg-strong)]"
+                            : "text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                     }`}
                 >
                     <Sparkles className="size-4" />
@@ -189,7 +189,7 @@ function EditorTopBar({
                     aria-label={isFullscreen ? "退出全屏" : "全屏编辑"}
                     title={isFullscreen ? "退出全屏（Esc）" : "全屏编辑"}
                     onClick={onToggleFullscreen}
-                    className="grid size-8 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                    className="grid size-8 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                 >
                     {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
                 </button>
@@ -198,7 +198,7 @@ function EditorTopBar({
                     aria-label="导出"
                     title="导出"
                     onClick={onExport}
-className="grid size-8 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] hover:text-[var(--director-dock-fg-strong)]"
+className="grid size-8 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] hover:text-[var(--previs-dock-fg-strong)]"
                 >
                     <Download className="size-4" />
                 </button>
@@ -215,8 +215,8 @@ function EditorStatusBar({ projectName }: { projectName: string }) {
     const durationMs = project?.durationMs ?? 0;
 
     return (
-        <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3 text-[10px] text-[var(--director-dock-fg)]">
-            <span className="truncate text-[var(--director-dock-fg-strong)]">{projectName}</span>
+        <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-3 text-[10px] text-[var(--previs-dock-fg)]">
+            <span className="truncate text-[var(--previs-dock-fg-strong)]">{projectName}</span>
             <span className="tabular-nums">时长 {formatTimelineTime(durationMs)}</span>
             <span>片段 {clipCount}</span>
             <span>轨道 {trackCount}</span>
@@ -428,7 +428,7 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
 
     return (
         <EditorStoreProvider store={store} host={{ projectId, assets, refreshAssets }}>
-            <div ref={workbenchRef} className="editor-workbench relative flex h-full min-h-0 flex-col bg-[var(--director-workspace-bg)]">
+            <div ref={workbenchRef} className="editor-workbench relative flex h-full min-h-0 flex-col bg-[var(--previs-workspace-bg)]">
                 <EditorTopBar
                     onExport={() => setRightTab("export")}
                     isFullscreen={isFullscreen}
@@ -445,11 +445,11 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                         className="fixed inset-0 z-30 cursor-default bg-transparent"
                         onClick={() => setAiOpen(false)}
                     />
-                    <div className="absolute right-2 top-14 z-40 flex h-[640px] max-h-[calc(100%-3.75rem)] w-[460px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface)] shadow-[0_12px_40px_rgba(0,0,0,0.5)]">
-                        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] px-3">
-                            <Sparkles className="size-4 text-[var(--director-dock-fg)]/80" />
-                            <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">AI 剪辑助手</span>
-                            <span className="hidden truncate text-[10px] text-[var(--director-dock-fg)]/45 sm:inline">
+                    <div className="absolute right-2 top-14 z-40 flex h-[640px] max-h-[calc(100%-3.75rem)] w-[460px] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface)] shadow-[0_12px_40px_rgba(0,0,0,0.5)]">
+                        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-[var(--previs-sequencer-border)] px-3">
+                            <Sparkles className="size-4 text-[var(--previs-dock-fg)]/80" />
+                            <span className="text-xs font-medium text-[var(--previs-dock-fg-strong)]">AI 剪辑助手</span>
+                            <span className="hidden truncate text-[10px] text-[var(--previs-dock-fg)]/45 sm:inline">
                                 编辑意图 → 时间线指令（宿主校验）
                             </span>
                             <div className="flex-1" />
@@ -458,7 +458,7 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                                 aria-label="关闭"
                                 title="关闭（Esc）"
                                 onClick={() => setAiOpen(false)}
-                                className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                                className="grid size-7 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                             >
                                 <X className="size-4" />
                             </button>
@@ -473,7 +473,7 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                     {/* 上区：左栏 + 预览 + 右栏 */}
                     <div className="flex min-h-0 flex-1 gap-2">
                         {/* 左栏：素材 / 转写（Tab 化） */}
-                        <aside className="flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-xl bg-[var(--director-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                        <aside className="flex h-full w-64 shrink-0 flex-col overflow-hidden rounded-xl bg-[var(--previs-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
                             <PanelTabs
                                 tabs={[
                                     { id: "asset", label: "素材" },
@@ -490,25 +490,25 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                         </aside>
 
                         {/* 中栏：预览（占满剩余高度） */}
-                        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-[var(--director-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-[var(--previs-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
                             <SlotStack slots={previewSlots} emptyHint="预览插件未加载。" />
                         </main>
 
                         {/* 右栏：检查 / 字幕 / 导出（Tab 化，可折叠为窄条；AI 助手已移至顶栏浮层） */}
                         {rightCollapsed ? (
-                            <aside className="flex h-full w-9 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-[var(--director-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                            <aside className="flex h-full w-9 shrink-0 flex-col items-center overflow-hidden rounded-xl bg-[var(--previs-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
                                 <button
                                     type="button"
                                     aria-label="展开检查器"
                                     title="展开检查器"
                                     onClick={() => setRightCollapsed(false)}
-                                    className="mt-1.5 grid size-8 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                                    className="mt-1.5 grid size-8 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                                 >
                                     <PanelRightOpen className="size-4" />
                                 </button>
                             </aside>
                         ) : (
-                            <aside className="flex h-full w-80 shrink-0 flex-col overflow-hidden rounded-xl bg-[var(--director-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                            <aside className="flex h-full w-80 shrink-0 flex-col overflow-hidden rounded-xl bg-[var(--previs-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
                                 <PanelTabs
                                     tabs={[
                                         { id: "inspector", label: "检查" },
@@ -523,7 +523,7 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                                             aria-label="折叠检查器"
                                             title="折叠检查器"
                                             onClick={() => setRightCollapsed(true)}
-                                            className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                                            className="grid size-7 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                                         >
                                             <PanelRightClose className="size-3.5" />
                                         </button>
@@ -564,11 +564,11 @@ export default function ProjectEditorView({ detail }: { detail: ProjectDetail })
                             splitterRef.current = null;
                         }}
                     >
-                        <div className="h-1 w-10 rounded-full bg-[var(--director-sequencer-border)] transition-colors group-hover:bg-[var(--director-dock-fg-strong)]/60" />
+                        <div className="h-1 w-10 rounded-full bg-[var(--previs-sequencer-border)] transition-colors group-hover:bg-[var(--previs-dock-fg-strong)]/60" />
                     </div>
 
                     {/* 时间线：横跨编辑面板全宽（左栏到右栏） */}
-                    <div className="flex h-full shrink-0 flex-col overflow-hidden rounded-xl bg-[var(--director-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]" style={{ height: `${timelineH}px` }}>
+                    <div className="flex h-full shrink-0 flex-col overflow-hidden rounded-xl bg-[var(--previs-sequencer-surface)] shadow-[0_1px_2px_rgba(0,0,0,0.3)]" style={{ height: `${timelineH}px` }}>
                         <SlotStack slots={timelineSlots} emptyHint="时间线面板插件未加载。" />
                     </div>
                 </div>

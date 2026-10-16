@@ -403,33 +403,33 @@ export function EditorPreviewMonitor() {
     const showEmpty = !activeClip || (!videoSrc && !imageSrc);
 
     return (
-        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--director-sequencer-surface)]">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--previs-sequencer-surface)]">
             {/* 顶部信息条：媒体标题/元数据常驻在画面外的标题栏，不再悬浮遮挡画面内容 */}
-            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3">
+            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-3">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                     {activeClip ? (
                         <>
-                            <ClipKindIcon kind={activeClip.kind} className="size-3.5 shrink-0 text-[var(--director-dock-fg)]/55" />
-                            <span className="truncate text-xs font-medium text-[var(--director-dock-fg-strong)]" title={clipDisplayTitle(activeClip)}>
+                            <ClipKindIcon kind={activeClip.kind} className="size-3.5 shrink-0 text-[var(--previs-dock-fg)]/55" />
+                            <span className="truncate text-xs font-medium text-[var(--previs-dock-fg-strong)]" title={clipDisplayTitle(activeClip)}>
                                 {clipDisplayTitle(activeClip)}
                             </span>
-                            <span className="hidden shrink-0 rounded-full bg-[var(--director-dock-active-surface)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--director-dock-fg)]/85 sm:inline-flex">
+                            <span className="hidden shrink-0 rounded-full bg-[var(--previs-dock-active-surface)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--previs-dock-fg)]/85 sm:inline-flex">
                                 {clipKindLabel(activeClip.kind)}
                             </span>
                             {activeTrack && (
-                                <span className="hidden shrink-0 rounded-full border border-[var(--director-sequencer-border)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--director-dock-fg)]/55 md:inline-flex">
+                                <span className="hidden shrink-0 rounded-full border border-[var(--previs-sequencer-border)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--previs-dock-fg)]/55 md:inline-flex">
                                     {activeTrack.label}
                                 </span>
                             )}
                         </>
                     ) : (
-                        <span className="truncate text-xs text-[var(--director-dock-fg)]/40">预览监视器</span>
+                        <span className="truncate text-xs text-[var(--previs-dock-fg)]/40">预览监视器</span>
                     )}
                 </div>
                 {mediaErrorHint && (
                     <span
                         title={mediaErrorHint}
-                        className="flex min-w-0 max-w-[42%] items-center gap-1.5 rounded-md bg-[var(--director-danger)]/10 px-2 py-1 text-[11px] text-[var(--director-danger)]"
+                        className="flex min-w-0 max-w-[42%] items-center gap-1.5 rounded-md bg-[var(--previs-danger)]/10 px-2 py-1 text-[11px] text-[var(--previs-danger)]"
                     >
                         {mediaErrorHint.includes("正在生成") ? (
                             <LoaderCircle className="size-3 shrink-0 animate-spin" />
@@ -442,7 +442,7 @@ export function EditorPreviewMonitor() {
                                 href={resourceFileUrl(mediaResourceId)}
                                 download
                                 title="下载原片，用本地播放器观看"
-                                className="grid size-4 shrink-0 place-items-center rounded hover:bg-[var(--director-danger)]/15"
+                                className="grid size-4 shrink-0 place-items-center rounded hover:bg-[var(--previs-danger)]/15"
                             >
                                 <Download className="size-3" />
                             </a>
@@ -494,11 +494,11 @@ export function EditorPreviewMonitor() {
                 宽度自适应见上方 transportWidth 逻辑。 */}
             <div
                 ref={transportRef}
-                className={`grid h-11 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] px-3 ${
+                className={`grid h-11 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-3 ${
                     allowScroll ? "overflow-x-auto [scrollbar-width:thin]" : ""
                 }`}
             >
-                <span className="truncate text-xs tabular-nums text-[var(--director-dock-fg)]">
+                <span className="truncate text-xs tabular-nums text-[var(--previs-dock-fg)]">
                     {!compact && formatTimelineTime(playbackMs)}
                     {!compact && !hideTotal && (
                         <span className="opacity-60"> / {formatTimelineTime(durationMs)}</span>
@@ -511,7 +511,7 @@ export function EditorPreviewMonitor() {
                         title="回到开头"
                         onClick={() => syncPlayback(0)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
+                        className="grid size-7 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <SkipBack className="size-4" />
                     </button>
@@ -521,7 +521,7 @@ export function EditorPreviewMonitor() {
                         title="后退 1 秒"
                         onClick={() => stepBy(-1000)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
+                        className="grid size-7 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <StepBack className="size-4" />
                     </button>
@@ -532,8 +532,8 @@ export function EditorPreviewMonitor() {
                         disabled={durationMs <= 0}
                         className={`grid size-7 place-items-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-40 ${
                             playing
-                                ? "bg-[var(--director-dock-active-surface)] text-[var(--director-dock-fg-strong)]"
-                                : "text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                                ? "bg-[var(--previs-dock-active-surface)] text-[var(--previs-dock-fg-strong)]"
+                                : "text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                         }`}
                     >
                         {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
@@ -544,7 +544,7 @@ export function EditorPreviewMonitor() {
                         title="前进 1 秒"
                         onClick={() => stepBy(1000)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
+                        className="grid size-7 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <StepForward className="size-4" />
                     </button>
@@ -554,7 +554,7 @@ export function EditorPreviewMonitor() {
                         title="跳到结尾"
                         onClick={() => syncPlayback(durationMs)}
                         disabled={!project || durationMs <= 0}
-                        className="grid size-7 place-items-center rounded-md text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:pointer-events-none disabled:opacity-40"
+                        className="grid size-7 place-items-center rounded-md text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:pointer-events-none disabled:opacity-40"
                     >
                         <SkipForward className="size-4" />
                     </button>
@@ -565,7 +565,7 @@ export function EditorPreviewMonitor() {
                         aria-label="播放速度"
                         title="播放速度"
                         onClick={() => setSpeedMenuOpen((v) => !v)}
-                        className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)]"
+                        className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)]"
                     >
                         <Gauge className="size-3.5" />
                         {!compact && <span className="tabular-nums">{speed}x</span>}
@@ -576,7 +576,7 @@ export function EditorPreviewMonitor() {
                     {speedMenuOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setSpeedMenuOpen(false)} />
-                            <div className="absolute bottom-full right-0 z-50 mb-1 w-24 overflow-hidden rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-sequencer-surface-raised)] py-1 shadow-xl">
+                            <div className="absolute bottom-full right-0 z-50 mb-1 w-24 overflow-hidden rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] py-1 shadow-xl">
                                 {[0.5, 1, 1.5, 2].map((s) => (
                                     <button
                                         key={s}
@@ -585,8 +585,8 @@ export function EditorPreviewMonitor() {
                                             changeSpeed(s);
                                             setSpeedMenuOpen(false);
                                         }}
-                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-[11px] transition-colors hover:bg-[var(--director-control-hover)] ${
-                                            s === speed ? "text-[var(--director-dock-fg-strong)]" : "text-[var(--director-dock-fg)]"
+                                        className={`flex w-full items-center justify-between px-2.5 py-1.5 text-[11px] transition-colors hover:bg-[var(--previs-control-hover)] ${
+                                            s === speed ? "text-[var(--previs-dock-fg-strong)]" : "text-[var(--previs-dock-fg)]"
                                         }`}
                                     >
                                         <span>{s}x</span>

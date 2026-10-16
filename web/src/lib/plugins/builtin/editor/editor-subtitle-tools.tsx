@@ -63,35 +63,35 @@ export function EditorSubtitleTools() {
     };
 
     return (
-        <div className="flex h-full flex-col bg-[var(--director-sequencer-surface)]">
+        <div className="flex h-full flex-col bg-[var(--previs-sequencer-surface)]">
             <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-3">
-                <div className="mb-3 rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
+                <div className="mb-3 rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">时间线字幕</span>
-                        <span className="text-[10px] text-[var(--director-dock-fg)]/60">{subtitleClips.length} 条</span>
+                        <span className="text-xs font-medium text-[var(--previs-dock-fg-strong)]">时间线字幕</span>
+                        <span className="text-[10px] text-[var(--previs-dock-fg)]/60">{subtitleClips.length} 条</span>
                     </div>
                     {subtitleClips.length === 0 ? (
-                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">暂无字幕快照。粘贴 SRT 导入后，字幕会重建到时间线。</p>
+                        <p className="mt-2 text-[11px] leading-relaxed text-[var(--previs-dock-fg)]/55">暂无字幕快照。粘贴 SRT 导入后，字幕会重建到时间线。</p>
                     ) : (
                         <ul className="mt-2 space-y-1">
                             {subtitleClips.slice(0, 6).map((clip) => (
                                 <SubtitleRow key={clip.id} clip={clip} />
                             ))}
                             {subtitleClips.length > 6 && (
-                                <li className="pt-1 text-[10px] text-[var(--director-dock-fg)]/50">…共 {subtitleClips.length} 条</li>
+                                <li className="pt-1 text-[10px] text-[var(--previs-dock-fg)]/50">…共 {subtitleClips.length} 条</li>
                             )}
                         </ul>
                     )}
                 </div>
 
                 <label className="mb-3 block">
-                    <span className="mb-1 block text-[11px] text-[var(--director-dock-fg)]/70">SRT 文本（导入）</span>
+                    <span className="mb-1 block text-[11px] text-[var(--previs-dock-fg)]/70">SRT 文本（导入）</span>
                     <textarea
                         value={srtText}
                         onChange={(e) => setSrtText(e.target.value)}
                         rows={8}
                         placeholder={"1\n00:00:00,500 --> 00:00:02,500\n你好，影策"}
-                        className="w-full resize-y rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] px-2 py-1.5 font-mono text-[11px] leading-relaxed text-[var(--director-dock-fg-strong)] outline-none focus:border-[var(--workspace-accent)]/60"
+                        className="w-full resize-y rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-control-hover)] px-2 py-1.5 font-mono text-[11px] leading-relaxed text-[var(--previs-dock-fg-strong)] outline-none focus:border-[var(--workspace-accent)]/60"
                     />
                 </label>
 
@@ -100,7 +100,7 @@ export function EditorSubtitleTools() {
                         type="button"
                         onClick={importSrt}
                         disabled={!srtText.trim()}
-                        className="flex-1 rounded-md bg-[var(--director-accent)] px-2 py-1.5 text-xs font-medium text-[var(--director-on-accent)] hover:bg-[var(--director-accent-hover)] disabled:opacity-40"
+                        className="flex-1 rounded-md bg-[var(--previs-accent)] px-2 py-1.5 text-xs font-medium text-[var(--previs-on-accent)] hover:bg-[var(--previs-accent-hover)] disabled:opacity-40"
                     >
                         导入（重建字幕）
                     </button>
@@ -108,24 +108,24 @@ export function EditorSubtitleTools() {
                         type="button"
                         onClick={exportSrt}
                         disabled={subtitleClips.length === 0}
-                        className="flex-1 rounded-md border border-[var(--director-sequencer-border)] px-2 py-1.5 text-xs text-[var(--director-dock-fg)] hover:bg-[var(--director-control-hover)] disabled:opacity-40"
+                        className="flex-1 rounded-md border border-[var(--previs-sequencer-border)] px-2 py-1.5 text-xs text-[var(--previs-dock-fg)] hover:bg-[var(--previs-control-hover)] disabled:opacity-40"
                     >
                         导出 SRT
                     </button>
                 </div>
 
-                <div className="rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
+                <div className="rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">AI 高亮</span>
-                        <span className="rounded-full bg-[var(--director-dock-active-surface)] px-1.5 py-0.5 text-[10px] text-[var(--director-dock-fg)]/80">可用</span>
+                        <span className="text-xs font-medium text-[var(--previs-dock-fg-strong)]">AI 高亮</span>
+                        <span className="rounded-full bg-[var(--previs-dock-active-surface)] px-1.5 py-0.5 text-[10px] text-[var(--previs-dock-fg)]/80">可用</span>
                     </div>
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--previs-dock-fg)]/55">
                         AI 字幕高亮与关键词标注已实现，入口在画布「字幕」弹窗（点击字幕 → AI 高亮，走 ai.text 权限）。
                         时间线字幕片段由该字幕快照重建而来；待编辑器预览支持字幕文本渲染后，高亮会随快照同步到这里。
                     </p>
                 </div>
 
-                {message && <p className="mt-2 text-[11px] text-[var(--director-dock-fg)]/70">{message}</p>}
+                {message && <p className="mt-2 text-[11px] text-[var(--previs-dock-fg)]/70">{message}</p>}
             </div>
         </div>
     );
@@ -134,11 +134,11 @@ export function EditorSubtitleTools() {
 
 function SubtitleRow({ clip }: { clip: TimelineClip }) {
     return (
-        <li className="flex items-baseline gap-2 rounded border border-[var(--director-sequencer-border)]/70 bg-[var(--director-control-hover)]/60 px-1.5 py-1">
-            <span className="shrink-0 tabular-nums text-[10px] text-[var(--director-dock-fg)]/60">
+        <li className="flex items-baseline gap-2 rounded border border-[var(--previs-sequencer-border)]/70 bg-[var(--previs-control-hover)]/60 px-1.5 py-1">
+            <span className="shrink-0 tabular-nums text-[10px] text-[var(--previs-dock-fg)]/60">
                 {formatTimelineTime(clip.startMs)} – {formatTimelineTime(clip.startMs + clip.durationMs)}
             </span>
-            <span className="truncate text-[11px] text-[var(--director-dock-fg)]/80">{clip.text ?? ""}</span>
+            <span className="truncate text-[11px] text-[var(--previs-dock-fg)]/80">{clip.text ?? ""}</span>
         </li>
     );
 }

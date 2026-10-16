@@ -119,45 +119,45 @@ export function EditorExport() {
     if (!project) return null;
 
     return (
-        <div className="flex h-full flex-col bg-[var(--director-sequencer-surface)]">
+        <div className="flex h-full flex-col bg-[var(--previs-sequencer-surface)]">
             <div className="director-scroll min-h-0 flex-1 overflow-y-auto p-3">
-                <div className="mb-3 rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] p-2.5">
+                <div className="mb-3 rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-control-hover)] p-2.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-[var(--director-dock-fg-strong)]">渲染计划</span>
-                        <span className="text-[10px] text-[var(--director-dock-fg)]/60">{plan ? `${plan.steps.length} 步` : "—"}</span>
+                        <span className="text-xs font-medium text-[var(--previs-dock-fg-strong)]">渲染计划</span>
+                        <span className="text-[10px] text-[var(--previs-dock-fg)]/60">{plan ? `${plan.steps.length} 步` : "—"}</span>
                     </div>
                     {plan && plan.steps.length > 0 ? (
                         <ul className="mt-2 space-y-1">
                             {plan.steps.slice(0, 8).map((step, index) => (
-                                <li key={index} className="flex items-center gap-2 text-[11px] text-[var(--director-dock-fg)]/70">
-                                    <span className="shrink-0 rounded bg-[var(--director-dock-active-surface)] px-1 py-0.5 font-mono text-[9px] uppercase text-[var(--director-dock-fg)]/80">
+                                <li key={index} className="flex items-center gap-2 text-[11px] text-[var(--previs-dock-fg)]/70">
+                                    <span className="shrink-0 rounded bg-[var(--previs-dock-active-surface)] px-1 py-0.5 font-mono text-[9px] uppercase text-[var(--previs-dock-fg)]/80">
                                         {step.kind}
                                     </span>
                                     <span className="truncate">{step.description}</span>
                                 </li>
                             ))}
                             {plan.steps.length > 8 && (
-                                <li className="pt-0.5 text-[10px] text-[var(--director-dock-fg)]/50">…共 {plan.steps.length} 步</li>
+                                <li className="pt-0.5 text-[10px] text-[var(--previs-dock-fg)]/50">…共 {plan.steps.length} 步</li>
                             )}
                         </ul>
                     ) : (
-                        <p className="mt-2 text-[11px] text-[var(--director-dock-fg)]/55">时间线没有可渲染的视频片段。</p>
+                        <p className="mt-2 text-[11px] text-[var(--previs-dock-fg)]/55">时间线没有可渲染的视频片段。</p>
                     )}
                 </div>
 
-                <div className="mb-3 flex items-center justify-between rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)] px-2.5 py-2 text-[11px] text-[var(--director-dock-fg)]/70">
+                <div className="mb-3 flex items-center justify-between rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-control-hover)] px-2.5 py-2 text-[11px] text-[var(--previs-dock-fg)]/70">
                     <span className="flex items-center gap-1.5">
-                        <PackageOpen className="size-3.5 text-[var(--director-dock-fg)]/60" />
+                        <PackageOpen className="size-3.5 text-[var(--previs-dock-fg)]/60" />
                         渲染源
                     </span>
-                    <span className="tabular-nums text-[var(--director-dock-fg)]/80">{sources.length} 个</span>
+                    <span className="tabular-nums text-[var(--previs-dock-fg)]/80">{sources.length} 个</span>
                 </div>
 
                 <button
                     type="button"
                     onClick={renderRemote}
                     disabled={sources.length === 0 || state.phase === "running"}
-                    className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--director-accent)] px-2 py-1.5 text-xs font-medium text-[var(--director-on-accent)] hover:bg-[var(--director-accent-hover)] disabled:opacity-40"
+                    className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--previs-accent)] px-2 py-1.5 text-xs font-medium text-[var(--previs-on-accent)] hover:bg-[var(--previs-accent-hover)] disabled:opacity-40"
                 >
                     {state.phase === "running" && state.mode === "remote" ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -171,7 +171,7 @@ export function EditorExport() {
                     type="button"
                     onClick={exportLocalMp4}
                     disabled={sources.length === 0 || state.phase === "running"}
-                    className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-md border border-[var(--director-sequencer-border)] px-2 py-1.5 text-xs text-[var(--director-dock-fg)]/80 hover:bg-[var(--director-control-hover)] disabled:opacity-40"
+                    className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-md border border-[var(--previs-sequencer-border)] px-2 py-1.5 text-xs text-[var(--previs-dock-fg)]/80 hover:bg-[var(--previs-control-hover)] disabled:opacity-40"
                 >
                     {state.phase === "running" && state.mode === "local" ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -183,13 +183,13 @@ export function EditorExport() {
 
                 {state.phase === "running" && (
                     <div className="mt-3">
-                        <div className="mb-1 flex justify-between text-[10px] text-[var(--director-dock-fg)]/70">
+                        <div className="mb-1 flex justify-between text-[10px] text-[var(--previs-dock-fg)]/70">
                             <span>{state.detail}</span>
                             <span className="tabular-nums">{state.percent}%</span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--director-control-hover)]">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--previs-control-hover)]">
                             <div
-                                className="h-full rounded-full bg-[var(--director-accent)] transition-all"
+                                className="h-full rounded-full bg-[var(--previs-accent)] transition-all"
                                 style={{ width: `${state.percent}%` }}
                             />
                         </div>
@@ -197,14 +197,14 @@ export function EditorExport() {
                 )}
 
                 {state.phase === "done" && state.result && state.mode === "remote" && (
-                    <div className="mt-2 overflow-hidden rounded-md border border-[var(--director-sequencer-border)] bg-[var(--director-control-hover)]">
+                    <div className="mt-2 overflow-hidden rounded-md border border-[var(--previs-sequencer-border)] bg-[var(--previs-control-hover)]">
                         <video src={resourceFileUrl(state.result.resourceId)} controls className="aspect-video w-full bg-black" />
-                        <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] text-[var(--director-dock-fg)]/80">
+                        <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] text-[var(--previs-dock-fg)]/80">
                             <span className="truncate">{state.result.fileName ?? "timeline.mp4"}</span>
                             <a
                                 href={resourceFileUrl(state.result.resourceId)}
                                 download={state.result.fileName ?? "timeline.mp4"}
-                                className="flex shrink-0 items-center gap-1 text-[var(--director-accent)] hover:underline"
+                                className="flex shrink-0 items-center gap-1 text-[var(--previs-accent)] hover:underline"
                             >
                                 <Download className="size-3" />
                                 下载
@@ -213,15 +213,15 @@ export function EditorExport() {
                     </div>
                 )}
                 {state.phase === "done" && (!state.result || state.mode !== "remote") && (
-                    <p className="mt-2 text-[11px] text-[var(--director-success)]">{state.detail}</p>
+                    <p className="mt-2 text-[11px] text-[var(--previs-success)]">{state.detail}</p>
                 )}
-                {state.phase === "error" && <p className="mt-2 text-[11px] text-[var(--director-danger)]">{state.detail}</p>}
+                {state.phase === "error" && <p className="mt-2 text-[11px] text-[var(--previs-danger)]">{state.detail}</p>}
 
-                <p className="mt-3 text-[11px] leading-relaxed text-[var(--director-dock-fg)]/55">
+                <p className="mt-3 text-[11px] leading-relaxed text-[var(--previs-dock-fg)]/55">
                     默认提交服务端渲染任务（异步，产物可直接预览/下载）；本地 ffmpeg.wasm 导出保留为离线兜底。
                 </p>
                 {sources.length === 0 && (
-                    <p className="mt-1 text-[11px] text-[var(--director-dock-fg)]/55">悬空引用片段（节点已删除）按计划跳过，不影响其余片段导出。</p>
+                    <p className="mt-1 text-[11px] text-[var(--previs-dock-fg)]/55">悬空引用片段（节点已删除）按计划跳过，不影响其余片段导出。</p>
                 )}
             </div>
         </div>
