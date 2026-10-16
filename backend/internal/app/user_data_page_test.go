@@ -73,3 +73,54 @@ func TestUserAssetsBatchIsBoundedAndScoped(t *testing.T) {
 		t.Fatal("expected invalid ID error")
 	}
 }
+
+func TestUploadedProjectAssetReadPathsReturnWritableDocument(t *testing.T) {
+	service, db := newProjectWorkbenchReadTestService(t)
+	asset := model.Asset{
+		ID: "uploaded-video", UserID: "owner", Kind: "video", Title: "上传视频",
+		Category: model.AssetCategoryMaterial, Status: model.AssetVersionStatusConfirmed,
+		PrimaryVersionID: "version-1",
+		PayloadJSON:      `{"data":{"storageKey":"resource:uploaded-video","mimeType":"video/mp4","kind":"video","size":1024,"width":1920,"height":1080}}`,
+	}
+	if err := db.Create(&asset).Error; err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]func() ([]json.RawMessage, error){
+		"detail": func() ([]json.RawMessage, error) {
+			raw, err := service.UserAsset("owner", asset.ID)
+			return []json.RawMessage{raw}, err
+		},
+		"batch": func() ([]json.RawMessage, error) { return service.UserAssetsByIDs("owner", []string{asset.ID}) },
+		"snapshot": func() ([]json.RawMessage, error) {
+			snapshot, err := service.UserDataSnapshot("owner")
+			return snapshot.Assets, err
+		},
+		"page": func() ([]json.RawMessage, error) {
+			page, err := service.UserAssetsPage("owner", 1, 40, UserAssetPageFilter{})
+			return page.Assets, err
+		},
+	}
+	for name, read := range paths {
+		t.Run(name, func(t *testing.T) {
+			items, err := read()
+			if err != nil || len(items) != 1 {
+				t.Fatalf("read assets: %s, %v", items, err)
+			}
+			parsed, err := assetFromJSON("owner", items[0])
+			if err != nil {
+				t.Fatalf("returned asset cannot be saved: %v; %s", err, items[0])
+			}
+			if parsed.ID != "uploaded-video" || parsed.Kind != "video" || parsed.Title != "上传视频" || parsed.PrimaryVersionID != "version-1" || parsed.Category != model.AssetCategoryMaterial {
+				t.Fatalf("lost asset identity: %+v", parsed)
+			}
+			var payload struct {
+				Data struct {
+					Bytes int64 `json:"bytes"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(items[0], &payload); err != nil || payload.Data.Bytes != 1024 {
+				t.Fatalf("lost resource byte size: %s, %v", items[0], err)
+			}
+		})
+	}
+}
