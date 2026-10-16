@@ -16,6 +16,10 @@ export function agentErrorPresentation(cause: unknown, fallback = "Agent 执行�
             text: text || "当前请求的 Agent 能力尚未开放，请使用 capabilities 返回的权限和工具范围。",
         };
     }
+    if (cause instanceof ApiError && cause.reason === "model_capability_not_supported") {
+        const detail = cause.details?.message;
+        if (typeof detail === "string" && detail.trim()) return { title: fallback, text: detail.trim() };
+    }
     // 渠道、鉴权、配额等业务错误保留真实语义，不能按 message 猜测为服务未部署。
     return { title: fallback, text: text || fallback };
 }

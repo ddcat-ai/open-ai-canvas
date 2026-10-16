@@ -52,6 +52,20 @@ describe("Agent window layout", () => {
     });
 });
 
+describe("Agent capability rejection details", () => {
+    it.each(["同步音频", "水印设置", "视频时长", "输出分辨率"])("shows the specific rejected %s option", (field) => {
+        const message = `参数 ${field}超出支持范围`;
+        const error = new ApiError("所选模型不支持当前请求", { status: 400, reason: "model_capability_not_supported", details: { message, request: { apiKey: "private-key" }, field } });
+        expect(agentErrorPresentation(error, "审批未确认，请重试")).toEqual({ title: "审批未确认，请重试", text: message });
+    });
+    it("ignores malformed or unrelated details and preserves the ordinary public message", () => {
+        for (const message of [undefined, {}, " "]) {
+            expect(agentErrorPresentation(new ApiError("所选模型不支持当前请求", { reason: "model_capability_not_supported", details: { message } })).text).toBe("所选模型不支持当前请求");
+        }
+        expect(agentErrorPresentation(new ApiError("积分不足", { reason: "insufficient_credits", details: { message: "private detail" } })).text).toBe("积分不足");
+    });
+});
+
 describe("Agent submission sync preflight contract", () => {
     it("scopes submit and approval saves to the active canvas before Agent POST", () => {
         const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8");
