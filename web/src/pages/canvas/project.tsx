@@ -83,7 +83,9 @@ import { batchReferenceColumns, promoteLegacyBatchTableSize } from "@/lib/canvas
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { CanvasPrevisNodePanel } from "@/components/canvas/previs/canvas-previs-node-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
-import { connectCanvasTextMention } from "@/lib/canvas/canvas-text-mention";
+import { connectCanvasResourceMention } from "@/lib/canvas/canvas-text-mention";
+import { getNodeAcceptedInputKinds } from "@/lib/canvas/node-registry";
+import type { CanvasNodeInputKind } from "@/lib/canvas/node-registry";
 import { writeCanvasNodePrompt } from "@/lib/canvas/canvas-node-prompt";
 import {
     applyCanvasConnectionPromptSync,
@@ -2183,6 +2185,7 @@ function CanvasViewportPage() {
     const renderCanvasNodePanel = useCallback(
         (panelNode: CanvasNodeData) => {
             if (panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing) return null;
+            const acceptedInputKinds = getNodeAcceptedInputKinds(panelNode.type);
             return panelNode.type === CanvasNodeType.Config ? (
                 <CanvasConfigComposer
                     value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
@@ -2202,22 +2205,29 @@ function CanvasViewportPage() {
                     isRunning={isCanvasNodeGenerating(panelNode, runningNodeId)}
                     mentionReferences={[
                         ...(mentionReferencesByNodeId.get(panelNode.id) || EMPTY_RESOURCE_REFERENCES),
+                        // 未连线的画布资源节点也可 @ 搜索，选中即自动连线（与文本引用同机制）。
                         ...buildCanvasResourceReferences(nodesRef.current, connectionsRef.current).filter(
-                            (reference) => reference.kind === "text" && reference.nodeId !== panelNode.id && !(mentionReferencesByNodeId.get(panelNode.id) || []).some((active) => active.nodeId === reference.nodeId),
+                            (reference) =>
+                                !reference.active &&
+                                reference.kind !== "skill" &&
+                                reference.kind !== "tool" &&
+                                reference.nodeId !== panelNode.id &&
+                                (!acceptedInputKinds.length || reference.kind === "character" || acceptedInputKinds.includes(reference.kind as CanvasNodeInputKind)) &&
+                                !(mentionReferencesByNodeId.get(panelNode.id) || []).some((active) => active.nodeId === reference.nodeId),
                         ),
                     ]}
                     onAddReference={(nodeId, reference) => {
-                        if (reference.active || reference.assetId || reference.kind === "skill") return reference;
-                        if (reference.kind !== "text" || !reference.nodeId || reference.nodeId === nodeId) return undefined;
+                        if (reference.active || reference.assetId || reference.kind === "skill" || reference.kind === "tool") return reference;
+                        if (!reference.nodeId || reference.nodeId === nodeId) return undefined;
                         try {
-                            const linked = connectCanvasTextMention(nodesRef.current, connectionsRef.current, nodeId, reference.nodeId, nanoid());
+                            const linked = connectCanvasResourceMention(nodesRef.current, connectionsRef.current, nodeId, reference.nodeId, nanoid());
                             nodesRef.current = linked.nodes;
                             connectionsRef.current = linked.connections;
                             setNodes(linked.nodes);
                             setConnections(linked.connections);
                             return linked.reference;
                         } catch (cause) {
-                            message.warning(cause instanceof Error ? cause.message : "文本引用失败");
+                            message.warning(cause instanceof Error ? cause.message : "引用失败");
                             return undefined;
                         }
                     }}
