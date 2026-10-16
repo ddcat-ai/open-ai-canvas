@@ -19,6 +19,13 @@ type MentionState = {
     query: string;
 };
 
+// @ 搜索结果的分组排序权重：0=画布资源节点，1=素材库，2=技能库。sort 稳定，同组保持原序。
+function mentionMatchGroup(reference: CanvasResourceReference) {
+    if (reference.kind === "skill") return 2;
+    if (reference.assetId) return 1;
+    return 0;
+}
+
 export type EditableSelection = {
     start: number;
     end: number;
@@ -94,7 +101,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (!mention) return [];
         const query = mention.query.trim().toLowerCase();
         if (!query) return onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences;
-        return availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(query));
+        const matches = availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(query));
+        // 搜索结果按 画布素材 → 素材库 → 技能 分组排序，引用素材是高频意图，技能命中靠后。
+        return [...matches].sort((left, right) => mentionMatchGroup(left) - mentionMatchGroup(right));
     }, [onSelectReference, mentionCanvasReferences, activeMentionCanvasReferences, availableReferences, mention]);
     const activeReferences = useMemo(() => {
         if (!highlightLabels) return [];
