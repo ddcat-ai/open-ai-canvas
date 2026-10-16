@@ -6,7 +6,7 @@ import { applyGenerationTaskResultToNodes, generationTaskCanReloadResource, gene
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
 import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
 import { canvasTaskBindingStatus, markCanvasTaskRecoveryUnconfirmed } from "@/lib/canvas/canvas-task-state";
-import { applyCanvasGenerationTaskNodeEffect, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
+import { applyCanvasGenerationTaskNodeEffect, CanvasGenerationDurableAckError, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
 import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -296,8 +296,9 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
 
     const applyGenerationTaskResult = useCallback(
         async (nodeId: string, task: GenerationTask) => {
+            const requestSignal = generationRequestsRef.current.get(nodeId)?.controller.signal;
+            const signal = requestSignal ? AbortSignal.any([consumerControllerRef.current.signal, requestSignal]) : consumerControllerRef.current.signal;
             const applyStoredTaskResult = async () => {
-                const signal = consumerControllerRef.current.signal;
                 const before = nodesRef.current.find((node) => node.id === nodeId);
                 if (!before) throw new Error("画布中找不到对应任务节点");
                 const applied = await applyGenerationTaskResultToNodes(nodesRef.current, task, nodeId);
@@ -309,45 +310,52 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 await applyStoredTaskResult();
                 return;
             }
+            let applyingResult = false;
             try {
-                const materialized = await consumeGenerationTaskNode(
-                    task,
-                    nodeId,
-                    0,
-                    async ({ task: materialized, output, effectKey, signal }) => {
-                        await applyCanvasGenerationTaskNodeEffect({
-                            projectId,
-                            nodeId,
-                            task: materialized,
-                            output,
-                            effectKey,
-                            signal,
-                            nodesRef,
-                            setNodes,
-                        });
-                    },
-                    { signal: consumerControllerRef.current.signal },
-                );
-                const currentNode = nodesRef.current.find((node) => node.id === nodeId);
-                if (task.status === "succeeded" && (!currentNode || !generationTaskOutputsApplied(currentNode, materialized))) {
-                    // attach effect 可能已经完成，但旧画布快照仍停留在 loading。
-                    // 最终以节点是否真实拿到媒体结果为准，不能只信幂等记录。
-                    const output = materialized.outputs?.find((item) => item.outputIndex === 0);
-                    if (!output) throw new Error("生成任务没有可恢复的输出");
-                    await applyCanvasGenerationTaskNodeEffect({ projectId, nodeId, task: materialized, output, effectKey: attachNodeEffectKey(task.id, nodeId, 0), signal: consumerControllerRef.current.signal, nodesRef, setNodes });
-                }
-            } catch (error) {
-                // 成功任务的副作用确认失败时，直接用已持久化结果回写节点，避免永久停留在生成中。
-                if (task.status === "succeeded") {
-                    await applyStoredTaskResult().catch(() => {
-                        throw error;
-                    });
-                } else {
-                    if (generationTaskCanReloadResource(task)) {
-                        setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, resourceReloadAvailable: true } } : node)));
+                await runGenerationConsumer(signal, async (signal) => {
+                    const materialized = await consumeGenerationTaskNode(
+                        task,
+                        nodeId,
+                        0,
+                        async ({ task: materialized, output, effectKey, signal }) => {
+                            applyingResult = true;
+                            await applyCanvasGenerationTaskNodeEffect({
+                                projectId,
+                                nodeId,
+                                task: materialized,
+                                output,
+                                effectKey,
+                                signal,
+                                nodesRef,
+                                setNodes,
+                            });
+                            applyingResult = false;
+                        },
+                        { signal, managed: true },
+                    );
+                    const currentNode = nodesRef.current.find((node) => node.id === nodeId);
+                    if (task.status === "succeeded" && (!currentNode || !generationTaskOutputsApplied(currentNode, materialized, nodesRef.current))) {
+                        // attach effect 可能已经完成，但旧画布快照仍停留在 loading。
+                        // 最终以节点是否真实拿到媒体结果为准，不能只信幂等记录。
+                        const output = materialized.outputs?.find((item) => item.outputIndex === 0);
+                        if (!output) throw new Error("生成任务没有可恢复的输出");
+                        applyingResult = true;
+                        await applyCanvasGenerationTaskNodeEffect({ projectId, nodeId, task: materialized, output, effectKey: attachNodeEffectKey(task.id, nodeId, 0), signal, nodesRef, setNodes });
+                        applyingResult = false;
                     }
-                    throw error;
+                });
+            } catch (error) {
+                if (signal.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+                // 物化/确认失败与图片内容校验失败分开，保存失败不能触发付费重生成。
+                const failure = !applyingResult && !isCanvasGenerationDurableAckError(error) ? new CanvasGenerationDurableAckError(error) : error;
+                if (generationTaskCanReloadResource(task)) {
+                    setNodes((current) => current.map((node) => {
+                        if (node.id !== nodeId || node.metadata?.taskId !== task.id) return node;
+                        const applied = generationTaskOutputsApplied(node, task, current);
+                        return { ...node, metadata: { ...node.metadata, status: applied ? node.metadata.status : NODE_STATUS_ERROR, resourceReloadAvailable: true, errorDetails: `结果已生成，应用结果失败：${error instanceof Error ? error.message : "未知错误"}` } };
+                    }));
                 }
+                throw failure;
             }
         },
         [nodesRef, projectId, setNodes],

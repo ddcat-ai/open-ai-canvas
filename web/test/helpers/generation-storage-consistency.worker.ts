@@ -1,10 +1,10 @@
 import localforage from "localforage";
 
-import { getActiveUserScope, setActiveUserScope } from "../../src/lib/user-scope";
+import { getActiveUserScope, scopedStorageKey, setActiveUserScope } from "../../src/lib/user-scope";
 
 type InstanceHook = (storeName: string, key: string, value: unknown) => Promise<void> | void;
 
-type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race" | "canvas-multi-output" | "canvas-copy-generation";
+type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race" | "canvas-multi-output" | "canvas-copy-generation" | "canvas-mask-batch" | "canvas-asset-preparation";
 
 function installStorageHarness() {
     const originalCreateInstance = localforage.createInstance.bind(localforage);
@@ -393,7 +393,7 @@ async function runMediaCommitRace(mediaType: "video" | "audio") {
     }
 }
 
-async function runCanvasBatchCommitRace(multiOutput = false) {
+async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
     const harness = installStorageHarness();
     const previousScope = getActiveUserScope();
     const { apiClient } = await import("../../src/services/api/request");
@@ -437,11 +437,12 @@ async function runCanvasBatchCommitRace(multiOutput = false) {
             position: { x: index * 400, y: 0 },
             width: 320,
             height: 240,
-            metadata: { taskId: `task-${index}`, status: index < 2 ? ("loading" as const) : ("error" as const) },
+            metadata: { taskId: `task-${index}`, status: index < 2 ? ("loading" as const) : ("error" as const), ...(mask ? { batchRootId: "mask-root" } : {}) },
         })).filter((node) => !multiOutput || node.id !== "node-1");
         const ref: { current: import("../../src/types/canvas").CanvasNodeData[] } = { current: nodes };
+        if (mask) ref.current = [...nodes, { id: "mask-root", type: CanvasNodeType.Image, title: "局部重绘", position: { x: -400, y: 0 }, width: 320, height: 240, metadata: { isBatchRoot: true, batchChildIds: nodes.map((node) => node.id), status: "loading" } }];
         const setNodes = createCanvasStateWriter(ref, () => {});
-        useCanvasStore.getState().updateProject(projectId, { nodes });
+        useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
         await flushCanvasStorePersistence();
         useAssetStore.setState({
             assets: (multiOutput ? [0, 1, 2, 3] : [0, 1]).map((index) => ({
@@ -452,7 +453,7 @@ async function runCanvasBatchCommitRace(multiOutput = false) {
                 tags: [],
                 createdAt: "2026-09-21T00:00:00Z",
                 updatedAt: "2026-09-21T00:00:00Z",
-                data: { dataUrl: "/image.png", storageKey: `resource:image-${index}`, width: multiOutput ? 640 + index : 640, height: 480, bytes: 100, mimeType: "image/png" },
+                data: { dataUrl: "/image.png", storageKey: `resource:image-${index}`, width: multiOutput ? 640 + index : 640, height: mask ? 360 : 480, bytes: 100, mimeType: "image/png" },
             })),
         });
         unregister = registerCanvasGenerationLiveProject({ scope: getActiveUserScope(), projectId, adapter: { read: () => ({ nodes: ref.current, connections: [], chatSessions: [], activeChatId: null }), write: (state) => setNodes(state.nodes) } });
@@ -478,6 +479,7 @@ async function runCanvasBatchCommitRace(multiOutput = false) {
                         attempts: 1,
                         createdAt: "2026-09-21T00:00:00Z",
                         updatedAt: "2026-09-21T00:00:01Z",
+                        ...(mask ? { inputJson: JSON.stringify({ metadata: { edit: "mask" } }) } : {}),
                         resultJson: multiOutput ? JSON.stringify({ images: [0, 1, 2, 3].map((i) => ({ dataUrl: "/image.png", storageKey: `resource:image-${i}` })) }) : "{}",
                         ...(multiOutput ? { outputs: [0, 1, 2, 3].map((i) => ({ outputIndex: i, mediaType: "image" as const, materializedAssetId: `asset-${i}` })) } : {}),
                     },
@@ -573,8 +575,66 @@ async function runCanvasCopyGeneration() {
     }
 }
 
+async function runCanvasAssetPreparation() {
+    const harness = installStorageHarness();
+    const previousScope = getActiveUserScope();
+    try {
+        setActiveUserScope("canvas-asset-preparation");
+        const { useCanvasStore, flushCanvasStorePersistence } = await import("../../src/stores/canvas/use-canvas-store");
+        const { useAssetStore, flushAssetStorePersistence, ASSET_STORE_KEY } = await import("../../src/stores/use-asset-store");
+        const { prepareCanvasMediaNodeAsset, isCanvasGenerationDurableAckError } = await import("../../src/services/canvas-generation-consumer");
+        const { localForageStorageForScope } = await import("../../src/lib/localforage-storage");
+        const { CanvasNodeType } = await import("../../src/types/canvas");
+        const projectId = useCanvasStore.getState().createProject("asset preparation");
+        const placeholder = { id: "result", type: CanvasNodeType.Image, position: { x: 0, y: 0 }, width: 320, height: 240, metadata: { status: "loading" as const } };
+        useCanvasStore.getState().updateProject(projectId, { nodes: [placeholder] });
+        await flushCanvasStorePersistence();
+        const candidate = { ...placeholder, metadata: { status: "success" as const, content: "/derived.png", storageKey: "resource:derived", imageLayerGroup: { width: 640, height: 480, layers: [] } } };
+        let release!: () => void;
+        let entered!: () => void;
+        const started = new Promise<void>((resolve) => { entered = resolve; });
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        harness.hooks.onSet = async (_store, key) => {
+            if (key !== scopedStorageKey(ASSET_STORE_KEY)) return;
+            entered();
+            await gate;
+        };
+        let resolved = false;
+        const pending = prepareCanvasMediaNodeAsset(projectId, candidate).then((node) => { resolved = true; return node; });
+        await Promise.race([started, pending.then(() => { throw new Error("素材持久化等待被绕过"); })]);
+        const resolvedBeforePersistence = resolved;
+        const nodesBeforePersistence = useCanvasStore.getState().projects.find((project) => project.id === projectId)!.nodes;
+        release();
+        const prepared = await pending;
+        harness.hooks.onSet = undefined;
+        const persisted = await localForageStorageForScope(getActiveUserScope()).getItem(ASSET_STORE_KEY);
+        const countBeforeReuse = useAssetStore.getState().assets.length;
+        const reused = await prepareCanvasMediaNodeAsset(projectId, prepared);
+        const countAfterReuse = useAssetStore.getState().assets.length;
+        let missingBindingError = false;
+        try {
+            await prepareCanvasMediaNodeAsset(projectId, { ...candidate, metadata: { content: "/original.png", storageKey: "resource:original", taskId: "task" } });
+        } catch (error) { missingBindingError = isCanvasGenerationDurableAckError(error); }
+        const controller = new AbortController();
+        controller.abort();
+        let aborted = false;
+        try { await prepareCanvasMediaNodeAsset(projectId, candidate, controller.signal); }
+        catch (error) { aborted = error instanceof Error && error.name === "AbortError"; }
+        await flushAssetStorePersistence();
+        return { resolvedBeforePersistence, nodesBeforePersistence, prepared, persisted, countBeforeReuse, countAfterReuse, reusedSameNode: reused === prepared, missingBindingError, aborted, finalAssetCount: useAssetStore.getState().assets.length };
+    } finally {
+        setActiveUserScope(previousScope);
+        harness.restore();
+    }
+}
+
 self.onmessage = async (event: MessageEvent<Scenario>) => {
     try {
+        if (event.data === "canvas-mask-batch" || event.data === "canvas-asset-preparation") {
+            const result = event.data === "canvas-mask-batch" ? await runCanvasBatchCommitRace(false, true) : await runCanvasAssetPreparation();
+            self.postMessage({ ok: true, result });
+            return;
+        }
         const result =
             event.data === "image-cleanup"
                 ? await runImageCleanup()

@@ -1,5 +1,6 @@
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
+import { findCanvasNodeAsset } from "@/lib/canvas/canvas-node-asset";
 import { findAvailableGenerationGroupPosition, imageGenerationChildPosition } from "@/lib/canvas/canvas-generation-layout";
 import { fitNodeSize, nodeSizeFromRatio, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
@@ -10,6 +11,8 @@ import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-c
 import { resolveMediaUrl, resolveVideoMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getCachedResourceBlob } from "@/services/resource-blob-cache";
+import { CanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
+import { runGenerationConsumer } from "@/services/generation-consumer-lifecycle";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { applyGenerationConsumerEffect, generationEffectApplied } from "@/services/generation-consumer-dedupe";
@@ -24,7 +27,7 @@ import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type Ca
 export function generationTaskInput(task: GenerationTask) {
     if (!task.inputJson) return null;
     try {
-        return JSON.parse(task.inputJson) as { mode?: CanvasGenerationMode; metadata?: { nodeId?: string; sourceNodeId?: string; domainProjectId?: string; layerDecomposition?: boolean }; prompt?: string };
+        return JSON.parse(task.inputJson) as { mode?: CanvasGenerationMode; metadata?: { nodeId?: string; sourceNodeId?: string; domainProjectId?: string; layerDecomposition?: boolean; edit?: string }; prompt?: string };
     } catch {
         return null;
     }
@@ -133,12 +136,22 @@ export function applyGeneratedMediaResultMetadata(node: CanvasNodeData, media: C
     );
 }
 
+async function uploadDerivedImageResult(input: string | Blob) {
+    try {
+        const uploaded = await uploadImage(input);
+        if (uploaded.pendingRemoteUpload) throw new Error("加工图片仅缓存在本机，服务端保存未完成；请重试保存结果");
+        return uploaded;
+    } catch (error) {
+        throw new CanvasGenerationDurableAckError(error);
+    }
+}
+
 export async function buildSourceImageLayerNodeResult(node: CanvasNodeData, image: { dataUrl: string }, signal: AbortSignal): Promise<CanvasNodeData> {
     const extraction = node.metadata?.layerExtraction;
     if (!extraction?.strategy || extraction.strategy.method === "generate") throw new Error("本层不是原图提取结果");
     if ((extraction.index === 0) !== (extraction.strategy.method === "source")) throw new Error("原图提取方式与本层角色不一致");
     if (signal.aborted) throw new DOMException("拆层已停止", "AbortError");
-    const uploaded = await uploadImage(image.dataUrl);
+    const uploaded = await uploadDerivedImageResult(image.dataUrl);
     if (signal.aborted) throw new DOMException("拆层已停止", "AbortError");
     return {
         ...node,
@@ -187,23 +200,28 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
         const uploaded =
             image.storageKey && !emotionEdit
                 ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 1024, height: image.height || 1024, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
-                : await uploadImage(resultDataUrl);
+                : extraction || emotionEdit
+                  ? await uploadDerivedImageResult(resultDataUrl)
+                  : await uploadImage(resultDataUrl);
         const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
         if (extraction) extraction = { ...extraction, sourceResultStorageKey: uploaded.storageKey !== sourceResultStorageKey ? sourceResultStorageKey : undefined };
-        const requestedImageSize = nodeSizeFromRatio(node.metadata?.size || "auto", imageConfig.width, imageConfig.height);
+        const directEdit = ["mask", "annotation", "text"].includes(generationTaskInput(task)?.metadata?.edit || "");
+        const requestedImageSize = directEdit ? undefined : nodeSizeFromRatio(node.metadata?.size || "auto", imageConfig.width, imageConfig.height);
         const imageSizeBounds = requestedImageSize || { width: node.width || imageConfig.width, height: node.height || imageConfig.height };
         const hasReportedImageSize = Boolean(image.width && image.width > 0 && image.height && image.height > 0);
         const resultWidth = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.width : uploaded.width;
         const resultHeight = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.height : uploaded.height;
         const normalizedImage = resultWidth === uploaded.width && resultHeight === uploaded.height ? uploaded : { ...uploaded, width: resultWidth, height: resultHeight };
         const imageSize =
-            node.metadata?.generationType === "edit" && !requestedImageSize ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height } : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height);
+            !directEdit && node.metadata?.generationType === "edit" && !requestedImageSize
+                ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height }
+                : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height);
         return {
             ...node,
             type: CanvasNodeType.Image,
             width: imageSize.width,
             height: imageSize.height,
-            position: { x: node.position.x + node.width / 2 - imageSize.width / 2, y: node.position.y + node.height / 2 - imageSize.height / 2 },
+            position: directEdit ? node.position : { x: node.position.x + node.width / 2 - imageSize.width / 2, y: node.position.y + node.height / 2 - imageSize.height / 2 },
             metadata: applyGeneratedMediaResultMetadata(
                 node,
                 imageMetadata(normalizedImage),
@@ -305,7 +323,7 @@ export async function applyGenerationTaskResultToNodes(nodes: CanvasNodeData[], 
 export async function applyMaterializedGenerationTaskResultToNodes(nodes: CanvasNodeData[], task: GenerationTask, output: GenerationTaskOutput, effectKey: string, targetNodeId?: string) {
     const node = findGenerationTaskNode(nodes, task, targetNodeId);
     if (!node) return { nodes, updated: false, nodeId: "", node: null };
-    if (generationEffectApplied(node.metadata || {}, effectKey) && generationTaskOutputsApplied(node, task)) {
+    if (generationEffectApplied(node.metadata || {}, effectKey) && generationTaskOutputsApplied(node, task, nodes)) {
         return { nodes, updated: true, nodeId: node.id, node, additionalNodes: [] };
     }
     const asset = useAssetStore.getState().assets.find((candidate) => candidate.id === output.materializedAssetId);
@@ -340,10 +358,18 @@ export async function applyMaterializedGenerationTaskResultToNodes(nodes: Canvas
         ...updatedNode,
         metadata: {
             ...updatedNode.metadata,
-            assetId: updatedNode.metadata?.assetId || (updatedNode.metadata?.imageLayerGroup || (updatedNode.metadata?.layerExtraction && updatedNode.metadata.storageKey !== asset.data.storageKey) ? undefined : asset.id),
+            assetId: updatedNode.metadata?.assetId || (updatedNode.metadata?.storageKey === asset.data.storageKey ? asset.id : undefined),
         },
     });
-    const durableChildren = additionalNodes.map(stamp);
+    // 已交付的图层组只补绑定，不能重建合成图或复活用户删除的图层。
+    const children = updatedNode.metadata?.imageLayerGroup && !additionalNodes.length ? nodes.filter((item) => item.metadata?.batchRootId === updatedNode.id) : additionalNodes;
+    const durableChildren = children.map((child) => {
+        if (!child.metadata?.imageLayer) return stamp(child);
+        const childOutput = task.outputs?.find((item) => item.outputIndex === child.metadata?.imageLayer?.outputIndex);
+        const childAsset = useAssetStore.getState().assets.find((item) => item.id === childOutput?.materializedAssetId);
+        const assetId = childAsset?.kind === "image" && childAsset.data.storageKey === child.metadata.storageKey ? childAsset.id : child.metadata.assetId;
+        return stamp({ ...child, metadata: { ...child.metadata, assetId } });
+    });
     return {
         nodes: commitCanvasGenerationResult(nodes, node, durableNode, task.id, durableChildren),
         updated: true,
@@ -353,7 +379,19 @@ export async function applyMaterializedGenerationTaskResultToNodes(nodes: Canvas
     };
 }
 
-export function generationTaskOutputsApplied(node: CanvasNodeData, task: GenerationTask) {
+export function generationTaskOutputsApplied(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node]) {
+    if (generationTaskMode(task) !== "text") {
+        const assets = useAssetStore.getState().assets;
+        const hasBoundAsset = (item: CanvasNodeData) => Boolean(item.metadata?.assetId && findCanvasNodeAsset(assets, item, task.projectId || "")?.id === item.metadata.assetId);
+        if (!hasBoundAsset(node)) return false;
+        if (
+            node.metadata?.batchChildIds?.some((id) => {
+                const child = nodes.find((item) => item.id === id && item.metadata?.batchRootId === node.id);
+                return child ? !hasBoundAsset(child) : !node.metadata?.imageLayerGroup;
+            })
+        )
+            return false;
+    }
     if (node.metadata?.layerExtraction?.extractionTaskId === task.id && node.metadata.content) return true;
     if (node.metadata?.taskId !== task.id || node.metadata.status !== "success" || !node.metadata.content) return false;
     if (generationTaskMode(task) !== "image") return true;
@@ -455,7 +493,7 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
     const children: CanvasNodeData[] = [];
     for (let index = 0; index < images.length; index += 1) {
         const id = `${node.id}:task:${task.id}:layer:${index}`;
-        const image = images[index];
+        const image = layerImages[index];
         const stored: UploadedImage = image.storageKey
             ? {
                   url: await resolveImageUrl(image.storageKey, image.dataUrl),
@@ -465,14 +503,13 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
                   bytes: image.bytes || decoded.layers[index].blob.size,
                   mimeType: decoded.layers[index].blob.type || "image/png",
               }
-            : await uploadImage(decoded.layers[index].blob);
-        if (stored.pendingRemoteUpload) throw new Error("图层仅缓存在本机，服务端保存未完成；请重试保存结果");
+            : await uploadDerivedImageResult(decoded.layers[index].blob);
         const existing = nodes.find((item) => item.id === id);
         const metadata = commitProducedModel(
             {
                 ...(existing?.metadata || {}),
                 ...imageMetadata(stored),
-                assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
+                assetId: image.storageKey && image.storageKey === images[index].storageKey ? task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId : undefined,
                 batchRootId: node.id,
                 imageLayer: { groupId: node.id, outputIndex: index, kind: decoded.layers[index].transparent ? "transparent" : "base" },
                 model: node.metadata?.model || task.model,
@@ -503,8 +540,7 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
             metadata,
         });
     }
-    const composite = await uploadImage(decoded.composite);
-    if (composite.pendingRemoteUpload) throw new Error("合成图仅缓存在本机，服务端保存未完成；请重试保存结果");
+    const composite = await uploadDerivedImageResult(decoded.composite);
     const group: NonNullable<CanvasNodeMetadata["imageLayerGroup"]> = {
         width: decoded.width,
         height: decoded.height,
@@ -595,8 +631,7 @@ export async function buildExperimentalImageLayerResult(root: CanvasNodeData, no
         ),
         ...(completed < plan.requests.length ? { incomplete: { completed, total: plan.requests.length, failed: plan.requests.length - completed, missingBackground: !order.some((item) => item.index === 0) } } : {}),
     };
-    const composite = await uploadImage(previous || group.layers.some((layer) => !layer.visible) ? await composeCanvasImageLayerGroup(group, updatedChildren) : decoded.composite);
-    if (composite.pendingRemoteUpload) throw new Error("合成图尚未保存到服务端，请重试本地合成");
+    const composite = await uploadDerivedImageResult(previous || group.layers.some((layer) => !layer.visible) ? await composeCanvasImageLayerGroup(group, updatedChildren) : decoded.composite);
     group.compositeSignature = imageLayerCompositeSignature(group, updatedChildren);
     return {
         node: {
@@ -631,17 +666,51 @@ export async function syncGenerationTaskToCanvasStore(task: GenerationTask) {
     // 短剧任务使用业务项目 ID，不能拿它请求同名的画布项目。
     const domainProjectId = task.clientContext?.domainProjectId || generationTaskInput(task)?.metadata?.domainProjectId;
     if (domainProjectId === task.projectId || !generationTaskNodeId(task)) return false;
-    const { loadCanvasProjectForEditing } = await import("@/services/user-data-sync");
-    const project = await loadCanvasProjectForEditing(task.projectId);
-    if (!project) return false;
-    const node = findGenerationTaskNode(project.nodes, task);
-    if (!node) return false;
-    if (generationTaskOutputsApplied(node, task)) return false;
-    const { node: updatedNode, additionalNodes } = await buildGenerationTaskNodeResults(node, task, project.nodes);
-    const latest = useCanvasStore.getState().projects.find((item) => item.id === project.id);
-    if (!latest?.nodes.some((item) => item.id === node.id)) return false;
-    useCanvasStore.getState().updateProject(project.id, { nodes: commitCanvasGenerationResult(latest.nodes, node, updatedNode, task.id, additionalNodes) });
-    return true;
+    return runGenerationConsumer(undefined, async (signal) => {
+        const { loadCanvasProjectForEditing } = await import("@/services/user-data-sync");
+        const project = await loadCanvasProjectForEditing(task.projectId!);
+        if (signal.aborted) throw new DOMException("The operation was aborted", "AbortError");
+        if (!project) return false;
+        const node = findGenerationTaskNode(project.nodes, task);
+        if (!node) return false;
+        if (generationTaskOutputsApplied(node, task, project.nodes)) return false;
+        if (generationTaskMode(task) !== "text") {
+            const { consumeGenerationTaskNode } = await import("@/services/project-asset-sync");
+            const { applyCanvasGenerationTaskNodeEffect } = await import("@/services/canvas-generation-consumer");
+            const { attachNodeEffectKey } = await import("@/services/generation-task-materializer");
+            const nodesRef = {
+                get current() {
+                    return useCanvasStore.getState().projects.find((item) => item.id === project.id)?.nodes || [];
+                },
+            };
+            const apply = async ({ task: materialized, output, effectKey, signal }: { task: GenerationTask; output: GenerationTaskOutput; effectKey: string; signal?: AbortSignal }) => {
+                await applyCanvasGenerationTaskNodeEffect({
+                    projectId: project.id,
+                    nodeId: node.id,
+                    task: materialized,
+                    output,
+                    effectKey,
+                    signal,
+                    nodesRef,
+                    setNodes: (update) => useCanvasStore.getState().updateProject(project.id, { nodes: typeof update === "function" ? update(nodesRef.current) : update }),
+                });
+            };
+            const materialized = await consumeGenerationTaskNode(task, node.id, 0, apply, { signal, managed: true });
+            const current = nodesRef.current.find((item) => item.id === node.id);
+            if (current && !generationTaskOutputsApplied(current, materialized, nodesRef.current)) {
+                const output = materialized.outputs?.find((item) => item.outputIndex === 0);
+                if (!output) throw new Error("生成任务没有可恢复的输出");
+                await apply({ task: materialized, output, effectKey: attachNodeEffectKey(task.id, node.id, 0), signal });
+            }
+            return true;
+        }
+        const { node: updatedNode, additionalNodes } = await buildGenerationTaskNodeResults(node, task, project.nodes);
+        if (signal.aborted) throw new DOMException("The operation was aborted", "AbortError");
+        const latest = useCanvasStore.getState().projects.find((item) => item.id === project.id);
+        if (!latest?.nodes.some((item) => item.id === node.id)) return false;
+        useCanvasStore.getState().updateProject(project.id, { nodes: commitCanvasGenerationResult(latest.nodes, node, updatedNode, task.id, additionalNodes) });
+        return true;
+    });
 }
 
 function findGenerationTaskNode(nodes: CanvasNodeData[], task: GenerationTask, targetNodeId?: string) {
