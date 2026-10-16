@@ -32,27 +32,15 @@ import {
 
 import { useEditorStoreContext } from "@/components/editor/editor-context";
 import { formatTimelineTime } from "@/lib/timeline/timeline-view";
+import { getPreviewClipAtTime } from "@/lib/timeline/timeline-clip-view";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { playbackVariantUrl, refreshResource, resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resources";
-import type { TimelineClip, TimelineProject } from "@/types/timeline";
+import type { TimelineClip } from "@/types/timeline";
 
 // 本地播放时钟 → store.transportMs 的回写节流（毫秒）。太密会让时间线面板每帧重渲染。
 const STORE_PUSH_INTERVAL_MS = 80;
-// 外部 seek 与本地时钟差超过该值（毫秒）视为"拖动跳转"：先暂停再跟随，避免播放中抢时钟。
-const SEEK_JUMP_MS = 500;
 // 视频元素位置校正阈值（秒）：仅当偏差超过该值才硬 seek，避免逐帧写 currentTime。
 const VIDEO_SEEK_TOLERANCE_S = 0.35;
-
-function getClipAtTime(project: TimelineProject, timeMs: number): TimelineClip | null {
-    // 隐藏轨道（visible === false）上的片段不参与预览合成。
-    const hiddenTrackIds = new Set(project.tracks.filter((t) => t.visible === false).map((t) => t.id));
-    const visible = (clip: TimelineClip) => !hiddenTrackIds.has(clip.trackId);
-    return (
-        project.clips.find((clip) => visible(clip) && clip.kind === "video" && clip.startMs <= timeMs && timeMs < clip.startMs + clip.durationMs) ??
-        project.clips.find((clip) => visible(clip) && clip.kind === "image" && clip.startMs <= timeMs && timeMs < clip.startMs + clip.durationMs) ??
-        null
-    );
-}
 
 function useClipMediaUrl(clip: TimelineClip | null): string | null {
     const [url, setUrl] = useState<string | null>(null);
@@ -110,7 +98,7 @@ function ClipKindIcon({ kind, className }: { kind: TimelineClip["kind"]; classNa
 }
 
 export function EditorPreviewMonitor() {
-    const { project, transportMs, setTransportMs } = useEditorStoreContext();
+    const { project, seekRequest, selectedClipId, setTransportMs } = useEditorStoreContext();
     const durationMs = project?.durationMs ?? 0;
 
     // 本地播放时钟（毫秒）：逐帧刷新本组件；播放态节流回写 store 驱动时间线播放头。
@@ -126,7 +114,7 @@ export function EditorPreviewMonitor() {
     const lastStorePushRef = useRef(0);
     const videoRef = useRef<HTMLVideoElement | null>(null);
 
-    const activeClip = project ? getClipAtTime(project, playbackMs) : null;
+    const activeClip = project ? getPreviewClipAtTime(project, playbackMs, selectedClipId) : null;
     const activeMediaUrl = useClipMediaUrl(activeClip);
     const activeTrack = project?.tracks.find((t) => t.id === activeClip?.trackId) ?? null;
 
@@ -245,25 +233,14 @@ export function EditorPreviewMonitor() {
         setTransportMs(playbackRef.current);
     }, [setTransportMs]);
 
-    // 外部 transport 变化（时间线标尺 scrub / 跳转）：回推本地时钟；
-    // 播放中大幅跳动视为拖动跳转，先暂停避免与本地时钟互相抢写。
+    // 用户 seek 与播放节流回写分开，不能凭时间差猜测来源，否则小幅定位会被忽略。
     useEffect(() => {
-        if (transportMs === playbackRef.current) return;
-        if (playingRef.current) {
-            // 播放中收到的 transport 写入只可能是自身节流回写或外部 scrub；
-            // 大幅跳动视为拖动/跳转：暂停并跟随。小幅忽略，避免本地时钟被旧回写值拉回（回跳）。
-            if (Math.abs(transportMs - playbackRef.current) > SEEK_JUMP_MS) {
-                stop();
-                playbackRef.current = transportMs;
-                setPlaybackMs(transportMs);
-            }
-            return;
-        }
-        playbackRef.current = transportMs;
-        setPlaybackMs(transportMs);
-        // stop 已是最新引用；transportMs 为唯一驱动源
+        if (!seekRequest) return;
+        stop();
+        syncPlayback(seekRequest.timeMs);
+        // 请求身份是唯一触发源，时长编辑不能重新执行旧的定位请求。
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transportMs]);
+    }, [seekRequest]);
 
     const toggle = useCallback(() => {
         if (!project || durationMs <= 0) return;
@@ -300,10 +277,10 @@ export function EditorPreviewMonitor() {
         rafRef.current = requestAnimationFrame(tick);
     }, [durationMs, project, stop, setTransportMs]);
 
-    // 项目切换/时长变化时重置播放
+    // 编辑后暂停并保留播放位置；项目加载的归零由显式 seek 请求处理。
     useEffect(() => {
-        syncPlayback(0);
         stop();
+        syncPlayback(playbackRef.current);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [project, durationMs]);
 
@@ -326,7 +303,7 @@ export function EditorPreviewMonitor() {
         const targetS = clipSourceTimeMs(activeClip, playbackRef.current) / 1000;
         const maxS = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : targetS;
         const t = Math.min(targetS, maxS);
-        if (Math.abs(v.currentTime - t) > VIDEO_SEEK_TOLERANCE_S) v.currentTime = t;
+        if (Math.abs(v.currentTime - t) > (playingRef.current ? VIDEO_SEEK_TOLERANCE_S : 0.001)) v.currentTime = t;
     };
 
     // 时钟推进/外部 seek：校正视频位置（播放同速时偏差小，几乎不触发硬 seek）。

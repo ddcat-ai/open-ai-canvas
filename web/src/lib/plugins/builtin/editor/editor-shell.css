@@ -1,4 +1,38 @@
 @layer utilities {
+    .editor-clip-label {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        height: 18px;
+        padding: 0 var(--space-2);
+        font-size: var(--fs-tiny);
+        line-height: 18px;
+        pointer-events: none;
+        background: var(--previs-sequencer-surface-raised);
+        color: var(--previs-dock-fg-strong);
+    }
+    .editor-filmstrip {
+        position: absolute;
+        inset: 18px 0 0;
+        overflow: hidden;
+        pointer-events: none;
+        background: var(--previs-control-hover);
+    }
+    .editor-filmstrip-tile {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        display: grid;
+        place-items: center;
+    }
+    .editor-filmstrip-tile img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
     /* Editor workbench scrolling and range controls belong to the editor plugin, not the app shell. */
     .director-scroll {
         scrollbar-width: thin;

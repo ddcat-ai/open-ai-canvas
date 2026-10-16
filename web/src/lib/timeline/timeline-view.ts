@@ -4,7 +4,7 @@
 export const BASE_TIMELINE_PX_PER_SECOND = 96;
 const MIN_TIMELINE_TRACK_WIDTH = 960;
 const MIN_TIMELINE_ZOOM = 0.02;
-const MAX_TIMELINE_ZOOM = 4;
+const MAX_TIMELINE_ZOOM = 64;
 const TIMELINE_ZOOM_STEP = 1.25;
 
 type ZoomDirection = "in" | "out";

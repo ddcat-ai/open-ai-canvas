@@ -38,6 +38,7 @@ export function makeClipFromAsset(asset: ProjectAsset, options: MakeClipFromAsse
         trackId: options.trackId,
         startMs: options.startMs,
         durationMs: asset.durationMs && asset.durationMs > 0 ? asset.durationMs : (options.defaultDurationMs ?? 3_000),
+        sourceDurationMs: asset.durationMs && asset.durationMs > 0 ? asset.durationMs : undefined,
         title: asset.title,
         directMedia: {
             id: asset.id,

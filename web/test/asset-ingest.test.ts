@@ -35,6 +35,10 @@ describe("assetToClipKind", () => {
 describe("makeClipFromAsset", () => {
     const options = { trackId: "track-video-1", startMs: 12_000, id: "asset:ast-1:1" };
 
+    test("保留原片总时长以限制胶片条裁剪上限", () => {
+        expect(makeClipFromAsset(makeAsset({ durationMs: 9000 }), options)?.sourceDurationMs).toBe(9000);
+    });
+
     test("生成 video clip 且 directMedia 引用资产", () => {
         const clip = makeClipFromAsset(makeAsset({}), options);
         expect(clip).not.toBeNull();

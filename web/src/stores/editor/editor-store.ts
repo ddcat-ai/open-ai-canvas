@@ -36,6 +36,9 @@ export type EditorStore = {
     /** 播放头位置（监视器与时间线面板共享的 transport，毫秒；纯 UI 状态，不入命令历史）。 */
     transportMs: number;
     setTransportMs: (ms: number) => void;
+    /** 用户定位请求独立于播放回写，即便只移动一帧也必须被预览消费。 */
+    seekRequest: { timeMs: number } | null;
+    seekTransportMs: (ms: number) => void;
     /** 加载/切换项目：重置历史与保存状态（数据由外部传入，不触发保存）。 */
     load: (project: TimelineProject) => void;
     /** 应用一条编辑命令（唯一修改入口）。 */
@@ -111,17 +114,23 @@ export function createEditorStore(options: EditorStoreOptions = {}): UseBoundSto
             lastSavedAt: null,
             selectedClipId: null,
             transportMs: 0,
+            seekRequest: null,
 
             selectClip: (id) => set({ selectedClipId: id }),
 
             setTransportMs: (ms) => set({ transportMs: Number.isFinite(ms) ? Math.max(0, Math.round(ms)) : 0 }),
+
+            seekTransportMs: (ms) => {
+                const timeMs = Number.isFinite(ms) ? Math.min(get().project?.durationMs ?? 0, Math.max(0, Math.round(ms))) : 0;
+                set({ transportMs: timeMs, seekRequest: { timeMs } });
+            },
 
             load: (project) => {
                 if (saveTimer) {
                     clearTimeout(saveTimer);
                     saveTimer = null;
                 }
-                set({ project, history: createEditorHistory(project), inPreview: false, isDirty: false, saving: false, saveError: null, lastSavedAt: null, selectedClipId: null, transportMs: 0 });
+                set({ project, history: createEditorHistory(project), inPreview: false, isDirty: false, saving: false, saveError: null, lastSavedAt: null, selectedClipId: null, transportMs: 0, seekRequest: { timeMs: 0 } });
             },
 
             dispatch: (cmd) => {

@@ -414,6 +414,7 @@ export function EditorAssetIngest() {
         const trackId = trackIdForKind(kind, project);
         const startMs = trackEndMs(project, trackId);
         const clip = makeClipFromAsset(asset, {
+            id: `asset:${asset.id}:${crypto.randomUUID()}`,
             trackId,
             startMs,
             defaultDurationMs: kind === "image" ? 3_000 : 5_000,

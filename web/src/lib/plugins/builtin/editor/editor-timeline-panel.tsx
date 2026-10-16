@@ -19,6 +19,8 @@ import {
 import { getAudioTracks, getSubtitleTracks, getVisualTracks } from "@/lib/timeline/timeline-tracks";
 import { TRACK_KIND_BASE_LABELS } from "@/lib/timeline/editor-commands";
 import { computeSnap } from "@/lib/timeline/timeline-snap";
+import { getClipSeekTime, getTimelineClipTitle } from "@/lib/timeline/timeline-clip-view";
+import { EditorClipFilmstrip } from "./editor-clip-filmstrip";
 import type { TimelineClip, TimelineProject, TimelineTrack, TimelineTrackKind } from "@/types/timeline";
 
 const MIN_VISUAL_END_MS = 1_000;
@@ -51,15 +53,17 @@ type GestureState = {
     originStartMs: number;
     originDurationMs: number;
     originSourceStartMs: number;
+    moved: boolean;
 };
 
 
 export function EditorTimelinePanel() {
-    const { project, dispatch, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip, transportMs, setTransportMs } =
+    const { project, dispatch, previewGesture, commitGesture, cancelGesture, selectedClipId, selectClip, transportMs, seekTransportMs } =
         useEditorStoreContext();
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [viewportWidth, setViewportWidth] = useState(0);
+    const [viewportStart, setViewportStart] = useState(0);
     const [zoomLevel, setZoomLevel] = useState(1);
     const [activeTool, setActiveTool] = useState<TimelineTool>("select");
     // 播放头与监视器共享同一 transport（store）：拖动标尺即时驱动监视器 seek，播放时监视器回写推进。
@@ -68,6 +72,7 @@ export function EditorTimelinePanel() {
     const [addMenuOpen, setAddMenuOpen] = useState(false);
     // 点击不可移除轨道 X 时的原因提示（2.2s 后自动消失）。
     const [removeBlockedHint, setRemoveBlockedHint] = useState<{ id: number; text: string } | null>(null);
+    const projectLoaded = project !== null;
 
     useEffect(() => {
         const el = containerRef.current;
@@ -79,13 +84,23 @@ export function EditorTimelinePanel() {
         });
         observer.observe(el);
         return () => observer.disconnect();
-    }, []);
+    }, [projectLoaded]);
 
     useEffect(() => {
         if (!removeBlockedHint) return;
         const timer = window.setTimeout(() => setRemoveBlockedHint(null), 2200);
         return () => window.clearTimeout(timer);
     }, [removeBlockedHint]);
+
+    useEffect(() => {
+        const element = containerRef.current;
+        if (!element) return;
+        const x = LABEL_COLUMN_PX + transportMs * getTimelinePxPerMs(zoomLevel);
+        if (x < element.scrollLeft + LABEL_COLUMN_PX || x > element.scrollLeft + element.clientWidth - 32) {
+            element.scrollLeft = Math.max(0, x - LABEL_COLUMN_PX - 64);
+            setViewportStart(element.scrollLeft);
+        }
+    }, [transportMs, zoomLevel]);
 
     if (!project) return <div className="flex h-full items-center justify-center text-sm text-[var(--previs-dock-fg)]">时间线未加载</div>;
 
@@ -120,7 +135,7 @@ export function EditorTimelinePanel() {
         selectClip(null);
     };
     const handleScrub = (ms: number) => {
-        setTransportMs(Math.max(0, Math.min(visualEndMs, Math.round(ms))));
+        seekTransportMs(Math.max(0, Math.min(visualEndMs, Math.round(ms))));
     };
     const handleFitWidth = () => {
         const availViewport = Math.max(320, viewportWidth - LABEL_COLUMN_PX);
@@ -295,7 +310,7 @@ export function EditorTimelinePanel() {
             </div>
 
             {/* 时间线主体 */}
-            <div ref={containerRef} className="director-scroll min-h-0 flex-1 overflow-auto bg-[var(--previs-sequencer-surface)]" data-canvas-no-zoom>
+            <div ref={containerRef} className="director-scroll min-h-0 flex-1 overflow-auto bg-[var(--previs-sequencer-surface)]" data-canvas-no-zoom onScroll={(event) => setViewportStart(event.currentTarget.scrollLeft)}>
                 {project.clips.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--previs-dock-fg)]">
                         <Scissors className="size-8" />
@@ -332,6 +347,9 @@ export function EditorTimelinePanel() {
                                             snapEnabled={snapEnabled}
                                             playheadMs={playheadMs}
                                             onSelectClip={selectClip}
+                                            onSeek={handleScrub}
+                                            viewportStart={viewportStart}
+                                            viewportEnd={viewportStart + viewportWidth - LABEL_COLUMN_PX}
 
                                             removable={project.tracks.filter((t) => t.kind === track.kind).length > 1}
                                              onRemoveTrack={handleRemoveTrack}
@@ -348,6 +366,7 @@ export function EditorTimelinePanel() {
                         {/* 播放头：贯穿标尺与全部轨道，与标尺拖动同源（视觉/音频/字幕均覆盖） */}
                         <div
                             aria-hidden
+                            data-editor-playhead
                             className="pointer-events-none absolute inset-y-0 z-[14] w-px bg-[var(--previs-danger)]"
                             style={{ left: LABEL_COLUMN_PX + playheadMs * pxPerMs }}
                         >
@@ -448,6 +467,9 @@ function TrackRow({
     onCancel,
     selectedClipId,
     onSelectClip,
+    onSeek,
+    viewportStart,
+    viewportEnd,
     razorActive,
     snapEnabled,
     playheadMs,
@@ -465,6 +487,9 @@ function TrackRow({
     onCancel: () => void;
     selectedClipId: string | null;
     onSelectClip: (id: string | null) => void;
+    onSeek: (ms: number) => void;
+    viewportStart: number;
+    viewportEnd: number;
     razorActive: boolean;
     snapEnabled: boolean;
     playheadMs: number;
@@ -476,7 +501,7 @@ function TrackRow({
 }) {
     const clips = project.clips.filter((c) => c.trackId === track.id);
     return (
-        <div className="group flex h-16 border-b border-[var(--previs-sequencer-border)]">
+        <div className={`group flex border-b border-[var(--previs-sequencer-border)] ${track.kind === "video" || track.kind === "image" ? "h-20" : "h-16"}`}>
             <div className="sticky left-0 z-10 flex w-48 shrink-0 items-center gap-1 border-r border-[var(--previs-sequencer-border)] bg-[var(--previs-sequencer-surface-raised)] px-2">
                 <TrackBadge kind={track.kind} />
                 <div className="min-w-0 flex-1">
@@ -539,7 +564,10 @@ function TrackRow({
                 } ${track.visible === false ? "opacity-40" : ""}`}
                 onPointerDown={(e) => {
                     if (razorActive) return;
-                    if (e.target === e.currentTarget) onSelectClip(null);
+                    if (e.target === e.currentTarget) {
+                        onSelectClip(null);
+                        onSeek((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerMs);
+                    }
                 }}
             >
                 {clips.map((clip) => (
@@ -552,6 +580,9 @@ function TrackRow({
                         onCancel={onCancel}
                         selected={selectedClipId === clip.id}
                         onSelectClip={onSelectClip}
+                        onSeek={onSeek}
+                        viewportStart={viewportStart}
+                        viewportEnd={viewportEnd}
                         razorActive={razorActive}
                         snapEnabled={snapEnabled}
                         playheadMs={playheadMs}
@@ -586,6 +617,9 @@ function ClipItem({
     onCancel,
     selected,
     onSelectClip,
+    onSeek,
+    viewportStart,
+    viewportEnd,
     razorActive,
     snapEnabled,
     playheadMs,
@@ -599,6 +633,9 @@ function ClipItem({
     onCancel: () => void;
     selected: boolean;
     onSelectClip: (id: string | null) => void;
+    onSeek: (ms: number) => void;
+    viewportStart: number;
+    viewportEnd: number;
     razorActive: boolean;
     snapEnabled: boolean;
     playheadMs: number;
@@ -608,7 +645,7 @@ function ClipItem({
     const gestureRef = useRef<GestureState | null>(null);
 
     const beginGesture = (e: React.PointerEvent, mode: Exclude<GestureMode, null>) => {
-        if (gestureRef.current) return;
+        if (gestureRef.current || e.button !== 0) return;
         onSelectClip(clip.id);
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -619,12 +656,15 @@ function ClipItem({
             originStartMs: clip.startMs,
             originDurationMs: clip.durationMs,
             originSourceStartMs: clip.sourceStartMs ?? 0,
+            moved: false,
         };
     };
 
     const onPointerMove = (e: React.PointerEvent) => {
         const g = gestureRef.current;
         if (!g || e.pointerId !== g.pointerId) return;
+        if (!g.moved && Math.abs(e.clientX - g.startClientX) < 3) return;
+        g.moved = true;
         const deltaMs = (e.clientX - g.startClientX) / pxPerMs;
 
         if (g.mode === "move") {
@@ -714,14 +754,16 @@ function ClipItem({
         } catch {
             // pointer capture 可能已被隐式释放
         }
-        onCommit();
+        if (g.moved) onCommit();
+        else if (g.mode === "move") onSeek(getClipSeekTime(clip, e.clientX - e.currentTarget.getBoundingClientRect().left, pxPerMs));
     };
 
     const isSubtitle = clip.kind === "subtitle";
     const isAudio = clip.kind === "audio";
     const left = clip.startMs * pxPerMs;
     const width = clip.durationMs * pxPerMs;
-    const label = clip.text || clip.nodeId || clip.id;
+    const label = getTimelineClipTitle(clip);
+    const hasFilmstrip = clip.kind === "video" || clip.kind === "image";
     const playheadInside = playheadMs >= clip.startMs && playheadMs <= clip.startMs + clip.durationMs;
 
     const razorSplitAt = (e: React.PointerEvent) => {
@@ -734,7 +776,12 @@ function ClipItem({
 
     return (
         <div
-            className={`group absolute top-1.5 bottom-1.5 select-none rounded-md border text-xs shadow-sm ${
+            role="button"
+            tabIndex={0}
+            aria-label={`${label} · ${formatTimelineTime(clip.durationMs)}`}
+            aria-pressed={selected}
+            data-editor-clip-id={clip.id}
+            className={`group absolute top-1.5 bottom-1.5 overflow-hidden select-none rounded-md border text-xs shadow-sm ${
                 selected
                     ? "border-[var(--previs-accent)] ring-1 ring-[var(--previs-accent)]/60 bg-[var(--previs-accent)]/25 text-[var(--previs-dock-fg-strong)]"
                     : isSubtitle
@@ -745,6 +792,13 @@ function ClipItem({
             }`}
             style={{ left, width, touchAction: "none" }}
             title={`${label} · ${formatTimelineTime(clip.startMs)} +${formatTimelineTime(clip.durationMs)}`}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectClip(clip.id);
+                    onSeek(clip.startMs);
+                }
+            }}
             onPointerDown={(e) => {
                 // 剃刀模式（字幕除外）：单击即在光标处分割；否则开始移动手势
                 if (razorActive && !isSubtitle) {
@@ -755,19 +809,24 @@ function ClipItem({
             }}
             onPointerMove={onPointerMove}
             onPointerUp={endGesture}
-            onPointerCancel={endGesture}
+            onPointerCancel={() => {
+                gestureRef.current = null;
+                onCancel();
+            }}
         >
             <div
-                className="absolute inset-y-0 left-0 cursor-ew-resize rounded-l-md"
+                className="absolute inset-y-0 left-0 z-20 cursor-ew-resize rounded-l-md"
                 style={{ width: TRIM_HANDLE_PX }}
                 onPointerDown={(e) => {
                     e.stopPropagation();
                     beginGesture(e, "trim-start");
                 }}
             />
-            <div className="pointer-events-none flex h-full items-center gap-1 px-2">
+            <div className={hasFilmstrip ? "editor-clip-label" : "pointer-events-none flex h-full items-center gap-1 px-2"}>
                 <span className="truncate">{label}</span>
+                {hasFilmstrip ? <span className="shrink-0 tabular-nums">{formatTimelineTime(clip.durationMs)}</span> : null}
             </div>
+            {hasFilmstrip ? <EditorClipFilmstrip clip={clip} pxPerMs={pxPerMs} visibleStartPx={viewportStart - left} visibleEndPx={viewportEnd - left} /> : null}
             {/* 播放头经过片段时的对齐标线（razor/对齐视觉辅助） */}
             {playheadInside && (
                 <div
@@ -777,7 +836,7 @@ function ClipItem({
                 />
             )}
             <div
-                className="absolute inset-y-0 right-0 cursor-ew-resize rounded-r-md"
+                className="absolute inset-y-0 right-0 z-20 cursor-ew-resize rounded-r-md"
                 style={{ width: TRIM_HANDLE_PX }}
                 onPointerDown={(e) => {
                     e.stopPropagation();

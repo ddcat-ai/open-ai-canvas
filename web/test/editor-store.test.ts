@@ -6,6 +6,24 @@ import type { TimelineProject } from "../src/types/timeline";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+test("用户 seek 和播放器回写分开，小幅或重复定位也产生明确请求", () => {
+    const store = createEditorStore();
+    store.getState().load(makeProject());
+    const loaded = store.getState().seekRequest;
+    store.getState().setTransportMs(2000);
+    expect(store.getState().seekRequest).toBe(loaded);
+    store.getState().seekTransportMs(2100);
+    expect(store.getState().transportMs).toBe(2100);
+    expect(store.getState().seekRequest?.timeMs).toBe(2100);
+    const first = store.getState().seekRequest;
+    store.getState().seekTransportMs(2100);
+    expect(store.getState().seekRequest).not.toBe(first);
+    expect(store.getState().isDirty).toBe(false);
+    expect(store.getState().history?.undoStack).toHaveLength(0);
+    store.getState().seekTransportMs(9000);
+    expect(store.getState().transportMs).toBe(5000);
+});
+
 function makeProject(): TimelineProject {
     return {
         version: 2,
