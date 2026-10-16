@@ -8,6 +8,7 @@ import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-previe
 import { isStoryboardPreviewAsset } from "@/lib/canvas/canvas-storyboard-materializer";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { CanvasNodeType, type CanvasNodeData, type StoryboardAssetBinding } from "@/types/canvas";
+import "./storyboard-assets-cell.css";
 
 export const STORYBOARD_ASSET_ROLE_LABELS: Record<StoryboardAssetBinding["role"], string> = {
     character: "角色",
@@ -30,14 +31,14 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4, onEdit, disab
     if (!assets.length && !onEdit) return <span className="text-[var(--fs-caption)] text-foreground/35">未关联</span>;
     return (
         <>
-            <div className="flex min-w-0 items-center gap-1.5" aria-label={`已关联 ${assets.length} 个资产`}>
+            <div className="storyboard-assets-cell flex min-w-0 max-w-full items-center gap-1.5" aria-label={`已关联 ${assets.length} 个资产`}>
                 {visible.map(({ binding, node }) => (
                     <Tooltip key={binding.nodeId} title={`${node?.title || "资产已失效"} · ${STORYBOARD_ASSET_ROLE_LABELS[binding.role]}`}>
                         <button
                             type="button"
                             data-icon-only
                             disabled={!node}
-                            className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-md border border-foreground/10 bg-foreground/[0.035] text-foreground/45 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground/70 focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
+                            className="storyboard-assets-cell-preview relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-md border border-foreground/10 bg-foreground/[0.035] text-foreground/45 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground/70 focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
                             aria-label={`预览${node?.title || "失效资产"}`}
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
@@ -57,7 +58,8 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4, onEdit, disab
                         type="button"
                         aria-label={assets.length ? "管理关联资产" : "选择关联资产"}
                         disabled={disabled}
-                        className="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-dashed border-foreground/20 px-2 text-xs text-foreground/60 outline-none transition hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:opacity-40"
+                        data-icon-only={assets.length ? true : undefined}
+                        className={`inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-dashed border-foreground/20 text-xs text-foreground/60 outline-none transition hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:opacity-40 ${assets.length ? "w-8 p-0" : "px-2"}`}
                         onMouseDown={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
@@ -76,6 +78,14 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4, onEdit, disab
 }
 
 export function AssetThumbnail({ node }: { node: CanvasNodeData }) {
+    return (
+        <span className="storyboard-asset-thumbnail">
+            <AssetThumbnailContent node={node} />
+        </span>
+    );
+}
+
+function AssetThumbnailContent({ node }: { node: CanvasNodeData }) {
     const source = useNodeMediaSource(node.type === CanvasNodeType.Video ? null : node);
     if (node.type === CanvasNodeType.Audio) return <Music2 className="size-4" />;
     if (node.metadata?.workflowKind === "character" && !source) return <UserRound className="size-4" />;
