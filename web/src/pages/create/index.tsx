@@ -924,7 +924,9 @@ export default function CreatePage() {
         const nextSettings = item.settings;
         selectMode(nextMode);
         setPrompt(item.content);
-        setAttachments(item.attachments ? [...item.attachments] : []);
+        const nextAttachments = item.attachments ? [...item.attachments] : [];
+        setAttachments(nextAttachments);
+        attachmentsRef.current = nextAttachments;
         setDraftReferences(item.references ? [...item.references] : []);
         if (item.model) updateConfig(nextMode === "text" ? "textModel" : nextMode === "image" ? "imageModel" : "videoModel", item.model);
         if (!nextSettings) return;
@@ -1122,7 +1124,10 @@ export default function CreatePage() {
                         onCreateVariant={() => createVariant(item, index)}
                         onContinueCanvas={(ids) => void continueOnCanvas(ids)}
                         openingCanvas={openingCanvas}
-                        onEditUserMessage={(text) => { setPrompt(text); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                        onEditUserMessage={(message) => {
+                            restoreMessageDraft(message);
+                            window.requestAnimationFrame(() => composerFocusRef.current?.focus());
+                        }}
                     /></div>)}</div></section>
                 </main>
                 <section className="creation-thread-composer"><CreationComposer {...composerProps} variant="thread" /></section>
