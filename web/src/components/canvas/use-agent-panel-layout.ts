@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent, type KeyboardEvent } from "react";
-import { AGENT_PANEL_LAYOUT_KEY, changeAgentPanelLayout, clampAgentPanelLayout, defaultAgentPanelLayout, restoreAgentPanelLayout, type AgentPanelGesture, type AgentPanelLayout } from "@/lib/canvas/agent-panel-layout";
+import { AGENT_PANEL_LAYOUT_KEY, changeAgentPanelLayout, defaultAgentPanelLayout, resizeAgentPanelLayout, restoreAgentPanelLayout, type AgentPanelGesture, type AgentPanelLayout } from "@/lib/canvas/agent-panel-layout";
 
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
 
@@ -14,11 +14,17 @@ export function useAgentPanelLayout() {
         }
     });
     const gestureRef = useRef<{ pointerId: number; kind: AgentPanelGesture; x: number; y: number; start: AgentPanelLayout } | null>(null);
+    const previousViewportRef = useRef(viewport());
 
     useEffect(() => {
         const resize = () => {
             setCompact(window.innerWidth < 640);
-            if (window.innerWidth >= 640) setLayout((current) => clampAgentPanelLayout(current, viewport()));
+            if (window.innerWidth >= 640) {
+                const previousViewport = previousViewportRef.current;
+                const nextViewport = viewport();
+                previousViewportRef.current = nextViewport;
+                setLayout((current) => resizeAgentPanelLayout(current, previousViewport, nextViewport));
+            }
         };
         window.addEventListener("resize", resize);
         return () => window.removeEventListener("resize", resize);
@@ -26,9 +32,10 @@ export function useAgentPanelLayout() {
 
     useEffect(() => {
         if (compact) return;
+        const savedViewport = previousViewportRef.current;
         const timer = window.setTimeout(() => {
             try {
-                localStorage.setItem(AGENT_PANEL_LAYOUT_KEY, JSON.stringify(layout));
+                localStorage.setItem(AGENT_PANEL_LAYOUT_KEY, JSON.stringify({ layout, viewport: savedViewport }));
             } catch (error) {
                 console.warn("Agent 窗口偏好无法保存", error);
             }
@@ -71,6 +78,14 @@ export function useAgentPanelLayout() {
         style: compact ? { left: 0, top: 8, width: "100%", height: "calc(100dvh - 8px)" } : layout,
         reset: () => setLayout(defaultAgentPanelLayout(viewport())),
         onResizeKeyDown,
-        pointerHandlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onLostPointerCapture: () => { gestureRef.current = null; } },
+        pointerHandlers: {
+            onPointerDown,
+            onPointerMove,
+            onPointerUp,
+            onPointerCancel: onPointerUp,
+            onLostPointerCapture: () => {
+                gestureRef.current = null;
+            },
+        },
     };
 }
