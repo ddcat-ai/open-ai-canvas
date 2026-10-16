@@ -52,7 +52,7 @@ export async function applyRemoteCanvasOperations(id, request) {
 }
 export async function getRemoteCanvasProject() { fixture.reads++; const hook = fixture.readHook; fixture.readHook = undefined; hook?.(); return { project: structuredClone(fixture.remote) }; }
 export const deleteRemoteAssets = unexpected, deleteRemoteCanvasProject = unexpected, getRemoteAsset = unexpected, getRemoteAssetsByIds = unexpected, getRemoteUserDataSnapshot = unexpected, listRemoteAssetsPage = unexpected, upsertRemoteAsset = unexpected;
-export const getImageBlob = unexpected, getMediaBlob = unexpected, parseAssetRecordList = unexpected, assetForRemoteSync = unexpected, canvasNodeToAsset = unexpected;
+export const getImageBlob = unexpected, getMediaBlob = unexpected, parseAssetRecordList = unexpected, rebaseAssetSnapshot = unexpected, assetForRemoteSync = unexpected, canvasNodeToAsset = unexpected;
 export const applyAgentCanvasPatch = unexpected, mergeAgentCanvasEditor = unexpected, mergeThreeWayValue = unexpected;
 export const useCanvasHistoryStore = {};
 `,
