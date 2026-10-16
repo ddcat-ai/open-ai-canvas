@@ -210,27 +210,38 @@ export async function loadCanvasProjectForEditing(id: string, options: { onLoad?
         const local = useCanvasStore.getState().openProject(id);
         const cachedClean = local?.remoteContentHash && local.remoteContentHash === (await canvasContentHash(local));
         const dirty = local && (!verifiedProjects.has(id) && incrementalSession ? !cachedClean : !sameCanvasContent(acknowledgedProjects.get(id), local));
+        let projected = remote;
         if (dirty && !sameCanvasContent(local, remote)) {
-            const live = requireUnchangedLocal(local, "画布仍在更新，未确认操作已保留");
-            acknowledgedProjects.set(id, { ...remote, remoteContentHash: hash });
-            verifiedProjects.add(id);
-            useSyncProgressStore.getState().setProjectProgress(id, { phase: "pending", cloudRevision: remote.revision, pendingChanges: 1, message: "保留本地未确认操作，等待自动重放" });
-            options.onLoad?.(live || local);
-            scheduleRemoteUserDataSync();
-            return live || local;
+            const pending = pendingCanvasMutations.get(id);
+            const baseline = pending?.baseline || acknowledgedProjects.get(id);
+            if (!baseline) throw new Error("缺少画布合并基线，已保留本地内容");
+            // 未核对的旧缓存不是最新云端文档的编辑结果。直接替换基线会把
+            // 其他设备/Agent 新增、缓存中没有的节点推导成 remove_node。
+            // 无可验证哈希的历史缓存先保留恢复副本，再按会话原基线三方合并。
+            if (!pending && incrementalSession && !verifiedProjects.has(id) && !sameCanvasContent(baseline, remote) && baseline.remoteContentHash !== (await canvasContentHash(baseline))) {
+                const storage = localForageStorageForScope(scope);
+                const key = `yingce:canvas-unverified-recovery:${id}`;
+                const raw = await storage.getItem(key);
+                const previous: unknown = raw ? JSON.parse(raw) : [];
+                const copies = Array.isArray(previous) ? previous : [];
+                await storage.setItem(key, JSON.stringify([...copies.slice(-2), { project: local, savedAt: new Date().toISOString(), cloudRevision: remote.revision }]));
+            }
+            projected = mergeAgentCanvasEditor(baseline, remote, local.nodes, local.connections, local);
         }
         // Editing/generation may continue during the network request or draft write.
         // Viewport-only updates are not document edits and must not block adopting cloud content.
         const live = requireUnchangedLocal(local, "画布仍在更新，已保留本地内容");
-        const project = { ...remote, viewport: live?.viewport || local?.viewport || remote.viewport || { x: 0, y: 0, k: 1 }, remoteContentHash: hash };
+        const project = { ...projected, viewport: live?.viewport || local?.viewport || remote.viewport || { x: 0, y: 0, k: 1 }, remoteContentHash: hash };
         // Align live editor refs synchronously before publishing the new revision.
         // A generation callback must never see old rendered nodes paired with a new revision.
         options.onLoad?.(project);
-        acknowledgedProjects.set(id, project);
+        acknowledgedProjects.set(id, { ...remote, viewport: project.viewport, remoteContentHash: hash });
         verifiedProjects.add(id);
         useCanvasStore.setState((state) => ({ projects: local ? state.projects.map((item) => (item.id === id ? project : item)) : [...state.projects, project] }));
         await flushCanvasStorePersistence();
-        useSyncProgressStore.getState().setProjectProgress(id, { phase: "done", cloudRevision: project.revision, pendingChanges: 0, message: "已确认云端画布基线" });
+        const pending = pendingCanvasMutations.has(id) || !sameCanvasContent(remote, project);
+        useSyncProgressStore.getState().setProjectProgress(id, { phase: pending ? "pending" : "done", cloudRevision: project.revision, pendingChanges: pending ? 1 : 0, message: pending ? "云端更新已合并，保留本地未确认操作" : "已确认云端画布基线" });
+        if (pending) scheduleRemoteUserDataSync();
         return project;
     });
     const pending = { mode, promise: request } as RemoteProjectLoad;
