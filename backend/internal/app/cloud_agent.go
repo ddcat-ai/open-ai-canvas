@@ -182,7 +182,7 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 			return BadAuthRequest("逻辑模型和系统渠道不能混用")
 		}
 	} else if req.ChannelID == "" || req.ChannelModelKey == "" {
-		return BadAuthRequest("请选择后端受管文本模型；Agent 不接受浏览器自定义密钥或上游地址")
+		return BadAuthRequest("请选择后端受管文本模型：Agent 在后端执行，不接受浏览器自定义密钥或上游地址；请在「后台管理 → 模型渠道」添加启用文本能力的渠道，并开启该模型价格档的「可供用户使用」")
 	} else if req.Model != "" && req.Model != req.ChannelModelKey {
 		return BadAuthRequest("渠道模型标识与 model 不一致")
 	}

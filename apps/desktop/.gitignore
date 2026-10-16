@@ -1,0 +1,14 @@
+# 桌面壳与前端包分离：Rust 工具链与 Tauri 依赖不进入 web/
+node_modules/
+
+# Rust 构建产物与 Tauri 生成的 schema
+src-tauri/target/
+src-tauri/gen/
+
+# 打包前暂存的构建输入：Go sidecar 与 web dist，均由 scripts/stage-assets.sh 生成
+src-tauri/binaries/
+src-tauri/resources/
+
+# 打包临时目录
+.stage/
+dist/

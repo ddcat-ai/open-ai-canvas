@@ -540,14 +540,21 @@ async function runCanvasCopyGeneration() {
             return stored.state.projects.find((project) => project.id === projectId)!.nodes;
         };
         const initial: import("../../src/types/canvas").CanvasNodeData = {
-            id: "source", type: CanvasNodeType.Image, title: "source", position: { x: 0, y: 0 }, width: 320, height: 240,
+            id: "source",
+            type: CanvasNodeType.Image,
+            title: "source",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 240,
             metadata: { content: "original-image", prompt: "test prompt", status: "success" },
         };
         useCanvasStore.getState().updateProject(projectId, { nodes: [initial] });
         await flushCanvasStorePersistence();
         const sourceEffect = "attach-node:old-task:source:0";
         await persistCanvasGenerationEffect({
-            projectId, effectKey: sourceEffect, previousNodes: [initial],
+            projectId,
+            effectKey: sourceEffect,
+            previousNodes: [initial],
             nodes: [{ ...initial, metadata: { ...initial.metadata, generationEffectKeys: [sourceEffect] } }],
         });
         const source = (await readNodes())[0]!;
@@ -562,8 +569,10 @@ async function runCanvasCopyGeneration() {
         await flushCanvasStorePersistence();
         const copyEffect = "attach-node:new-task:copy:0";
         await persistCanvasGenerationEffect({
-            projectId, effectKey: copyEffect, previousNodes: pendingNodes,
-            nodes: pendingNodes.map((node) => node.id === "copy" ? { ...node, metadata: { ...node.metadata, content: "new-image", status: "success", generationEffectKeys: [copyEffect] } } : node),
+            projectId,
+            effectKey: copyEffect,
+            previousNodes: pendingNodes,
+            nodes: pendingNodes.map((node) => (node.id === "copy" ? { ...node, metadata: { ...node.metadata, content: "new-image", status: "success", generationEffectKeys: [copyEffect] } } : node)),
         });
         await flushCanvasStorePersistence();
         return { beforeGeneration, restored: await readNodes() };

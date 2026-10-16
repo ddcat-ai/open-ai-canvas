@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  最小集：Go 单二进制 sidecar 是独立进程，不加载进壳进程，因此不需要 JIT / 库校验豁免。
+  签名与公证会验证这份文件是否真的够用；实测出现缺项时按缺项补，不要照抄 Python 侧的整套豁免。
+-->
+<plist version="1.0">
+<dict/>
+</plist>
