@@ -28,6 +28,31 @@ tags:
   - name: skills
   - name: workbench
 paths:
+  /projects/{id}/assets/{assetId}/image:
+    put:
+      tags: [projects, assets]
+      summary: 为场景或道具绑定图片并创建新版本
+      description: 校验项目归属、资产关联、版本归属与就绪图片资源；过期版本拒绝。旧版本与图片引用保留。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: assetId, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resourceId, expectedVersionId]
+              properties:
+                resourceId: {type: string, minLength: 1}
+                expectedVersionId: {type: string, minLength: 1}
+      responses:
+        "200":
+          description: 成功信封 data={asset}，包含 visual.definition/status 和新版本、图片资源定位
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "500": {$ref: "#/components/responses/Error"}
   /admin/login-logs:
     get:
       tags: [admin]

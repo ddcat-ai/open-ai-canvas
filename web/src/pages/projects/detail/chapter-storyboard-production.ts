@@ -68,7 +68,7 @@ export function chapterStoryboardAssets(detail: ProjectDetail): ChapterStoryboar
             type,
             category: asset.category || undefined,
             tags: [],
-            prompt: assetPrompt(asset.previewText, asset.character?.definition, asset.title),
+            prompt: assetPrompt(asset.previewText, asset.character?.definition || asset.visual?.definition, asset.title),
             ...(type === "character" ? { characterAssetId: asset.id, characterVersionId } : {}),
         }];
     }).slice(0, 60);

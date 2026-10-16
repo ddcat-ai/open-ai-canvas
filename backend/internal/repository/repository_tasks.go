@@ -213,6 +213,7 @@ func (r *Repository) SaveTaskCompletion(task *model.Task, expected model.TaskSta
 // the task recoverable and never exposes a false success to the canvas.
 func (r *Repository) SaveTaskCompletionWithRegistration(task *model.Task, expected model.TaskStatus, results []model.Result, register func(*Repository) error) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		storedResultJSON := task.ResultJSON
 		updated := taskLeaseWriter(tx.Model(&model.Task{}), task.LeaseOwner).
 			Where("id = ? AND status = ?", task.ID, expected).
 			Select("*").Omit("id", "created_at").Updates(task)
@@ -228,7 +229,13 @@ func (r *Repository) SaveTaskCompletionWithRegistration(task *model.Task, expect
 			}
 		}
 		if register != nil {
-			return register(New(tx))
+			if err := register(New(tx)); err != nil {
+				return err
+			}
+			// 版本化资产绑定可能补充结果状态；与任务终态在同一事务保存。
+			if task.ResultJSON != storedResultJSON {
+				return tx.Model(&model.Task{}).Where("id = ?", task.ID).Update("result_json", task.ResultJSON).Error
+			}
 		}
 		return nil
 	})

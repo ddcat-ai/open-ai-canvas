@@ -234,6 +234,17 @@ describe("素材批量删除", () => {
         expect(writes.every((item) => item.status === "archived")).toBe(true);
     });
 
+    test("服务端绑定图片后强制刷新已验证素材，保留本地标签编辑", async () => {
+        const initial = { ...asset("scene"), category: "environment" as const, primaryVersionId: "v1" };
+        let remote: Asset = initial;
+        apiClient.defaults.adapter = async (config) => ({ config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { assets: [remote] }, msg: "ok" } });
+        await loadAssetsForUse(["scene"]);
+        useAssetStore.getState().updateAsset("scene", { tags: ["本地标签"] });
+        remote = { ...initial, kind: "image", primaryVersionId: "v2", data: { dataUrl: "/api/resources/image/file", storageKey: "resource:image", width: 800, height: 600, bytes: 100, mimeType: "image/png" } };
+        await loadAssetsForUse(["scene"], { refresh: true });
+        expect(useAssetStore.getState().assets[0]).toMatchObject({ kind: "image", primaryVersionId: "v2", tags: ["本地标签"], data: { storageKey: "resource:image" } });
+    });
+
     test("删除响应返回前切换账号，不删除新账号本地素材", async () => {
         useAssetStore.setState({ assets: [asset("same-id")] });
         apiClient.defaults.adapter = async (config) => {

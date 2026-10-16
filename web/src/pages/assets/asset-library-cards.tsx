@@ -144,6 +144,8 @@ export function AssetCover({
             <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={`查看素材：${asset.title}`}>
                 {asset.kind === "audio" ? (
                     <AudioWaveCover asset={asset} />
+                ) : asset.kind === "entity" && (asset.category === "environment" || asset.category === "prop") ? (
+                    <div className="assets-cover-fallback"><span>{assetCategoryLabel(asset.category)} · 待生成图片</span></div>
                 ) : asset.kind === "entity" ? (
                     <CharacterAssetCover asset={asset} />
                 ) : asset.kind === "text" ? (
@@ -172,7 +174,7 @@ export function AssetCover({
             <span className="assets-cover-badges">
                 <span className="assets-cover-badge is-kind">
                     <KindIcon />
-                    {kind ? assetKindLabel(kind) : "素材"}
+                    {kind ? assetKindLabel(kind, asset.category) : "素材"}
                 </span>
                 {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : asset.kind === "entity" ? null : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
                 {asset.portraitCertified ? <span className="assets-cover-badge is-category">人像认证</span> : null}

@@ -39,22 +39,23 @@ type CreateAssetVersionRequest struct {
 }
 
 type ProjectAssetSummary struct {
-	ID               string                   `json:"id"`
-	Title            string                   `json:"title"`
-	MediaType        string                   `json:"mediaType"`
-	Category         model.AssetCategory      `json:"category"`
-	Status           model.AssetVersionStatus `json:"status"`
-	PrimaryVersionID string                   `json:"primaryVersionId,omitempty"`
-	VersionCount     int                      `json:"versionCount"`
-	Usages           []string                 `json:"usages"`
-	FolderID         string                   `json:"folderId,omitempty"`
-	Position         int                      `json:"position"`
-	StorageKey       string                   `json:"storageKey,omitempty"`
-	DurationMs       int64                    `json:"durationMs,omitempty"`
-	PreviewText      string                   `json:"previewText,omitempty"`
-	UpdatedAt        time.Time                `json:"updatedAt"`
-	Source           string                   `json:"source,omitempty"`
-	Character        *CharacterCardSummary    `json:"character,omitempty"`
+	ID               string                     `json:"id"`
+	Title            string                     `json:"title"`
+	MediaType        string                     `json:"mediaType"`
+	Category         model.AssetCategory        `json:"category"`
+	Status           model.AssetVersionStatus   `json:"status"`
+	PrimaryVersionID string                     `json:"primaryVersionId,omitempty"`
+	VersionCount     int                        `json:"versionCount"`
+	Usages           []string                   `json:"usages"`
+	FolderID         string                     `json:"folderId,omitempty"`
+	Position         int                        `json:"position"`
+	StorageKey       string                     `json:"storageKey,omitempty"`
+	DurationMs       int64                      `json:"durationMs,omitempty"`
+	PreviewText      string                     `json:"previewText,omitempty"`
+	UpdatedAt        time.Time                  `json:"updatedAt"`
+	Source           string                     `json:"source,omitempty"`
+	Character        *CharacterCardSummary      `json:"character,omitempty"`
+	Visual           *ProjectAssetVisualSummary `json:"visual,omitempty"`
 }
 
 type ProjectAssetFilter struct {
@@ -444,9 +445,16 @@ func (s *Service) ConfirmProjectAssetCandidate(userID string, projectID string, 
 			characterPayload, marshalErr = characterAssetPayload(assetID, versionID, candidate.Name, json.RawMessage(candidate.DetailsJSON), now, now)
 			payload = []byte(characterPayload)
 		} else {
+			if projectVisualCategory(candidate.Category) {
+				kind = "entity"
+			}
+			data := map[string]any{"content": ""}
+			if kind == "entity" {
+				data = map[string]any{"definition": json.RawMessage(candidate.DetailsJSON)}
+			}
 			payload, marshalErr = json.Marshal(map[string]any{
 				"id": assetID, "kind": kind, "category": candidate.Category, "status": model.AssetVersionStatusConfirmed,
-				"primaryVersionId": versionID, "title": candidate.Name, "tags": []string{}, "data": map[string]string{"content": ""},
+				"primaryVersionId": versionID, "title": candidate.Name, "coverUrl": "", "tags": []string{}, "data": data,
 				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
 			})
 		}
@@ -573,6 +581,26 @@ func (s *Service) projectAssetSummary(userID string, projectID string, asset *mo
 			return ProjectAssetSummary{}, cardErr
 		}
 		summary.Character = &card
+	}
+	if projectVisualCategory(asset.Category) && asset.PrimaryVersionID != "" {
+		for _, version := range versions {
+			if version.ID != asset.PrimaryVersionID {
+				continue
+			}
+			var definition map[string]any
+			if err := json.Unmarshal([]byte(version.DefinitionJSON), &definition); err != nil {
+				return ProjectAssetSummary{}, err
+			}
+			// 普通上传图片仍走媒体卡；有提取设定的场景、道具提供出图流程。
+			if asset.Kind == "entity" || definition["prompt"] != nil {
+				status := "missing"
+				if asset.Kind == "image" && storageKey != "" {
+					status = "ready"
+				}
+				summary.Visual = &ProjectAssetVisualSummary{Definition: definition, Status: status}
+			}
+			break
+		}
 	}
 	return summary, nil
 }

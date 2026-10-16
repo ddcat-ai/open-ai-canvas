@@ -68,6 +68,7 @@ export type ProjectAsset = {
     previewText?: string;
     updatedAt: string;
     character?: CharacterCardSummary;
+    visual?: { definition: Record<string, unknown>; status: "missing" | "ready" };
     source?: string;
 };
 
@@ -620,6 +621,10 @@ export function createProjectAssetCandidates(projectId: string, candidates: Arra
 
 export function confirmProjectAssetCandidate(projectId: string, candidateId: string, assetId?: string) {
     return http.post<{ asset: ProjectAsset }>(`/projects/${encodeURIComponent(projectId)}/asset-candidates/${encodeURIComponent(candidateId)}/confirm`, { assetId: assetId || "" });
+}
+
+export function bindProjectAssetImage(projectId: string, assetId: string, input: { resourceId: string; expectedVersionId: string }) {
+    return http.put<{ asset: ProjectAsset }>(`/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/image`, input);
 }
 
 export function updateWorkflowStep(projectId: string, stepId: string, input: { status: string; outputJson?: string; error?: string }) {

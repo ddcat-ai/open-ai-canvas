@@ -217,6 +217,8 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 | `GET /api/projects/:id/assets` | 项目资产分页、分类/目录计数，支持分类、媒体类型、目录和关键词筛选 |
 | `GET /api/projects/:id/asset-candidates` | 资产候选分页，支持章节、状态、分类和名称关键词筛选 |
 
+场景/道具提取设定复用 `assets.kind=entity` 与 `asset_versions.definition_json`。绑定真实图片后，同一资产转为 `image`，新版本通过 `asset_representations` 的 `primary` 角色关联资源，旧表现记录不删除。画布引用可匹配该资产的服务端历史图片；不通过客户端 metadata 授权历史资源。此流程不增加表或字段。
+
 旧 `GET /api/projects/:id` 暂时保留给尚未迁移的调用方；短剧工作台页面不得重新依赖该整包接口。
 
 面向上千章、上万镜头的数据量，迁移会建立以下组合索引：

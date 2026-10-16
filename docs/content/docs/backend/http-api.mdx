@@ -455,6 +455,14 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 生成提示词工具引用格式为 `@[tool:type:ID:label:icon]`，label 使用 URI 编码。名称和图标只用于展示，不作为授权依据。服务端在任务入队及执行前检查用户可见性、启用状态、工具类型和生成模式；无效、越权、嵌套工具或数据库错误必须失败，不能把未解析 token 发送给模型。风格和九宫格仅用于图片，运镜和特效仅用于视频。入队校验不冻结工具快照：排队期间删除工具将导致执行失败。
 
+## 场景与道具图片
+
+`PUT /api/projects/:id/assets/:assetId/image` 接收 `{ resourceId, expectedVersionId }`，返回标准信封 `data={ asset }`。只允许当前用户在自己项目内，为场景或道具绑定本人已就绪的图片；资源必须有有效尺寸和图片 MIME。两个字段均必填，过期版本拒绝，主版本必须属于目标资产。
+
+项目资产摘要可包含 `visual={ definition, status }`：definition 保留描述与提示词，status 为 `missing|ready`。未出图的设定使用 `entity`；真实图片绑定后，同一资产使用 `image` 和真实资源定位，旧版本及图片引用保留。继续使用现有资产、版本、表现表，无数据库迁移。
+
+受管图片任务使用 `metadata.operation=project_asset_image`、`projectAssetId` 和 `projectAssetVersionId`，由任务成功事务绑定资源，媒体保存恢复同样适用。结果的 `projectAssetImageStatus=bound|stale` 表示已绑定或资产版本已变化；stale 仍保留生成文件，不能自动重发收费请求。历史画布图片匹配只信任服务端版本表现记录，不信任客户端自报的历史。
+
 ## 平台技能策展
 
 新增登录读取 `/api/skills/curation` 与管理员 GET／PUT `/api/admin/skill-curation`；原技能列表仅在策展开启时应用新增分类筛选，响应结构不变。见 [接口与行为](./skill-curation)。

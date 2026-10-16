@@ -57,6 +57,15 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 	for _, asset := range ownedAssets {
 		assetResources[asset.ID] = assets.DocumentReferencedIDs(asset.PayloadJSON, resourceIDSet)
 	}
+	history, err := s.projectImageHistory(userID, ownedAssets)
+	if err != nil {
+		return err
+	}
+	for assetID, ids := range history {
+		for resourceID := range ids {
+			assetResources[assetID][resourceID] = struct{}{}
+		}
+	}
 
 	resources, err := s.repo.ResourcesForUserIDs(userID, assets.SortedIDs(resourceIDSet))
 	if err != nil {
@@ -106,6 +115,10 @@ func canvasResourcesMissingError(references []assets.DocumentResourceReference) 
 // validateAssetCanvasReferences prevents an Asset update from changing the
 // resource behind a canvas that already points at that Asset.
 func (s *Service) ValidateAssetCanvasReferences(userID string, asset model.Asset) error {
+	history, err := s.projectImageHistory(userID, []model.Asset{asset})
+	if err != nil {
+		return err
+	}
 	canvases, err := s.repo.CanvasProjects(userID)
 	if err != nil {
 		return err
@@ -120,7 +133,8 @@ func (s *Service) ValidateAssetCanvasReferences(userID string, asset model.Asset
 				continue
 			}
 			candidate := map[string]struct{}{reference.ResourceID: {}}
-			if !assets.DocumentReferences(asset.PayloadJSON, candidate) {
+			_, historical := history[asset.ID][reference.ResourceID]
+			if !assets.DocumentReferences(asset.PayloadJSON, candidate) && !historical {
 				return kernel.BadAuthRequest("素材仍被画布引用，不能替换为其他云端资源")
 			}
 		}
@@ -132,6 +146,10 @@ func (s *Service) ValidateAssetCanvasReferences(userID string, asset model.Asset
 // legacy full-replacement endpoint, which otherwise could silently remove an
 // Asset that a canvas still needs.
 func (s *Service) ValidateAssetReplacementCanvasReferences(userID string, replacement []model.Asset) error {
+	history, err := s.projectImageHistory(userID, replacement)
+	if err != nil {
+		return err
+	}
 	assetByID := make(map[string]model.Asset, len(replacement))
 	for _, asset := range replacement {
 		assetByID[asset.ID] = asset
@@ -151,12 +169,35 @@ func (s *Service) ValidateAssetReplacementCanvasReferences(userID string, replac
 				return kernel.BadAuthRequest("素材仍被画布引用，不能从素材库移除")
 			}
 			candidate := map[string]struct{}{reference.ResourceID: {}}
-			if !assets.DocumentReferences(asset.PayloadJSON, candidate) {
+			_, historical := history[asset.ID][reference.ResourceID]
+			if !assets.DocumentReferences(asset.PayloadJSON, candidate) && !historical {
 				return kernel.BadAuthRequest("画布媒体与替换后的素材库记录不一致")
 			}
 		}
 	}
 	return nil
+}
+
+// 场景、道具换图后保留旧画布的不可变资源引用；信任版本表，不信任客户端声明的历史。
+func (s *Service) projectImageHistory(userID string, candidates []model.Asset) (map[string]map[string]struct{}, error) {
+	ids := []string{}
+	for _, asset := range candidates {
+		if asset.Category == model.AssetCategoryEnvironment || asset.Category == model.AssetCategoryProp {
+			ids = append(ids, asset.ID)
+		}
+	}
+	references, err := s.repo.ProjectAssetImageReferences(userID, ids)
+	if err != nil {
+		return nil, err
+	}
+	history := map[string]map[string]struct{}{}
+	for _, reference := range references {
+		if history[reference.AssetID] == nil {
+			history[reference.AssetID] = map[string]struct{}{}
+		}
+		history[reference.AssetID][reference.ResourceID] = struct{}{}
+	}
+	return history, nil
 }
 
 func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {

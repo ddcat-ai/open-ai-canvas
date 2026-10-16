@@ -7,6 +7,16 @@ import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-s
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { TimelineClip } from "@/types/timeline";
 
+test("场景换图后的旧画布保留资产历史图片引用，不创建重复素材", () => {
+    const image: Asset = { id: "scene", kind: "image", category: "environment", title: "阁楼", coverUrl: "", tags: [], createdAt: "", updatedAt: "", metadata: { projectAssetImageHistory: ["resource:old-image"] }, data: { dataUrl: "/api/resources/new-image/file", storageKey: "resource:new-image", width: 800, height: 600, bytes: 100, mimeType: "image/png" } };
+    useAssetStore.setState({ assets: [image] });
+    const node = { ...videoNode("scene-node", "scene", "resource:old-image"), type: CanvasNodeType.Image };
+    useCanvasStore.setState({ projects: [project("canvas", [node])] });
+    expect(repairMissingCanvasAssets()).toEqual({ createdAssets: 0, updatedProjects: 0 });
+    expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.storageKey).toBe("resource:old-image");
+    expect(useAssetStore.getState().assets).toHaveLength(1);
+});
+
 function videoAsset(id: string, storageKey?: string, url = ""): Asset {
     return {
         id,
