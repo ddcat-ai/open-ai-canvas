@@ -80,8 +80,8 @@ test("Create refresh subscriptions share one durable scheduler observation witho
     const afterRefresh: GenerationTask[] = [];
     const disconnect = service.subscribe([running.id], (task) => beforeRefresh.push(task));
     await Promise.resolve();
-    disconnect();
     const reconnect = service.subscribe([running.id], (task) => afterRefresh.push(task));
+    disconnect();
     release();
     await new Promise((resolveTick) => setTimeout(resolveTick, 0));
     reconnect();

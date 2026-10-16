@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:tes
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 
 // Isolate transport/storage without leaking module mocks into other test suites.
@@ -15,12 +16,14 @@ const paths: Record<string, string> = {
     "@/services/api/resources": join(dir, "resources.ts"),
     "@/lib/canvas/canvas-content": join(dir, "content.ts"),
     "@/stores/use-sync-progress-store": join(dir, "progress.ts"),
-    "@/lib/canvas/canvas-task-mutation": new URL("../src/lib/canvas/canvas-task-mutation.ts", import.meta.url).pathname,
+    "@/lib/canvas/canvas-task-mutation": fileURLToPath(new URL("../src/lib/canvas/canvas-task-mutation.ts", import.meta.url)),
     "./user-data-sync-media": join(dir, "media.ts"),
+    "./canvas-edit-leases": stubPath,
+    "@/lib/canvas/agent-canvas-patch": fileURLToPath(new URL("lib/canvas/agent-canvas-patch.ts", root)),
 };
 function copySource(source: string, name: string) {
     const code = readFileSync(new URL(source, root), "utf8");
-    const imports = code.replace(/"(@\/[^\"]+|\.\/user-data-sync-media|json-canonicalize|zustand)"/g, (_, specifier: string) => JSON.stringify(paths[specifier] ?? stubPath));
+    const imports = code.replace(/"(@\/[^\"]+|\.\/user-data-sync-media|\.\/canvas-edit-leases|json-canonicalize|zustand)"/g, (_, specifier: string) => JSON.stringify(paths[specifier] ?? stubPath));
     writeFileSync(join(dir, name), `import { fixtureWindow as window } from ${JSON.stringify(stubPath)};\n` + imports);
 }
 writeFileSync(
@@ -105,7 +108,7 @@ export async function upsertRemoteAsset(asset) { fixture.assetWrites.push(struct
 export const assetForRemoteSync = asset => asset;
 export const deleteRemoteAssets = unexpected, deleteRemoteCanvasProject = unexpected, getRemoteAssetsByIds = unexpected, getRemoteUserDataSnapshot = unexpected, listRemoteAssetsPage = unexpected;
 export const getImageBlob = unexpected, getMediaBlob = unexpected, parseAssetRecordList = unexpected, rebaseAssetSnapshot = unexpected, canvasNodeToAsset = unexpected;
-export const applyAgentCanvasPatch = unexpected, mergeAgentCanvasEditor = unexpected, mergeThreeWayValue = unexpected;
+export const canvasEditLeases = { reset() {}, session: () => "test-session", versions: () => ({}), proofs: async () => [], acknowledged() {} };
 export const useCanvasHistoryStore = {};
 `,
 );
@@ -117,6 +120,7 @@ copySource("services/user-data-sync.ts", "sync.ts");
 const sync: typeof import("@/services/user-data-sync") = await import(join(dir, "sync.ts"));
 const { useSyncProgressStore }: typeof import("@/stores/use-sync-progress-store") = await import(join(dir, "progress.ts"));
 const { fixture, useCanvasStore, useAssetStore, ApiError } = await import(stubPath);
+const { canvasContentHash } = await import(join(dir, "content.ts"));
 sync.installRemoteUserDataAutoSync();
 
 const base = (): CanvasProject => ({
@@ -178,10 +182,22 @@ async function restoreJournal(entries: ReturnType<typeof oldTaskEntry>[], projec
     sync.resetRemoteUserDataSync();
     fixture.data.set(journalKey, JSON.stringify(entries));
     useCanvasStore.setState({ projects });
+    await markConfirmedFixtureSnapshots();
     await sync.initializeRemoteUserDataSession("sync-test-user");
+}
+async function markConfirmedFixtureSnapshots() {
+    // Only snapshots identical to our server fixture are acknowledged. Pending
+    // journal projections must retain their older baseline and dirty contents.
+    for (const project of useCanvasStore.getState().projects) {
+        const remote = project.id === "canvas" ? fixture.remote : fixture.remoteById.get(project.id);
+        if (remote && (await canvasContentHash(project)) === (await canvasContentHash(remote))) {
+            project.remoteContentHash = await canvasContentHash(remote);
+        }
+    }
 }
 async function reloadSession() {
     sync.resetRemoteUserDataSync();
+    await markConfirmedFixtureSnapshots();
     await sync.initializeRemoteUserDataSession("sync-test-user");
 }
 function expectFencedRetry(original: ReturnType<typeof oldTaskEntry>["request"], replacement: typeof original) {
@@ -212,6 +228,7 @@ beforeEach(async () => {
     fixture.reads = fixture.flushes = 0;
     fixture.beforeFlush = fixture.readHook = fixture.flushError = undefined;
     useCanvasStore.setState({ projects: [base()] });
+    await markConfirmedFixtureSnapshots();
     await sync.initializeRemoteUserDataSession("sync-test-user");
 });
 afterEach(() => sync.resetRemoteUserDataSync());

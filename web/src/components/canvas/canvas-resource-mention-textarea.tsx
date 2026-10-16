@@ -39,7 +39,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     value: string;
     references: CanvasResourceReference[];
     onSelectReference?: (reference: CanvasResourceReference) => CanvasResourceReference | undefined;
-    onChange: (value: string) => void;
+    onChange: (value: string) => boolean | void;
     onSubmit?: () => void;
     containerClassName?: string;
     highlightLabels?: boolean;
@@ -71,6 +71,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const containerRef = useRef<HTMLDivElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const editorRef = useRef<HTMLDivElement | null>(null);
+    const readOnly = Boolean(props.disabled || props.readOnly);
     const composingRef = useRef(false);
     const pendingSelectionRef = useRef<number | null>(null);
     const pendingScrollTopRef = useRef<number | null>(null);
@@ -216,11 +217,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const updateValue = (next: string, selectionStart?: number) => {
+        if (readOnly || onChange(next) === false) return false;
         if (typeof selectionStart === "number") pendingSelectionRef.current = selectionStart;
         const editor = editorRef.current ?? textareaRef.current;
         pendingScrollTopRef.current = editor?.scrollTop ?? null;
-        onChange(next);
         if (typeof selectionStart === "number") focusEditor(selectionStart);
+        return true;
     };
 
     const closeMention = () => {
@@ -229,6 +231,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const syncMention = (nextValue: string, cursor: number) => {
+        if (readOnly) return;
         setAutoLinkCursor(cursor);
         const prefix = nextValue.slice(0, cursor);
         const match = /@([^\s@,.;:!?，。；：！？、)\]}】）]*)$/.exec(prefix);
@@ -245,7 +248,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const insertReference = (reference: CanvasResourceReference) => {
-        if (!mention) return;
+        if (readOnly || !mention) return;
         const selected = onSelectReference ? onSelectReference(reference) : reference;
         if (!selected) return;
         const insertText = `${canvasResourceMentionToken(selected)} `;
@@ -262,7 +265,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             || { start: currentValue.length, end: currentValue.length };
         const next = `${currentValue.slice(0, selection.start)}${insertText}${currentValue.slice(selection.end)}`;
         const cursor = selection.start + insertText.length;
-        updateValue(next, cursor);
+        if (!updateValue(next, cursor)) return;
         syncMention(next, cursor);
     };
 
@@ -274,7 +277,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         setAutoLinkCursor(match.start + insertText.length);
     };
 
-    const autoLinkSuggestion = autoLinkMatch ? createPortal(
+    const autoLinkSuggestion = !readOnly && autoLinkMatch ? createPortal(
         <button
             ref={autoLinkSuggestionRef}
             type="button"
@@ -293,14 +296,19 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     ) : null;
 
     const syncEditableValue = () => {
-        if (composingRef.current) return;
+        if (readOnly || composingRef.current) return;
         const editor = editorRef.current;
         if (!editor) return;
         const next = serializeEditableValue(editor);
         const cursor = getEditableSelection(editor)?.start ?? next.length;
+        if (onChange(next) === false) {
+            renderEditableContent(editor, value, activeReferences);
+            lastRenderedValueRef.current = value;
+            setEditableSelection(editor, Math.min(cursor, value.length));
+            return;
+        }
         pendingSelectionRef.current = cursor;
         lastRenderedValueRef.current = next;
-        onChange(next);
         syncMention(next, cursor);
         reportContentSize(editor);
     };
@@ -329,7 +337,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         caretColor: style?.color || theme.node.text,
     } as CSSProperties;
     const menuAnchor = useRichEditor ? editorRef.current : textareaRef.current;
-    const menu = mention && availableReferences.length && menuAnchor ? (
+    const menu = !readOnly && mention && availableReferences.length && menuAnchor ? (
         <MentionMenu
             anchor={menuAnchor}
             connectedReferences={activeMentionCanvasReferences}
@@ -359,6 +367,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     aria-multiline="true"
                     aria-label={props["aria-label"]}
                     aria-disabled={props.disabled}
+                    aria-readonly={readOnly}
                     contentEditable={!props.disabled && !props.readOnly}
                     suppressContentEditableWarning
                     spellCheck={props.spellCheck}
@@ -407,6 +416,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onDragLeave?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
                     }}
                     onDrop={(event: DragEvent<HTMLDivElement>) => {
+                        if (readOnly) { event.preventDefault(); return; }
                         const reference = referenceForDropTarget(event.target);
                         const files = imageFilesFromTransfer(event);
                         setNativeDropReferenceId(null);
@@ -417,7 +427,8 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onDrop?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
                     }}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
+                        if (readOnly) { onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>); return; }
+                        if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
                         if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {
                             event.preventDefault();
                             insertAutoLink(autoLinkMatch);
@@ -513,8 +524,9 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                 className={`${className || ""} relative z-10`}
                 style={{ ...mergedStyle, height: "100%", minHeight: 0, maxHeight: "100%", overflowY: "auto", overflowX: "hidden" }}
                 onChange={(event) => {
+                    if (readOnly) return;
                     const next = event.target.value;
-                    onChange(next);
+                    if (onChange(next) === false) { event.currentTarget.value = value; return; }
                     syncMention(next, event.target.selectionStart);
                     reportContentSize(event.currentTarget);
                 }}
@@ -533,6 +545,7 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                     props.onSelect?.(event);
                 }}
                 onKeyDown={(event) => {
+                    if (readOnly) { onKeyDown?.(event); return; }
 if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
                         if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {
                             event.preventDefault();

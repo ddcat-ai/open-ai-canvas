@@ -24,7 +24,6 @@ import {
     MoreHorizontal,
     Quote,
     Redo2,
-    Save,
     Strikethrough,
     Underline,
     Undo2,
@@ -35,23 +34,34 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { createCanvasRichTextExtensions, isSafeCanvasRichTextLink } from "@/lib/canvas/canvas-rich-text";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { CanvasTextLeaseIndicator, useCanvasTextLease } from "./use-canvas-text-lease";
 
 type CanvasTextEditorModalProps = {
     node: CanvasNodeData | null;
     open: boolean;
     onClose: () => void;
-    onSave: (nodeId: string, title: string, content: string, richText: Record<string, unknown>) => Promise<void> | void;
+    onChange: (nodeId: string, title: string, content: string, richText: Record<string, unknown>) => Promise<void> | void;
 };
 
-export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTextEditorModalProps) {
-    const { message, modal } = App.useApp();
+export function CanvasTextEditorModal({ node, open, onClose, onChange }: CanvasTextEditorModalProps) {
+    const { message } = App.useApp();
     const theme = canvasThemes[useActiveTheme()];
     const [title, setTitle] = useState("");
     const [markdownContent, setMarkdownContent] = useState("");
-    const [dirty, setDirty] = useState(false);
-    const [saving, setSaving] = useState(false);
     const markdownEditorRef = useRef<TextAreaRef | null>(null);
     const isMarkdown = node?.type === CanvasNodeType.Markdown;
+    const textLease = useCanvasTextLease(node?.id || "");
+    const draftRef = useRef({ node, title, markdownContent, onChange, textLease });
+    draftRef.current = { node, title, markdownContent, onChange, textLease };
+    const publish = (content: string, richText: Record<string, unknown>, nextTitle = draftRef.current.title) => {
+        const current = draftRef.current;
+        if (!current.node || current.node.metadata?.locked || !current.textLease.input()) return;
+        void Promise.resolve().then(() => current.onChange(current.node!.id, nextTitle, content, richText)).catch((error) => {
+            message.error(error instanceof Error ? error.message : "草稿写回失败");
+        });
+    };
+    const publishRef = useRef(publish);
+    publishRef.current = publish;
     const editor = useEditor({
         immediatelyRender: false,
         extensions: createCanvasRichTextExtensions("输入文本内容…"),
@@ -62,15 +72,16 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                 "aria-label": "文本节点富文本编辑区",
             },
         },
-        onUpdate: () => setDirty(true),
+        onUpdate: ({ editor: updated }) => publishRef.current(updated.getText({ blockSeparator: "\n" }).trimEnd(), updated.getJSON() as Record<string, unknown>),
     });
+
+    const readOnly = textLease.blocked || Boolean(node?.metadata?.locked);
+    useEffect(() => { editor?.setEditable(!readOnly, false); }, [editor, readOnly]);
 
     useEffect(() => {
         if (!open || !node) return;
         setTitle(node.title || (node.type === CanvasNodeType.Markdown ? "Markdown" : "文本"));
         setMarkdownContent(node.metadata?.content || "");
-        setDirty(false);
-        setSaving(false);
         if (node.type === CanvasNodeType.Markdown) {
             window.setTimeout(() => markdownEditorRef.current?.focus(), 0);
             return;
@@ -80,48 +91,20 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
         window.setTimeout(() => editor.commands.focus("start"), 0);
     }, [editor, node?.id, node?.type, open]);
 
+    useEffect(() => {
+        if (!open || !node || textLease.pending) return;
+        setTitle(node.title || "");
+        setMarkdownContent(node.metadata?.content || "");
+        if (editor && node.type !== CanvasNodeType.Markdown) {
+            const content = (node.metadata?.richText as JSONContent | undefined) || plainTextDocument(node.metadata?.content || "");
+            if (JSON.stringify(editor.getJSON()) !== JSON.stringify(content)) editor.commands.setContent(content, { emitUpdate: false });
+        }
+    }, [editor, node, open, textLease.pending]);
+
     const characterCount = isMarkdown ? markdownContent.length : editor?.storage.characterCount?.characters?.() || 0;
     const wordCount = useMemo(() => countWords(isMarkdown ? markdownContent : editor?.getText() || ""), [characterCount, editor, isMarkdown, markdownContent]);
 
-    const save = async () => {
-        if (!node || saving || (!isMarkdown && !editor)) return;
-        setSaving(true);
-        try {
-            if (isMarkdown) {
-                await onSave(node.id, title.trim() || "Markdown", markdownContent, (node.metadata?.richText as Record<string, unknown> | undefined) || {});
-            } else {
-                await onSave(node.id, title.trim() || "文本", editor!.getText({ blockSeparator: "\n" }).trimEnd(), editor!.getJSON() as Record<string, unknown>);
-            }
-            setDirty(false);
-            message.success("文本节点已保存");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "文本保存失败");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const close = () => {
-        if (!dirty || saving) return onClose();
-        modal.confirm({
-            title: "放弃未保存的修改？",
-            content: `关闭后，本次${isMarkdown ? "Markdown" : "富文本"}编辑不会写回画布节点。`,
-            okText: "放弃修改",
-            cancelText: "继续编辑",
-            onOk: onClose,
-        });
-    };
-
-    useEffect(() => {
-        if (!open) return;
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
-            event.preventDefault();
-            void save();
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [dirty, editor, isMarkdown, markdownContent, node?.id, open, saving, title]);
+    const close = () => onClose();
 
     return (
         <AppModal
@@ -141,14 +124,20 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                     <Input
                         variant="borderless"
                         value={title}
-                        onChange={(event) => { setTitle(event.target.value); setDirty(true); }}
+                        readOnly={readOnly}
+                        onChange={(event) => {
+                            if (readOnly) return;
+                            const value = event.target.value;
+                            setTitle(value);
+                            draftRef.current.title = value;
+                            publish(isMarkdown ? markdownContent : editor?.getText({ blockSeparator: "\n" }).trimEnd() || "", isMarkdown ? (node?.metadata?.richText as Record<string, unknown>) || {} : editor?.getJSON() as Record<string, unknown> || {}, value);
+                        }}
                         className="!h-9 min-w-0 max-w-[360px] flex-1 !px-1 text-sm font-semibold"
                         placeholder="文本节点标题"
                         aria-label="文本节点标题"
                     />
                     <span className="hidden shrink-0 text-[var(--fs-label)] sm:inline" style={{ color: theme.node.muted }}>{characterCount.toLocaleString("zh-CN")} 字 · {wordCount.toLocaleString("zh-CN")} 词</span>
-                    <span className="ml-auto hidden text-[var(--fs-label)] sm:inline" style={{ color: dirty ? theme.accent.primary : theme.node.muted }}>{dirty ? "有未保存修改" : "已保存"}</span>
-                    <Button size="small" type="primary" icon={<Save className="size-3.5" />} loading={saving} disabled={!dirty} onClick={() => void save()}>保存</Button>
+                    <span className="ml-auto hidden text-[var(--fs-label)] sm:inline" style={{ color: textLease.pending ? theme.accent.primary : theme.node.muted }}>{textLease.pending || textLease.error ? "草稿待同步" : "画布内容"}</span>
                     <Tooltip title="关闭">
                         <Button size="small" type="text" icon={<X className="size-4" />} aria-label="关闭文本编辑器" onClick={close} />
                     </Tooltip>
@@ -159,7 +148,7 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                         Markdown 源码
                     </div>
                 ) : (
-                    <TextEditorToolbar editor={editor} />
+                    <div inert={readOnly || undefined} className={readOnly ? "shrink-0 opacity-50" : "shrink-0"}><TextEditorToolbar editor={readOnly ? null : editor} /></div>
                 )}
 
                 <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto" style={{ background: theme.canvas.background }}>
@@ -170,9 +159,12 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                             <Input.TextArea
                                 ref={markdownEditorRef}
                                 value={markdownContent}
+                                readOnly={readOnly}
                                 onChange={(event) => {
+                                    if (readOnly) return;
                                     setMarkdownContent(event.target.value);
-                                    setDirty(true);
+                                    draftRef.current.markdownContent = event.target.value;
+                                    publish(event.target.value, (node?.metadata?.richText as Record<string, unknown>) || {});
                                 }}
                                 placeholder="输入 Markdown 内容…"
                                 autoSize={false}
@@ -186,8 +178,7 @@ export function CanvasTextEditorModal({ node, open, onClose, onSave }: CanvasTex
                 </div>
 
                 <footer className="flex h-8 shrink-0 items-center gap-3 border-t px-3 text-[var(--fs-tiny)]" style={{ borderColor: theme.node.stroke, color: theme.node.muted }}>
-                    <span className="hidden sm:inline">{isMarkdown ? "直接编辑 Markdown 源码，保存后画布会按 Markdown 渲染" : "支持标题、列表、引用、链接、代码和颜色格式"}</span>
-                    <span className="ml-auto">Ctrl/⌘S 保存</span>
+                    {node && <CanvasTextLeaseIndicator nodeId={node.id} />}
                 </footer>
             </section>
         </AppModal>

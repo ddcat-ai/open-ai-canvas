@@ -14,7 +14,7 @@ describe("canvas node title interaction", () => {
         expect(liveViewportSource).toContain("else delete container.dataset.canvasNodeDragging");
     });
     test("keeps title editing separate from node-body dragging and protects locked titles", () => {
-        expect(nodeSource).toContain("editable={!readOnly && !data.metadata?.locked && Boolean(onTitleChange)}");
+        expect(nodeSource).toContain("editable={!readOnly && !textLease.blocked && !data.metadata?.locked && Boolean(onTitleChange)}");
         expect(nodeSource).toContain("onMouseDown={(event) => onMouseDown(event, data.id)}");
         const selection = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-selection-controller.ts"), "utf8");
         expect(selection).toContain("if (clickedNode?.metadata?.locked)");

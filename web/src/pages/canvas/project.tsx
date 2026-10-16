@@ -2185,6 +2185,8 @@ function CanvasViewportPage() {
             if (panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing) return null;
             return panelNode.type === CanvasNodeType.Config ? (
                 <CanvasConfigComposer
+                    nodeId={panelNode.id}
+                    canvasId={projectId}
                     value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
                     inputs={configInputsById.get(panelNode.id) || []}
                     skillReferences={skillMentionReferences}
@@ -2592,7 +2594,7 @@ function CanvasViewportPage() {
             <main
                 id="canvas-main"
                 tabIndex={-1}
-                className={`relative flex h-full min-h-0 overflow-hidden outline-none ${!focusMode ? `canvas-main-with-workspace ${workspaceOpen ? "canvas-workspace-expanded" : ""}` : ""}`}
+                className={`relative flex h-full min-h-0 overflow-clip outline-none ${!focusMode ? `canvas-main-with-workspace ${workspaceOpen ? "canvas-workspace-expanded" : ""}` : ""}`}
                 style={{ background: resolvedCanvasAppearance.background, color: theme.node.text }}
             >
                 {!focusMode ? (
@@ -2627,7 +2629,7 @@ function CanvasViewportPage() {
                 ) : null}
                 <CanvasOverlayLayerProvider>
                     <div className="canvas-editor-shell relative flex min-w-0 flex-1">
-                        <section data-canvas-editor className="relative min-w-0 flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <section data-canvas-editor className="relative min-w-0 flex-1 flex flex-col min-h-0 overflow-clip">
                             {!focusMode ? (
                                 <CanvasTopBar
                                     title={currentProject?.title || "未命名画布"}
@@ -2696,7 +2698,7 @@ function CanvasViewportPage() {
                             <CanvasPrevisTemplateModal open={Boolean(previsTemplateRequest)} onClose={() => setPrevisTemplateRequest(null)} onSelect={(templateId) => createPrevisShot(templateId, previsTemplateRequest?.position)} />
 
                             <div className="relative flex min-h-0 min-w-0 flex-1">
-                                <div className="relative min-w-0 flex-1 overflow-hidden">
+                                <div className="relative min-w-0 flex-1 overflow-clip">
                                     <CanvasViewport
                                         interactive
                                         containerRef={containerRef}
@@ -3250,8 +3252,12 @@ function CanvasViewportPage() {
                                 node={textEditorNode}
                                 open={Boolean(textEditorNode)}
                                 onClose={() => setTextEditorNodeId(null)}
-                                onSave={(nodeId, title, content, richText) => {
-                                    setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, title, metadata: { ...node.metadata, content, richText } } : node)));
+                                onChange={(nodeId, title, content, richText) => {
+                                    setNodes((current) => {
+                                        const next = current.map((node) => (node.id === nodeId ? { ...node, title, metadata: { ...node.metadata, content, richText } } : node));
+                                        nodesRef.current = next;
+                                        return next;
+                                    });
                                 }}
                             />
 

@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 画布多端协作（Schema 57）
+
+迁移 `canvas_multi_session_sync` 新增 `canvas_edit_leases`，以 `(user_id, canvas_id, node_id)` 为主键，记录浏览器会话、随机租约凭据与到期时间。服务端在画布事务锁内裁决占用和写入，租约有效期 30 秒；读取状态不返回凭据，浏览器计时不能代替服务端授权。
+
+`tasks.agent_execution_ready` 标记 Agent 执行记录已建立。迁移按任务 ID 和用户归属回填，保留任务内容与状态；`EnsureCloudAgent` 在创建执行的事务内更新标记，普通任务更新不能回写该字段。增加 `idx_cloud_agent_canvas_active` 和 `idx_tasks_canvas_agent_reservation` 两个部分索引，使占用查询只检查活动执行及未建立执行的根任务，不反复遍历终态历史。
+
+新增迁移不改写 Schema 1–56 的名称或校验和。必须先执行迁移再启动新后端；历史回填与建索引需要升级窗口。执行记录不独立删除；未来新增删除路径时必须同步维护标记。
+
 ## 用户登录日志
 
 Schema 53 新增 `login_logs`，新库初始化、既有库升级和 SQLite → PostgreSQL 迁移共用此表。字段：`id`、可空 `user_id`、用户快照 `username/display_name/account`、`event`（login/logout）、`method`（password/email/sms/linuxdo/verification/unknown）、`source`（login/registration/logout）、`result`（success/failed）、`ip`、`user_agent`、`session_ref`、`reason/message`、`created_at`。用户、事件、方式、结果、IP、关联会话和时间有查询索引。

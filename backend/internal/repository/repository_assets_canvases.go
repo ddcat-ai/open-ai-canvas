@@ -5,6 +5,7 @@
 package repository
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -100,6 +101,27 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 }
 
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
+	return r.Transaction(func(tx *Repository) error {
+		if project.Revision > 0 {
+			if err := tx.LockCanvasMutation(project.UserID, project.ID); err != nil {
+				return err
+			}
+			before, err := tx.CanvasProjectForUser(project.UserID, project.ID)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrCanvasRevisionConflict
+			}
+			if err != nil {
+				return err
+			}
+			if err := tx.checkCanvasEditLeases(before, project); err != nil {
+				return err
+			}
+		}
+		return tx.upsertCanvasProject(project)
+	})
+}
+
+func (r *Repository) upsertCanvasProject(project *model.CanvasProject) error {
 	expected := project.Revision
 	if expected < 0 {
 		return ErrCanvasRevisionConflict
@@ -139,6 +161,19 @@ func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 			return err
 		}
 		var snapshotIDs []string
+		before, err := New(tx).CanvasProjectForUser(userID, id)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := New(tx).checkCanvasEditLeases(before, nil); err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ? AND canvas_id = ?", userID, id).Delete(&model.CanvasEditLease{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Model(&model.CanvasSnapshot{}).Where("user_id = ? AND canvas_id = ?", userID, id).Pluck("id", &snapshotIDs).Error; err != nil {
 			return err
 		}
