@@ -495,6 +495,34 @@ func TestApplyCanvasOperationsAcceptsLegacyOmittedOptionalFieldValues(t *testing
 	}
 }
 
+func TestApplyCanvasOperationsRejectsDuplicateCreateWithStructuredConflict(t *testing.T) {
+	svc := newCanvasOperationTestService(t)
+	request := CanvasOperationsRequest{MutationID: "first-create", Operations: []CanvasOperation{{Type: "create_canvas", ID: "canvas", Patch: map[string]json.RawMessage{"title": json.RawMessage(`"已保存"`)}}}}
+	first, err := svc.ApplyUserCanvasOperations("user", "canvas", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A lost response must remain replayable with its original mutation ID.
+	replayed, err := svc.ApplyUserCanvasOperations("user", "canvas", request)
+	if err != nil || replayed.Revision != first.Revision {
+		t.Fatalf("original creation replay = %#v, %v", replayed, err)
+	}
+	request.MutationID = "stale-create-with-new-id"
+	request.Operations[0].Patch["title"] = json.RawMessage(`"不应覆盖"`)
+	_, err = svc.ApplyUserCanvasOperations("user", "canvas", request)
+	var appError *kernel.AppError
+	if !errors.As(err, &appError) || appError.Status != http.StatusConflict || appError.Reason != "canvas_field_conflict" || appError.Retryable {
+		t.Fatalf("duplicate create error = %#v, want non-retryable field conflict", err)
+	}
+	stored, err := svc.repo.CanvasProjectForUser("user", "canvas")
+	if err != nil || stored.Title != "已保存" || stored.Revision != first.Revision {
+		t.Fatalf("duplicate create changed stored canvas: %#v, %v", stored, err)
+	}
+	if _, err := svc.repo.CanvasMutationReceiptForUser("user", "canvas", request.MutationID); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("rejected creation retained a receipt: %v", err)
+	}
+}
+
 func TestApplyCanvasOperationsDoesNotRecreateDeletedCanvas(t *testing.T) {
 	svc := newCanvasOperationTestService(t)
 	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", CanvasOperationsRequest{MutationID: "create", Operations: []CanvasOperation{{Type: "create_canvas", ID: "canvas", Patch: map[string]json.RawMessage{"title": json.RawMessage(`"初始"`)}}}}); err != nil {
