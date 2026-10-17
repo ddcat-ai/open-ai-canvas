@@ -109,6 +109,7 @@ export const NODE_SPECS = {
         metadata: {
             status: "idle",
             batchTable: {
+                referenceMode: "cells",
                 operation: "try_on",
                 concurrency: 10,
                 referenceColumns: [

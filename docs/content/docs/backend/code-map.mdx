@@ -98,9 +98,16 @@ Pi SDK 执行前的参数校验失败由 `agent-runtime/pi/agent-runtime.mjs` �
 | 派生渲染模型和画布分层 | `web/src/pages/canvas/use-canvas-render-model.ts`、`canvas-project-world-layers.tsx`、`canvas-project-context-menu.tsx`、`canvas-project-status-dialogs.tsx` |
 | 顶栏、反馈和 screen-space 浮层 | `web/src/pages/canvas/canvas-project-top-bar.tsx`、`canvas-project-feedback.tsx`、`canvas-project-selection-toolbar.tsx`、`components/canvas/canvas-workspace-overlays.tsx` |
 | 媒体弹窗装配 | `web/src/pages/canvas/canvas-project-media-dialogs.tsx` |
-| 画布视口、拖拽、缩放和框选 | `web/src/components/canvas/canvas-viewport.tsx`、`web/src/lib/canvas/canvas-live-viewport.ts` |
+| 画布视口、拖拽、缩放和框选 | `web/src/components/canvas/canvas-viewport.tsx`、`web/src/lib/canvas/canvas-live-viewport.ts`；`pages/canvas/use-canvas-image-wheel-resize.ts` 合并单选图片 Ctrl 滚轮尺寸、历史和保存，`lib/canvas/canvas-wheel.ts` 识别离散滚轮，角点与滚轮共用 registry 最小尺寸规则 |
 | 节点渲染与节点工具 | `web/src/components/canvas/canvas-node.tsx`、`canvas-node-hover-toolbar.tsx`、`canvas-node-toolbar.tsx` |
 | 图片多角度、宫格切分与多选框 | `canvas-node-angle-dialog.tsx`、`canvas-angle-scene.tsx`、`canvas-grid-split-picker.tsx`、`web/src/lib/canvas/canvas-grid-split.ts`、`canvas-selection.ts` |
+| 图片自然比例与默认尺寸 | `web/src/lib/canvas/canvas-node-size.ts`；上传、生成结果和派生图片共用尺寸规则，节点调整继续使用现有角点入口 |
+| 图片编辑副本与工具菜单 | `web/src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx` 声明入口；`web/src/pages/canvas/use-canvas-node-operations.ts` 负责带来源连线的复制；`web/src/components/canvas/canvas-node-toolbar.tsx` 与 `canvas-grid-split-picker.css` 共用菜单布局、滚动及子面板视口约束 |
+| 浮层可用区与小屏模式 | `web/src/lib/canvas/canvas-overlay-layout.ts` 计算侧栏/工具区边界并维护面板矩形通知；`canvas-workspace-overlays.tsx` 发布实测面板布局，`canvas-node-toolbar.tsx` 避让；`web/src/hooks/use-focus-mode.ts` 以用户明确偏好优先于小屏默认 |
+| 图片方向与资源保留 | `web/src/pages/canvas/use-canvas-image-rotation.ts` 协调首次副本、只读、锁定和异步提交；`web/src/lib/canvas/canvas-image-edit-copy.ts` 共用编辑副本创建、来源线及空位；`web/src/lib/canvas/canvas-image-rotation.ts` 更新节点与引用行状态；`web/src/services/canvas-image-rotation.ts` 从原图旋转、上传并复用方向资源；原图及派生资源由 `backend/internal/assets/references.go`、`web/src/services/user-data-sync-media.ts`、`canvas-missing-resources.ts` 收集 |
+| 批量表编辑与渲染 | `web/src/components/canvas/canvas-batch-table-node.tsx` 处理行编辑、内部滚动及添加/插入；`web/src/lib/canvas/canvas-batch-window.ts` 限定大表挂载行；`canvas-batch-row-equality.ts` 判断影响行展示的引用变化 |
+| 批量表参考图绑定 | `web/src/pages/canvas/use-canvas-batch-references.tsx` 协调选择、上传、替换确认和按列重置；`web/src/lib/canvas/canvas-batch-references.ts` 同步列默认、保留单格覆盖，维护稳定行/列句柄并筛除离屏格线绘制；`web/src/pages/canvas/use-canvas-batch-table.ts` 保留 AI 列表和既有列模式的行规则 |
+| 批量任务输入冻结 | `web/src/lib/canvas/canvas-batch-table-state.ts` 准备任务；`canvas-batch-input-snapshot.ts` 保存提示词及最小资源引用快照；`web/src/pages/canvas/use-canvas-generation-batches.ts` 持久化队列与重试，`use-canvas-generation-executor.ts` 以快照构建本次输入，不读取排队期间变更后的源图 |
 | 生成 Composer | `web/src/components/canvas/canvas-node-prompt-panel.tsx`、`canvas-config-composer.tsx` |
 | 风格中心、用户风格编辑与项目快照 | `web/src/components/canvas/canvas-style-picker-modal.tsx`、`style-profile-editor-modal.tsx`、`style-asset-binding-modal.tsx`、`web/src/lib/canvas/style-profile.ts`、`web/src/services/api/style-profiles.ts` |
 | 分镜脚本节点 | `web/src/components/canvas/canvas-script-node.tsx` |

@@ -3,7 +3,7 @@ import { App } from "antd";
 import { nanoid } from "nanoid";
 
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
-import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize, preserveImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createPrevisSceneFromTemplate, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
 import { mergePrevisOutputPreview, upsertPrevisSceneById } from "@/lib/canvas/previs/previs-session";
@@ -155,7 +155,7 @@ export function useCanvasPrevis({
         const previewId = sourceNode.metadata?.previsPreviewNodeId || `image-previs-${Date.now()}`;
         const mergedScene = mergePrevisOutputPreview(latestScene, { sceneId: output.scene.id, shotId: output.shot.id, previewNodeId: previewId });
         if (!mergedScene) throw new Error("输出期间镜头已切换或删除，请重试");
-        const previewSize = fitNodeSize(image.width, image.height);
+        const previewSize = fitImageNodeSize(image.width, image.height);
         const nextNodes = [...nodesRef.current];
         const previewIndex = nextNodes.findIndex((item) => item.id === previewId);
         const existingPreview = previewIndex >= 0 ? nextNodes[previewIndex] : null;
@@ -165,8 +165,7 @@ export function useCanvasPrevis({
             type: CanvasNodeType.Image,
             title: `${sourceNode.title} · 预演台构图`,
             position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
-            width: previewSize.width,
-            height: previewSize.height,
+            ...preserveImageNodeSize(existingPreview, previewSize),
             metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["预演台构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
         };
         if (previewIndex >= 0) nextNodes[previewIndex] = previewNode;

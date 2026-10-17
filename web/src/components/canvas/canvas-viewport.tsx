@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 
 import { resolveCanvasAppearance, resolveCanvasGridColor, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { resolveCanvasPointerIntent } from "@/lib/canvas/canvas-selection";
+import { isDiscreteCanvasWheel } from "@/lib/canvas/canvas-wheel";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { applyCanvasLiveViewport, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -14,6 +15,7 @@ type CanvasViewportProps = {
     appearance?: CanvasAppearance;
     backgroundMode?: CanvasBackgroundMode;
     onViewportChange: (viewport: ViewportTransform) => void;
+    onSelectedImageWheel?: (deltaPixels: number) => boolean;
     onViewportPreviewChange?: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
     boxSelectEnabled?: boolean;
@@ -28,7 +30,7 @@ type CanvasViewportProps = {
     graphicsLayer?: React.ReactNode;
 };
 
-const CANVAS_WHEEL_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-canvas-wheel-scroll],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
+const CANVAS_WHEEL_IGNORE_SELECTOR = "input,textarea,select,[contenteditable]:not([contenteditable='false']),[data-canvas-no-zoom],[data-canvas-wheel-scroll],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
 const CANVAS_POINTER_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-connection-create-menu],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
 const CANVAS_INTERNAL_DRAG_SELECTOR = "[data-canvas-batch-table]";
 const WHEEL_ZOOM_DELTA = 72;
@@ -52,6 +54,7 @@ export function CanvasViewport({
     appearance,
     backgroundMode = "lines",
     onViewportChange,
+    onSelectedImageWheel,
     onViewportPreviewChange,
     onCanvasMouseDown,
     boxSelectEnabled = false,
@@ -87,6 +90,7 @@ export function CanvasViewport({
     const touchPointsRef = useRef(new Map<number, TouchPoint>());
     const pinchStateRef = useRef<PinchState>({ active: false, pointerIds: [-1, -1], initialDistance: 1, worldX: 0, worldY: 0, initialScale: viewport.k });
     const spacePressedRef = useRef(false);
+    const controlPressedRef = useRef(false);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
 
@@ -173,6 +177,7 @@ export function CanvasViewport({
     useEffect(() => {
         if (!interactive) return;
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Control") controlPressedRef.current = true;
             if (event.code !== "Space") return;
             if (event.target instanceof Element && event.target.closest("input,textarea,select,button,[contenteditable='true']")) return;
             event.preventDefault();
@@ -181,22 +186,24 @@ export function CanvasViewport({
         };
 
         const handleKeyUp = (event: KeyboardEvent) => {
+            if (event.key === "Control") controlPressedRef.current = false;
             if (event.code !== "Space") return;
             spacePressedRef.current = false;
             setIsSpacePressed(false);
         };
 
         const handleBlur = () => {
+            controlPressedRef.current = false;
             spacePressedRef.current = false;
             setIsSpacePressed(false);
         };
 
-        window.addEventListener("keydown", handleKeyDown);
-        window.addEventListener("keyup", handleKeyUp);
+        window.addEventListener("keydown", handleKeyDown, true);
+        window.addEventListener("keyup", handleKeyUp, true);
         window.addEventListener("blur", handleBlur);
         return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-            window.removeEventListener("keyup", handleKeyUp);
+            window.removeEventListener("keydown", handleKeyDown, true);
+            window.removeEventListener("keyup", handleKeyUp, true);
             window.removeEventListener("blur", handleBlur);
         };
     }, [interactive]);
@@ -209,6 +216,12 @@ export function CanvasViewport({
             const absX = Math.abs(deltaX);
             const absY = Math.abs(deltaY);
             const isPinchZoom = event.ctrlKey || event.metaKey;
+            // Chromium also sets ctrlKey for touchpad pinch, but does not send a Control keydown.
+            const editing = document.activeElement?.matches("input,textarea,select,[contenteditable]:not([contenteditable='false'])");
+            if (event.ctrlKey && controlPressedRef.current && !event.metaKey && !event.shiftKey && !editing && !target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && onSelectedImageWheel?.(deltaY)) {
+                event.preventDefault();
+                return;
+            }
             if (target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !isPinchZoom) {
                 // 内部区域保留纵向滚动，但横向手势不能泄漏为 macOS 浏览器前进/后退。
                 if (event.shiftKey || absX > absY) event.preventDefault();
@@ -219,8 +232,7 @@ export function CanvasViewport({
             event.preventDefault();
             interactingRef.current = true;
             const current = viewportRef.current;
-            const rawAbsY = Math.abs(event.deltaY);
-            const looksLikeMouseWheel = event.deltaMode !== 0 || (rawAbsY >= 80 && Math.abs(rawAbsY - Math.round(rawAbsY / 100) * 100) < 1);
+            const looksLikeMouseWheel = isDiscreteCanvasWheel(event.deltaY, event.deltaMode);
             const looksLikeTrackpadPan = !isPinchZoom && (event.shiftKey || absX > 0 || (!looksLikeMouseWheel && absY > 0));
 
             if (looksLikeTrackpadPan) {
@@ -255,7 +267,7 @@ export function CanvasViewport({
                 true,
             );
         },
-        [containerRef, scheduleViewportChange],
+        [containerRef, onSelectedImageWheel, scheduleViewportChange],
     );
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {

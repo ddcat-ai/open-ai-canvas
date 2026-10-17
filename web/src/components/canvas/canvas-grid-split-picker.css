@@ -9,8 +9,62 @@
     flex-direction: column;
 }
 
+.canvas-node-toolbar-menu-actions {
+    width: min(16.5rem, calc(100vw - 24px));
+}
+
+.canvas-node-toolbar-menu-actions .canvas-node-toolbar-menu-stack {
+    min-width: 0;
+}
+
+.canvas-node-toolbar-menu-actions .ant-dropdown-menu {
+    width: 100%;
+    /* Include the split menu border and the dropdown's measured vertical padding. */
+    max-height: min(calc(25rem - 2px), calc(100dvh - 26px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.canvas-node-toolbar-menu-actions .ant-dropdown-menu-title-content {
+    min-width: 0;
+}
+
+.canvas-node-toolbar-menu-actions .ant-dropdown-menu-item-group-title {
+    padding: 5px 10px 3px;
+    font-size: var(--fs-tiny);
+    line-height: 16px;
+}
+
+.canvas-node-toolbar-menu-actions .ant-dropdown-menu-item {
+    padding: 5px 10px;
+}
+
+.canvas-node-toolbar-menu-label {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.canvas-node-toolbar-menu-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: var(--fs-caption);
+    line-height: 18px;
+}
+
+.canvas-node-toolbar-menu-description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-tiny);
+    line-height: 16px;
+    opacity: 0.6;
+}
+
 .canvas-node-toolbar-menu-split .canvas-node-toolbar-menu-stack {
-    min-width: 13.5rem;
     overflow: hidden;
     border: 1px solid var(--workspace-overlay-border, var(--dock-border));
     border-radius: var(--r-md);
@@ -24,8 +78,24 @@
     z-index: 2;
     top: 0;
     left: calc(100% + var(--space-1));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    overscroll-behavior: contain;
     transform-origin: top left;
     animation: canvas-grid-split-picker-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (max-width: 480px) {
+    .canvas-node-toolbar-menu-split > .canvas-grid-split-picker {
+        flex-direction: column;
+    }
+
+    .canvas-node-toolbar-menu-split .canvas-grid-split-custom {
+        width: 100%;
+        border-top: var(--stroke-1) solid var(--dock-border);
+        border-left: 0;
+    }
 }
 
 @keyframes canvas-grid-split-picker-in {

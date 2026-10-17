@@ -12,7 +12,7 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
         if (JSON.stringify(before.metadata?.[key]) === JSON.stringify(result.metadata?.[key])) continue;
         Object.assign(metadata, { [key]: result.metadata?.[key] });
     }
-    const geometryChanged = live.width !== before.width || live.height !== before.height || live.metadata?.manualSize;
+    const geometryChanged = live.width !== before.width || live.height !== before.height || live.metadata?.manualSize || live.metadata?.locked || live.metadata?.freeResize;
     const moved = live.position.x !== before.position.x || live.position.y !== before.position.y;
     const merged: CanvasNodeData = {
         ...live,
@@ -33,7 +33,7 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
     const committedWithAdditional = committed.map((node) => {
         const refreshed = additionalById.get(node.id);
         if (!refreshed) return node;
-        const manualSize = Boolean(node.metadata?.manualSize);
+        const manualSize = Boolean(node.metadata?.manualSize || node.metadata?.locked || node.metadata?.freeResize);
         return {
             ...refreshed,
             title: node.title,

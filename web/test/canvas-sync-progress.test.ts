@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
     "@/stores/use-sync-progress-store": join(dir, "progress.ts"),
     "@/lib/canvas/canvas-task-mutation": fileURLToPath(new URL("../src/lib/canvas/canvas-task-mutation.ts", import.meta.url)),
     "@/lib/canvas/agent-canvas-patch": new URL("../src/lib/canvas/agent-canvas-patch.ts", import.meta.url).pathname,
+    "@/lib/canvas/canvas-batch-input-signature": fileURLToPath(new URL("lib/canvas/canvas-batch-input-signature.ts", root)),
     "./user-data-sync-media": join(dir, "media.ts"),
     "./canvas-edit-leases": stubPath,
     "@/lib/canvas/agent-canvas-patch": fileURLToPath(new URL("lib/canvas/agent-canvas-patch.ts", root)),

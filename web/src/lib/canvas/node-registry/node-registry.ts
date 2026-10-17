@@ -80,6 +80,14 @@ export function getNodeMinSize(type: CanvasNodeTypeId) {
     return definitions.get(type)?.minSize ?? FALLBACK_MIN_SIZE;
 }
 
+/** Image previews can be narrower than media composer panels; keep a usable long edge. */
+export function getNodeResizeMinSize(node: CanvasNodeData) {
+    if (node.type !== "image") return getNodeMinSize(node.type);
+    if (node.metadata?.freeResize) return { width: 80, height: 80 };
+    const factor = 160 / Math.max(1, node.width, node.height);
+    return { width: node.width * factor, height: node.height * factor };
+}
+
 /** 拉伸时是否锁定宽高比 */
 export function shouldKeepAspectRatio(node: CanvasNodeData) {
     return definitions.get(node.type)?.keepAspectRatio?.(node) ?? false;

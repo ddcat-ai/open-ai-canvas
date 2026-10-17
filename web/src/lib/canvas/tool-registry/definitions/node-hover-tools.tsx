@@ -1,9 +1,10 @@
-import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
+import { AudioLines, Captions, Clapperboard, Download, FolderPlus, Images, Image as ImageIcon, Info, LoaderCircle, Lock, Maximize2, MessageSquare, Minus, Music2, Plus, RefreshCw, RotateCcw, RotateCw, Scissors, Settings2, Trash2, Unlock, Upload, UserRound, Video, WandSparkles } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import { CanvasNodeType } from "@/types/canvas";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
+import { canRotateCanvasImage, currentImageRotation } from "@/lib/canvas/canvas-image-rotation";
 
 // 节点状态判定辅助函数——从 ToolContext 派生
 function isImage(ctx: ToolContext) { return ctx.node?.type === CanvasNodeType.Image; }
@@ -30,6 +31,38 @@ function canRetry(ctx: ToolContext) {
 }
 
 export const nodeHoverToolbarTools: ToolDefinition[] = [
+    {
+        id: "createEditCopy",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "创建编辑副本",
+        displayLabel: "创建编辑副本",
+        icon: <Images className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 195,
+        nodeToolbar: { group: "process", order: 5, section: "编辑副本", description: "保留原图，连线复制后在副本上调整" },
+        applicable: (ctx) => hasImage(ctx) && !ctx.nodeMetadata?.imageLayerGroup && !ctx.nodeMetadata?.imageLayer && !ctx.nodeMetadata?.layerExtraction,
+        disabled: (ctx) => Boolean(ctx.nodeMetadata?.fileUpload) || !ctx.handlers.onNodeCreateEditCopy,
+        run: (ctx) => ctx.handlers.onNodeCreateEditCopy?.(ctx.node!),
+    },
+    ...([
+        { id: "rotateClockwise", label: "向右转 90°", direction: 1, icon: <RotateCw className="size-3.5" /> },
+        { id: "rotateCounterclockwise", label: "向左转 90°", direction: -1, icon: <RotateCcw className="size-3.5" /> },
+        { id: "restoreImageOrientation", label: "恢复原方向", direction: 0, icon: <RefreshCw className="size-3.5" /> },
+    ] as const).map((rotation, index): ToolDefinition => ({
+        id: rotation.id,
+        toolbar: "node-hover",
+        category: "node-state",
+        label: rotation.label,
+        displayLabel: rotation.label,
+        icon: rotation.icon,
+        defaultVisible: true,
+        defaultOrder: 200 + index,
+        nodeToolbar: { group: (ctx) => ctx.nodeMetadata?.imageEditSourceNodeId && rotation.direction !== 0 ? "primary" : "process", order: 25 + index, section: "方向校正", description: "首次创建编辑副本，之后在副本上继续调整" },
+        applicable: (ctx) => hasImage(ctx) && !ctx.nodeMetadata?.imageLayerGroup && !ctx.nodeMetadata?.imageLayer && !ctx.nodeMetadata?.layerExtraction,
+        disabled: (ctx) => !ctx.node || !canRotateCanvasImage(ctx.node) || Boolean(ctx.rotatingImage) || !ctx.handlers.onNodeRotateImage || (rotation.direction === 0 && !currentImageRotation(ctx.node)?.quarterTurns),
+        run: (ctx) => ctx.handlers.onNodeRotateImage?.(ctx.node!, rotation.direction),
+    })),
     // 基础工具组
     {
         id: "info",
@@ -291,7 +324,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         toolbar: "node-hover",
         category: "navigation",
         label: (ctx) => ctx.nodeMetadata?.locked ? "解锁节点" : "锁定位置和尺寸",
-        displayLabel: "锁定位置与尺寸",
+        displayLabel: (ctx) => ctx.nodeMetadata?.locked ? "解锁位置与尺寸" : "锁定位置与尺寸",
         icon: (ctx) => ctx.nodeMetadata?.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 160,

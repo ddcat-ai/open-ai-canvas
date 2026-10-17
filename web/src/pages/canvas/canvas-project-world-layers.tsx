@@ -1,11 +1,12 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { Link2 } from "lucide-react";
 
-import { ConnectionPath } from "@/components/canvas/canvas-connections";
+import { activeConnectionPath, canvasConnectionPath, ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import type { CanvasConnectionApproach } from "@/lib/canvas/canvas-connection-tilt";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
+import { batchCellAnchor, BATCH_COLUMN_HEADER_HEIGHT, BATCH_TABLE_HEADER_HEIGHT, parseBatchCellHandle, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { sortCanvasNodesByStackOrder, type CanvasNodeStackOrder } from "@/lib/canvas/canvas-node-stack-order";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
@@ -23,9 +24,11 @@ type CanvasProjectWorldLayersProps = {
     selectedConnectionId: string | null;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
+    batchScrollById?: Record<string, BatchScroll>;
     connectingParams: ConnectionHandle | null;
     mouseWorld: Position;
     connectionTargetNodeId: string | null;
+    connectionTargetHandleId?: string;
     connectionApproach: CanvasConnectionApproach;
     nodeById: Map<string, CanvasNodeData>;
     visibleNodes: CanvasNodeData[];
@@ -121,6 +124,8 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         to={to}
                         fromScrollTop={props.scriptScrollTopById[from.id] || 0}
                         toScrollTop={props.scriptScrollTopById[to.id] || 0}
+                        fromBatchScroll={props.batchScrollById?.[from.id]}
+                        toBatchScroll={props.batchScrollById?.[to.id]}
                         active={props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id)}
                         visualMode="hover-only"
                         // 拖动预览由 Leafer 图形层逐帧同步；隐藏这层静态 SVG 描边，避免两套位置叠出残影。
@@ -201,6 +206,8 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                 ),
             )}
 
+            {!props.isNodeDragging ? <BatchConnectionTails {...props} /> : null}
+
             {props.selectedNodeBounds && !props.selectionBox ? (
                 <div
                     ref={props.selectionBoundsElementRef}
@@ -225,6 +232,43 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
             ) : null}
         </>
     );
+});
+
+/** 表内终段覆盖节点底色，但不接收鼠标，避免细线阻挡格子与提示词。 */
+const BatchConnectionTails = memo(function BatchConnectionTails(props: CanvasProjectWorldLayersProps) {
+    const groups = new Map<string, CanvasDisplayConnection[]>();
+    for (const item of props.displayConnections) {
+        if (!parseBatchCellHandle(item.connection.toHandleId)) continue;
+        const items = groups.get(item.to.id) || [];
+        items.push(item);
+        groups.set(item.to.id, items);
+    }
+    if (props.connectionTargetNodeId && parseBatchCellHandle(props.connectionTargetHandleId) && !groups.has(props.connectionTargetNodeId)) groups.set(props.connectionTargetNodeId, []);
+    return <>{Array.from(groups, ([tableId, items]) => {
+        const node = props.nodeById.get(tableId);
+        if (!node) return null;
+        const top = node.position.y + BATCH_TABLE_HEADER_HEIGHT + BATCH_COLUMN_HEADER_HEIGHT;
+        const height = Math.max(0, node.height - BATCH_TABLE_HEADER_HEIGHT - BATCH_COLUMN_HEADER_HEIGHT);
+        const scroll = props.batchScrollById?.[tableId];
+        const connecting = props.connectingParams;
+        const draft = connecting?.handleType === "source" && props.connectionTargetNodeId === tableId && parseBatchCellHandle(props.connectionTargetHandleId)
+            ? activeConnectionPath(props.nodeById.get(connecting.nodeId), connecting, props.mouseWorld, node, props.scriptScrollTopById[connecting.nodeId] || 0, props.connectionTargetHandleId, props.batchScrollById?.[connecting.nodeId], scroll)
+            : "";
+        return <svg key={tableId} data-batch-cell-connections={tableId} className="pointer-events-none absolute overflow-hidden" viewBox={`${node.position.x} ${top} ${node.width} ${height}`} style={{ left: node.position.x, top, width: node.width, height, zIndex: "var(--z-node-active)" }}>
+            {items.map(({ connection, from, to }) => {
+                const cell = batchCellAnchor(to, connection.toHandleId, scroll);
+                if (!cell) return null;
+                const active = props.selectedConnectionId === connection.id;
+                const path = canvasConnectionPath(connection, from, to, props.scriptScrollTopById[from.id] || 0, 0, props.batchScrollById?.[from.id], scroll);
+                return <g key={connection.id}>
+                    <path d={path.pathD} fill="none" stroke={active ? "var(--workspace-accent)" : "var(--muted-foreground)"} strokeWidth={active ? 1.5 : 1} strokeOpacity={active ? 0.9 : 0.5} vectorEffect="non-scaling-stroke" />
+                    <circle cx={cell.x} cy={cell.y} r={3} fill="var(--workspace-accent)" fillOpacity={active ? 1 : 0.65} />
+                    {active && cell.clipped ? <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>{cell.label} · 滚动查看</text> : null}
+                </g>;
+            })}
+            {draft ? <path d={draft} fill="none" stroke="var(--workspace-accent)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" /> : null}
+        </svg>;
+    })}</>;
 });
 
 function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale: number; count: number; active: boolean; onPointerDown: (event: ReactPointerEvent) => void }) {

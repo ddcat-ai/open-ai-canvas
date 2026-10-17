@@ -3,6 +3,7 @@ import { Group, Leafer, Path, Rect } from "leafer-ui";
 
 import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/canvas-connections";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
+import { batchCellAnchor, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
 import { offsetSelectedNodeBounds } from "@/lib/canvas/canvas-selection";
@@ -19,11 +20,13 @@ type CanvasLeaferGraphicsLayerProps = {
     selectedConnectionId: string | null;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
+    batchScrollById?: Record<string, BatchScroll>;
     connectingParams: ConnectionHandle | null;
     batchConnectionPreview: CanvasBatchConnectionPreview | null;
     mouseWorld: Position;
     connectionTargetNodeId: string | null;
     connectionTargetAnchorRatio?: number;
+    connectionTargetHandleId?: string;
     nodeById: Map<string, CanvasNodeData>;
     selectionBox: SelectionBox | null;
     selectedNodeBounds: NodeBounds;
@@ -144,13 +147,13 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         const underlay = underlayRef.current;
         if (!underlay) return;
         rebuildConnections(underlay, props);
-    }, [props.displayConnections, props.relatedConnectionIds, props.scriptScrollTopById, props.selectedConnectionId, props.theme]);
+    }, [props.displayConnections, props.relatedConnectionIds, props.scriptScrollTopById, props.batchScrollById, props.selectedConnectionId, props.theme]);
 
     useLayoutEffect(() => {
         const overlay = overlayRef.current;
         if (!overlay) return;
         syncOverlayContent(overlay, props, viewportRef.current.k);
-    }, [props.batchConnectionPreview, props.connectingParams, props.connectionTargetAnchorRatio, props.connectionTargetNodeId, props.mouseWorld, props.nodeById, props.scriptScrollTopById, props.selectedNodeBounds, props.selectionBox, props.theme]);
+    }, [props.batchConnectionPreview, props.connectingParams, props.connectionTargetAnchorRatio, props.connectionTargetNodeId, props.connectionTargetHandleId, props.mouseWorld, props.nodeById, props.scriptScrollTopById, props.batchScrollById, props.selectedNodeBounds, props.selectionBox, props.theme]);
 
     useLayoutEffect(() => {
         const underlay = underlayRef.current;
@@ -251,6 +254,8 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
 }
 
 function connectionSceneSignature(connection: CanvasDisplayConnection["connection"], from: CanvasNodeData, to: CanvasNodeData, props: CanvasLeaferGraphicsLayerProps, emphasized: boolean) {
+    const fromCell = batchCellAnchor(from, connection.fromHandleId, props.batchScrollById?.[from.id]);
+    const toCell = batchCellAnchor(to, connection.toHandleId, props.batchScrollById?.[to.id]);
     return [
         connection.id,
         connection.fromNodeId,
@@ -269,6 +274,10 @@ function connectionSceneSignature(connection: CanvasDisplayConnection["connectio
         to.height,
         props.scriptScrollTopById[from.id] || 0,
         props.scriptScrollTopById[to.id] || 0,
+        fromCell?.x,
+        fromCell?.y,
+        toCell?.x,
+        toCell?.y,
         emphasized ? "active" : "idle",
         props.theme.accent.primary,
         props.theme.node.muted,
@@ -280,7 +289,7 @@ function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGrap
     const to = translatePreviewNode(entry.to, previewIds, preview);
     const emphasized = props.selectedConnectionId === entry.connection.id || props.relatedConnectionIds.has(entry.connection.id);
     entry.path.set({
-        path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0).pathD,
+        path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0, props.batchScrollById?.[entry.from.id], props.batchScrollById?.[entry.to.id]).pathD,
         stroke: emphasized ? props.theme.accent.primary : props.theme.node.muted,
         strokeWidth: emphasized ? 2.8 : 2,
         strokeScaleFixed: true,
@@ -341,6 +350,10 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
                 props.mouseWorld,
                 props.connectionTargetNodeId ? props.nodeById.get(props.connectionTargetNodeId) : undefined,
                 props.scriptScrollTopById[connecting.nodeId] || 0,
+                props.connectionTargetHandleId,
+                props.batchScrollById?.[connecting.nodeId],
+                props.connectionTargetNodeId ? props.batchScrollById?.[props.connectionTargetNodeId] : undefined,
+                props.connectionTargetNodeId ? props.scriptScrollTopById[props.connectionTargetNodeId] || 0 : 0,
             ),
             stroke: props.theme.accent.primary,
             strokeCap: "round",
@@ -359,7 +372,7 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
         if (!source) return;
         const handle: ConnectionHandle = { nodeId: source.id, handleType: "source" };
         scene.batchDrafts.add(new Path({
-            path: activeConnectionPath(source, handle, batch.mouseWorld, target, props.scriptScrollTopById[source.id] || 0),
+            path: activeConnectionPath(source, handle, batch.mouseWorld, target, props.scriptScrollTopById[source.id] || 0, batch.targetHandleId, props.batchScrollById?.[source.id], target ? props.batchScrollById?.[target.id] : undefined, target ? props.scriptScrollTopById[target.id] || 0 : 0),
             stroke,
             strokeWidth: 1.4,
             strokeScaleFixed: true,

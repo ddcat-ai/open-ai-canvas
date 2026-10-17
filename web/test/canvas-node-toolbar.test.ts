@@ -28,6 +28,32 @@ function createNodeContext(node: CanvasNodeData): ToolContext {
 }
 
 describe("canvas node toolbar model", () => {
+    test("edit copy delegates the selected image once and refuses unavailable sources", () => {
+        const node: CanvasNodeData = { id: "image", type: CanvasNodeType.Image, title: "图片", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { content: "image.png" } };
+        const ctx = createNodeContext(node);
+        const tool = resolveToolbarTools("node-hover", ctx, null).find((item) => item.id === "createEditCopy")!;
+        expect(tool).toBeDefined();
+        expect(tool.disabled?.(ctx)).toBe(true);
+        const received: CanvasNodeData[] = [];
+        ctx.handlers.onNodeCreateEditCopy = (source) => received.push(source);
+        expect(received).toEqual([]);
+        expect(tool.disabled?.(ctx)).toBe(false);
+        tool.run(ctx);
+        expect(received).toEqual([node]);
+        for (const metadata of [{ ...node.metadata, locked: true }, { ...node.metadata, status: "loading" as const }]) {
+            const withExistingMedia = createNodeContext({ ...node, metadata });
+            withExistingMedia.handlers = ctx.handlers;
+            expect(tool.disabled?.(withExistingMedia)).toBe(false);
+        }
+        const uploading = createNodeContext({ ...node, metadata: { ...node.metadata, fileUpload: "uploading" } });
+        uploading.handlers = ctx.handlers;
+        expect(tool.disabled?.(uploading)).toBe(true);
+        const empty = createNodeContext({ ...node, metadata: {} });
+        expect(resolveToolbarTools("node-hover", empty, null).some((item) => item.id === "createEditCopy")).toBe(false);
+        const video = createNodeContext({ ...node, type: CanvasNodeType.Video });
+        expect(resolveToolbarTools("node-hover", video, null).some((item) => item.id === "createEditCopy")).toBe(false);
+    });
+
     test("preserves empty, simple and busy video states", () => {
         const ctx = createNodeContext({ id: "video", type: CanvasNodeType.Video, title: "视频", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: {} });
         const emptyTools = resolveToolbarTools("node-hover", ctx, null);

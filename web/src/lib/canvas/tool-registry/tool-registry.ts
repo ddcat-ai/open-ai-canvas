@@ -15,14 +15,20 @@ const addNodeMenuRegistry: AddNodeMenuCommand[] = [];
 export function registerToolbarTools(tools: ToolDefinition[]) {
     for (const tool of tools) {
         const list = registry.get(tool.toolbar) ?? [];
-        list.push(tool);
+        const index = list.findIndex((registered) => registered.id === tool.id);
+        if (index >= 0) list[index] = tool;
+        else list.push(tool);
         registry.set(tool.toolbar, list);
     }
 }
 
 /** 注册添加节点菜单命令 */
 export function registerAddNodeMenuCommands(commands: AddNodeMenuCommand[]) {
-    addNodeMenuRegistry.push(...commands);
+    for (const command of commands) {
+        const index = addNodeMenuRegistry.findIndex((registered) => registered.id === command.id);
+        if (index >= 0) addNodeMenuRegistry[index] = command;
+        else addNodeMenuRegistry.push(command);
+    }
 }
 
 /** 获取某工具栏全部已注册工具（按 defaultOrder 升序） */

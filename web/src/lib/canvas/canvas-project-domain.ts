@@ -6,7 +6,8 @@ import { bindingForConnectedNode, storyboardComposerContent, storyboardRowRefere
 import type { CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
 import type { NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
 import { isFrameNode } from "@/lib/canvas/canvas-frame";
-import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
+import { imageNodeSizeFromRatio, nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
+import { batchCellAnchor, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { canvasNodeMentionToken, canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
@@ -258,7 +259,8 @@ export function applyNodeConfigPatch(node: CanvasNodeData, patch: Partial<Canvas
     const nextPatch = resetGenerationParamsOnModelSwitch(node, safePatch);
     const next = synchronizeGenerationSpec(node, nextPatch);
     const spec = node.type === CanvasNodeType.Video ? NODE_DEFAULT_SIZE[CanvasNodeType.Video] : NODE_DEFAULT_SIZE[CanvasNodeType.Image];
-    const size = typeof safePatch.size === "string" && !node.metadata?.content ? nodeSizeFromRatio(safePatch.size, spec.width, spec.height) : null;
+    const size = typeof safePatch.size === "string" && !node.metadata?.content && !node.metadata?.manualSize
+        ? node.type === CanvasNodeType.Image ? imageNodeSizeFromRatio(safePatch.size) : nodeSizeFromRatio(safePatch.size, spec.width, spec.height) : null;
     return size && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video) ? { ...next, ...size, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } } : next;
 }
 
@@ -279,7 +281,9 @@ function resetGenerationParamsOnModelSwitch(node: CanvasNodeData, patch: Partial
  * 连线落到目标节点上的吸附点。单端口一侧取边的正中——与 connectionHandleY 保持同一个
  * 口径，否则吸附点和实际画出来的线会对不上（这两处是同一规则的两份实现，改一处必错）。
  */
-export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0) {
+export function getConnectionTargetAnchor(node: CanvasNodeData, current: ConnectionHandle, handleId?: string, scrollTop = 0, batchScroll?: BatchScroll) {
+    const cell = current.handleType === "source" ? batchCellAnchor(node, handleId, batchScroll) : undefined;
+    if (cell) return { x: cell.x, y: cell.y };
     return {
         x: current.handleType === "source" ? node.position.x : node.position.x + node.width,
         y: batchReferenceHandleY(node, handleId) ?? storyboardHandleY(node, handleId, scrollTop) ?? node.position.y + node.height / 2,
@@ -508,7 +512,18 @@ export function removeCanvasNodes(nodes: CanvasNodeData[], requestedIds: Set<str
     });
     const remainingNodes = nodes.filter((node) => !removedIds.has(node.id));
     const cleanedNodes = remainingNodes.map((node) => {
-        const detached = node.parentId && removedIds.has(node.parentId) ? { ...node, parentId: undefined } : node;
+        let detached = node.parentId && removedIds.has(node.parentId) ? { ...node, parentId: undefined } : node;
+        const batchTable = detached.metadata?.batchTable;
+        if (batchTable) {
+            const rows = batchTable.rows.map(row => {
+                const inputNodeIds = row.inputNodeIds.map(id => removedIds.has(id) ? "" : id);
+                const textNodeIds = row.textNodeIds?.map(id => removedIds.has(id) ? "" : id);
+                const outputNodeId = row.outputNodeId && removedIds.has(row.outputNodeId) ? undefined : row.outputNodeId;
+                const changed = inputNodeIds.some((id, i) => id !== row.inputNodeIds[i]) || textNodeIds?.some((id, i) => id !== row.textNodeIds?.[i]);
+                return changed || outputNodeId !== row.outputNodeId ? { ...row, inputNodeIds, textNodeIds, outputNodeId, inputChanged: Boolean(outputNodeId) || row.inputChanged } : row;
+            });
+            if (rows.some((row, i) => row !== batchTable.rows[i])) detached = { ...detached, metadata: { ...detached.metadata, batchTable: { ...batchTable, rows } } };
+        }
         const storyboard = detached.metadata?.storyboard;
         const cleaned = storyboard
             ? {

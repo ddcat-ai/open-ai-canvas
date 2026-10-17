@@ -5,6 +5,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
+import { batchCellAnchor, parseBatchCellHandle, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
 
 export const ConnectionPath = React.memo(function ConnectionPath({
@@ -13,6 +14,8 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     to,
     fromScrollTop = 0,
     toScrollTop = 0,
+    fromBatchScroll,
+    toBatchScroll,
     active,
     visualMode = "full",
     hideVisual = false,
@@ -24,6 +27,8 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     to: CanvasNodeData;
     fromScrollTop?: number;
     toScrollTop?: number;
+    fromBatchScroll?: BatchScroll;
+    toBatchScroll?: BatchScroll;
     active: boolean;
     visualMode?: "full" | "hover-only";
     hideVisual?: boolean;
@@ -32,14 +37,18 @@ export const ConnectionPath = React.memo(function ConnectionPath({
 }) {
     const theme = canvasThemes[useActiveTheme()];
     const [hovered, setHovered] = useState(false);
-    const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop);
+    const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop, fromBatchScroll, toBatchScroll);
+    const targetCell = batchCellAnchor(to, connection.toHandleId, toBatchScroll);
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || hovered);
     const showEmphasis = !hideVisual && emphasized;
     const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+    if (!pathD) return null;
 
     return (
         <g>
+            {targetCell ? <title>{targetCell.label}{targetCell.clipped ? "（位于表格滚动区域外）" : ""}</title> : null}
+            {targetCell?.clipped && !hideVisual && emphasized ? <text x={endX + 8} y={endY - 8} fill={theme.node.text} fontSize={12} style={{ pointerEvents: "none" }}>{targetCell.label} · 滚动查看</text> : null}
             {showEmphasis ? <defs>
                 <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
                     <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
@@ -140,28 +149,34 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
         </g>
     );
-}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
+}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop && previous.fromBatchScroll?.top === next.fromBatchScroll?.top && previous.fromBatchScroll?.left === next.fromBatchScroll?.left && previous.toBatchScroll?.top === next.toBatchScroll?.top && previous.toBatchScroll?.left === next.toBatchScroll?.left);
 
-export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0) {
-    const startX = from.position.x + from.width;
-    const startY = connectionHandleY(from, connection.fromHandleId, fromScrollTop);
-    const endX = to.position.x;
-    const endY = connectionHandleY(to, connection.toHandleId, toScrollTop);
+export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0, fromBatchScroll?: BatchScroll, toBatchScroll?: BatchScroll) {
+    const fromCell = batchCellAnchor(from, connection.fromHandleId, fromBatchScroll);
+    const toCell = batchCellAnchor(to, connection.toHandleId, toBatchScroll);
+    if ((parseBatchCellHandle(connection.fromHandleId) && !fromCell) || (parseBatchCellHandle(connection.toHandleId) && !toCell)) return { pathD: "", startX: 0, startY: 0, endX: 0, endY: 0 };
+    const startX = fromCell?.x ?? from.position.x + from.width;
+    const startY = fromCell?.y ?? connectionHandleY(from, connection.fromHandleId, fromScrollTop);
+    const endX = toCell?.x ?? to.position.x;
+    const endY = toCell?.y ?? connectionHandleY(to, connection.toHandleId, toScrollTop);
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
 }
 
-export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0) {
+export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0, targetHandleId?: string, nodeBatchScroll?: BatchScroll, targetBatchScroll?: BatchScroll, targetScrollTop = 0) {
     if (!node) return "";
+    const nodeCell = batchCellAnchor(node, handle.handleId, nodeBatchScroll);
+    const targetCell = target ? batchCellAnchor(target, targetHandleId, targetBatchScroll) : undefined;
+    if ((parseBatchCellHandle(handle.handleId) && !nodeCell) || (target && parseBatchCellHandle(targetHandleId) && !targetCell)) return "";
     const startX = handle.handleType === "source" ? node.position.x + node.width : mouseWorld.x;
     const startY = handle.handleType === "source" ? connectionHandleY(node, handle.handleId, nodeScrollTop) : mouseWorld.y;
-    const endX = handle.handleType === "source" ? mouseWorld.x : node.position.x;
-    const endY = handle.handleType === "source" ? mouseWorld.y : connectionHandleY(node, handle.handleId, nodeScrollTop);
+    const endX = handle.handleType === "source" ? mouseWorld.x : nodeCell?.x ?? node.position.x;
+    const endY = handle.handleType === "source" ? mouseWorld.y : nodeCell?.y ?? connectionHandleY(node, handle.handleId, nodeScrollTop);
     const snappedStartX = handle.handleType === "target" && target ? target.position.x + target.width : startX;
     const snappedStartY = handle.handleType === "target" && target ? connectionHandleY(target) : startY;
-    const snappedEndX = handle.handleType === "source" && target ? target.position.x : endX;
-    const snappedEndY = handle.handleType === "source" && target ? connectionHandleY(target) : endY;
+    const snappedEndX = handle.handleType === "source" && target ? targetCell?.x ?? target.position.x : endX;
+    const snappedEndY = handle.handleType === "source" && target ? targetCell?.y ?? connectionHandleY(target, targetHandleId, targetScrollTop) : endY;
     const distance = Math.abs(snappedEndX - snappedStartX);
     return `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
 }

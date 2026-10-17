@@ -1,4 +1,4 @@
-import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize, fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
 
@@ -72,7 +72,7 @@ export async function readUploadImageSize(file: File): Promise<{ width: number; 
 }
 
 export function createImageUploadPlaceholder(id: string, file: Pick<File, "name" | "size" | "type">, position: Position, naturalSize: { width: number; height: number }): CanvasNodeData {
-    const size = fitNodeSize(naturalSize.width, naturalSize.height);
+    const size = fitImageNodeSize(naturalSize.width, naturalSize.height);
     return {
         id, type: CanvasNodeType.Image, title: file.name,
         position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },

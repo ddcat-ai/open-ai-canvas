@@ -84,3 +84,108 @@ describe("canvas generation copy metadata", () => {
         expect(context.referenceImages.map((image) => image.id)).toEqual([reference.id]);
     });
 });
+
+describe("batch table copy references", () => {
+    const table: CanvasNodeData = {
+        id: "table",
+        type: CanvasNodeType.BatchTable,
+        title: "批量创作",
+        position: { x: 0, y: 0 },
+        width: 1280,
+        height: 560,
+        metadata: {
+            batchTable: {
+                operation: "creative",
+                concurrency: 2,
+                referenceMode: "cells",
+                aiGenerated: true,
+                referenceColumns: [
+                    { id: "portrait", label: "人物" },
+                    { id: "scene", label: "场景" },
+                    { id: "style", label: "风格" },
+                ],
+                textColumns: [{ id: "requirements", label: "要求", type: "text" }],
+                rows: [
+                    {
+                        id: "row-1",
+                        enabled: true,
+                        inputNodeIds: ["portrait-image", "", "portrait-image"],
+                        textNodeIds: ["note"],
+                        prompt: "保持人物一致",
+                        outputNodeId: "result",
+                        generatedInputSignature: "old-generation",
+                        cells: { requirements: "近景" },
+                    },
+                ],
+            },
+        },
+    };
+
+    test("只复制表格保留外部素材及空列，但不接管原表的生成结果", () => {
+        const metadata = isolateCopiedNodeMetadata(table, new Map([["table", "table-copy"]]));
+        const copied = metadata.batchTable!;
+
+        expect(copied.referenceMode).toBe("cells");
+        expect(copied.rows[0].inputNodeIds).toEqual(["portrait-image", "", "portrait-image"]);
+        expect(copied.rows[0].textNodeIds).toEqual(["note"]);
+        expect(copied.rows[0].outputNodeId).toBeUndefined();
+        expect(copied.rows[0].generatedInputSignature).toBeUndefined();
+        expect(table.metadata?.batchTable?.rows[0].outputNodeId).toBe("result");
+        expect(table.metadata?.batchTable?.rows[0].generatedInputSignature).toBe("old-generation");
+    });
+
+    test("同时复制表、素材和结果后，列位置、格子与输出归属全部指向同组副本", () => {
+        const idMap = new Map([
+            ["table", "table-copy"],
+            ["portrait-image", "portrait-copy"],
+            ["note", "note-copy"],
+            ["result", "result-copy"],
+        ]);
+        const copied = isolateCopiedNodeMetadata(table, idMap).batchTable!;
+        const result: CanvasNodeData = {
+            id: "result",
+            type: CanvasNodeType.Image,
+            title: "成品",
+            position: { x: 1400, y: 0 },
+            width: 340,
+            height: 240,
+            metadata: { content: "result.png", batchSourceNodeId: "table", batchRowId: "row-1", batchOperation: "creative", batchInputNodeIds: ["portrait-image", "", "portrait-image"] },
+        };
+        const copiedResult = isolateCopiedNodeMetadata(result, idMap);
+
+        expect(copied.rows[0].id).toBe("row-1");
+        expect(copied.referenceColumns?.map((column) => column.id)).toEqual(["portrait", "scene", "style"]);
+        expect(copied.rows[0].inputNodeIds).toEqual(["portrait-copy", "", "portrait-copy"]);
+        expect(copied.rows[0].textNodeIds).toEqual(["note-copy"]);
+        expect(copied.rows[0].outputNodeId).toBe("result-copy");
+        expect(copiedResult.batchSourceNodeId).toBe("table-copy");
+        expect(copiedResult.batchRowId).toBe("row-1");
+        expect(copiedResult.batchInputNodeIds).toEqual(["portrait-copy", "", "portrait-copy"]);
+
+        copied.referenceColumns![0].label = "副本人物";
+        copied.rows[0].cells!.requirements = "远景";
+        copied.rows[0].inputNodeIds[0] = "new-image";
+        expect(table.metadata?.batchTable?.referenceColumns?.[0].label).toBe("人物");
+        expect(table.metadata?.batchTable?.rows[0].cells?.requirements).toBe("近景");
+        expect(table.metadata?.batchTable?.rows[0].inputNodeIds[0]).toBe("portrait-image");
+    });
+
+    test("单独复制成品不再归属原任务行，仍保留素材引用", () => {
+        const result: CanvasNodeData = {
+            id: "result",
+            type: CanvasNodeType.Image,
+            title: "成品",
+            position: { x: 0, y: 0 },
+            width: 340,
+            height: 240,
+            metadata: { content: "result.png", batchSourceNodeId: "table", batchRowId: "row-1", batchOperation: "creative", batchInputNodeIds: ["portrait-image"] },
+        };
+        const copied = isolateCopiedNodeMetadata(result, new Map([["result", "result-copy"]]));
+
+        expect(copied.batchSourceNodeId).toBeUndefined();
+        expect(copied.batchRowId).toBeUndefined();
+        expect(copied.batchOperation).toBeUndefined();
+        expect(copied.batchInputNodeIds).toEqual(["portrait-image"]);
+        expect(copied.content).toBe("result.png");
+    });
+});
