@@ -86,7 +86,7 @@ Pi SDK 执行前的参数校验失败由 `agent-runtime/pi/agent-runtime.mjs` �
 | 页面装配和跨域动作协调 | `web/src/pages/canvas/project.tsx` |
 | 画布领域规则和生成协议 | `web/src/lib/canvas/canvas-project-domain.ts`、`canvas-project-generation.ts`、`produced-model.ts` |
 | 项目恢复、持久化和项目级动作 | `web/src/pages/canvas/use-canvas-project-lifecycle.ts` |
-| 画布 operations 同步与本地 journal | `web/src/services/user-data-sync.ts`、`web/src/services/api/user-data.ts`、`web/src/lib/canvas/canvas-content.ts`、`web/src/pages/canvas/canvas-sync-status.tsx`、`web/src/stores/use-sync-progress-store.ts` |
+| 画布 operations 同步与本地 journal | `web/src/services/user-data-sync.ts` 协调快照和确认；`web/src/services/canvas-mutation-batches.ts` 按服务端 500 条上限顺序提交、先持久化后发送并保留重放 ID；`web/src/services/api/user-data.ts`、`web/src/lib/canvas/canvas-content.ts`、`web/src/pages/canvas/canvas-sync-status.tsx`、`web/src/stores/use-sync-progress-store.ts` |
 | 内部资源保护与维护快照 | `backend/internal/canvas/canvas_history.go`、`repair_resources.go`、`backend/internal/repository/canvas_history.go`；仅供资源完整性维护和审计，不提供用户历史树、预览或恢复入口 |
 | Patch 历史、生成任务和重试控制 | `web/src/pages/canvas/use-canvas-history.ts`、`use-canvas-generation.ts`、`use-canvas-generation-executor.ts`、`use-canvas-generation-retry.ts` |
 | 文本、图片、视频和音频生成执行 | `web/src/pages/canvas/canvas-*-generation-executor*.ts` |

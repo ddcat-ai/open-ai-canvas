@@ -123,6 +123,8 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 ## 画布资源完整性与 operations 写入
 
+`PATCH /canvas-projects/:id/operations` 每次接受 1–500 条操作。前端超限变更按原顺序分批提交，每批发送前保存准确的请求 ID、请求正文和未提交操作；只有全部确认并读回后，界面才标记整份画布已保存。响应丢失时重放同一批 ID 和正文，依靠服务端事务回执去重；冲突停止在当前批，不放宽字段基线。大变更由多笔事务组成，中途失败可能已有部分批次落库，本地仍保留完整待提交快照与后续操作，不能将部分成功显示成全部完成。
+
 画布 operations 应用前校验当前文档中的资源引用；引用须属于当前用户且处于 `ready`。引用收集器递归遍历受支持的资源字段，因此 `nodes[节点 ID].metadata.videoPreview.storageKey` 等嵌套派生封面也会参与检查。维护写入会保留必要的损坏文档审计信息；若资源在事务期间缺失或状态变化，事务回滚，画布 revision 不递增。
 
 HTTP 409 不能一概解释为并发冲突：对象或字段基线冲突使用 `reason: conflict`；资源完整性失败使用 `reason: canvas_history_resources_missing`，并在 `details` 中返回 `resourceIds` 和 `missingResources`（含资源 ID、JSON 路径、节点 ID、引用类型及 `source`）。客户端应按 `reason` 分流，不解析 `msg` 猜测原因。普通 operations 不会绕过资源校验或 revision 语义，维护修复也不能把缺失主媒体写回为有效画布。
