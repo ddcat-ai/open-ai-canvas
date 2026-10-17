@@ -139,6 +139,61 @@ func TestCreateTimelineTranscriptionTaskRejectsForeignResource(t *testing.T) {
 	}
 }
 
+func disableEditorShellForUser(t *testing.T, db *gorm.DB, userID string) {
+	t.Helper()
+	if err := db.Create(&model.UserPluginState{ID: newID(), UserID: userID, PluginID: PluginEditorShell, Enabled: false}).Error; err != nil {
+		t.Fatalf("seed plugin state: %v", err)
+	}
+}
+
+func TestTimelineTasksRequireEditorShell(t *testing.T) {
+	svc, db := newTimelineTaskTestService(t)
+	seedResource(t, db, "res-editor-off", "usr-editor-off", "video/mp4")
+	disableEditorShellForUser(t, db, "usr-editor-off")
+
+	if _, err := svc.CreateTimelineTranscriptionTask("usr-editor-off", TimelineTranscriptionCreateRequest{ResourceID: "res-editor-off"}); err == nil {
+		t.Fatal("transcription task created while editor shell is disabled")
+	}
+	if _, err := svc.CreateTimelineRenderTask("usr-editor-off", TimelineRenderCreateRequest{Timeline: renderTestProject("resource:res-editor-off")}); err == nil {
+		t.Fatal("render task created while editor shell is disabled")
+	}
+	var count int64
+	if err := db.Model(&model.Task{}).Where("user_id = ?", "usr-editor-off").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("tasks created = %d, want 0", count)
+	}
+}
+
+func TestTimelineWorkersRecheckEditorShell(t *testing.T) {
+	svc, db := newTimelineTaskTestService(t)
+	transcription := seedRunningTimelineTask(t, db, `{"resourceId":"res-1"}`)
+	render := seedRunningRenderTask(t, db, renderInputJSON(t, renderTestProject("resource:res-1")))
+	disableEditorShellForUser(t, db, transcription.UserID)
+	disableEditorShellForUser(t, db, render.UserID)
+
+	// 两个前置条件都会让任务在门控之后失败，断言失败原因来自插件门控。
+	t.Setenv(whisperLangEnv, "")
+	t.Setenv(renderFfmpegEnv, "/no/such/ffmpeg")
+	w := newTaskWorkerCoordinator(svc)
+	if err := w.processTimelineTranscription(transcription, context.Background()); err != nil {
+		t.Fatalf("process transcription: %v", err)
+	}
+	if err := w.processTimelineRender(render, context.Background()); err != nil {
+		t.Fatalf("process render: %v", err)
+	}
+	for _, id := range []string{transcription.ID, render.ID} {
+		var stored model.Task
+		if err := db.First(&stored, "id = ?", id).Error; err != nil {
+			t.Fatalf("load task: %v", err)
+		}
+		if stored.Status != model.TaskStatusFailed || !strings.Contains(stored.Error, "插件未启用") {
+			t.Fatalf("task %s = %s / %q, want failed by editor shell gate", id, stored.Status, stored.Error)
+		}
+	}
+}
+
 func TestCreateTimelineTranscriptionTaskRejectsNonTranscribable(t *testing.T) {
 	svc, db := newTimelineTaskTestService(t)
 	seedResource(t, db, "res-img", "usr-img", "image/png")

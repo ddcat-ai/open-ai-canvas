@@ -224,9 +224,11 @@ func (s *Service) pluginStateForUser(actor *model.User, pluginID string, items [
 		}
 		// Preserve the old globally-enabled workflow behavior until each user
 		// explicitly saves a personal choice. Other official applications were
-		// already controlled by each user's local installation state.
+		// already controlled by each user's local installation state. The editor
+		// shell was always usable before its switch was enforced, so it keeps
+		// that default as well.
 		if !userConfigured {
-			if pluginID == PluginMediaConversion {
+			if pluginID == PluginMediaConversion || pluginID == PluginEditorShell {
 				userEnabled = true
 			} else if hasRuntime && pluginID == WorkflowPluginRunningHub {
 				userEnabled = runtimePlugin.Status == "enabled"

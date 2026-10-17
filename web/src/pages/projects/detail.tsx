@@ -7,7 +7,9 @@ import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { getProjectCore, getProjectOverview, getProjectUnitWorkspace, linkCanvasUnit, listProjectUnits } from "@/services/api/projects";
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
+import { EDITOR_SHELL_PLUGIN_ID } from "@/lib/plugins/builtin/editor/editor-shell";
 import type { ProjectDetail } from "@/services/api/projects";
+import { usePluginStore } from "@/stores/use-plugin-store";
 
 import { WorkflowChapterNavigator } from "./detail/workflow-chapter-navigator";
 
@@ -36,6 +38,7 @@ export default function ProjectDetailPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { message } = App.useApp();
+    const editorState = usePluginStore((state) => state.pluginStates[EDITOR_SHELL_PLUGIN_ID]);
     const activeView: DetailView = unitId || view === "workflow" ? "workflow" : chapterId ? "chapters" : views.some((item) => item.key === view) ? view as DetailView : "overview";
     const coreQuery = useQuery({
         queryKey: ["project", projectId, "core"],
@@ -116,6 +119,9 @@ export default function ProjectDetailPage() {
     if (coreQuery.isLoading || unitsQuery.isLoading) return <WorkspacePage><WorkspaceLoadingState label="正在打开项目工作台" detail="读取项目与章节索引" /></WorkspacePage>;
     if (coreQuery.isError || unitsQuery.isError || !detail) return <WorkspacePage><WorkspaceErrorState title="项目不可用" description="项目不存在、已被删除，或当前账号没有访问权限。" actionLabel="返回项目中心" onRetry={() => navigate("/projects")} /></WorkspacePage>;
     if (!chapterId && !unitId && (!view || !views.some((item) => item.key === view))) return <Navigate to={`/projects/${projectId}/overview`} replace />;
+    // 直接访问剪辑页时先等插件状态，停用则回到概览，避免在读到状态前误跳转。
+    if (activeView === "editor" && !editorState) return <WorkspacePage><WorkspaceLoadingState label="正在读取剪辑工作台状态" /></WorkspacePage>;
+    if (activeView === "editor" && !editorState?.effectiveEnabled) return <Navigate to={`/projects/${projectId}/overview`} replace />;
     if (chapterId && !units.some((unit) => unit.id === chapterId)) return <Navigate to={firstUnitId ? `/projects/${projectId}/chapters/${firstUnitId}` : `/projects/${projectId}/chapters`} replace />;
     if (unitId && !units.some((unit) => unit.id === unitId)) return <Navigate to={firstUnitId ? `/projects/${projectId}/workflow/${firstUnitId}/${stage || "video"}` : `/projects/${projectId}/workflow`} replace />;
     if (activeView === "workflow" && !unitId && detail.units.length) return <Navigate to={`/projects/${projectId}/workflow/${detail.units.slice().sort((left, right) => left.position - right.position)[0].id}/video`} replace />;
@@ -155,6 +161,7 @@ export default function ProjectDetailPage() {
 
 function ProjectWorkspaceHeader({ detail, projectId, activeView, unitId, stage, chapterHref, workflowHref, onCreateCanvas }: { detail: ProjectDetail; projectId: string; activeView: DetailView; unitId?: string; stage?: string; chapterHref: string; workflowHref: string; onCreateCanvas: () => void }) {
     const archived = detail.project.status === "archived";
+    const editorEnabled = usePluginStore((state) => state.pluginStates[EDITOR_SHELL_PLUGIN_ID]?.effectiveEnabled === true);
     const createCanvasLabel = activeView === "chapters" && detail.units.length ? "新建当前章节画布" : "新建项目画布";
     return (
         <header className="project-workspace-header">
@@ -169,7 +176,7 @@ function ProjectWorkspaceHeader({ detail, projectId, activeView, unitId, stage, 
                 </div>
             </div>
             <nav className="project-workspace-tabs" aria-label="项目导航">
-                {views.map((item) => {
+                {views.filter((item) => item.key !== "editor" || editorEnabled).map((item) => {
                     const active = item.key === activeView;
                     const href = item.key === "chapters" ? chapterHref : item.key === "workflow" ? workflowHref : `/projects/${projectId}/${item.key}`;
                     return (
