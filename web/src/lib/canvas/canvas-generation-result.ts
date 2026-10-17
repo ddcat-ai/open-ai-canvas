@@ -1,5 +1,32 @@
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
+const completedTaskObservationKeys = [
+    "status", "taskStatus", "taskProgress", "taskStage", "taskMediaStage", "taskCanRecoverMedia",
+    "taskStartedAt", "taskCompletedAt", "taskDurationMs", "taskCreatedAt", "taskUpdatedAt",
+    "errorDetails", "generationErrorCode", "failedPromptFingerprint", "resourceReloadAvailable",
+] as const satisfies readonly (keyof CanvasNodeMetadata)[];
+
+export function completedGenerationObservationBase(baseNodes: CanvasNodeData[], resultNodes: CanvasNodeData[], durableNodes: CanvasNodeData[], taskId: string, effectKey: string): CanvasNodeData[] {
+    const results = new Map(resultNodes.map((node) => [node.id, node]));
+    const durable = new Map(durableNodes.map((node) => [node.id, node]));
+    return baseNodes.map((base) => {
+        const result = results.get(base.id);
+        const saved = durable.get(base.id);
+        if (!saved || base.metadata?.taskId !== taskId || result?.metadata?.taskId !== taskId
+            || result.metadata.taskStatus !== "succeeded" || result.metadata.status !== "success"
+            || !result.metadata.generationEffectKeys?.includes(effectKey)) return base;
+        if (saved.metadata?.taskId !== taskId) throw new Error("节点已绑定其他生成任务，旧任务结果不能覆盖当前节点");
+        // UI recovery/polling can lead durable state. Only observations of this completed task
+        // use the latest saved baseline; prompt, media, geometry and task identity remain fenced.
+        const metadata = { ...base.metadata };
+        for (const key of completedTaskObservationKeys) {
+            if (Object.prototype.hasOwnProperty.call(saved.metadata, key)) Object.assign(metadata, { [key]: saved.metadata[key] });
+            else delete metadata[key];
+        }
+        return { ...base, metadata };
+    });
+}
+
 /** 异步阶段只准备结果；提交时按节点身份合并，绝不能用旧文档覆盖当前文档。 */
 export function commitCanvasGenerationResult(current: CanvasNodeData[], before: CanvasNodeData, result: CanvasNodeData, taskId: string, additionalNodes: CanvasNodeData[] = []): CanvasNodeData[] {
     const live = current.find((node) => node.id === before.id);

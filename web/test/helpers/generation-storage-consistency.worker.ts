@@ -14,7 +14,9 @@ type Scenario =
     | "canvas-multi-output"
     | "canvas-copy-generation"
     | "canvas-mask-batch"
-    | "canvas-asset-preparation";
+    | "canvas-asset-preparation"
+    | "canvas-reentry-observation"
+    | "canvas-video-reentry";
 
 function installStorageHarness() {
     const originalCreateInstance = localforage.createInstance.bind(localforage);
@@ -403,7 +405,7 @@ async function runMediaCommitRace(mediaType: "video" | "audio") {
     }
 }
 
-async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
+async function runCanvasBatchCommitRace(multiOutput = false, mask = false, reentry = false, video = false) {
     const harness = installStorageHarness();
     const previousScope = getActiveUserScope();
     const { apiClient } = await import("../../src/services/api/request");
@@ -432,6 +434,10 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
     let unregister: (() => void) | undefined;
     try {
         setActiveUserScope("canvas-batch-commit-race");
+        if (video) {
+            const { primeResourceBlobCache } = await import("../../src/services/resource-blob-cache");
+            for (const index of [0, 1]) await primeResourceBlobCache(`resource:image-${index}`, new Blob(["test-video"], { type: "video/mp4" }), { createObjectURL: false });
+        }
         const { useCanvasStore, flushCanvasStorePersistence, CANVAS_STORE_KEY } = await import("../../src/stores/canvas/use-canvas-store");
         const { useAssetStore } = await import("../../src/stores/use-asset-store");
         const { applyCanvasGenerationTaskNodeEffect, registerCanvasGenerationLiveProject } = await import("../../src/services/canvas-generation-consumer");
@@ -442,7 +448,7 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
         const projectId = useCanvasStore.getState().createProject("batch race");
         const nodes = Array.from({ length: 5 }, (_, index) => ({
             id: `node-${index}`,
-            type: CanvasNodeType.Image,
+            type: video ? CanvasNodeType.Video : CanvasNodeType.Image,
             title: `image-${index}`,
             position: { x: index * 400, y: 0 },
             width: 320,
@@ -467,18 +473,23 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
         const setNodes = createCanvasStateWriter(ref, () => {});
         useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
         await flushCanvasStorePersistence();
+        if (reentry) {
+            useCanvasStore.getState().updateProject(projectId, { nodes: ref.current.map((node) => node.id === "node-0" ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: "previous apply failed", resourceReloadAvailable: true } } : node) });
+            await flushCanvasStorePersistence();
+            setNodes((current) => current.map((node) => node.id === "node-0" ? { ...node, metadata: { ...node.metadata, status: "loading", taskStage: "正在重新加载资源" } } : node));
+        }
         // 模拟任务状态已到编辑器、自动保存尚未跟上的真实生成完成窗口。
         setNodes((current) => current.map((node) => ({ ...node, metadata: { ...node.metadata, taskStage: "正在应用结果" } })));
         useAssetStore.setState({
             assets: (multiOutput ? [0, 1, 2, 3] : [0, 1]).map((index) => ({
                 id: `asset-${index}`,
-                kind: "image" as const,
+                kind: video ? "video" as const : "image" as const,
                 title: "generated",
                 coverUrl: "/image.png",
                 tags: [],
                 createdAt: "2026-09-21T00:00:00Z",
                 updatedAt: "2026-09-21T00:00:00Z",
-                data: { dataUrl: "/image.png", storageKey: `resource:image-${index}`, width: multiOutput ? 640 + index : 640, height: mask ? 360 : 480, bytes: 100, mimeType: "image/png" },
+                data: { url: "/video.mp4", dataUrl: "/image.png", storageKey: `resource:image-${index}`, width: multiOutput ? 640 + index : 640, height: mask ? 360 : 480, bytes: 100, mimeType: video ? "video/mp4" : "image/png", duration: 5 },
             })),
         });
         unregister = registerCanvasGenerationLiveProject({ scope: getActiveUserScope(), projectId, adapter: { read: () => ({ nodes: ref.current, connections: [], chatSessions: [], activeChatId: null }), write: (state) => setNodes(state.nodes) } });
@@ -498,7 +509,7 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
                     task: {
                         id: `task-${index}`,
                         projectId,
-                        type: "canvas_image",
+                        type: video ? "canvas_video" : "canvas_image",
                         status: "succeeded",
                         prompt: "test",
                         attempts: 1,
@@ -508,7 +519,7 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
                         resultJson: multiOutput ? JSON.stringify({ images: [0, 1, 2, 3].map((i) => ({ dataUrl: "/image.png", storageKey: `resource:image-${i}` })) }) : "{}",
                         ...(multiOutput ? { outputs: [0, 1, 2, 3].map((i) => ({ outputIndex: i, mediaType: "image" as const, materializedAssetId: `asset-${i}` })) } : {}),
                     },
-                    output: { outputIndex: 0, mediaType: "image", materializedAssetId: `asset-${index}` },
+                    output: { outputIndex: 0, mediaType: video ? "video" : "image", materializedAssetId: `asset-${index}` },
                     effectKey: `attach:task-${index}:0`,
                 }),
             ),
@@ -685,6 +696,14 @@ async function runCanvasAssetPreparation() {
 
 self.onmessage = async (event: MessageEvent<Scenario>) => {
     try {
+        if (event.data === "canvas-video-reentry") {
+            self.postMessage({ ok: true, result: await runCanvasBatchCommitRace(false, false, true, true) });
+            return;
+        }
+        if (event.data === "canvas-reentry-observation") {
+            self.postMessage({ ok: true, result: await runCanvasBatchCommitRace(false, false, true) });
+            return;
+        }
         if (event.data === "canvas-mask-batch" || event.data === "canvas-asset-preparation") {
             const result = event.data === "canvas-mask-batch" ? await runCanvasBatchCommitRace(false, true) : await runCanvasAssetPreparation();
             self.postMessage({ ok: true, result });

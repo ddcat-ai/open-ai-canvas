@@ -732,6 +732,7 @@ function completedTaskMetadata(task: GenerationTask): CanvasNodeMetadata {
         taskCreatedAt: task.createdAt || task.created_at,
         taskUpdatedAt: task.updatedAt || task.updated_at,
         errorDetails: undefined,
+        resourceReloadAvailable: undefined,
         generationErrorCode: undefined,
         failedPromptFingerprint: undefined,
     };
