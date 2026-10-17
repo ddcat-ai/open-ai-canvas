@@ -436,6 +436,12 @@ func (s *Service) advanceCloudAgentReadBatch(run *model.CloudAgentExecution, sta
 }
 
 func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
+	return s.advanceCloudAgentApprovalTool(run, state, false)
+}
+
+// advanceCloudAgentApprovalTool 执行当前调用；continuing 表示批准后接续同批的下一个审批调用，
+// 此时准入失败只记录为该调用的工具错误，不终止整轮运行。
+func (s *Service) advanceCloudAgentApprovalTool(run *model.CloudAgentExecution, state *cloudAgentRuntime, continuing bool) error {
 	if run == nil || state == nil || (run.Status != "running" && run.Status != "queued") {
 		return nil
 	}
@@ -443,6 +449,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 		return s.failCloudAgent(run, state, "Agent 工具调用状态无效，本轮已停止")
 	}
 	call := state.Calls[state.CallIndex]
+	mediaAdmissionError := func(err error) error {
+		if continuing {
+			return s.recordCloudAgentQueuedApprovalError(run, state, err)
+		}
+		return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+	}
 	call = s.cloudAgentRefreshStepSnapshotHash(run, state, call)
 	state.Calls[state.CallIndex] = call
 	if state.Approval != nil && state.Approval.Decision == "" {
@@ -468,7 +480,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			mediaCall := cloudAgentMediaCall(call)
 			req, prepared, err := s.prepareCloudAgentMedia(run, state, mediaCall)
 			if err != nil {
-				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+				return mediaAdmissionError(err)
 			}
 			mediaRequest, plan = req, prepared
 			// A durable auto checkpoint already contains the exact admitted input and
@@ -479,14 +491,14 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				req.creationPrepare = mediaPreparation
 				preparedTask, err = s.CreateTask(run.UserID, req)
 				if err != nil {
-					return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+					return mediaAdmissionError(err)
 				}
 				// Resolve model-owned defaults once during the dry admission. Both the
 				// eventual task and the canvas draft must use this exact resolved input;
 				// otherwise auto mode reports a false tool failure for omitted size or
 				// duration and makes the model spend another turn repairing its own call.
 				if err := applyCloudAgentResolvedMediaDefaults(&req, prepared, preparedTask); err != nil {
-					return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+					return mediaAdmissionError(err)
 				}
 				if err := validateCloudAgentMediaBudget(prepared.Args, state); err != nil {
 					return s.cloudAgentMediaError(run, state, "admission", false, false, err)
@@ -495,7 +507,7 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			}
 			modelName, err = s.cloudAgentMediaModelName(plan.Args)
 			if err != nil {
-				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+				return mediaAdmissionError(err)
 			}
 		}
 		if plan != nil && state.Request.PermissionMode == "auto" && !mediaTool {
@@ -655,6 +667,10 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					}
 					var appErr *AppError
 					if errors.As(mutationErr, &appErr) && appErr != nil {
+						if continuing {
+							cloudAgentRecordToolResult(current, state, call, nil, mutationErr)
+							return cloudAgentSave(current, state)
+						}
 						return failCloudAgentAdmission(current, state, run.ID, mutationErr)
 					}
 					return mutationErr

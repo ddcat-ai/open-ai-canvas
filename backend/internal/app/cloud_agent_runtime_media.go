@@ -587,7 +587,7 @@ func cloudAgentApprovalResumePrompt(state *cloudAgentRuntime) string {
 	if receipt, ok := cloudAgentLastToolReceipt(state); ok {
 		prompt := "用户已批准刚才等待审批的操作，已执行完成，结果如下：\n" + receipt +
 			"\n该操作不要重复调用。结果里是目标对象的最新状态（含 snapshotHash）；继续写同一对象必须基于它，否则会因快照过期被拒绝。"
-		if state.CallIndex < len(state.Calls) {
+		if cloudAgentCurrentBatchUnanswered(state) {
 			prompt += " 你上一步同批发出的其余调用未被执行（每个审批周期只放行一个操作），仍需要请重发。"
 		}
 		return prompt
@@ -687,6 +687,13 @@ func cloudAgentReceiptClip(content string) string {
 }
 
 func (s *Service) resumeCloudAgentAfterApproval(userID, id string, state *cloudAgentRuntime) error {
+	// 同批还有调用未处理时，先由执行器依序接续下一个审批调用；出现新审批卡、
+	// 媒体任务在跑或运行已终止时，暂不恢复模型。
+	if state.CallIndex > 0 && state.CallIndex < len(state.Calls) {
+		if paused, err := s.continueCloudAgentApprovalQueue(userID, id, state); err != nil || paused {
+			return err
+		}
+	}
 	if state.PiResumePrompt == "" {
 		state.PiResumePrompt = cloudAgentApprovalResumePrompt(state)
 	}

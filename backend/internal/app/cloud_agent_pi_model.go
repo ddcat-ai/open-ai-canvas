@@ -433,6 +433,8 @@ func (s *Service) adoptCloudAgentPiModelStep(userID, runID, taskID string) (adop
 func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing canonicalAgentRequest) (canonicalAgentRequest, error) {
 	compactionSummaryRequest := cloudAgentPiCompactionSummaryRequest(messages)
 	if !compactionSummaryRequest {
+		// 审批队列已执行的同批调用用服务端真实结果替换 Pi 的等待占位。
+		messages = cloudAgentRestoreApprovalQueueResults(messages, existing)
 		// 审批暂停会留下没有结果的并行工具调用，先补齐再转换（见 cloud_agent_pi_unanswered_calls.go）。
 		messages = repairRuntimeUnansweredCalls(messages)
 	}
