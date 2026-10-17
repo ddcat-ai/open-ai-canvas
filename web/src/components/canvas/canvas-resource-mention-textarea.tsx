@@ -73,6 +73,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const editorRef = useRef<HTMLDivElement | null>(null);
     const readOnly = Boolean(props.disabled || props.readOnly);
     const composingRef = useRef(false);
+    const compositionValueRef = useRef(value);
+    const invalidatedCompositionRef = useRef(false);
+    const discardedCompositionTextRef = useRef<string | null>(null);
     const pendingSelectionRef = useRef<number | null>(null);
     const pendingScrollTopRef = useRef<number | null>(null);
     const lastRenderedValueRef = useRef("");
@@ -122,10 +125,13 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (!useRichEditor) pendingScrollTopRef.current = null;
     }, [useRichEditor, value]);
 
-    useLayoutEffect(() => {
-        if (!useRichEditor) return;
+    const renderControlledValue = useCallback(() => {
+        if (!useRichEditor) {
+            if (textareaRef.current) textareaRef.current.value = value;
+            return;
+        }
         const editor = editorRef.current;
-        if (!editor || composingRef.current) return;
+        if (!editor) return;
         const isFocused = document.activeElement === editor;
         const currentValue = serializeEditableValue(editor);
         if (currentValue === value && lastRenderedValueRef.current === value) {
@@ -143,6 +149,16 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (scrollTop !== null) editor.scrollTop = scrollTop;
         pendingScrollTopRef.current = null;
     }, [activeReferences, reportContentSize, useRichEditor, value]);
+
+    useLayoutEffect(() => {
+        if (composingRef.current) {
+            // Rich input is published at compositionend. A changed controlled
+            // value during composition is external, not an echo of that input.
+            if (readOnly || (useRichEditor && value !== compositionValueRef.current)) invalidatedCompositionRef.current = true;
+            if (!readOnly) return;
+        }
+        renderControlledValue();
+    }, [readOnly, renderControlledValue, useRichEditor, value]);
 
     useLayoutEffect(() => {
         const anchor = useRichEditor ? editorRef.current : textareaRef.current;
@@ -295,8 +311,14 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         document.body,
     ) : null;
 
-    const syncEditableValue = () => {
-        if (readOnly || composingRef.current) return;
+    const syncEditableValue = (event?: React.FormEvent<HTMLDivElement>) => {
+        const input = event?.nativeEvent as InputEvent | undefined;
+        if (readOnly || invalidatedCompositionRef.current || (discardedCompositionTextRef.current !== null && (input?.isComposing || /composition/i.test(input?.inputType || "") || input?.data === discardedCompositionTextRef.current))) {
+            renderControlledValue();
+            return;
+        }
+        if (composingRef.current) return;
+        discardedCompositionTextRef.current = null;
         const editor = editorRef.current;
         if (!editor) return;
         const next = serializeEditableValue(editor);
@@ -385,15 +407,25 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     onInput={syncEditableValue}
                     onCompositionStart={(event) => {
                         composingRef.current = true;
+                        compositionValueRef.current = value;
+                        invalidatedCompositionRef.current = readOnly;
+                        discardedCompositionTextRef.current = null;
                         props.onCompositionStart?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onCompositionEnd={(event) => {
                         composingRef.current = false;
-                        syncEditableValue();
+                        if (readOnly || invalidatedCompositionRef.current) {
+                            invalidatedCompositionRef.current = false;
+                            discardedCompositionTextRef.current = event.nativeEvent.data || event.data || null;
+                            renderControlledValue();
+                            closeMention();
+                            setAutoLinkCursor(null);
+                        } else syncEditableValue();
                         props.onCompositionEnd?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
                         event.preventDefault();
+                        discardedCompositionTextRef.current = null;
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
                     onDragOver={(event: DragEvent<HTMLDivElement>) => {
@@ -427,6 +459,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onDrop?.(event as unknown as React.DragEvent<HTMLTextAreaElement>);
                     }}
                     onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                        if (!event.nativeEvent.isComposing && !composingRef.current && event.keyCode !== 229) discardedCompositionTextRef.current = null;
                         if (readOnly) { onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>); return; }
                         if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
                         if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {
@@ -524,7 +557,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 className={`${className || ""} relative z-10`}
                 style={{ ...mergedStyle, height: "100%", minHeight: 0, maxHeight: "100%", overflowY: "auto", overflowX: "hidden" }}
                 onChange={(event) => {
-                    if (readOnly) return;
+                    const input = event.nativeEvent as InputEvent;
+                    if (readOnly || invalidatedCompositionRef.current || (discardedCompositionTextRef.current !== null && (input.isComposing || /composition/i.test(input.inputType || "") || input.data === discardedCompositionTextRef.current))) { event.currentTarget.value = value; return; }
+                    discardedCompositionTextRef.current = null;
                     const next = event.target.value;
                     if (onChange(next) === false) { event.currentTarget.value = value; return; }
                     syncMention(next, event.target.selectionStart);
@@ -532,11 +567,20 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 }}
                 onCompositionStart={(event) => {
                     composingRef.current = true;
+                    compositionValueRef.current = value;
+                    invalidatedCompositionRef.current = readOnly;
+                    discardedCompositionTextRef.current = null;
                     props.onCompositionStart?.(event);
                 }}
                 onCompositionEnd={(event) => {
                     composingRef.current = false;
-                    syncMention(event.currentTarget.value, event.currentTarget.selectionStart);
+                    if (readOnly || invalidatedCompositionRef.current) {
+                        invalidatedCompositionRef.current = false;
+                        discardedCompositionTextRef.current = event.nativeEvent.data || event.data || null;
+                        renderControlledValue();
+                        closeMention();
+                        setAutoLinkCursor(null);
+                    } else syncMention(event.currentTarget.value, event.currentTarget.selectionStart);
                     props.onCompositionEnd?.(event);
                 }}
                 onSelect={(event) => {
@@ -545,6 +589,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     props.onSelect?.(event);
                 }}
                 onKeyDown={(event) => {
+                    if (!event.nativeEvent.isComposing && !composingRef.current && event.keyCode !== 229) discardedCompositionTextRef.current = null;
                     if (readOnly) { onKeyDown?.(event); return; }
 if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229)) return;
                         if (autoLinkMatch && event.key === "Tab" && !event.shiftKey && !event.nativeEvent.isComposing && !composingRef.current) {

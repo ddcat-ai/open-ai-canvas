@@ -221,6 +221,44 @@ export function createCanvasEditLeaseClient(deps: Dependencies) {
             const entry = own.get(canvasId)?.get(nodeId);
             return scope === deps.scope() && Boolean(entry && entry.savedVersion < entry.version);
         },
+        rejectedNodes(canvasId: string) {
+            checkScope();
+            return [...(own.get(canvasId) || [])].filter(([, entry]) => {
+                const error = entry.error as (Error & { status?: number; reason?: string }) | undefined;
+                return entry.savedVersion < entry.version && error?.status === 409 && error.reason === "canvas_edit_lease_conflict";
+            }).map(([nodeId]) => nodeId);
+        },
+        failed(canvasId: string, versions: Record<string, number>, cause: unknown) {
+            checkScope();
+            for (const [nodeId, version] of Object.entries(versions)) {
+                const entry = own.get(canvasId)?.get(nodeId);
+                if (entry && entry.savedVersion < version) entry.error ??= cause instanceof Error ? cause : new Error("草稿同步失败，内容已保留");
+            }
+            emit();
+        },
+        async discarded(canvasId: string, nodeId: string, version: number | undefined) {
+            checkScope();
+            const entry = own.get(canvasId)?.get(nodeId);
+            if (!entry || entry.version !== version) return;
+            const startedScope = scope;
+            entry.error ??= new Error("正在恢复云端内容");
+            emit();
+            while (entry.pending) await entry.pending;
+            if (!valid(canvasId, nodeId, entry, startedScope) || entry.version !== version) return;
+            // A just-finished acquire/renew may have cleared the error above.
+            entry.error ??= new Error("正在恢复云端内容");
+            if (entry.proof.token) {
+                // A failed release cannot resurrect a discarded draft. The
+                // server's bounded lease remains authoritative until expiry.
+                const releasing = deps.change(canvasId, entry.proof, "release").then(() => undefined, () => undefined);
+                entry.pending = releasing;
+                await releasing;
+            }
+            if (!valid(canvasId, nodeId, entry, startedScope) || entry.version !== version) return;
+            own.get(canvasId)?.delete(nodeId);
+            if (remote.get(canvasId)?.get(nodeId)?.sessionId === sessionId) remote.get(canvasId)?.delete(nodeId);
+            emit();
+        },
         status(canvasId: string, status: CanvasSyncStatus, token?: symbol) {
             checkScope();
             // A poll already in flight cannot undo a newer admission verdict.
@@ -244,11 +282,11 @@ export function createCanvasEditLeaseClient(deps: Dependencies) {
             const startedScope = scope;
             for (const [nodeId, entry] of own.get(canvasId) || []) {
                 const now = deps.now();
-                if (entry.pending || entry.error || !entry.proof.token || entry.expires <= now) continue;
+                if (entry.pending || !entry.proof.token || entry.expires <= now) continue;
                 const saved = entry.savedVersion === entry.version;
                 const idle = now - entry.lastInput;
-                if (!(saved && idle >= 2000) && !(idle < 10000 && now - entry.lastRenew >= 5000)) continue;
-                const action = saved && idle >= 2000 ? "release" : "renew";
+                if (!entry.error && !(saved && idle >= 2000) && !(idle < 10000 && now - entry.lastRenew >= 5000)) continue;
+                const action = entry.error || (saved && idle >= 2000) ? "release" : "renew";
                 const version = entry.version;
                 const pending = deps
                     .change(canvasId, entry.proof, action)
@@ -266,7 +304,10 @@ export function createCanvasEditLeaseClient(deps: Dependencies) {
                         } else accept(entry, result);
                     })
                     .catch((error: unknown) => {
-                        if (valid(canvasId, nodeId, entry, startedScope)) entry.error = error instanceof Error ? error : new Error("编辑权限失效，草稿已保留");
+                        if (valid(canvasId, nodeId, entry, startedScope)) {
+                            entry.error = error instanceof Error ? error : new Error("编辑权限失效，草稿已保留");
+                            if (action === "release") entry.expires = 0;
+                        }
                     })
                     .finally(() => {
                         if (entry.pending === pending) entry.pending = undefined;

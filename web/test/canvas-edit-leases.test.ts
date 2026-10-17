@@ -52,6 +52,85 @@ const settle = async () => {
 };
 const nodes = new Set(["node"]);
 
+test("a rejected save stops typing and releases rather than renews its lease", async () => {
+    const f = fixture();
+    f.client.input("canvas", "node");
+    await settle();
+    f.client.failed("canvas", f.client.versions("canvas"), new Error("save rejected"));
+    expect(f.client.state("canvas", "node").typing).toBe(false);
+    expect(f.client.pending("canvas", "node")).toBe(true);
+    await f.client.tick("canvas");
+    f.time(10000);
+    await f.client.tick("canvas");
+    expect(f.calls).toEqual(["acquire", "release"]);
+});
+
+test("discard clears only the captured edit version, even if release fails", async () => {
+    const f = fixture();
+    f.client.input("canvas", "node");
+    await settle();
+    const oldVersion = f.client.versions("canvas").node;
+    f.client.input("canvas", "node");
+    await f.client.discarded("canvas", "node", oldVersion);
+    expect(f.client.pending("canvas", "node")).toBe(true);
+    f.fail();
+    await f.client.discarded("canvas", "node", f.client.versions("canvas").node);
+    expect(f.client.pending("canvas", "node")).toBe(false);
+    expect(f.client.state("canvas", "node").error).toBeUndefined();
+    expect(f.calls).toEqual(["acquire", "release"]);
+});
+
+test("account change during pending discard leaves the next account's edit alone", async () => {
+    const f = fixture();
+    let finish!: () => void;
+    f.pause(() => new Promise<void>((resolve) => { finish = resolve; }));
+    f.client.input("canvas", "node");
+    const dropping = f.client.discarded("canvas", "node", 1);
+    f.scope("account-b");
+    f.pause();
+    f.client.input("canvas", "node");
+    finish();
+    await dropping;
+    await settle();
+    expect(f.client.pending("canvas", "node")).toBe(true);
+    expect(f.calls).toEqual(["acquire", "acquire"]);
+});
+
+test("new typing waits until discarded ownership has been released", async () => {
+    const f = fixture();
+    f.client.input("canvas", "node");
+    await settle();
+    let finish!: () => void;
+    f.pause(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const dropping = f.client.discarded("canvas", "node", f.client.versions("canvas").node);
+    expect(f.client.input("canvas", "node")).toBe(false);
+    f.pause();
+    finish();
+    await dropping;
+    expect(f.client.input("canvas", "node")).toBe(true);
+    await settle();
+    expect(f.calls).toEqual(["acquire", "release", "acquire"]);
+});
+
+test("an acquisition finishing during discard cannot reopen typing before release", async () => {
+    const f = fixture();
+    let acquireDone!: () => void;
+    f.pause(() => new Promise<void>((resolve) => { acquireDone = resolve; }));
+    f.client.input("canvas", "node");
+    const dropping = f.client.discarded("canvas", "node", 1);
+    let releaseDone!: () => void;
+    f.pause(() => new Promise<void>((resolve) => { releaseDone = resolve; }));
+    acquireDone();
+    await settle();
+    expect(f.calls).toEqual(["acquire", "release"]);
+    expect(f.client.input("canvas", "node")).toBe(false);
+    f.pause();
+    releaseDone();
+    await dropping;
+    expect(f.client.state("canvas", "node").typing).toBe(false);
+    expect(f.client.pending("canvas", "node")).toBe(false);
+});
+
 test("admission rejection immediately blocks a different run and an older poll cannot unlock it", () => {
     const f = fixture();
     const status = {
