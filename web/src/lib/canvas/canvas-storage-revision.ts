@@ -136,9 +136,10 @@ function mergeRecord(base: Record<string, unknown>, local: Record<string, unknow
     const merged: Record<string, unknown> = {};
     for (const key of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(durable)])) {
         if (excluded.has(key)) continue;
-        const baseHas = Object.prototype.hasOwnProperty.call(base, key);
-        const localHas = Object.prototype.hasOwnProperty.call(local, key);
-        const durableHas = Object.prototype.hasOwnProperty.call(durable, key);
+        // JSON 会省略 undefined 字段；内存快照必须按相同的字段存在语义合并。
+        const baseHas = Object.prototype.hasOwnProperty.call(base, key) && base[key] !== undefined;
+        const localHas = Object.prototype.hasOwnProperty.call(local, key) && local[key] !== undefined;
+        const durableHas = Object.prototype.hasOwnProperty.call(durable, key) && durable[key] !== undefined;
         if (!localHas && baseHas) {
             if (durableHas && !deepEqual(durable[key], base[key])) {
                 onConflict?.();

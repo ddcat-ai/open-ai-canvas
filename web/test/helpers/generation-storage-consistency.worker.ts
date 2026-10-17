@@ -4,7 +4,17 @@ import { getActiveUserScope, scopedStorageKey, setActiveUserScope } from "../../
 
 type InstanceHook = (storeName: string, key: string, value: unknown) => Promise<void> | void;
 
-type Scenario = "image-cleanup" | "scope-cleanup-switch" | "scope-cleanup-late-canvas-reference" | "video-commit-race" | "audio-commit-race" | "canvas-batch-commit-race" | "canvas-multi-output" | "canvas-copy-generation" | "canvas-mask-batch" | "canvas-asset-preparation";
+type Scenario =
+    | "image-cleanup"
+    | "scope-cleanup-switch"
+    | "scope-cleanup-late-canvas-reference"
+    | "video-commit-race"
+    | "audio-commit-race"
+    | "canvas-batch-commit-race"
+    | "canvas-multi-output"
+    | "canvas-copy-generation"
+    | "canvas-mask-batch"
+    | "canvas-asset-preparation";
 
 function installStorageHarness() {
     const originalCreateInstance = localforage.createInstance.bind(localforage);
@@ -437,13 +447,28 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false) {
             position: { x: index * 400, y: 0 },
             width: 320,
             height: 240,
-            metadata: { taskId: `task-${index}`, status: index < 2 ? ("loading" as const) : ("error" as const), ...(mask ? { batchRootId: "mask-root" } : {}) },
+            metadata: {
+                taskId: `task-${index}`,
+                status: index < 2 ? ("loading" as const) : ("error" as const),
+                content: undefined,
+                storageKey: undefined,
+                assetId: undefined,
+                taskProgress: undefined,
+                taskCompletedAt: undefined,
+                ...(mask ? { batchRootId: "mask-root" } : {}),
+            },
         })).filter((node) => !multiOutput || node.id !== "node-1");
         const ref: { current: import("../../src/types/canvas").CanvasNodeData[] } = { current: nodes };
-        if (mask) ref.current = [...nodes, { id: "mask-root", type: CanvasNodeType.Image, title: "局部重绘", position: { x: -400, y: 0 }, width: 320, height: 240, metadata: { isBatchRoot: true, batchChildIds: nodes.map((node) => node.id), status: "loading" } }];
+        if (mask)
+            ref.current = [
+                ...nodes,
+                { id: "mask-root", type: CanvasNodeType.Image, title: "局部重绘", position: { x: -400, y: 0 }, width: 320, height: 240, metadata: { isBatchRoot: true, batchChildIds: nodes.map((node) => node.id), status: "loading" } },
+            ];
         const setNodes = createCanvasStateWriter(ref, () => {});
         useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
         await flushCanvasStorePersistence();
+        // 模拟任务状态已到编辑器、自动保存尚未跟上的真实生成完成窗口。
+        setNodes((current) => current.map((node) => ({ ...node, metadata: { ...node.metadata, taskStage: "正在应用结果" } })));
         useAssetStore.setState({
             assets: (multiOutput ? [0, 1, 2, 3] : [0, 1]).map((index) => ({
                 id: `asset-${index}`,
@@ -542,14 +567,21 @@ async function runCanvasCopyGeneration() {
             return stored.state.projects.find((project) => project.id === projectId)!.nodes;
         };
         const initial: import("../../src/types/canvas").CanvasNodeData = {
-            id: "source", type: CanvasNodeType.Image, title: "source", position: { x: 0, y: 0 }, width: 320, height: 240,
+            id: "source",
+            type: CanvasNodeType.Image,
+            title: "source",
+            position: { x: 0, y: 0 },
+            width: 320,
+            height: 240,
             metadata: { content: "original-image", prompt: "test prompt", status: "success" },
         };
         useCanvasStore.getState().updateProject(projectId, { nodes: [initial] });
         await flushCanvasStorePersistence();
         const sourceEffect = "attach-node:old-task:source:0";
         await persistCanvasGenerationEffect({
-            projectId, effectKey: sourceEffect, previousNodes: [initial],
+            projectId,
+            effectKey: sourceEffect,
+            previousNodes: [initial],
             nodes: [{ ...initial, metadata: { ...initial.metadata, generationEffectKeys: [sourceEffect] } }],
         });
         const source = (await readNodes())[0]!;
@@ -564,8 +596,10 @@ async function runCanvasCopyGeneration() {
         await flushCanvasStorePersistence();
         const copyEffect = "attach-node:new-task:copy:0";
         await persistCanvasGenerationEffect({
-            projectId, effectKey: copyEffect, previousNodes: pendingNodes,
-            nodes: pendingNodes.map((node) => node.id === "copy" ? { ...node, metadata: { ...node.metadata, content: "new-image", status: "success", generationEffectKeys: [copyEffect] } } : node),
+            projectId,
+            effectKey: copyEffect,
+            previousNodes: pendingNodes,
+            nodes: pendingNodes.map((node) => (node.id === "copy" ? { ...node, metadata: { ...node.metadata, content: "new-image", status: "success", generationEffectKeys: [copyEffect] } } : node)),
         });
         await flushCanvasStorePersistence();
         return { beforeGeneration, restored: await readNodes() };
@@ -592,16 +626,28 @@ async function runCanvasAssetPreparation() {
         const candidate = { ...placeholder, metadata: { status: "success" as const, content: "/derived.png", storageKey: "resource:derived", imageLayerGroup: { width: 640, height: 480, layers: [] } } };
         let release!: () => void;
         let entered!: () => void;
-        const started = new Promise<void>((resolve) => { entered = resolve; });
-        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const started = new Promise<void>((resolve) => {
+            entered = resolve;
+        });
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
         harness.hooks.onSet = async (_store, key) => {
             if (key !== scopedStorageKey(ASSET_STORE_KEY)) return;
             entered();
             await gate;
         };
         let resolved = false;
-        const pending = prepareCanvasMediaNodeAsset(projectId, candidate).then((node) => { resolved = true; return node; });
-        await Promise.race([started, pending.then(() => { throw new Error("素材持久化等待被绕过"); })]);
+        const pending = prepareCanvasMediaNodeAsset(projectId, candidate).then((node) => {
+            resolved = true;
+            return node;
+        });
+        await Promise.race([
+            started,
+            pending.then(() => {
+                throw new Error("素材持久化等待被绕过");
+            }),
+        ]);
         const resolvedBeforePersistence = resolved;
         const nodesBeforePersistence = useCanvasStore.getState().projects.find((project) => project.id === projectId)!.nodes;
         release();
@@ -614,12 +660,17 @@ async function runCanvasAssetPreparation() {
         let missingBindingError = false;
         try {
             await prepareCanvasMediaNodeAsset(projectId, { ...candidate, metadata: { content: "/original.png", storageKey: "resource:original", taskId: "task" } });
-        } catch (error) { missingBindingError = isCanvasGenerationDurableAckError(error); }
+        } catch (error) {
+            missingBindingError = isCanvasGenerationDurableAckError(error);
+        }
         const controller = new AbortController();
         controller.abort();
         let aborted = false;
-        try { await prepareCanvasMediaNodeAsset(projectId, candidate, controller.signal); }
-        catch (error) { aborted = error instanceof Error && error.name === "AbortError"; }
+        try {
+            await prepareCanvasMediaNodeAsset(projectId, candidate, controller.signal);
+        } catch (error) {
+            aborted = error instanceof Error && error.name === "AbortError";
+        }
         await flushAssetStorePersistence();
         return { resolvedBeforePersistence, nodesBeforePersistence, prepared, persisted, countBeforeReuse, countAfterReuse, reusedSameNode: reused === prepared, missingBindingError, aborted, finalAssetCount: useAssetStore.getState().assets.length };
     } finally {
