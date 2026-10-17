@@ -376,9 +376,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     style={{
                         ...mergedStyle,
                         color: style?.color || theme.node.text,
-                        height: "100%",
+                        height: style?.height ?? "100%",
                         minHeight: 0,
-                        maxHeight: "100%",
+                        maxHeight: style?.maxHeight ?? "100%",
                         overflowY: "auto",
                         overflowX: "hidden",
                     }}
@@ -522,7 +522,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 }}
                 value={value}
                 className={`${className || ""} relative z-10`}
-                style={{ ...mergedStyle, height: "100%", minHeight: 0, maxHeight: "100%", overflowY: "auto", overflowX: "hidden" }}
+                style={{ ...mergedStyle, height: style?.height ?? "100%", minHeight: 0, maxHeight: style?.maxHeight ?? "100%", overflowY: "auto", overflowX: "hidden" }}
                 onChange={(event) => {
                     if (readOnly) return;
                     const next = event.target.value;
