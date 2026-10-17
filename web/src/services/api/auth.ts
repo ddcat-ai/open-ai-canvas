@@ -296,6 +296,7 @@ export type AdminOSSSetting = {
     hasSessionToken: boolean;
     pathStyle: boolean;
     allowUserS3: boolean;
+    videoStorageTarget?: "local" | "oss";
     publicBaseUrl: string;
     pathPrefix: string;
     testedAt?: string;
@@ -579,6 +580,10 @@ export function updateAdminOSSSetting(input: Partial<AdminOSSSetting>) {
 
 export function testAdminOSSConnection(input: OSSConnectionTestInput) {
     return http.post<OSSConnectionTestResult>("/admin/settings/oss/test", input);
+}
+
+export function moveAdminResourceToLocal(id: string) {
+    return http.post<{ resource: unknown }>(`/admin/resources/${encodeURIComponent(id)}/move-to-local`);
 }
 
 export function getAdminArkPrivateAssetSetting() {

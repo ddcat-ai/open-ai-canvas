@@ -23,6 +23,7 @@ import (
 	"gorm.io/gorm"
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/storage"
 )
 
 func (s *Service) UploadResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, uploadIdentity ...string) (*model.Resource, error) {
@@ -32,6 +33,14 @@ func (s *Service) UploadResource(userID string, header *multipart.FileHeader, ki
 // uploadLocalResource keeps small system-owned assets on the server even when
 // the uploader or platform has enabled object storage. The resource still uses
 // the normal database record and persistent data directory lifecycle.
+func (s *Service) isVideoStorageTargetLocal(userID string) bool {
+	_, systemSetting, err := s.readOSSSetting()
+	if err != nil {
+		return true
+	}
+	return systemSetting.VideoStorageTarget != storage.VideoStorageTargetOSS
+}
+
 func (s *Service) uploadLocalResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, uploadIdentity ...string) (*model.Resource, error) {
 	return s.uploadResource(userID, header, kind, width, height, durationMs, true, uploadIdentity...)
 }
