@@ -349,11 +349,8 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 				operations = req.Operations
 			}
 			if err := applyCanvasOperations(payload, operations); err != nil {
-				if errors.Is(err, ErrCanvasObjectMissing) {
-					return canvasMutationError("canvas_object_missing", err.Error())
-				}
-				if errors.Is(err, ErrCanvasOperationConflict) {
-					return canvasMutationError("canvas_field_conflict", err.Error())
+				if errors.Is(err, ErrCanvasObjectMissing) || errors.Is(err, ErrCanvasOperationConflict) {
+					return err
 				}
 				return kernel.BadAuthRequest(err.Error())
 			}
@@ -406,6 +403,12 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 			return tx.FinalizeCanvasMutationReceipt(candidate)
 		})
 	})
+	if errors.Is(err, ErrCanvasObjectMissing) {
+		return UserDataSummary{}, canvasMutationError("canvas_object_missing", err.Error())
+	}
+	if errors.Is(err, ErrCanvasOperationConflict) {
+		return UserDataSummary{}, canvasMutationError("canvas_field_conflict", err.Error())
+	}
 	if errors.Is(err, repository.ErrCanvasRevisionConflict) {
 		retry := canvasMutationError("canvas_concurrent_write", "画布正在更新，将自动重放原请求")
 		retry.Retryable = true
