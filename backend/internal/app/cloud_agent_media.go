@@ -1008,6 +1008,46 @@ func jsonValuesEqual(left, right any) bool {
 // createCloudAgentMediaNode 为指定用户的画布保存计划中的媒体节点及引用连线。
 // task 为空时保存待审批草稿，否则绑定已创建任务；policy 校验配额，recorder 可记录撤销事件。
 // 返回保存错误；提交生成时由调用方放在任务、计费和 Agent 检查点的同一个事务中执行。
+// cloudAgentMediaNodeDimensions 按目标输出的宽高比给生成节点定框：横版以 720 为宽
+// 基准（与图片/视频节点默认 720x405 一致），竖版以 640 为高基准（沿用原 9:16 特判
+// 的 360x640），方形取 540。size 接受比例（9:16）与像素（1536x2752）两种写法——
+// 不同模型目录声明的形式不同；auto、空或解析失败时返回 false，由调用方保留默认框。
+// 仅草稿/生成中阶段的占位比例由此决定；任务成功回写时仍按产物实际宽高修正。
+func cloudAgentMediaNodeDimensions(size string) (float64, float64, bool) {
+	width, height, ok := parseCloudAgentMediaAspectRatio(size)
+	if !ok {
+		return 0, 0, false
+	}
+	switch {
+	case width > height:
+		return 720, 720 * height / width, true
+	case width < height:
+		return 640 * width / height, 640, true
+	default:
+		return 540, 540, true
+	}
+}
+
+func parseCloudAgentMediaAspectRatio(size string) (float64, float64, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(size))
+	if normalized == "" || normalized == "auto" {
+		return 0, 0, false
+	}
+	for _, sep := range []string{":", "x", "×"} {
+		index := strings.Index(normalized, sep)
+		if index <= 0 || index == len(normalized)-len(sep) {
+			continue
+		}
+		width, widthErr := strconv.ParseFloat(strings.TrimSpace(normalized[:index]), 64)
+		height, heightErr := strconv.ParseFloat(strings.TrimSpace(normalized[index+len(sep):]), 64)
+		if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 || width > 7680 || height > 7680 {
+			return 0, 0, false
+		}
+		return width, height, true
+	}
+	return 0, 0, false
+}
+
 func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID string, plan *cloudAgentMediaPlan, task *model.Task, policy RuntimePolicySetting, recorder ...cloudAgentMutationRecorder) error {
 	a := plan.Args
 	canvas, doc, refs, err := cloudAgentMediaDocument(repo, userID, canvasID, a, plan.TransientReferences)
@@ -1060,8 +1100,8 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		return BadAuthRequest("生成模式当前不受 Agent 支持")
 	}
 	node := creationAddedNode(CreationCanvasOp{Type: "add_node", ID: a.NodeID, NodeType: descriptor.Type, Title: a.Title, X: &x, Y: &y, Metadata: meta})
-	if a.Size == "9:16" {
-		node["width"], node["height"] = float64(360), float64(640)
+	if width, height, ok := cloudAgentMediaNodeDimensions(a.Size); ok {
+		node["width"], node["height"] = width, height
 	}
 	replaced := false
 	for _, existing := range nodes {
