@@ -103,6 +103,16 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		options["response_format"] = grokImageResponseFormat(input.ImageCapability)
 		request.ProviderOptions[input.Config.InterfaceType] = options
 	}
+	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) && imageParameterSupported(input.ImageCapability, "response_format") {
+		options := make(map[string]any)
+		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {
+			options[name] = value
+		}
+		// Prefer inline image data for supported OpenAI-compatible channels so
+		// the worker can persist the result without relying on a short-lived CDN URL.
+		options["response_format"] = "b64_json"
+		request.ProviderOptions[input.Config.InterfaceType] = options
+	}
 	return request
 }
 
