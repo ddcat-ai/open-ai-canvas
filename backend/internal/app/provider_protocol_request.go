@@ -100,18 +100,34 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {
 			options[name] = value
 		}
-		options["response_format"] = grokImageResponseFormat(input.ImageCapability)
-		request.ProviderOptions[input.Config.InterfaceType] = options
+		if responseFormat := grokImageResponseFormat(input.ImageCapability); responseFormat != "" {
+			options["response_format"] = responseFormat
+		} else {
+			delete(options, "response_format")
+		}
+		if len(options) > 0 {
+			request.ProviderOptions[input.Config.InterfaceType] = options
+		} else {
+			delete(request.ProviderOptions, input.Config.InterfaceType)
+		}
 	}
-	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) && imageParameterSupported(input.ImageCapability, "response_format") {
+	if input.Mode == "image" && input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) {
 		options := make(map[string]any)
 		for name, value := range request.ProviderOptions[input.Config.InterfaceType] {
 			options[name] = value
 		}
-		// Prefer inline image data for supported OpenAI-compatible channels so
-		// the worker can persist the result without relying on a short-lived CDN URL.
-		options["response_format"] = "b64_json"
-		request.ProviderOptions[input.Config.InterfaceType] = options
+		if responseFormat := configuredImageResponseFormat(input.ImageCapability); responseFormat != "" {
+			options["response_format"] = responseFormat
+		} else {
+			// A stale providerOptions value must not override the model-level
+			// "auto" choice after an administrator changes the setting.
+			delete(options, "response_format")
+		}
+		if len(options) > 0 {
+			request.ProviderOptions[input.Config.InterfaceType] = options
+		} else {
+			delete(request.ProviderOptions, input.Config.InterfaceType)
+		}
 	}
 	return request
 }

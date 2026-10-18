@@ -1360,6 +1360,7 @@ func TestRunOpenAIImageTaskUsesMultipartEditContract(t *testing.T) {
 	defer server.Close()
 
 	profile := DefaultImageCapabilityConfig("openai-image", "gpt-image-2-high")
+	profile.ResponseFormat.Default = "b64_json"
 	result, err := runImageTask(context.Background(), canvasGenerationInput{
 		Mode:            "image",
 		Prompt:          "make the reference clearer",
@@ -1382,12 +1383,14 @@ func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		responseFormat bool
+		defaultFormat  string
 		wantFormat     string
 		reply          string
 		wantDataURL    string
 	}{
-		{name: "b64_json", responseFormat: true, wantFormat: "b64_json", reply: `{"data":[{"b64_json":"aGVsbG8="}]}`, wantDataURL: "data:image/png;base64,aGVsbG8="},
+		{name: "b64_json", responseFormat: true, defaultFormat: "b64_json", wantFormat: "b64_json", reply: `{"data":[{"b64_json":"aGVsbG8="}]}`, wantDataURL: "data:image/png;base64,aGVsbG8="},
 		{name: "url", responseFormat: false, wantFormat: "url", reply: `{"data":[{"url":"https://example.com/result.png"}]}`, wantDataURL: "https://example.com/result.png"},
+		{name: "explicit_url", responseFormat: true, defaultFormat: "url", wantFormat: "url", reply: `{"data":[{"url":"https://example.com/result.png"}]}`, wantDataURL: "https://example.com/result.png"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1414,6 +1417,7 @@ func TestRunGrokImageTaskUsesJSONEditContract(t *testing.T) {
 
 			profile := DefaultImageCapabilityConfig("grok-image", "grok-imagine-image-quality")
 			profile.ResponseFormat.Supported = tc.responseFormat
+			profile.ResponseFormat.Default = tc.defaultFormat
 			result, err := runImageTask(context.Background(), canvasGenerationInput{
 				Mode:            "image",
 				Prompt:          "edit the reference",

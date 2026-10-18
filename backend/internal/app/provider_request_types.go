@@ -32,7 +32,7 @@ type grokImageRequest struct {
 	Prompt         string          `json:"prompt"`
 	Image          *grokImageInput `json:"image,omitempty"`
 	N              int             `json:"n"`
-	ResponseFormat string          `json:"response_format"`
+	ResponseFormat string          `json:"response_format,omitempty"`
 	AspectRatio    string          `json:"aspect_ratio,omitempty"`
 	// Resolution 对应 xAI / grok2api 的 resolution（常见 1k / 2k）。
 	Resolution string `json:"resolution,omitempty"`

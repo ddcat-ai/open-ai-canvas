@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
 
-import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ImageResponseFormat, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
@@ -453,6 +453,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
             <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name === "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p), definitions) })} />
             {size ? <ImageParameterSizeEditor profile={profile} definition={definitions.find((p) => p.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} /> : null}
             <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name !== "size" && p.name !== "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p)) })} />
+            <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
         </div>;
     }
 
@@ -536,7 +537,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                             </div>
                         ) : null}
                         <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
-                        <ParameterField label="response_format" description="发送 b64_json 响应格式" supported={profile.responseFormat.supported} disabled={disabled} onChange={(supported) => update({ responseFormat: { supported } })} />
+                        <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
                         <ParameterField label="output_format" description="发送 PNG 输出格式" supported={profile.outputFormat.supported} disabled={disabled} onChange={(supported) => update({ outputFormat: { supported } })} />
                     </ProtocolParameterCard>
                 </div>
@@ -621,7 +622,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                 ) : null}
                 <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <ParameterField label="response_format" description="发送 b64_json 响应格式" supported={profile.responseFormat.supported} disabled={disabled} onChange={(supported) => update({ responseFormat: { supported } })} />
+                    <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
                     <ParameterField label="output_format" description="发送 PNG 输出格式" supported={profile.outputFormat.supported} disabled={disabled} onChange={(supported) => update({ outputFormat: { supported } })} />
                 </div>
             </CapabilityGroup>
@@ -752,6 +753,36 @@ function ParameterField({ label, description, supported, disabled, onChange }: {
                 <span>支持</span>
                 <Switch aria-label={`${label}支持`} size="sm" disabled={disabled} checked={supported} onChange={onChange} />
             </label>
+        </div>
+    );
+}
+
+function ImageResponseFormatEditor({ value, disabled, onChange }: { value: ImageCapabilityConfig["responseFormat"]; disabled: boolean; onChange: (value: ImageCapabilityConfig["responseFormat"]) => void }) {
+    const defaultValue: ImageResponseFormat = value.default || "auto";
+    return (
+        <div className="admin-image-response-format-editor space-y-2">
+            <ParameterField
+                label="response_format"
+                description="是否向上游发送响应格式；关闭后由上游自动决定"
+                supported={value.supported}
+                disabled={disabled}
+                onChange={(supported) => onChange({ supported, default: supported ? defaultValue : "auto" })}
+            />
+            {value.supported ? (
+                <Field label="默认响应格式">
+                    <SegmentedControl
+                        block
+                        disabled={disabled}
+                        value={defaultValue}
+                        options={[
+                            { label: "自动", value: "auto" },
+                            { label: "Base64", value: "b64_json" },
+                            { label: "URL", value: "url" },
+                        ]}
+                        onChange={(next) => onChange({ supported: true, default: next as ImageResponseFormat })}
+                    />
+                </Field>
+            ) : null}
         </div>
     );
 }

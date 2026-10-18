@@ -58,6 +58,7 @@ export type TextCapabilityConfig = {
 };
 
 export type ImageSizeParameter = "none" | "size" | "aspect_ratio";
+export type ImageResponseFormat = "auto" | "b64_json" | "url";
 
 /**
  * 普通视频模型提示词字符数的默认上限。
@@ -93,7 +94,7 @@ export type ImageCapabilityConfig = {
     /** Protocol-declared mapping where quality values select image resolution. */
     resolutionUsesQuality?: boolean;
     transparentBackground: { supported: boolean; default: boolean };
-    responseFormat: { supported: boolean };
+    responseFormat: { supported: boolean; default?: ImageResponseFormat };
     outputFormat: { supported: boolean };
     maxOutputs: number;
 };
@@ -141,6 +142,16 @@ export function normalizeCapabilityString(value: string) {
     return normalized.startsWith("string:") ? normalized.slice("string:".length) : normalized;
 }
 
+function normalizeImageResponseFormat(value: unknown): ImageResponseFormat {
+    return value === "b64_json" || value === "url" ? value : "auto";
+}
+
+export function imageResponseFormatFor(profile: Pick<ImageCapabilityConfig, "responseFormat">): Exclude<ImageResponseFormat, "auto"> | undefined {
+    if (!profile.responseFormat.supported) return undefined;
+    const value = normalizeImageResponseFormat(profile.responseFormat.default);
+    return value === "auto" ? undefined : value;
+}
+
 function normalizeCapabilityStrings(values: string[]) {
     return Array.from(new Set(values.map(normalizeCapabilityString)));
 }
@@ -168,6 +179,10 @@ export function normalizeModelCapabilityConfig(config: ModelCapabilityConfig): M
                       ...config.image.quality,
                       values: normalizeCapabilityStrings(config.image.quality.values),
                       default: normalizeCapabilityString(config.image.quality.default),
+                  },
+                  responseFormat: {
+                      ...config.image.responseFormat,
+                      default: normalizeImageResponseFormat(config.image.responseFormat?.default),
                   },
               }
             : undefined,
@@ -262,7 +277,7 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         resolution: { supported: false, values: [], default: "auto" },
         quality: { supported: true, values: ["auto", "low", "medium", "high"], default: "auto" },
         transparentBackground: { supported: true, default: false },
-        responseFormat: { supported: true },
+        responseFormat: { supported: true, default: "auto" },
         outputFormat: { supported: true },
         maxOutputs: 15,
     };

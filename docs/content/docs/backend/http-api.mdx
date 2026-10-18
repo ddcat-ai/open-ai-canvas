@@ -24,6 +24,10 @@ description: 信封、错误码与 OpenAPI
 
 图片的 `role=first_frame/last_frame` 表示帧约束；`reference` 或未指定角色表示普通参考，不能静默改成首帧。模式、素材数量和参数共同参与模型能力校验及价格档选择；不支持的组合在创建任务和计费前拒绝。执行输入的 `metadata.videoEditOperation` 与任务操作保持一致，并保留帧素材标识。浏览器自定义渠道的工作台任务使用同一模式规则，其他入口沿用各自的意图解析。
 
+## 图片响应格式
+
+渠道模型的 `capabilityConfig.image.responseFormat` 包含 `supported` 和可选的 `default`。默认值为 `auto`，表示请求中不发送 `response_format`，由上游决定返回 URL 或 Base64；`b64_json` 和 `url` 会分别强制发送对应值。该配置按模型保存，不根据 `openai-image` 协议名称自动推断，避免兼容网关不接受 Base64 时生成失败。需要持久化 Base64 结果的模型（例如已验证的 ddcat 图片模型）应将默认值设为 `b64_json`。
+
 ## 用户登录日志
 
 菜单“用户与运营 → 用户登录日志”，页面 `/admin/login-logs`。查询在 service 校验管理员权限：匿名 401、普通用户 403。

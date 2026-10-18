@@ -18,6 +18,8 @@ Content-Type: application/json
 
 模型、允许尺寸、质量枚举、单次张数和计费会随上游服务变化，插件不维护可能过期的白名单。渠道若是 OpenAI 兼容实现，必须分别验证它是否支持 `n`、`quality`、`background`、`output_format` 和 Base64 响应。
 
+模型能力配置中的 `responseFormat` 同时声明 `supported` 和 `default`。`default` 可选 `auto`、`b64_json` 或 `url`：`auto` 不发送 `response_format`，由上游使用默认行为；另外两项会明确发送对应值。不要根据 `openai-image` 协议名称推断所有兼容渠道都接受 Base64；需要保存上游实际验证过的模型级配置。
+
 ## 参数与字段映射
 
 {{PARAMETERS}}

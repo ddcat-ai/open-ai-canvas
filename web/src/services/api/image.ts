@@ -4,7 +4,7 @@ import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
 import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
-import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
+import { imageResponseFormatFor, modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
 import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
 import { isVolcengineArkImageProtocol } from "@/lib/model-protocols";
 import { aiApiUrl, aiHeaders, imageChannelTransport, postChannelJSON, postGeminiJSON, postVolcengineArkImage } from "@/services/api/image-transport";
@@ -95,6 +95,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     }
     const quality = imageProfile.quality.supported && normalizedImage.quality !== "auto" ? normalizeQuality(normalizedImage.quality) || normalizedImage.quality : undefined;
     const requestSize = resolveImageRequestSize(imageProfile, imageProfile.resolution.supported ? normalizedImage.imageResolution : quality, normalizedImage.size);
+    const responseFormat = imageResponseFormatFor(imageProfile);
     const isVolcengineArk = isVolcengineArkImageProtocol(requestConfig.interfaceType);
     const normalizedRequestSize = requestSize?.parameter === "size" && isVolcengineArk ? { ...requestSize, value: normalizeVolcengineArkImageSize(requestSize.value)! } : requestSize;
     try {
@@ -113,7 +114,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
                   n,
                   ...(quality ? { quality } : {}),
                   ...(requestSize ? { [requestSize.parameter]: requestSize.value } : {}),
-                  ...(imageProfile.responseFormat.supported ? { response_format: "b64_json" } : {}),
+                  ...(responseFormat ? { response_format: responseFormat } : {}),
                   ...(imageProfile.outputFormat.supported ? { output_format: IMAGE_OUTPUT_FORMAT } : {}),
                   ...(imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true" ? { background: "transparent" } : {}),
               };
@@ -206,7 +207,8 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     formData.set("model", requestConfig.model);
     formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
     formData.set("n", String(n));
-    if (imageProfile.responseFormat.supported) formData.set("response_format", "b64_json");
+    const responseFormat = imageResponseFormatFor(imageProfile);
+    if (responseFormat) formData.set("response_format", responseFormat);
     if (imageProfile.outputFormat.supported) formData.set("output_format", IMAGE_OUTPUT_FORMAT);
     if (imageProfile.transparentBackground.supported && normalizedImage.transparentBackground === "true") {
         formData.set("background", "transparent");

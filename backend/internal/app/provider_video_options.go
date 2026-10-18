@@ -58,6 +58,21 @@ func imageParameterSupported(profile *ImageCapabilityConfig, parameter string) b
 	return profile.OutputFormat.Supported
 }
 
+// configuredImageResponseFormat returns the model-level response format choice.
+// "auto" deliberately means that response_format is omitted from the request.
+// The provider, rather than a protocol name heuristic, then decides its default.
+func configuredImageResponseFormat(profile *ImageCapabilityConfig) string {
+	if !imageParameterSupported(profile, "response_format") || profile == nil {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(profile.ResponseFormat.Default)) {
+	case "b64_json", "url":
+		return strings.ToLower(strings.TrimSpace(profile.ResponseFormat.Default))
+	default:
+		return ""
+	}
+}
+
 func imageQualitySupported(profile *ImageCapabilityConfig) bool {
 	return profile == nil || profile.Quality.Supported
 }

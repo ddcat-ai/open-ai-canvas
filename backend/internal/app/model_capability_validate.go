@@ -38,6 +38,18 @@ func validateTextCapabilityConfig(value *TextCapabilityConfig) error {
 }
 
 func validateImageCapabilityConfig(value *ImageCapabilityConfig) error {
+	if value.ResponseFormat.Supported {
+		switch strings.ToLower(strings.TrimSpace(value.ResponseFormat.Default)) {
+		case "", "auto":
+			value.ResponseFormat.Default = "auto"
+		case "b64_json", "url":
+			value.ResponseFormat.Default = strings.ToLower(strings.TrimSpace(value.ResponseFormat.Default))
+		default:
+			return BadAuthRequest("图片响应格式默认值仅支持 auto、b64_json 或 url")
+		}
+	} else {
+		value.ResponseFormat.Default = "auto"
+	}
 	if value.References.PromptMaxChars < 1 || value.References.PromptMaxChars > 1000000 {
 		return BadAuthRequest("提示词最大字符数必须在 1-1000000 之间")
 	}

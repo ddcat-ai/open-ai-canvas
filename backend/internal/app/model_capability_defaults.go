@@ -23,7 +23,7 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		Size:                  ImageSizeConfig{Parameter: "size", Values: defaultImageSizeValues(), Default: "1:1", AllowCustom: true},
 		Quality:               ImageQualityConfig{Supported: true, Values: []string{"auto", "low", "medium", "high"}, Default: "auto"},
 		TransparentBackground: VideoBooleanConfig{Supported: true, Default: false},
-		ResponseFormat:        ParameterSupport{Supported: true},
+		ResponseFormat:        ParameterSupport{Supported: true, Default: "auto"},
 		OutputFormat:          ParameterSupport{Supported: true},
 		MaxOutputs:            15,
 	}
@@ -55,7 +55,7 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "2k"}, Default: "2k"}
 		image.Quality = ImageQualityConfig{Supported: false, Default: "auto"}
 		image.TransparentBackground = VideoBooleanConfig{Supported: false, Default: false}
-		image.ResponseFormat = ParameterSupport{Supported: true}
+		image.ResponseFormat = ParameterSupport{Supported: true, Default: "auto"}
 		image.OutputFormat = ParameterSupport{Supported: false}
 		image.MaxOutputs = 1
 	case model.ChannelInterfaceVolcengineArkImage, model.ChannelInterfaceVolcengineArkAgentPlanImage:
@@ -88,7 +88,7 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "2k"}, Default: "2k"}
 		image.Quality = ImageQualityConfig{Supported: false, Default: "auto"}
 		image.TransparentBackground = VideoBooleanConfig{Supported: false, Default: false}
-		image.ResponseFormat = ParameterSupport{Supported: true}
+		image.ResponseFormat = ParameterSupport{Supported: true, Default: "auto"}
 		image.OutputFormat = ParameterSupport{Supported: false}
 		image.MaxOutputs = 1
 	}
