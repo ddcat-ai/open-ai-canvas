@@ -11939,7 +11939,8 @@ html:not(.dark) .creation-user-message-reference { background: rgba(28, 32, 37, 
 
 .creation-media-pending,
 .creation-media-empty { display: inline-flex; min-height: 42px; align-items: center; gap: 8px; margin: 14px 0 0 34px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, .055); padding: 0 12px; color: var(--creation-muted); font-size: 12px; }
-.creation-media-empty button { border: 0; background: transparent; color: var(--creation-text); font-size: 12px; }
+.creation-media-empty button { display: inline-flex; align-items: center; gap: var(--space-1); border: 0; background: transparent; color: var(--creation-text); font-size: 12px; white-space: nowrap; }
+.creation-media-empty button svg { width: var(--space-4); height: var(--space-4); flex: none; }
 .creation-media-result { max-width: 860px; padding: 14px 0 0 34px; }
 .creation-image-result-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .creation-image-result-grid.is-single { width: min(360px, 100%); grid-template-columns: minmax(0, 1fr); }
