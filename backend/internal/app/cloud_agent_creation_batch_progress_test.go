@@ -24,7 +24,7 @@ func TestCreationBatchReviewPreservesStages(t *testing.T) {
 		batch := &cloudAgentCommerceBatch{PlanID: "batch", Items: []cloudAgentCommerceBatchItem{{ItemID: "picture", Args: cloudAgentMediaArgs{Title: "图片标题"}}}}
 		if commerce {
 			plan := commerceFixturePlan()
-			cloudAgentCommerceBatchPlanEvent(&state, "run", &plan, batch)
+			cloudAgentCommerceBatchPlanEvent(&state, "run", &plan, batch, state.Request)
 		} else {
 			cloudAgentImageBatchPlanEvent(&state, "run", batch)
 		}
@@ -47,7 +47,7 @@ func TestCommerceReviewVisibilityKeepsFullPlanWithoutInventingStages(t *testing.
 			t.Fatal(err)
 		}
 		state := cloudAgentRuntime{Request: req}
-		cloudAgentCommerceBatchPlanEvent(&state, "run", plan, nil)
+		cloudAgentCommerceBatchPlanEvent(&state, "run", plan, nil, req)
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(mustMarshal(state.Events[0].Payload)), &payload); err != nil {
 			t.Fatal(err)

@@ -372,7 +372,7 @@ export function subscribeAgentEvents(runId: string, onEvent: (event: AgentEvent)
                                         emit("assistant_message", run.activeMessage);
                                     }
                                 }
-                                const statusPayload = { status: run.status, revision: run.revision, cleanupPending: run.cleanupPending, failureMessage: run.failureMessage, skills: run.skills, spentCredits: run.spentCredits, step: run.step, approval: run.approval };
+                                const statusPayload = { status: run.status, revision: run.revision, eventCount: run.eventCount, cleanupPending: run.cleanupPending, failureMessage: run.failureMessage, skills: run.skills, spentCredits: run.spentCredits, step: run.step, approval: run.approval };
                                 const statusKey = JSON.stringify(statusPayload);
                                 if (statusKey !== lastStatusKey) {
                                     lastStatusKey = statusKey;

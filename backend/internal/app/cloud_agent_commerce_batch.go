@@ -141,9 +141,9 @@ func cloudAgentCommerceBatchPreview(plan *cloudAgentCommercePlan, batch *cloudAg
 	return cloudAgentApprovalPreview{Kind: "commerce_batch", Title: "确认整套生成", Description: fmt.Sprintf("计划 %s 第 %d 版，共 %d 项；实际模型预计 %.4f 积分，本轮上限 %.4f 积分。批准后逐项走原生成任务与计费链。", plan.PlanID, plan.Version, len(batch.Items), float64(batch.QuoteMicrocredits)/float64(CreditScale), maxCredits), Items: items}
 }
 
-func cloudAgentCommerceBatchPlanEvent(state *cloudAgentRuntime, runID string, plan *cloudAgentCommercePlan, batch *cloudAgentCommerceBatch) {
+func cloudAgentCommerceBatchPlanEvent(state *cloudAgentRuntime, runID string, plan *cloudAgentCommercePlan, batch *cloudAgentCommerceBatch, references CloudAgentRequest) {
 	state.CommercePlan = plan
-	payload := cloudAgentCommerceReviewPayload(plan, state.Request, state.Skills, state.Events)
+	payload := cloudAgentCommerceReviewPayload(plan, references, state.Skills, state.Events)
 	payload["items"] = append([]cloudAgentPlanItem{}, state.Plan...)
 	payload["pendingTitles"] = cloudAgentPendingPlanItems(state.Plan)
 	if batch != nil {
@@ -180,7 +180,11 @@ func (s *Service) advanceCloudAgentCommercePlan(run *model.CloudAgentExecution, 
 		}
 		return s.advanceCloudAgentCommerceBatch(run, state, call, state.Approval.Batch)
 	}
-	plan, err := cloudAgentParseCommercePlan(state.Request, call)
+	references, err := cloudAgentCreationRequestWithOutputs(s.repo, run.UserID, state)
+	if err != nil {
+		return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+	}
+	plan, err := cloudAgentParseCommercePlan(references, call)
 	if err != nil {
 		return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 	}
@@ -188,12 +192,12 @@ func (s *Service) advanceCloudAgentCommercePlan(run *model.CloudAgentExecution, 
 	if err != nil {
 		// Keep a valid plan visible when model quoting or admission fails.
 		// No approval or billable task is created from this failed attempt.
-		cloudAgentCommerceBatchPlanEvent(state, run.ID, plan, batch)
+		cloudAgentCommerceBatchPlanEvent(state, run.ID, plan, batch, references)
 		return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 	}
 	s.storageMu.Lock()
 	err = s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
-		cloudAgentCommerceBatchPlanEvent(state, run.ID, plan, batch)
+		cloudAgentCommerceBatchPlanEvent(state, run.ID, plan, batch, references)
 		if state.Request.PermissionMode == "auto" {
 			state.CommerceBatch = batch
 		} else {

@@ -126,6 +126,14 @@ describe("Agent SSE recovery", () => {
         expect(result.events.filter((e) => e.seq > 0).map((e) => e.seq)).toEqual([1, 2]);
     });
 
+    it("keeps the terminal event watermark so consumers can recover missing task events", async () => {
+        globalThis.fetch = (async () => stream(event(1) + snapshot("completed", { revision: 9, eventCount: 3 }))) as typeof fetch;
+        const result = observe();
+        expect(await result.done).toBeUndefined();
+        expect(result.events.find((e) => e.type === "run_status")?.payload).toMatchObject({ status: "completed", eventCount: 3 });
+        expect(result.events.filter((e) => e.seq > 0).map((e) => e.seq)).toEqual([1]);
+    });
+
     it("waits for durable cleanup after a terminal status", async () => {
         let requests = 0;
         globalThis.fetch = (async () => stream(snapshot("cancelled", { cleanupPending: ++requests === 1 }))) as typeof fetch;

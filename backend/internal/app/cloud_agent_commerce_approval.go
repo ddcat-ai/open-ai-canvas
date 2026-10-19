@@ -60,6 +60,7 @@ func (s *Service) refreshCloudAgentCommerceApproval(userID, id, approvalID strin
 		}
 		var batch *cloudAgentCommerceBatch
 		var preview cloudAgentApprovalPreview
+		var references CloudAgentRequest
 		if approval.Batch.Kind == "images" {
 			if len(state.RetryReplay) > 0 {
 				batch, err = s.prepareCloudAgentReplayBatch(run, &state, approval.Call)
@@ -72,6 +73,10 @@ func (s *Service) refreshCloudAgentCommerceApproval(userID, id, approvalID strin
 		} else {
 			if plan == nil || approval.Batch.PlanID != plan.PlanID || approval.Batch.Version != plan.Version || approval.Batch.PlanHash != cloudAgentCommercePlanHash(plan) {
 				return creationConflict("方案内容与待审批版本不一致，请修改方案后重新审批")
+			}
+			references, err = cloudAgentCreationRequestWithOutputs(s.repo, userID, &state)
+			if err != nil {
+				return err
 			}
 			batch, err = s.prepareCloudAgentCommerceBatch(run, &state, plan, approval.Call)
 			if err == nil {
@@ -99,7 +104,7 @@ func (s *Service) refreshCloudAgentCommerceApproval(userID, id, approvalID strin
 			if batch.Kind == "images" {
 				cloudAgentImageBatchPlanEvent(&state, id, batch)
 			} else {
-				cloudAgentCommerceBatchPlanEvent(&state, id, plan, batch)
+				cloudAgentCommerceBatchPlanEvent(&state, id, plan, batch, references)
 			}
 			state.event(id, "approval_requested", map[string]any{"approvalId": renewed.ID, "previousApprovalId": approvalID, "toolName": renewed.Call.Function.Name, "arguments": json.RawMessage(renewed.Call.Function.Arguments), "preview": renewed.Preview, "planHash": batch.PlanHash, "text": renewed.Preview.Description})
 			return cloudAgentSave(current, &state)

@@ -255,6 +255,41 @@ export async function restoreCreationAgentConversation(sessionId: string, client
     return projectCreationAgentConversation(first.session, fullRuns);
 }
 
+// Only server event identities establish a missing delivery. A plan may
+// legitimately have unsubmitted items after rejection, cancellation or approval.
+export function creationAgentHistoryGapKey(conversation?: CreationConversation): string {
+    if (!conversation?.agentSessionId) return "";
+    const messages = new Set(conversation.messages.map((message) => message.id));
+    for (const run of conversation.agentRuns || []) {
+        const events = [...new Map((run.events || []).filter((event) => event.runId === run.id && Number.isSafeInteger(event.seq) && event.seq > 0).map((event) => [event.seq, event])).values()].sort((left, right) => left.seq - right.seq);
+        let expected = 1;
+        for (const event of events) {
+            if (event.seq !== expected) return `${run.id}:seq:${expected}`;
+            expected++;
+        }
+        if (terminal.has(run.status) && (run.eventCount || 0) >= expected) return `${run.id}:seq:${expected}`;
+        const created = new Set(events.filter((event) => event.type === "generation_task_created").map((event) => text(event.payload?.taskId)).filter(Boolean));
+        for (const event of events) {
+            const taskId = text(event.payload?.taskId);
+            if (event.type === "generation_task_completed" && taskId && !created.has(taskId)) return `${run.id}:task:${taskId}`;
+        }
+        for (const taskId of created) if (!messages.has(`task-${taskId}`)) return `${run.id}:message:${taskId}`;
+    }
+    return "";
+}
+
+export async function recoverCreationAgentHistory(current: () => CreationConversation | undefined, client: CreationAgentRecoveryClient, signal?: AbortSignal): Promise<CreationConversation | undefined> {
+    const initial = current();
+    if (!initial?.agentSessionId || !creationAgentHistoryGapKey(initial)) return;
+    const restored = await restoreCreationAgentConversation(initial.agentSessionId, client, signal);
+    signal?.throwIfAborted();
+    // Read again after I/O: a new direct message/Agent turn must survive, while
+    // switching the selected conversation or account invalidates this response.
+    const latest = current();
+    if (!latest || latest.id !== initial.id || latest.agentSessionId !== initial.agentSessionId) return;
+    return mergeCreationAgentConversation(latest, restored);
+}
+
 // A shared creation session can contain direct image/video messages. Only stable
 // message/task identities establish which Agent run owns a failed delivery.
 export function creationAgentRetryRun(conversation: CreationConversation, message: CreationMessage): AgentRun | undefined {
@@ -569,6 +604,7 @@ export function appendCreationAgentEvent(conversation: CreationConversation, eve
                   ...run,
                   status: typeof payload.status === "string" ? (payload.status as AgentRun["status"]) : run.status,
                   ...(typeof payload.revision === "number" ? { revision: payload.revision } : {}),
+                  ...(typeof payload.eventCount === "number" && Number.isSafeInteger(payload.eventCount) && payload.eventCount >= 0 ? { eventCount: payload.eventCount } : {}),
                   ...(typeof payload.cleanupPending === "boolean" ? { cleanupPending: payload.cleanupPending } : {}),
                   failureMessage: text(payload.failureMessage) || run.failureMessage,
                   approval: payload.approval && typeof payload.approval === "object" ? (payload.approval as AgentRun["approval"]) : undefined,

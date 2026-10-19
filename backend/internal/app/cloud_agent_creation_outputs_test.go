@@ -2,12 +2,150 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
+
+func TestCreationSelectedOutputCommerceExecution(t *testing.T) {
+	for _, scenario := range []struct {
+		name       string
+		permission string
+		ordinary   bool
+		invalidate string
+	}{
+		{name: "agent-auto", permission: "auto"},
+		{name: "agent-approval", permission: "request_approval"},
+		{name: "ordinary-auto", permission: "auto", ordinary: true},
+		{name: "ordinary-approval", permission: "request_approval", ordinary: true},
+		{name: "unselected", permission: "auto", invalidate: "unselected"},
+		{name: "foreign-resource", permission: "auto", invalidate: "foreign-resource"},
+		{name: "changed-output", permission: "request_approval", invalidate: "changed-output"},
+		{name: "foreign-task", permission: "request_approval", ordinary: true, invalidate: "foreign-task"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			s, db, _ := agentMediaFixture(t)
+			installCreationParallelImageModel(t, db)
+			req := creationAgentRequest()
+			req.PermissionMode = scenario.permission
+			req.Budget.MaxCredits, req.Budget.MaxGenerationTasks = 10, 1
+			req.Attachments = []CloudAgentAttachment{{ResourceID: "ref-one", StorageKey: "resource:ref-one", Kind: "image", Role: "reference", Name: "原附件"}}
+			req.MediaSettings = &CloudAgentCreationMedia{Image: &CloudAgentCreationMediaChoice{Selection: CloudAgentMediaModelSelection{ChannelID: "channel", ChannelModelKey: "image-test"}, ParameterMode: "manual", Size: "1024x1024"}}
+			source := model.Task{ID: "selected-product", UserID: "user", Type: "canvas_image", Status: model.TaskStatusSucceeded, InputJSON: `{}`, ResultJSON: `{"images":[{"storageKey":"resource:ref-two"}]}`}
+			if scenario.ordinary {
+				req.CreationContext = []CloudAgentCreationContextEntry{{Role: "assistant", Mode: "image", TaskIDs: []string{source.ID}}}
+				if err := db.Create(&source).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			root, err := s.CreateCloudAgentRun("user", req, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !scenario.ordinary {
+				source.AgentRunID = root.ID
+				if err := db.Create(&source).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario.invalidate != "unselected" {
+				read := cloudAgentCall{ID: "read-selected-product"}
+				read.Function.Name, read.Function.Arguments = "creation_media_read", `{"taskId":"selected-product","outputIndex":1}`
+				result, err := s.executeCloudAgentRuntimeTool(context.Background(), "user", root.ID, read)
+				if err != nil || result.(map[string]any)["isError"] == true {
+					t.Fatalf("read selected product: %+v %v", result, err)
+				}
+			}
+			switch scenario.invalidate {
+			case "foreign-resource":
+				err = db.Model(&model.Resource{}).Where("id = ?", "ref-two").Update("user_id", "other").Error
+			case "changed-output":
+				err = db.Model(&model.Task{}).Where("id = ?", source.ID).Update("result_json", `{"images":[{"storageKey":"resource:ref-one"}]}`).Error
+			case "foreign-task":
+				err = db.Model(&model.Task{}).Where("id = ?", source.ID).Update("user_id", "other").Error
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := commerceFixturePlan()
+			plan.ProductFacts[0].SourceIDs = []string{"ref-two"}
+			plan.Items[0].AttachmentResourceIDs = []string{"ref-two"}
+			plan.References = []cloudAgentCreationReference{{ResourceID: "ref-two", Role: "product", Usage: "沿用已选成品的产品外观"}}
+			run, state := agentInterjectionState(t, s, root.ID)
+			call := cloudAgentCall{ID: "submit-selected-product"}
+			call.Function.Name, call.Function.Arguments = "commerce_plan_submit", mustMarshal(plan)
+			state.ActiveTaskID, state.CallIndex, state.Calls = "", 0, []cloudAgentCall{call}
+			if err := s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				return cloudAgentSave(current, &state)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			run, state = agentInterjectionState(t, s, root.ID)
+			if err := s.advanceCloudAgentTool(run, &state); err != nil {
+				t.Fatal(err)
+			}
+			run, state = agentInterjectionState(t, s, root.ID)
+			var tasks []model.Task
+			if err := db.Where("agent_run_id = ? AND type = ? AND id <> ?", run.ID, "canvas_image", source.ID).Find(&tasks).Error; err != nil {
+				t.Fatal(err)
+			}
+			if scenario.invalidate != "" {
+				if len(tasks) != 0 || state.Approval != nil || state.CommerceBatch != nil {
+					t.Fatalf("invalid reference reached admission: %s %+v", scenario.invalidate, state)
+				}
+				return
+			}
+			if state.CommercePlan == nil {
+				t.Fatalf("selected authorized product rejected: status=%s error=%v", run.Status, state.Events[len(state.Events)-1].Payload["text"])
+			}
+			if scenario.permission == "request_approval" {
+				if run.Status != "waiting_approval" || state.Approval == nil || len(tasks) != 0 {
+					t.Fatalf("missing approval or generated before approval: status=%s tasks=%d", run.Status, len(tasks))
+				}
+				if err := s.refreshCloudAgentCommerceApproval("user", run.ID, state.Approval.ID); err != nil {
+					t.Fatal(err)
+				}
+				run, state = agentInterjectionState(t, s, root.ID)
+				if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, state = agentInterjectionState(t, s, root.ID)
+			reviews := 0
+			for _, event := range state.Events {
+				if event.Type != "plan_updated" || event.Payload["plan"] == nil {
+					continue
+				}
+				reviews++
+				refs := creationMaps(event.Payload["references"])
+				if len(refs) != 2 || refs[1]["resourceId"] != "ref-two" || refs[1]["role"] != "product" {
+					t.Fatalf("selected product missing from important information: %+v", refs)
+				}
+			}
+			if reviews == 0 || scenario.permission == "request_approval" && reviews < 2 {
+				t.Fatalf("missing original or refreshed important information: %d", reviews)
+			}
+			if err := db.Where("agent_run_id = ? AND type = ? AND id <> ?", run.ID, "canvas_image", source.ID).Find(&tasks).Error; err != nil {
+				t.Fatal(err)
+			}
+			if len(tasks) != 1 {
+				t.Fatalf("expected one admitted item, got %d", len(tasks))
+			}
+			var input map[string]any
+			if err := json.Unmarshal([]byte(tasks[0].InputJSON), &input); err != nil {
+				t.Fatal(err)
+			}
+			refs := creationMaps(input["referenceImages"])
+			if len(refs) != 1 || refs[0]["storageKey"] != "resource:ref-two" || refs[0]["role"] != "product" {
+				t.Fatalf("selected source lost during preparation or approval: %+v", refs)
+			}
+		})
+	}
+}
 
 func TestCreationSelectedOutputSurvivesToolCheckpointAndCommercePlan(t *testing.T) {
 	s, db, _ := agentMediaFixture(t)

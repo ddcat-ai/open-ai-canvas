@@ -53,7 +53,7 @@ import { expandSmartCreationPlan, projectSmartCreationBatch, runSmartCreationSch
 import { createCreationSubmitGate, createCreationSubmitGateRelease, withCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
 import { buildCreationAgentRunInput, creationAgentAttachmentSelection, creationAgentImageInputError, creationAgentImageReferenceLimit, creationManagedModelSelection } from "./creation-agent-request";
-import { appendCreationAgentEvent, applyCreationAgentTaskState, assertCreationAgentSession, beginCreationAgentSubmission, bindCreationAgentSubmission, creationAgentRecoveryClient, creationAgentRetryRun, failCreationAgentSubmission, mergeCreationAgentConversation, mergeCreationConversationHistory, projectCreationAgentConversation, restoreCreationAgentConversation, retryCreationHistoryRead, settleCreationAgentSubmission } from "./creation-agent-conversation";
+import { appendCreationAgentEvent, applyCreationAgentTaskState, assertCreationAgentSession, beginCreationAgentSubmission, bindCreationAgentSubmission, creationAgentHistoryGapKey, creationAgentRecoveryClient, creationAgentRetryRun, failCreationAgentSubmission, mergeCreationAgentConversation, mergeCreationConversationHistory, projectCreationAgentConversation, recoverCreationAgentHistory, restoreCreationAgentConversation, retryCreationHistoryRead, settleCreationAgentSubmission } from "./creation-agent-conversation";
 import { CreationAgentReview } from "./creation-agent-review";
 import { creationAgentRunsToStop, stopCreationAgentRuns } from "./creation-agent-cancel";
 import { creationLibraryDisabledReason, creationLibrarySelectionToAttachments } from "./creation-library";
@@ -596,6 +596,24 @@ export default function CreatePage() {
             setConversations(next);
         }, { after, onError: (error) => setAgentConnectionError(error instanceof Error ? error.message : "Agent 连接中断") });
     }, [activeConversation?.id, activeConversation?.agentRunId, agentConnectionEpoch]);
+
+    const agentHistoryGapKey = useMemo(() => creationAgentHistoryGapKey(activeConversation), [activeConversation]);
+    useEffect(() => {
+        const id = activeConversation?.id;
+        if (!hydrated || !id || !agentHistoryGapKey || !smartCreationUserId) return;
+        const controller = new AbortController();
+        const scope = getActiveUserScope();
+        const current = () => !controller.signal.aborted && scope === getActiveUserScope() && activeIdRef.current === id
+            ? conversationsRef.current.find((conversation) => conversation.id === id) : undefined;
+        void recoverCreationAgentHistory(current, creationAgentRecoveryClient, controller.signal).then((restored) => {
+            if (!restored || !current()) return;
+            updateConversation(id, (latest) => mergeCreationAgentConversation(latest, restored));
+            setAgentConnectionError("");
+        }).catch((error) => {
+            if (current()) setAgentConnectionError(error instanceof Error ? error.message : "原任务记录暂时无法同步，请重新连接");
+        });
+        return () => controller.abort();
+    }, [hydrated, activeConversation?.id, agentHistoryGapKey, smartCreationUserId, agentConnectionEpoch, updateConversation]);
 
     const activeAgentTaskKey = activeConversation?.agentSessionId ? activeConversation.messages.flatMap((message) => message.taskIds || []).join("|") : "";
     useEffect(() => {
