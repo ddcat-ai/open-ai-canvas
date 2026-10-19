@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AgentEvent, CreateAgentRunInput } from "../src/services/api/agent";
+import { ApiError } from "../src/services/api/request";
 
 // Exercise the production protocol, isolating only transport/storage dependencies.
 // Temporary modules avoid mock.module leaking into unrelated Bun test suites.
@@ -11,7 +12,7 @@ import type { AgentEvent, CreateAgentRunInput } from "../src/services/api/agent"
 const dir = mkdtempSync(join(fileURLToPath(new URL(".", import.meta.url)), ".agent-reliability-"));
 const root = new URL("../src/", import.meta.url);
 const requestPath = join(dir, "request.ts");
-writeFileSync(requestPath, 'export const apiBaseURL = "https://agent.invalid/api"; export const compactApiParams = (params) => Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined)); export const http = { post: async () => { throw new Error("unexpected POST"); } };');
+writeFileSync(requestPath, `export { ApiError } from ${JSON.stringify(fileURLToPath(new URL("services/api/request.ts", root)))}; export const apiBaseURL = "https://agent.invalid/api"; export const compactApiParams = (params) => Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined)); export const http = { post: async () => { throw new Error("unexpected POST"); } };`);
 writeFileSync(join(dir, "agent.ts"), readFileSync(new URL("services/api/agent.ts", root), "utf8")
     .replace('"@/services/api/request"', JSON.stringify(requestPath))
     .replace('"@/services/api/task-text-stream"', JSON.stringify(fileURLToPath(new URL("services/api/task-text-stream.ts", root)))));
@@ -200,6 +201,28 @@ describe("Agent admission replay and durable pending records", () => {
         transport.http.post = async () => { attempts++; throw { status: 400, retryable: false }; };
         await expect(api.createAgentRun(input)).rejects.toMatchObject({ status: 400 });
         expect(attempts).toBe(1);
+    });
+
+    it("a rejection after an ambiguous admission attempt cannot release the original request identity", async () => {
+        let attempts = 0;
+        transport.http.post = async () => {
+            if (++attempts === 1) throw new ApiError("回执丢失", { status: 502 });
+            throw new ApiError("模型已停用", { status: 400 });
+        };
+        const error = await api.createAgentRun(input).catch((error) => error);
+        expect(attempts).toBe(2);
+        expect(api.isAgentAdmissionRejection(error)).toBe(false);
+        expect(error.message).toContain("结果待确认");
+        expect(error.cause).toMatchObject({ status: 400 });
+    });
+
+    it("recognizes only explicit admission rejections, including business envelopes, not arbitrary conflicts", () => {
+        expect(api.isAgentAdmissionRejection(new ApiError("invalid", { status: 200, code: 400 }))).toBe(true);
+        expect(api.isAgentAdmissionRejection(new ApiError("custom", { status: 200, code: 40301 }))).toBe(false);
+        expect(api.isAgentAdmissionRejection(new ApiError("quota", { status: 403, code: 40301 }))).toBe(true);
+        expect(api.isAgentAdmissionRejection(new ApiError("busy", { status: 409, reason: "canvas_agent_busy" }))).toBe(true);
+        expect(api.isAgentAdmissionRejection(new ApiError("conflict", { status: 409 }))).toBe(false);
+        expect(api.isAgentAdmissionRejection(new ApiError("timeout", { status: 408 }))).toBe(false);
     });
 
     it("restores the full original request and message identity, isolated by conversation", async () => {

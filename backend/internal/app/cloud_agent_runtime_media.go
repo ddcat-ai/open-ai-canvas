@@ -41,6 +41,16 @@ func cloudAgentMediaCall(call cloudAgentCall) cloudAgentCall {
 }
 
 func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *cloudAgentRuntime, req CreateTaskRequest, media *cloudAgentMediaPlan) error {
+	if media != nil {
+		// Frozen batches can wait while another approved repair consumes budget.
+		// Recheck cumulative limits at admission, not only when quoting the set.
+		if limit := state.Request.Budget.MaxGenerationTasks; limit > 0 && state.Generations >= limit {
+			return s.cloudAgentMediaError(run, state, "admission", false, false, BadAuthRequest("已达到本轮媒体任务上限，未提交生成任务"))
+		}
+		if limit := state.Request.Budget.MaxVideoSeconds; limit > 0 && state.VideoSeconds+media.Args.Duration > limit {
+			return s.cloudAgentMediaError(run, state, "admission", false, false, BadAuthRequest("已超过本轮视频时长预算，未提交生成任务"))
+		}
+	}
 	if media != nil && media.CommerceKey != "" {
 		if err := cloudAgentCommerceDependenciesReady(s.repo, run.UserID, state, media.CommerceItemID); err != nil {
 			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
@@ -97,6 +107,9 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			return s.cloudAgentMediaError(run, state, "admission", false, false, creationConflict("缺少已批准的生成准备态，请重新申请审批；未提交任务"))
 		}
 		generationID = prepared.GenerationID
+		if time.Now().After(prepared.Quote.ExpiresAt) {
+			return s.cloudAgentMediaError(run, state, "admission", false, false, creationConflict("生成报价已过期，请刷新报价并重新批准；未提交任务"))
+		}
 		refs, refErr := cloudAgentPreparedReferences(s.repo, run.UserID, prepared)
 		if refErr != nil {
 			return s.cloudAgentMediaError(run, state, "admission", false, false, refErr)
@@ -123,6 +136,9 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 	req.creationPrepare = prepare
 	task, err := s.CreateTask(run.UserID, req)
 	if err != nil {
+		if cloudAgentBatchPending(state) && errors.Is(err, repository.ErrActiveTaskLimit) {
+			return err
+		}
 		if media != nil {
 			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 		}
@@ -293,6 +309,9 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 		return cloudAgentSave(current, state)
 	})
 	if err != nil && media != nil {
+		if cloudAgentBatchPending(state) && errors.Is(err, repository.ErrActiveTaskLimit) {
+			return err
+		}
 		// Rollback may have happened after checkpoint edits. Reload before recording
 		// a tool failure; never turn a stale worker revision into a second result.
 		latest, readErr := s.reloadCloudAgent(run)
@@ -332,9 +351,9 @@ func (s *Service) cloudAgentMediaError(run *model.CloudAgentExecution, state *cl
 		// a prepared quote from the failed attempt leak into the corrected call.
 		state.AutoPreparedMedia = nil
 		state.AutoPreparedCallHash = ""
-		if submitted {
-			state.MediaTaskID = ""
-		}
+		// The tool cursor advanced, so no previous batch child's wait pointer
+		// may remain attached to this call. Its durable TaskID is retained.
+		state.MediaTaskID = ""
 		// Only explicitly typed argument errors and a stale canvas snapshot may
 		// continue into another model turn. Every other pre-submission media
 		// failure is a real admission boundary failure; continuing would invite
@@ -736,7 +755,7 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 			return err
 		}
 	}
-	if mediaTaskID == "" {
+	if !cloudAgentMediaPending(&state) {
 		return s.resumeCloudAgentAfterApproval(userID, id, &state)
 	}
 	// 媒体生成可能要几分钟：审批请求立即返回，等待与回写在后台完成后再恢复运行。
@@ -748,21 +767,15 @@ func (s *Service) finishApprovedCloudAgentMedia(ctx context.Context, userID, id,
 	failed := false
 	for {
 		mediaTask, err := s.waitCloudAgentMediaTask(ctx, userID, id, mediaTaskID)
-		if err != nil && ctx.Err() != nil {
+		if err != nil {
 			// 服务停机或等待被取消：不能继续回写和恢复运行时，否则正在排空的进程会重新拉起 Agent。
 			// MediaTaskID 仍保留在运行状态里，重启后 recoverCloudAgentPiRunners 会重新挂上等待。
-			return ctx.Err()
-		}
-		if mediaTask == nil {
-			// 失败的任务也要回写（记录工具失败并释放 MediaTaskID）；只有读不到任务才中止。
-			if mediaTask, err = s.repo.Task(mediaTaskID); err != nil {
-				return err
-			}
+			return err
 		}
 		if err = s.settleCloudAgentMedia(userID, id, cloudAgentFence(ctx)); err != nil {
 			return err
 		}
-		failed = failed || mediaTask.Status != model.TaskStatusSucceeded
+		failed = failed || mediaTask != nil && mediaTask.Status != model.TaskStatusSucceeded
 		latest, err := s.repo.CloudAgent(userID, id)
 		if err != nil {
 			return err
@@ -771,7 +784,10 @@ func (s *Service) finishApprovedCloudAgentMedia(ctx context.Context, userID, id,
 		if err != nil {
 			return err
 		}
-		if state.MediaTaskID != "" {
+		if cloudAgentRunTerminal(latest.Status) {
+			return nil
+		}
+		if cloudAgentMediaPending(&state) {
 			mediaTaskID = state.MediaTaskID
 			continue
 		}

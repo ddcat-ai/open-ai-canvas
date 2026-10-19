@@ -1,4 +1,4 @@
-import { compactApiParams, http, apiBaseURL } from "@/services/api/request";
+import { compactApiParams, http, apiBaseURL, ApiError } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser } from "@/services/api/task-text-stream";
 
 export type AgentPermissionMode = "read_only" | "auto" | "request_approval";
@@ -190,13 +190,24 @@ export type ListAgentSessionRunsOptions = {
 
 // Only Agent admission endpoints have server-side fingerprint/idempotency protection.
 // Never apply this policy to arbitrary provider generation POSTs.
+export function isAgentAdmissionRejection(error: unknown): boolean {
+    if (!(error instanceof ApiError)) return false;
+    const status = error.status === 200 ? error.code : error.status;
+    return [400, 401, 402, 403, 404, 413, 422].includes(status || 0) || error.reason === "canvas_agent_busy";
+}
+
 async function submitAgentRequest(path: string, input: CreateAgentRunInput) {
     const body = JSON.parse(JSON.stringify(input)) as CreateAgentRunInput;
+    let outcomeUnconfirmed = false;
     for (let attempt = 0; ; attempt++) {
         try {
             return await http.post<{ run: AgentRun }>(path, body, { timeout: 15_000 });
         } catch (cause) {
             const error = cause as { retryable?: boolean; retryAfterMs?: number };
+            // A later rejection cannot prove that a prior timed-out attempt was
+            // never accepted. Preserve its pending identity for session recovery.
+            if (outcomeUnconfirmed && isAgentAdmissionRejection(cause)) throw new Error(`Agent 请求结果待确认；${cause instanceof Error ? cause.message : "请恢复原请求"}`, { cause });
+            if (!isAgentAdmissionRejection(cause)) outcomeUnconfirmed = true;
             if (!error.retryable || attempt >= 2) throw cause;
             const delay = Math.max(500 * 2 ** attempt * (0.75 + Math.random() * 0.5), error.retryAfterMs || 0);
             // Long rate-limit waits return control to the user with the original

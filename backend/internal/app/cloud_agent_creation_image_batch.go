@@ -49,17 +49,6 @@ func (s *Service) prepareCloudAgentImageBatch(run *model.CloudAgentExecution, st
 	if limit := state.Request.Budget.MaxGenerationTasks; limit > 0 && state.Generations+len(args.Items) > limit {
 		return nil, BadAuthRequest("图片批次数量超过本轮剩余媒体任务上限，未提交任务")
 	}
-	policy, err := s.RuntimePolicy()
-	if err != nil {
-		return nil, err
-	}
-	active, err := s.repo.ActiveTaskCountForUser(run.UserID)
-	if err != nil {
-		return nil, err
-	}
-	if active+int64(len(args.Items)) > int64(policy.Task.ActiveTaskLimit) {
-		return nil, BadAuthRequest(fmt.Sprintf("当前可用任务名额不足以提交 %d 张图片，同时排队或运行上限为 %d；未提交本批任务", len(args.Items), policy.Task.ActiveTaskLimit))
-	}
 	batch := &cloudAgentCommerceBatch{Kind: "images", PlanID: cloudAgentID(run.UserID, run.ID+":image-batch:"+call.ID), Version: 1, PlanHash: cloudAgentApprovalCallHash(call), PlanItemIDs: cloudAgentBatchActiveStages(state)}
 	copyState := *state
 	settings, choice := *state.Request.MediaSettings, *state.Request.MediaSettings.Image
@@ -80,7 +69,7 @@ func (s *Service) prepareCloudAgentImageBatch(run *model.CloudAgentExecution, st
 		}
 		metadata := request.Input["metadata"].(map[string]any)
 		metadata["imageBatchId"], metadata["imageBatchTotal"], metadata["imageBatchItemId"] = batch.PlanID, len(args.Items), item.ID
-		preparation := &creationTaskPreparation{}
+		preparation := &creationTaskPreparation{DeferActiveTaskLimit: true}
 		request.creationPrepare = preparation
 		dryTask, err := s.CreateTask(run.UserID, request)
 		if err != nil {
@@ -177,10 +166,14 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 	}
 	state.CommerceBatch = batch
 	var waiting string
+	capacityBlocked := false
 	results := make([]map[string]any, 0, len(batch.Items))
 	for _, item := range batch.Items {
 		task, err := s.repo.TaskForUser(run.UserID, item.TaskID)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if capacityBlocked {
+				continue
+			}
 			var input map[string]any
 			if err := json.Unmarshal([]byte(mustMarshal(item.Request.Input)), &input); err != nil {
 				return err
@@ -188,10 +181,11 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 			request := item.Request
 			request.Input = input
 			media := &cloudAgentMediaPlan{Args: item.Args, CallID: call.ID, TaskID: item.TaskID, Prepared: item.Prepared}
-			// Earlier items are durable in TaskIDs. A rejected later admission
-			// must not leave their wait pointer attached to an advanced tool call.
-			state.MediaTaskID = ""
 			if err := s.enqueueCloudAgentTask(run, state, request, media); err != nil {
+				if errors.Is(err, repository.ErrActiveTaskLimit) {
+					capacityBlocked = true
+					continue
+				}
 				return err
 			}
 			latest, reloadErr := s.reloadCloudAgent(run)
@@ -232,9 +226,10 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 	}
 	return s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 		cloudAgentBatchRecordCompleted(state, run.ID, batch, results)
+		batch.WaitingForCapacity = capacityBlocked
 		state.CommerceBatch = batch
 		state.MediaTaskID = waiting
-		if waiting == "" {
+		if waiting == "" && !capacityBlocked {
 			allSucceeded := true
 			for _, result := range results {
 				allSucceeded = allSucceeded && result["status"] == model.TaskStatusSucceeded

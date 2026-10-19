@@ -120,7 +120,7 @@ func (s *Service) closeCloudAgentPiRunners() {
 }
 
 func (s *Service) startApprovedCloudAgentMediaWaiter(userID, runID, mediaTaskID string) {
-	if s == nil || runID == "" || mediaTaskID == "" {
+	if s == nil || runID == "" {
 		return
 	}
 	key := runID + ":" + mediaTaskID
@@ -247,7 +247,7 @@ func (s *Service) recoverCloudAgentPiRunners() {
 			// 批准后的媒体任务仍在生成。进程重启后内存 waiter 已经消失，这里按
 			// 持久化的任务 ID 重建；不能同时再启动一轮模型步骤。
 			state, decodeErr := cloudAgentDecode(&run)
-			if decodeErr == nil && state.MediaTaskID != "" {
+			if decodeErr == nil && cloudAgentMediaPending(&state) {
 				s.startApprovedCloudAgentMediaWaiter(run.UserID, run.ID, state.MediaTaskID)
 				continue
 			}
@@ -491,7 +491,7 @@ func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool
 	if sessionJSONL == "" || state == nil || state.PiAssistantResponses == 0 {
 		return false
 	}
-	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+	if state.ActiveTaskID != "" || cloudAgentMediaPending(state) || state.Approval != nil {
 		return false
 	}
 	lines := strings.Split(strings.TrimRight(sessionJSONL, "\n"), "\n")
@@ -555,7 +555,7 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string, priorAssistantRe
 		}
 
 		// 检查是否有未完成的任务
-		if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || len(state.CreationPendingImages) > 0 {
+		if state.ActiveTaskID != "" || cloudAgentMediaPending(&state) || state.Approval != nil || len(state.CreationPendingImages) > 0 {
 			return nil
 		}
 		if state.CommerceBatch != nil {

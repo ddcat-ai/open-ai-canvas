@@ -23,7 +23,7 @@ import type { GenerationTask } from "@/services/api/task-center";
 import { createAgentMemory, listAgentMemories, updateAgentMemory } from "@/services/api/agent-memories";
 import { clearPendingCreationAgentSubmission, loadCreationConversations, loadPendingCreationAgentSubmission, pendingCreationTaskIds, queueCreationConversationsSave, removeCreationConversationSnapshot, removeStoredCreationConversation, saveCreationConversations, savePendingCreationAgentSubmission, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useEffectiveConfig } from "@/stores/use-config-store";
-import { createAgentRun, createAgentSession, decideAgentApproval, deleteAgentSession, getAgentRun, getAgentSession, listAgentSessions, sendAgentMessage, subscribeAgentEvents, type CreateAgentRunInput } from "@/services/api/agent";
+import { createAgentRun, createAgentSession, decideAgentApproval, deleteAgentSession, getAgentRun, getAgentSession, isAgentAdmissionRejection, listAgentSessions, sendAgentMessage, subscribeAgentEvents, type CreateAgentRunInput } from "@/services/api/agent";
 import { subscribeGenerationTasks } from "@/services/api/task-center";
 import { creationConfigWithPreferences, useCreationAgentPreferences, useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
@@ -1074,8 +1074,11 @@ export default function CreatePage() {
         };
         setBusy(true);
         followLatestMessageRef.current = true;
+        let submissionKey: string | undefined;
+        let recoveringPending = false, requestSent = false, accepted = false;
         try {
             const pending = await loadPendingCreationAgentSubmission(conversationId);
+            recoveringPending = Boolean(pending);
             assertScope();
             if (action?.recoverPending && !pending) throw new Error("待确认请求已处理，请刷新本会话后查看结果");
             const sessionId = pending?.sessionId || conversation.agentSessionId || (await createAgentSession({ surface: "creation", title: text.slice(0, 48) })).session.id;
@@ -1113,6 +1116,7 @@ export default function CreatePage() {
             const effectiveParentRunId = action && pending ? pending.parentRunId : parentRunId;
             const fingerprint = JSON.stringify({ ...request, idempotencyKey: "", parentRunId: effectiveParentRunId });
             if (pending && pending.fingerprint !== fingerprint) throw new Error("上次 Agent 请求结果待确认，请保持原提示词和设置后重试，避免重复提交");
+            submissionKey = key;
             if (!pending) await savePendingCreationAgentSubmission(conversationId, { sessionId, key, fingerprint, prompt: text, request, parentRunId, createdAt: new Date().toISOString() });
             assertScope();
             const bound = updateConversation(conversationId, (current) => bindCreationAgentSubmission(current, submissionId, sessionId, key));
@@ -1122,21 +1126,25 @@ export default function CreatePage() {
             assertScope();
             if (pending && snapshot) {
                 if (snapshot.runs.some((run) => run.idempotencyKey === pending.key)) {
+                    accepted = true;
                     const restored = await restoreCreationAgentConversation(sessionId, creationAgentRecoveryClient);
                     assertScope();
                     updateConversation(conversationId, (current) => mergeCreationAgentConversation(current, restored));
-                    await clearPendingCreationAgentSubmission(conversationId);
+                    await clearPendingCreationAgentSubmission(conversationId, scope, key);
                     clearSubmittedDraft();
                     return true;
                 }
             }
+            requestSent = true;
             const response = effectiveParentRunId ? await sendAgentMessage(effectiveParentRunId, request) : await createAgentRun(request);
+            if (!response.run?.id) throw new Error("Agent 未返回运行回执，请恢复原请求核对结果");
+            accepted = true;
             assertScope();
             const run = { ...response.run, userPrompt: response.run.userPrompt || text, sessionId };
             const session = { id: sessionId, title: conversation.title === "新创作" ? text.slice(0, 48) : conversation.title, surface: "creation", status: "active", revision: 0, createdAt: conversation.updatedAt, updatedAt: run.updatedAt };
             const projected = projectCreationAgentConversation(session, [...(conversation.agentRuns || []), run]);
             updateConversation(conversationId, (current) => settleCreationAgentSubmission(current, projected, submissionId));
-            await clearPendingCreationAgentSubmission(conversationId);
+            await clearPendingCreationAgentSubmission(conversationId, scope, key);
             clearSubmittedDraft();
             void restoreCreationAgentConversation(sessionId, creationAgentRecoveryClient).then((restored) => {
                 if (scope !== getActiveUserScope()) return;
@@ -1145,9 +1153,25 @@ export default function CreatePage() {
             }).catch(() => undefined);
             return true;
         } catch (error) {
+            if (accepted) {
+                if (scope === getActiveUserScope()) {
+                    clearSubmittedDraft();
+                    toast.warning("Agent 请求已提交，本地恢复记录暂未清理；请从当前会话或历史查看进度");
+                }
+                return true;
+            }
+            let rejectedKey: string | undefined;
+            let cleanupError: unknown;
+            if (submissionKey && !recoveringPending && (!requestSent || isAgentAdmissionRejection(error))) {
+                try {
+                    await clearPendingCreationAgentSubmission(conversationId, scope, submissionKey);
+                    rejectedKey = submissionKey;
+                } catch (cause) { cleanupError = cause; }
+            }
             if (scope === getActiveUserScope()) {
-                const detail = error instanceof Error ? error.message : "Agent 请求失败；运行记录仍可从历史恢复";
-                updateConversation(conversationId, (current) => failCreationAgentSubmission(current, submissionId, detail));
+                const failure = error instanceof Error ? error.message : "Agent 请求失败；运行记录仍可从历史恢复";
+                const detail = cleanupError ? `${failure}；本地待确认记录未能清理（${cleanupError instanceof Error ? cleanupError.message : "存储不可用"}），已保留原请求以便恢复核对` : failure;
+                updateConversation(conversationId, (current) => failCreationAgentSubmission(current, submissionId, detail, rejectedKey));
                 toast.error(detail);
             }
             return false;

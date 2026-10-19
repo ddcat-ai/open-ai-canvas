@@ -63,3 +63,22 @@ test("repeated scoped cache cleanup is harmless and clears a pending-only draft"
     await store.removeStoredCreationConversation("deleted", "owner");
     expect(storage.data.size).toBe(0);
 });
+
+test("submission cleanup compares the original scope and request key before deleting", async () => {
+    const key = `${store.CREATION_AGENT_PENDING_KEY}:conversation`;
+    storage.data.set(`owner:${key}`, JSON.stringify({ key: "newer-request" }));
+    storage.data.set(`other:${key}`, JSON.stringify({ key: "original-request" }));
+    storage.setScope("other");
+    await store.clearPendingCreationAgentSubmission("conversation", "owner", "original-request");
+    expect(storage.data.has(`owner:${key}`)).toBe(true);
+    await store.clearPendingCreationAgentSubmission("conversation", "owner", "newer-request");
+    expect(storage.data.has(`owner:${key}`)).toBe(false);
+    expect(storage.data.has(`other:${key}`)).toBe(true);
+});
+
+test("corrupt pending state fails closed instead of clearing an unverified request", async () => {
+    const key = `owner:${store.CREATION_AGENT_PENDING_KEY}:conversation`;
+    storage.data.set(key, "{broken");
+    await expect(store.clearPendingCreationAgentSubmission("conversation", "owner", "request")).rejects.toThrow();
+    expect(storage.data.get(key)).toBe("{broken");
+});

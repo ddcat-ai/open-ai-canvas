@@ -250,7 +250,7 @@ func TestCreationContextImageBatchApprovalAndFailureKeepExactTasks(t *testing.T)
 }
 
 func TestCreationContextImageBatchRejectsInvalidLastSourceBeforeAnyCharge(t *testing.T) {
-	for _, reason := range []string{"foreign_source", "task_budget", "active_limit"} {
+	for _, reason := range []string{"foreign_source", "task_budget"} {
 		t.Run(reason, func(t *testing.T) {
 			s, db, runID, call := creationContextImageBatchFixture(t, "auto")
 			run, state := agentInterjectionState(t, s, runID)
@@ -259,11 +259,6 @@ func TestCreationContextImageBatchRejectsInvalidLastSourceBeforeAnyCharge(t *tes
 				call.Function.Arguments = strings.ReplaceAll(call.Function.Arguments, "previous-image-5", "private")
 			case "task_budget":
 				state.Request.Budget.MaxGenerationTasks = 4
-			case "active_limit":
-				policy := defaultRuntimePolicy()
-				if _, err := s.UpdateRuntimePolicySetting(&model.User{ID: "admin", Role: model.UserRoleAdmin}, policy); err != nil {
-					t.Fatal(err)
-				}
 			}
 			if _, err := s.prepareCloudAgentImageBatch(run, &state, call); err == nil {
 				t.Fatal("invalid batch was admitted")

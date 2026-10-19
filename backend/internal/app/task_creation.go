@@ -26,6 +26,12 @@ type taskAdmission struct {
 	NonBillable  bool
 }
 
+func taskActiveLimitError(limit int) *AppError {
+	err := BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", limit))
+	err.Cause = repository.ErrActiveTaskLimit
+	return err
+}
+
 // CreateTask 收敛任务进入系统前的 admission 流程：输入标准化、逻辑模型路由、
 // 能力/额度校验和持久化。执行阶段由 worker 与 provider 相关模块负责。
 // CreateTask 校验并创建一条生成任务。
@@ -132,12 +138,14 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
-	activeTasks, err := s.repo.ActiveTaskCountForUser(userID)
-	if err != nil {
-		return nil, err
-	}
-	if activeTasks >= int64(policy.Task.ActiveTaskLimit) {
-		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
+	if req.creationPrepare == nil || !req.creationPrepare.DeferActiveTaskLimit {
+		activeTasks, err := s.repo.ActiveTaskCountForUser(userID)
+		if err != nil {
+			return nil, err
+		}
+		if activeTasks >= int64(policy.Task.ActiveTaskLimit) {
+			return nil, taskActiveLimitError(policy.Task.ActiveTaskLimit)
+		}
 	}
 	// 媒体任务在扣费和调用上游前确认账号文件容量，避免容量已满仍然计费却无法回存产物。
 	// 调用方已持锁时走不加锁的版本；这里不能再抢同一把 storageMu。
@@ -249,7 +257,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		}
 	}
 	if errors.Is(err, repository.ErrActiveTaskLimit) {
-		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
+		return nil, taskActiveLimitError(policy.Task.ActiveTaskLimit)
 	}
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")

@@ -53,7 +53,8 @@ export async function initializeCreationPreferencesSync(userId: string) {
         if (current()) timer = setTimeout(() => void flush(), 400);
     };
     const flush = async () => {
-        if (!current() || !ready || saving) return;
+        // Keep edits pending until the read is applied so an older snapshot cannot replace an acknowledged save.
+        if (!current() || !ready || loading || saving) return;
         const sent = { ...store.getState().pendingPreferenceChanges };
         if (!Object.keys(sent).length) return;
         saving = true;
@@ -100,12 +101,12 @@ export async function initializeCreationPreferencesSync(userId: string) {
             });
             applying = false;
             ready = true;
-            await flush();
         } catch {
             if (current()) store.setState({ syncStatus: "error" });
         } finally {
             loading = false;
         }
+        await flush();
     };
     const onFocus = () => {
         if (document.visibilityState !== "hidden") void refresh();

@@ -413,22 +413,64 @@ func cloudAgentCommerceDependenciesReady(repo *repository.Repository, userID str
 	if repo == nil || state == nil || state.CommercePlan == nil {
 		return BadAuthRequest("电商计划依赖校验缺少运行状态")
 	}
-	var item *cloudAgentCommerceItem
-	for i := range state.CommercePlan.Items {
-		if state.CommercePlan.Items[i].ID == itemID {
-			item = &state.CommercePlan.Items[i]
-			break
-		}
+	dependencies, err := cloudAgentCommerceDependencies(state.CommercePlan, itemID)
+	if err != nil {
+		return err
 	}
-	if item == nil {
-		return BadAuthRequest("电商计划交付项不存在")
-	}
-	for _, dependencyID := range item.Dependencies {
-		if !cloudAgentCommerceSuccessfulDependency(repo, userID, state, dependencyID) {
+	for _, dependency := range dependencies {
+		if dependency.Type != "text" && !cloudAgentCommerceSuccessfulDependency(repo, userID, state, dependency.ID) {
 			return BadAuthRequest("依赖交付项尚未成功；请先查看原任务状态")
 		}
 	}
 	return nil
+}
+
+// Text is delivered in the reviewed plan, not by a media task. Resolve its
+// prerequisites as well; a prompt or review translation is not finished copy.
+func cloudAgentCommerceDependencies(plan *cloudAgentCommercePlan, itemID string) ([]cloudAgentCommerceItem, error) {
+	items := make(map[string]cloudAgentCommerceItem, len(plan.Items))
+	for _, item := range plan.Items {
+		items[item.ID] = item
+	}
+	item, ok := items[itemID]
+	if !ok {
+		return nil, BadAuthRequest("电商计划交付项不存在")
+	}
+	var dependencies []cloudAgentCommerceItem
+	visited := map[string]int{itemID: 1}
+	var visit func(string) error
+	visit = func(id string) error {
+		if visited[id] == 1 {
+			return BadAuthRequest("电商计划交付项存在循环依赖")
+		}
+		if visited[id] == 2 {
+			return nil
+		}
+		dependency, exists := items[id]
+		if !exists {
+			return BadAuthRequest("依赖交付项不存在")
+		}
+		visited[id] = 1
+		if dependency.Type == "text" {
+			if strings.TrimSpace(dependency.TargetCopy) == "" {
+				return BadAuthRequest(fmt.Sprintf("文字交付项“%s”尚无完成文案，请先补充 targetCopy", firstNonEmpty(dependency.Title, dependency.ID)))
+			}
+			for _, parentID := range dependency.Dependencies {
+				if err := visit(parentID); err != nil {
+					return err
+				}
+			}
+		}
+		visited[id] = 2
+		dependencies = append(dependencies, dependency)
+		return nil
+	}
+	for _, dependencyID := range item.Dependencies {
+		if err := visit(dependencyID); err != nil {
+			return nil, err
+		}
+	}
+	return dependencies, nil
 }
 
 // Compile the server-validated item into a normal generate_media call. Review
@@ -462,6 +504,10 @@ func cloudAgentCommerceMediaCall(plan *cloudAgentCommercePlan, call cloudAgentCa
 	}
 	if item == nil || item.Type == "text" || args.Mode != item.Type {
 		return call, BadAuthRequest("电商交付项不存在或媒体类型不匹配")
+	}
+	dependencies, err := cloudAgentCommerceDependencies(plan, item.ID)
+	if err != nil {
+		return call, err
 	}
 	if args.RetryPrompt != "" {
 		if args.RetryFailedTaskID == "" || item.Type != "image" || strings.TrimSpace(args.RetryPrompt) == "" || len([]rune(args.RetryPrompt)) > 16000 {
@@ -504,6 +550,11 @@ func cloudAgentCommerceMediaCall(plan *cloudAgentCommercePlan, call cloudAgentCa
 		prompt += "\nOutput canvas: " + size + ". This is the image canvas, not the product's physical aspect ratio. Preserve the product's own proportions within this canvas."
 	}
 	prompt += "\nItem purpose: " + strings.TrimSpace(item.Purpose) + "\nItem direction:\n" + strings.TrimSpace(item.Prompt)
+	for _, dependency := range dependencies {
+		if dependency.Type == "text" {
+			prompt += "\n\nApproved text dependency (creative context only; visible copy is specified separately below):\n" + strings.TrimSpace(dependency.TargetCopy)
+		}
+	}
 	if item.Type == "image" && plan.StyleLock != nil {
 		prompt += "\n\n" + cloudAgentCommerceStyleLockPrompt(plan.StyleLock) + "\nThe shared style lock takes precedence over conflicting font/color directions in this item's scene description."
 	}

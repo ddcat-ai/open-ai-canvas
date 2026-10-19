@@ -372,8 +372,17 @@ export function settleCreationAgentSubmission(current: CreationConversation, inc
     };
 }
 
-export function failCreationAgentSubmission(conversation: CreationConversation, submissionId: string, error: string): CreationConversation {
-    return { ...conversation, messages: conversation.messages.map((message) => (message.clientOperationId === submissionId && message.role === "assistant" ? { ...message, status: "error", error } : message)) };
+export function failCreationAgentSubmission(conversation: CreationConversation, submissionId: string, error: string, rejectedKey?: string): CreationConversation {
+    return {
+        ...conversation,
+        messages: conversation.messages.map((message) => {
+            if (message.clientOperationId !== submissionId) return message;
+            const failed = message.role === "assistant" ? { ...message, status: "error" as const, error } : message;
+            // A definite admission rejection has no run to recover. Keep the
+            // draft/error visible, but let the next submit replace these bubbles.
+            return rejectedKey && message.agentIdempotencyKey === rejectedKey ? { ...failed, agentIdempotencyKey: undefined } : failed;
+        }),
+    };
 }
 
 function prepareCachedCreationAgentConversation(conversation: CreationConversation): CreationConversation {

@@ -19,8 +19,14 @@ export async function savePendingCreationAgentSubmission(conversationId: string,
     await localForageStorageForScope(getActiveUserScope()).setItem(`${CREATION_AGENT_PENDING_KEY}:${conversationId}`, JSON.stringify(pending));
 }
 
-export async function clearPendingCreationAgentSubmission(conversationId: string, scope = getActiveUserScope()) {
-    await localForageStorageForScope(scope).removeItem(`${CREATION_AGENT_PENDING_KEY}:${conversationId}`);
+export async function clearPendingCreationAgentSubmission(conversationId: string, scope = getActiveUserScope(), expectedKey?: string) {
+    const storage = localForageStorageForScope(scope);
+    const storageKey = `${CREATION_AGENT_PENDING_KEY}:${conversationId}`;
+    if (expectedKey) {
+        const value = await storage.getItem(storageKey);
+        if (value && JSON.parse(value).key !== expectedKey) return;
+    }
+    await storage.removeItem(storageKey);
 }
 
 type PendingCreationMessage = {

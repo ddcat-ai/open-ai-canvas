@@ -585,11 +585,11 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		if cloudAgentRunTerminal(run.Status) && run.Status != "completed" {
 			return nil, fmt.Errorf("%s", firstNonEmpty(run.FailureMessage, "Agent 工具执行失败"))
 		}
-		if state.MediaTaskID == "" {
+		if !cloudAgentMediaPending(&state) {
 			return nil, fmt.Errorf("tool %s produced no result", call.Function.Name)
 		}
-		if _, err := s.waitCloudAgentMediaTask(ctx, userID, runID, state.MediaTaskID); err != nil && ctx.Err() != nil {
-			return nil, ctx.Err()
+		if _, err := s.waitCloudAgentMediaTask(ctx, userID, runID, state.MediaTaskID); err != nil {
+			return nil, err
 		}
 		for _, taskID := range state.CreationPendingImages {
 			if _, err := s.waitCloudAgentTask(ctx, taskID); err != nil && ctx.Err() != nil {
@@ -615,7 +615,7 @@ func (s *Service) settleCloudAgentMedia(userID, runID string, fences ...*model.C
 		if err != nil {
 			return err
 		}
-		if fresh.MediaTaskID == "" || fresh.CallIndex >= len(fresh.Calls) {
+		if cloudAgentRunTerminal(latest.Status) || !cloudAgentMediaPending(&fresh) || fresh.CallIndex >= len(fresh.Calls) {
 			return nil
 		}
 		call := fresh.Calls[fresh.CallIndex]

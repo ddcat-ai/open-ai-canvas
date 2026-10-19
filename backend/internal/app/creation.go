@@ -57,7 +57,12 @@ type CreationDetail struct {
 	Run         CreationRunOutput          `json:"run"`
 	Submissions []CreationSubmissionOutput `json:"submissions"`
 }
-type creationTaskPreparation struct{ Order *model.BillingOrder }
+type creationTaskPreparation struct {
+	Order *model.BillingOrder
+	// Quoting a frozen batch reserves no active slots; actual admission still
+	// enforces the per-user limit atomically before any charge.
+	DeferActiveTaskLimit bool
+}
 
 func creationConflict(message string) error {
 	return &AppError{Status: 409, Code: 409, Message: message}

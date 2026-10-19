@@ -1,7 +1,23 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CreationMessageView } from "../src/pages/create/creation-workspace-messages";
 import type { CreationMessage } from "../src/pages/create/creation-types";
+
+// Other DOM suites can initialize Motion's browser detection before restoring
+// globals. Give this markup suite its own window when reduced-motion hooks run.
+let originalWindow: PropertyDescriptor | undefined;
+let dom: Window;
+beforeEach(() => {
+    originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    dom = new Window({ url: "http://localhost/" });
+    Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: dom });
+});
+afterEach(() => {
+    dom.happyDOM.abort();
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+});
 
 const renderMessage = (status: CreationMessage["status"], error?: string) =>
     renderToStaticMarkup(

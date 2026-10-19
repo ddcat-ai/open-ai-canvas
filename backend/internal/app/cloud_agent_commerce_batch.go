@@ -14,15 +14,16 @@ import (
 // Each prepared item is the exact normal media admission input and quote. The
 // set is saved with its plan hash before any billable task is submitted.
 type cloudAgentCommerceBatch struct {
-	Kind              string                        `json:"kind,omitempty"`
-	PlanID            string                        `json:"planId"`
-	Version           int                           `json:"version"`
-	PlanHash          string                        `json:"planHash"`
-	QuoteMicrocredits int64                         `json:"quoteMicrocredits"`
-	Items             []cloudAgentCommerceBatchItem `json:"items"`
-	ReportedFailures  []string                      `json:"reportedFailures,omitempty"`
-	CompletedTaskIDs  []string                      `json:"completedTaskIds,omitempty"`
-	PlanItemIDs       []string                      `json:"planItemIds,omitempty"`
+	Kind               string                        `json:"kind,omitempty"`
+	PlanID             string                        `json:"planId"`
+	Version            int                           `json:"version"`
+	PlanHash           string                        `json:"planHash"`
+	QuoteMicrocredits  int64                         `json:"quoteMicrocredits"`
+	Items              []cloudAgentCommerceBatchItem `json:"items"`
+	ReportedFailures   []string                      `json:"reportedFailures,omitempty"`
+	CompletedTaskIDs   []string                      `json:"completedTaskIds,omitempty"`
+	PlanItemIDs        []string                      `json:"planItemIds,omitempty"`
+	WaitingForCapacity bool                          `json:"waitingForCapacity,omitempty"`
 }
 
 type cloudAgentCommerceBatchItem struct {
@@ -82,7 +83,7 @@ func (s *Service) prepareCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 			return nil, err
 		}
 		media.CommerceKey, media.CommerceItemID = identity.TaskID, identity.ItemID
-		preparation := &creationTaskPreparation{}
+		preparation := &creationTaskPreparation{DeferActiveTaskLimit: true}
 		request.creationPrepare = preparation
 		dryTask, err := s.CreateTask(run.UserID, request)
 		if err != nil {
@@ -239,7 +240,8 @@ func (s *Service) advanceCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 	failedItems := []map[string]any{}
 	repairs := []map[string]any{}
 	completed := []map[string]any{}
-	progress := false
+	capacityBlocked := false
+	dependencyErrors := map[string]error{}
 	for _, entry := range batch.Items {
 		task, _, err := cloudAgentCommerceLatestTask(s.repo, run.UserID, state, entry.ItemID)
 		if err != nil {
@@ -268,6 +270,14 @@ func (s *Service) advanceCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 			continue
 		}
 		if err := cloudAgentCommerceDependenciesReady(s.repo, run.UserID, state, entry.ItemID); err != nil {
+			var appErr *AppError
+			if !errors.As(err, &appErr) {
+				return err
+			}
+			dependencyErrors[entry.ItemID] = err
+			continue
+		}
+		if capacityBlocked {
 			continue
 		}
 		var input map[string]any
@@ -279,9 +289,12 @@ func (s *Service) advanceCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 		request.Input = input
 		media := &cloudAgentMediaPlan{Args: entry.Args, CommerceKey: entry.TaskID, CommerceItemID: entry.ItemID, Prepared: entry.Prepared}
 		if err := s.enqueueCloudAgentTask(run, state, request, media); err != nil {
+			if errors.Is(err, repository.ErrActiveTaskLimit) {
+				capacityBlocked = true
+				continue
+			}
 			return err
 		}
-		progress = true
 		latest, err := s.reloadCloudAgent(run)
 		if err != nil {
 			return err
@@ -292,11 +305,15 @@ func (s *Service) advanceCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 			return err
 		}
 		*state = fresh
+		if cloudAgentRunTerminal(run.Status) || state.CallIndex >= len(state.Calls) {
+			return nil
+		}
 		statuses[entry.ItemID] = string(model.TaskStatusQueued)
 		if waiting == "" {
 			waiting = entry.TaskID
 		}
 	}
+	batch.WaitingForCapacity = capacityBlocked
 	readyRepairs := []map[string]any{}
 	for _, failure := range repairs {
 		if waiting == "" || !cloudAgentContainsString(batch.ReportedFailures, stringValue(failure["retryFailedTaskId"])) {
@@ -323,10 +340,7 @@ func (s *Service) advanceCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 			return cloudAgentSave(current, state)
 		})
 	}
-	if waiting != "" {
-		if state.MediaTaskID == waiting && len(completed) == 0 {
-			return nil
-		}
+	if waiting != "" || capacityBlocked {
 		return s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 			cloudAgentBatchRecordCompleted(state, run.ID, batch, completed)
 			state.CommerceBatch = batch
@@ -334,11 +348,13 @@ func (s *Service) advanceCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 			return cloudAgentSave(current, state)
 		})
 	}
-	if !progress {
-		for _, entry := range batch.Items {
-			if statuses[entry.ItemID] == "" {
-				statuses[entry.ItemID] = "skipped_dependency"
+	for _, entry := range batch.Items {
+		if statuses[entry.ItemID] == "" {
+			err := dependencyErrors[entry.ItemID]
+			if err == nil {
+				err = BadAuthRequest("交付项“" + entry.Args.Title + "”的前置内容尚未完成，未提交生成任务")
 			}
+			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 		}
 	}
 	return s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {

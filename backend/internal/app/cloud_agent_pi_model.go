@@ -184,7 +184,7 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		// The in-process scheduler may finish an already-approved media task
 		// before it schedules its next model step. The /model bridge above still
 		// rejects a new external request until that approval is fully settled.
-		if run.Status == "waiting_approval" || (state.Approval != nil && (state.Approval.Decision != "approve" || state.MediaTaskID == "")) {
+		if run.Status == "waiting_approval" || (state.Approval != nil && (state.Approval.Decision != "approve" || !cloudAgentMediaPending(&state))) {
 			return nil, false, errCloudAgentAwaitingApproval
 		}
 		state.ModelReceipt, _ = ctx.Value(cloudAgentModelReceiptKey{}).(*model.CloudAgentReceipt)
@@ -217,9 +217,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		}
 		// 一个运行同一时刻只能有一个活动任务。媒体任务还没回写时不能再入队模型步骤，
 		// 否则检查点校验会拒绝（"多个活动任务"）并让整轮失败。先等媒体结果落库。
-		if state.MediaTaskID != "" {
-			if _, waitErr := s.waitCloudAgentMediaTask(ctx, userID, runID, state.MediaTaskID); waitErr != nil && ctx.Err() != nil {
-				return nil, false, ctx.Err()
+		if cloudAgentMediaPending(&state) {
+			if _, waitErr := s.waitCloudAgentMediaTask(ctx, userID, runID, state.MediaTaskID); waitErr != nil {
+				return nil, false, waitErr
 			}
 			if err := s.settleCloudAgentMedia(userID, runID, cloudAgentFence(ctx)); err != nil {
 				return nil, false, err

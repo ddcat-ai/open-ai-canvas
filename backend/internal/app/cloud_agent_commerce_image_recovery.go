@@ -108,7 +108,15 @@ func (s *Service) waitCloudAgentMediaTask(ctx context.Context, userID, runID, ta
 		return nil, err
 	}
 	if state.CommerceBatch == nil || state.CallIndex >= len(state.Calls) || !cloudAgentCommerceBatchCall(state.Calls[state.CallIndex].Function.Name) {
-		return s.waitCloudAgentTask(ctx, taskID)
+		task, err := s.waitCloudAgentTask(ctx, taskID)
+		if err != nil && ctx.Err() == nil {
+			// A failed media job is still a settled delivery that must publish its
+			// tool result. Database and ownership failures are not delivery states.
+			if terminal, lookupErr := s.repo.TaskForUser(userID, taskID); lookupErr == nil && cloudAgentTaskTerminal(terminal.Status) {
+				return terminal, nil
+			}
+		}
+		return task, err
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -116,11 +124,27 @@ func (s *Service) waitCloudAgentMediaTask(ctx context.Context, userID, runID, ta
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		run, err = s.ownedCloudAgent(ctx, userID, runID)
+		if err != nil {
+			return nil, err
+		}
+		if cloudAgentRunTerminal(run.Status) {
+			return nil, context.Canceled
+		}
+		state, err = cloudAgentDecode(run)
+		if err != nil || !cloudAgentBatchPending(&state) {
+			return nil, err
+		}
+		capacityExpired := false
+		waitingForCapacity := state.CommerceBatch.WaitingForCapacity
 		for _, entry := range state.CommerceBatch.Items {
 			var task *model.Task
 			var err error
 			if state.CommerceBatch.Kind == "images" {
 				task, err = s.repo.TaskForUser(userID, entry.TaskID)
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					task, err = nil, nil
+				}
 			} else {
 				task, _, err = cloudAgentCommerceLatestTask(s.repo, userID, &state, entry.ItemID)
 			}
@@ -128,6 +152,12 @@ func (s *Service) waitCloudAgentMediaTask(ctx context.Context, userID, runID, ta
 				return nil, err
 			}
 			if task == nil {
+				capacityExpired = capacityExpired || entry.Prepared == nil || time.Now().After(entry.Prepared.Quote.ExpiresAt)
+				// A restart can occur after freezing the batch but before its first
+				// admission/capacity checkpoint. Recover that same pending item.
+				if state.CommerceBatch.Kind == "images" || cloudAgentCommerceDependenciesReady(s.repo, userID, &state, entry.ItemID) == nil {
+					waitingForCapacity = true
+				}
 				continue
 			}
 			if cloudAgentTaskTerminal(task.Status) && (task.ID == taskID || !cloudAgentContainsString(state.CommerceBatch.CompletedTaskIDs, task.ID)) {
@@ -140,12 +170,37 @@ func (s *Service) waitCloudAgentMediaTask(ctx context.Context, userID, runID, ta
 				}
 			}
 		}
+		if waitingForCapacity {
+			// Capacity belongs to the user, not this batch. A task in another run
+			// may free the first slot; no worker or database lock is held here.
+			policy, err := s.RuntimePolicy()
+			if err != nil {
+				return nil, err
+			}
+			active, err := s.repo.ActiveTaskCountForUser(userID)
+			if err != nil {
+				return nil, err
+			}
+			if capacityExpired || active < int64(policy.Task.ActiveTaskLimit) {
+				return nil, nil
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-ticker.C:
 		}
 	}
+}
+
+// A frozen batch may be waiting for its first slot without a MediaTaskID.
+// Completed tools retained for repair do not represent an active wait.
+func cloudAgentBatchPending(state *cloudAgentRuntime) bool {
+	return state != nil && state.CommerceBatch != nil && state.CallIndex >= 0 && state.CallIndex < len(state.Calls) && cloudAgentCommerceBatchCall(state.Calls[state.CallIndex].Function.Name)
+}
+
+func cloudAgentMediaPending(state *cloudAgentRuntime) bool {
+	return state != nil && (state.MediaTaskID != "" || cloudAgentBatchPending(state))
 }
 
 func cloudAgentCommerceBatchCall(name string) bool {
