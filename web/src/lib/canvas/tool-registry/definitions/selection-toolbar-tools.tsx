@@ -1,4 +1,4 @@
-import { AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignHorizontalSpaceAround, AlignHorizontalSpaceBetween, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, AlignVerticalSpaceAround, AlignVerticalSpaceBetween, AtSign, Film, FolderTree, Grid3X3, LayoutTemplate, Link2, LoaderCircle, Workflow } from "lucide-react";
+import { AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignHorizontalSpaceAround, AlignHorizontalSpaceBetween, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, AlignVerticalSpaceAround, AlignVerticalSpaceBetween, AtSign, Film, FolderTree, Grid3X3, Group, LayoutTemplate, Link2, LoaderCircle, Ungroup, Workflow } from "lucide-react";
 
 import { registerToolbarTools, type ToolDefinition } from "@/lib/canvas/tool-registry";
 
@@ -17,6 +17,8 @@ export const selectionToolbarTools: ToolDefinition[] = [
     { id: "selection-arrange-flow", toolbar: "selection", category: "arrange", label: "按连线整理", icon: <Workflow />, defaultVisible: false, defaultOrder: 120, run: (ctx) => ctx.handlers.onArrange("flow") },
     { id: "selection-create-storyboard", toolbar: "selection", category: "selection", label: "创建分镜组", icon: <LayoutTemplate />, defaultVisible: true, defaultOrder: 130, disabled: (ctx) => ctx.selectedCount < 2, run: (ctx) => ctx.handlers.onCreateStoryboard() },
     { id: "selection-create-reference-group", toolbar: "selection", category: "selection", label: "创建引用组", icon: <FolderTree />, defaultVisible: false, defaultOrder: 140, disabled: (ctx) => ctx.selectedCount < 2, run: (ctx) => ctx.handlers.onCreateReferenceGroup() },
+    { id: "selection-group", toolbar: "selection", category: "selection", label: "编组", icon: <Group />, defaultVisible: true, defaultOrder: 125, disabled: (ctx) => ctx.selectedCount < 2, run: (ctx) => ctx.handlers.onGroup() },
+    { id: "selection-ungroup", toolbar: "selection", category: "selection", label: "解组", icon: <Ungroup />, defaultVisible: true, defaultOrder: 127, disabled: (ctx) => !ctx.selectedHasGroup, run: (ctx) => ctx.handlers.onUngroup() },
     { id: "selection-batch-connect", toolbar: "selection", category: "selection", label: "批量连接", icon: <Link2 />, defaultVisible: true, defaultOrder: 145, disabled: (ctx) => ctx.selectedCount < 2, run: (ctx) => ctx.handlers.onBatchConnect() },
     { id: "selection-send-to-agent", toolbar: "selection", category: "selection", label: "发送到 Agent", icon: <AtSign />, defaultVisible: true, defaultOrder: 148, disabled: (ctx) => ctx.selectedCount < 1, run: (ctx) => ctx.handlers.onSendSelectionToAgent() },
     {

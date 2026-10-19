@@ -67,6 +67,7 @@ export function useCanvasNodeOperations({
     const markerWritePendingRef = useRef(false);
     const markerWriteSequenceRef = useRef(0);
     const internalMarkerWriteRef = useRef(false);
+    const groupSeqRef = useRef(0);
     const [hasCopiedNodes, setHasCopiedNodes] = useState(false);
 
     const releaseCopiedNodesPastePriority = useCallback(() => {
@@ -328,6 +329,43 @@ export function useCanvasNodeOperations({
         message.success(`已创建 ${media.length} 项引用组，折叠后可作为路由节点`);
     }, [commitNodes, message, nodesRef, selectNodes, selectedNodeIdsRef]);
 
+    // 轻量持久编组：给选中节点绑定同一 groupId 与默认组名，不创建容器、不改变布局。
+    const groupNodes = useCallback(() => {
+        const selectedIds = selectedNodeIdsRef.current;
+        const targetNodes = nodesRef.current.filter((node) => selectedIds.has(node.id) && !node.metadata?.locked);
+        if (targetNodes.length < 2) {
+            message.warning("请至少选择两个未锁定的节点进行编组");
+            return;
+        }
+        const groupId = nanoid();
+        const existingGroupCount = new Set(nodesRef.current.map((node) => node.groupId).filter(Boolean)).size;
+        // 单调序号：取「已有编组数」与「历史最大值」的较大者 +1，解组后也不会复用旧编号。
+        const nextSeq = Math.max(groupSeqRef.current, existingGroupCount) + 1;
+        groupSeqRef.current = nextSeq;
+        const groupName = `Group ${nextSeq}`;
+        commitNodes(nodesRef.current.map((node) => (selectedIds.has(node.id) && !node.metadata?.locked ? { ...node, groupId, groupName } : node)));
+        message.success(`已编组 ${targetNodes.length} 个节点`);
+    }, [commitNodes, message, nodesRef, selectedNodeIdsRef]);
+
+    // 解组：清除所选已编组节点的 groupId 与组名。
+    const ungroupNodes = useCallback(() => {
+        const selectedIds = selectedNodeIdsRef.current;
+        const affected = nodesRef.current.filter((node) => selectedIds.has(node.id) && Boolean(node.groupId));
+        if (!affected.length) {
+            message.warning("所选节点中没有已编组的节点");
+            return;
+        }
+        commitNodes(nodesRef.current.map((node) => (selectedIds.has(node.id) && node.groupId ? { ...node, groupId: undefined, groupName: undefined } : node)));
+        message.success(`已解组 ${affected.length} 个节点`);
+    }, [commitNodes, message, nodesRef, selectedNodeIdsRef]);
+
+    // 重命名编组：整组同步 groupName。
+    const renameGroup = useCallback((groupId: string, name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        commitNodes(nodesRef.current.map((node) => (node.groupId === groupId ? { ...node, groupName: trimmed } : node)));
+    }, [commitNodes, nodesRef]);
+
     const toggleNodeLocked = useCallback((nodeId: string) => {
         const target = nodesRef.current.find((node) => node.id === nodeId);
         if (!target) return;
@@ -389,6 +427,7 @@ export function useCanvasNodeOperations({
                 title: node.id === source.id ? copyTitle || `${node.title.replace(/ · [A-Z]$/, "")} · ${versionLabel || "副本"}` : node.title,
                 position: { x: node.position.x + 36, y: node.position.y + 36 },
                 parentId: node.parentId ? idMap.get(node.parentId) || node.parentId : undefined,
+                groupId: undefined,
                 metadata,
             };
         });
@@ -562,6 +601,9 @@ export function useCanvasNodeOperations({
         createNode,
         createReferenceGroup,
         createStoryboardGroup,
+        groupNodes,
+        ungroupNodes,
+        renameGroup,
         deleteConnection,
         deleteNodes,
         duplicateNode,

@@ -70,6 +70,9 @@ export type ToolbarHandlers = {
     onBatchConnect: () => void;
     onMergeVideos: () => void;
     onSendSelectionToAgent: () => void;
+    // 多选工具栏——编组/解组
+    onGroup: () => void;
+    onUngroup: () => void;
     // 节点悬停工具栏——节点操作（均接收当前节点）
     onNodeInfo: (node: CanvasNodeData) => void;
     onNodeDelete: (node: CanvasNodeData) => void;
@@ -126,6 +129,8 @@ export type ToolContext = {
     trimmingVideo: boolean;
     /** 合并视频中（多选工具栏用） */
     mergingVideos: boolean;
+    /** 当前选中节点中是否包含已编组节点（多选工具栏"解组"按钮用） */
+    selectedHasGroup?: boolean;
     /** 主工具栏面板开关状态（仅主工具栏使用） */
     addPanelOpen: boolean;
     appearancePanelOpen: boolean;

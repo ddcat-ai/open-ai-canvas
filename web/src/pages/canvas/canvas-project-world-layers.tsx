@@ -3,6 +3,7 @@ import { Link2 } from "lucide-react";
 
 import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
+import { CanvasGroupBoundsLayer } from "@/components/canvas/canvas-group-bounds-layer";
 import { CanvasNode } from "@/components/canvas/canvas-node";
 import type { CanvasConnectionApproach } from "@/lib/canvas/canvas-connection-tilt";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
@@ -77,6 +78,8 @@ type CanvasProjectWorldLayersProps = {
     onOpenPrevis: (node: CanvasNodeData) => void;
     onOpenDrawing: (node: CanvasNodeData) => void;
     onStartBatchConnection: (event: ReactPointerEvent, sourceNodeIds: string[]) => void;
+    onGroupPointerDown: (memberIds: string[], event: ReactMouseEvent) => void;
+    onRenameGroup: (groupId: string, name: string) => void;
 };
 
 const EMPTY_RESOURCE_REFERENCES: CanvasResourceReference[] = [];
@@ -108,6 +111,14 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
     };
     return (
         <>
+            <CanvasGroupBoundsLayer
+                nodeById={props.nodeById}
+                dragPreview={props.dragPreview}
+                viewportScale={viewportScale}
+                selectedNodeIds={props.selectedNodeIds}
+                onGroupPointerDown={props.onGroupPointerDown}
+                onRenameGroup={props.onRenameGroup}
+            />
             <svg
                 className="absolute overflow-visible"
                 viewBox={`${props.connectionLayerBounds.left} ${props.connectionLayerBounds.top} ${props.connectionLayerBounds.width} ${props.connectionLayerBounds.height}`}

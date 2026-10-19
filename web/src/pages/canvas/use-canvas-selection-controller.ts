@@ -37,6 +37,8 @@ type DragState = {
     draggedNodeIds: string[];
     draggedRenderNodeIds: string[];
     draggedRenderNodeIdSet: Set<string>;
+    /** 本次手势若为非修饰键的纯单击单节点，则该节点 id；否则 null。用于编组后区分"单击弹面板"与"拖动整组"。 */
+    singleClickNodeId: string | null;
     initialSelectedNodes: Array<{ id: string; x: number; y: number }>;
 };
 
@@ -53,8 +55,99 @@ const EMPTY_DRAG_STATE: DragState = {
     draggedNodeIds: [],
     draggedRenderNodeIds: [],
     draggedRenderNodeIdSet: new Set(),
+    singleClickNodeId: null,
     initialSelectedNodes: [],
 };
+
+// 拖拽结束后按节点最终位置与各编组框的关系自动编组（同一 setNodes 提交，可随拖拽一起撤销）：
+// - 组外节点外接盒与某编组可见框（含内边距）重叠 → 加入该组（重叠多个时取最小框），随后派生框自动撑大；
+// - 组内节点被单独拖出同组其余成员的包围盒（含内边距）→ 移出该组，其余成员保持原组；
+// - 同组其余成员随该节点一起以相同位移移动（整组平移）→ 强制保留编组，避免稀疏编组被误解除。
+function applyCanvasDragAutoGrouping(nodes: CanvasNodeData[], movingIds: Set<string>, initialPositions: Map<string, { x: number; y: number }>): CanvasNodeData[] {
+    if (!movingIds.size) return nodes;
+    const byGroup = new Map<string, CanvasNodeData[]>();
+    for (const node of nodes) {
+        if (!node.groupId) continue;
+        const list = byGroup.get(node.groupId);
+        if (list) list.push(node);
+        else byGroup.set(node.groupId, [node]);
+    }
+    if (!byGroup.size) return nodes;
+
+    const GROUP_PADDING = 12;
+    // 含内边距的框（用于"拖出"判定与最小框排序）。
+    const boxOf = (members: CanvasNodeData[]): { left: number; top: number; right: number; bottom: number } | null => {
+        if (!members.length) return null;
+        const left = Math.min(...members.map((n) => n.position.x));
+        const top = Math.min(...members.map((n) => n.position.y));
+        const right = Math.max(...members.map((n) => n.position.x + n.width));
+        const bottom = Math.max(...members.map((n) => n.position.y + n.height));
+        return { left: left - GROUP_PADDING, top: top - GROUP_PADDING, right: right + GROUP_PADDING, bottom: bottom + GROUP_PADDING };
+    };
+    const center = (n: CanvasNodeData) => ({ x: n.position.x + n.width / 2, y: n.position.y + n.height / 2 });
+    const contains = (box: { left: number; top: number; right: number; bottom: number } | null, p: { x: number; y: number }) => box != null && p.x >= box.left && p.x <= box.right && p.y >= box.top && p.y <= box.bottom;
+    const intersects = (box: { left: number; top: number; right: number; bottom: number } | null, rect: { x: number; y: number; right: number; bottom: number }) =>
+        box != null && rect.x < box.right && rect.right > box.left && rect.y < box.bottom && rect.bottom > box.top;
+    const deltaOf = (node: CanvasNodeData) => {
+        const initial = initialPositions.get(node.id);
+        return initial ? { x: node.position.x - initial.x, y: node.position.y - initial.y } : { x: 0, y: 0 };
+    };
+    const MOVE_TOGETHER_EPS = 2;
+
+    const desired = new Map<string, string | null>();
+    for (const node of nodes) {
+        if (!movingIds.has(node.id)) continue;
+        if (node.parentId || node.metadata?.locked) continue;
+        const originalGroupId = node.groupId;
+        if (originalGroupId) {
+            const members = byGroup.get(originalGroupId) ?? [];
+            const others = members.filter((m) => m.id !== node.id);
+            const delta = deltaOf(node);
+            const othersMoving = others.filter((m) => movingIds.has(m.id));
+            const movedTogether = othersMoving.length > 0 && othersMoving.every((m) => {
+                const d = deltaOf(m);
+                return Math.abs(d.x - delta.x) < MOVE_TOGETHER_EPS && Math.abs(d.y - delta.y) < MOVE_TOGETHER_EPS;
+            });
+            if (movedTogether) {
+                // 整组一起平移：相对位置不变，强制保留编组。
+                desired.set(node.id, originalGroupId);
+            } else {
+                // 仅该节点被拖离：中心是否仍在同组其余成员框内（含内边距），否则解除编组。
+                desired.set(node.id, contains(boxOf(others), center(node)) ? originalGroupId : null);
+            }
+        } else {
+            // 拖入编组：节点外接盒与某编组可见框（含内边距）重叠即加入（重叠多个取最小框）；与拖拽预览的撑大逻辑一致，松手即定。
+            const nodeRect = { x: node.position.x, y: node.position.y, right: node.position.x + node.width, bottom: node.position.y + node.height };
+            const containing = [...byGroup.entries()]
+                .filter(([, members]) => intersects(boxOf(members), nodeRect))
+                .sort((a, b) => {
+                    const ba = boxOf(a[1])!;
+                    const bb = boxOf(b[1])!;
+                    return ba.right - ba.left + (ba.bottom - ba.top) - (bb.right - bb.left + (bb.bottom - bb.top));
+                });
+            desired.set(node.id, containing.length ? containing[0][0] : null);
+        }
+    }
+    if (!desired.size) return nodes;
+
+    const targetName = new Map<string, string | undefined>();
+    for (const [nodeId, targetGroupId] of desired) {
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) continue;
+        if (targetGroupId !== null && targetGroupId === node.groupId) continue;
+        if (targetGroupId === null) {
+            targetName.set(nodeId, undefined);
+        } else {
+            const name = nodes.find((m) => m.groupId === targetGroupId && m.id !== nodeId)?.groupName ?? nodes.find((m) => m.groupId === targetGroupId)?.groupName;
+            targetName.set(nodeId, name);
+        }
+    }
+    return nodes.map((node) => {
+        if (!targetName.has(node.id)) return node;
+        const target = desired.get(node.id)!;
+        return { ...node, groupId: target ?? undefined, groupName: targetName.get(node.id) };
+    });
+}
 
 export function useCanvasSelectionController({
     containerRef,
@@ -126,6 +219,14 @@ export function useCanvasSelectionController({
         onDeselect();
     }, [cancelPendingConnectionCreate, cancelSelectionBox, onDeselect, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
 
+    // 同步选中整组（连同 ref），供组边框空白处拖拽整组时复用拖拽逻辑。
+    const selectNodes = useCallback((ids: string[]) => {
+        const next = new Set(ids);
+        selectedNodeIdsRef.current = next;
+        setSelectedNodeIds(next);
+        setSelectedConnectionId(null);
+    }, [selectedNodeIdsRef, setSelectedNodeIds, setSelectedConnectionId]);
+
     const handleCanvasMouseDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         cancelPendingConnectionCreate();
         onCanvasSelectionStart();
@@ -147,7 +248,7 @@ export function useCanvasSelectionController({
         setSelectedConnectionId(null);
     }, [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId]);
 
-    const handleNodeMouseDown = useCallback((event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => {
+    const handleNodeMouseDown = useCallback((event: ReactMouseEvent | ReactPointerEvent, nodeId: string, openPanelOnClick = true) => {
         event.stopPropagation();
         if (event.button !== 0) return;
         if (onBatchConnectionTarget?.(event, nodeId)) return;
@@ -201,7 +302,7 @@ export function useCanvasSelectionController({
         draggedNodesRef.current = currentNodes.filter((node) => dragIds.has(node.id) && !node.metadata?.locked);
         const draggedRenderNodeIds = initialSelectedNodes.map((item) => item.id);
         const draggedRenderNodeIdSet = new Set(draggedRenderNodeIds);
-        dragRef.current = { isDraggingNode: true, hasMoved: false, openPanelOnClick: !isMultiSelectClick, startX: event.clientX, startY: event.clientY, draggedNodeIds, draggedRenderNodeIds, draggedRenderNodeIdSet, initialSelectedNodes };
+        dragRef.current = { isDraggingNode: true, hasMoved: false, openPanelOnClick: openPanelOnClick && !isMultiSelectClick, startX: event.clientX, startY: event.clientY, draggedNodeIds, draggedRenderNodeIds, draggedRenderNodeIdSet, singleClickNodeId: isMultiSelectClick || isSubtractClick ? null : nodeId, initialSelectedNodes };
         historyPausedRef.current = true;
         nodeDraggingRef.current = true;
         pendingNodeDragRef.current = { x: 0, y: 0 };
@@ -220,8 +321,9 @@ export function useCanvasSelectionController({
         }
         if (!dragRef.current.isDraggingNode) return;
         const shouldOpenPanelOnClick = dragRef.current.openPanelOnClick;
-        const wasClick = shouldOpenPanelOnClick && !dragRef.current.hasMoved && dragRef.current.draggedNodeIds.length === 1;
-        const clickedNodeId = dragRef.current.draggedNodeIds[0];
+        // 编组后 draggedNodeIds 可能含整组，改用 singleClickNodeId 判断是否为纯单击单节点。
+        const wasClick = shouldOpenPanelOnClick && !dragRef.current.hasMoved && dragRef.current.singleClickNodeId != null;
+        const clickedNodeId = dragRef.current.singleClickNodeId ?? dragRef.current.draggedNodeIds[0];
         const currentViewport = viewportRef.current;
         const rawOffset = { x: clientX == null ? 0 : (clientX - dragRef.current.startX) / currentViewport.k, y: clientY == null ? 0 : (clientY - dragRef.current.startY) / currentViewport.k };
         const initialPositions = dragRef.current.initialSelectedNodes;
@@ -236,10 +338,11 @@ export function useCanvasSelectionController({
         setAlignmentGuides({});
         if (dragRef.current.hasMoved) {
             const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
-            const positioned = clientX == null || clientY == null ? nodesRef.current : nodesRef.current.map((node) => {
+            let positioned = clientX == null || clientY == null ? nodesRef.current : nodesRef.current.map((node) => {
                 const initial = initialById.get(node.id);
                 return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
             });
+            positioned = applyCanvasDragAutoGrouping(positioned, draggedNodeIds, initialById);
             const targetId = findFrameDropTargetFromIndex(frameDropIndexRef.current, draggedNodesRef.current, draggedNodeIds, { x: dx, y: dy });
             const target = targetId ? positioned.find((node) => node.id === targetId) : undefined;
             const linkedFolder = target?.metadata?.folder?.assetFolderId ? target : undefined;
@@ -395,6 +498,7 @@ export function useCanvasSelectionController({
         handleNodeMouseDown,
         isNodeDragging,
         nodeDraggingRef,
+        selectNodes,
         selectionBoundsElementRef,
         selectionBox,
     };

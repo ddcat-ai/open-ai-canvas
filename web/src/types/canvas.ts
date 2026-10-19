@@ -574,6 +574,10 @@ export type CanvasNodeData = {
     width: number;
     height: number;
     parentId?: string;
+    /** 轻量持久编组：同 groupId 的节点组成逻辑组，可整体移动并渲染持久边框。与 Frame 容器（parentId）正交。 */
+    groupId?: string;
+    /** 所在编组的名称；同组成员保持一致，重命名时整组更新。 */
+    groupName?: string;
     metadata?: CanvasNodeMetadata;
 };
 

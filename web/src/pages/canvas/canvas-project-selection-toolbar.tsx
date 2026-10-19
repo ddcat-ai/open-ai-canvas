@@ -14,6 +14,7 @@ type CanvasProjectSelectionToolbarProps = {
     count: number;
     selectedVideoCount: number;
     mergingVideos: boolean;
+    selectedHasGroup: boolean;
     onAlign: (mode: CanvasAlignmentMode) => void;
     onArrange: (mode: "row" | "column" | "grid" | "flow") => void;
     onCreateStoryboard: () => void;
@@ -21,13 +22,15 @@ type CanvasProjectSelectionToolbarProps = {
     onBatchConnect: () => void;
     onMergeVideos: () => void;
     onSendSelectionToAgent: () => void;
+    onGroup: () => void;
+    onUngroup: () => void;
 };
 
-export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, selectedVideoCount, mergingVideos, onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent }: CanvasProjectSelectionToolbarProps) {
+export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, selectedVideoCount, mergingVideos, selectedHasGroup, onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent, onGroup, onUngroup }: CanvasProjectSelectionToolbarProps) {
     const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
 
     const handlers = {
-        onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent,
+        onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent, onGroup, onUngroup,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
     const ctx: ToolContext = {
@@ -43,6 +46,7 @@ export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, 
         extractingAudio: false,
         trimmingVideo: false,
         mergingVideos,
+        selectedHasGroup,
         addPanelOpen: false,
         appearancePanelOpen: false,
         settingsPanelOpen: false,

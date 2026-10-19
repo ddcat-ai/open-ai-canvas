@@ -987,6 +987,9 @@ function CanvasViewportPage() {
         createNode,
         createReferenceGroup,
         createStoryboardGroup,
+        groupNodes,
+        ungroupNodes,
+        renameGroup,
         deleteConnection,
         deleteNodes,
         duplicateNode,
@@ -1198,7 +1201,7 @@ function CanvasViewportPage() {
         setDialogNodeId(null);
     }, []);
 
-    const { alignmentGuides, cancelSelectionBox, deselectCanvas, dragPreview, frameDropTargetId, handleCanvasMouseDown, handleNodeMouseDown, isNodeDragging, nodeDraggingRef, selectionBoundsElementRef, selectionBox } = useCanvasSelectionController({
+    const { alignmentGuides, cancelSelectionBox, deselectCanvas, dragPreview, frameDropTargetId, handleCanvasMouseDown, handleNodeMouseDown, isNodeDragging, nodeDraggingRef, selectNodes, selectionBoundsElementRef, selectionBox } = useCanvasSelectionController({
         containerRef,
         nodesRef,
         viewportRef,
@@ -1447,6 +1450,9 @@ function CanvasViewportPage() {
         scriptEditorNodeId,
         dialogNodeId,
     });
+
+    // 持久编组：当前选择是否包含已编组节点（多选工具栏"解组"按钮用）。组边框由世界层 DOM 渲染。
+    const selectedHasGroup = useMemo(() => nodes.some((node) => selectedNodeIds.has(node.id) && node.groupId), [nodes, selectedNodeIds]);
 
     const visibleDisplayConnections = useMemo(
         () =>
@@ -2790,6 +2796,12 @@ function CanvasViewportPage() {
                                                         setContextMenu({ type: "connection", x: event.clientX, y: event.clientY, connectionId });
                                                     }}
                                                     onNodeMouseDown={handleNodeMouseDown}
+                                                    onGroupPointerDown={(memberIds, event) => {
+                                                        if (!memberIds.length) return;
+                                                        selectNodes(memberIds);
+                                                        handleNodeMouseDown(event, memberIds[0], false);
+                                                    }}
+                                                    onRenameGroup={renameGroup}
                                                     onNodeHoverStart={handleCanvasNodeHoverStart}
                                                     onNodeHoverEnd={handleCanvasNodeHoverEnd}
                                                     onConnectStart={handleConnectStart}
@@ -3019,6 +3031,7 @@ function CanvasViewportPage() {
                                     count={selectedNodeBounds.count}
                                     selectedVideoCount={selectedVideoNodes.length}
                                     mergingVideos={Boolean(mergeVideoProgress)}
+                                    selectedHasGroup={selectedHasGroup}
                                     onAlign={alignSelectedNodes}
                                     onArrange={arrangeSelectedNodes}
                                     onCreateStoryboard={createStoryboardGroup}
@@ -3026,6 +3039,8 @@ function CanvasViewportPage() {
                                     onBatchConnect={() => beginBatchConnectionMode(Array.from(selectedNodeIds))}
                                     onMergeVideos={() => void mergeSelectedVideos()}
                                     onSendSelectionToAgent={() => sendSelectionToAgent()}
+                                    onGroup={groupNodes}
+                                    onUngroup={ungroupNodes}
                                 />
                             ) : null}
 
