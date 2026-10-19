@@ -2,6 +2,7 @@ package repository
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -71,7 +72,8 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 
 // CloudAgent 在同一个只读事务里读取执行行和它的事件/消息行。分开读的话，并发写入
 // （运行时事件、工具结果）可能落在两次查询之间：读到旧的计数配新的行，解码时会被
-// 当成"记录不完整"而把一次正常运行判死。
+// 当成"记录不完整"而把一次正常运行判死。PostgreSQL 默认 READ COMMITTED 逐句取快照，
+// 因此需要 REPEATABLE READ。嵌套在 MutateCloudAgent 内时复用已锁定执行行的写事务。
 func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -79,7 +81,7 @@ func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, 
 			return err
 		}
 		return New(tx).hydrateCloudAgent(&run)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return &run, err
 }
 
@@ -156,7 +158,7 @@ func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.Clou
 			return err
 		}
 		return New(tx).hydrateCloudAgent(&run)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return &run, err
 }
 
@@ -201,7 +203,7 @@ func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.Cl
 			}
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return runs, err
 }
 

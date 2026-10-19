@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -225,26 +226,30 @@ func (r *Repository) CloudAgentExecutionsBySession(userID, sessionID string, lim
 	if limit > maxAgentSessionListLimit {
 		limit = maxAgentSessionListLimit
 	}
-	query := r.db.Where(
-		"user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))",
-		userID, sessionID, sessionID,
-	)
-	if len(before) > 0 && strings.TrimSpace(before[0]) != "" {
-		var cursor model.CloudAgentExecution
-		if err := r.db.Where("id = ? AND user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))", strings.TrimSpace(before[0]), userID, sessionID, sessionID).First(&cursor).Error; err != nil {
-			return nil, err
-		}
-		query = query.Where("created_at < ? OR (created_at = ? AND id < ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
-	}
 	var runs []model.CloudAgentExecution
-	err := query.Order("created_at DESC, id DESC").Limit(limit).Find(&runs).Error
-	if err == nil {
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		query := tx.Where(
+			"user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))",
+			userID, sessionID, sessionID,
+		)
+		if len(before) > 0 && strings.TrimSpace(before[0]) != "" {
+			var cursor model.CloudAgentExecution
+			if err := tx.Where("id = ? AND user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))", strings.TrimSpace(before[0]), userID, sessionID, sessionID).First(&cursor).Error; err != nil {
+				return err
+			}
+			query = query.Where("created_at < ? OR (created_at = ? AND id < ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
+		}
+		if err := query.Order("created_at DESC, id DESC").Limit(limit).Find(&runs).Error; err != nil {
+			return err
+		}
+		scoped := New(tx)
 		for index := range runs {
-			if err = r.hydrateCloudAgent(&runs[index]); err != nil {
-				break
+			if err := scoped.hydrateCloudAgent(&runs[index]); err != nil {
+				return err
 			}
 		}
-	}
+		return nil
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return runs, err
 }
 
