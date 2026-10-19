@@ -203,17 +203,20 @@ describe("Agent admission replay and durable pending records", () => {
         expect(attempts).toBe(1);
     });
 
-    it("a rejection after an ambiguous admission attempt cannot release the original request identity", async () => {
+    it.each([
+        new ApiError("模型已停用", { status: 400 }),
+        new ApiError("上一轮 Agent 尚未结束", { status: 409, code: 409, reason: "canvas_agent_busy" }),
+    ])("a rejection after an ambiguous admission attempt cannot release the original request identity: %s", async (rejection) => {
         let attempts = 0;
         transport.http.post = async () => {
             if (++attempts === 1) throw new ApiError("回执丢失", { status: 502 });
-            throw new ApiError("模型已停用", { status: 400 });
+            throw rejection;
         };
         const error = await api.createAgentRun(input).catch((error) => error);
         expect(attempts).toBe(2);
         expect(api.isAgentAdmissionRejection(error)).toBe(false);
         expect(error.message).toContain("结果待确认");
-        expect(error.cause).toMatchObject({ status: 400 });
+        expect(error.cause).toBe(rejection);
     });
 
     it("recognizes only explicit admission rejections, including business envelopes, not arbitrary conflicts", () => {

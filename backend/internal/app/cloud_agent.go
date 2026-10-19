@@ -487,6 +487,11 @@ func cloudAgentRunTerminal(status string) bool {
 	return status == "completed" || status == "failed" || status == "cancelled" || status == "rejected"
 }
 
+func cloudAgentBusyRejection(canvasID, message string, activity repository.CanvasAgentActivity) *AppError {
+	return &AppError{Status: 409, Code: 409, Reason: "canvas_agent_busy", Message: message,
+		Details: map[string]any{"canvasId": canvasID, "agent": activity}}
+}
+
 func (s *Service) CloudAgentRun(userID, id string, options ...CloudAgentRunViewOptions) (*CloudAgentRun, error) {
 	task, state, err := s.cloudAgentTask(userID, id)
 	if err != nil {
@@ -658,14 +663,16 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if superseded {
 			slog.Info("agent run cannot resume after a contract change; continuing in a new turn", "run", parentID)
 		} else if !cloudAgentRunTerminal(parentRun.Status) || parentRun.CleanupPending {
-			return nil, kernel.NewAppError(409, "上一轮 Agent 尚未结束")
+			return nil, cloudAgentBusyRejection(req.CanvasID, "上一轮 Agent 尚未结束", repository.CanvasAgentActivity{
+				RunID: parentRun.ID, Status: parentRun.Status, CleanupPending: parentRun.CleanupPending})
 		}
 		parentExecution, err := s.repo.CloudAgent(userID, parentID)
 		if err != nil {
 			return nil, err
 		}
 		if !cloudAgentRunTerminal(parentExecution.Status) || parentExecution.CleanupPending {
-			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
+			return nil, cloudAgentBusyRejection(req.CanvasID, "上一轮仍在执行，请等待结束", repository.CanvasAgentActivity{
+				RunID: parentExecution.ID, Status: parentExecution.Status, CleanupPending: parentExecution.CleanupPending})
 		}
 		parentState, err := cloudAgentDecode(parentExecution)
 		if err != nil {
@@ -816,8 +823,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		}
 		var busy *repository.CanvasAgentBusyError
 		if errors.As(err, &busy) {
-			return nil, &AppError{Status: 409, Code: 409, Reason: "canvas_agent_busy", Message: err.Error(),
-				Details: map[string]any{"canvasId": req.CanvasID, "agent": busy.Activity}}
+			return nil, cloudAgentBusyRejection(req.CanvasID, err.Error(), busy.Activity)
 		}
 		return nil, err
 	}

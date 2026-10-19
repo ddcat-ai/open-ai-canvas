@@ -1029,7 +1029,7 @@ paths:
         "400":
           description: 参数、能力、模型或预算不符合要求，未创建任务
         "409":
-          description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；未创建任务或预留积分，不自动重试。
+          description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。画布占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending）；本次未创建任务或预留积分，不自动重试。普通幂等键冲突保持 reason=conflict，不能据此清除此前结果未知的提交身份。
   /agent/runs/{id}:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -1075,7 +1075,7 @@ paths:
         "200":
           description: 信封 data.run（新的 ID）
         "409":
-          description: 父轮仍在执行、幂等键冲突，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；不自动重试。
+          description: 父轮仍在执行或终态收尾、幂等键冲突，或画布已有另一轮 Agent 占用。父轮及画布占用拒绝均返回 reason=canvas_agent_busy，details 包含 canvasId（首页创作为空）和拒绝时观察到的 agent（runId、status、cleanupPending）；本次未创建任务或预留积分，不自动重试。相同请求的幂等回放优先返回已存在轮次；普通幂等键冲突保持 reason=conflict，不代表此前未知提交未被接受。
   /agent/runs/{id}/interjections:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"

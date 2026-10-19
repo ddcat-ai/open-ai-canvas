@@ -188,6 +188,29 @@ test.each([400, 401, 402, 403, 404, 413, 422])("准入 HTTP %s 明确拒绝允�
     expect(page.pending).toBeNull();
 });
 
+test("续轮在服务端确认上一轮仍执行时释放新请求身份，可编辑后重新提交", async () => {
+    // The local completed snapshot can lag behind the server's execution/cleanup
+    // check. Only the explicit admission reason proves this new turn was rejected.
+    const page = fixture(true);
+    page.error(new ApiError("上一轮 Agent 尚未结束", { status: 409, code: 409, reason: "canvas_agent_busy" }));
+    expect(await page.submit()).toBe(false);
+    expect(page.requests[0].parent).toBe("parent");
+    expect(page.pending).toBeNull();
+    expect(page.conversation.messages.some((message) => message.agentIdempotencyKey)).toBe(false);
+    expect(page.draft.prompt).toBe("生成商品图");
+    expect(page.draft.attachments).toHaveLength(1);
+    expect(page.notices.at(-1)).toBe("上一轮 Agent 尚未结束");
+
+    page.reload();
+    page.edit();
+    page.error(undefined);
+    expect(await page.submit()).toBe(true);
+    expect(page.requests).toHaveLength(2);
+    expect(page.requests[1].parent).toBe("parent");
+    expect(page.requests[1].body).toMatchObject({ prompt: "生成五张商品图", logicalModelId: "new-model", budget: { maxCredits: 300 } });
+    expect(page.requests[1].body.idempotencyKey).not.toBe(page.requests[0].body.idempotencyKey);
+});
+
 test.each([undefined, 408, 409, 429, 500, 502, 503, 504])("结果未知 HTTP %s 保留原请求，刷新/改参数不新建，恢复仍使用相同 key/body", async (status) => {
     const page = fixture();
     page.error(new ApiError("结果未知", { status }));
@@ -203,14 +226,23 @@ test.each([undefined, 408, 409, 429, 500, 502, 503, 504])("结果未知 HTTP %s 
     expect(page.requests[1].body).toEqual(page.requests[0].body);
 });
 
-test("未知请求的后续提交拒绝不能证明首次未接收，继续保留原身份", async () => {
-    const page = fixture();
+test.each([new ApiError("模型已停用", { status: 400 }), new ApiError("上一轮 Agent 尚未结束", { status: 409, code: 409, reason: "canvas_agent_busy" })])("未知请求的后续提交拒绝不能证明首次未接收，继续保留原身份：%s", async (rejection) => {
+    const page = fixture(true);
     page.error(new ApiError("断网", { status: 502 }));
     await page.submit();
     const key = page.pending?.key;
-    page.error(new ApiError("模型已停用", { status: 400 }));
-    await page.submit({ recoverPending: true });
+    page.reload();
+    page.error(rejection);
+    expect(await page.submit({ recoverPending: true })).toBe(false);
     expect(page.pending?.key).toBe(key);
+    expect(page.requests[1]).toEqual(page.requests[0]);
+    expect(page.clearScopes).toEqual([]);
+    page.edit();
+    expect(await page.submit()).toBe(false);
+    expect(page.requests).toHaveLength(2);
+    page.error(undefined);
+    expect(await page.submit({ recoverPending: true })).toBe(true);
+    expect(page.requests[2]).toEqual(page.requests[0]);
 });
 
 test("会话查询拒绝不能清除之前提交结果未知的身份", async () => {
