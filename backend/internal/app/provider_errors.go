@@ -39,6 +39,24 @@ type providerHTTPError struct {
 	RetryAfter time.Duration
 }
 
+const providerNoCompatibleAccounts = "No available compatible accounts"
+
+// This gateway response is emitted before an account is selected. A generic
+// 503, free-form message, or response containing a receipt proves no such thing.
+func providerAccountPoolRejected(err error) bool {
+	var upstream providerHTTPError
+	if !errors.As(err, &upstream) || upstream.StatusCode != http.StatusServiceUnavailable {
+		return false
+	}
+	var body map[string]json.RawMessage
+	if json.Unmarshal([]byte(upstream.Body), &body) != nil || len(body) != 1 {
+		return false
+	}
+	var detail map[string]string
+	return json.Unmarshal(body["error"], &detail) == nil && len(detail) == 2 &&
+		detail["type"] == "api_error" && detail["message"] == providerNoCompatibleAccounts
+}
+
 type providerResponseDecodeError struct {
 	Err error
 }

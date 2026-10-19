@@ -24,6 +24,8 @@ const cloudAgentOperation = "cloud_agent"
 // turns reference the previous run, not a mutable in-memory conversation. This
 // reuses transactional billing, worker leases, cancellation and text replay.
 type CloudAgentRequest struct {
+	CreationContext []CloudAgentCreationContextEntry `json:"creationContext,omitempty"`
+
 	Retry            *CloudAgentCreationRetry   `json:"retry,omitempty"`
 	ReasoningMode    string                     `json:"reasoningMode,omitempty"`
 	ProfileRevision  string                     `json:"profileRevision,omitempty"`
@@ -283,6 +285,9 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	}
 	if req.Surface == "creation" && len(req.ContextScope) != 0 {
 		return BadAuthRequest("creation 场景不能读取画布上下文")
+	}
+	if err := validateCloudAgentCreationContext(req); err != nil {
+		return err
 	}
 	if req.Surface != "creation" && (len(req.Attachments) > 0 || req.AttachmentMode != "" || req.MediaSettings != nil) {
 		return BadAuthRequest("画布 Agent 不接受 creation 素材和媒体设置")
@@ -758,6 +763,12 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			// executing it again or redoing successful items.
 			inheritedCommercePlan = sourceState.CommercePlan
 		}
+	}
+	if context, err := s.cloudAgentCreationContext(userID, req); err != nil {
+		return nil, err
+	} else if context != "" {
+		history = cloudAgentWithoutPriorCreationContext(history)
+		history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 	}
 	encodedHistory, err := json.Marshal(history)
 	if err != nil {

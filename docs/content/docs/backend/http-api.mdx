@@ -332,11 +332,15 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 
 首页 `mediaSettings.image/video.selectionMode` 支持 `preferred|fixed`，新请求默认 `preferred`，区分默认模型偏好和固定前台型号；旧持久运行缺少该字段时不扩大换型号授权。兼容模型切换保留参考素材与硬参数，并受已授权预算约束。明确失败且生成设置未变的 `retry` 直接恢复原提示词、参数和逐项素材，未知提交先核对原任务；重试共享原轮剩余积分，不新发整轮预算。
 
+从普通图片、视频或文本模式切回 Agent 时，可提交 `creationContext`：当前会话最近最多 20 条普通模式历史，每条含 `role`、`mode`、可选 `content` 和 `taskIds`，总计最多 12000 字符及 32 个任务。文本按低信任用户内容处理，状态及成品目录从归属校验后的任务记录读取；未完成或失败任务不提供成功成品。本轮明确带入的普通任务可由 `creation_media_read` 按任务和成品序号读取；未带入的普通任务不可读取。历史参考素材仍走 `attachments` 的受管归属和就绪校验，显式替换不会恢复旧素材。此上下文不修改当前提示词、预算和权限，不包含浏览器结果 URL 或未发送草稿。
+
+普通生成查询和重试沿用真实提交诊断：精确匹配已知“无可用兼容账号”拒绝的记录可按 `rejected_no_job` 恢复重试；普通 HTTP 503、超时或有上游受理凭证的任务仍须核对原请求，退款本身不证明可以重复提交。读取历史任务时的诊断修正不改写原始供应商尝试记录。
+
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
 
 - `POST /agent/runs` 创建一轮；`POST /agent/runs/:id/messages` 以上一轮为父节点创建新的不可变轮次，两者返回 `{ run }`，追加后必须使用新的 `run.id` 订阅。
 - `POST /agent/runs/:id/interjections` 向**正在运行**的轮次插入一句话，不新建轮次、不产生新的扣费身份。请求 `{ text, messageId }`，`text` 最多 4000 字符；同一 `messageId` 幂等。插话在下一次模型调用前注入；运行已结束返回 409，前端应回落为新一轮发送。步数耗尽或运行失败时发出 `user_interjection_dropped`，不会静默吞掉，也不会自动替用户开新一轮。
-- 请求字段：`canvasId`、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode: "off" | "auto" | "deep"`、`profileRevision`、`skillIds`、`contextScope: [] | ["canvas"]`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds }`、`idempotencyKey`。不接受密钥、自定义 URL、客户端历史或未知字段。
+- 请求字段：`canvasId`、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode: "off" | "auto" | "deep"`、`profileRevision`、`skillIds`、`contextScope: [] | ["canvas"]`、仅 creation 可用的受限 `creationContext`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds }`、`idempotencyKey`。不接受密钥、自定义 URL、任意模型对话历史或未知字段。
 - 同用户同幂等键及相同请求返回同一运行；不同请求复用键返回 409。失败后重试同一提交应保留键。上一轮未完成时禁止追加；已完成、失败、取消或已拒绝的终态轮次作为不可变历史读取，即使其冻结的策略或节点能力版本早于当前服务，也可用于创建采用当前执行合同的新一轮，父运行不会被改写。旧版合同下仍活动或待审批的运行不得恢复执行。历史只保留最近 10 轮用户目标；运行历史与跨轮摘要仍受独立的持久化 JSON 保护，超限先丢掉更早的可重读正文并保留结构化事实，单轮仍超出当前模型能力预算时才提示缩小范围或新建对话；历史结构损坏返回明确 409，不投影为通用 500。
 - 画布占用及父轮仍在执行或终态收尾的拒绝统一返回 `409 / canvas_agent_busy`，`details` 包含 `canvasId`（首页创作为空）与拒绝时观察到的 `agent: { runId, status, cleanupPending }`。这表示本次没有创建新任务或预留积分，不自动重试；相同正文和幂等键的回放仍优先返回已存在轮次。普通幂等键冲突保持 `409 / conflict`。若此前同一提交曾超时或丢失响应，后来收到忙碌拒绝也不能证明首次未受理，客户端必须保留原正文和身份继续恢复。
 - 续轮交接是一条**有界结构化事实帧**（`{ source: "server", kind: "run_handoff", parentRunId, status, failureReason?, submittedTaskIds?, canvasChanges?, omittedCanvasChanges?, authority }`）：画布改动取自上一轮真实的 `canvas_updated` 事件，最多 12 组（operation、去重后的 nodeId/title、actionCount），超出的组数只记 `omittedCanvasChanges`，不静默丢弃；帧还带 `authority` 明写"执行事实交接，不是重放写入、重复提交任务或扩大权限的授权"。帧按字节封顶（单个 nodeId 截 64 字符、整帧 8 KiB，超限按最近改动优先裁剪），失败原因沿用 `cloudAgentSafeUserMessage` 的脱敏口径，不合格退回固定说法。身份由服务端字段 `agentContextSource=continuation` 承载并要求"来源元数据 + `【运行状态】` 前缀 + JSON `source=server`/`kind=run_handoff`"三者同时成立，因此用户逐字复制帧正文也拿不到该身份；升级前落库、没有来源字段的旧散文交接只在历史裁剪与轮次计数上按"紧跟上一轮 assistant 回复 + 旧版文案前缀"识别，该判据不影响 canonical 身份。

@@ -51,6 +51,8 @@ export type CreationMessage = {
     /** 创建回执尚未确认，恢复时必须沿用本次请求，不能另建生成任务。 */
     submissionPending?: boolean;
     agentIdempotencyKey?: string;
+    /** 已确认 Agent 创建未被受理，原输入可以重新编辑后发送。 */
+    agentSubmissionRejected?: boolean;
     retryOf?: string;
     attemptGroupId?: string;
     generationStage?: string;

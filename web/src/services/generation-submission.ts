@@ -5,7 +5,7 @@ import { ApiError, http } from "@/services/api/request";
 import type { GenerationTask } from "@/services/api/task-center";
 
 type Submission = { entries: Array<{ key: string; state: "pending" | "confirmed" | "rejected"; taskId?: string }> };
-type RecoveryOptions = { signal?: AbortSignal; onTaskUpdate?: (task: GenerationTask) => void };
+type RecoveryOptions = { signal?: AbortSignal; keys?: string[]; onTaskUpdate?: (task: GenerationTask) => void };
 
 export class GenerationSubmissionUnconfirmedError extends Error {
     constructor(public readonly operationId: string) {
@@ -119,9 +119,16 @@ export function createGenerationSubmissionStore(dependencies: { getScope(): stri
     }
     async function recover(operationId: string, options: RecoveryOptions = {}) {
         const scope = dependencies.getScope();
-        const record = await load(scope, operationId);
+        let record = await load(scope, operationId);
+        // 历史会话可从原操作标识恢复查询索引；不保存请求内容，也不据此构造新的生成请求。
+        if (!record && options.keys?.length) {
+            checkScope(scope, options.signal);
+            await prepare(operationId, options.keys);
+            record = await load(scope, operationId);
+        }
         if (!record) throw new Error("原任务提交记录不存在，请先核对任务中心，未重新生成");
         checkScope(scope, options.signal);
+        if (record.entries.every((entry) => entry.state === "rejected")) throw new ApiError("原请求已明确拒绝，未创建生成任务，可以调整后重新生成", { reason: "generation_submission_rejected", retryable: false });
         const results = await Promise.allSettled(
             record.entries
                 .filter((entry) => entry.state !== "rejected")

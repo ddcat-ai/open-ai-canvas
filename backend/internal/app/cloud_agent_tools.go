@@ -224,7 +224,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 	}
 	taskDescription := "查询当前用户在本轮 Agent 已提交的生成任务状态"
 	if req.Surface == "creation" {
-		taskDescription = "查询当前用户在本会话 Agent 已提交的生成任务状态"
+		taskDescription = "查询本会话 Agent 任务或本轮普通创作上下文中明确带入的任务，返回最新执行与账务事实；提交结果 unknown 时先核对，不得因已退款推断可以重发"
 	}
 	add("task_get", taskDescription, map[string]any{"taskId": str("真实任务ID")}, "taskId")
 	if req.VisionEnabled && len(req.ContextScope) > 0 {

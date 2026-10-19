@@ -175,6 +175,7 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         getActiveUserScope: () => "user",
         followLatestMessageRef: { current: false },
         toast: { error: (s: string) => notices.push(s), warning: (s: string) => notices.push(s), info: (s: string) => notices.push(s) },
+        ApiError,
         createClientId,
         bindCreationSubmissionTask,
         newMessage,
@@ -302,6 +303,20 @@ test("图片批次部分回执丢失保留已有图片，不把已确认项重�
     expect(page.messages.at(-1)?.submissionPending).toBeUndefined();
     expect(page.requests).toHaveLength(2);
     expect(page.accepted.size).toBe(2);
+});
+
+test("旧缓存丢失批次待确认标记时，按原张数找回缺失回执而非重试已知项", async () => {
+    const page = harness("image", "partial");
+    await page.start();
+    const item = page.messages.at(-1)!;
+    item.submissionPending = undefined;
+    item.status = "error";
+    await page.retry(item);
+    expect(page.messages.at(-1)?.taskIds).toHaveLength(2);
+    expect(page.messages.at(-1)?.submissionPending).toBeUndefined();
+    expect(page.requests).toHaveLength(2);
+    expect(page.accepted.size).toBe(2);
+    expect(page.retrySequence).toBe(0);
 });
 
 test.each([false, true])("已知 ID 的恢复保护保持不变，查询异常=%s 不新建", async (queryError) => {

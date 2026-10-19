@@ -130,7 +130,7 @@ test("批量重试复核后仅返回真实失败项，成功、进行中、停�
     const refreshed = await recovery.refreshCreationMessageTasks(fixture.stub, conversation(batch), batch);
     expect(fixture.reads).toEqual(tasks.map((item) => item.id));
     expect(refreshed.retryableTaskIds).toEqual(["failed"]);
-    expect(refreshed.canRetry).toBe(false);
+    expect(refreshed.canRetry).toBe(true);
     expect(fixture.materializations()).toBe(1);
     expect(refreshed.conversation.messages[1].resultStorageKeys).toContain("resource:finished");
 });

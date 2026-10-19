@@ -42,6 +42,15 @@ export type GenerationTask = {
     providerCancelRequestedAt?: string;
     providerCancelledAt?: string;
     errorCode?: string;
+    diagnostic?: {
+        code?: string;
+        phase?: string;
+        taskSubmitted?: boolean;
+        submissionOutcome?: string;
+        retryClass?: string;
+        safeMessage?: string;
+        diagnosticId?: string;
+    };
     officialStatus?: "pending" | "processing" | "completed" | "failed" | "cancelled";
     receiptRecorded?: boolean;
     previewUrl?: string;

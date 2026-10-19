@@ -1,5 +1,6 @@
 import { createClientId } from "@/lib/client-id";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask } from "@/services/api/task-center";
 import { ApiError } from "@/services/api/request";
@@ -162,22 +163,37 @@ export async function recoverCreationGenerationSubmission(runtime: CreationRunti
     const tasks = new Map<string, GenerationTask>();
     let updates = Promise.resolve<unknown>(undefined);
     let recoveryError: unknown;
+    let recoveredFromStore = false;
+    const expected = message.mode === "video" ? 1 : message.batchTotal || Number(message.settings?.count) || 0;
+    const onTaskUpdate = (task: GenerationTask) => {
+        tasks.set(task.id, task);
+        updates = updates.then(() => updateMessage((current) => bindCreationSubmissionTask(current, task)));
+    };
     await updateMessage((current) => ({ ...current, status: "pending", submissionPending: true, error: undefined, generationErrorCode: undefined }));
     try {
-        await runtime.recoverGenerationSubmission(message.clientOperationId, {
-            signal,
-            onTaskUpdate: (task) => {
-                tasks.set(task.id, task);
-                updates = updates.then(() => updateMessage((current) => bindCreationSubmissionTask(current, task)));
-            },
-        });
+        const known = Array.from(new Set(message.taskIds || []));
+        if (known.length) {
+            const lookups = await Promise.allSettled(known.map(async (id) => {
+                const task = await runtime.queryGenerationTask(id, { signal });
+                if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+                onTaskUpdate(task);
+            }));
+            const failure = lookups.find((result) => result.status === "rejected");
+            if (failure?.status === "rejected") throw failure.reason;
+        }
+        if (!expected || latestCreationTaskAttempts([...tasks.values()]).length < expected) {
+            recoveredFromStore = true;
+            const keys = message.mode === "video" ? [message.clientOperationId]
+                : Number.isInteger(expected) && expected > 0 && expected <= 15 ? Array.from({ length: expected }, (_, index) => `${message.clientOperationId}:batch:${index}`) : undefined;
+            await runtime.recoverGenerationSubmission(message.clientOperationId, { signal, keys, onTaskUpdate });
+        }
     } catch (error) {
         recoveryError = error;
         throw error;
     } finally {
         await updates;
         if (signal?.aborted || (recoveryError instanceof DOMException && recoveryError.name === "AbortError")) throw recoveryError || new DOMException("Aborted", "AbortError");
-        const pending = await runtime.hasPendingGenerationSubmission(message.clientOperationId) || Boolean(recoveryError && !(recoveryError instanceof ApiError && !recoveryError.retryable));
+        const pending = (recoveredFromStore && await runtime.hasPendingGenerationSubmission(message.clientOperationId)) || Boolean(recoveryError && !(recoveryError instanceof ApiError && recoveryError.reason === "generation_submission_rejected"));
         const contextual = [...tasks.values()].map((task) => ({ ...task, clientContext: { ...task.clientContext, conversationId, messageId: message.id, batchCount: task.clientContext?.batchCount || message.batchTotal || Number(message.settings?.count) || 1 } }));
         const persisted = await materializeCreationTaskResults(runtime, contextual, signal);
         await updateMessage((current) => {
@@ -198,10 +214,17 @@ export async function refreshCreationMessageTasks(runtime: CreationRuntime, conv
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const persisted = await materializeCreationTaskResults(runtime, attachCreationTaskContexts(tasks, [conversation]), signal);
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const latest = latestCreationTaskAttempts(tasks);
+    const safeToRetry = (task: GenerationTask) => !task.canRecoverMedia
+        && !isGenerationTaskSubmissionUncertain(task) && task.errorCode !== "provider_submission_unknown"
+        && task.diagnostic?.submissionOutcome !== "unknown" && task.diagnostic?.retryClass !== "reconcile_submission"
+        && task.providerCancelStatus !== "requested" && task.providerCancelStatus !== "uncertain"
+        && (!task.billing || task.billing.status === "settled" || task.billing.status === "refunded");
+    const retryableTaskIds = latest.filter((task) => task.status === "failed" && safeToRetry(task)).map((task) => task.id);
     return {
         conversation: reconcileCreationTaskMessages(runtime, [conversation], persisted)[0],
-        canRetry: tasks.every((task) => (task.status === "failed" || task.status === "cancelled") && !task.canRecoverMedia),
-        retryableTaskIds: tasks.filter((task) => task.status === "failed" && !task.canRecoverMedia).map((task) => task.id),
+        canRetry: retryableTaskIds.length > 0 || latest.length > 0 && latest.every((task) => task.status === "cancelled" && safeToRetry(task)),
+        retryableTaskIds,
     };
 }
 
@@ -213,8 +236,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
         const messages = conversation.messages.map((message) => {
             const taskIds = new Set(message.taskIds || []);
             const matched = tasks.filter((task) => taskIds.has(task.id) || Boolean(task.retryOf && taskIds.has(task.retryOf)) || Boolean(task.attemptGroupId && taskIds.has(task.attemptGroupId)) || (task.clientContext?.conversationId === conversation.id && task.clientContext.messageId === message.id));
-            const superseded = new Set(matched.flatMap((task) => task.retryOf ? [task.retryOf] : []));
-            const matches = matched.filter((task) => !superseded.has(task.id))
+            const matches = latestCreationTaskAttempts(matched)
                 .sort((left, right) => (left.clientContext?.batchIndex || 0) - (right.clientContext?.batchIndex || 0));
             if (message.role === "assistant" && message.mode === "text") {
                 const recovery = runtime.recoverCreationTextTask(message, matches);
@@ -225,7 +247,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
                 return { ...message, ...recovery };
             }
             if (message.role !== "assistant" || (message.status !== "pending" && !(message.status === "error" && (message.mode === "image" || message.mode === "video")))) return message;
-            const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0));
+            const expectedTaskCount = Math.max(0, ...matches.map((task) => task.clientContext?.batchCount || 0)) || (message.mode === "video" ? 1 : Number(message.settings?.count) || 0);
             if (!matches.length) return message;
 
             const succeeded = matches.filter((task) => task.status === "succeeded");
@@ -236,7 +258,8 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
             const failedCount = matches.length >= total ? observedFailedCount : Math.max(message.batchFailedCount || 0, observedFailedCount);
             const nextTaskIds = Array.from(new Set([...(message.taskIds || []), ...matches.map((task) => task.id)]));
             const taskStatuses = { ...message.taskStatuses, ...Object.fromEntries(matches.map((task) => [task.id, task.status])) };
-            const nextMessage = { ...message, taskIds: nextTaskIds, taskStatuses };
+            const submissionPending = message.submissionPending && !(expectedTaskCount > 0 && matches.length >= (message.batchTotal || expectedTaskCount));
+            const nextMessage = { ...message, taskIds: nextTaskIds, taskStatuses, submissionPending: submissionPending || undefined };
             completedAt = matches.reduce((latest, task) => conversationTimestamp(task.updatedAt) > conversationTimestamp(latest) ? task.updatedAt : latest, completedAt);
             conversationChanged = true;
             changed = true;
@@ -251,7 +274,7 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
                 const error = failed?.creationError || failed?.error || "任务已结束，但生成结果暂时无法读取";
                 return { ...nextMessage, status: "error" as const, error: generationErrorMessage(error), generationErrorCode: generationErrorCode(error) };
             }
-            if (message.submissionPending) return { ...nextMessage, status: "pending" as const, resultUrls, resultStorageKeys, batchFailedCount: observedFailedCount, error: undefined, generationErrorCode: undefined };
+            if (submissionPending) return { ...nextMessage, status: "pending" as const, resultUrls, resultStorageKeys, batchFailedCount: observedFailedCount, error: undefined, generationErrorCode: undefined };
             if (message.mode === "video") {
                 if (resultUrls.length || resultStorageKeys.length) return { ...nextMessage, status: "done" as const, content: "视频已生成", resultUrls, resultStorageKeys, error: undefined, generationErrorCode: undefined };
                 if (matches.some((task) => task.status === "queued" || task.status === "running")) return { ...nextMessage, status: "pending" as const, error: undefined, generationErrorCode: undefined };
@@ -274,6 +297,27 @@ export function reconcileCreationTaskMessages(runtime: CreationRuntime, conversa
         return conversationChanged ? { ...conversation, messages, updatedAt: completedAt } : conversation;
     });
     return changed ? next : conversations;
+}
+
+// 重试只替换同一原任务的一次尝试，不能当作新的批次交付槽位。
+function latestCreationTaskAttempts<T extends GenerationTask>(tasks: T[]): T[] {
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const superseded = new Set(tasks.flatMap((task) => task.retryOf ? [task.retryOf] : []));
+    const latest = new Map<string, T>();
+    for (const task of tasks) {
+        if (superseded.has(task.id)) continue;
+        let root = task.id;
+        let current: T | undefined = task;
+        const visited = new Set<string>();
+        while (current?.retryOf && !visited.has(current.id)) {
+            visited.add(current.id);
+            root = current.retryOf;
+            current = byId.get(root);
+        }
+        const previous = latest.get(root);
+        if (!previous || conversationTimestamp(task.createdAt) >= conversationTimestamp(previous.createdAt)) latest.set(root, task);
+    }
+    return [...latest.values()];
 }
 
 function creationTaskResultUrls(task: PersistedCreationTask) {

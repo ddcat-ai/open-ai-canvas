@@ -23,6 +23,9 @@ func cloudAgentCreationSessionTask(repo *repository.Repository, userID string, s
 	if err != nil {
 		return nil, err
 	}
+	if cloudAgentCreationContextAllowsTask(state.Request, task) && (task.Type == "canvas_image" || task.Type == "canvas_video") {
+		return task, nil
+	}
 	owner, err := repo.CloudAgent(userID, task.AgentRunID)
 	if err != nil || owner.Surface != "creation" || owner.SessionID != state.Request.SessionID || task.ProjectID != "" || (task.Type != "canvas_image" && task.Type != "canvas_video") {
 		return nil, BadAuthRequest("只能读取本会话的图片或视频任务")

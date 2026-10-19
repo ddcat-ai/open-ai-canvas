@@ -145,6 +145,8 @@ func (c *taskTerminalCoordinator) handleExecutionFailure(task *model.Task, err e
 	outcome := taskSubmissionOutcome(task, channelSlotFailedBeforeRequest)
 	if providerSucceeded {
 		outcome = "accepted"
+	} else if outcome == "unknown" && safeRouteRejection(err) {
+		outcome = "rejected"
 	}
 	retryClass := "new_generation_authorization"
 	if outcome == "unknown" {

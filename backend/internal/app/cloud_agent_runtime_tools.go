@@ -773,14 +773,13 @@ func (s *Service) advanceCloudAgentApprovalTool(run *model.CloudAgentExecution, 
 	// and holding the write transaction open during storage IO.
 	var skillResult any
 	var skillErr error
-	if allowed && (call.Function.Name == "skill_read_file" || call.Function.Name == "model_list" || call.Function.Name == "image_annotation_render" || call.Function.Name == "canvas_read_text") {
+	if allowed && (call.Function.Name == "skill_read_file" || call.Function.Name == "model_list" || call.Function.Name == "image_annotation_render" || call.Function.Name == "canvas_read_text" || call.Function.Name == "task_get") {
 		state.RuntimeRunID = run.ID
 		if call.Function.Name == "image_annotation_render" {
 			skillResult, skillErr = cloudAgentReadTool(s.repo, run.UserID, state, call, s)
 		} else {
-			// 技能文件和模型目录都是稳定的只读结果。统一走检查点缓存，
-			// 使重复调用不会再次访问文件系统/数据库，也不会把大结果重复
-			// 写入后续模型上下文。
+			// 稳定的技能和模型读取复用检查点缓存；task_get 不缓存，
+			// 每次刷新真实任务状态并沿用同一只读调用预算。
 			skillResult, skillErr = cloudAgentReadToolCached(s.repo, run.UserID, state, call, s)
 		}
 	}
@@ -846,7 +845,7 @@ func (s *Service) advanceCloudAgentApprovalTool(run *model.CloudAgentExecution, 
 					result = map[string]any{"planId": plan.PlanID, "version": plan.Version, "items": items}
 				}
 			}
-		case call.Function.Name == "skill_read_file", call.Function.Name == "model_list", call.Function.Name == "image_annotation_render", call.Function.Name == "canvas_read_text":
+		case call.Function.Name == "skill_read_file", call.Function.Name == "model_list", call.Function.Name == "image_annotation_render", call.Function.Name == "canvas_read_text", call.Function.Name == "task_get":
 			result, toolErr = skillResult, skillErr
 		default:
 			result, toolErr = cloudAgentReadToolCached(repo, run.UserID, state, call)

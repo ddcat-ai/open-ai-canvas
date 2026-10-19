@@ -187,6 +187,13 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 		if err := lockOwnedWriteUser(tx, userID); err != nil {
 			return err
 		}
+		var source model.Task
+		if err := tx.First(&source, "id = ? AND user_id = ?", taskID, userID).Error; err != nil {
+			return err
+		}
+		if err := requireTaskRetryDispatch(tx, &source); err != nil {
+			return err
+		}
 		if err := enforceActiveTaskLimit(tx, userID, activeTaskLimit); err != nil {
 			return err
 		}

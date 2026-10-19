@@ -507,6 +507,9 @@ func safeRouteRejection(err error) bool {
 	if code, _ := ChannelSlotFailureDetails(err); code != "" {
 		return true
 	}
+	if providerAccountPoolRejected(err) {
+		return true
+	}
 	var upstream providerHTTPError
 	if errors.As(err, &upstream) {
 		switch upstream.StatusCode {

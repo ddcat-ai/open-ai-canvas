@@ -618,7 +618,7 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 			return nil, err
 		}
 		if state.Request.Surface == "creation" {
-			ownedByRun := false
+			ownedByRun := state.Request.SessionID != "" && cloudAgentCreationContextAllowsTask(state.Request, task)
 			for _, id := range state.TaskIDs {
 				if id == task.ID {
 					ownedByRun = true
@@ -642,11 +642,17 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 					ownedByRun = ownerErr == nil && owner.Surface == "creation" && owner.SessionID == state.Request.SessionID
 				}
 				if !ownedByRun {
-					return nil, BadAuthRequest("只能读取本会话 Agent 已提交的生成任务")
+					return nil, BadAuthRequest("只能读取本会话 Agent 任务或本轮明确带入的普通创作任务")
 				}
 			}
 		} else if task.ProjectID != state.Request.CanvasID {
 			return nil, BadAuthRequest("不能读取其他画布的任务")
+		}
+		if service != nil {
+			service.hydrateTaskProviderRequestID(task)
+			if err := service.reconcileRecordedTaskRejection(task); err != nil {
+				return nil, err
+			}
 		}
 		result := cloudAgentTaskDiagnostic(repo, task)
 		result["status"] = task.Status

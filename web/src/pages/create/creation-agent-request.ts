@@ -1,6 +1,8 @@
 import type { CreateAgentRunInput, AgentCreationAttachment, AgentMediaChoice, AgentModelSelection, AgentOutputPreference, AgentPermissionMode } from "@/services/api/agent";
 import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { creationAgentDirectContext } from "./creation-agent-context";
+import type { CreationConversation } from "./creation-types";
 
 type InputAttachment = { name: string; type: string; storageKey?: string; role?: "product" | "reference" | "competitor" | "style" | "source" | "person" };
 type MediaParameters = Partial<Omit<AgentMediaChoice, "selection">>;
@@ -38,6 +40,8 @@ export function creationManagedModelSelection(config: AiConfig, value: string): 
 }
 
 export type CreationAgentRequestOptions = {
+    conversation?: Pick<CreationConversation, "messages">;
+    inheritedAttachments?: AgentCreationAttachment[];
     retry?: CreateAgentRunInput["retry"];
     prompt: string;
     idempotencyKey: string;
@@ -66,6 +70,20 @@ function managedAttachment(item: InputAttachment): AgentCreationAttachment {
 
 export function buildCreationAgentRunInput(input: CreationAgentRequestOptions): CreateAgentRunInput {
     const budget = input.budget || defaultCreationAgentBudget;
+    const context = creationAgentDirectContext(input.retry ? undefined : input.conversation);
+    const selected = new Map((input.attachments || []).map((item) => [item.storageKey, item]));
+    const occupied = new Set([...selected.keys(), ...(input.attachmentMode === "replace" ? [] : (input.inheritedAttachments || []).map((item) => item.storageKey))]);
+    let appendedHistory = false;
+    if (input.attachmentMode !== "replace") {
+        for (const item of [...context.attachments].reverse()) {
+            if (occupied.has(item.storageKey) || occupied.size >= 16) continue;
+            selected.set(item.storageKey, item);
+            occupied.add(item.storageKey);
+            appendedHistory = true;
+        }
+    }
+    const selectedAttachments = [...selected.values()];
+    const attachmentMode = appendedHistory ? "append" : input.attachmentMode;
     const mediaChoice = (selection: AgentModelSelection | undefined, parameters?: MediaParameters): AgentMediaChoice | undefined =>
         selection
             ? {
@@ -79,6 +97,7 @@ export function buildCreationAgentRunInput(input: CreationAgentRequestOptions): 
         surface: "creation",
         ...(input.retry ? { retry: input.retry } : {}),
         prompt: input.prompt.trim(),
+        ...(context.entries.length ? { creationContext: context.entries } : {}),
         idempotencyKey: input.idempotencyKey,
         ...(input.sessionId ? { sessionId: input.sessionId } : {}),
         ...input.textSelection,
@@ -87,8 +106,8 @@ export function buildCreationAgentRunInput(input: CreationAgentRequestOptions): 
         contextScope: [],
         contextSelection: { surface: "creation", scopes: [] },
         budget: { maxCredits: budget.maxCredits, maxGenerationTasks: input.permissionMode === "read_only" ? 0 : budget.maxGenerationTasks, maxVideoSeconds: input.permissionMode === "read_only" ? 0 : budget.maxVideoSeconds },
-        ...(input.attachmentMode ? { attachmentMode: input.attachmentMode } : {}),
-        ...(input.attachments?.length || input.attachmentMode === "replace" ? { attachments: (input.attachments || []).map(managedAttachment) } : {}),
+        ...(attachmentMode ? { attachmentMode } : {}),
+        ...(selectedAttachments.length || attachmentMode === "replace" ? { attachments: selectedAttachments.map(managedAttachment) } : {}),
         mediaSettings: {
             ...(mediaChoice(input.imageSelection, input.imageParameters) ? { image: mediaChoice(input.imageSelection, input.imageParameters) } : {}),
             ...(mediaChoice(input.videoSelection, input.videoParameters) ? { video: mediaChoice(input.videoSelection, input.videoParameters) } : {}),

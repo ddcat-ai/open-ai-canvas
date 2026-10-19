@@ -77,6 +77,33 @@ test("刷新后未查到任务且没有原请求，不猜测参数创建收费�
     expect(await reloaded.hasPending("op")).toBe(true);
 });
 
+test("另一浏览器没有本地索引时按历史消息的原 key 找回任务", async () => {
+    const f = fixture();
+    f.accepted.set("old:batch:0", task("first"));
+    f.accepted.set("old:batch:1", task("second"));
+    const results = await f.store.recover("old", { keys: ["old:batch:0", "old:batch:1"] });
+    expect(results.map((item) => item.id)).toEqual(["first", "second"]);
+    expect(await f.store.hasPending("old")).toBe(false);
+});
+
+test("补回索引仍查不到任务时保留未知，不因为 GET null 新建任务", async () => {
+    const f = fixture();
+    await expect(f.store.recover("missing", { keys: ["missing"] })).rejects.toThrow("提交状态待确认");
+    expect(await f.store.hasPending("missing")).toBe(true);
+});
+
+test("已有索引优先于历史推导，明确拒绝的空批次返回可重试错误", async () => {
+    const f = fixture();
+    await f.store.prepare("rejected", ["rejected"]);
+    await expect(
+        f.store.submit("rejected", "rejected", async () => {
+            throw new ApiError("余额不足", { status: 400 });
+        }),
+    ).rejects.toThrow("余额不足");
+    await expect(f.store.recover("rejected", { keys: ["wrong-key"] })).rejects.toMatchObject({ reason: "generation_submission_rejected", retryable: false });
+    expect(await f.store.hasPending("rejected")).toBe(false);
+});
+
 test("批量回执部分丢失，已确认项不重投，未确认项继续保留", async () => {
     const f = fixture();
     await f.store.prepare("batch", ["batch:0", "batch:1"]);

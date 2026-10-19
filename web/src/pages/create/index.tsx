@@ -20,6 +20,7 @@ import { inferVideoOperation, modelGroupReferenceLimits, resolveCompatibleModel,
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
+import { ApiError } from "@/services/api/request";
 import { createAgentMemory, listAgentMemories, updateAgentMemory } from "@/services/api/agent-memories";
 import { clearPendingCreationAgentSubmission, loadCreationConversations, loadPendingCreationAgentSubmission, pendingCreationTaskIds, queueCreationConversationsSave, removeCreationConversationSnapshot, removeStoredCreationConversation, saveCreationConversations, savePendingCreationAgentSubmission, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
 import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useEffectiveConfig } from "@/stores/use-config-store";
@@ -52,7 +53,7 @@ import { expandSmartCreationPlan, projectSmartCreationBatch, runSmartCreationSch
 import { createCreationSubmitGate, createCreationSubmitGateRelease, withCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
 import { buildCreationAgentRunInput, creationAgentAttachmentSelection, creationAgentImageInputError, creationAgentImageReferenceLimit, creationManagedModelSelection } from "./creation-agent-request";
-import { appendCreationAgentEvent, applyCreationAgentTaskState, assertCreationAgentSession, beginCreationAgentSubmission, bindCreationAgentSubmission, creationAgentRecoveryClient, failCreationAgentSubmission, mergeCreationAgentConversation, mergeCreationConversationHistory, projectCreationAgentConversation, restoreCreationAgentConversation, retryCreationHistoryRead, settleCreationAgentSubmission } from "./creation-agent-conversation";
+import { appendCreationAgentEvent, applyCreationAgentTaskState, assertCreationAgentSession, beginCreationAgentSubmission, bindCreationAgentSubmission, creationAgentRecoveryClient, creationAgentRetryRun, failCreationAgentSubmission, mergeCreationAgentConversation, mergeCreationConversationHistory, projectCreationAgentConversation, restoreCreationAgentConversation, retryCreationHistoryRead, settleCreationAgentSubmission } from "./creation-agent-conversation";
 import { CreationAgentReview } from "./creation-agent-review";
 import { creationAgentRunsToStop, stopCreationAgentRuns } from "./creation-agent-cancel";
 import { creationLibraryDisabledReason, creationLibrarySelectionToAttachments } from "./creation-library";
@@ -280,7 +281,7 @@ export default function CreatePage() {
     const retryPreparingRef = useRef(new Set<string>());
     const submitGateRef = useRef(createCreationSubmitGate());
     const smartPlanningGateRef = useRef(createCreationSubmitGate());
-    const pendingRetryRef = useRef<{ context: CreationRetryContext; lockKey: string } | null>(null);
+    const pendingRetryRef = useRef<{ context?: CreationRetryContext; lockKey: string } | null>(null);
     const [retrySequence, setRetrySequence] = useState(0);
     const [composerPreferencesInitialized, setComposerPreferencesInitialized] = useState(false);
     promptRef.current = prompt;
@@ -1104,6 +1105,8 @@ export default function CreatePage() {
             const imageSelection = config.imageModel ? creationManagedModelSelection(config, config.imageModel) : undefined;
             const videoSelection = config.videoModel ? creationManagedModelSelection(config, config.videoModel) : undefined;
             const request = action && pending ? pending.request : buildCreationAgentRunInput({
+                conversation,
+                inheritedAttachments: snapshot?.runs.find((run) => run.id === parentRunId)?.attachments || conversation.agentRuns?.find((run) => run.id === parentRunId)?.attachments,
                 retry: action?.retry,
                 prompt: text, idempotencyKey: key, sessionId, permissionMode: agentPermissionMode,
                 textSelection: creationManagedModelSelection(config, config.textModel), imageSelection, videoSelection,
@@ -1727,10 +1730,27 @@ export default function CreatePage() {
             : item;
         if (!previous?.content || busy) return;
         if (item.mode === "agent" && item.clientOperationId) {
-            await submitCreationAgent(previous.content, activeConversation, false, { recoverPending: true });
-            return;
+            const scope = getActiveUserScope();
+            try {
+                const pending = await loadPendingCreationAgentSubmission(activeConversation!.id);
+                if (scope !== getActiveUserScope() || activeIdRef.current !== activeConversation!.id) return;
+                if (pending) {
+                    await submitCreationAgent(previous.content, activeConversation, false, { recoverPending: true });
+                    return;
+                }
+                if (item.agentSubmissionRejected) {
+                    restoreMessageDraft({ ...previous, mode: "agent", model: item.model || previous.model });
+                    window.requestAnimationFrame(() => composerFocusRef.current?.focus());
+                    toast.info("原请求未被受理，已恢复原输入；请确认模型偏好与预算后发送");
+                    return;
+                }
+            } catch (error) {
+                if (scope === getActiveUserScope()) toast.error(generationErrorMessage(error));
+                return;
+            }
         }
-        if (item.submissionPending && item.clientOperationId && (item.mode === "image" || item.mode === "video")) {
+        const expectedTaskCount = item.mode === "image" ? item.batchTotal || Number(item.settings?.count) || 1 : 1;
+        if ((item.submissionPending || (item.taskIds?.length || 0) < expectedTaskCount) && item.clientOperationId && !item.agentRunId && !item.id.startsWith("task-") && (item.mode === "image" || item.mode === "video")) {
             const scope = getActiveUserScope();
             const originId = activeConversation!.id;
             const key = `submission:${item.clientOperationId}`;
@@ -1743,24 +1763,40 @@ export default function CreatePage() {
                     if (scope !== getActiveUserScope()) return;
                     await updateConversationMessage(originId, item.id, updater);
                 });
+                return;
             } catch (error) {
-                if (scope === getActiveUserScope()) toast.error(generationErrorMessage(error));
+                if (scope !== getActiveUserScope()) return;
+                if (!(error instanceof ApiError && error.reason === "generation_submission_rejected")) {
+                    toast.error(generationErrorMessage(error));
+                    return;
+                }
             } finally { retryPreparingRef.current.delete(key); }
-            return;
         }
-        if (activeConversation?.agentSessionId) {
+        if (item.mode === "agent" || item.agentRunId || item.id.startsWith("task-")) {
             let origin = activeConversation;
             const scope = getActiveUserScope();
-            const runId = item.agentRunId;
-            if (!runId) { toast.error("未找到原失败轮次，请刷新历史后重试"); return; }
-            const retryKey = `agent:${runId}`;
+            const retryKey = `agent:${item.agentRunId || item.id}`;
             if (retryPreparingRef.current.has(retryKey)) return;
             retryPreparingRef.current.add(retryKey);
             try {
+                if (!origin?.agentSessionId) { toast.error("缺少原创作会话记录，请从历史对话重新打开后重试"); return; }
+                const projected = await restoreCreationAgentConversation(origin.agentSessionId, creationAgentRecoveryClient);
+                if (scope !== getActiveUserScope() || activeIdRef.current !== origin.id) return;
+                origin = mergeCreationAgentConversation(origin, projected);
+                updateConversation(origin.id, (current) => mergeCreationAgentConversation(current, projected));
+                const run = creationAgentRetryRun(projected, item);
+                if (!run) { toast.error("已查询原会话，暂未找到此消息对应的轮次，请从历史对话核对原任务"); return; }
+                const runId = run.id;
+                if (run.cleanupPending || ["queued", "running", "waiting_approval"].includes(run.status)) {
+                    toast.info(run.status === "waiting_approval" ? "原轮次正在等待审批，请先处理原方案" : "原轮次仍在处理中，已恢复最新状态");
+                    return;
+                }
                 const targets = failedItems || [item];
-                if (targets.some((target) => target.agentRunId !== runId || target.status !== "error")) { toast.info("只能重试同一轮中失败的任务"); return; }
-                let taskIds = [...new Set(targets.flatMap((target) => target.taskIds || []))];
-                if (failedItems && targets.some((target) => !target.taskIds?.length)) { toast.error("失败项缺少任务记录，请刷新历史后重试"); return; }
+                if (targets.some((target) => creationAgentRetryRun(projected, target)?.id !== runId || target.status !== "error")) { toast.info("只能重试同一轮中失败的任务"); return; }
+                const targetTaskIds = targets.map((target) => target.taskIds?.length ? target.taskIds : target.id.startsWith("task-") ? [target.id.slice(5)] : []);
+                let taskIds = [...new Set(targetTaskIds.flat())];
+                if (!taskIds.length && !failedItems) taskIds = [...new Set((run.events || []).flatMap((event) => event.type === "generation_task_created" && typeof event.payload.taskId === "string" ? [event.payload.taskId] : []))];
+                if (failedItems && targetTaskIds.some((ids) => !ids.length)) { toast.error("失败项缺少任务记录，请刷新历史后重试"); return; }
                 if (taskIds.length) {
                     const runtime = await loadCreationRuntime();
                     const refreshed = await refreshCreationMessageTasks(runtime, origin, { ...item, taskIds });
@@ -1769,6 +1805,10 @@ export default function CreatePage() {
                     taskIds = refreshed.retryableTaskIds;
                     if (!taskIds.length) { toast.info("已刷新原任务状态，进行中、已完成或待恢复的任务不会重复生成"); return; }
                     origin = refreshed.conversation;
+                } else if (run.status === "completed") {
+                    await updateConversationMessage(origin.id, item.id, (current) => ({ ...current, status: "done", agentRunId: runId, error: undefined }));
+                    toast.info("原轮次已完成，已恢复最新结果");
+                    return;
                 }
                 if (scope !== getActiveUserScope() || activeIdRef.current !== origin.id) return;
                 await submitCreationAgent("重试失败项", origin, false, { retry: { runId, ...(taskIds.length > 1 ? { taskIds } : taskIds.length ? { taskId: taskIds[0] } : {}) } });
@@ -1778,9 +1818,10 @@ export default function CreatePage() {
             return;
         }
         const retryOf = item.taskIds?.[0];
-        const restoreForRetry = () => {
+        const restoreForRetry = (retryCount?: number, preserveResults = false) => {
             followLatestMessageRef.current = true;
-            restoreMessageDraft(previous);
+            restoreMessageDraft(retryCount && previous.settings ? { ...previous, settings: { ...previous.settings, count: String(retryCount) } } : previous);
+            if (preserveResults) return;
             const removedIds = new Set([item.id, previous.id]);
             updateActive((conversation) => {
                 const messages = conversation.messages.filter((message) => !removedIds.has(message.id));
@@ -1789,7 +1830,12 @@ export default function CreatePage() {
             });
         };
         if (!retryOf) {
+            const key = `message:${item.id}`;
+            if (retryPreparingRef.current.has(key)) return;
+            retryPreparingRef.current.add(key);
             restoreForRetry();
+            pendingRetryRef.current = { lockKey: key };
+            setRetrySequence((current) => current + 1);
             return;
         }
         if (retryPreparingRef.current.has(retryOf)) return;
@@ -1808,9 +1854,16 @@ export default function CreatePage() {
                 toast.info(recovered?.status === "done" ? "已恢复原任务结果" : "原任务仍在处理或保存结果，请稍后查看任务状态");
                 return;
             }
+            const taskIds = refreshed.retryableTaskIds.length ? refreshed.retryableTaskIds : [...new Set(item.taskIds || [])];
             const attemptGroupId = item.attemptGroupId || item.retryOf || retryOf;
-            const context: CreationRetryContext = { ...(await runtime.createGenerationRetryContext(retryOf, attemptGroupId)), ...(item.taskIds && item.taskIds.length > 1 ? { retryContextsByBatchIndex: await runtime.createGenerationBatchRetryContexts(item.taskIds, attemptGroupId) } : {}) };
-            restoreForRetry();
+            const context: CreationRetryContext = { ...(await runtime.createGenerationRetryContext(taskIds[0], attemptGroupId)), ...(taskIds.length > 1 ? { retryContextsByBatchIndex: await runtime.createGenerationBatchRetryContexts(taskIds, attemptGroupId) } : {}) };
+            if (scope !== getActiveUserScope() || activeIdRef.current !== origin.id) { retryPreparingRef.current.delete(retryOf); return; }
+            const preserveResults = taskIds.length < new Set(item.taskIds).size;
+            if (preserveResults) {
+                const recovered = refreshed.conversation.messages.find((message) => message.id === item.id);
+                if (recovered) await updateConversationMessage(origin.id, item.id, () => recovered);
+            }
+            restoreForRetry(item.mode === "image" ? taskIds.length : undefined, preserveResults);
             pendingRetryRef.current = { context, lockKey: retryOf };
             setRetrySequence((current) => current + 1);
         } catch (error) {
@@ -1824,7 +1877,7 @@ export default function CreatePage() {
             ? activeConversation?.messages.slice(0, index).reverse().find((message) => message.role === "user")
             : item;
         if (!previous?.content || busy) return;
-        if (activeConversation?.agentSessionId) {
+        if (item.mode === "agent" || item.agentRunId || item.id.startsWith("task-")) {
             selectMode("agent");
             setPrompt(`请基于之前的结果创作一个新版本：${previous.content}`);
             window.requestAnimationFrame(() => composerFocusRef.current?.focus());

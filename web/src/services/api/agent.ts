@@ -144,7 +144,15 @@ export class AgentStreamError extends Error {
     }
 }
 
+export type AgentCreationContextEntry = {
+    role: "user" | "assistant";
+    mode: "image" | "video" | "text";
+    content?: string;
+    taskIds?: string[];
+};
+
 export type CreateAgentRunInput = {
+    creationContext?: AgentCreationContextEntry[];
     retry?: { runId: string; taskId?: string; taskIds?: string[] };
     reasoningMode?: AgentReasoningMode;
     profileRevision?: string;

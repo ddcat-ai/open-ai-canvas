@@ -294,6 +294,9 @@ func (s *Service) Task(userID string, id string) (*model.Task, error) {
 		return nil, err
 	}
 	s.hydrateTaskProviderRequestID(task)
+	if err := s.reconcileRecordedTaskRejection(task); err != nil {
+		return nil, err
+	}
 	return taskForOutput(*task), nil
 }
 

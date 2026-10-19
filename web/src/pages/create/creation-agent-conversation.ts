@@ -255,6 +255,23 @@ export async function restoreCreationAgentConversation(sessionId: string, client
     return projectCreationAgentConversation(first.session, fullRuns);
 }
 
+// A shared creation session can contain direct image/video messages. Only stable
+// message/task identities establish which Agent run owns a failed delivery.
+export function creationAgentRetryRun(conversation: CreationConversation, message: CreationMessage): AgentRun | undefined {
+    const runs = conversation.agentRuns || [];
+    if (message.agentRunId) return runs.find((run) => run.id === message.agentRunId);
+    const taskIds = new Set(message.taskIds || []);
+    if (message.id.startsWith("task-")) taskIds.add(message.id.slice(5));
+    const matches = runs.filter(
+        (run) =>
+            message.id === `${run.id}:assistant` ||
+            message.id === `error-${run.id}` ||
+            Boolean(message.agentIdempotencyKey && run.idempotencyKey === message.agentIdempotencyKey) ||
+            (run.events || []).some((event) => event.runId === run.id && event.type === "generation_task_created" && taskIds.has(text(event.payload?.taskId))),
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+}
+
 function mergeCreationAgentAttachments(local: CreationMessage["attachments"], remote: CreationMessage["attachments"]): CreationMessage["attachments"] {
     if (!remote) return local;
     return remote.map((attachment) => {
@@ -358,7 +375,7 @@ export function beginCreationAgentSubmission(
 
 export function bindCreationAgentSubmission(conversation: CreationConversation, submissionId: string, sessionId: string, key: string): CreationConversation {
     if (conversation.agentSessionId && conversation.agentSessionId !== sessionId) throw new Error("首页创作会话归属不一致，已保留原会话");
-    return { ...conversation, agentSessionId: sessionId, messages: conversation.messages.map((message) => (message.clientOperationId === submissionId ? { ...message, agentIdempotencyKey: key } : message)) };
+    return { ...conversation, agentSessionId: sessionId, messages: conversation.messages.map((message) => (message.clientOperationId === submissionId ? { ...message, agentIdempotencyKey: key, agentSubmissionRejected: undefined } : message)) };
 }
 
 export function settleCreationAgentSubmission(current: CreationConversation, incoming: CreationConversation, submissionId: string): CreationConversation {
@@ -380,7 +397,7 @@ export function failCreationAgentSubmission(conversation: CreationConversation, 
             const failed = message.role === "assistant" ? { ...message, status: "error" as const, error } : message;
             // A definite admission rejection has no run to recover. Keep the
             // draft/error visible, but let the next submit replace these bubbles.
-            return rejectedKey && message.agentIdempotencyKey === rejectedKey ? { ...failed, agentIdempotencyKey: undefined } : failed;
+            return rejectedKey && message.agentIdempotencyKey === rejectedKey ? { ...failed, agentIdempotencyKey: undefined, agentSubmissionRejected: true } : failed;
         }),
     };
 }

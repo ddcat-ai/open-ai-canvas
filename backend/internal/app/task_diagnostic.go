@@ -103,3 +103,49 @@ func taskSubmissionOutcome(task *model.Task, notSent bool) string {
 	}
 	return "unknown"
 }
+
+// A task read may resolve an older conservative diagnostic from persisted
+// dispatch evidence. This changes only the response, never the task or billing.
+func (s *Service) reconcileRecordedTaskRejection(task *model.Task) error {
+	if task.Status != model.TaskStatusFailed || task.ProviderRequestID != "" || task.MediaRecoveryJSON != "" {
+		return nil
+	}
+	diagnostic := taskExecutionDiagnostic(task)
+	if diagnostic == nil || diagnostic.SubmissionOutcome != "unknown" {
+		return nil
+	}
+	attempts, err := s.repo.RouteAttempts(task.ID, task.RouteRun)
+	if err != nil {
+		return err
+	}
+	if len(attempts) == 0 {
+		return nil
+	}
+	outcome := "not_submitted"
+	for _, attempt := range attempts {
+		if attempt.ProviderRequestID != "" {
+			return nil
+		}
+		switch attempt.DispatchState {
+		case "rejected_no_job":
+			if attempt.Status != "failed" {
+				return nil
+			}
+			outcome = "rejected"
+		case "not_sent":
+			if attempt.Status != "failed" && attempt.Status != "selected" {
+				return nil
+			}
+		default:
+			return nil
+		}
+	}
+	diagnostic.TaskSubmitted = false
+	diagnostic.SubmissionOutcome, diagnostic.RetryClass = outcome, "new_generation_authorization"
+	raw, err := json.Marshal(diagnostic)
+	if err != nil {
+		return err
+	}
+	task.ExecutionDiagnosticJSON = string(raw)
+	return nil
+}
