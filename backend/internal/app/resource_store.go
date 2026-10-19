@@ -58,7 +58,7 @@ func (s *Service) uploadResource(userID string, header *multipart.FileHeader, ki
 	if err != nil {
 		return nil, err
 	}
-	if !(forceLocal && (kind == "live2d" || kind == "agent-avatar-bundle")) {
+	if !(forceLocal && (kind == "live2d" || kind == "agent-avatar-bundle" || kind == "sprite")) {
 		kind = uploadedResourceKind(mimeType)
 	}
 	if existing != nil {
@@ -288,7 +288,7 @@ func (s *Service) storeResourceWithWriter(userID string, kind string, fileName s
 		reservationID = reservationIDs[0]
 	}
 	// Live2D is reserved for the administrator's validated local import path.
-	if !(forceLocal && (kind == "live2d" || kind == "agent-avatar-bundle")) {
+	if !(forceLocal && (kind == "live2d" || kind == "agent-avatar-bundle" || kind == "sprite")) {
 		kind = normalizeResourceKind(kind, mimeType)
 	}
 	if existing, err := s.resourceForUploadKey(userID, uploadKey); err != nil {

@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 
-export function AgentAvatarVideo({ src, loop = true, onError, className }: { src: string; loop?: boolean; onError?: () => void; className?: string }) {
+export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, onError, className }: { src: string; loop?: boolean; paused?: boolean; onReady?: () => void; onError?: () => void; className?: string }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const errorRef = useRef(onError);
     errorRef.current = onError;
+    const readyRef = useRef(onReady);
+    readyRef.current = onReady;
+    const drawRef = useRef<() => void>(() => {});
 
     useEffect(() => {
         const video = videoRef.current;
@@ -55,6 +58,7 @@ export function AgentAvatarVideo({ src, loop = true, onError, className }: { src
                 });
             }
         };
+        drawRef.current = drawFrame;
         drawFrame();
         scheduleFrame();
         return () => {
@@ -68,8 +72,9 @@ export function AgentAvatarVideo({ src, loop = true, onError, className }: { src
         const video = videoRef.current;
         if (!video) return;
         video.loop = loop;
-        if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) void video.play().catch(() => undefined);
-    }, [src, loop]);
+        if (paused) video.pause();
+        else if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) void video.play().catch(() => undefined);
+    }, [src, loop, paused]);
 
     return (
         <>
@@ -77,7 +82,7 @@ export function AgentAvatarVideo({ src, loop = true, onError, className }: { src
             <video
                 ref={videoRef}
                 src={src}
-                autoPlay
+                autoPlay={!paused}
                 muted
                 loop={loop}
                 playsInline
@@ -85,6 +90,10 @@ export function AgentAvatarVideo({ src, loop = true, onError, className }: { src
                 aria-hidden="true"
                 draggable={false}
                 onError={() => errorRef.current?.()}
+                onLoadedData={() => {
+                    drawRef.current();
+                    readyRef.current?.();
+                }}
                 className="canvas-agent-video-source"
                 style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
             />

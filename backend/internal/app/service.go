@@ -34,6 +34,7 @@ type Service struct {
 	emailCodeMu              sync.Mutex
 	redeemBatchMu            sync.Mutex
 	storageMu                sync.Mutex
+	spriteCacheMu            sync.Mutex
 	storageTestMu            sync.Mutex
 	workerRuntimeMu          sync.Mutex
 	agentSchedulerMu         sync.Mutex

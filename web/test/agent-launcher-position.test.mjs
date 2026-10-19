@@ -180,3 +180,26 @@ test("production handlers support keyboard movement and viewport resizing", () =
     h.fire("onClick", { detail: 0 });
     expect(h.opens).toBe(1);
 });
+
+test("keyboard-generated virtual pointers do not capture or block subsequent real dragging", () => {
+    const h = harness();
+    expect(() =>
+        h.fire("onPointerDown", {
+            currentTarget: {
+                setPointerCapture() {
+                    const error = new Error("No active pointer");
+                    error.name = "NotFoundError";
+                    throw error;
+                },
+            },
+        }),
+    ).not.toThrow();
+    h.fire("onClick", { detail: 0 });
+    expect(h.opens).toBe(1);
+    h.fire("onPointerDown");
+    h.fire("onPointerMove", { clientX: 400 });
+    expect(h.state.dragging).toBe(true);
+    expect(h.state.moveDirection).toBe(-1);
+    h.fire("onPointerUp", { clientX: 400 });
+    expect(h.state.moveDirection).toBe(0);
+});

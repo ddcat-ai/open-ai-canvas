@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 宠物与形象库
+
+- 导入、图集校验和资源授权：`app/appearance_sprite.go`；缩略图与可回收派生缓存：`app/appearance_sprite_cache.go`。
+- 形象库、个人偏好和并发更新：`app/appearance_pets.go`、`repository/pet_preference.go`；HTTP 入口：`handler/appearance_sprite.go`、`handler/pet_preference.go`。
+- 管理后台：`settings/components/pet-catalog-library.tsx`、`sprite-pet-editor.tsx`；播放与菜单：`components/canvas/sprite-avatar.tsx`、`pet-radial-menu.tsx`；用户隔离与图片缓存：`stores/use-pet-preference.ts`、`services/sprite-image-cache.ts`。
+
 ## 画布实时会话
 
 - 传输入口：`backend/internal/handler/canvas_realtime.go` 校验登录与 Origin、管理 WebSocket；`app/canvas_realtime.go` 校验画布归属，`internal/canvas/realtime.go` 负责临时 Presence、房间隔离与 Redis 分发，`realtime_devices.go` 管理跨实例统一窗口编号及临时租期。

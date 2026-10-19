@@ -18,7 +18,7 @@ export default function StorageResourcesPanel() {
     const { message, modal } = App.useApp();
     const [searchParams, setSearchParams] = useSearchParams();
     const keyword = searchParams.get("filter") || "";
-    const kind = normalizeOption(searchParams.get("kind"), ["image", "video", "audio", "file", "live2d"]);
+    const kind = normalizeOption(searchParams.get("kind"), ["image", "video", "audio", "file", "live2d", "sprite"]);
     const status = normalizeOption(searchParams.get("status"), ["pending", "ready", "failed", "deleted"]);
     const provider = normalizeOption(searchParams.get("provider"), ["local", "aliyun", "tencent", "qiniu", "s3"]);
     const userQuery = searchParams.get("user") || searchParams.get("userId") || "";
@@ -212,7 +212,15 @@ export default function StorageResourcesPanel() {
                             placeholder="资源 ID 或对象路径"
                             onValueChange={(value) => updateUrl({ filter: value, page: 1 }, true)}
                         />
-                        <AdminSearchInput aria-label="按用户名、昵称、邮箱或用户 ID 筛选" autoComplete="off" allowClear className="w-64" value={userQuery} placeholder="用户名 / 昵称 / 邮箱 / 用户 ID" onValueChange={(value) => updateUrl({ user: value, userId: "", page: 1 }, true)} />
+                        <AdminSearchInput
+                            aria-label="按用户名、昵称、邮箱或用户 ID 筛选"
+                            autoComplete="off"
+                            allowClear
+                            className="w-64"
+                            value={userQuery}
+                            placeholder="用户名 / 昵称 / 邮箱 / 用户 ID"
+                            onValueChange={(value) => updateUrl({ user: value, userId: "", page: 1 }, true)}
+                        />
                         <Select aria-label="筛选资源类型" className="w-32" value={kind} onChange={(value) => updateUrl({ kind: value, page: 1 })} options={kindOptions} />
                         <Select aria-label="筛选资源状态" className="w-32" value={status} onChange={(value) => updateUrl({ status: value, page: 1 })} options={statusOptions} />
                         <Select aria-label="筛选存储类型" className="w-36" value={provider} onChange={(value) => updateUrl({ provider: value, page: 1 })} options={providerOptions} />
@@ -321,6 +329,7 @@ const kindOptions = [
     { label: "音频", value: "audio" },
     { label: "文件", value: "file" },
     { label: "Live2D 模型", value: "live2d" },
+    { label: "精灵宠物", value: "sprite" },
 ];
 const statusOptions = [
     { label: "全部状态", value: "all" },
@@ -353,7 +362,7 @@ function fileName(objectKey: string) {
     return objectKey.split("/").filter(Boolean).at(-1) || "";
 }
 function kindLabel(kind: string) {
-    return ({ image: "图片", video: "视频", audio: "音频", file: "文件", live2d: "Live2D" } as Record<string, string>)[kind] || kind || "未知";
+    return ({ image: "图片", video: "视频", audio: "音频", file: "文件", live2d: "Live2D", sprite: "精灵宠物" } as Record<string, string>)[kind] || kind || "未知";
 }
 function statusLabel(status: string) {
     return ({ pending: "待处理", ready: "已就绪", failed: "失败", deleted: "已删除" } as Record<string, string>)[status] || status || "未知";

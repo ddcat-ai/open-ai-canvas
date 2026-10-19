@@ -1,0 +1,57 @@
+.pet-thumbnail {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.pet-thumbnail img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 160ms ease;
+}
+.pet-thumbnail.is-ready img {
+    opacity: 1;
+}
+.pet-thumbnail.is-loading {
+    border-radius: var(--radius-md, 8px);
+    background: var(--skeleton-surface);
+    animation: pet-thumbnail-pulse 1.4s ease-in-out infinite;
+}
+.pet-thumbnail.is-error {
+    display: grid;
+    place-items: center;
+    opacity: 0.5;
+}
+.pet-thumbnail.is-error svg {
+    width: 20px;
+    height: 20px;
+}
+@keyframes pet-thumbnail-pulse {
+    50% {
+        opacity: 0.4;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pet-thumbnail.is-loading {
+        animation: none;
+    }
+    .pet-thumbnail img {
+        transition: none;
+    }
+}
+.pet-thumbnail-stage,
+.pet-thumbnail-symbol {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    color: inherit;
+}
+.pet-thumbnail-symbol svg {
+    width: 30px;
+    height: 30px;
+}

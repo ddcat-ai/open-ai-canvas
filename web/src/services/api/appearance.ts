@@ -5,6 +5,7 @@ import { apiBaseURL } from "@/services/api/request";
 import type { UpdateAnnouncement } from "@/lib/update-announcement";
 
 export type PublicAppearance = {
+    petCatalog?: PetAppearance[];
     updates?: UpdateAnnouncement;
     canvas?: CanvasAppearance;
     schemaVersion: number;
@@ -37,6 +38,7 @@ export type PublicAppearance = {
 };
 
 export type AdminAppearance = {
+    petCatalog?: PetAppearance[];
     updates?: UpdateAnnouncement;
     canvas?: CanvasAppearance;
     schemaVersion: number;
@@ -97,6 +99,7 @@ export async function updateAdminAppearance(
         AdminAppearance,
         | "brandName"
         | "canvas"
+        | "petCatalog"
         | "updates"
         | "brandSlug"
         | "authHeroTitle"
@@ -163,6 +166,31 @@ export function agentAvatarBundleFileURL(resourceId: string, file: string, previ
     return `${apiBaseURL.replace(/\/$/, "")}/${endpoint}/appearance/avatar/${encodeURIComponent(resourceId)}/${encodeURIComponent(file)}${query}`;
 }
 
+export async function uploadSpritePet(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    const result = await http.post<{ pet: { resourceId: string; config: import("@/lib/canvas/sprite-pet").SpritePet } }>("/admin/settings/appearance/sprite", body);
+    return result.pet;
+}
+
+export function spriteImageURL(resourceId: string, preview = false) {
+    return `${apiBaseURL.replace(/\/$/, "")}/${preview ? "admin/settings" : "public"}/appearance/sprite/${encodeURIComponent(resourceId)}`;
+}
+
+export function spriteThumbnailURL(resourceId: string, sprite: Pick<import("@/lib/canvas/sprite-pet").SpritePet, "frameWidth" | "frameHeight" | "neutralFrame">, preview = false) {
+    return `${spriteImageURL(resourceId, preview)}/thumbnail?v=1&w=${sprite.frameWidth}&h=${sprite.frameHeight}&frame=${sprite.neutralFrame}`;
+}
+
 export function live2DModelURL(resourceId: string, entry: string, preview = false) {
     return `${apiBaseURL.replace(/\/$/, "")}/${preview ? "admin/settings" : "public"}/appearance/live2d/${encodeURIComponent(resourceId)}/${entry.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export type PetAppearance = Pick<CanvasAppearance, "avatarType" | "avatarHeight" | "spriteResourceId" | "sprite" | "live2dResourceId" | "live2dEntry"> &
+    Partial<Pick<CanvasAppearance, "avatarBundleResourceId" | "avatarClipStates">> & { id: string; name: string; published: boolean };
+export type PetPreference = { modelId: string; scale: number; locked: boolean; hidden: boolean; revision: number };
+export async function getPetPreference(signal?: AbortSignal) {
+    return (await http.get<{ preference: PetPreference }>("/me/pet-preference", { signal })).preference;
+}
+export async function savePetPreference(preference: PetPreference) {
+    return (await http.put<{ preference: PetPreference }>("/me/pet-preference", preference)).preference;
 }

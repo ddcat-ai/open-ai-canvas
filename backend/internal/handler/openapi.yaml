@@ -28,6 +28,111 @@ tags:
   - name: skills
   - name: workbench
 paths:
+  /me/pet-preference:
+    get:
+      tags: [canvas]
+      summary: 读取当前账号的宠物外观偏好
+      description: 私有且不缓存。不存在时返回 system、100%、未锁定、未隐藏、revision=0。
+      responses:
+        "200": {description: "成功信封 data={preference:{modelId,scale,locked,hidden,revision}}"}
+        "401": {$ref: "#/components/responses/Error"}
+    put:
+      tags: [canvas]
+      summary: 保存当前账号的宠物外观偏好
+      description: 用户 ID 由认证会话解析；仅允许 system 或后台已发布的形象。旧 revision 拒绝，不修改其他账号。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modelId, scale, locked, hidden, revision]
+              properties:
+                modelId: {type: string, maxLength: 64}
+                scale: {type: integer, minimum: 50, maximum: 150, multipleOf: 5}
+                locked: {type: boolean}
+                hidden: {type: boolean}
+                revision: {type: integer, minimum: 0}
+      responses:
+        "200": {description: "成功信封 data={preference}，revision 递增"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+  /admin/settings/appearance/sprite:
+    post:
+      tags: [admin]
+      summary: 导入精灵宠物草稿（不自动启用）
+      description: ZIP 最大 16 MiB，最多 16 条目、解压累计 24 MiB。包含一个 pet.json 和引用的 PNG/静态 WebP，可附文字授权文件。支持 Codex v1/v2 或 yinghui 自定义图集配置。返回 data.pet.resourceId 和 data.pet.config；通过 PATCH 外观接口的 canvas.spriteResourceId、canvas.sprite 和 avatarType=sprite 保存启用。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200": { description: 成功信封 data.pet 包含 resourceId 和已校验的 config }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /admin/settings/appearance/sprite/{id}:
+    get:
+      tags: [admin]
+      summary: 预览自己上传或当前配置引用的精灵图集
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: PNG 或 WebP 图片，非 JSON 信封 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /public/appearance/sprite/{id}:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取当前启用或形象库已发布的精灵图集
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: PNG 或 WebP 图片，非 JSON 信封 }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /public/appearance/sprite/{id}/thumbnail:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取当前启用或已发布形象的中立帧缩略图
+      description: 最长边88px，透明PNG。w、h、frame须匹配已发布配置；鉴权通过后支持ETag和If-None-Match。
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: w, required: true, schema: { type: integer, minimum: 8, maximum: 4096 } }
+        - { in: query, name: h, required: true, schema: { type: integer, minimum: 8, maximum: 4096 } }
+        - { in: query, name: frame, required: true, schema: { type: integer, minimum: 0, maximum: 4095 } }
+      responses:
+        "200": { description: PNG图片，非JSON信封 }
+        "304": { description: 内容未变化 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/settings/appearance/sprite/{id}/thumbnail:
+    get:
+      tags: [admin]
+      summary: 预览精灵中立帧缩略图
+      description: 最长边88px透明PNG；支持编辑后的单帧尺寸和中立帧。资源归属规则与图集预览一致。
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: w, required: true, schema: { type: integer, minimum: 8, maximum: 4096 } }
+        - { in: query, name: h, required: true, schema: { type: integer, minimum: 8, maximum: 4096 } }
+        - { in: query, name: frame, required: true, schema: { type: integer, minimum: 0, maximum: 4095 } }
+      responses:
+        "200": { description: PNG图片，非JSON信封 }
+        "304": { description: 内容未变化 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /projects/{id}/assets/{assetId}/image:
     put:
       tags: [projects, assets]

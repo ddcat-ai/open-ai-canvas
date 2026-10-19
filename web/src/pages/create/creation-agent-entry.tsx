@@ -1,8 +1,11 @@
 import { useRef, useState } from "react";
 import { App, Button } from "antd";
-import { ArrowUpRight, FolderOpen, Sparkles } from "lucide-react";
+import { ArrowUpRight, FolderOpen, LoaderCircle, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { PetAvatar } from "@/components/canvas/pet-avatar";
+import { PetAppearanceTransition } from "@/components/canvas/pet-appearance-transition";
+import { usePetAppearance } from "@/hooks/use-pet-appearance";
+import { usePetReducedMotion } from "@/hooks/use-pet-reduced-motion";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, saveRemoteUserDataNow } from "@/services/user-data-sync";
@@ -12,6 +15,8 @@ export function CreationAgentEntry() {
     const navigate = useNavigate();
     const { message } = App.useApp();
     const hydrated = useCanvasStore((state) => state.hydrated);
+    const { appearance, resolved: appearanceResolved } = usePetAppearance();
+    const reducedMotion = usePetReducedMotion();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const lock = useRef(false);
@@ -42,12 +47,37 @@ export function CreationAgentEntry() {
                 setError(detail);
                 message.error(detail);
             }
-        } finally { lock.current = false; setBusy(false); }
+        } finally {
+            lock.current = false;
+            setBusy(false);
+        }
     };
-    return <section className="creation-agent-entry" aria-label="画布 Agent 模式">
-        <div className="creation-agent-orb" aria-hidden><FluidOrb size={88} /></div>
-        <div className="creation-agent-copy"><span className="creation-agent-eyebrow">CANVAS AGENT</span><h2>不止回答，把想法落到画布上</h2><p>使用画布里的同一个 Agent，结合素材、技能与创作上下文协作。生成与修改仍需经过原有审批和额度检查。</p></div>
-        <div className="creation-agent-actions"><Button type="primary" icon={<Sparkles />} loading={busy} disabled={!hydrated} onClick={() => void start()}>{created.current ? "重试同步并进入" : "新建画布，与 Agent 创作"}<ArrowUpRight /></Button><Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>在已有画布中继续</Button></div>
-        {error ? <p className="creation-agent-error" role="alert">{error}</p> : null}
-    </section>;
+    return (
+        <section className="creation-agent-entry" aria-label="画布 Agent 模式">
+            <div className="creation-agent-avatar" aria-hidden="true">
+                <PetAppearanceTransition appearance={appearance} resolved={appearanceResolved} reducedMotion={reducedMotion}>
+                    {!appearanceResolved ? <LoaderCircle className="size-6 motion-safe:animate-spin" /> : <PetAvatar appearance={appearance} height={112} paused={false} reducedMotion={reducedMotion} />}
+                </PetAppearanceTransition>
+            </div>
+            <div className="creation-agent-copy">
+                <span className="creation-agent-eyebrow">CANVAS AGENT</span>
+                <h2>不止回答，把想法落到画布上</h2>
+                <p>使用画布里的同一个 Agent，结合素材、技能与创作上下文协作。生成与修改仍需经过原有审批和额度检查。</p>
+            </div>
+            <div className="creation-agent-actions">
+                <Button type="primary" icon={<Sparkles />} loading={busy} disabled={!hydrated} onClick={() => void start()}>
+                    {created.current ? "重试同步并进入" : "新建画布，与 Agent 创作"}
+                    <ArrowUpRight />
+                </Button>
+                <Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>
+                    在已有画布中继续
+                </Button>
+            </div>
+            {error ? (
+                <p className="creation-agent-error" role="alert">
+                    {error}
+                </p>
+            ) : null}
+        </section>
+    );
 }

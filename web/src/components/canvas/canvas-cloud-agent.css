@@ -604,18 +604,12 @@
     text-align: center;
 }
 
-.agent-welcome-orb {
-    display: inline-block;
-    width: 52px;
-    height: 52px;
+.agent-welcome-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 88px;
     margin-bottom: var(--space-5);
-    border-radius: 50%;
-    background:
-        radial-gradient(circle at 32% 24%, var(--color-neutral-0), transparent 36%), radial-gradient(circle at 70% 80%, var(--palette-node-audio), transparent 64%),
-        radial-gradient(circle at 35% 65%, color-mix(in srgb, var(--agent-accent) 65%, var(--color-neutral-0)), var(--agent-accent));
-    box-shadow:
-        inset -4px -6px 14px color-mix(in srgb, var(--agent-accent) 28%, transparent),
-        0 8px 32px color-mix(in srgb, var(--agent-accent) 14%, transparent);
 }
 
 .agent-welcome-intro h2 {
@@ -1739,7 +1733,7 @@
 
 .canvas-agent-launcher-label {
     position: absolute;
-    bottom: -34px;
+    bottom: calc(var(--canvas-pet-inset, 0px) - 34px);
     left: 50%;
     padding: 3px 7px;
     border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
@@ -1751,6 +1745,9 @@
     line-height: 1;
     transform: translateX(-50%);
     white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     backdrop-filter: blur(10px);
 }
 
@@ -1805,11 +1802,7 @@
 
 .canvas-agent-launcher-status {
     position: absolute;
-    top: 6px;
-    right: 7px;
-    width: 10px;
-    height: 10px;
-    border: 2px solid var(--background);
+    border: 1px solid var(--background);
     border-radius: 50%;
     background: #57b786;
     box-shadow: 0 2px 7px rgba(23, 90, 61, 0.28);
@@ -1825,20 +1818,9 @@
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--canvas-agent-status-color, #df9b47) 20%, transparent);
 }
 
-.canvas-agent-launcher-badge {
-    position: absolute;
-    top: 1px;
-    right: 62px;
-    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--background) 94%, transparent);
-    padding: 5px 8px;
-    color: var(--foreground);
-    font-size: 10px;
-    font-weight: 650;
-    line-height: 1;
-    white-space: nowrap;
-    box-shadow: 0 8px 22px color-mix(in srgb, var(--foreground) 10%, transparent);
+.canvas-agent-launcher-label.is-pending {
+    color: var(--status-warning);
+    border-color: color-mix(in srgb, var(--status-warning) 35%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

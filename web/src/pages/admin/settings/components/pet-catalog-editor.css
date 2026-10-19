@@ -1,0 +1,174 @@
+[data-admin-root] .pet-admin-choice {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    cursor: pointer;
+}
+[data-admin-root] .pet-admin-choice[aria-pressed="true"] {
+    background: var(--admin-nav-active);
+    border-color: var(--admin-border-strong);
+}
+[data-admin-root] .pet-admin-choice:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+[data-admin-root] .pet-admin-choice small {
+    color: var(--admin-text-secondary);
+}
+[data-admin-root] .pet-admin-choice > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+[data-admin-root] .pet-admin-workspace {
+    display: grid;
+    gap: 20px;
+    min-width: 0;
+}
+[data-admin-root] .pet-admin-identity,
+[data-admin-root] .pet-library,
+[data-admin-root] .pet-admin-detail {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+}
+[data-admin-root] .pet-admin-identity summary,
+[data-admin-root] .pet-admin-import-details summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+[data-admin-root] .pet-admin-identity-fields {
+    margin-top: 16px;
+}
+[data-admin-root] .pet-admin-identity-fields form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 20px;
+}
+[data-admin-root] .pet-library-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+[data-admin-root] .pet-library h3,
+[data-admin-root] .pet-admin-detail h3 {
+    font-weight: 600;
+    font-size: var(--fs-body);
+    margin: 0;
+}
+[data-admin-root] .pet-library h3 span {
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    color: var(--admin-text-secondary);
+    margin-left: 8px;
+}
+[data-admin-root] .pet-library-heading p {
+    color: var(--admin-text-secondary);
+    font-size: var(--fs-caption);
+    margin-top: 4px;
+}
+[data-admin-root] .pet-library-tools {
+    display: flex;
+    gap: 8px;
+}
+[data-admin-root] .pet-library-filter {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) 132px auto;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0 16px;
+}
+[data-admin-root] .pet-library-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+[data-admin-root] .pet-library-selected {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    color: var(--admin-text);
+}
+[data-admin-root] .pet-library-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+    color: var(--admin-text-secondary);
+    font-size: var(--fs-caption);
+}
+[data-admin-root] .pet-library-empty,
+[data-admin-root] .pet-library-progress {
+    padding: 16px 0;
+    color: var(--admin-text-secondary);
+}
+[data-admin-root] .pet-admin-detail {
+    display: grid;
+    gap: 18px;
+}
+[data-admin-root] .pet-admin-detail-title {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+[data-admin-root] .pet-admin-detail-title > span {
+    color: var(--admin-text-secondary);
+    font-size: var(--fs-caption);
+}
+[data-admin-root] .pet-admin-model-content {
+    display: grid;
+    gap: 16px;
+}
+[data-admin-root] .pet-admin-import-details {
+    border-top: 1px solid var(--admin-border);
+    padding-top: 16px;
+}
+[data-admin-root] .pet-admin-choice:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+@media (max-width: 1100px) {
+    [data-admin-root] .pet-library-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+@media (max-width: 640px) {
+    [data-admin-root] .pet-admin-identity,
+    [data-admin-root] .pet-library,
+    [data-admin-root] .pet-admin-detail {
+        padding: 14px;
+    }
+    [data-admin-root] .pet-library-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+    [data-admin-root] .pet-library-filter {
+        grid-template-columns: minmax(0, 1fr) 116px;
+    }
+    [data-admin-root] .pet-library-filter > label {
+        grid-column: 1/-1;
+    }
+    [data-admin-root] .pet-admin-identity-fields form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    [data-admin-root] .pet-library-tools {
+        flex-wrap: wrap;
+    }
+    [data-admin-root] .pet-library-pagination {
+        flex-wrap: wrap;
+    }
+}

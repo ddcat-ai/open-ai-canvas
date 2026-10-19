@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 精灵宠物存储
+
+形象库保存在 `system_settings.appearance.petCatalog`，系统默认项为 `canvas.defaultPetId`。个人偏好使用当前登录用户的 `user-pet:<user-id>` 设置项，保存形象、大小、锁定状态及版本号；写入通过条件更新或首次插入检测并发冲突。下架形象回退到可用默认项，不增加数据表或迁移。
+
+图集使用 `resources.kind=sprite`，仅保存经过校验的 PNG/WebP；ZIP 在内存中解析，不执行脚本、不提取任意路径。图集及形象库引用参与资源删除保护，缩略图和转换缓存可重建。
+
 ## 画布多端协作（Schema 57）
 
 迁移 `canvas_multi_session_sync` 新增 `canvas_edit_leases`，以 `(user_id, canvas_id, node_id)` 为主键，记录浏览器会话、随机租约凭据与到期时间。服务端在画布事务锁内裁决占用和写入，租约有效期 30 秒；读取状态不返回凭据，浏览器计时不能代替服务端授权。
@@ -35,7 +41,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 ## 画布 Agent 外观配置
 
-`system_settings` 的 `appearance` JSON 合同版本 9 新增 `canvas`：助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`。独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
+`system_settings` 的 `appearance` JSON 中 `canvas` 包括助手名称、入口标签、面板标题、欢迎文案、输入提示、`avatarType`（`orb|live2d|sprite`）、`avatarHeight`（120–360）、`live2dResourceId` 和服务端确认的 `live2dEntry`。独立于站点品牌；缺失时读取内置画布默认值。不新增数据库结构迁移，不改变全局 schema 版本。
 
 模型包复用 `resources` 表，`kind=live2d`、`provider=local`，ZIP 不解压到磁盘。该 kind 仅由验证后的管理员导入路径保留，普通上传不能声明它。外观配置中的模型 ID 参与删除引用检查；清除引用不删除资源。默认球仍可保留模型引用，便于切换。
 

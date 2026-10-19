@@ -1,64 +1,53 @@
-import { useEffect, useRef, useState } from "react";
-import { Alert, App, Button, Form, Input, InputNumber, Radio, Select } from "antd";
-import { ExternalLink, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { Alert, App, Button, Form, Input, Radio, Slider, Switch } from "antd";
+import { ArrowDown, ArrowUp, ExternalLink, Trash2, Upload } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
 import { FluidOrb } from "@/components/ui/fluid-orb";
-import {
-    AGENT_AVATAR_STATES,
-    DEFAULT_AGENT_AVATAR_CLIP_STATES,
-    agentAvatarClipForState,
-    agentCopy,
-    isAgentAvatarBundleManifest,
-    suggestedAgentAvatarClipStates,
-    type AgentAvatarBundleManifest,
-    type AgentAvatarState,
-    type CanvasAppearance,
-} from "@/lib/canvas/agent-appearance";
-import { agentAvatarBundleFileURL, live2DModelURL, uploadAgentAvatarBundle, uploadLive2D } from "@/services/api/appearance";
-import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
+import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
+import { live2DModelURL, uploadLive2D, type PetAppearance } from "@/services/api/appearance";
+import { PetCatalogLibrary } from "./pet-catalog-library";
+import "./pet-catalog-editor.css";
+import { SpritePetEditor } from "./sprite-pet-editor";
+import { validateSpritePet } from "@/lib/canvas/sprite-pet";
+import { AvatarBundleEditor } from "./avatar-bundle-editor";
 
-export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading }: { value: CanvasAppearance; onChange: (value: CanvasAppearance) => void; disabled: boolean; onUploading: (value: boolean) => void }) {
+export function CanvasAppearanceEditor({
+    value: globalValue,
+    onChange,
+    catalog,
+    onCatalogChange,
+    disabled,
+    onUploading,
+}: {
+    value: CanvasAppearance;
+    onChange: (value: CanvasAppearance) => void;
+    catalog: PetAppearance[];
+    onCatalogChange: (value: PetAppearance[]) => void;
+    disabled: boolean;
+    onUploading: (value: boolean) => void;
+}) {
+    const [selectedId, setSelectedId] = useState(globalValue.defaultPetId || catalog[0]?.id || "");
+    const selected = catalog.find((p) => p.id === selectedId) || catalog[0];
+    const value = selected ? { ...globalValue, ...selected } : globalValue;
     const { message } = App.useApp();
     const reducedMotion = useReducedMotion() ?? false;
     const input = useRef<HTMLInputElement>(null);
-    const bundleInput = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [readyURL, setReadyURL] = useState("");
     const [error, setError] = useState("");
     const [attempt, setAttempt] = useState(0);
-    const [bundleManifest, setBundleManifest] = useState<AgentAvatarBundleManifest | null>(null);
-    const [bundleLoading, setBundleLoading] = useState(false);
-    const [bundleError, setBundleError] = useState("");
-    const [selectedAvatarState, setSelectedAvatarState] = useState<AgentAvatarState>("idle");
+    const [spriteReady, setSpriteReady] = useState("");
     const url = value.live2dResourceId ? live2DModelURL(value.live2dResourceId, value.live2dEntry, true) : "";
-    const bundleID = value.avatarBundleResourceId;
-    const bundleManifestURL = bundleID ? agentAvatarBundleFileURL(bundleID, "avatar.json", true) : "/doll/avatar.json";
-    const previewClip = bundleManifest ? agentAvatarClipForState(value, selectedAvatarState, bundleManifest) : "";
-    const previewFile = bundleManifest?.clips[previewClip] || "";
-    const previewBundleURL = previewFile ? (bundleID ? agentAvatarBundleFileURL(bundleID, previewFile, true) : `/doll/${encodeURIComponent(previewFile)}`) : "";
-    const change = (patch: Partial<CanvasAppearance>) => onChange({ ...value, ...patch });
-    useEffect(() => {
-        if (value.avatarType !== "bundle") return;
-        const controller = new AbortController();
-        setBundleLoading(true);
-        setBundleError("");
-        setBundleManifest(null);
-        void (async () => {
-            try {
-                const response = await fetch(bundleManifestURL, { credentials: "include", cache: "no-store", signal: controller.signal });
-                if (!response.ok) throw new Error(`读取动画包失败（HTTP ${response.status}）`);
-                const manifest: unknown = await response.json();
-                if (!isAgentAvatarBundleManifest(manifest)) throw new Error("avatar.json 格式无效");
-                setBundleManifest(manifest);
-            } catch (cause) {
-                if (!controller.signal.aborted) setBundleError(cause instanceof Error ? cause.message : "无法读取 Agent 动画包");
-            } finally {
-                if (!controller.signal.aborted) setBundleLoading(false);
-            }
-        })();
-        return () => controller.abort();
-    }, [value.avatarType, bundleManifestURL, attempt]);
+    const change = (patch: Partial<CanvasAppearance>) => {
+        const modelKeys = ["avatarType", "avatarHeight", "live2dResourceId", "live2dEntry", "spriteResourceId", "sprite", "avatarBundleResourceId", "avatarClipStates"];
+        if (Object.keys(patch).every((k) => !modelKeys.includes(k))) {
+            onChange({ ...globalValue, ...patch });
+            return;
+        }
+        if (selected) onCatalogChange(catalog.map((p) => (p.id === selected.id ? { ...p, ...patch } : p)));
+        if (!selected || selected.id === globalValue.defaultPetId) onChange({ ...globalValue, ...patch });
+    };
     async function upload(file?: File) {
         if (!file) return;
         if (!file.name.toLowerCase().endsWith(".zip") || file.size > 128 * 1024 * 1024) {
@@ -80,233 +69,209 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
             onUploading(false);
         }
     }
-    async function uploadBundle(file?: File) {
-        if (!file) return;
-        if (!file.name.toLowerCase().endsWith(".zip") || file.size > 128 * 1024 * 1024) {
-            message.error("请选择不超过 128 MiB 的 Agent 动画 ZIP");
-            return;
-        }
-        setUploading(true);
-        onUploading(true);
-        setBundleError("");
-        try {
-            const bundle = await uploadAgentAvatarBundle(file);
-            setBundleManifest(bundle.manifest);
-            change({
-                avatarType: "bundle",
-                avatarBundleResourceId: bundle.resourceId,
-                avatarClipStates: suggestedAgentAvatarClipStates(bundle.manifest),
-            });
-            setSelectedAvatarState("idle");
-            message.success("动画包已导入，请检查状态映射并点击页面顶部保存");
-        } catch (cause) {
-            message.error(cause instanceof Error ? cause.message : "Agent 动画包导入失败");
-        } finally {
-            setUploading(false);
-            onUploading(false);
-        }
-    }
     return (
-        <div className="grid gap-6 lg:grid-cols-2">
-            <div>
-                <h3 className="mb-3 font-semibold">Agent 身份与文案</h3>
-                <p className="mb-4 text-sm text-foreground/60">独立于站点品牌。助手名称同步用于界面文案和对话中的自我介绍；文案可使用 {"{agentName}"} 引用名称，不修改工具权限。</p>
-                <Form layout="vertical" disabled={disabled || uploading}>
-                    {(
-                        [
-                            ["agentName", "助手名称", 24],
-                            ["launcherLabel", "悬浮入口文字（可留空）", 24],
-                            ["panelTitle", "对话面板标题", 40],
-                            ["welcomeTitle", "欢迎标题", 100],
-                            ["welcomeDescription", "欢迎说明", 200],
-                            ["inputPlaceholder", "输入框提示", 160],
-                        ] as const
-                    ).map(([key, label, max]) => (
-                        <Form.Item key={key} label={label}>
-                            <Input value={value[key]} maxLength={max} showCount onChange={(event) => change({ [key]: event.target.value })} />
-                        </Form.Item>
-                    ))}
-                </Form>
-            </div>
-            <div className="grid content-start gap-4">
-                <h3 className="font-semibold">Agent 形象</h3>
+        <div className="pet-admin-workspace">
+            <details className="pet-admin-identity">
+                <summary>助手名称与文案</summary>
+                <div className="pet-admin-identity-fields">
+                    <p className="mb-4 text-sm text-foreground/60">独立于站点品牌。助手名称同步用于界面文案和对话中的自我介绍；文案可使用 {"{agentName}"} 引用名称，不修改工具权限。</p>
+                    <Form layout="vertical" disabled={disabled || uploading}>
+                        {(
+                            [
+                                ["agentName", "助手名称", 24],
+                                ["launcherLabel", "悬浮入口文字（可留空）", 24],
+                                ["panelTitle", "对话面板标题", 40],
+                                ["welcomeTitle", "欢迎标题", 100],
+                                ["welcomeDescription", "欢迎说明", 200],
+                                ["inputPlaceholder", "输入框提示", 160],
+                            ] as const
+                        ).map(([key, label, max]) => (
+                            <Form.Item key={key} label={label}>
+                                <Input value={value[key]} maxLength={max} showCount onChange={(event) => change({ [key]: event.target.value })} />
+                            </Form.Item>
+                        ))}
+                    </Form>
+                </div>
+            </details>
+            <PetCatalogLibrary
+                catalog={catalog}
+                selectedId={selected?.id || ""}
+                defaultId={globalValue.defaultPetId}
+                disabled={disabled || uploading}
+                onChange={onCatalogChange}
+                onUploading={onUploading}
+                onSelect={(id) => {
+                    setSelectedId(id);
+                    setError("");
+                }}
+            />
+            <section className="pet-admin-detail" aria-label="形象详情" key={selected?.id}>
+                <div className="pet-admin-detail-title">
+                    <h3>{selected?.name || "形象设置"}</h3>
+                    <span>当前编辑</span>
+                </div>
+                {selected ? (
+                    <div className="grid gap-3" aria-label="编辑形象">
+                        <label className="grid gap-1 text-sm">
+                            形象名称
+                            <Input aria-label="形象名称" value={selected.name} maxLength={40} disabled={disabled} onChange={(e) => onCatalogChange(catalog.map((p) => (p.id === selected.id ? { ...p, name: e.target.value } : p)))} />
+                        </label>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Switch
+                                aria-label="发布给用户选择"
+                                checked={selected.published}
+                                disabled={disabled || selected.id === globalValue.defaultPetId}
+                                onChange={(published) => onCatalogChange(catalog.map((p) => (p.id === selected.id ? { ...p, published } : p)))}
+                            />
+                            <span className="text-sm">发布给用户选择</span>
+                            <Button disabled={disabled || !selected.published || selected.id === globalValue.defaultPetId} onClick={() => onChange({ ...globalValue, ...selected, defaultPetId: selected.id })}>
+                                设为系统默认
+                            </Button>
+                            <Button
+                                aria-label="形象前移"
+                                title="前移"
+                                icon={<ArrowUp size={16} aria-hidden />}
+                                disabled={disabled || catalog[0]?.id === selected.id}
+                                onClick={() => {
+                                    const next = [...catalog],
+                                        index = next.findIndex((p) => p.id === selected.id);
+                                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                                    onCatalogChange(next);
+                                }}
+                            />
+                            <Button
+                                aria-label="形象后移"
+                                title="后移"
+                                icon={<ArrowDown size={16} aria-hidden />}
+                                disabled={disabled || catalog.at(-1)?.id === selected.id}
+                                onClick={() => {
+                                    const next = [...catalog],
+                                        index = next.findIndex((p) => p.id === selected.id);
+                                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                                    onCatalogChange(next);
+                                }}
+                            />
+                            <Button
+                                danger
+                                aria-label="移除形象"
+                                title="移除形象"
+                                icon={<Trash2 size={16} aria-hidden />}
+                                disabled={disabled || selected.id === globalValue.defaultPetId}
+                                onClick={() => {
+                                    onCatalogChange(catalog.filter((p) => p.id !== selected.id));
+                                    setSelectedId(globalValue.defaultPetId || "");
+                                }}
+                            />
+                        </div>
+                    </div>
+                ) : null}
                 <Radio.Group
                     value={value.avatarType}
                     disabled={disabled || uploading}
+                    onChange={(event) => change({ avatarType: event.target.value })}
                     options={[
                         { label: "默认动态球", value: "orb" },
-                        { label: "Live2D", value: "live2d", disabled: !url || readyURL !== url },
                         { label: "状态动画包", value: "bundle" },
+                        { label: "Live2D", value: "live2d", disabled: !url || readyURL !== url },
+                        { label: "精灵宠物", value: "sprite", disabled: !value.sprite || Boolean(validateSpritePet(value.sprite)) || spriteReady !== value.spriteResourceId },
                     ]}
-                    onChange={(event) => {
-                        const type = event.target.value;
-                        change(type === "bundle" ? { avatarType: type, avatarClipStates: value.avatarClipStates || DEFAULT_AGENT_AVATAR_CLIP_STATES } : { avatarType: type });
-                    }}
                 />
-                {value.avatarType === "live2d" ? (
-                    <p className="text-sm text-foreground/60">上传有授权的 Cubism 3/4 运行时 ZIP：一个 model3.json、moc3、PNG 纹理及可选动作/表情 JSON。首期不支持音频、旧版模型和编辑工程。模型会发送到浏览器，无法保证防下载。</p>
-                ) : null}
-                {value.avatarType === "bundle" ? (
-                    <div className="grid gap-3">
-                        <input
-                            ref={bundleInput}
-                            type="file"
-                            accept=".zip,application/zip"
-                            className="hidden"
-                            onChange={(event) => {
-                                void uploadBundle(event.target.files?.[0]);
-                                event.currentTarget.value = "";
-                            }}
-                        />
-                        <div className="flex flex-wrap gap-2">
-                            <Button icon={<Upload className="size-4" />} disabled={disabled || uploading} loading={uploading} onClick={() => bundleInput.current?.click()}>
-                                导入状态动画包 ZIP（最大 128 MiB）
-                            </Button>
-                            {value.avatarBundleResourceId ? (
-                                <Button
-                                    disabled={disabled || uploading}
-                                    onClick={() => {
-                                        change({
-                                            avatarType: "bundle",
-                                            avatarBundleResourceId: "",
-                                            avatarClipStates: DEFAULT_AGENT_AVATAR_CLIP_STATES,
-                                        });
-                                        setBundleError("");
-                                    }}
-                                >
-                                    恢复内置动画包
-                                </Button>
-                            ) : null}
-                        </div>
-                        <div className="grid gap-3 border-t border-border pt-3">
-                            <Radio.Group
-                                className="flex flex-wrap"
-                                optionType="button"
-                                value={selectedAvatarState}
-                                disabled={disabled || uploading}
-                                options={AGENT_AVATAR_STATES.map((item) => ({ label: item.label, value: item.id }))}
-                                onChange={(event) => setSelectedAvatarState(event.target.value)}
-                            />
-                            <label className="grid gap-1 text-sm">
-                                {AGENT_AVATAR_STATES.find((item) => item.id === selectedAvatarState)?.label}动画
-                                <Select
-                                    aria-label="当前状态动画"
-                                    value={previewClip || undefined}
-                                    disabled={disabled || uploading || !bundleManifest}
-                                    loading={bundleLoading}
-                                    options={Object.entries(bundleManifest?.clips ?? {}).map(([clip, file]) => ({ label: `${clip} · ${file}`, value: clip }))}
-                                    onChange={(clip) =>
-                                        change({
-                                            avatarType: "bundle",
-                                            avatarClipStates: { ...value.avatarClipStates, [selectedAvatarState]: clip },
-                                        })
-                                    }
-                                />
-                            </label>
-                        </div>
-                        {bundleManifest ? (
-                            <p className="text-xs text-foreground/60">
-                                {Object.keys(bundleManifest.clips).length} 个动画 · {bundleManifest.width} × {bundleManifest.height}
-                            </p>
-                        ) : null}
-                        {bundleError ? (
-                            <Alert
-                                type="warning"
-                                showIcon
-                                title="动画包预览失败"
-                                description={bundleError}
-                                action={
-                                    <Button size="small" onClick={() => setAttempt((current) => current + 1)}>
-                                        重试
-                                    </Button>
-                                }
-                            />
-                        ) : null}
-                    </div>
-                ) : null}
-
-                <div className="grid gap-2 text-sm">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <span className="text-foreground/60">参考资料</span>
-                        <a href="https://www.live2d.com/en/learn/sample/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">
-                            官方示例模型库
-                            <ExternalLink className="size-3.5" aria-hidden="true" />
-                            <span className="sr-only">（在新标签页打开）</span>
-                        </a>
-                        <a href="https://docs.live2d.com/en/cubism-sdk-manual/cubism-sdk-for-web/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">
-                            Cubism Web SDK 文档
-                            <ExternalLink className="size-3.5" aria-hidden="true" />
-                            <span className="sr-only">（在新标签页打开）</span>
-                        </a>
-                    </div>
-                    <p className="text-xs text-foreground/60">下载前请确认素材授权；官方原始包需按上述要求整理为运行时 ZIP，不能直接整包导入。</p>
-                </div>
-                <input
-                    ref={input}
-                    type="file"
-                    accept=".zip,application/zip"
-                    className="hidden"
-                    onChange={(event) => {
-                        void upload(event.target.files?.[0]);
-                        event.currentTarget.value = "";
-                    }}
-                />
-                <div className="flex flex-wrap gap-2">
-                    <Button icon={<Upload className="size-4" />} loading={uploading} disabled={disabled} onClick={() => input.current?.click()}>
-                        导入 Live2D 模型（最大 128 MiB）
-                    </Button>
-                    {url ? (
-                        <Button
-                            disabled={disabled || uploading}
-                            onClick={() => {
-                                change({ avatarType: "orb", live2dResourceId: "", live2dEntry: "" });
-                                setError("");
-                            }}
-                        >
-                            移除模型引用
-                        </Button>
-                    ) : null}
-                </div>
-                <label className="flex items-center gap-3 text-sm">
-                    形象高度
-                    <InputNumber aria-label="形象高度" min={120} max={360} value={value.avatarHeight} disabled={disabled || uploading} onChange={(height) => height !== null && change({ avatarHeight: height })} />
-                    px
-                </label>
-                <div className="grid justify-items-center gap-3 rounded-xl border border-border bg-background p-5" aria-label="Agent 形象预览">
-                    {url ? (
-                        <Live2DAvatar
-                            key={`${url}-${attempt}`}
-                            url={url}
-                            width={Math.round(value.avatarHeight * 0.75)}
-                            height={value.avatarHeight}
-                            reducedMotion={reducedMotion}
-                            fallback={<FluidOrb size={60} color="#7164f6" />}
-                            onReady={() => {
-                                setReadyURL(url);
-                                setError("");
-                            }}
-                            onError={(reason) => {
-                                setReadyURL("");
-                                setError(reason);
-                            }}
-                        />
-                    ) : value.avatarType === "bundle" && previewBundleURL && bundleManifest ? (
-                        <div
-                            className="relative mx-auto overflow-hidden"
-                            style={{
-                                width: Math.round(bundleManifest.width * Math.min(1, 220 / Math.max(bundleManifest.width, bundleManifest.height))),
-                                height: Math.round(bundleManifest.height * Math.min(1, 220 / Math.max(bundleManifest.width, bundleManifest.height))),
-                            }}
-                        >
-                            <AgentAvatarVideo src={previewBundleURL} loop={!["completed", "failed"].includes(selectedAvatarState)} />
-                        </div>
+                <div className="pet-admin-model-content">
+                    {value.avatarType === "bundle" ? <AvatarBundleEditor key={selected?.id} value={value} onChange={change} disabled={disabled || uploading} onUploading={onUploading} /> : null}
+                    {value.avatarType === "sprite" || value.sprite ? (
+                        <SpritePetEditor key={selected?.id} value={value} onChange={change} disabled={disabled || uploading} onUploading={onUploading} onReady={setSpriteReady} />
                     ) : (
-                        <FluidOrb size={60} color="#7164f6" />
+                        <details className="pet-admin-import-details">
+                            <summary>导入精灵素材</summary>
+                            <SpritePetEditor key={selected?.id} value={value} onChange={change} disabled={disabled || uploading} onUploading={onUploading} onReady={setSpriteReady} />
+                        </details>
                     )}
-                    <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
-                    <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>
-                    {url ? <small>{readyURL === url ? "预览已就绪，可选择 Live2D 并保存启用" : "等待模型预览就绪"}</small> : null}
+                    <details className="pet-admin-import-details" open={value.avatarType === "live2d"}>
+                        <summary className="cursor-pointer text-sm font-medium">Live2D 模型设置</summary>
+                        <div className="mt-3 grid gap-4">
+                            <p className="text-sm text-foreground/60">上传有授权的 Cubism 3/4 运行时 ZIP：一个 model3.json、moc3、PNG 纹理及可选动作/表情 JSON。首期不支持音频、旧版模型和编辑工程。模型会发送到浏览器，无法保证防下载。</p>
+                            <div className="grid gap-2 text-sm">
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                    <span className="text-foreground/60">参考资料</span>
+                                    <a href="https://www.live2d.com/en/learn/sample/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">
+                                        官方示例模型库
+                                        <ExternalLink className="size-3.5" aria-hidden="true" />
+                                        <span className="sr-only">（在新标签页打开）</span>
+                                    </a>
+                                    <a href="https://docs.live2d.com/en/cubism-sdk-manual/cubism-sdk-for-web/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">
+                                        Cubism Web SDK 文档
+                                        <ExternalLink className="size-3.5" aria-hidden="true" />
+                                        <span className="sr-only">（在新标签页打开）</span>
+                                    </a>
+                                </div>
+                                <p className="text-xs text-foreground/60">下载前请确认素材授权；官方原始包需按上述要求整理为运行时 ZIP，不能直接整包导入。</p>
+                            </div>
+                            <input
+                                ref={input}
+                                type="file"
+                                accept=".zip,application/zip"
+                                className="hidden"
+                                onChange={(event) => {
+                                    void upload(event.target.files?.[0]);
+                                    event.currentTarget.value = "";
+                                }}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                                <Button icon={<Upload className="size-4" />} loading={uploading} disabled={disabled} onClick={() => input.current?.click()}>
+                                    导入 Live2D 模型（最大 128 MiB）
+                                </Button>
+                                {url ? (
+                                    <Button
+                                        disabled={disabled || uploading}
+                                        onClick={() => {
+                                            change({ avatarType: "orb", live2dResourceId: "", live2dEntry: "" });
+                                            setError("");
+                                        }}
+                                    >
+                                        移除模型引用
+                                    </Button>
+                                ) : null}
+                            </div>
+                        </div>
+                    </details>
                 </div>
+                <div className="grid gap-1 text-sm">
+                    <label id="pet-admin-height-label">
+                        默认大小 <output>{value.avatarType === "orb" ? `${Math.round((value.avatarHeight / 220) * 100)}%` : `${value.avatarHeight} px`}</output>
+                    </label>
+                    <Slider ariaLabelledByForHandle="pet-admin-height-label" min={120} max={360} step={5} value={value.avatarHeight} disabled={disabled || uploading} onChange={(height) => change({ avatarHeight: height })} />
+                    <div className="flex justify-between text-xs text-foreground/60">
+                        <span>{value.avatarType === "orb" ? "小" : "120 px"}</span>
+                        <span>{value.avatarType === "orb" ? "大" : "360 px"}</span>
+                    </div>
+                </div>
+                {value.avatarType !== "sprite" ? (
+                    <div className="grid justify-items-center gap-3 rounded-xl border border-border bg-background p-5" aria-label="Agent 形象预览">
+                        {url ? (
+                            <Live2DAvatar
+                                key={`${url}-${attempt}`}
+                                url={url}
+                                width={Math.round(value.avatarHeight * 0.75)}
+                                height={value.avatarHeight}
+                                reducedMotion={reducedMotion}
+                                fallback={<FluidOrb size={60} color="#7164f6" />}
+                                onReady={() => {
+                                    setReadyURL(url);
+                                    setError("");
+                                }}
+                                onError={(reason) => {
+                                    setReadyURL("");
+                                    setError(reason);
+                                }}
+                            />
+                        ) : (
+                            <FluidOrb size={Math.round((60 * value.avatarHeight) / 220)} color="#7164f6" />
+                        )}
+                        <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
+                        <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>
+                        {url ? <small>{readyURL === url ? "预览已就绪，可选择 Live2D 并保存启用" : "等待模型预览就绪"}</small> : null}
+                    </div>
+                ) : null}
                 {error ? (
                     <Alert
                         type="warning"
@@ -326,8 +291,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                         }
                     />
                 ) : null}
-                <p className="text-xs text-foreground/60">项目已内置 Cubism Core，无需另行安装。使用前仍需确认 Live2D SDK 及模型素材的适用授权。未启用的导入包可在资源管理中清理。</p>
-            </div>
+            </section>
         </div>
     );
 }

@@ -1,0 +1,487 @@
+.pet-menu-layer {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-toast) + 20);
+    color: var(--user-ink);
+}
+.pet-menu-layer.app-user-overlays {
+    background: transparent !important;
+}
+.pet-menu-backdrop {
+    position: absolute;
+    inset: 0;
+}
+.pet-radial-menu {
+    position: fixed;
+    pointer-events: none;
+    font-size: var(--fs-caption);
+}
+.pet-radial-menu button,
+.pet-radial-menu input,
+.pet-menu-size-panel,
+.pet-menu-feedback {
+    pointer-events: auto;
+}
+.pet-radial-menu button {
+    cursor: pointer;
+}
+.pet-menu-actions,
+.pet-menu-models {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.pet-menu-petal,
+.pet-model-choice,
+.pet-menu-more {
+    position: absolute;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--user-ink);
+}
+.pet-menu-petal,
+.pet-model-choice,
+.pet-menu-more {
+    animation: pet-sector-enter 0.2s ease-out both;
+}
+.pet-sector-surface {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.pet-sector-surface path {
+    fill: var(--user-surface);
+    stroke: var(--user-border-strong);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    transition:
+        fill 0.16s,
+        stroke 0.16s;
+}
+.pet-sector-label {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    pointer-events: none;
+    font-size: var(--fs-label);
+}
+.pet-menu-petal .pet-sector-label > svg {
+    width: 26px;
+    height: 26px;
+    color: var(--user-accent);
+}
+.pet-menu-petal:hover path,
+.pet-model-choice:hover path,
+.pet-menu-more:hover path {
+    fill: var(--user-surface-hover);
+}
+.pet-radial-menu :is(button, input):focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 3px;
+}
+.pet-radial-menu :is(.pet-menu-petal, .pet-model-choice, .pet-menu-more):focus-visible path {
+    stroke: var(--control-focus-ring);
+    stroke-width: 4;
+}
+.pet-menu-petal[aria-expanded="true"] path,
+.pet-menu-petal[aria-pressed="true"] path,
+.pet-model-choice[aria-pressed="true"] path {
+    fill: color-mix(in srgb, var(--control-selected-fg) 12%, var(--user-surface));
+    stroke: var(--control-selected-border);
+    stroke-width: 2;
+}
+.pet-model-choice .pet-sector-label > svg {
+    width: 30px;
+    height: 30px;
+    color: var(--user-accent);
+}
+.pet-model-choice .pet-sector-label > span:last-of-type {
+    display: none;
+}
+.pet-model-choice .pet-sector-label .pet-choice-check {
+    position: absolute;
+    right: -6px;
+    top: -3px;
+    width: 12px;
+    height: 12px;
+}
+.pet-menu-more .pet-sector-label {
+    font-size: var(--fs-label);
+    width: 40px;
+    white-space: normal;
+    line-height: 1.4;
+}
+.pet-menu-more .pet-sector-label > svg {
+    width: 24px;
+    height: 24px;
+}
+.pet-menu-models,
+.pet-menu-size-panel {
+    animation: pet-panel-appear 0.18s ease-out;
+}
+.pet-menu-models.is-grid {
+    right: auto;
+    bottom: auto;
+    max-height: min(320px, calc(100dvh - 24px));
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    overflow: auto;
+    pointer-events: auto;
+    border: 1px solid var(--user-border);
+    border-radius: 12px;
+    background: var(--user-surface);
+    box-shadow: var(--shadow-sm);
+}
+.pet-menu-models.is-grid .pet-model-choice {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 80px;
+    border: 1px solid var(--user-border);
+    border-radius: 12px;
+    background: var(--user-surface-muted);
+}
+.pet-menu-models.is-grid .pet-sector-label {
+    position: static;
+    transform: none;
+    width: 100%;
+}
+.pet-menu-models.is-grid .pet-sector-label > span:last-of-type {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pet-menu-models.is-grid .pet-model-choice[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--user-surface-hover);
+}
+.pet-radial-menu.is-more .pet-menu-actions,
+.pet-radial-menu.is-size .pet-menu-actions {
+    visibility: hidden;
+}
+.pet-menu-back {
+    grid-column: 1/-1;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-self: start;
+}
+.pet-menu-back svg {
+    width: 16px;
+    height: 16px;
+}
+.pet-menu-panel-heading {
+    grid-column: 1/-1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.pet-menu-panel-dismiss {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: var(--user-radius-control);
+    background: transparent;
+    color: var(--user-ink-muted);
+}
+.pet-menu-panel-dismiss svg {
+    width: 18px;
+    height: 18px;
+}
+.pet-menu-panel-dismiss:hover {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+.pet-menu-search {
+    grid-column: 1/-1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-control);
+}
+.pet-menu-search svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--user-ink-muted);
+}
+.pet-menu-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--user-ink);
+    font: inherit;
+}
+.pet-menu-empty {
+    grid-column: 1/-1;
+    padding: 12px;
+    text-align: center;
+    color: var(--user-ink-muted);
+}
+.pet-menu-size-panel {
+    position: absolute;
+    left: 70px;
+    top: 0;
+    width: 276px;
+    padding: 12px;
+    border: 1px solid var(--user-border);
+    border-radius: 12px;
+    background: var(--user-surface);
+    box-shadow: var(--shadow-sm);
+}
+.pet-menu-size-panel label {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.pet-menu-size-heading {
+    gap: 8px;
+}
+.pet-menu-size-panel svg,
+.pet-menu-progress {
+    width: 18px;
+    height: 18px;
+}
+.pet-menu-size-panel button,
+.pet-menu-back {
+    min-width: 32px;
+    min-height: 32px;
+    display: grid;
+    place-items: center;
+}
+.pet-menu-size-panel button:hover,
+.pet-menu-back:hover {
+    background: var(--user-surface-hover);
+}
+.pet-menu-progress {
+    animation: pet-progress-spin 1s linear infinite;
+}
+.pet-menu-size-panel output {
+    font-variant-numeric: tabular-nums;
+}
+.pet-menu-size-panel input {
+    width: 100%;
+    min-height: 32px;
+    margin: 4px 0;
+    accent-color: var(--user-accent);
+    cursor: ew-resize;
+}
+.pet-menu-size-panel > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--user-ink-muted);
+}
+.pet-menu-size-panel button,
+.pet-menu-feedback button,
+.pet-menu-back {
+    border: 0;
+    background: transparent;
+    padding: 6px 8px;
+    border-radius: var(--user-radius-control);
+    color: var(--user-ink);
+}
+.pet-menu-feedback {
+    position: absolute;
+    top: 320px;
+    left: 0;
+    right: 0;
+    width: fit-content;
+    max-width: 100%;
+    margin: auto;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+}
+.pet-menu-feedback[hidden] {
+    display: none;
+}
+.pet-radial-menu button:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+.pet-prepare-layer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+.pet-personal-launcher {
+    touch-action: none;
+}
+@media (max-width: 640px) {
+    .pet-radial-menu {
+        left: 12px !important;
+        right: 12px;
+        top: auto !important;
+        bottom: 12px;
+        width: auto !important;
+        height: auto !important;
+        max-height: calc(100dvh - 32px);
+        overflow: auto;
+        padding: 18px;
+        border: 1px solid var(--user-border);
+        border-radius: 16px;
+        background: var(--user-surface);
+        pointer-events: auto;
+    }
+    .pet-menu-actions {
+        position: static;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .pet-radial-menu.is-more .pet-menu-actions,
+    .pet-radial-menu.is-size .pet-menu-actions {
+        visibility: visible;
+    }
+    .pet-menu-petal,
+    .pet-model-choice,
+    .pet-menu-more {
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        height: 72px !important;
+        clip-path: none !important;
+        border: 1px solid var(--user-border);
+        border-radius: 12px;
+        background: var(--user-surface);
+    }
+    .pet-sector-surface {
+        display: none;
+    }
+    .pet-sector-label {
+        position: static;
+        left: auto !important;
+        top: auto !important;
+        transform: none;
+        height: 100%;
+        width: 100%;
+        white-space: normal;
+    }
+    .pet-menu-models,
+    .pet-menu-models.is-grid {
+        position: static;
+        width: auto !important;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        max-height: none;
+        margin-top: 14px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .pet-menu-models.is-grid {
+        max-height: 40dvh;
+        overflow: auto;
+    }
+    .pet-model-choice {
+        height: 80px !important;
+    }
+    .pet-model-choice .pet-sector-label > span:last-of-type {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .pet-model-choice .pet-sector-label .pet-choice-check {
+        right: 4px;
+        top: 4px;
+    }
+    .pet-menu-more {
+        grid-column: 1/-1;
+        height: 36px !important;
+    }
+    .pet-menu-more .pet-sector-label {
+        width: 100%;
+    }
+    .pet-menu-size-panel {
+        position: static;
+        width: auto;
+        margin-top: 14px;
+        box-shadow: none;
+    }
+    .pet-menu-panel-dismiss {
+        display: none !important;
+    }
+    .pet-menu-feedback {
+        position: static;
+        margin-top: 12px;
+        padding: 0;
+        flex-wrap: wrap;
+    }
+    .pet-menu-petal[aria-expanded="true"],
+    .pet-menu-petal[aria-pressed="true"],
+    .pet-model-choice[aria-pressed="true"] {
+        border-color: var(--control-selected-border);
+        background: var(--user-surface-hover);
+    }
+}
+@keyframes pet-panel-appear {
+    from {
+        opacity: 0;
+        translate: 0 4px;
+    }
+    to {
+        opacity: 1;
+        translate: 0 0;
+    }
+}
+@keyframes pet-progress-spin {
+    to {
+        rotate: 360deg;
+    }
+}
+@keyframes pet-sector-enter {
+    from {
+        opacity: 0;
+        translate: var(--pet-enter-x, 0) var(--pet-enter-y, 4px);
+    }
+    to {
+        opacity: 1;
+        translate: 0 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pet-sector-surface path {
+        transition: none;
+    }
+    .pet-menu-models,
+    .pet-menu-size-panel,
+    .pet-menu-petal,
+    .pet-model-choice,
+    .pet-menu-more,
+    .pet-menu-progress {
+        animation: none;
+    }
+}

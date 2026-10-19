@@ -1,16 +1,21 @@
+import type { SpritePet } from "./sprite-pet";
+
 export type CanvasAppearance = {
+    defaultPetId?: string;
     agentName: string;
     launcherLabel: string;
     panelTitle: string;
     welcomeTitle: string;
     welcomeDescription: string;
     inputPlaceholder: string;
-    avatarType: "orb" | "live2d" | "bundle";
+    avatarType: "orb" | "live2d" | "bundle" | "sprite";
     live2dResourceId: string;
     live2dEntry: string;
     avatarBundleResourceId: string;
     avatarClipStates?: Partial<Record<AgentAvatarState, string>>;
     avatarHeight: number;
+    spriteResourceId?: string;
+    sprite?: SpritePet;
 };
 
 export type AgentAvatarState = "idle" | "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled" | "rejected";

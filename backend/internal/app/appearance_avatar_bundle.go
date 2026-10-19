@@ -235,6 +235,11 @@ func (s *Service) AgentAvatarBundleAsset(actor *model.User, id, name string) ([]
 		return nil, "", err
 	}
 	active := appearance.Canvas.AvatarType == "bundle" && appearance.Canvas.AvatarBundleResourceID == id
+	for _, pet := range appearance.PetCatalog {
+		if pet.Published && pet.AvatarType == "bundle" && pet.AvatarBundleResourceID == id {
+			active = true
+		}
+	}
 	resource, err := s.repo.Resource(id)
 	if err != nil || resource.Kind != agentAvatarBundleResourceKind || resource.Provider != "local" || resource.Status != model.ResourceStatusReady {
 		return nil, "", NotFound("Agent 动画包不存在")

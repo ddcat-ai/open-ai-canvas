@@ -14,6 +14,8 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         }
     });
     const [dragging, setDragging] = useState(false);
+    const [moveDirection, setMoveDirection] = useState(0);
+    const lastPointerX = useRef(0);
     const gestureRef = useRef<(AgentLauncherGesture & { pointerId: number }) | null>(null);
     const suppressClick = useRef(false);
 
@@ -36,8 +38,15 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         event.stopPropagation();
         if (event.button !== 0 || !event.isPrimary || gestureRef.current) return;
         suppressClick.current = false;
+        lastPointerX.current = event.clientX;
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch (cause) {
+            // Motion synthesizes pointer events for keyboard activation, without an active browser pointer.
+            if ((cause as { name?: string }).name !== "NotFoundError") throw cause;
+            return;
+        }
         gestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: position, dragged: false };
-        event.currentTarget.setPointerCapture(event.pointerId);
     };
     const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -49,6 +58,8 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         event.preventDefault();
         suppressClick.current = true;
         setDragging(true);
+        if (Math.abs(event.clientX - lastPointerX.current) > 1) setMoveDirection(event.clientX > lastPointerX.current ? 1 : -1);
+        lastPointerX.current = event.clientX;
         setPosition(next.position);
     };
     const finish = (event: PointerEvent<HTMLButtonElement>, cancelled: boolean) => {
@@ -59,6 +70,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         const next = cancelled ? { dragged: gesture.dragged, position: clampAgentLauncherPosition(position, viewport(), size) } : moveAgentLauncher(gesture, event.clientX, event.clientY, viewport(), size);
         suppressClick.current = cancelled || next.dragged;
         setDragging(false);
+        setMoveDirection(0);
         setPosition(next.position);
         if (next.dragged) save(next.position);
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -87,6 +99,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
     return {
         position,
         dragging,
+        moveDirection,
         handlers: {
             onPointerDown,
             onPointerMove,

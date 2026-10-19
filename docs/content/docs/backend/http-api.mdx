@@ -5,6 +5,15 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 宠物与形象库
+
+- `POST /api/admin/settings/appearance/sprite`：管理员上传 Codex v1/v2 ZIP 或 PNG/WebP 图集，返回归一化配置；批量 ZIP 由前端逐项提交，重复项识别，失败项可重试。
+- `GET /api/admin/settings/appearance/sprite/:id`：管理员预览自己的上传或已配置资源；`GET /api/public/appearance/sprite/:id`：只允许当前启用或已发布形象。
+- 两类图集路径后的 `/thumbnail?w=&h=&frame=` 返回最长边 88px 的透明 PNG。公开读取的帧参数须与已发布配置一致；管理员预览支持编辑参数。授权检查先于 ETag / 304 返回，下架立即失去公开访问权限。
+- `GET/PUT /api/me/pet-preference`：当前用户读取或保存个人偏好，写入携带 `revision`，冲突返回 409；未发布形象不可选择。响应使用 `private, no-store`。
+
+图集与缩略图响应为二进制，其他响应沿用 JSON 信封。管理员权限、资源归属和发布状态均由服务端校验，前端菜单不代替授权。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。

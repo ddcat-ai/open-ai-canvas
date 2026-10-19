@@ -52,6 +52,7 @@ const (
 )
 
 type AppearanceSetting struct {
+	PetCatalog                []PetAppearance       `json:"petCatalog"`
 	Updates                   UpdateAnnouncement    `json:"updates"`
 	Canvas                    CanvasAppearance      `json:"canvas"`
 	SchemaVersion             int                   `json:"schemaVersion"`
@@ -77,6 +78,7 @@ type AppearanceSetting struct {
 }
 
 type PublicAppearanceSetting struct {
+	PetCatalog                []PetAppearance     `json:"petCatalog"`
 	Updates                   UpdateAnnouncement  `json:"updates"`
 	Canvas                    CanvasAppearance    `json:"canvas"`
 	SchemaVersion             int                 `json:"schemaVersion"`
@@ -230,15 +232,26 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validatePetCatalog(actor, &value, before); err != nil {
+		return nil, err
+	}
 	if value.Canvas.Live2DResourceID != "" {
-		entry, err := s.validateLive2DResource(actor, value.Canvas.Live2DResourceID, before.Canvas.Live2DResourceID)
+		known := before.Canvas.Live2DResourceID
+		if catalogReferences(before.PetCatalog, "live2d", value.Canvas.Live2DResourceID) {
+			known = value.Canvas.Live2DResourceID
+		}
+		entry, err := s.validateLive2DResource(actor, value.Canvas.Live2DResourceID, known)
 		if err != nil {
 			return nil, err
 		}
 		value.Canvas.Live2DEntry = entry
 	}
 	if value.Canvas.AvatarBundleResourceID != "" {
-		manifest, err := s.validateAgentAvatarBundleResource(actor, value.Canvas.AvatarBundleResourceID, before.Canvas.AvatarBundleResourceID)
+		known := before.Canvas.AvatarBundleResourceID
+		if catalogReferences(before.PetCatalog, "agent-avatar-bundle", value.Canvas.AvatarBundleResourceID) {
+			known = value.Canvas.AvatarBundleResourceID
+		}
+		manifest, err := s.validateAgentAvatarBundleResource(actor, value.Canvas.AvatarBundleResourceID, known)
 		if err != nil {
 			return nil, err
 		}
@@ -246,6 +259,15 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 			if _, exists := manifest.Clips[clip]; !exists {
 				return nil, BadAuthRequest("状态映射引用的动画不存在：" + clip)
 			}
+		}
+	}
+	if value.Canvas.SpriteResourceID != "" {
+		known := before.Canvas.SpriteResourceID
+		if catalogReferences(before.PetCatalog, "sprite", value.Canvas.SpriteResourceID) {
+			known = value.Canvas.SpriteResourceID
+		}
+		if err := s.validateSpriteResource(actor, value.Canvas.SpriteResourceID, known, value.Canvas.Sprite); err != nil {
+			return nil, err
 		}
 	}
 	if err := s.validateUpdateAnnouncementResources(actor, value.Updates, before.Updates); err != nil {
@@ -402,6 +424,7 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
 		{resourceID: value.Canvas.Live2DResourceID, title: "画布 Agent Live2D 形象"},
 		{resourceID: value.Canvas.AvatarBundleResourceID, title: "画布 Agent 动画包"},
+		{resourceID: value.Canvas.SpriteResourceID, title: "画布 Agent 精灵宠物"},
 	}
 	for _, release := range value.Updates.Releases {
 		for _, block := range release.Blocks {
@@ -412,6 +435,19 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 				}{block.ResourceID, "更新公告 " + release.Version})
 			}
 		}
+	}
+	for _, pet := range value.PetCatalog {
+		candidates = append(candidates, struct {
+			resourceID string
+			title      string
+		}{pet.AvatarBundleResourceID, "宠物形象库：" + pet.Name})
+		candidates = append(candidates, struct {
+			resourceID string
+			title      string
+		}{pet.SpriteResourceID, "宠物形象库：" + pet.Name}, struct {
+			resourceID string
+			title      string
+		}{pet.Live2DResourceID, "宠物形象库：" + pet.Name})
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
@@ -431,7 +467,9 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, error) {
 	setting, err := s.repo.SystemSetting(appearanceSettingKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, defaultAppearanceSetting(), nil
+		value := defaultAppearanceSetting()
+		seedPetCatalog(&value)
+		return nil, value, nil
 	}
 	if err != nil {
 		return nil, AppearanceSetting{}, err
@@ -471,6 +509,7 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
 	value.RedeemPurchaseURL = strings.TrimSpace(value.RedeemPurchaseURL)
+	seedPetCatalog(&value)
 	return setting, value, nil
 }
 
@@ -718,11 +757,13 @@ func appearanceResourceID(value AppearanceSetting, slot string) string {
 }
 
 func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetting) *PublicAppearanceSetting {
+	seedPetCatalog(&value)
 	revision := "builtin"
 	if setting != nil {
 		revision = strconv.FormatInt(setting.UpdatedAt.UTC().UnixNano(), 36)
 	}
 	result := &PublicAppearanceSetting{
+		PetCatalog:          publishedPets(value.PetCatalog),
 		Updates:             publicUpdateAnnouncement(value.Updates, revision),
 		Canvas:              value.Canvas,
 		SchemaVersion:       appearanceSchemaVersion,
