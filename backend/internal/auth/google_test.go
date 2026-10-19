@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 )
@@ -119,13 +120,17 @@ func TestVerifyGoogleIDToken(t *testing.T) {
 	t.Run("签名被篡改", func(t *testing.T) {
 		svc := newTestServiceWithKey(key, kid)
 		token := signTestJWT(t, key, kid, validGoogleClaims(clientID))
-		// 改掉最后一个字符，签名失效。
-		last := token[len(token)-1]
-		replacement := byte('A')
-		if last == 'A' {
-			replacement = 'B'
+		// 不能改最后一个 base64 字符：Base64 末位可能只用了部分比特，
+		// 改掉它解码出的字节可能完全相同，签名依然有效（测试会假失败）。
+		// 这里改为翻转签名段第一个字符对应的字节，确保解码结果确实变化。
+		parts := strings.Split(token, ".")
+		rawSignature, err := base64.RawURLEncoding.DecodeString(parts[2])
+		if err != nil {
+			t.Fatalf("解码签名失败：%v", err)
 		}
-		tampered := token[:len(token)-1] + string(replacement)
+		rawSignature[0] ^= 0xFF
+		parts[2] = base64.RawURLEncoding.EncodeToString(rawSignature)
+		tampered := strings.Join(parts, ".")
 		if _, err := svc.verifyGoogleIDToken(t.Context(), tampered, clientID); err == nil {
 			t.Fatal("签名篡改必须拒绝")
 		}
