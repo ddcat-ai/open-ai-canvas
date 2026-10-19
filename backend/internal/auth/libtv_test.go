@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestAdaptLibTVDetailSelectsFirstMediaAndReportsPartialImport(t *testing.T) {
+func TestAdaptLibTVDetailPreservesAllMediaAndReportsPartialImport(t *testing.T) {
 	detail := &libTVDetail{}
 	detail.ProjectMeta.UUID = "project-uuid"
 	detail.ProjectMeta.Name = "测试画布"
@@ -79,7 +79,10 @@ func TestAdaptLibTVDetailSelectsFirstMediaAndReportsPartialImport(t *testing.T) 
 	if got := result.Nodes[0].Metadata.Provider; got != "libtv" {
 		t.Fatalf("metadata provider = %q, want libtv", got)
 	}
-	if len(result.Warnings) != 3 {
+	if got := result.Nodes[0].Results; len(got) != 2 || got[0].Content != "https://example.com/first.png" || got[1].Content != "https://example.com/second.png" || got[1].SourceIndex != 1 {
+		t.Fatalf("multiple image results were lost: %#v", got)
+	}
+	if result.MultiResultNodeCount != 1 || len(result.Warnings) != 2 {
 		t.Fatalf("warnings = %#v", result.Warnings)
 	}
 }

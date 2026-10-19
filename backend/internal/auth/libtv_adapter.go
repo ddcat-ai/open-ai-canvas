@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -63,9 +62,9 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 			result.SkippedNodes = append(result.SkippedNodes, LibTVImportIssue{ID: nodeKey, Name: raw.Name, Reason: "暂不支持的节点类型"})
 			continue
 		}
-		mediaURL, mediaIndex := firstLibTVMediaURL(data.URL)
-		if mediaURL == "" && sourceType == "material-style" {
-			mediaURL, mediaIndex = firstLibTVMediaURL([]string{data.CoverURL})
+		results := libTVImportMediaResults(kind, data.URL, data.ResourceMeta, normalizeLibTVMediaURL)
+		if len(results) == 0 && sourceType == "material-style" {
+			results = libTVImportMediaResults(kind, []string{data.CoverURL}, libTVTemplateResourceMeta{}, normalizeLibTVMediaURL)
 		}
 
 		x, okX := finiteFloat(raw.Position.X)
@@ -90,7 +89,7 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 			Y:       y,
 			Width:   width,
 			Height:  height,
-			Content: mediaURL,
+			Results: results,
 			Prompt:  mapString(data.Params, "prompt"),
 			Model:   mapString(data.Params, "model"),
 			Metadata: LibTVImportMetadata{
@@ -107,16 +106,11 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 		if item.Title == "" {
 			item.Title = kind + " 节点"
 		}
-		if mediaIndex >= 0 && mediaIndex < len(data.ResourceMeta.Items) {
-			resource := data.ResourceMeta.Items[mediaIndex]
-			item.NaturalWidth = resource.Width
-			item.NaturalHeight = resource.Height
-			if resource.DurationSec > 0 && !math.IsNaN(resource.DurationSec) && !math.IsInf(resource.DurationSec, 0) {
-				item.DurationMs = int64(math.Round(resource.DurationSec * 1000))
-			}
+		libTVSetPrimaryMedia(&item)
+		if item.MimeType == "" {
+			item.MimeType = inferMediaMime(kind, item.Content)
 		}
-		item.MimeType = inferMediaMime(kind, mediaURL)
-		if mediaURL == "" {
+		if item.Content == "" {
 			result.PlaceholderNodeCount++
 			if taskStatus == 3 {
 				// 没有历史结果的失败节点仍保留拓扑，并以失败占位状态呈现。
@@ -140,9 +134,11 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 		if !okWidth || !okHeight {
 			result.Warnings = append(result.Warnings, LibTVImportWarning{ID: nodeKey, Message: fmt.Sprintf("节点“%s”尺寸无效，已使用默认尺寸。", item.Title)})
 		}
-		if len(data.URL) > 1 && mediaURL != "" {
+		if len(item.Results) > 1 {
 			result.MultiResultNodeCount++
-			result.Warnings = append(result.Warnings, LibTVImportWarning{ID: nodeKey, Message: fmt.Sprintf("节点“%s”包含 %d 个结果，已导入第 %d 个。", item.Title, len(data.URL), mediaIndex+1)})
+		}
+		if len(item.Results) > 0 && len(item.Results) < len(data.URL) {
+			result.Warnings = append(result.Warnings, LibTVImportWarning{ID: nodeKey, Message: fmt.Sprintf("已保留 %d 个结果，%d 个无效媒体地址已忽略", len(item.Results), len(data.URL)-len(item.Results))})
 		}
 		if data.IsStale || raw.IsStale {
 			result.StaleNodeCount++
@@ -195,20 +191,17 @@ func isLibTVProjectUUID(value string) bool {
 	return true
 }
 
-func firstLibTVMediaURL(values []string) (string, int) {
-	for index, value := range values {
-		parsed, err := url.Parse(strings.TrimSpace(value))
-		if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
-			continue
-		}
-		return parsed.String(), index
+func normalizeLibTVMediaURL(value string) string {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
+		return ""
 	}
-	return "", -1
+	return parsed.String()
 }
 
 func finiteFloat(value string) (float64, bool) {
 	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+	if err != nil || !libTVFinite(parsed) {
 		return 0, false
 	}
 	return parsed, true

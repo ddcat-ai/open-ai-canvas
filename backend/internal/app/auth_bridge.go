@@ -35,6 +35,12 @@ type (
 	LibTVImportIssue           = auth.LibTVImportIssue
 	LibTVImportMetadata        = auth.LibTVImportMetadata
 	LibTVImportWarning         = auth.LibTVImportWarning
+	LibTVGalleryRequest        = auth.LibTVGalleryRequest
+	LibTVGalleryResult         = auth.LibTVGalleryResult
+	LibTVGalleryItem           = auth.LibTVGalleryItem
+	LibTVGalleryTag            = auth.LibTVGalleryTag
+	LibTVWorkDetail            = auth.LibTVWorkDetail
+	LibTVWorkStep              = auth.LibTVWorkStep
 	TapNowImportRequest        = auth.TapNowImportRequest
 	TapNowImportResult         = auth.TapNowImportResult
 	TapNowCanvasConnection     = auth.TapNowCanvasConnection
@@ -225,6 +231,18 @@ func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
 
 func (s *Service) ImportLibTV(userID, canvasProjectID, projectUUID string) (*LibTVImportResult, error) {
 	return s.authDomain().ImportLibTV(userID, canvasProjectID, projectUUID)
+}
+
+func (s *Service) LibTVGallery(ctx context.Context, actor *model.User, req LibTVGalleryRequest) (*LibTVGalleryResult, error) {
+	return s.authDomain().LibTVGallery(ctx, actor, req)
+}
+
+func (s *Service) LibTVWork(ctx context.Context, actor *model.User, templateUUID string) (*LibTVWorkDetail, error) {
+	return s.authDomain().LibTVWork(ctx, actor, templateUUID)
+}
+
+func (s *Service) ImportLibTVTemplate(ctx context.Context, userID, canvasProjectID, templateUUID string) (*LibTVImportResult, error) {
+	return s.authDomain().ImportLibTVTemplate(ctx, userID, canvasProjectID, templateUUID)
 }
 
 func (s *Service) ImportTapNow(userID, canvasProjectID, shareID string) (*TapNowImportResult, error) {

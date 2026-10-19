@@ -1,14 +1,16 @@
 // 创作页空态：横幅、推荐提示词与精选作品。
 
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import type { CreationMode } from "./creation-assets";
-import { ArrowUp, ChevronDown, Clapperboard, FileText, Image as ImageIcon, Sparkles } from "lucide-react";
+import { Alert, Button, Spin } from "antd";
+import { ArrowUp, Clapperboard, FileText, Image as ImageIcon, RotateCw, Sparkles } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { curatedInspirations, inspirationSourceOf, inspirationSources } from "@/lib/inspirations/catalog";
-import { modeLabels } from "./creation-types";
-import { Button } from "antd";
+import { libTVGalleryInfiniteQuery, pickLibTVRecommendations, shuffleLibTVGalleryPages } from "@/lib/libtv-gallery";
+import { getLibTVGallery } from "@/services/api/libtv-gallery";
+import { LibTVWorkDetailDialog } from "@/pages/inspiration/work-detail-dialog";
 
 export const creationEmptyBannerFrames = [
     { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: "镜头01 · 雨夜霓虹" },
@@ -79,82 +81,113 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
     );
 }
 
-export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
-    const [filter, setFilter] = useState<"all" | CreationMode>("all");
-    const [limit, setLimit] = useState(12);
-    const filtered = curatedInspirations.filter((item) => filter === "all" || item.mode === filter);
-    // 只列出真正用到的外部来源；原创条目不写来源声明。
-    const declaredSources = Array.from(new Set(curatedInspirations.map((item) => item.sourceId ?? "original")))
-        .map((id) => inspirationSources[id])
-        .filter((source) => source.notice);
+/**
+ * 精选灵感直接读灵感广场的同一份公开作品（同一个 queryKey，命中缓存，不复制数据、不转存媒体）。
+ * 点开的是同一个作品弹窗，所以创作页的对话、模型、积分都留在原地；点一下不会填提示词，也不会自动生成。
+ * 加载中/失败/无结果照实说，不拿旧的内置示例冒充「已同步」。
+ */
+export function CreationFeaturedWorks({ showHeading = true }: { showHeading?: boolean }) {
+    const [activeTemplateUuid, setActiveTemplateUuid] = useState<string>();
+    const [shuffleSeed] = useState(() => Math.floor(Math.random() * 0x100000000));
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+    const { data, isLoading, isError, error, refetch, isFetching, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError } = useInfiniteQuery(libTVGalleryInfiniteQuery({ keyword: "" }, getLibTVGallery));
+
+    const items = useMemo(() => shuffleLibTVGalleryPages(data?.pages ?? [], shuffleSeed), [data?.pages, shuffleSeed]);
+    const recommended = useMemo(() => (activeTemplateUuid ? pickLibTVRecommendations(items, activeTemplateUuid, 6) : []), [activeTemplateUuid, items]);
+
+    useEffect(() => {
+        const target = loadMoreRef.current;
+        if (!target || !hasNextPage || isFetching || isError || activeTemplateUuid || typeof IntersectionObserver === "undefined") return;
+        let requested = false;
+        const observer = new IntersectionObserver((entries) => {
+            if (requested || !entries.some((entry) => entry.isIntersecting)) return;
+            requested = true;
+            void fetchNextPage({ cancelRefetch: false });
+        }, { root: target.closest(".creation-home-scroll, .creation-empty-workspace"), rootMargin: "0px 0px 240px 0px" });
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [activeTemplateUuid, fetchNextPage, hasNextPage, isError, isFetching, items.length]);
     return (
-        <section className="creation-featured-works" aria-labelledby="creation-featured-title">
-            <div className="creation-featured-heading">
+        <section className="creation-featured-works" aria-label="精选灵感">
+            {showHeading ? <div className="creation-featured-heading">
                 <div>
                     <h2 id="creation-featured-title">精选灵感</h2>
                 </div>
-                <p>{curatedInspirations.length} 个创意起点 · 点击填入提示词，不自动生成</p>
-            </div>
-            <div className="creation-inspiration-filters" role="group" aria-label="灵感类型">
-                {(["all", "video", "image", "text"] as const).map((value) => (
-                    <button
-                        key={value}
-                        type="button"
-                        aria-pressed={filter === value}
-                        onClick={() => {
-                            setFilter(value);
-                            setLimit(12);
-                        }}
-                    >
-                        {value === "all" ? "全部灵感" : modeLabels[value]}
-                        <span>{curatedInspirations.filter((item) => value === "all" || item.mode === value).length}</span>
-                    </button>
-                ))}
-            </div>
-            <div className="creation-featured-layout">
-                {filtered.slice(0, limit).map((item, index) => (
-                    <button key={item.title} type="button" className={`product-collection-card creation-featured-card ${index === 0 ? "is-featured-hero" : ""}`} onClick={() => onStartPrompt(item.mode, item.prompt)}>
-                        <span className="creation-featured-media">
-                            <img src={item.image} alt="" loading="lazy" />
-                            <span className="creation-inspiration-overlay">
-                                <ArrowUp />
-                                使用这个创意
-                            </span>
-                        </span>
-                        <span className="creation-featured-copy">
-                            <strong>{item.title}</strong>
-                            <span>{item.description}</span>
-                            <em>
-                                <Sparkles />
-                                {inspirationSourceOf(item).label} · {modeLabels[item.mode]}
-                            </em>
-                        </span>
-                    </button>
-                ))}
-            </div>
-            <footer className="creation-inspiration-footer">
-                {limit < filtered.length ? (
-                    <Button onClick={() => setLimit((count) => count + 12)}>
-                        展开更多灵感
-                        <ChevronDown />
-                    </Button>
-                ) : (
-                    <span>已展示全部 {filtered.length} 个创意</span>
-                )}
-                <details>
-                    <summary>模板与封面来源</summary>
-                    {declaredSources.map((source) => (
-                        <div key={source.name ?? source.label}>
-                            <p>{source.notice}</p>
-                            {source.repository ? (
-                                <a href={source.repository} target="_blank" rel="noreferrer">
-                                    {source.name} · {source.license}
-                                </a>
-                            ) : null}
-                        </div>
+            </div> : null}
+
+            {isError && !isFetchNextPageError ? (
+                <Alert
+                    type="error"
+                    showIcon
+                    message="暂时读不到灵感广场的作品"
+                    description={error instanceof Error ? error.message : "请求出错"}
+                    action={
+                        <Button size="small" loading={isFetching} onClick={() => void refetch()}>
+                            重试
+                        </Button>
+                    }
+                />
+            ) : isLoading ? (
+                <div className="creation-featured-layout" aria-busy="true">
+                    {[0, 1, 2].map((key) => (
+                        <span key={key} className="product-collection-card creation-featured-card is-placeholder" />
                     ))}
-                </details>
-            </footer>
+                </div>
+            ) : items.length === 0 ? (
+                <p className="creation-featured-empty">灵感广场现在还没有公开作品。</p>
+            ) : (
+                <div className="creation-featured-layout">
+                    {items.map((item, index) => (
+                        <button
+                            key={item.templateUuid}
+                            type="button"
+                            className={`product-collection-card creation-featured-card ${index === 0 ? "is-featured-hero" : ""}`}
+                            onClick={() => setActiveTemplateUuid(item.templateUuid)}
+                        >
+                            <span className="creation-featured-media">
+                                <img src={item.coverUrl} alt="" loading="lazy" />
+                                <span className="creation-inspiration-overlay">
+                                    <ArrowUp />
+                                    查看作品
+                                </span>
+                            </span>
+                            <span className="creation-featured-copy">
+                                <strong>{item.title}</strong>
+                                <span>{item.description}</span>
+                                <em>
+                                    <Sparkles />
+                                    {item.authorName || "LibTV 创作者"}
+                                    {item.tags[0] ? ` · ${item.tags[0].label}` : ""}
+                                </em>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {items.length > 0 && (
+                <div ref={loadMoreRef} className="creation-inspiration-load-status" role="status" aria-live="polite">
+                    {isFetchNextPageError ? (
+                        <>
+                            <span>下一批灵感加载失败</span>
+                            <Button size="small" icon={<RotateCw size={14} />} loading={isFetchingNextPage} disabled={isFetching} onClick={() => void fetchNextPage({ cancelRefetch: false })}>
+                                重试
+                            </Button>
+                        </>
+                    ) : isFetchingNextPage ? (
+                        <><Spin size="small" /><span>正在加载更多灵感…</span></>
+                    ) : !hasNextPage ? (
+                        <span>已展示全部 {items.length} 个作品</span>
+                    ) : null}
+                </div>
+            )}
+
+            <LibTVWorkDetailDialog
+                templateUuid={activeTemplateUuid}
+                recommended={recommended}
+                onSelectWork={(item) => setActiveTemplateUuid(item.templateUuid)}
+                onClose={() => setActiveTemplateUuid(undefined)}
+            />
         </section>
     );
 }

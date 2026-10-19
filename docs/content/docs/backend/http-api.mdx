@@ -5,6 +5,19 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## LibTV 公开作品与模板
+
+以下接口需要平台登录态。作品查询按用户限流，仅访问 LibTV 已审核的公开作品，不转发管理员配置的 LibTV 凭证。
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/libtv/gallery` | 分页作品列表，支持 `page`、`pageSize`、`keyword`、`tagId`、`requestId`；后续分页复用首次响应的查询标识 |
+| `GET /api/libtv/works/:uuid` | 作品、制作步骤、公开提示词、媒体及导入警告 |
+| `POST /api/canvas-projects/:id/import/libtv-template` | 请求体 `{"uuid":"作品模板 UUID"}`；校验画布归属后返回转换预览，用户确认后由前端通过现有画布保存流程写入 |
+
+列表页大小上限为 40；导入请求体上限为 16 KiB。不存在、未审核或不兼容的作品返回明确错误，不用私有项目作为公开模板的回退来源。
+“单步制作同款”只预填提示词和比例，不自动提交生成任务；含节点引用的步骤需复制完整画布。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。

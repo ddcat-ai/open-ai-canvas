@@ -28,6 +28,66 @@ tags:
   - name: skills
   - name: workbench
 paths:
+  /libtv/gallery:
+    get:
+      tags: [libtv]
+      summary: 读取 LibTV 公开作品列表
+      description: 登录后匿名读取已审核的公开作品，不发送管理员 LibTV Token。total 不作为全库数量；后续分页保留首次返回的 requestId，按 hasMore 判断是否继续。不存储媒体原件，不创建生成任务。
+      parameters:
+        - {in: query, name: page, schema: {type: integer, minimum: 1, maximum: 1000, default: 1}}
+        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 40, default: 20}}
+        - {in: query, name: keyword, schema: {type: string, maxLength: 100}}
+        - {in: query, name: tagId, schema: {type: integer, minimum: 0}}
+        - {in: query, name: requestId, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: 标准信封 data 为 items、page、pageSize、hasMore、requestId；每项包含 templateUuid、projectUuid、title、description、coverUrl、mediaUrl、mediaType、authorName、authorAvatar、likeCount、publishedAt、tags、sourceUrl。
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        "502": {$ref: "#/components/responses/Error"}
+  /libtv/works/{uuid}:
+    get:
+      tags: [libtv]
+      summary: 读取 LibTV 已发布模板的制作步骤
+      description: uuid 为公开 templateUuid，不是原项目 projectUuid。仅接受已审核的公开快照；steps 是快照节点顺序，不保证为执行顺序。模型名称仅为来源信息，不自动映射本站模型或发起收费生成。
+      parameters:
+        - {in: path, name: uuid, required: true, schema: {type: string, pattern: '^[A-Fa-f0-9]{32}$'}}
+      responses:
+        "200":
+          description: 标准信封 data 为 work、steps、nodeCount、connectionCount、canImport、warnings。步骤包含 id、title、type、prompt、text、model、mediaUrls、aspectRatio、resolution、durationSeconds、referenceNodeIds。计数为来源总数，失效节点或连线通过 warnings 报告。
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        "502": {$ref: "#/components/responses/Error"}
+  /canvas-projects/{id}/import/libtv-template:
+    post:
+      tags: [libtv, canvas]
+      summary: 预览并转换 LibTV 已发布模板
+      description: 先校验目标画布属于当前用户，再读取公开 templateUuid；无需管理员 Token，不读取原项目私有详情。只返回转换后的节点、连线和报告，不写入画布。前端确认后通过现有画布保存合同持久化；媒体保留外链，不上传原件。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid]
+              properties:
+                uuid: {type: string, pattern: '^[A-Fa-f0-9]{32}$'}
+      responses:
+        "200":
+          description: '标准信封 data 与原 LibTV 导入结果一致，包含 batchId、batchCreatedAt、projectUuid、projectName、nodes、connections、计数及 skippedNodes、skippedConnections、warnings；节点增加可选 parentId、aspectRatio，来源 metadata 增加 templateUuid、snapshotId。媒体节点 results 为全部有效结果，项包含 sourceIndex（上游原数组零基索引）、content 及可选 naturalWidth、naturalHeight、durationMs、mimeType，顶层媒体为首个有效结果。multiResultNodeCount 统计有效结果超过一个的来源节点；importedNodeCount 不包含前端结果卡的展开数量。'
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        "502": {$ref: "#/components/responses/Error"}
   /projects/{id}/assets/{assetId}/image:
     put:
       tags: [projects, assets]

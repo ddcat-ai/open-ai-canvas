@@ -1,4 +1,8 @@
 /* Creation-specific geometry. Shared controls still use the workspace tokens. */
+.creation-inspiration-switch { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); margin-bottom: var(--space-4); }
+.creation-inspiration-switch h2 { margin: 0; font-size: var(--fs-title); font-weight: 650; color: var(--user-ink); }
+.app-user-workspace .creation-inspiration-switch + .creation-featured-works { margin-top: 0 !important; }
+.creation-inspiration-load-status { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; min-height: 32px; margin-top: 24px; color: var(--user-ink-muted); font-size: 12px; }
 .creation-home-scroll { display: block; width: 100%; min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; padding: var(--space-6) var(--space-8) var(--space-12); }
 .creation-home-scroll > * { width: 100%; max-width: 1280px; margin-inline: auto; }
 .creation-home-scroll > .creation-launchpad { width: min(960px, 100%); margin-inline: auto; }

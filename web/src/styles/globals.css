@@ -12646,6 +12646,13 @@ html:not(.dark) .creation-history-drawer-root {
     background: var(--popover) !important;
     box-shadow: var(--elevation-overlay) !important;
 }
+.workspace-modal.library-modal.libtv-work-detail-dialog { width: min(1200px, calc(100vw - 32px)) !important; }
+.libtv-work-detail-dialog .ant-modal-close { top: 14px; right: 14px; color: color-mix(in srgb, var(--foreground) 48%, transparent); }
+.libtv-work-detail-dialog .ant-modal-close:hover { background: var(--surface-hover); color: var(--foreground); }
+.libtv-work-detail-dialog .ant-modal-body { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+@media (min-width: 1024px) {
+    .libtv-work-detail-dialog .ant-modal-body { height: min(88dvh, 920px); max-height: none; overflow: hidden; }
+}
 .canvas-shortcuts-modal .ant-modal-close {
     top: 16px;
     right: 16px;

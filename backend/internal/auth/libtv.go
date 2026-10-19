@@ -71,9 +71,12 @@ type LibTVCanvasNode struct {
 	Y             float64             `json:"y"`
 	Width         float64             `json:"width"`
 	Height        float64             `json:"height"`
+	ParentID      string              `json:"parentId,omitempty"`
 	Content       string              `json:"content"`
+	Results       []LibTVMediaResult  `json:"results,omitempty"`
 	Prompt        string              `json:"prompt,omitempty"`
 	Model         string              `json:"model,omitempty"`
+	AspectRatio   string              `json:"aspectRatio,omitempty"`
 	NaturalWidth  int                 `json:"naturalWidth,omitempty"`
 	NaturalHeight int                 `json:"naturalHeight,omitempty"`
 	DurationMs    int64               `json:"durationMs,omitempty"`
@@ -83,9 +86,20 @@ type LibTVCanvasNode struct {
 	Metadata      LibTVImportMetadata `json:"metadata"`
 }
 
+type LibTVMediaResult struct {
+	SourceIndex   int    `json:"sourceIndex"`
+	Content       string `json:"content"`
+	NaturalWidth  int    `json:"naturalWidth,omitempty"`
+	NaturalHeight int    `json:"naturalHeight,omitempty"`
+	DurationMs    int64  `json:"durationMs,omitempty"`
+	MimeType      string `json:"mimeType,omitempty"`
+}
+
 type LibTVImportMetadata struct {
 	Provider         string `json:"provider"`
 	ProjectUUID      string `json:"projectUuid"`
+	TemplateUUID     string `json:"templateUuid,omitempty"`
+	SnapshotID       int64  `json:"snapshotId,omitempty"`
 	NodeKey          string `json:"nodeKey"`
 	BatchID          string `json:"batchId"`
 	SourceType       string `json:"sourceType,omitempty"`
@@ -167,14 +181,8 @@ type libTVNodeData struct {
 		Status       int    `json:"status"`
 		FailedReason string `json:"failedReason"`
 	} `json:"taskInfo"`
-	IsStale      bool `json:"isStale"`
-	ResourceMeta struct {
-		Items []struct {
-			Width       int     `json:"width"`
-			Height      int     `json:"height"`
-			DurationSec float64 `json:"durationSec"`
-		} `json:"items"`
-	} `json:"_resourceMeta"`
+	IsStale      bool                      `json:"isStale"`
+	ResourceMeta libTVTemplateResourceMeta `json:"_resourceMeta"`
 }
 
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {
