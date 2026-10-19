@@ -53,9 +53,9 @@ func TestWeChatSignatureValid(t *testing.T) {
 // 这是整个微信登录最容易写错的一处。
 func TestWeChatEventKeyParsing(t *testing.T) {
 	tests := []struct {
-		name     string
-		event    string
-		eventKey string
+		name      string
+		event     string
+		eventKey  string
 		wantScene string
 	}{
 		{"未关注扫码后关注", "subscribe", "qrscene_abc123", "abc123"},

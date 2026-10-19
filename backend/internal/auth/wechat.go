@@ -69,17 +69,17 @@ type WeChatSettingRequest struct {
 }
 
 type PublicWeChatSetting struct {
-	Enabled          bool      `json:"enabled"`
-	AppID            string    `json:"appId"`
-	HasAppSecret     bool      `json:"hasAppSecret"`
-	Token            string    `json:"token"`
-	EncodingAESKey   string    `json:"encodingAesKey"`
-	EncryptMode      string    `json:"encryptMode"`
-	QRExpireSecs     int       `json:"qrExpireSecs"`
-	CallbackURL      string    `json:"callbackUrl"`
-	UpdatedBy        string    `json:"updatedBy"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	Enabled        bool      `json:"enabled"`
+	AppID          string    `json:"appId"`
+	HasAppSecret   bool      `json:"hasAppSecret"`
+	Token          string    `json:"token"`
+	EncodingAESKey string    `json:"encodingAesKey"`
+	EncryptMode    string    `json:"encryptMode"`
+	QRExpireSecs   int       `json:"qrExpireSecs"`
+	CallbackURL    string    `json:"callbackUrl"`
+	UpdatedBy      string    `json:"updatedBy"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type wechatSettingValue struct {
@@ -408,9 +408,9 @@ func (s *Service) BeginWeChatLogin(ctx context.Context, nextPath string, accepte
 // ---------- 轮询状态 ----------
 
 type WeChatLoginStatus struct {
-	Status string          `json:"status"` // pending | confirmed | expired
-	User   *AuthUser       `json:"user,omitempty"`
-	Next   string          `json:"next,omitempty"`
+	Status  string             `json:"status"` // pending | confirmed | expired
+	User    *AuthUser          `json:"user,omitempty"`
+	Next    string             `json:"next,omitempty"`
 	Session *AuthSessionResult `json:"-"`
 }
 
@@ -504,13 +504,13 @@ func wechatSignatureValid(token, signature, timestamp, nonce string) bool {
 }
 
 type wechatEventMessage struct {
-	XMLName    xml.Name `xml:"xml"`
-	ToUserName string   `xml:"ToUserName"`
-	FromUserName string `xml:"FromUserName"`
-	MsgType    string   `xml:"MsgType"`
-	Event      string   `xml:"Event"`
-	EventKey   string   `xml:"EventKey"`
-	Ticket     string   `xml:"Ticket"`
+	XMLName      xml.Name `xml:"xml"`
+	ToUserName   string   `xml:"ToUserName"`
+	FromUserName string   `xml:"FromUserName"`
+	MsgType      string   `xml:"MsgType"`
+	Event        string   `xml:"Event"`
+	EventKey     string   `xml:"EventKey"`
+	Ticket       string   `xml:"Ticket"`
 }
 
 // HandleWeChatEvent 解析事件推送。当前只关心扫码：
