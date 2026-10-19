@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
 	"yingce/backend/internal/auth"
@@ -26,6 +28,13 @@ type (
 	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
 	PublicLinuxDOSetting       = auth.PublicLinuxDOSetting
 	LinuxDOCallbackResult      = auth.LinuxDOCallbackResult
+	WeChatSettingRequest       = auth.WeChatSettingRequest
+	PublicWeChatSetting        = auth.PublicWeChatSetting
+	WeChatQRCode               = auth.WeChatQRCode
+	WeChatLoginStatus          = auth.WeChatLoginStatus
+	GoogleSettingRequest       = auth.GoogleSettingRequest
+	PublicGoogleSetting        = auth.PublicGoogleSetting
+	GoogleCallbackResult       = auth.GoogleCallbackResult
 	LibTVSettingRequest        = auth.LibTVSettingRequest
 	PublicLibTVSetting         = auth.PublicLibTVSetting
 	LibTVImportRequest         = auth.LibTVImportRequest
@@ -81,6 +90,20 @@ func (h authHost) BrandName() string {
 		return auth.DefaultBrandName
 	}
 	return h.svc.appearanceBrandName()
+}
+
+// PublicBaseURL 用于拼装第三方登录回调地址。优先取管理员在存储设置里配置的
+// 公网访问地址，其次取环境变量；两者都没有时返回空，由调用方退化为相对路径。
+func (h authHost) PublicBaseURL() string {
+	if h.svc == nil {
+		return ""
+	}
+	if _, setting, err := h.svc.readOSSSetting(); err == nil {
+		if value := strings.TrimSpace(setting.PublicBaseURL); value != "" {
+			return strings.TrimRight(value, "/")
+		}
+	}
+	return strings.TrimRight(strings.TrimSpace(os.Getenv("CANVAS_PUBLIC_BASE_URL")), "/")
 }
 
 func (h authHost) EnsureSignupBonus(userID string) error {
@@ -209,6 +232,54 @@ func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string
 
 func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (*LinuxDOCallbackResult, error) {
 	return s.authDomain().CompleteLinuxDOLogin(stateValue, code, cookieValue, contexts...)
+}
+
+func (s *Service) AdminWeChatSetting(actor *model.User) (*PublicWeChatSetting, error) {
+	return s.authDomain().AdminWeChatSetting(actor)
+}
+
+func (s *Service) UpdateWeChatSetting(actor *model.User, req WeChatSettingRequest) (*PublicWeChatSetting, error) {
+	return s.authDomain().UpdateWeChatSetting(actor, req)
+}
+
+func (s *Service) WeChatEnabled() bool {
+	return s.authDomain().WeChatEnabled()
+}
+
+func (s *Service) BeginWeChatLogin(ctx context.Context, nextPath string, acceptedTerms bool) (*WeChatQRCode, error) {
+	return s.authDomain().BeginWeChatLogin(ctx, nextPath, acceptedTerms)
+}
+
+func (s *Service) WeChatLoginStatus(ctx context.Context, loginToken string, contexts ...LoginContext) (*WeChatLoginStatus, error) {
+	return s.authDomain().WeChatLoginStatus(ctx, loginToken, contexts...)
+}
+
+func (s *Service) VerifyWeChatSignature(signature, timestamp, nonce, echostr string) (string, error) {
+	return s.authDomain().VerifyWeChatSignature(signature, timestamp, nonce, echostr)
+}
+
+func (s *Service) HandleWeChatEvent(ctx context.Context, raw []byte) error {
+	return s.authDomain().HandleWeChatEvent(ctx, raw)
+}
+
+func (s *Service) AdminGoogleSetting(actor *model.User) (*PublicGoogleSetting, error) {
+	return s.authDomain().AdminGoogleSetting(actor)
+}
+
+func (s *Service) UpdateGoogleSetting(actor *model.User, req GoogleSettingRequest) (*PublicGoogleSetting, error) {
+	return s.authDomain().UpdateGoogleSetting(actor, req)
+}
+
+func (s *Service) GoogleEnabled() bool {
+	return s.authDomain().GoogleEnabled()
+}
+
+func (s *Service) BeginGoogleLogin(nextPath string, acceptedTerms bool) (string, error) {
+	return s.authDomain().BeginGoogleLogin(nextPath, acceptedTerms)
+}
+
+func (s *Service) CompleteGoogleLogin(ctx context.Context, stateValue, code string, contexts ...LoginContext) (*GoogleCallbackResult, error) {
+	return s.authDomain().CompleteGoogleLogin(ctx, stateValue, code, contexts...)
 }
 
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {

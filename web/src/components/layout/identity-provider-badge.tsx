@@ -6,8 +6,18 @@ export function isLinuxDOIdentity(user?: IdentityUser | null) {
     return user?.identityProvider?.trim().toLowerCase() === "linuxdo";
 }
 
+// 第三方身份的展示元数据。provider 值来自后端 UserIdentity.Provider，
+// 必须与后端保持一致（linuxdo / google / wechat）。
+const IDENTITY_LABELS: Record<string, { short: string; full: string; title: string }> = {
+    linuxdo: { short: "L", full: "Linux.do", title: "Linux.do" },
+    google: { short: "G", full: "Google", title: "Google" },
+    wechat: { short: "W", full: "微信", title: "微信" },
+};
+
 export function IdentityProviderBadge({ user, compact = false, className }: { user: IdentityUser; compact?: boolean; className?: string }) {
-    if (!isLinuxDOIdentity(user)) return null;
+    const provider = user?.identityProvider?.trim().toLowerCase() || "";
+    const meta = IDENTITY_LABELS[provider];
+    if (!meta) return null;
     return (
         <span
             className={cn(
@@ -15,9 +25,9 @@ export function IdentityProviderBadge({ user, compact = false, className }: { us
                 compact ? "size-3.5 rounded-full text-[var(--fs-micro)] leading-none" : "h-4 rounded px-1 text-[var(--fs-micro)] leading-none",
                 className,
             )}
-            title={user.identityUsername ? `Linux.do · @${user.identityUsername}` : "Linux.do 用户"}
+            title={user.identityUsername ? `${meta.title} · ${user.identityUsername}` : `${meta.title} 用户`}
         >
-            {compact ? "L" : "Linux.do"}
+            {compact ? meta.short : meta.full}
         </span>
     );
 }

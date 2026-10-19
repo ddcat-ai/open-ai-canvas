@@ -188,6 +188,13 @@ type (
 	LinkShotAssetRequest                   = app.LinkShotAssetRequest
 	LinuxDOCallbackResult                  = app.LinuxDOCallbackResult
 	LinuxDOSettingRequest                  = app.LinuxDOSettingRequest
+	WeChatSettingRequest                   = app.WeChatSettingRequest
+	PublicWeChatSetting                    = app.PublicWeChatSetting
+	WeChatQRCode                           = app.WeChatQRCode
+	WeChatLoginStatus                      = app.WeChatLoginStatus
+	GoogleSettingRequest                   = app.GoogleSettingRequest
+	PublicGoogleSetting                    = app.PublicGoogleSetting
+	GoogleCallbackResult                   = app.GoogleCallbackResult
 	LogicalModelQuote                      = app.LogicalModelQuote
 	LogicalModelRequest                    = app.LogicalModelRequest
 	LogicalRouteRequest                    = app.LogicalRouteRequest

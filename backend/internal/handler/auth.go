@@ -157,6 +157,55 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.Redirect(http.StatusFound, target)
 	})
 	r.GET("/auth/linuxdo/callback", rejectedLoginAudit(svc, "linuxdo"), linuxDOCallbackHandler(svc))
+	// 微信服务号扫码登录：生成二维码 / 轮询确认态。
+	r.GET("/auth/wechat/qrcode", func(c *gin.Context) {
+		if !enforceRateLimit(c, "wechat-qrcode:"+c.ClientIP(), 30, 10*time.Minute) {
+			return
+		}
+		acceptedTerms := c.Query("acceptedTerms") == "true"
+		code, err := svc.BeginWeChatLogin(c.Request.Context(), c.Query("next"), acceptedTerms)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, code)
+	})
+	r.POST("/auth/wechat/status", func(c *gin.Context) {
+		if !enforceRateLimit(c, "wechat-status:"+c.ClientIP(), 600, 10*time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req struct {
+			LoginToken string `json:"loginToken"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		status, err := svc.WeChatLoginStatus(c.Request.Context(), req.LoginToken, loginRequestContext(c))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if status.Session != nil {
+			setSessionCookie(c, status.Session.Session, status.Session.MaxAgeSecs)
+		}
+		ok(c, gin.H{"status": status.Status, "user": status.User, "next": status.Next})
+	})
+	// Google OAuth：标准授权码流程，与 Linux.do 同构。
+	r.GET("/auth/google/start", func(c *gin.Context) {
+		if !enforceRateLimit(c, "google-start:"+c.ClientIP(), 20, 10*time.Minute) {
+			return
+		}
+		acceptedTerms := c.Query("acceptedTerms") == "true"
+		target, err := svc.BeginGoogleLogin(c.Query("next"), acceptedTerms)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Redirect(http.StatusFound, target)
+	})
+	r.GET("/auth/google/callback", rejectedLoginAudit(svc, "google"), googleCallbackHandler(svc))
 	r.POST("/auth/logout", func(c *gin.Context) {
 		if err := svc.Logout(sessionCookie(c), loginRequestContext(c)); err != nil {
 			failService(c, err)
@@ -215,6 +264,65 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 // 兼容已在 Linux.do OAuth 应用中登记的传统回调地址，处理逻辑与 /api/auth/linuxdo/callback 完全一致。
 func RegisterOAuthCallbackRoutes(r gin.IRoutes, svc *service.Service) {
 	r.GET("/oauth/linuxdo/callback", rejectedLoginAudit(svc, "linuxdo"), linuxDOCallbackHandler(svc))
+	// 微信公众平台的「服务器配置」地址必须挂在根路径，且要在 NoRoute 之前注册，
+	// 否则会被 SystemProxyNoRouteHandler 当作系统渠道代理请求吃掉。
+	r.GET("/wechat/callback", wechatVerifyHandler(svc))
+	r.POST("/wechat/callback", wechatEventHandler(svc))
+}
+
+// wechatVerifyHandler 处理公众平台保存服务器配置时的 URL 校验：
+// 校验签名通过后必须原样返回 echostr，否则微信判定配置失败。
+func wechatVerifyHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !enforceRateLimit(c, "wechat-verify:"+c.ClientIP(), 60, 10*time.Minute) {
+			return
+		}
+		echo, err := svc.VerifyWeChatSignature(c.Query("signature"), c.Query("timestamp"), c.Query("nonce"), c.Query("echostr"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.String(http.StatusOK, echo)
+	}
+}
+
+// wechatEventHandler 接收扫码事件。微信要求 5 秒内响应，超时会重试 3 次，
+// 因此这里只写「已确认」标记，真正的建会话放在前端轮询时完成。
+func wechatEventHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !enforceRateLimit(c, "wechat-event:"+c.ClientIP(), 300, 10*time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
+		raw, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.HandleWeChatEvent(c.Request.Context(), raw); err != nil {
+			// 微信只关心 HTTP 状态码，错误体不展示给用户。
+			c.String(http.StatusOK, "success")
+			return
+		}
+		// 必须返回 success，否则微信会持续重试。
+		c.String(http.StatusOK, "success")
+	}
+}
+
+func googleCallbackHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !enforceRateLimit(c, "google-callback:"+c.ClientIP(), 30, 10*time.Minute) {
+			return
+		}
+		c.Set("login_audit_handled", true)
+		result, err := svc.CompleteGoogleLogin(c.Request.Context(), c.Query("state"), c.Query("code"), loginRequestContext(c))
+		if err != nil {
+			c.Redirect(http.StatusFound, "/login?oauth_error="+url.QueryEscape(err.Error()))
+			return
+		}
+		setSessionCookie(c, result.Session.Session, result.Session.MaxAgeSecs)
+		c.Redirect(http.StatusFound, result.Next)
+	}
 }
 
 func linuxDOCallbackHandler(svc *service.Service) gin.HandlerFunc {

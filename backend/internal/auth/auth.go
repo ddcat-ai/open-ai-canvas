@@ -58,6 +58,8 @@ type PublicAuthSettings struct {
 	EmailCodeRequired     bool   `json:"emailCodeRequired"`
 	AgreementTitle        string `json:"agreementTitle,omitempty"`
 	AgreementContent      string `json:"agreementContent,omitempty"`
+	WeChatEnabled         bool   `json:"wechatEnabled"`
+	GoogleEnabled         bool   `json:"googleEnabled"`
 }
 
 type AuthSessionResult struct {
@@ -125,6 +127,8 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		EmailCodeRequired:     p.EmailRegistration || p.SMSAndEmailRegistration,
 		AgreementTitle:        agreementTitle,
 		AgreementContent:      agreementContent,
+		WeChatEnabled:         s.WeChatEnabled(),
+		GoogleEnabled:         s.GoogleEnabled(),
 	}, nil
 }
 
@@ -354,17 +358,29 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 }
 
 // 认证响应只补充当前用户自己的第三方公开身份，不把身份表或密钥字段暴露给其他列表接口。
+// 一个用户可能同时绑定多个第三方身份（例如先微信登录后又绑定 Google），
+// 这里按固定优先级取第一个命中的身份作为展示来源，保证同一用户每次返回稳定。
+var publicIdentityProviders = []string{"linuxdo", "google", "wechat"}
+
 func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	result := AuthUser{User: *user}
 	if user.AvatarMode == "custom" {
 		result.AvatarURL = profileAvatarURL(user)
 	}
-	identity, err := s.repo.UserIdentityForUser(user.ID, "linuxdo")
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return result, nil
+	var identity *model.UserIdentity
+	for _, provider := range publicIdentityProviders {
+		found, err := s.repo.UserIdentityForUser(user.ID, provider)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			continue
+		}
+		if err != nil {
+			return AuthUser{}, err
+		}
+		identity = found
+		break
 	}
-	if err != nil {
-		return AuthUser{}, err
+	if identity == nil {
+		return result, nil
 	}
 	if user.AvatarMode == "" {
 		result.AvatarURL = identity.AvatarURL

@@ -19,6 +19,9 @@ type Host interface {
 	DecryptSecret(value string) (string, error)
 	SettingsEncryptionKey() ([]byte, error)
 	BrandName() string
+	// PublicBaseURL 是站点对外可访问的根地址（不含尾斜杠），用于拼装第三方回调 URL。
+	// 为空表示部署方未配置，此时调用方应退化为相对路径。
+	PublicBaseURL() string
 	EnsureSignupBonus(userID string) error
 	RecordActivity(userID string, event string, count int)
 	AllowRequest(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
@@ -36,6 +39,7 @@ func (nopHost) DecryptSecret(value string) (string, error) {
 }
 func (nopHost) SettingsEncryptionKey() ([]byte, error) { return nil, nil }
 func (nopHost) BrandName() string                      { return DefaultBrandName }
+func (nopHost) PublicBaseURL() string                  { return "" }
 func (nopHost) EnsureSignupBonus(string) error         { return nil }
 func (nopHost) RecordActivity(string, string, int)     {}
 func (nopHost) AllowRequest(context.Context, string, int, time.Duration) (bool, error) {
@@ -52,6 +56,11 @@ type Service struct {
 	emailCodeMu    sync.Mutex
 	registrationMu sync.Mutex
 	sms            SMSDelivery
+	// wechatToken 缓存微信服务端 access_token。微信同一 AppID 的 token 是全局单例，
+	// 重复获取会让旧 token 失效，因此必须串行化并复用。
+	wechatToken wechatTokenState
+	// googleKeys 缓存 Google id_token 验签所需的公钥（JWKS）。
+	googleKeys googleKeyCache
 }
 
 type SMSDelivery interface {

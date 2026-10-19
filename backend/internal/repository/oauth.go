@@ -48,6 +48,20 @@ func (r *Repository) ConsumeOAuthState(provider string, stateHash string) (*mode
 	return &state, err
 }
 
+// OAuthStateByHash 只读查询，不消费 state。微信扫码登录需要「事件回调写确认态、
+// 前端轮询读确认态」两段式流程，因此不能复用 ConsumeOAuthState 的一次性语义。
+func (r *Repository) OAuthStateByHash(provider string, stateHash string) (*model.OAuthState, error) {
+	var state model.OAuthState
+	if err := r.db.First(&state, "provider = ? AND state_hash = ?", provider, stateHash).Error; err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (r *Repository) SaveOAuthState(state *model.OAuthState) error {
+	return r.db.Save(state).Error
+}
+
 func (r *Repository) CreateOAuthUser(user *model.User, identity *model.UserIdentity) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := lockRegistrationEmail(tx, user.Email); err != nil {

@@ -398,6 +398,8 @@ export function getAuthSettings() {
             firstUser: boolean;
             registrationEnabled: boolean;
             linuxdoEnabled: boolean;
+            wechatEnabled: boolean;
+            googleEnabled: boolean;
             emailEnabled: boolean;
             emailCodeRequired: boolean;
             smsBindingAvailable: boolean;
@@ -412,6 +414,34 @@ export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
     const base = String(apiBaseURL).replace(/\/$/, "");
     const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
     return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}${termsQuery}`;
+}
+
+export function googleLoginURL(next: string, acceptedTerms?: boolean) {
+    const base = String(apiBaseURL).replace(/\/$/, "");
+    const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
+    return `${base}/auth/google/start?next=${encodeURIComponent(next)}${termsQuery}`;
+}
+
+export type WeChatQRCode = {
+    loginToken: string;
+    qrCodeUrl: string;
+    expiresIn: number;
+    next: string;
+};
+
+export type WeChatLoginStatus = {
+    status: "pending" | "confirmed" | "expired";
+    user?: LocalUser | null;
+    next?: string;
+};
+
+export function getWeChatQRCode(next: string, acceptedTerms?: boolean) {
+    const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
+    return http.get<WeChatQRCode>(`/auth/wechat/qrcode?next=${encodeURIComponent(next)}${termsQuery}`);
+}
+
+export function pollWeChatLoginStatus(loginToken: string) {
+    return http.post<WeChatLoginStatus>("/auth/wechat/status", { loginToken });
 }
 
 export function getAuthSession() {

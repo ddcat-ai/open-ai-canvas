@@ -272,6 +272,49 @@ export function updateAdminLinuxDOSetting(input: Partial<LinuxDOSetting>) {
     return http.patch<{ setting: LinuxDOSetting }>("/admin/settings/linuxdo", input);
 }
 
+export type WeChatSetting = {
+    enabled: boolean;
+    appId: string;
+    appSecret?: string;
+    hasAppSecret: boolean;
+    token: string;
+    encodingAesKey: string;
+    encryptMode: "plain" | "compatible" | "safe";
+    qrExpireSecs: number;
+    callbackUrl: string;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export function getAdminWeChatSetting() {
+    return http.get<{ setting: WeChatSetting }>("/admin/settings/wechat");
+}
+
+export function updateAdminWeChatSetting(input: Partial<WeChatSetting>) {
+    return http.patch<{ setting: WeChatSetting }>("/admin/settings/wechat", input);
+}
+
+export type GoogleSetting = {
+    enabled: boolean;
+    clientId: string;
+    clientSecret?: string;
+    hasClientSecret: boolean;
+    redirectUrl: string;
+    hostedDomain: string;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export function getAdminGoogleSetting() {
+    return http.get<{ setting: GoogleSetting }>("/admin/settings/google");
+}
+
+export function updateAdminGoogleSetting(input: Partial<GoogleSetting>) {
+    return http.patch<{ setting: GoogleSetting }>("/admin/settings/google", input);
+}
+
 export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }
