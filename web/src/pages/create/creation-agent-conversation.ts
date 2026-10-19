@@ -268,7 +268,12 @@ export function creationAgentHistoryGapKey(conversation?: CreationConversation):
             expected++;
         }
         if (terminal.has(run.status) && (run.eventCount || 0) >= expected) return `${run.id}:seq:${expected}`;
-        const created = new Set(events.filter((event) => event.type === "generation_task_created").map((event) => text(event.payload?.taskId)).filter(Boolean));
+        const created = new Set(
+            events
+                .filter((event) => event.type === "generation_task_created")
+                .map((event) => text(event.payload?.taskId))
+                .filter(Boolean),
+        );
         for (const event of events) {
             const taskId = text(event.payload?.taskId);
             if (event.type === "generation_task_completed" && taskId && !created.has(taskId)) return `${run.id}:task:${taskId}`;

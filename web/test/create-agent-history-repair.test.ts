@@ -8,14 +8,38 @@ const session: AgentSession = { id: "session-nine", title: "九张商品图", su
 const itemIds = ["main-1", "secondary-2", "secondary-3", "secondary-4", "secondary-5", "detail-1", "detail-2", "detail-3", "detail-4"];
 const event = (seq: number, type: string, payload: Record<string, unknown>): AgentEvent => ({ runId: "run-nine", eventId: `run-nine:${seq}`, seq, type, payload, createdAt: at });
 const events = [
-    event(1, "plan_updated", { items: [{ id: "visual", title: "锁定视觉方案", status: "done" }, { id: "images", title: "生成九张图片", status: "doing" }], plan: { items: itemIds.map((id) => ({ id, type: "image", title: id })) } }),
+    event(1, "plan_updated", {
+        items: [
+            { id: "visual", title: "锁定视觉方案", status: "done" },
+            { id: "images", title: "生成九张图片", status: "doing" },
+        ],
+        plan: { items: itemIds.map((id) => ({ id, type: "image", title: id })) },
+    }),
     ...Array.from({ length: 9 }, (_, i) => event(i + 2, "tool_completed", {})),
     ...itemIds.map((id, i) => event(i + 11, "generation_task_created", { taskId: `image-${i}`, commerceItemId: id, mode: "image", title: id })),
     ...itemIds.map((id, i) => event(i + 20, "generation_task_completed", { taskId: `image-${i}`, commerceItemId: id, status: "succeeded" })),
-    event(29, "plan_updated", { items: [{ id: "visual", title: "锁定视觉方案", status: "done" }, { id: "images", title: "生成九张图片", status: "done" }] }),
+    event(29, "plan_updated", {
+        items: [
+            { id: "visual", title: "锁定视觉方案", status: "done" },
+            { id: "images", title: "生成九张图片", status: "done" },
+        ],
+    }),
     event(30, "assistant_message", { text: "九张图片已生成" }),
 ];
-const run: AgentRun = { id: "run-nine", sessionId: session.id, canvasId: "", surface: "creation", userPrompt: "5 张方图和 4 张竖图", status: "completed", permissionMode: "auto", createdAt: at, updatedAt: at, eventCount: events.length, latestSeq: events.length, events };
+const run: AgentRun = {
+    id: "run-nine",
+    sessionId: session.id,
+    canvasId: "",
+    surface: "creation",
+    userPrompt: "5 张方图和 4 张竖图",
+    status: "completed",
+    permissionMode: "auto",
+    createdAt: at,
+    updatedAt: at,
+    eventCount: events.length,
+    latestSeq: events.length,
+    events,
+};
 const project = (record = run) => history.projectCreationAgentConversation(session, [record]);
 const missing = () => project({ ...run, events: events.filter((entry) => entry.seq !== 11) });
 const gap = (conversation: CreationConversation) => history.creationAgentHistoryGapKey(conversation);
@@ -27,7 +51,10 @@ const client = (getSession: history.CreationAgentRecoveryClient["getSession"] = 
 const finish = (conversation: CreationConversation) => {
     for (let i = 0; i < 9; i++) conversation = history.applyCreationAgentTaskState(conversation, { id: `image-${i}`, status: "succeeded", resultJson: JSON.stringify({ images: [{ storageKey: `resource:image-${i}` }] }) });
     const reply = conversation.messages.find((message) => message.mode === "agent" && message.role === "assistant")!;
-    return history.projectCreationAgentMediaBatches(reply, conversation.messages.filter((message) => message.taskIds?.length))[0];
+    return history.projectCreationAgentMediaBatches(
+        reply,
+        conversation.messages.filter((message) => message.taskIds?.length),
+    )[0];
 };
 
 test("终态本地缓存漏创建事件时重新核对，九张成功图从8/9补回9/9", async () => {
@@ -64,7 +91,10 @@ test("完整记录不补拉，确实尚未提交的计划项也不凭数量补�
 
 test("没有事件缺口不发恢复请求，恢复读取失败保留原会话", async () => {
     let requests = 0;
-    const unavailable = client(async () => { requests++; throw new Error("读取失败"); });
+    const unavailable = client(async () => {
+        requests++;
+        throw new Error("读取失败");
+    });
     expect(await history.recoverCreationAgentHistory(() => project(), unavailable)).toBeUndefined();
     expect(requests).toBe(0);
     const cached = missing();
@@ -83,9 +113,25 @@ test("有完成记录却无创建记录、或消息投影漏项时也复核原�
 test("补拉期间新增普通图片、视频和后续Agent轮次均保留", async () => {
     let current = missing();
     let release!: () => void;
-    const waiting = new Promise<void>((resolve) => { release = resolve; });
-    const recovery = history.recoverCreationAgentHistory(() => current, client(async () => { await waiting; return { session, runs: [run] }; }));
-    const direct: CreationMessage[] = ["image", "video"].map((mode, i) => ({ id: `direct-${i}`, role: "assistant", mode: mode as "image" | "video", content: "后续直接创作", createdAt: "2026-10-19T11:20:00Z", status: "pending", taskIds: [`direct-task-${i}`] }));
+    const waiting = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const recovery = history.recoverCreationAgentHistory(
+        () => current,
+        client(async () => {
+            await waiting;
+            return { session, runs: [run] };
+        }),
+    );
+    const direct: CreationMessage[] = ["image", "video"].map((mode, i) => ({
+        id: `direct-${i}`,
+        role: "assistant",
+        mode: mode as "image" | "video",
+        content: "后续直接创作",
+        createdAt: "2026-10-19T11:20:00Z",
+        status: "pending",
+        taskIds: [`direct-task-${i}`],
+    }));
     const nextRun: AgentRun = { ...run, id: "new-run", status: "running", createdAt: "2026-10-19T11:21:00Z", updatedAt: "2026-10-19T11:21:00Z", eventCount: 0, events: [], userPrompt: "继续修改" };
     current = history.mergeCreationAgentConversation({ ...current, messages: [...current.messages, ...direct] }, history.projectCreationAgentConversation(session, [nextRun]));
     release();
@@ -100,8 +146,17 @@ test.each(["switch", "logout", "abort"])("异步补拉后%s不更新已经离开
     let current: CreationConversation | undefined = missing();
     const controller = new AbortController();
     let release!: () => void;
-    const waiting = new Promise<void>((resolve) => { release = resolve; });
-    const recovery = history.recoverCreationAgentHistory(() => current, client(async () => { await waiting; return { session, runs: [run] }; }), controller.signal);
+    const waiting = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const recovery = history.recoverCreationAgentHistory(
+        () => current,
+        client(async () => {
+            await waiting;
+            return { session, runs: [run] };
+        }),
+        controller.signal,
+    );
     if (reason === "switch") current = { ...current, id: "another", agentSessionId: "another" };
     if (reason === "logout") current = undefined;
     if (reason === "abort") controller.abort();
