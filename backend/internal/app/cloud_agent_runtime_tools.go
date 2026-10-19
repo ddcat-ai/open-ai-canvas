@@ -537,7 +537,7 @@ func (s *Service) advanceCloudAgentApprovalTool(run *model.CloudAgentExecution, 
 				// Dry admission validates the selected model and prompt limits without a task or charge.
 				mediaPreparation = &creationTaskPreparation{}
 				req.creationPrepare = mediaPreparation
-				preparedTask, err = s.CreateTask(run.UserID, req)
+				preparedTask, err = s.prepareCloudAgentPreferredMedia(run, state, &req, prepared, 0)
 				if err != nil {
 					return mediaAdmissionError(err)
 				}

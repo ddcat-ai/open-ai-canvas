@@ -73,7 +73,7 @@ func (s *Service) prepareCloudAgentImageBatch(run *model.CloudAgentExecution, st
 		metadata["imageBatchId"], metadata["imageBatchTotal"], metadata["imageBatchItemId"] = batch.PlanID, len(args.Items), item.ID
 		preparation := &creationTaskPreparation{DeferActiveTaskLimit: true}
 		request.creationPrepare = preparation
-		dryTask, err := s.CreateTask(run.UserID, request)
+		dryTask, err := s.prepareCloudAgentPreferredMedia(run, &copyState, &request, media, batch.QuoteMicrocredits)
 		if err != nil {
 			return nil, err
 		}
@@ -106,8 +106,7 @@ func cloudAgentImageBatchPreview(batch *cloudAgentCommerceBatch) cloudAgentAppro
 	hasVideo := false
 	for _, item := range batch.Items {
 		details := []string{fmt.Sprintf("预计 %.4f 积分", float64(item.Prepared.Quote.AmountMicrocredits)/float64(CreditScale))}
-		metadata, _ := item.Request.Input["metadata"].(map[string]any)
-		if stringValue(metadata["retryOf"]) != "" {
+		if item.Request.Model != "" {
 			details = append(details, "生成模型："+item.Request.Model)
 		}
 		hasVideo = hasVideo || item.Args.Mode == "video"

@@ -85,7 +85,7 @@ func (s *Service) prepareCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 		media.CommerceKey, media.CommerceItemID = identity.TaskID, identity.ItemID
 		preparation := &creationTaskPreparation{DeferActiveTaskLimit: true}
 		request.creationPrepare = preparation
-		dryTask, err := s.CreateTask(run.UserID, request)
+		dryTask, err := s.prepareCloudAgentPreferredMedia(run, &copyState, &request, media, batch.QuoteMicrocredits)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +129,11 @@ func cloudAgentCommerceBatchPreview(plan *cloudAgentCommercePlan, batch *cloudAg
 	for _, entry := range batch.Items {
 		for _, item := range plan.Items {
 			if item.ID == entry.ItemID {
-				items = append(items, cloudAgentApprovalPreviewItem{Operation: "generate_media", Summary: item.Title, Details: []string{item.Purpose, fmt.Sprintf("预计 %.4f 积分", float64(entry.Prepared.Quote.AmountMicrocredits)/float64(CreditScale))}})
+				details := []string{item.Purpose, fmt.Sprintf("预计 %.4f 积分", float64(entry.Prepared.Quote.AmountMicrocredits)/float64(CreditScale))}
+				if entry.Request.Model != "" {
+					details = append(details, "生成模型："+entry.Request.Model)
+				}
+				items = append(items, cloudAgentApprovalPreviewItem{Operation: "generate_media", Summary: item.Title, Details: details})
 				break
 			}
 		}

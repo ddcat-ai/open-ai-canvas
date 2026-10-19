@@ -201,6 +201,31 @@ func (s *Service) prepareCloudAgentCreationMedia(run *model.CloudAgentExecution,
 	if err := validateCloudAgentMediaReferences(a.Mode, refs); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
+	if a.Prepared != nil && a.LogicalModelID == "" {
+		// Restore the admitted model and defaults, including a compatible soft
+		// preference fallback. Never re-select from the original preference here.
+		var input map[string]any
+		if err := json.Unmarshal([]byte(mustMarshal(a.Prepared.Input)), &input); err != nil {
+			return CreateTaskRequest{}, nil, err
+		}
+		config, _ := input["config"].(map[string]any)
+		if stringValue(input["mode"]) != a.Mode || stringValue(config["channelId"]) == "" || stringValue(config["model"]) == "" {
+			return CreateTaskRequest{}, nil, creationConflict("已批准的模型配置无效，请重新准备生成")
+		}
+		for _, field := range []string{"referenceImages", "referenceVideos", "referenceAudios"} {
+			delete(input, field)
+		}
+		for field, value := range refs {
+			input[field] = value
+		}
+		a.ChannelID, a.ChannelModelKey = stringValue(config["channelId"]), firstNonEmpty(stringValue(config["channelModelKey"]), stringValue(config["model"]))
+		request := CreateTaskRequest{Type: "canvas_" + a.Mode, Operation: cloudAgentMediaOperation(a.Mode, refs), Prompt: a.Prompt, Model: a.ChannelModelKey, Input: input}
+		plan := &cloudAgentMediaPlan{Args: a, CallID: callID, Prepared: a.Prepared}
+		if err := applyCloudAgentResolvedMediaDefaults(&request, plan, &model.Task{InputJSON: mustMarshal(input)}); err != nil {
+			return CreateTaskRequest{}, nil, err
+		}
+		return request, plan, nil
+	}
 	spec, err := cloudAgentGenerationSpec(a, refs, nil)
 	if err != nil {
 		return CreateTaskRequest{}, nil, err

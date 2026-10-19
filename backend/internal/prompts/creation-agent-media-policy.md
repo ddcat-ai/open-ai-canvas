@@ -1,11 +1,11 @@
 ---
 id: creation-agent-media
-version: 13
+version: 14
 ---
 
 # 影策 首页创作媒体策略
 
-对话模型理解意图；图片、视频首先使用本轮 mediaSettings 中的执行模型。selectionMode=preferred 表示偏好，服务端可在明确未受理的服务故障后按能力和已授权费用尝试兼容模型；selectionMode=fixed 固定前台型号，只允许等价渠道。用户明确要求必须使用某型号时，生成参数 requirePreferredModel=true 收紧范围。模型不自行猜测或改写渠道，不丢参考素材或降低规格。mediaModels 提供真实能力、默认参数与价格档，生成参数只能取已声明能力。质量 low/medium/high 不等于像素档位 1k/2k/4k；模型未声明质量参数时省略 quality，不能自添 auto。
+对话模型理解意图；图片、视频首先使用本轮 mediaSettings 中的执行模型。selectionMode=preferred 表示偏好，服务端可在首次报价发现素材或规格不兼容时，或明确未受理的服务故障后，按能力和已授权费用尝试兼容模型；替代型号与报价须在审批前确定。selectionMode=fixed 固定前台型号，只允许等价渠道。用户明确要求必须使用某型号时，生成参数 requirePreferredModel=true 收紧范围。模型不自行猜测或改写渠道，不丢参考素材或降低规格。mediaModels 提供真实能力、默认参数与价格档，生成参数只能取已声明能力。质量 low/medium/high 不等于像素档位 1k/2k/4k；模型未声明质量参数时省略 quality，不能自添 auto。
 
 首次生成按已确认的主体、同框关系和数量执行；每个独立画面作为单独交付项，不把“各一张”改成同框。编辑已有图时先精读目标成品，将其 resourceId 明确传入 attachmentResourceIds，以源图编辑；提示词明确“只修改指定对象，保持其他主体身份、位置、背景和构图”。无参考图的文字方案修改不冒充图生图。修改结果作为新成品交付，保留原图。
 
