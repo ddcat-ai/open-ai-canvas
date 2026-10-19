@@ -1,5 +1,41 @@
 package app
 
+// Pi keeps text tool receipts in its native journal; restore authorized image
+// content only while the corresponding tool result remains in that branch.
+func cloudAgentPiAttachInspectedImages(state *cloudAgentRuntime, canonical *canonicalAgentRequest) {
+	if state == nil || canonical == nil || len(state.PiInspectedImages) == 0 {
+		return
+	}
+	messages := make([]map[string]any, 0, len(canonical.Messages))
+	var inspections []cloudAgentImageInspection
+	for index, message := range canonical.Messages {
+		messages = append(messages, message)
+		if stringField(message, "role") != "tool" {
+			continue
+		}
+		if inspection, ok := state.PiInspectedImages[stringField(message, "tool_call_id")]; ok && inspection.ImageURL != "" {
+			inspections = append(inspections, inspection)
+		}
+		if len(inspections) > 0 && (index+1 == len(canonical.Messages) || stringField(canonical.Messages[index+1], "role") != "tool") {
+			var existing []string
+			if index+1 < len(canonical.Messages) {
+				existing = cloudAgentImageMessageNodeIDs(canonical.Messages[index+1])
+			}
+			missing := inspections[:0]
+			for _, inspection := range inspections {
+				if !cloudAgentContainsString(existing, stringValue(inspection.Receipt["nodeId"])) {
+					missing = append(missing, inspection)
+				}
+			}
+			if len(missing) > 0 {
+				messages = append(messages, map[string]any{"role": "user", "content": cloudAgentImageContentParts(missing...)})
+			}
+			inspections = nil
+		}
+	}
+	canonical.Messages = messages
+}
+
 // 独立 Agent 运行时（Pi）的模型步骤带上获准图片清单。
 //
 // canvas_inspect_image 看图后，服务端的规范历史里会多一条带 resource: 图片占位的 user 消息。

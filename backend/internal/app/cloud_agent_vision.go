@@ -90,14 +90,24 @@ func (s *Service) cloudAgentVisionEnabled(req CloudAgentRequest) bool {
 }
 
 func (s *Service) cloudAgentVisionReferences(req CloudAgentRequest) (TextReferenceConfig, error) {
-	if s == nil || s.repo == nil || req.ChannelID == "" || req.ChannelModelKey == "" {
+	if s == nil || s.repo == nil {
+		return TextReferenceConfig{}, BadAuthRequest("看图渠道模型不可用")
+	}
+	if req.LogicalModelID != "" {
+		routed, err := s.ResolveLogicalModel(req.LogicalModelID, ModelRequestIntent{Capability: "text", Inputs: map[string]int{"image": 1}})
+		if err != nil {
+			return TextReferenceConfig{}, err
+		}
+		req.ChannelID, req.ChannelModelKey = routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey
+	}
+	if req.ChannelID == "" || req.ChannelModelKey == "" {
 		return TextReferenceConfig{}, BadAuthRequest("看图需要指定支持图片输入的渠道模型")
 	}
 	channelModel, err := s.repo.ChannelModelByKey(req.ChannelID, req.ChannelModelKey)
 	if err != nil || channelModel == nil || normalizeCapability(channelModel.Capability) != "text" {
 		return TextReferenceConfig{}, BadAuthRequest("看图渠道模型不可用")
 	}
-	config, err := normalizedChannelModelCapability(channelModel)
+	config, err := normalizedChannelModelCapability(channelModel, s.protocolRegistry())
 	if err != nil || config == nil || config.Text == nil || config.Text.References.MaxImages <= 0 {
 		return TextReferenceConfig{}, BadAuthRequest("当前模型未声明图片输入能力")
 	}

@@ -40,6 +40,7 @@ func TestWavespeedImageEditConformance(t *testing.T) {
 				"output_format":{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.wavespeed-image-edit.output_format"},"png"]}}
 			}},
 			"poll":{"method":"GET","path":"/predictions/{{taskId}}/result"},
+			"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},
 			"response":{
 				"taskId":{"$coalesce":[{"$ref":"response.data.id"},{"$ref":"response.id"}]},
 				"status":{"$coalesce":[{"$ref":"response.data.status"},{"$ref":"response.status"},"pending"]},
@@ -151,6 +152,7 @@ func TestWavespeedImageEditPollFailure(t *testing.T) {
 				"prompt":{"$ref":"request.prompt"}
 			}},
 			"poll":{"method":"GET","path":"/predictions/{{taskId}}/result"},
+			"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},
 			"response":{
 				"taskId":{"$coalesce":[{"$ref":"response.data.id"},{"$ref":"response.id"}]},
 				"status":{"$coalesce":[{"$ref":"response.data.status"},{"$ref":"response.status"},"pending"]},

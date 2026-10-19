@@ -30,6 +30,14 @@ func TestAuthErrorAliasRemainsCompatible(t *testing.T) {
 	}
 }
 
+func TestPublicModelErrorPreservesHTTPProjection(t *testing.T) {
+	err := ModelCapabilityNotSupported("当前模型不支持参考图")
+	var projected *AppError
+	if !errors.As(err, &projected) || projected.Status != 400 || projected.Reason != "model_capability_not_supported" {
+		t.Fatalf("model error projection: %#v", err)
+	}
+}
+
 func TestQuotaExceededUsesStableCodeAndReason(t *testing.T) {
 	err := QuotaExceeded("账号素材数量已达到 1 个上限")
 	if err.Status != 403 || err.Code != CodeQuotaExceeded || err.Reason != ReasonQuotaExceeded {

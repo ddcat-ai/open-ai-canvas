@@ -250,8 +250,14 @@ func (s *Service) OpenResourceRange(userID string, id string, rangeHeader string
 }
 
 func (s *Service) openResourceRange(userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
+	if resource.Status == model.ResourceStatusDeleted {
+		return nil, assets.AccessError(http.StatusGone, "resource_expired", "媒体已清理，请重新生成或上传")
+	}
 	if resource.Status != model.ResourceStatusReady {
 		return nil, BadAuthRequest("资源尚未上传完成")
+	}
+	if resource.TransferPending {
+		return s.openGeneratedResource(resource)
 	}
 	if resource.Provider == "local" {
 		body, err := os.Open(filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)))

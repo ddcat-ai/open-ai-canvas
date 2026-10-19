@@ -12,9 +12,8 @@
 //     工具执行完、下一次模型调用前把它作为 user 消息写进会话并落盘；即使模型
 //     本轮没有工具调用，挂着的 steer 也会让会话再走一步，因此「最终回答时的
 //     插话」由运行时自然续跑，无需服务端另开一步。
-//   - 两份历史各有一份插话：下一次 /model 的 canonical 选取
-//     （cloudAgentPiCanonicalForModelRequest）在长度相等时采用运行时投影，
-//     插话不会重复；投影不带来源标记，转换后按已送达指纹补回。
+//   - 下一次 /model 以 Pi 当前分支构建 canonical；投影不带来源标记，
+//     转换后从文本或文本块读取内容，按已送达指纹补回，不追加重复插话。
 
 package app
 
@@ -81,7 +80,7 @@ func cloudAgentRestoreInterjectionSources(state *cloudAgentRuntime) {
 		if stringField(message, "role") != "user" || stringField(message, cloudAgentContextSourceKey) != "" {
 			continue
 		}
-		digest := cloudAgentInterjectionDigest(stringField(message, "content"))
+		digest := cloudAgentInterjectionDigest(runtimeContentText(message["content"]))
 		for _, delivered := range state.DeliveredInterjectionDigests {
 			if digest == delivered {
 				message[cloudAgentContextSourceKey] = "user_interjection"
@@ -149,12 +148,13 @@ func cloudAgentPiRunAtFinalAnswer(state *cloudAgentRuntime) bool {
 // completed 并退回剩余插话，而不是把整轮判成失败。普通步数耗尽（工具调用之后
 // 想再开一步）不满足最终回答边界，保持原有失败路径。收尾后运行时以模型步失败
 // 退出，failPiRunner 看到终态不会再写状态。
-func (s *Service) settleCloudAgentPiFinalAnswer(userID, runID string) {
+func (s *Service) settleCloudAgentPiFinalAnswer(userID, runID string, fences ...*model.CloudAgentFence) {
 	for attempt := 0; attempt < cloudAgentInterjectionAttempts; attempt++ {
 		run, err := s.repo.CloudAgent(userID, runID)
 		if err != nil {
 			return
 		}
+		cloudAgentBindFence(run, fences)
 		state, err := cloudAgentDecode(run)
 		if err != nil {
 			return
@@ -165,7 +165,7 @@ func (s *Service) settleCloudAgentPiFinalAnswer(userID, runID string) {
 		if !cloudAgentPiRunAtFinalAnswer(&state) {
 			return
 		}
-		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		err = s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 			if cloudAgentRunTerminal(current.Status) || current.Status == "waiting_approval" || current.Status == "waiting_user" {
 				return nil
 			}

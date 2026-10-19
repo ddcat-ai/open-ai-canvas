@@ -45,7 +45,13 @@ func cloudAgentSafeToolError(err error) string {
 		return readLoopErr.Error()
 	}
 	var appErr *AppError
-	if errors.As(err, &appErr) && appErr != nil {
+	var modelErr *ModelError
+	if errors.As(err, &modelErr) && modelErr != nil {
+		appErr = modelErr.AppError
+	} else {
+		errors.As(err, &appErr)
+	}
+	if appErr != nil {
 		message := strings.TrimSpace(appErr.Message)
 		if cloudAgentSafeUserMessage(message) {
 			return message

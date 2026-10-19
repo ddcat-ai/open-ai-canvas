@@ -340,7 +340,7 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v1",
 			"id":"test-declarative-video-runtime","version":"1.0.0","name":"Test Declarative Video","author":"Test","documentation":"# Test Declarative Video",
-		"contributes":{"providers":[{"id":"test-declarative-video-runtime","label":"Test Declarative Video","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model","prompt":"request.prompt","seconds":"request.duration"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-declarative-video-runtime","label":"Test Declarative Video","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model","prompt":"request.prompt","seconds":"request.duration"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`)
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -401,7 +401,7 @@ func TestDeclarativeProtocolPollRecoversFromTransientGatewayFailure(t *testing.T
 	adapter, err := protocol.LoadManifest([]byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"test-declarative-video-retry","version":"1.0.0","name":"Test Declarative Video Retry","author":"Test","documentation":"# Test",
-		"contributes":{"providers":[{"id":"test-declarative-video-retry","label":"Test Declarative Video Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-declarative-video-retry","label":"Test Declarative Video Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -449,7 +449,7 @@ func TestDeclarativeProtocolRetriesResultDownloadWithoutRepolling(t *testing.T) 
 	adapter, err := protocol.LoadManifest([]byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"test-declarative-download-retry","version":"1.0.0","name":"Test Declarative Download Retry","author":"Test","documentation":"# Test",
-		"contributes":{"providers":[{"id":"test-declarative-download-retry","label":"Test Declarative Download Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-declarative-download-retry","label":"Test Declarative Download Retry","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -496,7 +496,7 @@ func TestDeclarativeProtocolRuntimeGeneratesPerCreateIdempotencyKey(t *testing.T
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"test-idempotency-key-runtime","version":"1.0.0","name":"Test Idempotency Key","author":"Test","documentation":"# Test Idempotency Key",
-		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"test-idempotency-key-runtime","label":"Test Idempotency Key","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","headers":{"Idempotency-Key":{"$ref":"request.extra.idempotencyKey"}},"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}}},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`)
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -715,7 +715,7 @@ func newDeclarativeNewAPIChannel2TestAdapter(t *testing.T) protocol.Adapter {
 	adapter, err := protocol.LoadManifest([]byte(`{
 		"apiVersion":"yingce.plugin/v1",
 		"id":"newapi-channel-2","version":"1.0.0","name":"NewAPI Channel 2","author":"Test","documentation":"# Test",
-		"contributes":{"providers":[{"id":"newapi-channel-2","label":"NewAPI Channel 2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/video/generations","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/video/generations/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+		"contributes":{"providers":[{"id":"newapi-channel-2","label":"NewAPI Channel 2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/video/generations","fields":{"model":"request.model"}},"poll":{"method":"GET","path":"/video/generations/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -728,7 +728,7 @@ func TestDeclarativeProtocolRecoveryQueriesExistingTaskWithoutCreating(t *testin
 	manifest := []byte(`{
 		"apiVersion":"yingce.plugin/v2",
 		"id":"test-declarative-video-recovery","version":"1.0.0","name":"Test Declarative Video Recovery","author":"Test","documentation":"# Test Declarative Video Recovery",
-		"contributes":{"providers":[{"id":"test-declarative-video-recovery","label":"Test Declarative Video Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"result":{"method":"GET","path":"/videos/{{taskId}}/content"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]}}}]}
+		"contributes":{"providers":[{"id":"test-declarative-video-recovery","label":"Test Declarative Video Recovery","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","body":{"model":{"$ref":"request.model"}}},"poll":{"method":"GET","path":"/videos/{{taskId}}"},"nonCancelable":{"reason":"test provider has no verifiable upstream cancellation endpoint"},"result":{"method":"GET","path":"/videos/{{taskId}}/content"},"response":{"taskId":{"$coalesce":[{"$ref":"response.id"},{"$ref":"taskId"}]},"status":{"$coalesce":[{"$ref":"response.status"},"pending"]}}}]}
 	}`)
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {

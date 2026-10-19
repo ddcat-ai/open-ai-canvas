@@ -95,18 +95,19 @@ type ParameterSupport struct {
 }
 
 type VideoCapabilityConfig struct {
-	References        VideoReferenceConfig   `json:"references"`
-	Duration          VideoDurationConfig    `json:"duration"`
-	DurationSupported *bool                  `json:"durationSupported,omitempty"`
-	Ratios            []string               `json:"ratios"`
-	DefaultRatio      string                 `json:"defaultRatio"`
-	Resolutions       []string               `json:"resolutions"`
-	DefaultResolution string                 `json:"defaultResolution"`
-	FixedScreenSpec   *VideoScreenSpecConfig `json:"fixedScreenSpec,omitempty"`
-	GenerateAudio     VideoBooleanConfig     `json:"generateAudio"`
-	Watermark         VideoBooleanConfig     `json:"watermark"`
-	Operations        []string               `json:"operations"`
-	DefaultOperation  string                 `json:"defaultOperation"`
+	References           VideoReferenceConfig           `json:"references"`
+	Duration             VideoDurationConfig            `json:"duration"`
+	DurationByResolution map[string]VideoDurationConfig `json:"durationByResolution,omitempty"`
+	DurationSupported    *bool                          `json:"durationSupported,omitempty"`
+	Ratios               []string                       `json:"ratios"`
+	DefaultRatio         string                         `json:"defaultRatio"`
+	Resolutions          []string                       `json:"resolutions"`
+	DefaultResolution    string                         `json:"defaultResolution"`
+	FixedScreenSpec      *VideoScreenSpecConfig         `json:"fixedScreenSpec,omitempty"`
+	GenerateAudio        VideoBooleanConfig             `json:"generateAudio"`
+	Watermark            VideoBooleanConfig             `json:"watermark"`
+	Operations           []string                       `json:"operations"`
+	DefaultOperation     string                         `json:"defaultOperation"`
 }
 
 type VideoScreenSpecConfig struct {
@@ -437,14 +438,12 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		addInputConstraint(spec.Inputs, "image", video.References.MinImages, video.References.MaxImages)
 		addInputConstraint(spec.Inputs, "video", 0, video.References.MaxVideos)
 		addInputConstraint(spec.Inputs, "audio", 0, video.References.MaxAudios)
-		if video.Duration.Selection == "enum" {
-			values := make([]any, 0, len(video.Duration.Values))
-			for _, value := range video.Duration.Values {
-				values = append(values, value)
+		spec.Options["videoSeconds"] = videoDurationOptionConstraint(video.Duration)
+		if len(video.DurationByResolution) > 0 {
+			spec.VideoDurationByResolution = make(map[string]OptionConstraint, len(video.DurationByResolution))
+			for resolution, duration := range video.DurationByResolution {
+				spec.VideoDurationByResolution[normalizeChannelModelTierResolution(resolution)] = videoDurationOptionConstraint(duration)
 			}
-			spec.Options["videoSeconds"] = OptionConstraint{Values: values}
-		} else {
-			spec.Options["videoSeconds"] = numericRange(float64(video.Duration.Min), float64(video.Duration.Max), float64(video.Duration.Step))
 		}
 		if len(video.Ratios) > 0 {
 			spec.Options["size"] = anyValues(video.Ratios)
@@ -466,6 +465,17 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		return spec, BadAuthRequest("未知模型能力类型")
 	}
 	return spec, nil
+}
+
+func videoDurationOptionConstraint(duration VideoDurationConfig) OptionConstraint {
+	if duration.Selection == "enum" {
+		values := make([]any, 0, len(duration.Values))
+		for _, value := range duration.Values {
+			values = append(values, value)
+		}
+		return OptionConstraint{Values: values}
+	}
+	return numericRange(float64(duration.Min), float64(duration.Max), float64(duration.Step))
 }
 
 // imageSizeOptionConstraint 保留可见的标准尺寸/比例，同时用 * 表示允许自定义。

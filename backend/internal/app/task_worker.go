@@ -248,6 +248,9 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	default:
 	}
 	result, canvasOps, err := routeResult.result, routeResult.canvasOps, routeResult.err
+	if err == nil && strings.HasPrefix(task.Type, "canvas_image") {
+		result, err = s.prepareGeneratedImageResult(ctx, task, result)
+	}
 	latestMedia, readErr := s.repo.Task(task.ID)
 	if readErr != nil {
 		return readErr

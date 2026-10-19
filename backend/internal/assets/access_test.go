@@ -19,6 +19,28 @@ func testReadyResource(provider string) *model.Resource {
 	}
 }
 
+func TestReadyThumbnailUsesDerivedObjectAndKeepsOriginalDownload(t *testing.T) {
+	resource := testReadyResource("aliyun")
+	resource.ThumbnailStatus, resource.ThumbnailMimeType = "ready", "image/png"
+	resource.ThumbnailWidth, resource.ThumbnailHeight, resource.ThumbnailSize = 400, 200, 123
+	setting := storage.Settings{Provider: "aliyun", CDNBaseURL: "https://media.example.com", Delivery: storage.DeliverySettings{CDNAuthMode: "public"}}
+	var variants []ResourceVariant
+	access, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDisplay, Variant: VariantThumbnail}, time.Now(), testPlatformURL(&variants))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if access.ActualVariant != VariantThumbnail || !strings.HasSuffix(access.URL, resource.ObjectKey+".thumbnail") || access.FallbackReason != "" {
+		t.Fatalf("thumbnail access = %#v", access)
+	}
+	original, err := ResolveAccess(resource, setting, AccessOptions{Purpose: PurposeDownload, Variant: VariantThumbnail}, time.Now(), testPlatformURL(&variants))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if original.ActualVariant != VariantOriginal || strings.Contains(original.URL, ".thumbnail") {
+		t.Fatalf("download access = %#v", original)
+	}
+}
+
 func testPlatformURL(variants *[]ResourceVariant) func(ResourceVariant, time.Time) (string, error) {
 	return func(variant ResourceVariant, _ time.Time) (string, error) {
 		*variants = append(*variants, variant)

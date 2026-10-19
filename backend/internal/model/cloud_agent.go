@@ -4,18 +4,24 @@ import "time"
 
 // CloudAgentExecution checkpoints orchestration independently of billed tasks.
 type CloudAgentExecution struct {
-	ID                string `gorm:"primaryKey;size:80"`
-	UserID            string `gorm:"index;size:36"`
-	Status            string `gorm:"index;size:32"`
-	Revision          int64
-	CheckpointVersion int    `gorm:"not null;default:0"`
-	ConversationID    string `gorm:"index;size:80"`
-	ParentID          string `gorm:"index;size:80"`
-	Title             string `gorm:"size:240"`
-	EventCount        int
-	MessageCount      int
-	Journal           []CloudAgentEventRecord   `gorm:"foreignKey:RunID;references:ID" json:"-"`
-	Transcript        []CloudAgentMessageRecord `gorm:"foreignKey:RunID;references:ID" json:"-"`
+	ExecutionFence *CloudAgentFence `gorm:"-" json:"-"`
+	ID             string           `gorm:"primaryKey;size:80"`
+	UserID         string           `gorm:"index;size:36"`
+	// SessionID groups immutable model turns into one durable conversation.
+	// ConversationID remains for backwards compatibility with existing rows.
+	SessionID            string `gorm:"index;size:80"`
+	Surface              string `gorm:"index;size:64"`
+	ContextSelectionJSON string `gorm:"type:text"`
+	Status               string `gorm:"index;size:32"`
+	Revision             int64
+	CheckpointVersion    int    `gorm:"not null;default:0"`
+	ConversationID       string `gorm:"index;size:80"`
+	ParentID             string `gorm:"index;size:80"`
+	Title                string `gorm:"size:240"`
+	EventCount           int
+	MessageCount         int
+	Journal              []CloudAgentEventRecord   `gorm:"foreignKey:RunID;references:ID" json:"-"`
+	Transcript           []CloudAgentMessageRecord `gorm:"foreignKey:RunID;references:ID" json:"-"`
 	// Control fields remain writable even when the transcript cannot be decoded or saved.
 	CanvasID       string `gorm:"size:80"`
 	ActiveTaskID   string `gorm:"size:80"`
@@ -27,6 +33,32 @@ type CloudAgentExecution struct {
 	UpdatedAt      time.Time
 }
 
+// AgentSession is the durable conversation identity shared by multiple runs.
+// Run state and transcripts remain owned by CloudAgentExecution; this row is
+// a small index for cross-device recovery.
+type AgentSession struct {
+	ID             string `gorm:"primaryKey;size:80"`
+	UserID         string `gorm:"index;size:36"`
+	Title          string `gorm:"size:240"`
+	Surface        string `gorm:"index;size:64"`
+	LastSurface    string `gorm:"size:64"`
+	Status         string `gorm:"index;size:32"`
+	CheckpointJSON string `gorm:"type:text"`
+	Revision       int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type CloudAgentFence struct {
+	Token string `json:"token"`
+	Epoch int64  `json:"epoch"`
+}
+
+type CloudAgentExecutionLease struct {
+	CloudAgentFence
+	LeaseUntil int64 `json:"leaseUntil"`
+}
+
 // CloudAgentPiSession stores Pi's native JSONL session independently from the
 // bounded control checkpoint. Pi owns transcript and compaction semantics;
 // Go only persists the opaque session snapshot and its revision.
@@ -35,6 +67,22 @@ type CloudAgentPiSession struct {
 	UserID       string `gorm:"index;size:36;not null"`
 	SessionJSONL string `gorm:"column:session_jsonl;type:text;not null"`
 	Revision     int64  `gorm:"not null;default:1"`
+	UpdatedAt    time.Time
+}
+
+// CloudAgentReceipt survives transcript compaction and session replacement.
+type CloudAgentReceipt struct {
+	RunID        string `gorm:"primaryKey;size:80"`
+	Kind         string `gorm:"primaryKey;size:24"`
+	OperationKey string `gorm:"primaryKey;size:160"`
+	UserID       string `gorm:"size:36;not null"`
+	Name         string `gorm:"size:160;not null"`
+	InputSHA256  string `gorm:"size:64;not null"`
+	Status       string `gorm:"size:24;not null"`
+	Content      string `gorm:"type:text;not null"`
+	IsError      bool   `gorm:"not null"`
+	TaskID       string `gorm:"size:80"`
+	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
 

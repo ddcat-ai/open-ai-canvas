@@ -8,6 +8,7 @@ test("普通 multipart 将传输进度换算为文件字节，总量未知不伪
     const progress: number[][] = [];
     try {
         apiClient.defaults.adapter = async (config) => {
+            if (config.url === "/resources/uploads/direct") return { config, status: 200, statusText: "OK", headers: {}, data: { code: 0, data: { fallbackReason: "local_storage" } } };
             config.onUploadProgress?.({ loaded: 100, total: undefined } as AxiosProgressEvent);
             config.onUploadProgress?.({ loaded: 250, total: 1000 } as AxiosProgressEvent);
             config.onUploadProgress?.({ loaded: 1000, total: 1000 } as AxiosProgressEvent);
@@ -29,7 +30,8 @@ test("分片上传累加片内真实进度，传输 100% 后仍须等待合并�
     try {
         apiClient.defaults.adapter = async (config) => {
             let data: unknown;
-            if (config.url === "/resources/uploads") data = { uploadId: "session", chunkSize, chunkCount: 2 };
+            if (config.url === "/resources/uploads/direct") data = { fallbackReason: "local_storage" };
+            else if (config.url === "/resources/uploads") data = { uploadId: "session", chunkSize, chunkCount: 2 };
             else if (config.url?.endsWith("/complete")) {
                 expect(progress.at(-1)).toEqual([size, size]);
                 merged = true;

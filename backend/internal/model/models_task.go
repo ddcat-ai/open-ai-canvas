@@ -10,6 +10,7 @@ type Task struct {
 	// Only EnsureCloudAgent sets this after creating the execution in the same
 	// transaction. Ordinary task saves must not reset it from a stale snapshot.
 	AgentExecutionReady          bool                     `json:"-" gorm:"not null;default:false;<-:create"`
+	Source                       string                   `json:"source,omitempty" gorm:"-"`
 	AgentRunID                   string                   `json:"agentRunId,omitempty" gorm:"size:36;index"`
 	GenerationID                 string                   `json:"generationId,omitempty" gorm:"size:36;index"`
 	ApprovalID                   string                   `json:"approvalId,omitempty" gorm:"size:160"`
@@ -22,7 +23,9 @@ type Task struct {
 	CreationSubmissionID         *string                  `json:"creationSubmissionId,omitempty" gorm:"size:36;uniqueIndex"`
 	WorkbenchKind                string                   `json:"workbenchKind,omitempty" gorm:"size:16;index"`
 	ID                           string                   `json:"id" gorm:"primaryKey;size:36"`
-	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1"`
+	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1;index:idx_tasks_user_idempotency,unique,priority:1"`
+	IdempotencyKey               *string                  `json:"-" gorm:"size:160;index:idx_tasks_user_idempotency,unique,priority:2"`
+	IdempotencyFingerprint       string                   `json:"-" gorm:"size:64"`
 	TraceID                      string                   `json:"-" gorm:"index;size:96"`
 	RequestID                    string                   `json:"-" gorm:"index;size:96"`
 	ProjectID                    string                   `json:"projectId" gorm:"index;size:80;index:idx_tasks_user_project_created,priority:2"`

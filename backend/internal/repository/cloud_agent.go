@@ -176,6 +176,14 @@ func (r *Repository) CloudAgentRoots() ([]model.Task, error) {
 	return tasks, err
 }
 
+func (r *Repository) ActiveCloudAgentTaskIDs(userID, runID string) ([]string, error) {
+	var ids []string
+	err := r.db.Model(&model.Task{}).
+		Where("user_id = ? AND agent_run_id = ? AND status IN ?", userID, runID, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}).
+		Order("created_at, id").Pluck("id", &ids).Error
+	return ids, err
+}
+
 // A stable keyset makes waiting rows yield to later runs without changing business timestamps.
 func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.CloudAgentExecution, error) {
 	var runs []model.CloudAgentExecution

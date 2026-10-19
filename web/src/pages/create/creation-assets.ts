@@ -16,10 +16,9 @@ export type CreationDocumentAttachment = {
     bytes: number;
     previewUrl: string;
 };
-export type CreationAttachment = ((ReferenceImage | ReferenceVideo | ReferenceAudio) & { previewUrl: string }) | CreationDocumentAttachment;
-import type { CreationMode } from "@/lib/creation-mode";
-
-export type { CreationMode };
+export type CreationAttachmentRole = "product" | "reference" | "competitor" | "style" | "source" | "person";
+export type CreationAttachment = (((Omit<ReferenceImage, "role"> | Omit<ReferenceVideo, "role"> | Omit<ReferenceAudio, "role">) & { previewUrl: string }) | CreationDocumentAttachment) & { role?: CreationAttachmentRole };
+export type CreationMode = "agent" | "text" | "image" | "video";
 export type CreationAttachmentKind = "image" | "video" | "audio" | "file";
 
 const textDocumentExtensions = [".pdf", ".txt", ".md", ".csv", ".json", ".html", ".xml", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"];
@@ -32,14 +31,14 @@ export type CreationAssetIdentity = {
 
 export function creationUploadAccept(mode: CreationMode) {
     if (mode === "video") return "image/*,video/*,audio/*";
-    if (mode === "text") return `image/*,video/*,audio/*,${textDocumentExtensions.join(",")}`;
+    if (mode === "text" || mode === "agent") return `image/*,video/*,audio/*,${textDocumentExtensions.join(",")}`;
     return "image/*";
 }
 
 export function creationFileAccepted(mode: CreationMode, file: Pick<File, "type" | "name">) {
     if (file.type.startsWith("image/")) return true;
     if (mode === "video") return file.type.startsWith("video/") || file.type.startsWith("audio/");
-    if (mode !== "text") return false;
+    if (mode !== "text" && mode !== "agent") return false;
     const name = file.name.toLowerCase();
     return file.type.startsWith("video/") || file.type.startsWith("audio/") || file.type.startsWith("text/") || textDocumentExtensions.some((extension) => name.endsWith(extension));
 }
@@ -53,9 +52,10 @@ export function creationAttachmentKind(attachment: Pick<CreationAttachment, "typ
 
 export function splitCreationAttachments(attachments: CreationAttachment[]) {
     return {
-        referenceImages: attachments.filter((attachment): attachment is CreationAttachment & ReferenceImage => creationAttachmentKind(attachment) === "image"),
-        referenceVideos: attachments.filter((attachment): attachment is CreationAttachment & ReferenceVideo => creationAttachmentKind(attachment) === "video"),
-        referenceAudios: attachments.filter((attachment): attachment is CreationAttachment & ReferenceAudio => creationAttachmentKind(attachment) === "audio"),
+        // Agent 的商品/竞品/风格角色不能作为供应商的首尾帧角色发送。
+        referenceImages: attachments.filter((attachment): attachment is CreationAttachment & Omit<ReferenceImage, "role"> => creationAttachmentKind(attachment) === "image").map(({ role: _role, ...reference }): ReferenceImage => reference),
+        referenceVideos: attachments.filter((attachment): attachment is CreationAttachment & Omit<ReferenceVideo, "role"> => creationAttachmentKind(attachment) === "video").map(({ role: _role, ...reference }): ReferenceVideo => reference),
+        referenceAudios: attachments.filter((attachment): attachment is CreationAttachment & Omit<ReferenceAudio, "role"> => creationAttachmentKind(attachment) === "audio").map(({ role: _role, ...reference }): ReferenceAudio => reference),
     };
 }
 

@@ -41,6 +41,34 @@ export class ApiError extends Error {
 export const apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
 export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: true });
 
+// 只供只读接口使用；创建、生成等写请求必须保留原有幂等和失败语义。
+export async function retryApiRead<T>(read: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+        signal?.throwIfAborted();
+        try {
+            const result = await read();
+            signal?.throwIfAborted();
+            return result;
+        } catch (error) {
+            signal?.throwIfAborted();
+            if (!(error instanceof ApiError) || !error.retryable || attempt >= 2) throw error;
+            const delay = Math.max(500 * 2 ** attempt, error.retryAfterMs || 0);
+            if (delay > 10_000) throw error;
+            await new Promise<void>((resolve, reject) => {
+                const abort = () => {
+                    clearTimeout(timer);
+                    reject(signal?.reason);
+                };
+                const timer = setTimeout(() => {
+                    signal?.removeEventListener("abort", abort);
+                    resolve();
+                }, delay);
+                signal?.addEventListener("abort", abort, { once: true });
+            });
+        }
+    }
+}
+
 /**
  * 解包后端业务信封的唯一边界。这里把非零业务 code 转成 ApiError，保留 reason、重试语义和 Retry-After；
  * 取消请求必须继续抛出 AbortError，不能被包装成普通失败，否则页面切换会被误报为错误。

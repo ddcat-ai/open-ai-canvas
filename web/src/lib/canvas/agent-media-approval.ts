@@ -1,16 +1,29 @@
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import type { CanvasNodeData } from "@/types/canvas";
-import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
+import { modelCapabilityConfigFor, normalizeVideoValue } from "@/lib/model-capabilities";
+import { isVolcengineArkVideoProtocol } from "@/lib/model-protocols";
+import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 
 export type AgentImageApproval = AgentMediaSettings & { prompt: string; referenceNodeIds: string[] };
 export type AgentVideoApproval = AgentImageApproval & { referenceTransientIds: string[]; sourceNodeId: string };
 
-/**
- * 审批详情里只有这些字段属于后端 mediaSettings；prompt 与引用节点由服务端持有。
- * 展开完整审批对象会把 prompt 回传，被后端 DisallowUnknownFields 拒绝（json: unknown field "prompt"），
- * 表现为“审批未确认，请重试”，所以回传前先窄化。
- */
+export function agentVideoSettingsForModel(config: AiConfig, model: string, settings: AgentMediaSettings): AgentMediaSettings {
+    const profile = modelCapabilityConfigFor(config, model).video;
+    if (!profile) throw new Error("当前模型不支持视频生成");
+    const normalized = normalizeVideoValue(profile, { seconds: String(settings.durationSeconds || ""), ratio: settings.size, resolution: settings.quality });
+    return {
+        ...agentApprovalModelSelection(config, model),
+        size: normalized.ratio,
+        quality: normalized.resolution,
+        durationSeconds: Number(normalized.seconds),
+        videoGenerateAudio: profile.generateAudio.supported ? (settings.videoGenerateAudio ?? profile.generateAudio.default) : false,
+        videoWatermark: profile.watermark.supported ? (settings.videoWatermark ?? profile.watermark.default) : false,
+        videoArkPrivateAssetUpload: isVolcengineArkVideoProtocol(resolveModelRequestConfig(config, model).interfaceType) ? settings.videoArkPrivateAssetUpload : undefined,
+    };
+}
+
+/** 审批详情含服务端持有的 prompt 和引用；回传时只保留决策 API 接受的媒体字段。 */
 export function agentMediaSettings(value: AgentMediaSettings): AgentMediaSettings {
     return {
         logicalModelId: value.logicalModelId,

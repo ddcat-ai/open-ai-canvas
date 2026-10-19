@@ -651,6 +651,7 @@ export function remoteAssetToPickerItem(asset: Asset, known: AssetLibraryPickerI
         id: asset.id,
         title: asset.title,
         category: asset.category || "other",
+        folderId: asset.folderId,
         archived: asset.status === "archived",
         kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : asset.kind === "entity" ? "角色" : "文本",
         searchText: (asset.tags ?? []).join(" "),

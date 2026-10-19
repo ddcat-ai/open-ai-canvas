@@ -17,6 +17,7 @@ export type CapabilitySpec = {
     operations?: string[];
     inputs?: Record<string, InputConstraint>;
     options?: Record<string, OptionConstraint>;
+    videoDurationByResolution?: Record<string, OptionConstraint>;
     imageSize?: CapabilityImageSize;
 };
 

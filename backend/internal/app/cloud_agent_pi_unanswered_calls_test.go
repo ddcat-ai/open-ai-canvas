@@ -36,7 +36,7 @@ func TestCloudAgentPiCanonicalRepairsCallSkippedByApprovalPause(t *testing.T) {
 		},
 	}
 
-	canonical, err := cloudAgentPiCanonicalForModelRequest(messages, existing)
+	canonical, err := cloudAgentPiCanonicalForModelRequest(repairRuntimeUnansweredCalls(messages), existing)
 	if err != nil {
 		t.Fatalf("convert resumed transcript: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestRepairRuntimeUnansweredCallsHandlesSeveralTurns(t *testing.T) {
 
 // 后端重启后恢复运行时，服务端规范历史比运行时消息长，会被直接采用；
 // 它里面没有结果的调用同样要补齐，否则恢复运行仍以「工具调用缺少结果」失败。
-func TestCloudAgentPiCanonicalRepairsServerHistoryWhenItIsAuthoritative(t *testing.T) {
+func TestCloudAgentPiCanonicalKeepsNativeBranchWhenServerHistoryIsLonger(t *testing.T) {
 	existing := canonicalAgentRequest{
 		SystemPrompt: "Agent system prompt",
 		Messages: []map[string]interface{}{
@@ -125,7 +125,7 @@ func TestCloudAgentPiCanonicalRepairsServerHistoryWhenItIsAuthoritative(t *testi
 	if err := validateCanonicalAgentHistory(&canonical, false); err != nil {
 		t.Fatalf("authoritative server history still invalid: %v", err)
 	}
-	if len(canonical.Messages) != 6 || stringField(canonical.Messages[4], "tool_call_id") != "call-b" {
-		t.Fatalf("missing result not inserted after existing results: %#v", canonical.Messages)
+	if len(canonical.Messages) != 2 || stringField(canonical.Messages[1], "content") != "继续" {
+		t.Fatalf("old server history was restored over the native branch: %#v", canonical.Messages)
 	}
 }

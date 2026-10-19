@@ -14,6 +14,48 @@ import (
 	"yingce/backend/internal/repository"
 )
 
+func TestCloudAgentFallbackCheckpointUsesLatestTaskStatus(t *testing.T) {
+	for _, status := range []string{"succeeded", "failed", "cancelled"} {
+		t.Run(status, func(t *testing.T) {
+			state := cloudAgentRuntime{Request: CloudAgentRequest{Prompt: "只分析下一张图，不要重新生成"}}
+			state.event("run", "generation_task_created", map[string]any{"taskId": "finished", "status": "running"})
+			state.event("run", "tool_completed", map[string]any{"result": map[string]any{"taskId": "finished", "status": status, "taskSubmitted": true}})
+			state.event("run", "generation_task_created", map[string]any{"taskId": "active", "status": "running"})
+			checkpoint := cloudAgentFallbackCheckpoint(&state)
+			if len(checkpoint.PendingTasks) != 1 || !strings.Contains(checkpoint.PendingTasks[0], "active") {
+				t.Fatalf("已终结任务仍进入待办: %+v", checkpoint.PendingTasks)
+			}
+			if checkpoint.CurrentWork != state.Request.Prompt {
+				t.Fatalf("当前意图丢失: %q", checkpoint.CurrentWork)
+			}
+		})
+	}
+}
+
+func TestCloudAgentFallbackCheckpointClearsCompletedPriorPendingTask(t *testing.T) {
+	previous := agentcontext.Checkpoint{Version: agentcontext.Version, PendingTasks: []string{`{"taskId":"finished","status":"running"}`}}
+	frame, err := agentcontext.Frame(previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := cloudAgentRuntime{Canonical: canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": frame, cloudAgentContextSourceKey: "checkpoint"}}}}
+	state.event("run", "tool_completed", map[string]any{"result": map[string]any{"taskId": "finished", "status": "succeeded"}})
+	if checkpoint := cloudAgentFallbackCheckpoint(&state); len(checkpoint.PendingTasks) != 0 {
+		t.Fatalf("旧检查点的待办未被新终态清除: %+v", checkpoint.PendingTasks)
+	}
+}
+
+func TestCloudAgentFallbackCheckpointKeepsLatestUserIntent(t *testing.T) {
+	state := cloudAgentRuntime{Request: CloudAgentRequest{Prompt: "生成套图"}, Canonical: canonicalAgentRequest{Messages: []map[string]any{
+		{"role": "user", "content": "生成套图"},
+		{"role": "user", "content": "【用户插话】先停止生成，只分析已完成结果", cloudAgentContextSourceKey: "user_interjection"},
+		{"role": "user", "content": "旧计划还有生成待办", cloudAgentContextSourceKey: "runtime"},
+	}}}
+	if checkpoint := cloudAgentFallbackCheckpoint(&state); checkpoint.CurrentWork != "【用户插话】先停止生成，只分析已完成结果" {
+		t.Fatalf("旧目标覆盖最新用户意图: %q", checkpoint.CurrentWork)
+	}
+}
+
 // saveCloudAgentCompactionState 用真实保存路径持久化运行状态（消息、事件与检查点同事务），
 // 而不是直接改写 state_json：检查点从 v2 起不再承载消息与事件，绕过持久化层会让行上的
 // 计数与实际行数脱节。

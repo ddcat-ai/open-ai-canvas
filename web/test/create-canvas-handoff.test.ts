@@ -124,6 +124,7 @@ test("task subscription can reconnect after an observation failure", async () =>
         const first = service.subscribe([terminal.id], () => undefined);
         await new Promise((resolveTick) => setTimeout(resolveTick, 0));
         first();
+        await new Promise((resolveTick) => setTimeout(resolveTick, 0));
 
         const observed: GenerationTask[] = [];
         const second = service.subscribe([terminal.id], (task) => observed.push(task));
@@ -138,13 +139,16 @@ test("task subscription can reconnect after an observation failure", async () =>
 });
 
 test("Create durably correlates failures that happen before the first Runtime response", async () => {
-    const source = [await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(), await Bun.file(new URL("../src/pages/create/creation-types.ts", import.meta.url)).text()].join("\n");
-    expect(source).toContain("generationErrorCode?: string");
-    expect(source).toContain("generationOperation?: string");
-    expect(source).toContain("generationOperation: task.operation");
-    expect(source).toContain("generationErrorCode: task.errorCode");
-    expect(source).toContain("generationErrorCode(error)");
-    expect(source).toContain("createdAt: assistantMessage.createdAt");
+    const { projectCreationTaskWaitFailure } = await import("../src/pages/create/creation-conversations");
+    const message = { id: "pending-reply", role: "assistant" as const, mode: "video" as const, content: "", createdAt: "2026-10-17T00:00:00Z", clientOperationId: "submit-once" };
+    const failure = Object.assign(new Error("生成被拒绝"), { code: "provider_request_rejected" });
+    expect(projectCreationTaskWaitFailure(message, failure, { cancelled: false, unmounted: false, boundTaskCount: 0, operation: "image_to_video" })).toMatchObject({
+        ...message,
+        status: "error",
+        content: "生成失败",
+        generationErrorCode: "provider_request_rejected",
+        generationOperation: "image_to_video",
+    });
 });
 
 test("creation results hand off exact asset ids to one new canvas and consume the route once", async () => {
@@ -361,8 +365,8 @@ test("Create forwards owned result assets through one new canvas and the project
     expect(workspace).toContain("onContinueCanvas(resultAssetIds)");
     expect(createPage).toContain("continueCreationConversationOnCanvas(source)");
     expect(createPage).toContain("if (ids.length !== Math.max(resultStorageKeys.length, resultUrls.length)) throw new Error");
-    expect(createPage).toContain("await saveCreationConversations(next)");
-    expect(createPage.indexOf("await saveCreationConversations(next)")).toBeLessThan(createPage.indexOf("navigate(`/canvas/${result.id}?${params.toString()}`)"));
+    expect(createPage).toContain("await saveCreationConversations(next, scope)");
+    expect(createPage.indexOf("await saveCreationConversations(next, scope)")).toBeLessThan(createPage.indexOf("navigate(`/canvas/${result.id}?${params.toString()}`)"));
     expect(canvasIndex).toContain('const handoffMode = mode === "handoff"');
     expect(canvasIndex).toContain('mode !== "new" && mode !== "recent" && mode !== "handoff"');
     expect(canvasProject).toContain('import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff"');

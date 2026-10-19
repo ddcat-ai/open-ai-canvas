@@ -49,27 +49,24 @@ describe("video generation approval settings", () => {
     });
 });
 
-describe("approval media settings sent back to the backend", () => {
-    const mediaKeys = ["channelId", "channelModelKey", "durationSeconds", "imageParameters", "imageResolution", "logicalModelId", "quality", "size", "videoArkPrivateAssetUpload", "videoGenerateAudio", "videoWatermark"];
-
-    it("drops prompt and reference nodes that the decision API rejects", () => {
-        const approval = agentVideoApproval({ toolName: "generate_media", arguments: { mode: "video", prompt: "镜头运动", size: "9:16", quality: "720p", durationSeconds: 8, channelId: "platform", channelModelKey: "seedance-test", referenceNodeIds: ["image"], referenceTransientIds: ["tmp-image"], sourceNodeId: "shot-1" } });
+describe("approval settings sent to the decision API", () => {
+    it("keeps video options without sending server-owned prompt or references", () => {
+        const approval = agentVideoApproval({ toolName: "generate_media", arguments: { mode: "video", prompt: "镜头运动", size: "9:16", quality: "720p", durationSeconds: 8, videoGenerateAudio: false, videoWatermark: false, videoArkPrivateAssetUpload: true, channelId: "platform", channelModelKey: "seedance-test", referenceNodeIds: ["image"], referenceTransientIds: ["temporary-image"], sourceNodeId: "shot-1" } });
         expect(approval).not.toBeNull();
-        const settings = agentMediaSettings(approval!);
-        expect(Object.keys(settings).sort()).toEqual(mediaKeys);
-        expect(JSON.stringify(settings)).not.toContain("prompt");
-        expect(settings.durationSeconds).toBe(8);
-        expect(settings.channelModelKey).toBe("seedance-test");
+        const settings = JSON.parse(JSON.stringify({ ...agentMediaSettings(approval!), durationSeconds: 12 }));
+        expect(settings).toEqual({ logicalModelId: "", channelId: "platform", channelModelKey: "seedance-test", size: "9:16", quality: "720p", durationSeconds: 12, videoGenerateAudio: false, videoWatermark: false, videoArkPrivateAssetUpload: true });
+        expect(approval?.prompt).toBe("镜头运动");
+        expect(approval?.referenceTransientIds).toEqual(["temporary-image"]);
     });
 
-    it("keeps image settings without leaking prompt or reference nodes", () => {
-        const approval = agentImageApproval({ toolName: "generate_media", arguments: { mode: "image", prompt: "产品图", size: "1024x1024", quality: "high", channelId: "platform", channelModelKey: "gpt-image-2", referenceNodeIds: ["product"] } });
+    it("keeps image resolution and parameter JSON when editing image settings", () => {
+        const imageParameters = '{"seed":42}';
+        const approval = agentImageApproval({ toolName: "generate_media", arguments: { mode: "image", prompt: "产品图", size: "1024x1024", imageResolution: "2k", imageParameters, quality: "high", channelId: "platform", channelModelKey: "gpt-image-2", referenceNodeIds: ["product"] } });
         expect(approval).not.toBeNull();
-        const settings = agentMediaSettings(approval!);
-        expect(Object.keys(settings).sort()).toEqual(mediaKeys);
-        expect(settings.size).toBe("1024x1024");
-        expect(settings.quality).toBe("high");
-        expect(settings.channelModelKey).toBe("gpt-image-2");
+        const settings = JSON.parse(JSON.stringify({ ...agentMediaSettings(approval!), imageParameters: '{"seed":43}' }));
+        expect(settings).toEqual({ logicalModelId: "", channelId: "platform", channelModelKey: "gpt-image-2", size: "1024x1024", imageResolution: "2k", imageParameters: '{"seed":43}', quality: "high" });
+        expect(approval?.imageParameters).toBe(imageParameters);
+        expect(approval?.referenceNodeIds).toEqual(["product"]);
     });
 });
 

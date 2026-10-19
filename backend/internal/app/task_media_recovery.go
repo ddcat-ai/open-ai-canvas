@@ -121,7 +121,7 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 		}
 		item := mediaCheckpointItem{Reference: protocol.MediaReference{URL: reference.URL, MIMEType: reference.MIMEType}}
 		// Inline bytes are staged, never stored as a large base64 DB checkpoint.
-		if reference.DataURL != "" {
+		if reference.DataURL != "" && (mode != "image" || reference.URL == "") {
 			mimeType, data, decodeErr := decodeProviderDataURL(reference.DataURL)
 			if decodeErr != nil {
 				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: decodeErr}
@@ -172,13 +172,12 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			err = &mediaRecoveryError{stage: task.MediaStage, cause: err}
 		}
 	}()
-	// Do not occupy a worker waiting for a download slot.
-	select {
-	case mediaRecoverySlots <- struct{}{}:
-		defer func() { <-mediaRecoverySlots }()
-	default:
-		return nil, &mediaRecoveryError{stage: task.MediaStage, retryable: true, cause: errMediaRecoveryBusy}
-	}
+	hasStorageSlot := false
+	defer func() {
+		if hasStorageSlot {
+			<-mediaRecoverySlots
+		}
+	}()
 	if _, err := s.mediaTaskProject(task); err != nil {
 		return nil, &mediaRecoveryError{stage: "register", cause: err}
 	}
@@ -192,7 +191,21 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 		if err != nil {
 			return nil, &mediaRecoveryError{stage: "register", retryable: true, cause: err}
 		}
+		if resource == nil && checkpoint.Mode == "image" && item.Reference.URL != "" && item.TempName == "" {
+			resource, err = s.registerGeneratedURL(task, index, item.Reference)
+			if err != nil {
+				return nil, &mediaRecoveryError{stage: "register", cause: err}
+			}
+		}
 		if resource == nil || resource.Status != model.ResourceStatusReady {
+			if !hasStorageSlot {
+				select {
+				case mediaRecoverySlots <- struct{}{}:
+					hasStorageSlot = true
+				default:
+					return nil, &mediaRecoveryError{stage: task.MediaStage, retryable: true, cause: errMediaRecoveryBusy}
+				}
+			}
 			path := s.mediaTempPath(item.TempName)
 			info, statErr := os.Lstat(path)
 			if path == "" || statErr != nil || !info.Mode().IsRegular() {
@@ -233,12 +246,18 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 				return nil, &mediaRecoveryError{stage: stage, retryable: retryableMediaRecovery(err), cause: err}
 			}
 		}
+		if resource.SourceTaskID == "" {
+			resource.SourceTaskID = task.ID
+			if err := s.repo.SetGeneratedResourceSourceTask(task.UserID, resource.ID, task.ID); err != nil {
+				return nil, err
+			}
+		}
 		item.ResourceID = resource.ID
 		if err := s.saveMediaCheckpoint(task, checkpoint, "register"); err != nil {
 			return nil, err
 		}
 		url := resourceFileURL(resource.ID)
-		items = append(items, map[string]interface{}{"dataUrl": url, "url": url, "resourceId": resource.ID, "storageKey": "resource:" + resource.ID, "mimeType": resource.MimeType, "bytes": resource.Size, "width": resource.Width, "height": resource.Height, "durationMs": resource.DurationMs})
+		items = append(items, map[string]interface{}{"dataUrl": url, "url": url, "resourceId": resource.ID, "storageKey": "resource:" + resource.ID, "mimeType": resource.MimeType, "bytes": resource.Size, "width": resource.Width, "height": resource.Height, "durationMs": resource.DurationMs, "transferPending": resource.TransferPending})
 	}
 	result = map[string]interface{}{"mode": checkpoint.Mode}
 	if checkpoint.Mode == "image" {

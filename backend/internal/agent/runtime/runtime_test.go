@@ -89,6 +89,8 @@ func TestRunDoesNotLeakBackendEnvironment(t *testing.T) {
 if (process.env.DATABASE_URL) {
   process.stdout.write(JSON.stringify({ event: "runtime_error", message: "leaked" }) + "\n");
   process.exitCode = 1;
+} else {
+  process.stdout.write(JSON.stringify({ event: "settled" }) + "\n");
 }
 `)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

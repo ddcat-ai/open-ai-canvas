@@ -12,6 +12,10 @@ type (
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest
+	CloudAgentContextSelection             = app.CloudAgentContextSelection
+	CloudAgentSessionRequest               = app.CloudAgentSessionRequest
+	CloudAgentSession                      = app.CloudAgentSession
+	CloudAgentSessionDetail                = app.CloudAgentSessionDetail
 	CloudAgentRunViewOptions               = app.CloudAgentRunViewOptions
 	CloudAgentMediaSettings                = app.CloudAgentMediaSettings
 	CloudAgentCapabilitySet                = app.CloudAgentCapabilitySet

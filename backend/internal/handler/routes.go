@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"yingce/backend/internal/service"
@@ -45,9 +46,17 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		req.TraceID = TraceID(c)
 		req.RequestID = RequestID(c)
+		if key := strings.TrimSpace(c.GetHeader("X-Idempotency-Key")); key != "" {
+			req.IdempotencyKey = key
+		}
 		task, err := svc.CreateTask(user.ID, req)
 		if err != nil {
-			fail(c, http.StatusBadRequest, err)
+			var appErr *service.AppError
+			if errors.As(err, &appErr) {
+				failService(c, err)
+			} else {
+				fail(c, http.StatusBadRequest, err)
+			}
 			return
 		}
 		ok(c, task)
@@ -119,6 +128,19 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, tasks)
+	})
+	r.GET("/tasks/by-idempotency-key", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		task, err := svc.TaskByIdempotencyKey(user.ID, c.Query("key"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, task)
 	})
 	r.GET("/tasks/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

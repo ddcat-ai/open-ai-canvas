@@ -299,7 +299,7 @@ func TestCloudAgentVideoApprovalEditsAreValidatedAndApplied(t *testing.T) {
 	}
 }
 
-func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
+func TestCloudAgentConversationPreservesHistoryBeforeRuntimeCompaction(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
 		t.Fatal(err)
@@ -308,6 +308,7 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	for round := 0; round < 15; round++ {
 		req := agentTestRequest()
 		req.IdempotencyKey = fmt.Sprintf("long-conversation-%d", round)
+		req.Prompt = fmt.Sprintf("第 %d 轮：", round) + strings.Repeat("x", 4000)
 		run, err := s.CreateCloudAgentRun("user", req, parent)
 		if err != nil {
 			t.Fatalf("round %d failed: %v", round+1, err)
@@ -318,9 +319,6 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 			t.Fatalf("history decode failed at round %d: %v", round, err)
 		}
 		want := round * 2
-		if want > cloudAgentHistoryKeepRounds*2 {
-			want = cloudAgentHistoryKeepRounds * 2
-		}
 		if len(state.TextHistory) != want {
 			t.Fatalf("history window at round %d: got %d want %d", round, len(state.TextHistory), want)
 		}
@@ -332,20 +330,11 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 		}
 		parent = run.ID
 	}
-	run, _ := s.repo.CloudAgent("user", parent)
-	state, _ := cloudAgentDecode(run)
-	for i := range state.TextHistory {
-		state.TextHistory[i].Content = strings.Repeat("x", 4000)
-	}
-	raw, _ := json.Marshal(state)
-	if err := db.Model(run).Update("state_json", string(raw)).Error; err != nil {
-		t.Fatal(err)
-	}
 	req := agentTestRequest()
-	req.IdempotencyKey = "long-conversation-trim-bytes"
+	req.IdempotencyKey = "long-conversation-preserve-history"
 	child, err := s.CreateCloudAgentRun("user", req, parent)
 	if err != nil {
-		t.Fatalf("oversize history should trim not fail: %v", err)
+		t.Fatalf("history should remain available for runtime compaction: %v", err)
 	}
 	childRun, err := s.repo.CloudAgent("user", child.ID)
 	if err != nil {
@@ -355,10 +344,7 @@ func TestCloudAgentConversationKeepsRecentRounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cloudAgentHistoryJSONSize(childState.TextHistory) > cloudAgentHistoryMaxBytes {
-		t.Fatal("trimmed history still over cap")
-	}
-	if cloudAgentHistoryUserInstructionCount(childState.TextHistory) < 1 {
-		t.Fatal("trimmed away the conversation")
+	if len(childState.TextHistory) != 30 || cloudAgentHistoryUserInstructionCount(childState.TextHistory) != 15 {
+		t.Fatal("conversation rounds were silently discarded")
 	}
 }

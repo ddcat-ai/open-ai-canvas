@@ -233,7 +233,11 @@ func TestFinishCloudAgentPiModelStepWithInvalidCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := validCall("call_next", "canvas_get_state")
-	if err := s.finishCloudAgentPiModelStep("user", run.ID, "model-task-2", "", "", []cloudAgentCall{next}); err != nil {
+	result, _ := json.Marshal(map[string]any{"toolCalls": []cloudAgentCall{next}})
+	if err := s.repo.Create(&model.Task{ID: "model-task-2", UserID: "user", AgentRunID: run.ID, Operation: cloudAgentStepOperation, Status: model.TaskStatusSucceeded, ResultJSON: string(result)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.finishCloudAgentPiModelStep("user", run.ID, "model-task-2", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if latest, err = s.repo.CloudAgent("user", run.ID); err != nil {

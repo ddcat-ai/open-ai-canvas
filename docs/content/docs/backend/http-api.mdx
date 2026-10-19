@@ -5,6 +5,29 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 首页 Agent 账号偏好与媒体交付
+
+首页 Agent 的会话、审批、上下文与资源恢复合同见 [首页创作 Agent](./creative-agent-runtime)。以下接口沿用登录 Cookie、统一响应信封与服务端归属校验；不能根据客户端传入的用户或资源 ID 越权操作。
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/agent/sessions`、`POST /api/agent/sessions` | 按当前账号与 `surface` 列出或创建会话 |
+| `GET /api/agent/sessions/:id`、`GET /api/agent/sessions/:id/runs` | 读取当前账号的会话及分页运行历史 |
+| `DELETE /api/agent/sessions/:id` | 在账号锁内校验活动运行后删除会话；不授权删除其他账号或活动任务 |
+| `GET /api/settings/creation-preferences?userId=...` | 返回当前账号的 `{ preferences }` |
+| `PATCH /api/settings/creation-preferences` | `{ userId, changes }` 按字段更新偏好，拒绝未知字段和其他账号 |
+| `POST /api/resources/uploads/direct` | 校验配额后创建浏览器直传预留 |
+| `POST /api/resources/uploads/direct/:id/complete` | 服务端核验存储对象后完成上传 |
+| `DELETE /api/resources/uploads/direct/:id` | 取消未完成的直传预留 |
+| `POST /api/resources/:id/generated-upload` | 为已有生成结果申请直传签名，保持原资源身份 |
+| `POST /api/resources/:id/generated-upload/:uploadId/complete` | 核验并完成生成图片补存 |
+| `POST /api/resources/:id/generated-upload/:uploadId/fallback` | 浏览器失败时请求后台补存；无上传会话时使用 `none` |
+| `POST /api/resources/:id/thumbnail-upload/begin`、`complete` | 浏览器生成缩略图后直传并确认 |
+| `POST /api/resources/:id/thumbnail` | 有界缩略图上传降级路径 |
+| `GET /api/tasks/by-idempotency-key?key=...` | 按当前账号查询提交回执；网络结果未知时先恢复原任务，不盲目创建第二条收费任务 |
+
+直传能力由实际存储配置和签名能力决定，无法直传时保留后端路径。对象存储需允许接收方站点的 GET/HEAD/PUT 跨域访问及签名请求所需请求头；仅开放 GET/HEAD 不能上传。上游图片源也必须允许浏览器读取，否则交由后台补存。`transferPending` 表示持久化仍在进行，不是生成失败；完成后仍通过同一 `resource:` 引用解析，前端静默刷新地址。`browserDirect` 只表示已经核验成功的浏览器直传，不把服务端补存标成直传。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。

@@ -203,12 +203,12 @@ func TestCloudAgentLiveRecallLessonsStreamingRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCloudAgentLiveRetriesTransientUpstreamFailure(t *testing.T) {
+func TestCloudAgentLiveRetriesConfirmedRateLimitRejection(t *testing.T) {
 	upstream := &liveUpstream{}
 	upstream.handler = func(call int, body map[string]any, w http.ResponseWriter) {
 		if call <= 2 {
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusTooManyRequests)
 			_, _ = w.Write([]byte(`{"error":{"message":"Upstream gateway error","type":"api_error"}}`))
 			return
 		}
@@ -217,10 +217,24 @@ func TestCloudAgentLiveRetriesTransientUpstreamFailure(t *testing.T) {
 	s, runID := startLiveAgentService(t, upstream, "")
 	execution := waitLiveAgentTerminal(t, s, runID)
 	if execution.Status != "completed" {
-		t.Fatalf("transient 500 was not retried: status=%s failure=%q", execution.Status, execution.FailureMessage)
+		t.Fatalf("confirmed 429 rejection was not retried: status=%s failure=%q", execution.Status, execution.FailureMessage)
 	}
 	if calls := len(upstream.snapshot()); calls != 3 {
 		t.Fatalf("expected 2 failures + 1 success, got %d upstream calls", calls)
+	}
+}
+
+func TestCloudAgentLiveDoesNotRetryUnknownGatewayFailure(t *testing.T) {
+	upstream := &liveUpstream{}
+	upstream.handler = func(_ int, _ map[string]any, w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"Upstream gateway error","type":"api_error"}}`))
+	}
+	s, runID := startLiveAgentService(t, upstream, "")
+	execution := waitLiveAgentTerminal(t, s, runID)
+	if execution.Status != "failed" || len(upstream.snapshot()) != 1 {
+		t.Fatalf("unknown submission retried: status=%s calls=%d", execution.Status, len(upstream.snapshot()))
 	}
 }
 

@@ -541,12 +541,13 @@ func imageDataURLs(payload imageResponse) ([]map[string]string, error) {
 	}
 	images := make([]map[string]string, 0, len(payload.Data))
 	for _, item := range payload.Data {
+		if url, ok := item["url"].(string); ok && url != "" {
+			images = append(images, map[string]string{"dataUrl": url})
+			continue
+		}
 		if b64, ok := item["b64_json"].(string); ok && b64 != "" {
 			images = append(images, map[string]string{"dataUrl": "data:image/png;base64," + b64})
 			continue
-		}
-		if url, ok := item["url"].(string); ok && url != "" {
-			images = append(images, map[string]string{"dataUrl": url})
 		}
 	}
 	if len(images) == 0 {

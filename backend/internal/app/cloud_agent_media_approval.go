@@ -146,6 +146,7 @@ func replaceCloudAgentPreparedLeases(repo *repository.Repository, userID, runID,
 func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]any) error {
 	resolvedOptions, _ := resolvedInput["capabilityOptions"].(map[string]any)
 	resolvedConfig, _ := resolvedInput["config"].(map[string]any)
+	resolvedParameters, _ := resolvedConfig["imageParameters"].(map[string]any)
 	if raw := requested["imageParameters"]; raw != nil {
 		var values map[string]any
 		if encoded, ok := raw.(string); ok {
@@ -156,7 +157,9 @@ func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]
 			values, _ = raw.(map[string]any)
 		}
 		for name, value := range values {
-			if resolvedOptions[name] != value {
+			// Admission keeps canonical ratios in capabilityOptions and provider
+			// pixels in imageParameters. Both describe the same validated request.
+			if creationHash(resolvedOptions[name]) != creationHash(value) && creationHash(resolvedParameters[name]) != creationHash(value) {
 				return creationConflict("模型解析后的图片参数与审批内容不同")
 			}
 		}
@@ -171,6 +174,11 @@ func validateCloudAgentResolvedMediaOptions(requested, resolvedInput map[string]
 			continue
 		}
 		if key == "quality" && requestedValue != "" {
+			if _, declared := resolvedOptions[key]; !declared && requestedValue == "auto" && stringValue(resolvedInput["mode"]) == "image" {
+				// auto imposes no quality constraint; models without this option
+				// legitimately omit it during task admission.
+				continue
+			}
 			if _, declared := resolvedOptions[key]; !declared && !strings.EqualFold(requestedValue, stringValue(resolvedOptions["imageResolution"])) {
 				return creationConflict("所选图片模型未声明质量参数，请使用模型声明的图片分辨率或质量选项")
 			}

@@ -32,7 +32,7 @@ func TestCloudAgentReliabilitySchedulerHeadOfLine500(t *testing.T) {
 	now := time.Now().Add(-time.Hour)
 	var tailID, tailUser string
 	profile := cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")}
-	_, policy, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", profile)
+	_, policy, err := compileCloudAgentPoliciesForIdentity(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", profile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,6 +301,89 @@ func TestCloudAgentReliabilityCancelReplayInterrupted(t *testing.T) {
 	t.Logf("cancel replay returned success; active child status remains=%s", task.Status)
 	if task.Status != model.TaskStatusCancelled {
 		t.Fatalf("child not cancelled: %s", task.Status)
+	}
+}
+
+func TestCreationStopPreservesSubmittedMediaThenContinue(t *testing.T) {
+	for _, status := range []string{"running", "completed"} {
+		t.Run(status, func(t *testing.T) {
+			s, db, _, _ := creationTestService(t)
+			req := creationAgentRequest()
+			root, err := s.CreateCloudAgentRun("user", req, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", root.ID).Update("status", status).Error; err != nil {
+				t.Fatal(err)
+			}
+			for i, taskStatus := range []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusSucceeded} {
+				task := model.Task{ID: fmt.Sprintf("media-%d", i), UserID: "user", AgentRunID: root.ID, Status: taskStatus, Type: "canvas_image", InputJSON: `{}`, ResultJSON: `{}`}
+				if i == 1 {
+					task.Type = "canvas_video"
+				}
+				if i < 2 {
+					task.BillingOrderID = "bill-" + task.ID
+					if err := s.repo.ReserveBillingOrder(&model.BillingOrder{ID: task.BillingOrderID, UserID: "user", TaskID: task.ID, IdempotencyKey: task.ID, BillingMode: "fixed_request", AmountMicrocredits: 100, Status: model.BillingStatusReserved}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := db.Create(&task).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			other := model.Task{ID: "other-user", UserID: "other", AgentRunID: root.ID, Status: model.TaskStatusQueued, InputJSON: `{}`}
+			if err := db.Create(&other).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := s.CancelCloudAgent(context.Background(), "user", root.ID); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 3; i++ {
+				task, err := s.repo.TaskForUser("user", fmt.Sprintf("media-%d", i))
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusSucceeded}[i]
+				if task.Status != want {
+					t.Fatalf("child %d status = %s, want %s", i, task.Status, want)
+				}
+				if i < 2 {
+					order, err := s.repo.BillingOrder(task.BillingOrderID)
+					if err != nil || order.Status != model.BillingStatusReserved || order.RefundedAmountMicrocredits != 0 {
+						t.Fatalf("stop altered admitted media billing: %+v %v", order, err)
+					}
+					if err := s.repo.SettleBillingOrder(task.BillingOrderID, "delivered-after-stop"); err != nil {
+						t.Fatal(err)
+					}
+					order, err = s.repo.BillingOrder(task.BillingOrderID)
+					if err != nil || order.Status != model.BillingStatusSettled || order.ActualAmountMicrocredits != 100 {
+						t.Fatalf("media could not settle normally after stop: %+v %v", order, err)
+					}
+				}
+			}
+			if err := db.First(&other, "id = ?", other.ID).Error; err != nil || other.Status != model.TaskStatusQueued {
+				t.Fatalf("foreign task changed: %s %v", other.Status, err)
+			}
+			stopped, err := s.CloudAgentRun("user", root.ID)
+			if err != nil || stopped.Status != "cancelled" || stopped.CleanupPending {
+				t.Fatalf("stop not settled: %+v %v", stopped, err)
+			}
+			req.Prompt, req.IdempotencyKey, req.SessionID = "不要继续旧任务，改为蓝色背景", "after-cancel", root.SessionID
+			next, err := s.CreateCloudAgentRun("user", req, root.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if next.SessionID != root.SessionID {
+				t.Fatal("continuation changed session")
+			}
+			task, err := s.repo.TaskForUser("user", next.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(task.InputJSON, "cancelled") || !strings.Contains(task.InputJSON, req.Prompt) {
+				t.Fatal("continuation lost cancellation or new request")
+			}
+		})
 	}
 }
 

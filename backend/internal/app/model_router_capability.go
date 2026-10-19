@@ -28,13 +28,14 @@ type CapabilityImageSize struct {
 }
 
 type CapabilitySpec struct {
-	ImageParameters []protocol.ImageParameter   `json:"imageParameters"`
-	Version         int                         `json:"version"`
-	Capability      string                      `json:"capability"`
-	Operations      []string                    `json:"operations,omitempty"`
-	Inputs          map[string]InputConstraint  `json:"inputs,omitempty"`
-	Options         map[string]OptionConstraint `json:"options,omitempty"`
-	ImageSize       *CapabilityImageSize        `json:"imageSize,omitempty"`
+	ImageParameters           []protocol.ImageParameter   `json:"imageParameters"`
+	Version                   int                         `json:"version"`
+	Capability                string                      `json:"capability"`
+	Operations                []string                    `json:"operations,omitempty"`
+	Inputs                    map[string]InputConstraint  `json:"inputs,omitempty"`
+	Options                   map[string]OptionConstraint `json:"options,omitempty"`
+	VideoDurationByResolution map[string]OptionConstraint `json:"videoDurationByResolution,omitempty"`
+	ImageSize                 *CapabilityImageSize        `json:"imageSize,omitempty"`
 }
 
 type InputConstraint struct {
@@ -273,6 +274,28 @@ func NormalizeCapabilitySpec(spec CapabilitySpec) (CapabilitySpec, error) {
 		normalizedOptions[name] = constraint
 	}
 	spec.Options = normalizedOptions
+	if len(spec.VideoDurationByResolution) > 0 {
+		if spec.Capability != "video" {
+			return spec, BadAuthRequest("只有视频能力支持按分辨率配置时长")
+		}
+		durations := make(map[string]OptionConstraint, len(spec.VideoDurationByResolution))
+		for resolution, constraint := range spec.VideoDurationByResolution {
+			key := normalizeChannelModelTierResolution(resolution)
+			if key == "*" {
+				return spec, BadAuthRequest("按分辨率配置的视频时长分辨率无效")
+			}
+			if _, exists := durations[key]; exists {
+				return spec, BadAuthRequest("按分辨率配置的视频时长分辨率重复")
+			}
+			hasValues := len(constraint.Values) > 0
+			hasRange := constraint.Min != nil || constraint.Max != nil || constraint.Step != nil
+			if hasValues == hasRange || hasRange && (constraint.Min == nil || constraint.Max == nil || *constraint.Max < *constraint.Min || constraint.Step != nil && *constraint.Step <= 0) {
+				return spec, BadAuthRequest("按分辨率配置的视频时长范围无效")
+			}
+			durations[key] = constraint
+		}
+		spec.VideoDurationByResolution = durations
+	}
 	if spec.Capability == "image" && spec.ImageParameters != nil {
 		if err := protocol.ValidateImageParameters(spec.ImageParameters); err != nil {
 			return spec, BadAuthRequest(err.Error())
@@ -376,6 +399,11 @@ func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityM
 			continue
 		}
 		constraint, declared := spec.Options[canonical]
+		if canonical == "videoSeconds" {
+			if duration, ok := videoDurationConstraintForOptions(spec, intent.Options); ok {
+				constraint, declared = duration, true
+			}
+		}
 		if !declared {
 			addIssue("option", canonical, "不支持参数 "+capabilityOptionLabel(name))
 			continue
@@ -385,6 +413,18 @@ func MatchCapability(spec CapabilitySpec, intent ModelRequestIntent) CapabilityM
 		}
 	}
 	return CapabilityMatch{Matched: len(reasons) == 0, Reasons: reasons, Issues: issues}
+}
+
+func videoDurationConstraintForOptions(spec CapabilitySpec, options map[string]any) (OptionConstraint, bool) {
+	if spec.Capability == "video" {
+		for name, value := range options {
+			if canonicalModelOptionName("video", name) == "vquality" {
+				constraint, found := spec.VideoDurationByResolution[normalizeChannelModelTierResolution(fmt.Sprint(value))]
+				return constraint, found
+			}
+		}
+	}
+	return OptionConstraint{}, false
 }
 
 // Image size intent and provider encoding share explicit preset mappings.

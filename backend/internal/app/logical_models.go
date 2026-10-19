@@ -599,6 +599,11 @@ func normalizeLogicalDefaults(spec CapabilitySpec, defaults map[string]any) (map
 			return nil, BadAuthRequest("默认参数存在重复别名：" + name)
 		}
 		constraint, ok := spec.Options[name]
+		if name == "videoSeconds" {
+			if duration, found := videoDurationConstraintForOptions(spec, defaults); found {
+				constraint, ok = duration, true
+			}
+		}
 		if !ok || !matchOptionConstraint(name, constraint, value) {
 			return nil, BadAuthRequest("默认参数 " + name + " 不在前台模型能力范围内")
 		}
@@ -731,7 +736,7 @@ func channelModelDefaultOptions(channelModel model.ChannelModel, spec Capability
 			}
 		case "video":
 			if config.Video != nil {
-				defaults["videoSeconds"] = config.Video.Duration.Default
+				defaults["videoSeconds"] = videoDurationConfigForResolution(config.Video, config.Video.DefaultResolution).Default
 				defaults["vquality"] = normalizeChannelModelTierResolution(config.Video.DefaultResolution)
 				if len(config.Video.Ratios) > 0 {
 					defaults["size"] = config.Video.DefaultRatio

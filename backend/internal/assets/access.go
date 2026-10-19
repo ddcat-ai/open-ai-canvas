@@ -27,6 +27,7 @@ const (
 	DeliveryOrigin   DeliveryMode    = "origin"
 	DeliveryLocal    DeliveryMode    = "platform-local"
 	DeliveryProxy    DeliveryMode    = "platform-proxy"
+	DeliveryUpstream DeliveryMode    = "upstream"
 )
 
 // AccessOptions contains use intent, never a client-controlled authorization or transport override.
@@ -54,6 +55,8 @@ type ResourceAccess struct {
 	RefreshAt        time.Time       `json:"refreshAt"`
 	Revision         string          `json:"revision"`
 	FallbackReason   string          `json:"fallbackReason,omitempty"`
+	OriginalWidth    int             `json:"originalWidth,omitempty"`
+	OriginalHeight   int             `json:"originalHeight,omitempty"`
 }
 
 func AccessError(status int, reason, message string) *kernel.AppError {
@@ -101,6 +104,9 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	if resource == nil {
 		return nil, kernel.NotFound("资源不存在")
 	}
+	if resource.Status == model.ResourceStatusDeleted {
+		return nil, AccessError(http.StatusGone, "resource_expired", "媒体已清理，请重新生成或上传")
+	}
 	if resource.Status != model.ResourceStatusReady {
 		return nil, AccessError(http.StatusConflict, "resource_not_ready", "资源尚未上传完成")
 	}
@@ -136,7 +142,14 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		}
 	}
 	if options.Variant == VariantThumbnail {
-		access.FallbackReason = "thumbnail_not_ready"
+		if resource.ThumbnailStatus == "ready" && resource.ThumbnailSize > 0 {
+			access.ActualVariant = VariantThumbnail
+			access.OriginalWidth, access.OriginalHeight = resource.Width, resource.Height
+			access.Revision += ":thumbnail-ready"
+			resource = ThumbnailResource(resource)
+		} else {
+			access.FallbackReason = "thumbnail_not_ready"
+		}
 	}
 	if resource.Provider == "local" {
 		access.Delivery = DeliveryLocal
@@ -200,6 +213,16 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		}
 	}
 	return access, nil
+}
+
+func ThumbnailObjectKey(original string) string { return original + ".thumbnail" }
+
+func ThumbnailResource(original *model.Resource) *model.Resource {
+	thumbnail := *original
+	thumbnail.ObjectKey = ThumbnailObjectKey(original.ObjectKey)
+	thumbnail.MimeType, thumbnail.Size = original.ThumbnailMimeType, original.ThumbnailSize
+	thumbnail.Width, thumbnail.Height = original.ThumbnailWidth, original.ThumbnailHeight
+	return &thumbnail
 }
 
 // browserCacheable 标记浏览器直接读取字节、值得复用 HTTP 缓存的用途。

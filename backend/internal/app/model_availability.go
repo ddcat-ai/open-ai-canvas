@@ -48,7 +48,15 @@ func (s *Service) publicModelAvailability(channels []PublicChannelCatalog, now t
 
 	// 30 秒 TTL 缓存，避免每次模型目录请求都全量扫描 api_call_logs。
 	s.modelAvailabilityMu.RLock()
-	if s.modelAvailabilityCache != nil && time.Since(s.modelAvailabilityAt) < 30*time.Second {
+	cacheMatches := len(s.modelAvailabilityCache) == len(known) && time.Since(s.modelAvailabilityAt) < 30*time.Second
+	for key := range known {
+		item := s.modelAvailabilityCache[key]
+		if item == nil || now.Sub(item.ComputedAt).Abs() >= 30*time.Second {
+			cacheMatches = false
+			break
+		}
+	}
+	if cacheMatches {
 		cached := make(map[publicModelAvailabilityKey]*PublicModelAvailability, len(s.modelAvailabilityCache))
 		for k, v := range s.modelAvailabilityCache {
 			cached[k] = v

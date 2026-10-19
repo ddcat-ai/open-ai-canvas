@@ -334,6 +334,10 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		selector["operation"] = operation
 	}
 	switch normalizeCapability(intent.Capability) {
+	case "text":
+		// 文本模型的价格档统一使用 text_generation；页面和内部流程可能
+		// 分别传入 text、storyboard 或其他文本任务操作，但计价规格相同。
+		selector["operation"] = "text_generation"
 	case "video":
 		// 价格档按实际参考素材归类。供应商执行仍可使用 reference_to_video、extend
 		// 等细分操作；计价时视频参考优先归为视频生视频，其余图片参考无论数量

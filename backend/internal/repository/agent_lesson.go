@@ -115,6 +115,22 @@ func (r *Repository) ApprovedAgentLessons(userID string, limit int) ([]model.Age
 	return lessons, err
 }
 
+// Apply the entry-point boundary before ordering and limiting, including keyword lookups.
+func (r *Repository) ApprovedAgentLessonsForSurface(userID, surface string, limit int) ([]model.AgentLesson, error) {
+	if limit <= 0 || limit > cloudAgentLessonScanMax {
+		limit = cloudAgentLessonScanMax
+	}
+	query := r.db.Where("author_user_id = ? AND status = ?", strings.TrimSpace(userID), model.AgentLessonStatusApproved)
+	if surface == "creation" {
+		query = query.Where("category = ?", "smart_creation")
+	} else {
+		query = query.Where("category <> ?", "smart_creation")
+	}
+	var lessons []model.AgentLesson
+	err := query.Order("hits DESC, updated_at DESC").Limit(limit).Find(&lessons).Error
+	return lessons, err
+}
+
 func (r *Repository) CountAgentLessonsByAuthor(userID, status string) (int64, error) {
 	query := r.db.Model(&model.AgentLesson{}).Where("author_user_id = ?", strings.TrimSpace(userID))
 	if trimmed := strings.TrimSpace(status); trimmed != "" {

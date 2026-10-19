@@ -25,7 +25,7 @@ import (
 )
 
 func cloudAgentWrite(name string) bool {
-	return name == "canvas_apply_ops" || name == "canvas_arrange_nodes" || name == "generate_media" || name == "image_layer_split" || name == "canvas_create_storyboard" || name == "canvas_edit_storyboard" || name == "canvas_edit_batch_table" || name == "canvas_create_character" || name == "previs_scene_create" || name == "previs_apply_patch"
+	return name == "canvas_apply_ops" || name == "canvas_arrange_nodes" || name == "generate_media" || name == "image_layer_split" || cloudAgentCommerceBatchCall(name) || name == "canvas_create_storyboard" || name == "canvas_edit_storyboard" || name == "canvas_edit_batch_table" || name == "canvas_create_character" || name == "previs_scene_create" || name == "previs_apply_patch"
 }
 
 // 同参缓存只能拦住“原样重复”的读取。模型也可能不断修改 offset、nodeIds 或
@@ -52,7 +52,7 @@ func cloudAgentReadToolCacheable(name string) bool {
 // and search results are allowed to change between calls.
 func cloudAgentReadToolReadOnly(name string) bool {
 	switch name {
-	case "agent_profile_read", "canvas_get_state", "canvas_read_text", "canvas_read_storyboard", "previs_scene_read", "canvas_read_batch_table", "canvas_list_node_types", "skill_read_file", "skill_search", "model_list", "recall_lessons", "task_get":
+	case "agent_profile_read", "canvas_get_state", "canvas_read_text", "canvas_read_storyboard", "previs_scene_read", "canvas_read_batch_table", "canvas_list_node_types", "skill_read_file", "skill_search", "model_list", "recall_lessons", "task_get", "creation_media_read", "load_creation_workflow":
 		return true
 	default:
 		return false
@@ -172,8 +172,10 @@ func cloudAgentReadToolCached(repo *repository.Repository, userID string, state 
 					if err := json.Unmarshal(cached.Result, &restored); err != nil {
 						return nil, errors.New("缓存的 Agent 只读结果无效")
 					}
+					cloudAgentCreationSkillRead(state, call)
 					return restored, nil
 				}
+				cloudAgentCreationSkillRead(state, call)
 				return map[string]any{
 					"cacheReplay": true,
 					"replayCount": cached.ReplayCount,
@@ -221,6 +223,10 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		service = services[0]
 	}
 	switch call.Function.Name {
+	case "load_creation_workflow":
+		return cloudAgentLoadCreationWorkflow(state, call)
+	case "creation_media_read":
+		return cloudAgentCreationMediaRead(repo, userID, state, call)
 	case "model_list":
 		if service == nil {
 			return nil, BadAuthRequest("模型目录服务不可用")
@@ -263,7 +269,7 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 	case "ask_user":
 		return cloudAgentAskUser(call, state)
 	case "recall_lessons":
-		return cloudAgentRecallLessons(repo, userID, call)
+		return cloudAgentRecallLessons(repo, userID, state.Request.Surface, call)
 	case "remember_lesson":
 		return cloudAgentRememberLesson(repo, userID, state, call)
 	case "previs_scene_read":
@@ -519,6 +525,11 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		}
 		return cloudAgentRenderImageAnnotations(repo, userID, state, call, services[0])
 	case "skill_search":
+		for _, skill := range state.Skills {
+			if err := validateCloudAgentSkillSurface(skill, state.Request.Surface); err != nil {
+				return nil, err
+			}
+		}
 		var args struct {
 			Keyword string `json:"keyword"`
 			Limit   int    `json:"limit"`
@@ -544,6 +555,9 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		}
 		for _, skill := range state.Skills {
 			if skill.ID == args.SkillID {
+				if err := validateCloudAgentSkillSurface(skill, state.Request.Surface); err != nil {
+					return nil, err
+				}
 				if args.Path == "" {
 					return map[string]any{"version": skill.Version, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill), "guidance": "先读取 SKILL.md，再只读取入口明确引用且当前任务需要的参考文件。只能读取 files 中列出的路径；不要重复列目录或猜测路径"}, nil
 				}
@@ -556,7 +570,11 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 						return nil, creationConflict("技能已更新或不可用，请重试")
 					}
 					if args.Path == cloudAgentSkillEntryPath {
-						return cloudAgentSkillPage(skill.Version, args.Path, detail.Instruction, args.Offset)
+						result, err := cloudAgentSkillPage(skill.Version, args.Path, detail.Instruction, args.Offset)
+						if err == nil {
+							cloudAgentCreationSkillRead(state, call)
+						}
+						return result, err
 					}
 					if _, ok := skill.Files[args.Path]; !ok {
 						return nil, BadAuthRequest("参考文件未包含在本轮固定快照中")
@@ -578,6 +596,7 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 					return cloudAgentSkillPage(skill.Version, args.Path, file.Content, args.Offset)
 				}
 				if args.Path == cloudAgentSkillEntryPath && strings.TrimSpace(skill.Instruction) != "" {
+					cloudAgentCreationSkillRead(state, call)
 					return map[string]any{"version": skill.Version, "path": args.Path, "content": skill.Instruction}, nil
 				}
 				if content, ok := skill.Files[args.Path]; ok && content != "" {
@@ -598,7 +617,35 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		if err != nil {
 			return nil, err
 		}
-		if task.ProjectID != state.Request.CanvasID {
+		if state.Request.Surface == "creation" {
+			ownedByRun := false
+			for _, id := range state.TaskIDs {
+				if id == task.ID {
+					ownedByRun = true
+					break
+				}
+			}
+			if state.CommercePlan != nil {
+				for _, item := range state.CommercePlan.Items {
+					if cloudAgentCommerceTaskID(userID, state.CommercePlan, item.ID, state.Request.SessionID) == task.ID {
+						ownedByRun = true
+						break
+					}
+				}
+			}
+			if !ownedByRun {
+				// A continuation keeps the server session but starts a new run.
+				// Authorize its prior task by the actual owning run, never by a
+				// caller-supplied task ID or another surface's conversation ID.
+				if state.Request.SessionID != "" && task.AgentRunID != "" && task.ProjectID == "" {
+					owner, ownerErr := repo.CloudAgent(userID, task.AgentRunID)
+					ownedByRun = ownerErr == nil && owner.Surface == "creation" && owner.SessionID == state.Request.SessionID
+				}
+				if !ownedByRun {
+					return nil, BadAuthRequest("只能读取本会话 Agent 已提交的生成任务")
+				}
+			}
+		} else if task.ProjectID != state.Request.CanvasID {
 			return nil, BadAuthRequest("不能读取其他画布的任务")
 		}
 		result := cloudAgentTaskDiagnostic(repo, task)

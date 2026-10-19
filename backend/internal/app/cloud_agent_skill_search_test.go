@@ -82,7 +82,7 @@ func TestCloudAgentSkillSearchWithoutKeywordListsIndex(t *testing.T) {
 	}
 }
 
-func TestCloudAgentSkillSearchClampsLimitAndHandlesNoHit(t *testing.T) {
+func TestCloudAgentSkillSearchClampsLimitAndReturnsCandidateIndexOnNoHit(t *testing.T) {
 	skills := skillSearchTestSkills()
 	result, err := cloudAgentSearchSkills(skills, "钩子", 99)
 	if err != nil {
@@ -95,11 +95,89 @@ func TestCloudAgentSkillSearchClampsLimitAndHandlesNoHit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result["matches"].([]map[string]any)) != 0 {
-		t.Fatalf("expected no matches, got %v", result["matches"])
+	if len(result["matches"].([]map[string]any)) != len(skills) || result["total"] != len(skills) || result["fallback"] != true {
+		t.Fatalf("expected an explicitly labelled candidate index, got %v", result)
 	}
 	if guidance, _ := result["guidance"].(string); !strings.Contains(guidance, "skill_read_file") {
 		t.Fatalf("no-hit guidance must point at skill_read_file: %q", guidance)
+	}
+}
+
+func TestCloudAgentSkillSearchMatchesNaturalChinesePhrase(t *testing.T) {
+	result, err := cloudAgentSearchSkills(skillSearchTestSkills(), "给这个短剧设计一个反转结尾", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := result["matches"].([]map[string]any)
+	if len(matches) == 0 || matches[0]["skillId"] != "s2" || result["fallback"] == true {
+		t.Fatalf("expected the relevant short-drama skill first, got %v", result)
+	}
+}
+
+func TestCloudAgentSkillSearchTokensOnlyExpandAdjacentHan(t *testing.T) {
+	for _, test := range []struct {
+		query string
+		want  []string
+	}{
+		{"反转结尾", []string{"反转结尾", "反转", "转结", "结尾"}},
+		{"解释weatherstation", []string{"解释weatherstation", "解释"}},
+		{"短剧Python反转", []string{"短剧python反转", "短剧", "反转"}},
+		{"hook-paywall", []string{"hook-paywall"}},
+	} {
+		t.Run(test.query, func(t *testing.T) {
+			got := cloudAgentSkillSearchTokens(test.query)
+			if strings.Join(got, "|") != strings.Join(test.want, "|") {
+				t.Fatalf("tokens = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestCloudAgentSkillSearchTokensShareHardBudgetAndPreserveOriginalWords(t *testing.T) {
+	var long strings.Builder
+	for r := rune(0x4e00); r < 0x4e00+100; r++ {
+		long.WriteRune(r)
+	}
+	original := []string{long.String(), "aa", "bb", "cc", "dd", "ee", "ff", "gg"}
+	tokens := cloudAgentSkillSearchTokens(strings.Join(original, " "))
+	if len(tokens) != 64 {
+		t.Fatalf("expanded search must fill but never exceed the shared 64-token budget: %d", len(tokens))
+	}
+	for index, word := range original {
+		if tokens[index] != word {
+			t.Fatalf("long first word displaced original keyword %q: %v", word, tokens)
+		}
+	}
+	seen := map[string]bool{}
+	for _, token := range tokens {
+		if seen[token] {
+			t.Fatalf("duplicate token %q consumed the search budget", token)
+		}
+		seen[token] = true
+	}
+}
+
+func TestCloudAgentSkillSearchMixedLanguageNoHitRemainsCandidateOnly(t *testing.T) {
+	skills := skillSearchTestSkills()
+	skills[0].Instruction = "PRIVATE_FALLBACK_SKILL_BODY"
+	result, err := cloudAgentSearchSkills(skills, "帮我解释weatherstation", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := result["matches"].([]map[string]any)
+	if result["fallback"] != true || len(matches) != 1 || result["total"] != len(skills) {
+		t.Fatalf("unrelated mixed-language query must return only a limited candidate index: %v", result)
+	}
+	if _, hasScore := matches[0]["score"]; hasScore {
+		t.Fatal("fallback candidates must not masquerade as ranked matches")
+	}
+	guidance, _ := result["guidance"].(string)
+	if !strings.Contains(guidance, "不代表匹配") || !strings.Contains(guidance, "不适用就不读取") {
+		t.Fatalf("candidate guidance must allow skipping unrelated skills: %q", guidance)
+	}
+	encoded, _ := json.Marshal(result)
+	if strings.Contains(string(encoded), "PRIVATE_FALLBACK_SKILL_BODY") {
+		t.Fatal("candidate fallback leaked the full skill body")
 	}
 }
 

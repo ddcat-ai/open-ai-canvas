@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import { VideoSettingsPanel } from "@/components/video-settings-panel";
 import type { CanvasTheme } from "@/lib/canvas-theme";
-import { agentApprovalModel, agentApprovalModelSelection, agentMediaSettings, type AgentVideoApproval } from "@/lib/canvas/agent-media-approval";
-import { modelCapabilityConfigFor, normalizeVideoValue } from "@/lib/model-capabilities";
+import { agentApprovalModel, agentVideoSettingsForModel, agentMediaSettings, type AgentVideoApproval } from "@/lib/canvas/agent-media-approval";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { PUBLIC_MODEL_CATALOG_ID, useEffectiveConfig } from "@/stores/use-config-store";
@@ -35,21 +35,12 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
         if (disabled) return;
         const profile = modelCapabilityConfigFor(config, next).video;
         if (!profile) return;
-        const normalized = normalizeVideoValue(profile, { seconds: duration, ratio: settings.size, resolution: settings.quality });
-        onChange({
-            ...agentApprovalModelSelection(config, next),
-            size: normalized.ratio,
-            quality: normalized.resolution,
-            durationSeconds: Number(normalized.seconds),
-            videoGenerateAudio: settings.videoGenerateAudio,
-            videoWatermark: settings.videoWatermark,
-            videoArkPrivateAssetUpload: settings.videoArkPrivateAssetUpload,
-        });
+        onChange(agentVideoSettingsForModel(config, next, { ...settings, durationSeconds: Number(duration) || undefined }));
     };
 
     const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", next: string) => {
         if (disabled) return;
-        const nextSettings: AgentMediaSettings = {
+        const nextSettings = agentVideoSettingsForModel(config, model, {
             ...settings,
             size: key === "size" ? next : settings.size,
             quality: key === "vquality" ? next : settings.quality,
@@ -57,7 +48,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
             videoGenerateAudio: key === "videoGenerateAudio" ? next === "true" : settings.videoGenerateAudio,
             videoWatermark: key === "videoWatermark" ? next === "true" : settings.videoWatermark,
             videoArkPrivateAssetUpload: key === "videoArkPrivateAssetUpload" ? next === "true" : settings.videoArkPrivateAssetUpload,
-        };
+        });
         const selected = resolveCompatibleModel(config, model, {
             ...requirements,
             videoSeconds: String(nextSettings.durationSeconds || ""),
@@ -71,7 +62,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
             },
         });
         if (!selected) return;
-        onChange({ ...agentApprovalModelSelection(config, selected), ...nextSettings });
+        onChange(agentVideoSettingsForModel(config, selected, nextSettings));
     };
 
     return (
@@ -99,6 +90,8 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
                 本次规格：{settings.size}
                 {settings.quality ? ` · ${settings.quality}` : ""}
                 {settings.durationSeconds ? ` · ${settings.durationSeconds} 秒` : ""}
+                {settings.videoGenerateAudio === undefined ? "" : ` · 音频：${settings.videoGenerateAudio ? "开启" : "关闭"}`}
+                {settings.videoWatermark === undefined ? "" : ` · 水印：${settings.videoWatermark ? "开启" : "关闭"}`}
             </p>
             <p className="text-xs" style={{ color: theme.node.muted }}>
                 修改仅用于本次生成，费用按最终模型和规格计算。

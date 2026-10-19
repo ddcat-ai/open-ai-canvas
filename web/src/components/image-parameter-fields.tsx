@@ -5,8 +5,13 @@ import { ImageSizePicker } from "./image-size-picker";
 import { IMAGE_RESOLUTIONS, imageSingleSizeTier, imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
 import { Select } from "@/components/ui/base/select";
 import { imageHostControls, imageParameterAccepts, imageParameterRequest, parseImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
-import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { IMAGE_QUALITY_CAPABILITY_OPTIONS, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { imageQualityLabel } from "@/lib/image-quality";
 import type { AiConfig } from "@/stores/use-config-store";
+
+function imageParameterValueLabel(field: ImageParameter, value: ImageParameterValue) {
+    return field.name === "quality" ? imageQualityLabel(String(value)) : String(value);
+}
 
 export function ImageParameterInput({
     field,
@@ -43,7 +48,7 @@ export function ImageParameterInput({
                             return (
                                 <button type="button" key={`${typeof option}:${option}`} disabled={disabled} aria-pressed={value === option} onClick={() => onChange(option)}>
                                     {width > 0 && height > 0 ? <span aria-hidden="true" className="image-size-ratio-icon" style={{ width: 24 * Math.min(1, width / height), height: 24 * Math.min(1, height / width) }} /> : null}
-                                    <span>{typeof option === "boolean" ? (option ? "开启" : "关闭") : String(option)}</span>
+                                    <span>{typeof option === "boolean" ? (option ? "开启" : "关闭") : imageParameterValueLabel(field, option)}</span>
                                 </button>
                             );
                         })}
@@ -64,7 +69,7 @@ export function ImageParameterInput({
                 allowClear={!field.required}
                 value={value === undefined ? undefined : String(value)}
                 placeholder="跟随模型默认"
-                options={field.values.map((v) => ({ value: String(v), label: typeof v === "boolean" ? (v ? "开启" : "关闭") : String(v) }))}
+                options={field.values.map((v) => ({ value: String(v), label: typeof v === "boolean" ? (v ? "开启" : "关闭") : imageParameterValueLabel(field, v) }))}
                 onChange={(next) => onChange(field.values!.find((v) => String(v) === next))}
             />
         );
@@ -228,10 +233,12 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
                                                 mode={definition.values?.length ? "multiple" : "tags"}
                                                 disabled={disabled}
                                                 value={(field.values || []).map(String)}
-                                                options={(isResolution ? resolutionChoices : definition.values || []).map((v) => ({
-                                                    label: isResolution && IMAGE_RESOLUTIONS.includes(String(v).toLowerCase()) ? String(v).toUpperCase() : String(v),
-                                                    value: String(v),
-                                                }))}
+                                                options={(isResolution ? resolutionChoices : definition.values?.length ? definition.values : field.name === "quality" ? [...new Set([...IMAGE_QUALITY_CAPABILITY_OPTIONS, ...(field.values || [])])] : []).map(
+                                                    (v) => ({
+                                                        label: isResolution && IMAGE_RESOLUTIONS.includes(String(v).toLowerCase()) ? String(v).toUpperCase() : imageParameterValueLabel(field, v),
+                                                        value: String(v),
+                                                    }),
+                                                )}
                                                 tokenSeparators={[",", "，"]}
                                                 placeholder={isResolution ? "输入后按回车，或点击下方档位" : undefined}
                                                 onChange={updateValues}

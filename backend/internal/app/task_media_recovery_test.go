@@ -75,9 +75,15 @@ func TestMediaRecoveryDownloadFailureResumesSameTaskAfterRestart(t *testing.T) {
 	config := providerConfig{BaseURL: server.URL}
 	task := seedMediaTask(t, db, config)
 	ctx := context.WithValue(withProviderAnalytics(context.Background(), s, *task), mediaExecutionTaskKey{}, *task)
-	_, handled, failure := recoverProtocolMedia(ctx, config, "image", []protocol.MediaReference{{URL: server.URL + "/result?token=private-test-token"}})
-	if !handled || failure == nil {
-		t.Fatalf("handled=%v failure=%v", handled, failure)
+	// A pre-upgrade task may already be in the server download stage. Resume
+	// that checkpoint rather than submitting generation or changing its identity.
+	checkpoint := &mediaCheckpoint{Mode: "image", StartedAt: time.Now(), Items: []mediaCheckpointItem{{Reference: protocol.MediaReference{URL: server.URL + "/result?token=private-test-token"}, TempName: "result-expired"}}}
+	if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
+		t.Fatal(err)
+	}
+	_, failure := s.resumeTaskMedia(ctx, task)
+	if failure == nil {
+		t.Fatal("expected the first download to fail")
 	}
 	if err := s.handleMediaRecoveryFailure(task, failure); err != nil {
 		t.Fatal(err)

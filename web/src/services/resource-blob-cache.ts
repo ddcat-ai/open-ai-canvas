@@ -2,6 +2,7 @@ import localforage from "localforage";
 
 import { getActiveUserScope } from "@/lib/user-scope";
 import { getResourceBlob, resourceIdFromStorageKey } from "@/services/api/resources";
+import { scheduleBrowserResourceThumbnail } from "@/services/resource-thumbnail";
 
 type ResourceCacheMeta = {
     key: string;
@@ -70,6 +71,12 @@ export async function cacheResourceObjectUrl(storageKey: string) {
     return blob ? objectUrl(target.key, blob) : "";
 }
 
+/** Start warming a remote resource without making cache availability part of rendering. */
+export function scheduleResourceBlobCache(storageKey: string) {
+    if (!storageKey) return;
+    void cacheResourceObjectUrl(storageKey).catch(() => undefined);
+}
+
 function withDownloadSlot<T>(task: () => Promise<T>) {
     return new Promise<T>((resolve, reject) => {
         downloadQueue.push(() => {
@@ -92,6 +99,7 @@ function runDownloadQueue() {
 export async function primeResourceBlobCache(storageKey: string, blob: Blob) {
     const target = await cacheTarget(storageKey);
     if (!target) return "";
+    scheduleBrowserResourceThumbnail(storageKey, blob);
     sessionBlobs.set(target.key, blob);
     const url = objectUrl(target.key, blob);
     if (blob.size <= MAX_CACHE_BYTES) void enqueuePersist(target, blob);
@@ -131,6 +139,7 @@ async function getOrDownloadResourceBlob(storageKey: string, target: ResourceCac
 async function downloadResourceBlob(storageKey: string, target: ResourceCacheMeta, generation: number) {
     const blob = await getResourceBlob(storageKey);
     if (!blob || generation !== cacheGeneration) return null;
+    scheduleBrowserResourceThumbnail(storageKey, blob);
     sessionBlobs.set(target.key, blob);
     if (blob.size <= MAX_CACHE_BYTES) await enqueuePersist(target, blob);
     return blob;

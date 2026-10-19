@@ -531,6 +531,20 @@ func safeProviderLogError(err error) string {
 	if errors.As(err, &httpErr) {
 		return fmt.Sprintf("上游 HTTP %d", httpErr.StatusCode)
 	}
+	// net/http wraps transport failures in url.Error, whose Error method includes
+	// the full request URL. Query strings may contain user supplied or provider
+	// credentials, so keep only the operation and nested transport reason.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Err == nil {
+			return strings.TrimSpace(urlErr.Op)
+		}
+		reason := safeProviderLogError(urlErr.Err)
+		if strings.TrimSpace(urlErr.Op) == "" {
+			return reason
+		}
+		return strings.TrimSpace(urlErr.Op) + ": " + reason
+	}
 	return truncateRunes(err.Error(), 500)
 }
 

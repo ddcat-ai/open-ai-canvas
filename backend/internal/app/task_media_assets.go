@@ -6,19 +6,39 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
 )
 
-// A deleted canvas/project must not be resurrected by an old download worker.
+// Missing standalone canvases must not discard an already generated output.
+// Save it to the owner's personal library without recreating the canvas; domain
+// project membership and archived/deleted project guards remain authoritative.
 func (s *Service) mediaTaskProject(task *model.Task) (string, error) {
 	id := task.ProjectID
 	if id == "" {
-		return "", nil
+		// 删除实体会清空归属，但真实领域项目的删除/归档约束仍须生效。
+		var input struct {
+			DomainProjectID string `json:"domainProjectId"`
+			Metadata        struct {
+				DomainProjectID string `json:"domainProjectId"`
+			} `json:"metadata"`
+		}
+		if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+			return "", err
+		}
+		id = strings.TrimSpace(input.DomainProjectID)
+		if id == "" {
+			id = strings.TrimSpace(input.Metadata.DomainProjectID)
+		}
+		if id == "" {
+			return "", nil
+		}
 	}
 	canvas, err := s.repo.CanvasProjectForUser(task.UserID, id)
+	missingCanvas := errors.Is(err, gorm.ErrRecordNotFound)
 	if err == nil {
 		id = canvas.ProjectID
 		if id == "" {
@@ -29,6 +49,9 @@ func (s *Service) mediaTaskProject(task *model.Task) (string, error) {
 	}
 	project, err := s.repo.ProjectForUser(task.UserID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		if missingCanvas && isStandaloneCanvasMediaTask(task) {
+			return "", nil
+		}
 		return "", NotFound("任务所属画布或项目已不存在")
 	}
 	if err != nil {
@@ -38,6 +61,29 @@ func (s *Service) mediaTaskProject(task *model.Task) (string, error) {
 		return "", BadAuthRequest("项目已归档，无法恢复作品")
 	}
 	return project.ID, nil
+}
+
+func isStandaloneCanvasMediaTask(task *model.Task) bool {
+	switch task.Type {
+	case "canvas_image", "canvas_video", "canvas_audio":
+	default:
+		return false
+	}
+	// Only inspect non-secret task routing metadata, including its public form
+	// retained after completion. Do not infer a canvas from a missing project ID.
+	var input struct {
+		DomainProjectID string `json:"domainProjectId"`
+		WorkflowStepID  string `json:"workflowStepId"`
+		Metadata        struct {
+			NodeID          string `json:"nodeId"`
+			DomainProjectID string `json:"domainProjectId"`
+			WorkflowStepID  string `json:"workflowStepId"`
+		} `json:"metadata"`
+	}
+	if json.Unmarshal([]byte(task.InputJSON), &input) != nil {
+		return false
+	}
+	return strings.TrimSpace(input.Metadata.NodeID) != "" && input.DomainProjectID == "" && input.WorkflowStepID == "" && input.Metadata.DomainProjectID == "" && input.Metadata.WorkflowStepID == ""
 }
 
 // AudioOutputDurationMs returns the measured duration of the first persisted

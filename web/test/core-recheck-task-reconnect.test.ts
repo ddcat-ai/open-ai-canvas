@@ -77,14 +77,13 @@ test("text reconnect queries the same task with the last event sequence and dedu
     expect(queries).toEqual(["/tasks/existing-task"]);
 });
 
-test("polling stops after five network failures but can resume the original task without creation", async () => {
-    let offline = true;
+test("polling resumes the original task after five network failures without creation", async () => {
     let queries = 0;
     apiClient.defaults.adapter = async (config) => {
         expect(config.method).toBe("get");
         expect(config.url).toBe("/tasks/existing-task");
         queries += 1;
-        if (offline) throw new Error("offline fixture");
+        if (queries <= 5) throw new Error("offline fixture");
         return {
             config,
             status: 200,
@@ -93,15 +92,6 @@ test("polling stops after five network failures but can resume the original task
             data: { code: 0, data: terminal, msg: "ok" },
         };
     };
-    await expect(
-        waitForGenerationTask(running.id, {
-            initialTask: running,
-            intervalMs: 1,
-            timeoutMs: 1000,
-        }),
-    ).rejects.toThrow("offline fixture");
-    expect(queries).toBe(5);
-    offline = false;
     expect(
         (
             await waitForGenerationTask(running.id, {
@@ -171,11 +161,13 @@ test("last subscriber aborts observation and reopening resumes the same task", a
     first();
     expect(signals[0].aborted).toBe(false);
     second();
+    await tick();
     expect(signals[0].aborted).toBe(true);
     const reopened = service.subscribe([running.id], () => {});
     await tick();
     expect(ids).toEqual([running.id, running.id]);
     expect(signals[1].aborted).toBe(false);
     reopened();
+    await tick();
     expect(signals[1].aborted).toBe(true);
 });

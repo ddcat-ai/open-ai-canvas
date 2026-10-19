@@ -14,6 +14,8 @@ import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice, type ToolResponseResult } from "@/services/api/image";
 import { assertAgentExchangeBudget } from "@/lib/canvas/agent-context-budget";
+import { createClientId } from "@/lib/client-id";
+import { prepareGenerationSubmission, submitGenerationRequest } from "@/services/generation-submission";
 
 export { logicalModelIDForConfig };
 
@@ -22,7 +24,7 @@ export type BackendGenerationMode = "text" | "image" | "video" | "audio";
 export type BackendGenerationResult = {
     projectAssetImageStatus?: "bound" | "stale";
     mode?: BackendGenerationMode;
-    images?: Array<{ dataUrl: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string }>;
+    images?: Array<{ dataUrl: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string; transferPending?: boolean }>;
     video?: { dataUrl: string; storageKey?: string; width?: number; height?: number; durationMs?: number; bytes?: number; mimeType?: string };
     audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
     audios?: Array<{ dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string }>;
@@ -57,12 +59,13 @@ export type GenerationTaskDependencies = {
     createTask: typeof createGenerationTask;
     waitTask: typeof waitForGenerationTask;
     createId: () => string;
+    submissionStore?: { prepare: typeof prepareGenerationSubmission; submit: typeof submitGenerationRequest };
 };
 
 const defaultDependencies: GenerationTaskDependencies = {
     createTask: createGenerationTask,
     waitTask: waitForGenerationTask,
-    createId: () => crypto.randomUUID(),
+    createId: createClientId,
 };
 
 type PreparedGenerationReferences = {
@@ -183,6 +186,7 @@ export async function runBackendToolGenerationTask(options: BackendToolGeneratio
 }
 
 export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }, dependencies: GenerationTaskDependencies = defaultDependencies) {
+    options = { ...options, clientOperationId: options.clientOperationId || dependencies.createId() };
     const count = Math.max(1, Math.min(15, Math.floor(Number(options.count)) || 1));
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
@@ -270,7 +274,16 @@ async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions
 }
 
 async function createBackendGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
-    const task = await dependencies.createTask(backendGenerationTaskInput(options, prepared));
+    const operationId = options.clientOperationId || dependencies.createId();
+    const input = backendGenerationTaskInput({ ...options, clientOperationId: operationId }, prepared);
+    const store = dependencies.submissionStore || { prepare: prepareGenerationSubmission, submit: submitGenerationRequest };
+    const batchCount = Number(options.metadata?.batchCount);
+    const keys = typeof options.metadata?.batchIndex === "number" && Number.isInteger(batchCount) && batchCount > 0
+        ? Array.from({ length: batchCount }, (_, index) => `${operationId}:batch:${index}`)
+        : [input.idempotencyKey!];
+    await store.prepare(operationId, keys);
+    throwIfAborted(options.signal);
+    const task = await store.submit(operationId, input.idempotencyKey!, () => dependencies.createTask(input));
     options.onTaskUpdate?.(task);
     return task;
 }
@@ -289,6 +302,10 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
     const videoOperation = generationOperation(options);
     const workflow = resolveGenerationWorkflowExecution(config, mode);
     const logicalModelId = workflow ? "" : logicalModelIDForConfig(config);
+    const batchIndex = typeof metadata?.batchIndex === "number" ? metadata.batchIndex : undefined;
+    const idempotencyKey = options.clientOperationId
+        ? `${options.clientOperationId}${batchIndex === undefined ? "" : `:batch:${batchIndex}`}`
+        : undefined;
     return {
         ...(projectId ? { projectId } : {}),
         type: `canvas_${mode}`,
@@ -297,6 +314,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
         ...(workflow ? { provider: workflow.provider } : {}),
         model: workflow?.taskModel || config.model,
         ...(logicalModelId ? { logicalModelId } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : {}),
         input: {
             mode,
             prompt,

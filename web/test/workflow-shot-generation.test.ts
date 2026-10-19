@@ -117,7 +117,7 @@ test("shot generation submits historical character image, current voice and asse
         createTask: async (input) => { createdInput = input; return task; },
         waitTask: async () => { throw new Error("should not wait"); },
         runLocal: async () => ({ mode: "video" }),
-        createId: () => "id-1",
+        createId: () => "shot-asset-reference-submission",
         now: () => "2026-08-30T00:00:00.000Z",
     });
 
@@ -144,7 +144,7 @@ test("background generation submission returns after task creation without waiti
             throw new Error("should not wait");
         },
         runLocal: async () => ({ mode: "video" }),
-        createId: () => "id-1",
+        createId: () => "background-video-submission",
         now: () => "2026-08-30T00:00:00.000Z",
     };
 

@@ -29,6 +29,12 @@ describe("creation remote library", () => {
         expect(attachments.map((item) => item.id)).toEqual([`asset:${video.id}`, `asset:${image.id}`]);
     });
 
+    test("uncached remote references retain their user folder", () => {
+        const asset = { ...image, folderId: "product-photos" };
+        expect(remoteItem(asset).folderId).toBe("product-photos");
+        expect(creationLibrarySelectionToAttachments([asset.id], [remoteItem(asset)], "image")[0].id).toBe(`asset:${asset.id}`);
+    });
+
     test("other callers still reject uncached assets unless they accept remote records", () => {
         expect(remoteAssetToPickerItem(image, undefined, false).disabledReason).toBe("此素材不适用于当前操作");
         const known = { ...remoteItem(image), disabledReason: "素材不可用" };

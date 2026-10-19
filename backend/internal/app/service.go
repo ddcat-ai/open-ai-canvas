@@ -123,10 +123,12 @@ type CreateTaskRequest struct {
 	Prompt               string         `json:"prompt"`
 	Provider             string         `json:"provider"`
 	Model                string         `json:"model"`
+	IdempotencyKey       string         `json:"idempotencyKey,omitempty"`
 	LogicalModelID       string         `json:"logicalModelId"`
 	Input                map[string]any `json:"input"`
 	TraceID              string         `json:"-"`
 	RequestID            string         `json:"-"`
+	CreationSubmissionID string         `json:"-"`
 }
 
 type TaskListOptions struct {
@@ -186,6 +188,7 @@ func (s *Service) StartWorker() {
 	}
 	s.taskWorker().start(ctx)
 	s.startResourceDeletionWorker(ctx)
+	s.startResourceTransferWorker(ctx)
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
 	go s.syncAgentSessionLimit()

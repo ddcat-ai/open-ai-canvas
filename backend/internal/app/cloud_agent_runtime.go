@@ -105,17 +105,31 @@ func (e *cloudAgentReadLoopError) Error() string {
 }
 
 type cloudAgentApproval struct {
-	Prepared  *cloudAgentPreparedMedia  `json:"prepared,omitempty"`
-	ModelName string                    `json:"modelName,omitempty"`
-	ID        string                    `json:"approvalId"`
-	Call      cloudAgentCall            `json:"call"`
-	CallHash  string                    `json:"callHash,omitempty"`
-	Preview   cloudAgentApprovalPreview `json:"preview"`
-	Decision  string                    `json:"decision,omitempty"`
-	Reason    string                    `json:"reason,omitempty"`
+	ReceiptInputSHA256 string                    `json:"receiptInputSha256,omitempty"`
+	Prepared           *cloudAgentPreparedMedia  `json:"prepared,omitempty"`
+	Batch              *cloudAgentCommerceBatch  `json:"commerceBatch,omitempty"`
+	ModelName          string                    `json:"modelName,omitempty"`
+	ID                 string                    `json:"approvalId"`
+	Call               cloudAgentCall            `json:"call"`
+	CallHash           string                    `json:"callHash,omitempty"`
+	Preview            cloudAgentApprovalPreview `json:"preview"`
+	Decision           string                    `json:"decision,omitempty"`
+	Reason             string                    `json:"reason,omitempty"`
 }
 
 type cloudAgentRuntime struct {
+	CreationOutputRefs    map[string]cloudAgentCreationOutputRef `json:"creationOutputRefs,omitempty"`
+	CreationPendingImages []string                               `json:"creationPendingImages,omitempty"`
+	CommerceToolsEnabled  bool                                   `json:"commerceToolsEnabled,omitempty"`
+	PiInspectedImages     map[string]cloudAgentImageInspection   `json:"piInspectedImages,omitempty"`
+	// Server-committed model declarations prove which tools may execute or be repaired.
+	PiModelCalls                 []cloudAgentCall `json:"piModelCalls,omitempty"`
+	PiModelTaskID                string           `json:"piModelTaskId,omitempty"`
+	DeliveredInterjectionDigests []string         `json:"deliveredInterjectionDigests,omitempty"`
+
+	ExecutionLease     model.CloudAgentExecutionLease        `json:"executionLease,omitempty"`
+	ExecutionFence     *model.CloudAgentFence                `json:"-"`
+	ModelReceipt       *model.CloudAgentReceipt              `json:"-"`
 	RuntimeRunID       string                                `json:"-"`
 	Request            CloudAgentRequest                     `json:"request"`
 	Policy             cloudAgentPolicySnapshot              `json:"policy"`
@@ -155,23 +169,24 @@ type cloudAgentRuntime struct {
 	StepSnapshotHash               string                                  `json:"stepSnapshotHash,omitempty"`
 	StoryboardTaskID               string                                  `json:"storyboardTaskId,omitempty"`
 	Plan                           []cloudAgentPlanItem                    `json:"plan,omitempty"`
+	CommercePlan                   *cloudAgentCommercePlan                 `json:"commercePlan,omitempty"`
+	CommerceBatch                  *cloudAgentCommerceBatch                `json:"commerceBatch,omitempty"`
 	ConfirmationRounds             int                                     `json:"confirmationRounds,omitempty"`
 	ConfirmationFingerprints       []string                                `json:"confirmationFingerprints,omitempty"`
 	PendingConfirmationFingerprint string                                  `json:"pendingConfirmationFingerprint,omitempty"`
 	PendingInterjections           []cloudAgentInterjection                `json:"pendingInterjections,omitempty"`
 	PiResumePrompt                 string                                  `json:"piResumePrompt,omitempty"`
+	PiTurnID                       string                                  `json:"piTurnId,omitempty"`
 	TransientReferences            map[string]cloudAgentTransientReference `json:"transientReferences,omitempty"`
 	InterjectionIDs                []string                                `json:"interjectionIds,omitempty"`
-	// 已送达插话正文的 SHA-256 指纹（有界）。运行时投影回写 canonical 时不带
-	// 来源标记，模型步按指纹补回 user_interjection，见 cloud_agent_interjection_pi.go。
-	DeliveredInterjectionDigests []string          `json:"deliveredInterjectionDigests,omitempty"`
-	Events                       []CloudAgentEvent `json:"events"`
+	Events                         []CloudAgentEvent                       `json:"events"`
 	// PiAssistantResponses counts successful assistant message_end events from
 	// the Pi runtime. Completion must not be inferred from a clean Node exit:
 	// a provider/session error can otherwise be reported as a successful run.
 	PiAssistantResponses        int    `json:"piAssistantResponses,omitempty"`
 	LessonEligibleToolSuccesses int    `json:"lessonEligibleToolSuccesses,omitempty"`
 	RememberLessonSuccesses     int    `json:"rememberLessonSuccesses,omitempty"`
+	PiRecoveryAttempts          int    `json:"piRecoveryAttempts,omitempty"`
 	IsGenerating                bool   `json:"isGenerating,omitempty"`
 	LastError                   string `json:"lastError,omitempty"`
 	// EmptyOutputEscalated 记录"空输出已经升级重试过几次"（关思考 + 放大输出预算）。
@@ -225,6 +240,23 @@ type cloudAgentRuntime struct {
 	// 内存只保留最近一窗（repository.CloudAgentJournalWindow），因此它是"窗口在整条
 	// 日志里的偏移"，而不是累计条数。只在内存里有效，不进检查点（检查点里的事件为空）。
 	EventSeqBase int `json:"-"`
+	// LastStep* 记下"最近一次已发出的模型调用"的本地计价，与上游回填的实测用量
+	// 配成锚点用。估算与实测指向同一份 canonical：估算取自任务 input 里实际发出的那份，
+	// 因此"信封一致"是构造保证，不需要额外比对。
+	LastStepTaskID       string `json:"lastStepTaskId,omitempty"`
+	LastStepOperation    string `json:"lastStepOperation,omitempty"`
+	LastStepEstimate     int    `json:"lastStepEstimate,omitempty"`
+	LastStepSourceBytes  int    `json:"lastStepSourceBytes,omitempty"`
+	LastStepSignature    string `json:"lastStepSignature,omitempty"`
+	LastStepModel        string `json:"lastStepModel,omitempty"`
+	LastStepChannelID    string `json:"lastStepChannelId,omitempty"`
+	LastStepWindowTokens int    `json:"lastStepWindowTokens,omitempty"`
+	// TokenAnchor 是上一步上游上报的用量（模型自己的分词器计数），上下文压力的权威锚点。
+	TokenAnchor *cloudAgentTokenAnchor `json:"tokenAnchor,omitempty"`
+	// ContextWindowKnown 记录本轮是否已经看到过"模型窗口已确认"的读数：从"未确认"变为
+	// "已确认"时要落一条 context_transition，消费方据此标"模型窗口已识别"，
+	// 而不是把口径切换画成上下文骤降。
+	ContextWindowKnown bool `json:"contextWindowKnown,omitempty"`
 }
 
 type cloudAgentTransientReference struct {
@@ -259,7 +291,7 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	// not an active model task; validation and recovery use TaskIDs as the run's
 	// immutable task-history anchor. Leaving this nil makes every new Pi run
 	// fail its first checkpoint with "Agent runtime task history is invalid".
-	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: "", TaskIDs: []string{task.ID}, Step: 0, Decisions: map[string]string{}, Plan: initial.Plan, ConfirmationRounds: initial.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), initial.ConfirmationFingerprints...), PendingConfirmationFingerprint: "", Events: []CloudAgentEvent{}, StepLimits: limits}
+	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: "", TaskIDs: []string{task.ID}, Step: 0, Decisions: map[string]string{}, Plan: initial.Plan, CommercePlan: initial.CommercePlan, ConfirmationRounds: initial.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), initial.ConfirmationFingerprints...), PendingConfirmationFingerprint: "", Events: []CloudAgentEvent{}, StepLimits: limits}
 	if !carrier {
 		state.ActiveTaskID = task.ID
 		state.Step = 1
@@ -273,22 +305,48 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 		}
 		state.event(task.ID, "tool_completed", map[string]any{"toolName": "skills_load", "skillIds": skillIDs, "text": fmt.Sprintf("已启用 %d 个技能，正文将按需读取", len(initial.Skills))})
 	}
-	if len(state.Plan) > 0 {
+	if state.Request.Surface != "creation" && len(state.Plan) > 0 {
 		// 继承的待办清单必须挂到本轮：前端按 plan-<runId> 展示清单，不发这条事件时
 		// 界面会一直停在上一轮（已结束）的清单上，显示"未完成项已停止"。
-		state.event(task.ID, "plan_updated", map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan), "inherited": true})
+		payload := map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan), "inherited": true}
+		if state.CommercePlan != nil {
+			payload["planId"], payload["version"] = state.CommercePlan.PlanID, state.CommercePlan.Version
+			payload["platform"], payload["site"], payload["language"] = state.CommercePlan.Platform, state.CommercePlan.Site, state.CommercePlan.Language
+			payload["items"] = cloudAgentCommercePlanItems(state.CommercePlan)
+		}
+		state.event(task.ID, "plan_updated", payload)
 	}
+	pressure := s.cloudAgentContextPressure(input.Requests.Canonical, initial.Request.Prompt, initial.Request)
 	if carrier {
 		// The carrier is deliberately not a model call. Pi will create the first
 		// governed cloud_agent_step through the model bridge below.
+		state.ContextWindowKnown = pressure.ModelLimitConfigured
 		run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
 		if err := cloudAgentSave(run, &state); err != nil {
 			return err
 		}
 		return s.repo.EnsureCloudAgent(run)
 	}
-	// 非 Pi 的旧入口仍保留运行状态初始化，但上下文占用统一由 Pi SDK
-	// 在实际模型调用前上报；这里不再生成 Go 侧估算读数。
+	// 第一步的模型调用就是根任务本身（不经过 enqueueCloudAgentTask）：在这里登记任务 id
+	// 与本次请求的本地计价，它回来时才能与上游实测配成锚点。根任务的操作名是
+	// cloud_agent，但它就是第一步的模型调用，按"步骤"口径登记，否则回来配锚点时会被
+	// 操作名守卫挡掉。
+	state.LastStepTaskID = task.ID
+	state.LastStepOperation = cloudAgentStepOperation
+	state.LastStepEstimate = pressure.EstimatedInputTokens
+	state.LastStepSourceBytes = pressure.SourceBytes
+	state.LastStepModel = stringValue(input.Config["model"])
+	state.LastStepChannelID = stringValue(input.Config["channelId"])
+	state.LastStepSignature = cloudAgentRequestSignature(&state, input.Requests.Canonical, state.LastStepChannelID, state.LastStepModel)
+	if pressure.ModelLimitConfigured {
+		state.LastStepWindowTokens = pressure.ContextWindowTokens
+	}
+	// 第一步的窗口是"起始状态"而不是"刚刚识别"：只播种标记，不落 window_resolved，
+	// 否则每轮开头都会报一次"模型窗口已识别"。
+	state.ContextWindowKnown = pressure.ModelLimitConfigured
+	firstPressure := cloudAgentContextPressurePayload(pressure, &state, input.Requests.Canonical)
+	firstPressure["requestId"] = task.ID
+	state.event(task.ID, "context_pressure", firstPressure)
 	run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
 	if err := cloudAgentSave(run, &state); err != nil {
 		return err

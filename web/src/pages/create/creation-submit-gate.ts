@@ -21,3 +21,23 @@ export function createCreationSubmitGate() {
         },
     };
 }
+
+export function createCreationSubmitGateRelease(gate: ReturnType<typeof createCreationSubmitGate>, token: symbol) {
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        gate.release(token);
+    };
+}
+
+export async function withCreationSubmitGate<T>(gate: ReturnType<typeof createCreationSubmitGate>, task: (release: () => void) => Promise<T> | T) {
+    const token = gate.tryAcquire();
+    if (!token) return { accepted: false as const };
+    const release = createCreationSubmitGateRelease(gate, token);
+    try {
+        return { accepted: true as const, value: await task(release) };
+    } finally {
+        release();
+    }
+}

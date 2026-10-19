@@ -130,12 +130,19 @@ type cloudAgentMediaArgs struct {
 	SourceNodeID               string                              `json:"sourceNodeId"`
 	ReferenceNodeIDs           []string                            `json:"referenceNodeIds"`
 	ReferenceTransientIDs      []string                            `json:"referenceTransientIds"`
+	AttachmentResourceIDs      []string                            `json:"attachmentResourceIds"`
+	References                 []cloudAgentCreationReference       `json:"references,omitempty"`
 }
 
 type cloudAgentMediaPlan struct {
-	Args                cloudAgentMediaArgs
-	CallID              string
-	TransientReferences map[string]cloudAgentTransientReference
+	Args                      cloudAgentMediaArgs
+	CallID                    string
+	TaskID                    string
+	CommerceKey               string
+	CommerceItemID            string
+	CommerceRetryFailedTaskID string
+	CommerceRetryPromptHash   string
+	TransientReferences       map[string]cloudAgentTransientReference
 	// Prepared is populated by the auto path after its dry admission. Approval
 	// mode keeps the same admission in state.Approval.Prepared.
 	Prepared *cloudAgentPreparedMedia `json:"-"`
@@ -681,13 +688,29 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		return CreateTaskRequest{}, nil, cloudAgentJSONArgumentError(err)
 	}
 	a.Mode = strings.ToLower(strings.TrimSpace(a.Mode))
-	if cloudAgentModelSelectionProvided(call.Function.Arguments) || run == nil || state == nil {
+	if (state == nil || state.Request.Surface != "creation") && (cloudAgentModelSelectionProvided(call.Function.Arguments) || run == nil || state == nil) {
 		if err := validateCloudAgentModelSelection(call.Function.Arguments, a); err != nil {
 			return CreateTaskRequest{}, nil, err
 		}
 	}
 	if run == nil || state == nil {
 		return CreateTaskRequest{}, nil, BadAuthRequest("Agent 状态无效")
+	}
+	a.DraftRunID = run.ID
+	callHash := cloudAgentApprovalCallHash(call)
+	if state.Request.Surface == "creation" && state.CommercePlan != nil && state.CallIndex >= 0 && state.CallIndex < len(state.Calls) && state.Calls[state.CallIndex].ID == call.ID {
+		callHash = cloudAgentApprovalCallHash(state.Calls[state.CallIndex])
+	}
+	if state.Approval != nil && state.Approval.Prepared != nil &&
+		state.Approval.CallHash == callHash {
+		a.Prepared = state.Approval.Prepared
+	} else if state.AutoPreparedMedia != nil &&
+		state.AutoPreparedCallHash == callHash &&
+		time.Now().Before(state.AutoPreparedMedia.Quote.ExpiresAt) {
+		a.Prepared = state.AutoPreparedMedia
+	}
+	if state.Request.Surface == "creation" {
+		return s.prepareCloudAgentCreationMedia(run, state, a, call.ID)
 	}
 	if a.NodeID == "" {
 		if call.ID == "" {
@@ -698,15 +721,6 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	titleOmitted := a.Title == ""
 	if titleOmitted {
 		a.Title = map[string]string{"image": "图片创作", "video": "视频创作", "audio": "音频创作"}[a.Mode]
-	}
-	a.DraftRunID = run.ID
-	if state.Approval != nil && state.Approval.Prepared != nil &&
-		state.Approval.CallHash == cloudAgentApprovalCallHash(call) {
-		a.Prepared = state.Approval.Prepared
-	} else if state.AutoPreparedMedia != nil &&
-		state.AutoPreparedCallHash == cloudAgentApprovalCallHash(call) &&
-		time.Now().Before(state.AutoPreparedMedia.Quote.ExpiresAt) {
-		a.Prepared = state.AutoPreparedMedia
 	}
 	if err := s.fillCloudAgentMediaSnapshotHash(run.UserID, state.Request.CanvasID, &a); err != nil {
 		return CreateTaskRequest{}, nil, err
@@ -859,6 +873,17 @@ func applyCloudAgentResolvedMediaDefaults(req *CreateTaskRequest, plan *cloudAge
 	if err := validateCloudAgentResolvedMediaOptions(requested, input); err != nil {
 		return err
 	}
+	if plan.Args.Mode == "image" {
+		if options, ok := input["capabilityOptions"].(map[string]any); ok {
+			// Provider defaults such as quality=auto are not explicit model options.
+			// Mirror only declared parameters into the approved request.
+			for _, key := range []string{"quality", "imageResolution"} {
+				if _, declared := options[key]; !declared {
+					delete(config, key)
+				}
+			}
+		}
+	}
 
 	plan.Args.Size = stringValue(config["size"])
 	if plan.Args.Mode == "image" {
@@ -1008,6 +1033,46 @@ func jsonValuesEqual(left, right any) bool {
 // createCloudAgentMediaNode 为指定用户的画布保存计划中的媒体节点及引用连线。
 // task 为空时保存待审批草稿，否则绑定已创建任务；policy 校验配额，recorder 可记录撤销事件。
 // 返回保存错误；提交生成时由调用方放在任务、计费和 Agent 检查点的同一个事务中执行。
+// cloudAgentMediaNodeDimensions 按目标输出的宽高比给生成节点定框：横版以 720 为宽
+// 基准（与图片/视频节点默认 720x405 一致），竖版以 640 为高基准（沿用原 9:16 特判
+// 的 360x640），方形取 540。size 接受比例（9:16）与像素（1536x2752）两种写法——
+// 不同模型目录声明的形式不同；auto、空或解析失败时返回 false，由调用方保留默认框。
+// 仅草稿/生成中阶段的占位比例由此决定；任务成功回写时仍按产物实际宽高修正。
+func cloudAgentMediaNodeDimensions(size string) (float64, float64, bool) {
+	width, height, ok := parseCloudAgentMediaAspectRatio(size)
+	if !ok {
+		return 0, 0, false
+	}
+	switch {
+	case width > height:
+		return 720, 720 * height / width, true
+	case width < height:
+		return 640 * width / height, 640, true
+	default:
+		return 540, 540, true
+	}
+}
+
+func parseCloudAgentMediaAspectRatio(size string) (float64, float64, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(size))
+	if normalized == "" || normalized == "auto" {
+		return 0, 0, false
+	}
+	for _, sep := range []string{":", "x", "×"} {
+		index := strings.Index(normalized, sep)
+		if index <= 0 || index == len(normalized)-len(sep) {
+			continue
+		}
+		width, widthErr := strconv.ParseFloat(strings.TrimSpace(normalized[:index]), 64)
+		height, heightErr := strconv.ParseFloat(strings.TrimSpace(normalized[index+len(sep):]), 64)
+		if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 || width > 7680 || height > 7680 {
+			return 0, 0, false
+		}
+		return width, height, true
+	}
+	return 0, 0, false
+}
+
 func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID string, plan *cloudAgentMediaPlan, task *model.Task, policy RuntimePolicySetting, recorder ...cloudAgentMutationRecorder) error {
 	a := plan.Args
 	canvas, doc, refs, err := cloudAgentMediaDocument(repo, userID, canvasID, a, plan.TransientReferences)
@@ -1060,8 +1125,8 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		return BadAuthRequest("生成模式当前不受 Agent 支持")
 	}
 	node := creationAddedNode(CreationCanvasOp{Type: "add_node", ID: a.NodeID, NodeType: descriptor.Type, Title: a.Title, X: &x, Y: &y, Metadata: meta})
-	if a.Size == "9:16" {
-		node["width"], node["height"] = float64(360), float64(640)
+	if width, height, ok := cloudAgentMediaNodeDimensions(a.Size); ok {
+		node["width"], node["height"] = width, height
 	}
 	replaced := false
 	for _, existing := range nodes {

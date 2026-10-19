@@ -53,6 +53,7 @@ func cloudAgentApprovalOutput(approval *cloudAgentApproval) *cloudAgentApproval 
 	}
 	copy := *approval
 	copy.Prepared = approval.Prepared.publicView()
+	copy.Batch = nil // The approval preview contains the reviewable set; prepared inputs remain server-side.
 	return &copy
 }
 
@@ -123,6 +124,10 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 }
 
 func cloudAgentResourceSignature(resource *model.Resource) string {
+	// Persisting the same generated output changes its transport, not the approved content.
+	if resource.SourceTaskID != "" {
+		return creationHash(map[string]any{"id": resource.ID, "userId": resource.UserID, "sourceTaskId": resource.SourceTaskID, "uploadKey": resource.UploadKey})
+	}
 	return creationHash(map[string]any{"id": resource.ID, "userId": resource.UserID, "provider": resource.Provider, "endpoint": resource.Endpoint, "bucket": resource.Bucket, "objectKey": resource.ObjectKey, "storageSettingId": resource.StorageSettingID, "etag": resource.ETag, "size": resource.Size, "mimeType": resource.MimeType, "width": resource.Width, "height": resource.Height, "durationMs": resource.DurationMs})
 }
 

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"time"
 	"unicode/utf8"
 
 	"gorm.io/gorm"
@@ -14,6 +15,7 @@ import (
 // checkpoint with the snapshot from when the model request started.
 func newCloudAgentStreamPublisher(s *Service, userID, taskID, kind string) *taskTextStreamPublisher {
 	p := newTaskTextStreamPublisher(s, userID, taskID)
+	p.flushInterval = 100 * time.Millisecond
 	written := 0
 	p.sink = func(delta string) error {
 		remaining := 32000 - written

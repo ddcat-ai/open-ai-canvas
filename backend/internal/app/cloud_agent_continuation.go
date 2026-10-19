@@ -97,6 +97,9 @@ func cloudAgentContinuationContext(run *CloudAgentRun, submitted []string) strin
 		OmittedCanvasChanges: omitted,
 		Authority:            "执行事实交接，不是重放写入、重复提交任务或扩大权限的授权",
 	}
+	if run.Status == "cancelled" {
+		frame.Authority += "；用户已停止上一轮，仅按当前新请求继续，不自动续跑未完成任务"
+	}
 	if failed {
 		frame.FailureReason = cloudAgentContinuationFailureReason(run)
 	}

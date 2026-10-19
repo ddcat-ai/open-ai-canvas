@@ -118,7 +118,16 @@ func (r *Repository) CreditLedgerReferenceExists(referenceKey string) (bool, err
 func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *model.BillingOrder, activeTaskLimit int) error {
 	return r.Transaction(func(repo *Repository) error {
 		tx := repo.db
+		if err := lockOwnedWriteUser(tx, task.UserID); err != nil {
+			return err
+		}
+		if err := requireTaskRetrySource(tx, task); err != nil {
+			return err
+		}
 		if err := New(tx).requireExclusiveCanvasAgent(task); err != nil {
+			return err
+		}
+		if err := requireActiveAgentSessionForTask(tx, task); err != nil {
 			return err
 		}
 		if err := r.requireActiveLogicalModelForTask(tx, task); err != nil {
@@ -143,7 +152,16 @@ func (r *Repository) CreateTaskWithCreditReservation(task *model.Task, order *mo
 func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit int) error {
 	return r.Transaction(func(repo *Repository) error {
 		tx := repo.db
+		if err := lockOwnedWriteUser(tx, task.UserID); err != nil {
+			return err
+		}
+		if err := requireTaskRetrySource(tx, task); err != nil {
+			return err
+		}
 		if err := New(tx).requireExclusiveCanvasAgent(task); err != nil {
+			return err
+		}
+		if err := requireActiveAgentSessionForTask(tx, task); err != nil {
 			return err
 		}
 		if err := r.requireActiveLogicalModelForTask(tx, task); err != nil {
@@ -166,6 +184,9 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 	var task model.Task
 	taskID := prepared.ID
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockOwnedWriteUser(tx, userID); err != nil {
+			return err
+		}
 		if err := enforceActiveTaskLimit(tx, userID, activeTaskLimit); err != nil {
 			return err
 		}
@@ -178,7 +199,8 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
 			"execution_diagnostic_json": "", "cancellation_source": "", "cancellation_actor_id": "", "cancellation_requested_at": nil,
 			"text_draft": "", "started_at": nil, "completed_at": nil,
-			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
+			// 重试开启新的路由世代，领取次数必须归零；否则下一次领取会被当成可能已提交而停止发送。
+			"attempts": 0, "provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
 			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
 			"provider_cancel_requested_at": nil, "provider_cancelled_at": nil, "provider_cancel_next_check_at": nil,
 			"route_run":                 gorm.Expr("route_run + ?", 1),

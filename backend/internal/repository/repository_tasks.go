@@ -32,6 +32,21 @@ func (r *Repository) TaskForUser(userID string, id string) (*model.Task, error) 
 	return &task, nil
 }
 
+func (r *Repository) TaskForUserByIdempotencyKey(userID string, key string) (*model.Task, error) {
+	if strings.TrimSpace(key) == "" {
+		return nil, nil
+	}
+	var task model.Task
+	err := r.db.First(&task, "user_id = ? AND idempotency_key = ?", userID, key).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
 func (r *Repository) ActiveTaskCountForUser(userID string) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.Task{}).Where("user_id = ? AND status IN ?", userID, []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning}).Count(&count).Error
@@ -217,13 +232,20 @@ func (r *Repository) SaveTaskCompletionWithRegistration(task *model.Task, expect
 		storedResultJSON := task.ResultJSON
 		updated := taskLeaseWriter(tx.Model(&model.Task{}), task.LeaseOwner).
 			Where("id = ? AND status = ?", task.ID, expected).
-			Select("*").Omit("id", "created_at").Updates(task)
+			Select("*").Omit("id", "created_at", "project_id").Updates(task)
 		if updated.Error != nil {
 			return updated.Error
 		}
 		if updated.RowsAffected != 1 {
 			return ErrTaskStateConflict
 		}
+		// Canvas deletion may have detached the task while the worker was waiting
+		// for its provider. Completion cannot restore that stale association.
+		var current model.Task
+		if err := tx.Select("project_id").First(&current, "id = ?", task.ID).Error; err != nil {
+			return err
+		}
+		task.ProjectID = current.ProjectID
 		for index := range results {
 			if err := tx.Create(&results[index]).Error; err != nil {
 				return err
@@ -387,7 +409,7 @@ func (r *Repository) TasksWithWorkbenchKind(userID string, limit int, projectID 
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "project_id", "type", "workbench_kind", "status", "stage", "media_stage", "media_recovery_json", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at", "agent_run_id", "generation_id", "approval_id", "authorized_charge_microcredits", "execution_diagnostic_json", "cancellation_source", "cancellation_actor_id", "cancellation_requested_at").
+	query := r.db.Select("id", "user_id", "project_id", "type", "workbench_kind", "status", "stage", "media_stage", "media_recovery_json", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at", "agent_run_id", "generation_id", "approval_id", "authorized_charge_microcredits", "execution_diagnostic_json", "cancellation_source", "cancellation_actor_id", "cancellation_requested_at").
 		Where("user_id = ?", userID)
 	if strings.TrimSpace(projectID) != "" {
 		query = query.Where("project_id = ?", strings.TrimSpace(projectID))

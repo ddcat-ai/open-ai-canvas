@@ -1,13 +1,13 @@
 // 创作页历史会话抽屉、导出与时间格式化。
 
-import { conversationTimeFormatter, type CreationConversation, type CreationMessage, historyDayFormatter, modeLabels } from "./creation-types";
+import { conversationTimeFormatter, type CreationConversation, type CreationHistoryEntry, type CreationMessage, historyDayFormatter, modeLabels } from "./creation-types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { App, Dropdown } from "antd";
 import { displayCreationPrompt } from "./creation-references";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
-import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
 import { conversationTimestamp } from "./creation-conversations";
 import { formatMessageTime } from "./creation-workspace-messages";
 
@@ -29,8 +29,12 @@ export const creationBucketLabels: Record<"today" | "yesterday" | "week" | "earl
 
 export function CreationHistoryDrawer({
     open,
+    deleteConfirmOpen = false,
     conversations,
     activeId,
+    loading = false,
+    syncError = "",
+    onRefresh,
     onNew,
     onClose,
     onSelect,
@@ -38,8 +42,12 @@ export function CreationHistoryDrawer({
     onRename,
 }: {
     open: boolean;
-    conversations: CreationConversation[];
+    deleteConfirmOpen?: boolean;
+    conversations: CreationHistoryEntry[];
     activeId: string;
+    loading?: boolean;
+    syncError?: string;
+    onRefresh: () => void;
     onNew: () => void;
     onClose: () => void;
     onSelect: (conversation: CreationConversation) => void;
@@ -90,16 +98,7 @@ export function CreationHistoryDrawer({
         const query = keyword.trim().toLowerCase();
         if (!query) return conversations;
         return conversations.filter((conversation) => {
-            const latest = conversationPreviewMessage(conversation);
-            const searchable = [
-                conversation.title,
-                ...conversation.messages.flatMap((message) => [message.content, displayCreationPrompt(message.content, message.references || [])]),
-                latest?.mode ? modeLabels[latest.mode] : "创作",
-                formatConversationTime(conversation.updatedAt),
-            ]
-                .filter(Boolean)
-                .join(" ")
-                .toLowerCase();
+            const searchable = [conversation.title, formatConversationTime(conversation.updatedAt)].filter(Boolean).join(" ").toLowerCase();
             return searchable.includes(query);
         });
     }, [conversations, keyword]);
@@ -108,6 +107,9 @@ export function CreationHistoryDrawer({
         <AppDrawer
             flush
             open={open}
+            // The confirmation owns focus while open; two independent overlay
+            // focus locks would otherwise pull focus back and forth.
+            focusable={{ trap: !deleteConfirmOpen }}
             onClose={onClose}
             placement="right"
             size="min(440px, 100vw)"
@@ -118,13 +120,21 @@ export function CreationHistoryDrawer({
                 <div className="creation-history-title">
                     <span>历史对话</span>
                     <small>{conversations.length} 个对话</small>
+                    <button type="button" className="creation-history-refresh" aria-label="刷新历史对话" disabled={loading} onClick={onRefresh}>
+                        <RefreshCw className={loading ? "animate-spin" : undefined} />
+                    </button>
                 </div>
             }
         >
             <div className="creation-history-content">
+                {syncError || loading ? (
+                    <p className="creation-history-sync" role="status">
+                        {syncError || "正在同步历史对话…"}
+                    </p>
+                ) : null}
                 <label className="creation-history-search">
                     <Search aria-hidden="true" />
-                    <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索对话标题或内容" aria-label="搜索历史对话" />
+                    <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索对话标题" aria-label="搜索历史对话" />
                 </label>
 
                 <button type="button" className="creation-history-new" onClick={onNew}>
@@ -176,6 +186,7 @@ export function CreationHistoryDrawer({
                                                 type="button"
                                                 className="creation-history-item-main"
                                                 aria-current={active ? "page" : undefined}
+                                                disabled={conversation.historyStatus === "loading"}
                                                 onClick={() => {
                                                     setMenuOpenId(null);
                                                     onSelect(conversation);
@@ -185,20 +196,13 @@ export function CreationHistoryDrawer({
                                                     <HistoryTypeIcon />
                                                 </span>
                                                 <span className="creation-history-item-text">
-                                                    <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
-                                                    <span className="creation-history-snippet">
-                                                        {latest ? (
-                                                            <>
-                                                                <em>{latest.mode ? modeLabels[latest.mode] : "创作"}</em>
-                                                                <span>{displayCreationPrompt(latest.content, latest.references || []).trim() || "还没有开始创作"}</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <em>创作</em>
-                                                                <span>还没有开始创作</span>
-                                                            </>
-                                                        )}
-                                                    </span>
+                                                    <strong className="creation-history-item-heading">
+                                                        <span className="creation-history-item-title">{conversation.title.trim() || "新创作"}</span>
+                                                        {conversation.agentApproval ? <span className="creation-history-pending-approval">待审批</span> : null}
+                                                    </strong>
+                                                    {conversation.historyStatus === "loading" || conversation.historyStatus === "error" ? (
+                                                        <span className="creation-history-snippet">{conversation.historyStatus === "error" ? "加载失败，点击重试" : "正在加载对话…"}</span>
+                                                    ) : null}
                                                 </span>
                                             </button>
                                             <span className="creation-history-time-slot" aria-hidden={menuOpenId === conversation.id}>
@@ -206,14 +210,15 @@ export function CreationHistoryDrawer({
                                             </span>
                                             <Dropdown
                                                 trigger={["click"]}
+                                                disabled={conversation.historyStatus === "loading"}
                                                 placement="bottomRight"
                                                 open={menuOpenId === conversation.id}
                                                 onOpenChange={(open) => setMenuOpenId(open ? conversation.id : null)}
                                                 overlayClassName="creation-history-menu-overlay"
                                                 menu={{
                                                     items: [
-                                                        { key: "rename", label: "重命名", icon: <Pencil /> },
-                                                        { key: "export", label: "导出对话", icon: <Download /> },
+                                                        { key: "rename", label: "重命名", icon: <Pencil />, disabled: Boolean(conversation.historyStatus) },
+                                                        { key: "export", label: "导出对话", icon: <Download />, disabled: Boolean(conversation.historyStatus) },
                                                         { key: "delete", label: "删除对话", danger: true, icon: <Trash2 /> },
                                                     ],
                                                     onClick: ({ key }) => {
@@ -233,6 +238,7 @@ export function CreationHistoryDrawer({
                                                     type="button"
                                                     className={menuOpenId === conversation.id ? "creation-history-more is-open" : "creation-history-more"}
                                                     aria-label={`更多操作：${conversation.title.trim() || "新创作"}`}
+                                                    disabled={conversation.historyStatus === "loading"}
                                                     onClick={(event) => event.preventDefault()}
                                                 >
                                                     <MoreHorizontal />
@@ -245,7 +251,7 @@ export function CreationHistoryDrawer({
                         })}
                     </ul>
                 ) : (
-                    <div className="creation-history-empty">{keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>
+                    <div className="creation-history-empty">{loading ? "正在读取历史对话…" : syncError ? "历史尚未完整加载，请重试" : keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>
                 )}
             </div>
         </AppDrawer>

@@ -176,6 +176,31 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if err := validateVideoDuration(value.Duration); err != nil {
 		return err
 	}
+	seenDurations := make(map[string]bool, len(value.DurationByResolution))
+	for resolution, duration := range value.DurationByResolution {
+		key := normalizeChannelModelTierResolution(resolution)
+		if key == "*" || seenDurations[key] {
+			return BadAuthRequest("按分辨率配置的视频时长分辨率无效或重复")
+		}
+		seenDurations[key] = true
+		supported := false
+		resolutions := append([]string(nil), value.Resolutions...)
+		if value.FixedScreenSpec != nil {
+			resolutions = append(resolutions, value.FixedScreenSpec.Resolutions...)
+		}
+		for _, candidate := range resolutions {
+			if normalizeChannelModelTierResolution(candidate) == key {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return BadAuthRequest("按分辨率配置的视频时长包含未声明的分辨率")
+		}
+		if err := validateVideoDuration(duration); err != nil {
+			return BadAuthRequest(fmt.Sprintf("分辨率 %s 的视频时长配置无效", resolution))
+		}
+	}
 	if len(value.Ratios) == 0 {
 		if strings.TrimSpace(value.DefaultRatio) != "" {
 			return BadAuthRequest("未配置画面比例时不能设置默认比例")
@@ -377,7 +402,7 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 		}
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds))
-	if err != nil || !videoDurationAllowed(profile.Duration, seconds) {
+	if err != nil || !videoDurationAllowed(videoDurationConfigForResolution(profile, input.Config.VQuality), seconds) {
 		return newModelCapabilityArgumentError("durationSeconds", "unsupported_value", BadAuthRequest("视频时长不在当前模型支持范围内"))
 	}
 	if input.Config.Size != "" && !videoRatioAllowed(profile.Ratios, input.Config.Size) {
@@ -493,6 +518,12 @@ func qualityForImageValidation(quality string, fallback string) string {
 }
 
 func validateImagePresetSelection(profile *ImageCapabilityConfig, quality, ratio string) error {
+	// DefaultTier resolves ratios, not explicitly advertised pixel sizes, when
+	// resolution is disabled. Pixels still pass parameter and pricing validation.
+	if profile.Parameters != nil && !profile.Resolution.Supported && imageSizePixelOutbound(profile, "") &&
+		strings.ContainsAny(ratio, "xX") && containsCapabilityString(profile.Size.Values, ratio) {
+		return nil
+	}
 	if profile.Size.Parameter != "aspect_ratio" || profile.Size.AllowCustom || len(profile.Size.Presets) == 0 || ratio == "auto" {
 		return nil
 	}
@@ -956,6 +987,16 @@ func validateGPTImage2CustomSize(value string) error {
 		return errors.New("图片总像素需在 655360 到 8294400 之间")
 	}
 	return nil
+}
+
+func videoDurationConfigForResolution(profile *VideoCapabilityConfig, resolution string) VideoDurationConfig {
+	key := normalizeChannelModelTierResolution(resolution)
+	for candidate, duration := range profile.DurationByResolution {
+		if normalizeChannelModelTierResolution(candidate) == key {
+			return duration
+		}
+	}
+	return profile.Duration
 }
 
 func videoDurationAllowed(value VideoDurationConfig, seconds int) bool {

@@ -66,6 +66,9 @@ func cloudAgentRegisteredToolNames(t *testing.T) []string {
 	file := parseCloudAgentFile(t, "cloud_agent_tools.go")
 	names := map[string]bool{}
 	ast.Inspect(file, func(node ast.Node) bool {
+		if decl, ok := node.(*ast.FuncDecl); ok && decl.Name.Name != "compileCloudAgentTools" {
+			return false
+		}
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
@@ -115,7 +118,7 @@ func cloudAgentDispatchedToolNames(t *testing.T) []string {
 		file string
 		fn   string
 	}{
-		{"app 包", "advanceCloudAgentTool"},
+		{"app 包", "advanceCloudAgentApprovalTool"},
 		{"app 包", "cloudAgentReadTool"},
 	} {
 		file := parseCloudAgentFile(t, target.file)

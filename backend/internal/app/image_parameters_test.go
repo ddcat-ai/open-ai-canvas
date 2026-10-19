@@ -299,6 +299,105 @@ func TestImageParametersPixelSelectionKeepsExactSizeWithoutResolution(t *testing
 	}
 }
 
+func TestImageParametersMixedSizesWithoutResolution(t *testing.T) {
+	for _, size := range []string{"1:1", "1024x1024", "2048x2048"} {
+		t.Run(size, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model").Image
+			profile.Parameters = []protocol.ImageParameter{
+				{Name: "size", Label: "Size", Type: "string", Values: []any{"1:1", "1024x1024", "2048x2048"}, Default: "1:1", Binding: "aspectRatio", Encoding: "pixels"},
+				{Name: "quality", Label: "Quality", Type: "string", Values: []any{"auto", "high"}, Default: "auto", Binding: "quality"},
+			}
+			profile.Size.DefaultTier = "1k"
+			profile.Size.Presets = []ImageSizePreset{{Tier: "1k", Ratio: "1:1", Size: "1024x1024", Width: 1024, Height: 1024}, {Tier: "2k", Ratio: "1:1", Size: "2048x2048", Width: 2048, Height: 2048}}
+			if err := projectImageParameters(profile); err != nil {
+				t.Fatal(err)
+			}
+			input := canvasGenerationInput{Config: providerConfig{Size: size, Quality: "high"}}
+			if err := validateImageTaskWithResolvedSize(map[string]any{}, &input, profile); err != nil {
+				t.Fatal(err)
+			}
+			want := size
+			if size == "1:1" {
+				want = "1024x1024"
+			}
+			if input.Config.Size != want || input.Config.Quality != "high" || input.Config.ImageResolution != "" {
+				t.Fatalf("wrong outbound: %#v", input.Config)
+			}
+			// Worker revalidation must preserve the admitted pixels and billing inputs.
+			if err := validateImageTaskWithResolvedSize(map[string]any{}, &input, profile); err != nil {
+				t.Fatal(err)
+			}
+			if input.Config.Size != want {
+				t.Fatal(input.Config.Size)
+			}
+		})
+	}
+}
+
+func TestImageParametersRatioUsesDeclaredPixels(t *testing.T) {
+	for _, tc := range []struct{ ratio, initial, want string }{
+		{"1:1", "2048x2048", "2048x2048"},
+		{"1:1", "1536x1024", "1024x1024"},
+		{"2:2", "2048x2048", "2048x2048"},
+		{"16:9", "1024x1024", ""},
+	} {
+		t.Run(tc.ratio+tc.initial, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model").Image
+			profile.Parameters = []protocol.ImageParameter{{Name: "size", Label: "Size", Type: "string", Values: []any{"2048x2048", "1536x1024", "1024x1024"}, Default: tc.initial, Binding: "aspectRatio", Encoding: "pixels"}}
+			profile.Size.Presets = nil
+			if err := projectImageParameters(profile); err != nil {
+				t.Fatal(err)
+			}
+			input := canvasGenerationInput{Config: providerConfig{Size: tc.ratio}}
+			err := validateImageTaskWithResolvedSize(map[string]any{}, &input, profile)
+			if tc.want == "" {
+				if err == nil {
+					t.Fatal("unsupported ratio silently changed")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if input.Config.Size != tc.want || input.Config.ImageParameters["size"] != tc.want {
+				t.Fatalf("wrong selection: %#v", input.Config)
+			}
+		})
+	}
+}
+
+func TestImageParametersMixedSizesWithoutPresets(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model").Image
+	profile.Parameters = []protocol.ImageParameter{{Name: "size", Label: "Size", Type: "string", Values: []any{"1:1", "1024x1024", "2048x2048"}, Default: "1:1", Binding: "aspectRatio", Encoding: "pixels"}}
+	profile.Size.Presets = nil
+	if err := projectImageParameters(profile); err != nil {
+		t.Fatal(err)
+	}
+	input := canvasGenerationInput{Config: providerConfig{Size: "1:1"}}
+	if err := validateImageTaskWithResolvedSize(map[string]any{}, &input, profile); err != nil {
+		t.Fatal(err)
+	}
+	if input.Config.Size != "1024x1024" || input.Config.ImageParameters["size"] != "1024x1024" {
+		t.Fatalf("wrong outbound and quote selection: %#v", input.Config)
+	}
+}
+
+func TestImageParametersExplicitResolutionStillRestrictsPixels(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model").Image
+	profile.Parameters = []protocol.ImageParameter{
+		{Name: "size", Label: "Size", Type: "string", Values: []any{"1:1", "1024x1024", "2048x2048"}, Default: "1:1", Binding: "aspectRatio", Encoding: "pixels"},
+		{Name: "imageResolution", Label: "Resolution", Type: "string", Values: []any{"1k", "2k"}, Default: "1k", Binding: "resolution"},
+	}
+	profile.Size.Presets = []ImageSizePreset{{Tier: "1k", Ratio: "1:1", Size: "1024x1024", Width: 1024, Height: 1024}, {Tier: "2k", Ratio: "1:1", Size: "2048x2048", Width: 2048, Height: 2048}}
+	if err := projectImageParameters(profile); err != nil {
+		t.Fatal(err)
+	}
+	input := canvasGenerationInput{Config: providerConfig{Size: "2048x2048", ImageResolution: "1k"}}
+	if err := validateImageTaskWithResolvedSize(map[string]any{}, &input, profile); err == nil {
+		t.Fatal("2k pixels admitted with 1k billing tier")
+	}
+}
+
 func TestImageParametersDisabledResolutionUsesDefaultAndPreservesGroups(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model")
 	disabled := false

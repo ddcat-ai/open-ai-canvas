@@ -50,6 +50,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     includeAssetLibrary?: boolean;
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
+    onPasteFiles?: (files: File[]) => void;
     autoLinkEnabled?: boolean;
 };
 
@@ -63,7 +64,7 @@ function shouldSubmitOnEnter(event: { key: string; ctrlKey: boolean; metaKey: bo
 }
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, onPasteFiles, autoLinkEnabled = false, ...props },
     forwardedRef,
 ) {
     const rawTheme = useActiveTheme();
@@ -389,9 +390,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     style={{
                         ...mergedStyle,
                         color: style?.color || theme.node.text,
-                        height: "100%",
+                        height: style?.height ?? "100%",
                         minHeight: 0,
-                        maxHeight: "100%",
+                        maxHeight: style?.maxHeight ?? "100%",
                         overflowY: "auto",
                         overflowX: "hidden",
                     }}
@@ -412,6 +413,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onCompositionEnd?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+                        const clipboardImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+                        if (clipboardImages.length && onPasteFiles) {
+                            event.preventDefault();
+                            onPasteFiles(clipboardImages);
+                            return;
+                        }
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
@@ -541,7 +548,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 }}
                 value={compositionValue ?? value}
                 className={`${className || ""} relative z-10`}
-                style={{ ...mergedStyle, height: "100%", minHeight: 0, maxHeight: "100%", overflowY: "auto", overflowX: "hidden" }}
+                style={{ ...mergedStyle, height: style?.height ?? "100%", minHeight: 0, maxHeight: style?.maxHeight ?? "100%", overflowY: "auto", overflowX: "hidden" }}
                 onChange={(event) => {
                     if (readOnly) return;
                     const next = event.target.value;
@@ -569,6 +576,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     if (onChange(merged) === false) event.currentTarget.value = value;
                     syncMention(merged, cursor);
                     props.onCompositionEnd?.(event);
+                }}
+                onPaste={(event) => {
+                    const clipboardImages = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+                    if (!clipboardImages.length || !onPasteFiles) return;
+                    event.preventDefault();
+                    onPasteFiles(clipboardImages);
                 }}
                 onSelect={(event) => {
                     const textarea = event.currentTarget;

@@ -30,32 +30,20 @@ var (
 	taskErrorWrappedStatusPrefix   = regexp.MustCompile(`(?i)^\d{3}(?:\s+(?:Bad Gateway|Service Unavailable|Gateway Timeout|Internal Server Error|Not Found|Unauthorized|Forbidden|Too Many Requests))?\s*[:：-]?\s*`)
 	taskErrorStorageDisabled       = regexp.MustCompile(`(?i)\bUserDisable\b`)
 	taskErrorStorageUpload         = regexp.MustCompile(`(?i)(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云)`)
+	taskErrorAddressPattern        = regexp.MustCompile(`(?i)\b(?:localhost|(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::[0-9]+)?\b|\.internal\b`)
 )
 
 // userFacingTaskError 把任务里保存的原始错误转换成用户能看懂的中文原因。
 func userFacingTaskError(raw string) string {
+	if strings.Contains(raw, "；上游：") {
+		return sanitizeUserVisibleError(raw)
+	}
 	return sanitizeUserVisibleError(classifyUserFacingTaskError(raw))
 }
 
 func classifyUserFacingTaskError(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return taskErrorDefaultMessage
-	}
-	if index := strings.Index(raw, "；上游："); index >= 0 {
-		prefix := strings.TrimSpace(raw[:index])
-		if taskErrorIsModeration(prefix) {
-			return taskErrorModerationMessage
-		}
-		if hint := actionableUpstreamReason(raw[index+len("；上游："):]); hint != "" {
-			if prefix != "" {
-				return prefix + "；" + hint
-			}
-			return hint
-		}
-		if prefix != "" {
-			return prefix
-		}
 		return taskErrorDefaultMessage
 	}
 	if taskErrorIsModeration(raw) {
@@ -97,6 +85,10 @@ func classifyUserFacingTaskError(raw string) string {
 		if taskErrorInfrastructurePattern.MatchString(raw) {
 			return taskErrorNetworkMessage
 		}
+	}
+	display = redactUserDiagnosticText(display)
+	if safeTaskDiagnosticMessage(display) != truncateRunes(display, 240) || taskErrorAddressPattern.MatchString(display) {
+		return taskErrorNetworkMessage
 	}
 	return truncateRunes(display, 240)
 }
@@ -189,6 +181,72 @@ func taskErrorModerationText(raw string) string {
 	return taskErrorModerationMessage
 }
 
+var (
+	userVisibleTaskID     = regexp.MustCompile(`(?i)\btask[_-][a-z0-9][a-z0-9_-]{2,}\b`)
+	userVisibleRequestID  = regexp.MustCompile(`(?i)\b(?:request[_ -]?id|trace[_ -]?id)["']?\s*[:=]?\s*["']?[a-z0-9_-]{3,}["']?`)
+	userVisibleCredential = regexp.MustCompile(`(?i)\b(?:bearer\s+\S+|(?:api[_-]?key|token|secret|authorization|cookie)["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s，；。,}\]]+))`)
+	userVisibleRedaction  = regexp.MustCompile(`\[(?:链接|地址|凭据|请求标识|任务标识)已隐藏\]`)
+)
+
+func redactUserDiagnosticText(value string) string {
+	value = userVisibleCredential.ReplaceAllString(redactUpstreamAddress(value), "[凭据已隐藏]")
+	value = userVisibleRequestID.ReplaceAllString(value, "[请求标识已隐藏]")
+	return userVisibleTaskID.ReplaceAllString(value, "[任务标识已隐藏]")
+}
+
+// 普通备注只脱敏，不按 HTTP 状态重新分类；保留人工调账和活动文案。
+func sanitizeUserVisibleError(value string) string {
+	if index := strings.Index(value, "；上游："); index >= 0 {
+		prefix := strings.TrimSpace(value[:index])
+		if taskErrorIsModeration(prefix) {
+			prefix = taskErrorModerationMessage
+		}
+		if hint := actionableUpstreamReason(value[index+len("；上游："):]); hint != "" {
+			if prefix != "" {
+				prefix += "；"
+			}
+			prefix += hint
+		}
+		if prefix == "" {
+			prefix = taskErrorDefaultMessage
+		}
+		value = prefix
+	}
+	return redactUserDiagnosticText(value)
+}
+
+func actionableUpstreamReason(value string) string {
+	lower := strings.ToLower(value)
+	image := strings.Contains(lower, "image") || strings.Contains(lower, "图片") || strings.Contains(lower, "file") || strings.Contains(lower, "参考图")
+	switch {
+	case strings.Contains(lower, "insufficient_quota") || strings.Contains(lower, "insufficient quota") || strings.Contains(lower, "insufficient balance") || strings.Contains(lower, "quota exceeded") || strings.Contains(lower, "额度不足") || strings.Contains(lower, "余额不足"):
+		return "模型服务额度不足，请更换模型或联系管理员。"
+	case strings.Contains(lower, "model_not_found") || strings.Contains(lower, "model not found") || strings.Contains(lower, "无可用渠道"):
+		return "当前模型暂无可用渠道，请更换模型或联系管理员。"
+	case image && (strings.Contains(lower, "too large") || strings.Contains(lower, "exceed") || strings.Contains(lower, "超过") || strings.Contains(lower, "25mb") || strings.Contains(lower, "25 mb")):
+		return "参考图片超过模型支持的大小限制，请压缩图片后重试。"
+	case image && (strings.Contains(lower, "unsupported size") || strings.Contains(lower, "unsupported format") || strings.Contains(lower, "图片尺寸不支持") || strings.Contains(lower, "图片格式不支持")):
+		return "参考图片的尺寸或格式不符合模型要求，请调整图片后重试。"
+	case strings.Contains(lower, "content_policy_violation") || strings.Contains(lower, "content filter") || strings.Contains(lower, "safety system"):
+		return "请求内容触发模型内容限制，请修改提示词或参考素材后重试。"
+	}
+	message := taskErrorStructuredProviderMessage(value)
+	if message == "" {
+		message = value
+	}
+	message = redactUserDiagnosticText(strings.TrimSpace(message))
+	readable := userVisibleRedaction.ReplaceAllString(message, "")
+	if !strings.ContainsFunc(readable, func(r rune) bool { return unicode.Is(unicode.Han, r) }) || strings.ContainsAny(message, "\r\n\x00{}") || taskErrorInfrastructurePattern.MatchString(message) || taskErrorNetworkPattern.MatchString(message) {
+		return ""
+	}
+	for _, marker := range []string{"stack trace", "traceback", "sql:", "sqlite", "postgres", "/var/", "/tmp/"} {
+		if strings.Contains(strings.ToLower(message), marker) {
+			return ""
+		}
+	}
+	return truncateRunes(message, 240)
+}
+
 func taskErrorStorageMessage(value string) string {
 	switch {
 	case value == "":
@@ -199,28 +257,6 @@ func taskErrorStorageMessage(value string) string {
 		return "参考素材上传到对象存储失败，请检查对象存储配置后重试。"
 	}
 	return ""
-}
-
-// Only known upstream failure classes become user hints; never echo upstream text.
-func actionableUpstreamReason(value string) string {
-	lower := strings.ToLower(value)
-	image := strings.Contains(lower, "image") || strings.Contains(lower, "图片") || strings.Contains(lower, "file") || strings.Contains(lower, "参考图")
-	tooLarge := strings.Contains(lower, "too large") || strings.Contains(lower, "exceed") || strings.Contains(lower, "超过") || strings.Contains(lower, "25mb") || strings.Contains(lower, "25 mb")
-	switch {
-	case image && tooLarge:
-		return "参考图片超过模型支持的大小限制，请压缩图片后重试。"
-	case strings.Contains(lower, "model_not_found") || strings.Contains(lower, "model not found") || strings.Contains(lower, "无可用渠道"):
-		return "当前模型暂无可用渠道，请更换模型或联系管理员。"
-	case image && (strings.Contains(lower, "unsupported size") || strings.Contains(lower, "图片尺寸不支持") || strings.Contains(lower, "unsupported format") || strings.Contains(lower, "图片格式不支持")):
-		return "参考图片的尺寸或格式不符合模型要求，请调整图片后重试。"
-	}
-	return ""
-}
-
-var userVisibleTaskID = regexp.MustCompile("(?i)\\btask[_-][a-z0-9][a-z0-9_-]{2,}\\b")
-
-func sanitizeUserVisibleError(value string) string {
-	return userVisibleTaskID.ReplaceAllString(redactUpstreamAddress(value), "[任务标识已隐藏]")
 }
 
 func taskErrorHasStatus(value string, statuses ...string) bool {

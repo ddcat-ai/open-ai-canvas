@@ -43,12 +43,19 @@ func (s *Service) ossSettingForResource(userID string, resource *model.Resource)
 	var setting ossSettingValue
 	var err error
 	if resource.StorageSettingID != "" {
-		_, setting, err = s.storageLocationValue(resource.StorageSettingID)
+		location, historical, locationErr := s.storageLocationValue(resource.StorageSettingID)
+		setting, err = historical, locationErr
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			_, setting, err = s.readUserOSSSettingByID(userID, resource.StorageSettingID)
 		}
 		if err == nil {
-			_, current, currentErr := s.readUserOSSSetting(userID)
+			var current ossSettingValue
+			var currentErr error
+			if location != nil && location.Scope == "platform" {
+				_, current, currentErr = s.readOSSSetting()
+			} else {
+				_, current, currentErr = s.readUserOSSSetting(userID)
+			}
 			if currentErr != nil {
 				return ossSettingValue{}, currentErr
 			}

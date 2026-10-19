@@ -80,6 +80,50 @@ func TestUploadReservationConcurrentAdmission(t *testing.T) {
 	}
 }
 
+func TestBrowserCancelAndPublishAreExclusiveAcrossRepositories(t *testing.T) {
+	db, first, second := uploadReservationTestDB(t)
+	for i := 0; i < 12; i++ {
+		id := fmt.Sprintf("direct-%d", i)
+		resource := model.Resource{ID: id, UserID: id, Provider: "s3", ObjectKey: id, Status: model.ResourceStatusPending, Size: 10}
+		if err := db.Create(&resource).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := first.ReserveUploadSession(&model.UploadReservation{ID: id, UserID: id, Size: 10, ExpiresAt: time.Now().Add(time.Minute)}, 1000, 1000, 32); err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		published := make(chan error, 1)
+		canceled := make(chan bool, 1)
+		go func() {
+			<-start
+			ready := resource
+			ready.Status = model.ResourceStatusReady
+			published <- first.SaveResourceWithinStorageLimit(&ready, 1000, 1000, id)
+		}()
+		go func() {
+			<-start
+			claimed, err := second.ClaimBrowserUploadCancellation(id, id)
+			if err != nil {
+				canceled <- false
+				return
+			}
+			canceled <- claimed
+		}()
+		close(start)
+		publishErr, cancelWon := <-published, <-canceled
+		var stored model.Resource
+		if err := db.First(&stored, "id = ?", id).Error; err != nil {
+			t.Fatal(err)
+		}
+		if cancelWon && (publishErr == nil || stored.Status == model.ResourceStatusReady) {
+			t.Fatalf("cancel and publish both won: %#v", stored)
+		}
+		if !cancelWon && (publishErr != nil || stored.Status != model.ResourceStatusReady) {
+			t.Fatalf("neither operation won: status=%s publish=%v", stored.Status, publishErr)
+		}
+	}
+}
+
 func TestUploadReservationAtomicCapacityCommit(t *testing.T) {
 	db, first, second := uploadReservationTestDB(t)
 	start := make(chan struct{})
@@ -173,9 +217,24 @@ func TestUploadReservationCommitAcrossUTCDay(t *testing.T) {
 	if err := r.ReserveDailyUpload("user", today, 90, 100); err != nil {
 		t.Fatal(err)
 	}
-	resource := model.Resource{ID: "midnight", UserID: "user", Size: 15, ObjectKey: "midnight", Status: model.ResourceStatusReady}
+	resource := model.Resource{ID: "midnight", UserID: "user", Size: 15, ObjectKey: "midnight", Status: model.ResourceStatusPending}
+	if err := db.Create(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	resource.Status = model.ResourceStatusReady
 	if err := r.SaveResourceWithinStorageLimit(&resource, 1000, 100, lease.ID); !errors.Is(err, ErrDailyUploadLimitExceeded) {
 		t.Fatalf("new-day quota bypassed: %v", err)
+	}
+	var pending model.Resource
+	if err := db.First(&pending, "id = ?", resource.ID).Error; err != nil || pending.Status != model.ResourceStatusPending {
+		t.Fatalf("failed commit published resource: status=%s err=%v", pending.Status, err)
+	}
+	var retained model.UploadReservation
+	if err := db.First(&retained, "id = ?", lease.ID).Error; err != nil || retained.Day != yesterday {
+		t.Fatalf("failed commit changed reservation: day=%s err=%v", retained.Day, err)
+	}
+	if used, _ := r.DailyUploadBytes("user", today); used != 90 {
+		t.Fatalf("failed commit changed new-day usage=%d", used)
 	}
 	if used, _ := r.DailyUploadBytes("user", yesterday); used != 15 {
 		t.Fatalf("failed commit refunded reservation: %d", used)
@@ -185,6 +244,13 @@ func TestUploadReservationCommitAcrossUTCDay(t *testing.T) {
 	}
 	if err := r.SaveResourceWithinStorageLimit(&resource, 1000, 100, lease.ID); err != nil {
 		t.Fatal(err)
+	}
+	var ready model.Resource
+	if err := db.First(&ready, "id = ?", resource.ID).Error; err != nil || ready.Status != model.ResourceStatusReady {
+		t.Fatalf("successful commit did not publish resource: status=%s err=%v", ready.Status, err)
+	}
+	if err := db.First(&model.UploadReservation{}, "id = ?", lease.ID).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("successful commit retained reservation: %v", err)
 	}
 	if used, _ := r.DailyUploadBytes("user", today); used != 15 {
 		t.Fatalf("new-day usage=%d", used)

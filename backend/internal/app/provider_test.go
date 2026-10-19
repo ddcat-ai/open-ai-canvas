@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -91,6 +92,17 @@ func TestProviderRequestErrorDetails(t *testing.T) {
 				t.Fatalf("providerRequestErrorDetails() = (%q, %q), want (%q, %q)", code, text, tt.code, tt.text)
 			}
 		})
+	}
+}
+
+func TestProviderRequestErrorDetailsRedactsURLCredentials(t *testing.T) {
+	err := &url.Error{Op: "Post", URL: "https://provider.example/v1/chat/completions?token=secret-token", Err: errors.New("connection refused")}
+	_, text := providerRequestErrorDetails(err)
+	if strings.Contains(text, "secret-token") || strings.Contains(text, "provider.example") {
+		t.Fatalf("provider error leaked URL data: %q", text)
+	}
+	if text == "" {
+		t.Fatal("provider error text is empty")
 	}
 }
 

@@ -98,6 +98,13 @@ func (r *Repository) SaveResourceWithinStorageLimit(resource *model.Resource, li
 			return err
 		}
 		now := time.Now()
+		if reservationID != "" && reservationID == resource.ID {
+			// Direct sessions share the resource ID; chunk sessions have a separate ID.
+			var current model.Resource
+			if err := tx.Where("id = ? AND user_id = ? AND status = ?", resource.ID, resource.UserID, model.ResourceStatusPending).First(&current).Error; err != nil {
+				return err
+			}
+		}
 		if reservationID != "" {
 			var reservation model.UploadReservation
 			if err := tx.Where("id = ? AND user_id = ? AND size = ? AND expires_at > ?", reservationID, resource.UserID, resource.Size, now).First(&reservation).Error; err != nil {

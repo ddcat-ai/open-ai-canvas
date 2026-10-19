@@ -76,6 +76,12 @@ func (s *Service) beginTaskRouteAttempt(task *model.Task) (*model.RouteAttempt, 
 			return nil, routeDispatchUncertainError{"上一次提交结果不明确，为避免重复扣费已停止自动重发"}
 		case "rejected_no_job":
 			if task.LogicalModelID == "" {
+				if task.Type == "canvas_image" && task.AgentRunID != "" {
+					next, err := s.switchTaskToNextImageChannel(task, attempts)
+					if err != nil || next != nil {
+						return next, err
+					}
+				}
 				return nil, errors.New("上游已拒绝本次请求，请检查渠道配置后再试")
 			}
 			return s.switchTaskToNextRoute(task, attempts)
@@ -307,7 +313,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 }
 
 func (s *Service) nextRouteAttemptAfterFailure(task *model.Task, attempt *model.RouteAttempt, taskErr error) (*model.RouteAttempt, error) {
-	if task == nil || task.LogicalModelID == "" || attempt == nil || attempt.DispatchState != "rejected_no_job" {
+	if task == nil || attempt == nil || attempt.DispatchState != "rejected_no_job" {
 		return nil, nil
 	}
 	if errors.Is(taskErr, context.Canceled) || errors.Is(taskErr, context.DeadlineExceeded) {
@@ -317,6 +323,12 @@ func (s *Service) nextRouteAttemptAfterFailure(task *model.Task, attempt *model.
 	attempts, err := s.repo.RouteAttempts(task.ID, task.RouteRun)
 	if err != nil {
 		return nil, err
+	}
+	if task.LogicalModelID == "" {
+		if task.Type != "canvas_image" || task.AgentRunID == "" {
+			return nil, nil
+		}
+		return s.switchTaskToNextImageChannel(task, attempts)
 	}
 	return s.switchTaskToNextRoute(task, attempts)
 }
@@ -466,7 +478,7 @@ func (s *Service) finishTaskRouteAttempt(attempt *model.RouteAttempt, task *mode
 		attempt.FailureCode = routeFailureCode(taskErr)
 		if attempt.ProviderRequestID != "" {
 			attempt.DispatchState = "accepted"
-		} else if safeRouteRejection(taskErr) {
+		} else if safeRouteRejection(taskErr) || (task != nil && task.Type == "canvas_image" && task.AgentRunID != "" && safeImageRouteRejection(taskErr)) {
 			attempt.DispatchState = "rejected_no_job"
 		} else {
 			attempt.DispatchState = "submission_unknown"

@@ -1,8 +1,8 @@
 import { http } from "@/services/api/request";
-import type { PluginManifest } from "@/lib/plugins/plugin-types";
+import type { PluginManifest, PluginManifestV2, PluginPermission, SmartCreationContribution } from "@/lib/plugins/plugin-types";
 
 export type BackendPlugin = {
-    manifest: PluginManifest;
+    manifest: PluginManifest | PluginManifestV2;
     source: "bundled" | "uploaded" | string;
     fileName: string;
     package: string;
@@ -38,6 +38,20 @@ export type AdminPluginState = PluginState & { enabledUserCount: number };
 
 export async function fetchPlugins() {
     return http.get<{ plugins: BackendPlugin[]; states: Record<string, PluginState> }>("/plugins");
+}
+
+/** 当前用户已生效的智能创作插件及其声明式策略；创作页据此加载插件包里的最新提示词和参数。 */
+export type SmartCreationPluginPolicy = {
+    id: string;
+    name: string;
+    version: string;
+    permissions: PluginPermission[];
+    smartCreation: SmartCreationContribution;
+};
+
+export async function fetchSmartCreationPlugins(options?: { signal?: AbortSignal }) {
+    const result = await http.get<{ plugins: SmartCreationPluginPolicy[] }>("/plugins/smart-creation", { signal: options?.signal });
+    return result.plugins || [];
 }
 
 export async function fetchPluginRuntimeState() {

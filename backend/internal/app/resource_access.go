@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -63,6 +64,12 @@ func (s *Service) resolveResourceAccess(resource *model.Resource, options Resour
 	if resource == nil {
 		return nil, NotFound("资源不存在")
 	}
+	if resource.Status == model.ResourceStatusDeleted {
+		return nil, assets.AccessError(410, "resource_expired", "媒体已清理，请重新生成或上传")
+	}
+	if resource.TransferPending {
+		return s.generatedResourceAccess(resource, options)
+	}
 	var setting ossSettingValue
 	if resource.Provider != "local" {
 		var err error
@@ -104,11 +111,13 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 		return nil, err
 	}
 	delivery := &ResourceDelivery{Resource: resource, Access: access}
-	if options.DescribeOnly || access.Delivery == assets.DeliveryCDN || access.Delivery == assets.DeliveryOrigin {
+	if options.DescribeOnly || access.Delivery == assets.DeliveryCDN || access.Delivery == assets.DeliveryOrigin || access.Delivery == assets.DeliveryUpstream {
 		return delivery, nil
 	}
 	if access.ActualVariant == assets.VariantPlayback {
 		delivery.Stream, err = s.OpenResourcePlaybackRange(userID, resource.ID)
+	} else if access.ActualVariant == assets.VariantThumbnail {
+		delivery.Stream, err = s.openResourceRange(userID, assets.ThumbnailResource(resource), rangeHeader)
 	} else {
 		delivery.Stream, err = s.openResourceRange(userID, resource, rangeHeader)
 	}
@@ -117,6 +126,39 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	}
 	delivery.Resource = delivery.Stream.Resource
 	return delivery, nil
+}
+
+func (s *Service) PrepareBrowserResourceFallback(userID, id, reason string, variant assets.ResourceVariant, rangeHeader string) (*ResourceDelivery, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, Unauthorized("请先登录")
+	}
+	if reason != "cors_or_network" {
+		return nil, BadAuthRequest("浏览器读取降级原因无效")
+	}
+	options, err := assets.NormalizeAccessOptions(ResourceAccessOptions{Purpose: assets.PurposeProcess, Variant: variant}, false)
+	if err != nil {
+		return nil, err
+	}
+	resource, err := s.repo.ResourceForUser(userID, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("资源不存在或不可访问")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if options.Variant == assets.VariantThumbnail && resource.ThumbnailStatus == "ready" {
+		resource = assets.ThumbnailResource(resource)
+	}
+	var stream *ResourceStream
+	if options.Variant == assets.VariantPlayback {
+		stream, err = s.OpenResourcePlaybackRange(userID, id)
+	} else {
+		stream, err = s.openResourceRange(userID, resource, rangeHeader)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ResourceDelivery{Resource: resource, Stream: stream, Access: &ResourceAccess{ResourceID: id, Delivery: assets.DeliveryProxy, FallbackReason: "browser_cors_or_network"}}, nil
 }
 
 func (s *Service) signedResourceAccessURL(resource *model.Resource, variant assets.ResourceVariant, expires time.Time, public bool) (string, error) {

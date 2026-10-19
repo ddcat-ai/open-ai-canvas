@@ -18,6 +18,8 @@ import (
 )
 
 func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerCreationPreferenceRoutes(r, svc)
+	registerBrowserResourceRoutes(r, svc)
 	r.POST("/resources/access", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -35,6 +37,7 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
+		c.Header("Cache-Control", "private, no-store")
 		ok(c, gin.H{"items": result})
 	})
 	r.POST("/assets/batch-delete", func(c *gin.Context) {

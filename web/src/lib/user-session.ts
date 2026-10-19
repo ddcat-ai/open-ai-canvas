@@ -1,4 +1,5 @@
 import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
+import { initializeCreationPreferencesSync, stopCreationPreferencesSync } from "@/services/creation-preferences-sync";
 import { projectImageParameters, imageParametersForSpec } from "./image-parameters";
 import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
@@ -34,6 +35,7 @@ export async function switchUserStorageScope(userId?: string | null) {
 let sessionGeneration = 0;
 
 export async function applyUserSession(payload: AuthSessionPayload) {
+    stopCreationPreferencesSync();
     const generation = ++sessionGeneration;
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
@@ -67,7 +69,7 @@ function resetUserScopedMemory() {
     useAssetStore.setState({ assets: [], hydrated: false });
     useConfigStore.setState({ config: normalizeConfigSnapshot({ config: defaultConfig }).config });
     usePluginStore.setState({ hydrated: false, installations: [], runtimeStatuses: {}, pluginStates: {} });
-    useCreationPreferencesStore.setState({ hydrated: false, preferences: {} });
+    useCreationPreferencesStore.setState({ hydrated: false, preferences: {}, pendingPreferenceChanges: {}, syncStatus: "local" });
 }
 
 async function hydrateUserSessionData(payload: AuthSessionPayload, generation: number) {
@@ -97,6 +99,9 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
     if (!hasPersistedValue(assets)) useAssetStore.setState({ assets: [] });
     if (!hasPersistedValue(plugins)) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
     if (!persistedCreationPreferences) useCreationPreferencesStore.setState({ preferences: {} });
+
+    await initializeCreationPreferencesSync(userId);
+    if (!isCurrentSession(generation, userId)) return;
 
     if (userId) {
         await initializeRemoteUserDataSession(userId);

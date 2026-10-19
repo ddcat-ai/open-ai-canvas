@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ImgHTMLAttributes, type ReactNode } from "react";
 
-import { getResourceAccess, resolveResourceAccessURL, resourceIdFromStorageKey, type ResourceAccessVariant } from "@/services/api/resources";
+import { getResourceAccess, resolveResourceAccessURL, resourceIdFromStorageKey, subscribeResourceAccessUpdates, type ResourceAccessVariant } from "@/services/api/resources";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { ApiError } from "@/services/api/request";
 import { resolveImageUrl } from "@/services/image-storage";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
 
@@ -31,7 +32,13 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
     const displayedRef = useRef(displayed);
     displayedRef.current = displayed;
     const [failedIdentity, setFailedIdentity] = useState("");
+    const [expiredIdentity, setExpiredIdentity] = useState("");
+    const [accessRevision, setAccessRevision] = useState(0);
     const cachedSrc = displayed?.identity === identity ? displayed.src : "";
+
+    useEffect(() => subscribeResourceAccessUpdates((id) => {
+        if (id === resourceId && scope === getActiveUserScope()) setAccessRevision((value) => value + 1);
+    }), [resourceId, scope]);
 
     useEffect(() => {
         if (!remoteResource || eager) {
@@ -68,7 +75,7 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
                     const access = await getResourceAccess(storageKey, "display", variant);
                     candidate = resolveResourceAccessURL(access.url);
                 } catch (error) {
-                    if (variant !== "thumbnail") throw error;
+                    if (variant !== "thumbnail" || (error instanceof ApiError && error.reason === "resource_expired")) throw error;
                     const access = await getResourceAccess(storageKey, "display", "original");
                     candidate = resolveResourceAccessURL(access.url);
                 }
@@ -95,14 +102,18 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
                 setFailedIdentity("");
             }
         };
-        void load().catch(() => {
+        void load().catch((error) => {
+            if (isCurrent() && error instanceof ApiError && error.reason === "resource_expired") {
+                setDisplayed(null);
+                setExpiredIdentity(identity);
+            }
             if (isCurrent() && displayedRef.current?.identity !== identity) setFailedIdentity(identity);
         });
         return () => {
             cancelled = true;
             controller.abort();
         };
-    }, [identity, localImageResource, nearViewport, remoteResource, resourceId, scope, src, storageKey, variant]);
+    }, [accessRevision, identity, localImageResource, nearViewport, remoteResource, resourceId, scope, src, storageKey, variant]);
 
     const handleImgError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
         if (localImageResource && storageKey && cachedSrc.startsWith("blob:")) {
@@ -129,6 +140,7 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
         onError?.(e);
     };
 
+    if (expiredIdentity === identity) return <span className="cached-resource-image-shell" role="status" title="媒体已按保留策略清理，对话与画布记录仍保留">媒体已清理</span>;
     if (failedIdentity === identity && fallback) return <>{fallback}</>;
     if (!remoteResource) return <img {...props} src={cachedSrc || undefined} onError={handleImgError} />;
     return (

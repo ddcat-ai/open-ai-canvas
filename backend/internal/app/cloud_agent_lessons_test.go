@@ -342,6 +342,9 @@ func TestLessonTaskTextCoversPromptPlanAndCalls(t *testing.T) {
 }
 
 func TestLessonCategoryIsControlled(t *testing.T) {
+	if label, ok := cloudAgentLessonCategoryOf("smart_creation"); !ok || label != "smart_creation" {
+		t.Fatal("智能创作分类未注册")
+	}
 	if _, ok := cloudAgentLessonCategoryOf("storyboard"); !ok {
 		t.Fatal("合法分类被拒")
 	}
@@ -468,7 +471,7 @@ func TestLessonSearchFindsMergeLessonByRealKeyword(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, err := cloudAgentSearchLessons(repo, "user-a", "分镜 合并 视频 合成 拼接 one take", 5)
+	got, err := cloudAgentSearchLessons(repo, "user-a", "分镜 合并 视频 合成 拼接 one take", "canvas", "", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +492,7 @@ func TestLessonSearchNoMatchReturnsActionableError(t *testing.T) {
 	if err := repo.Create(&entry); err != nil {
 		t.Fatal(err)
 	}
-	_, err := cloudAgentRecallLessons(repo, "user-a", cloudAgentCall{
+	_, err := cloudAgentRecallLessons(repo, "user-a", "canvas", cloudAgentCall{
 		Function: struct {
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"`
@@ -528,7 +531,7 @@ func TestLessonsBlockDoesNotAutoInject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	block := s.cloudAgentLessonsBlock("user-a", "把资产挂上，正在调用 canvas_apply_ops")
+	block := s.cloudAgentLessonsBlock("user-a", "把资产挂上，正在调用 canvas_apply_ops", "canvas")
 	if !strings.Contains(block, "canvas.snapshot-hash") {
 		t.Fatalf("相关记忆应出现在索引里：%s", block)
 	}
@@ -593,7 +596,7 @@ func TestAttachLessonsDoesNotAppendUserNudge(t *testing.T) {
 		SystemPrompt: "system",
 		Messages:     []map[string]any{{"role": "user", "content": "帮我做分镜"}},
 	}
-	s.attachCloudAgentLessons(&canonical, "user-a", "帮我做分镜")
+	s.attachCloudAgentLessons(&canonical, "user-a", "帮我做分镜", "canvas")
 	if len(canonical.Messages) != 1 || stringField(canonical.Messages[0], "role") != "user" {
 		t.Fatalf("经验库不得再塞一条假用户催办：%+v", canonical.Messages)
 	}
@@ -607,7 +610,7 @@ func TestAttachLessonsDoesNotAppendUserNudge(t *testing.T) {
 		t.Fatalf("剥离后应回到原系统提示，got %q", stripped)
 	}
 	frozen := canonical.SystemPrompt
-	s.attachCloudAgentLessons(&canonical, "user-a", "完全不同的后续任务 canvas_apply_ops")
+	s.attachCloudAgentLessons(&canonical, "user-a", "完全不同的后续任务 canvas_apply_ops", "canvas")
 	if canonical.SystemPrompt != frozen {
 		t.Fatalf("同轮不得重算记忆块，否则会打爆前缀缓存：%s", canonical.SystemPrompt)
 	}

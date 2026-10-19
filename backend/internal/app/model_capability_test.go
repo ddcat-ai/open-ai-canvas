@@ -126,10 +126,11 @@ func TestValidateImageTaskEnforcesGPTImage2CustomSizeLimits(t *testing.T) {
 
 func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T) {
 	tests := map[string][]string{
-		"newapi-channel-2":        {"480p", "720p", "1080p", "1440p", "2160p"},
+		"newapi-channel-2":        {"480p", "720p", "768p", "1080p", "1440p", "2160p"},
 		"volcengine-ark-video":    {"480p", "720p", "1080p"},
 		"volcengine-jimeng-video": {"720p"},
 		"gemini-veo":              {"720p", "1080p"},
+		"grsai-minimax-h3":        {"480p", "768p", "1080p"},
 	}
 	for protocol, want := range tests {
 		t.Run(protocol, func(t *testing.T) {
@@ -305,6 +306,26 @@ func TestValidateVideoTaskIgnoresGlobalResolutionWhenCatalogDeclaresNone(t *test
 	})
 	if err != nil {
 		t.Fatalf("validateVideoTask() error = %v", err)
+	}
+}
+
+func TestGlobalCapabilityDefaultsIncludeStandardVideoAndImageTiers(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("", "")
+	if profile == nil || profile.Video == nil || profile.Image == nil {
+		t.Fatal("global capability profile is incomplete")
+	}
+	if fmt.Sprint(profile.Video.Resolutions) != fmt.Sprint([]string{"480p", "720p", "768p", "1080p", "1440p", "2160p"}) {
+		t.Fatalf("global video resolutions = %v", profile.Video.Resolutions)
+	}
+	if fmt.Sprint(profile.Image.Quality.Values) != fmt.Sprint([]string{"auto", "low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("global image quality = %v", profile.Image.Quality.Values)
+	}
+}
+
+func TestGrsaiImageCapabilityAdvertisesQualityTiers(t *testing.T) {
+	profile := DefaultImageCapabilityConfig("grsai-gpt-image", "gpt-image-2.5")
+	if !profile.Quality.Supported || fmt.Sprint(profile.Quality.Values) != fmt.Sprint([]string{"auto", "low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("Grsai GPT image quality = %#v", profile.Quality)
 	}
 }
 

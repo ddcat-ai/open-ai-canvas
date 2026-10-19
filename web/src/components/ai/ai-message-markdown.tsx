@@ -1,5 +1,6 @@
 import { Streamdown, type Components } from "streamdown";
 import { memo } from "react";
+import { useStreamingText } from "@/hooks/use-streaming-text";
 import { AiMessageCodeBlock } from "./ai-message-code-block";
 
 import "streamdown/styles.css";
@@ -7,6 +8,7 @@ import "streamdown/styles.css";
 type AIMessageMarkdownProps = {
     children: string;
     isStreaming?: boolean;
+    smoothStreaming?: boolean;
     streamingAnimation?: "word" | "char" | "none";
     className?: string;
     /** 仅覆盖当前调用方需要定制的 Markdown 渲染器，默认渲染行为保持不变。 */
@@ -39,21 +41,23 @@ function buildComponents(isStreaming: boolean): Components {
 const staticComponents = buildComponents(false);
 const streamingComponents = buildComponents(true);
 
-export const AIMessageMarkdown = memo(function AIMessageMarkdown({ children, isStreaming = false, streamingAnimation = "word", className = "", components }: AIMessageMarkdownProps) {
-    if (!children.trim()) return null;
+export const AIMessageMarkdown = memo(function AIMessageMarkdown({ children, isStreaming = false, smoothStreaming = false, streamingAnimation = "word", className = "", components }: AIMessageMarkdownProps) {
+    const displayedText = useStreamingText(children, isStreaming, smoothStreaming);
+    const isAnimating = isStreaming || displayedText !== children;
+    if (!displayedText.trim()) return null;
     return (
         <Streamdown
-            className={`ai-message-markdown ${isStreaming ? "ai-message-markdown-streaming" : ""} ${className}`.trim()}
+            className={`ai-message-markdown ${isAnimating ? "ai-message-markdown-streaming" : ""} ${className}`.trim()}
             mode="streaming"
             dir="auto"
-            isAnimating={isStreaming}
-            animated={isStreaming && streamingAnimation !== "none" ? { animation: "fadeIn", duration: streamingAnimation === "char" ? 120 : 140, sep: streamingAnimation, stagger: streamingAnimation === "char" ? 16 : 8 } : false}
+            isAnimating={isAnimating}
+            animated={!smoothStreaming && isStreaming && streamingAnimation !== "none" ? { animation: "fadeIn", duration: streamingAnimation === "char" ? 120 : 140, sep: streamingAnimation, stagger: streamingAnimation === "char" ? 16 : 8 } : false}
             parseIncompleteMarkdown
             skipHtml
             lineNumbers={false}
-            components={components ? { ...(isStreaming ? streamingComponents : staticComponents), ...components } : isStreaming ? streamingComponents : staticComponents}
+            components={components ? { ...(isAnimating ? streamingComponents : staticComponents), ...components } : isAnimating ? streamingComponents : staticComponents}
         >
-            {children}
+            {displayedText}
         </Streamdown>
     );
 });

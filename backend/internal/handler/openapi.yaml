@@ -640,7 +640,134 @@ paths:
       summary: 读取云端 Agent 能力
       responses:
         "200":
-          description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
+          description: 信封 data 包含 version、permissionModes、surfaces、contextScopes、contextCompaction、maxRuntimeRequestBytes、skills、writeTools、billing、maxSteps、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；surfaces 包含 canvas 与 creation，contextCompaction 为 pi_native，maxSteps 为 0 表示无固定模型调用上限
+  /agent/sessions:
+    get:
+      tags: [agent]
+      summary: 列出当前账号的 Agent 会话
+      parameters:
+        - in: query
+          name: canvasId
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: surface
+          description: 按会话场景过滤，如 canvas 或 creation
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: status
+          schema: { type: string, maxLength: 32 }
+        - $ref: "#/components/parameters/AgentSessionLimit"
+      responses:
+        "200":
+          description: 信封 data.sessions 为 CloudAgentSession 数组，仅包含当前账号的会话
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [agent]
+      summary: 创建当前账号的 Agent 会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloudAgentSessionRequest"
+      responses:
+        "200":
+          description: 信封 data.session 为新建的 CloudAgentSession
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/sessions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/AgentSessionID"
+    get:
+      tags: [agent]
+      summary: 读取当前账号的会话及最近 50 轮历史
+      responses:
+        "200":
+          description: 信封 data 包含 session（CloudAgentSession）、runs 和 nextRunCursor；后续历史使用 runs 接口的 before 游标读取
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: 会话不存在、已删除或不属于当前账号
+    delete:
+      tags: [agent]
+      summary: 删除当前账号已结束的会话历史
+      description: 仅隐藏会话和历史入口，保留任务、计费和资源记录；不会隐式取消任务或退款。仍有运行、审批、收尾或媒体子任务时拒绝。
+      responses:
+        "200":
+          description: 信封 data 包含 id 与 deleted=true
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: 会话不存在或不属于当前账号
+        "409":
+          description: 会话仍有未完成工作，不能删除
+  /agent/sessions/{id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/AgentSessionID"
+    get:
+      tags: [agent]
+      summary: 分页读取当前账号的会话运行历史
+      parameters:
+        - $ref: "#/components/parameters/AgentSessionLimit"
+        - in: query
+          name: before
+          description: 上一页 nextRunCursor；必须属于同一账号和会话
+          schema: { type: string }
+      responses:
+        "200":
+          description: 信封 data 包含 runs 与 nextRunCursor，空游标表示没有下一页
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /settings/creation-preferences:
+    get:
+      tags: [agent]
+      summary: 读取当前账号的首页创作偏好
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          description: 必须与当前登录账号一致，防止账号切换时串写偏好
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/CreationPreferences"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [agent]
+      summary: 按字段合并当前账号的首页创作偏好
+      description: 请求最多 16 KiB；changes 仅允许已定义的偏好字段，未提交字段保持原值。偏好不授予工具权限或预算。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, changes]
+              properties:
+                userId: { type: string }
+                changes:
+                  $ref: "#/components/schemas/CreationPreferences"
+      responses:
+        "200":
+          $ref: "#/components/responses/CreationPreferences"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /agent/skills/usage:
     get:
       tags: [agent]
@@ -889,7 +1016,7 @@ paths:
     post:
       tags: [agent]
       summary: 创建一轮云端 Agent 任务
-      description: 同一画布同时只允许一轮执行。排队、运行、等待审批及终态收尾均占用；服务端在创建任务和预留积分前以事务串行校验。浏览器断开不释放占用，同一轮幂等恢复不受影响。
+      description: surface=canvas 使用画布上下文，surface=creation 使用独立会话及当前账号附件，不接受画布或项目上下文。同一画布或会话同时只允许一轮执行；排队、运行、等待审批及终态收尾均占用。服务端在创建任务和预留积分前校验，浏览器断开不释放占用，同一轮幂等恢复不受影响。
       requestBody:
         required: true
         content:
@@ -898,7 +1025,7 @@ paths:
               $ref: "#/components/schemas/CloudAgentRequest"
       responses:
         "200":
-          description: 信封 data.run，包含新一轮 id、canvasId、status、permissionMode、model 及时间
+          description: 信封 data.run，包含新一轮 id、sessionId、surface、canvasId、status、permissionMode、model 及时间
         "400":
           description: 参数、能力、模型或预算不符合要求，未创建任务
         "409":
@@ -911,6 +1038,10 @@ paths:
       summary: 读取当前用户的 Agent 轮次
       description: data.run 只返回一页事件（默认最新 40 条）并带上 eventSeqBase、eventCount、latestSeq、eventsTruncated：eventSeqBase 是本次首条事件之前已入库的条数（不变量 events[i].seq == eventSeqBase + i + 1），latestSeq 可直接作为下次 sinceSeq，eventsTruncated 表示还有更早的记录未随本次返回。读取走 (run_id, sequence) 的 keyset 分页，不使用 offset；升级前把事件放在 state_json 里的轮次在事件表中没有行，读取回退到内存窗口。
       parameters:
+        - in: query
+          name: fromStart
+          description: 从首条事件读取；不能与非零 sinceSeq 同用
+          schema: { type: string, enum: ["1"] }
         - in: query
           name: sinceSeq
           required: false
@@ -1037,15 +1168,15 @@ paths:
               properties:
                 decision:
                   type: string
-                  enum: [approve, reject]
+                  enum: [approve, reject, refresh]
+                  description: refresh 刷新首页电商方案的报价，保持等待审批，不提交生成，也不能同时传 mediaSettings
                 reason:
                   type: string
                   maxLength: 2000
                 mediaSettings:
                   type: object
                   additionalProperties: false
-                  description: 仅 approve 图片生成审批可传；替换本次模型、画幅和质量，重新强校验，不修改提示词、引用或目标。logicalModelId 与 channelId + channelModelKey 二选一。
-                  required: [size, quality]
+                  description: 仅画布图片或视频生成审批在 approve 时可修改；首页创作的模型与参数在本轮固定。重新校验能力、预算和报价，不修改提示词、引用或目标。logicalModelId 与 channelId + channelModelKey 二选一。
                   properties:
                     logicalModelId:
                       type: string
@@ -1057,6 +1188,19 @@ paths:
                       type: string
                     quality:
                       type: string
+                    imageResolution:
+                      type: string
+                    imageParameters:
+                      type: string
+                      description: 图片参数 JSON 字符串，按模型能力强校验
+                    durationSeconds:
+                      type: integer
+                    videoGenerateAudio:
+                      type: boolean
+                    videoWatermark:
+                      type: boolean
+                    videoArkPrivateAssetUpload:
+                      type: boolean
       responses:
         "200":
           description: 信封 data.accepted
@@ -1519,7 +1663,7 @@ paths:
                 properties:
                   resourceId: {type: string}
                   purpose: {type: string, enum: [display, copy, download, browser-process, provider-input], default: display}
-                  variant: {type: string, enum: [original, playback], default: original}
+                  variant: {type: string, enum: [original, playback, thumbnail], default: original}
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -1542,7 +1686,7 @@ paths:
           description: 仅返回统一访问描述，不返回文件正文。
         - in: query
           name: variant
-          schema: { type: string, enum: [original, playback], default: original }
+          schema: { type: string, enum: [original, playback, thumbnail], default: original }
         - in: query
           name: purpose
           schema: { type: string, enum: [display, download, browser-process], default: display }
@@ -1552,6 +1696,201 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+  /resources/uploads/direct:
+    post:
+      tags: [resources]
+      summary: 创建浏览器直传预留并签发上传地址
+      description: 校验当前账号、文件声明与配额；仅向支持浏览器访问的对象存储签发 PUT。无法直传时返回 fallbackReason，客户端可使用普通上传。请求体最多 16 KiB。
+      requestBody:
+        $ref: "#/components/requestBodies/BrowserResourceUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/BrowserResourceUpload"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /resources/uploads/direct/{id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/ResourceUploadID"
+    post:
+      tags: [resources]
+      summary: 核验并完成当前账号的浏览器直传
+      description: 服务端检查对象大小、类型和内容后创建资源；不能用其他账号的上传 ID 完成上传。
+      responses:
+        "200":
+          description: 信封 data.resource 为已发布资源
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/uploads/direct/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceUploadID"
+    delete:
+      tags: [resources]
+      summary: 取消当前账号未完成的直传预留
+      responses:
+        "200":
+          description: 信封 data.id 为上传预留 ID
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/generated-upload:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    post:
+      tags: [resources]
+      summary: 为当前账号的生成图片申请浏览器补存
+      description: 保持已有资源 ID；上游 URL 可先展示及用于后续生成，补存不创建新的生成任务。请求体最多 16 KiB，图片宽高必须大于 0。
+      requestBody:
+        $ref: "#/components/requestBodies/BrowserResourceUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/BrowserResourceUpload"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/generated-upload/{uploadId}/complete:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+      - $ref: "#/components/parameters/GeneratedResourceUploadID"
+    post:
+      tags: [resources]
+      summary: 核验并完成生成图片的浏览器补存
+      description: 核对资源和上传预留均属于当前账号，验证存储对象后静默替换资源访问地址。
+      responses:
+        "200":
+          description: 信封 data.resource 为完成补存的同一资源
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/generated-upload/{uploadId}/fallback:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+      - $ref: "#/components/parameters/GeneratedResourceUploadID"
+    post:
+      tags: [resources]
+      summary: 浏览器补存失败时请求服务端继续保存
+      description: 未获得上传预留时 uploadId 使用 none；仅恢复已有生成资源的保存，不重新生成或扣费。
+      responses:
+        "200":
+          description: 信封 data.id 为资源 ID
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/thumbnail-upload/begin:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    post:
+      tags: [resources]
+      summary: 为当前账号已保存的原图申请缩略图直传
+      description: 仅 PNG/JPEG，宽高均为 1–512，最多 1 MiB；原图必须已完成补存。返回 fallbackReason 时可改用有界缩略图上传。
+      requestBody:
+        $ref: "#/components/requestBodies/BrowserResourceUpload"
+      responses:
+        "200":
+          $ref: "#/components/responses/BrowserResourceUpload"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/thumbnail-upload/complete:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    post:
+      tags: [resources]
+      summary: 核验并发布浏览器直传的缩略图
+      description: 提交与 begin 相同的文件声明；服务端核验对象大小、类型和尺寸。
+      requestBody:
+        $ref: "#/components/requestBodies/BrowserResourceUpload"
+      responses:
+        "200":
+          description: 信封 data.resource 含已就绪缩略图信息
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    post:
+      tags: [resources]
+      summary: 上传浏览器生成的有界缩略图
+      description: 直传不可用时使用；PNG/JPEG 文件最多 1 MiB，宽高均不超过 512。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: 信封 data 包含 resource、delivery=server 与 reason=bounded_thumbnail_upload
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /resources/{id}/browser-file:
+    parameters:
+      - $ref: "#/components/parameters/ResourceID"
+    get:
+      tags: [resources]
+      summary: 浏览器跨域或网络失败时读取当前账号资源字节
+      description: 受账号归属和资源导入限流约束；返回私有、禁止缓存的二进制流，不是 JSON 信封。不能指定任意上游 URL。
+      parameters:
+        - in: query
+          name: reason
+          required: true
+          schema: { type: string, enum: [cors_or_network] }
+        - in: query
+          name: variant
+          schema: { type: string, enum: [original, playback, thumbnail], default: original }
+        - in: header
+          name: Range
+          schema: { type: string }
+      responses:
+        "200":
+          description: 完整文件流
+        "206":
+          description: 按 Range 返回的部分文件流
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
           $ref: "#/components/responses/Error"
   /workbench/tools:
     get:
@@ -1672,10 +2011,35 @@ paths:
     post:
       tags: [tasks]
       summary: 创建生成任务
+      description: 可通过 X-Idempotency-Key 请求头或请求体 idempotencyKey 设置幂等键，请求头优先。同账号同键同请求返回原任务；同键不同请求返回 409。提交响应丢失时先查询原任务，不重复创建收费任务。
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          description: 最多 160 个 UTF-8 字节，不含控制字符
+          schema: { type: string }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
         "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /tasks/by-idempotency-key:
+    get:
+      tags: [tasks]
+      summary: 按幂等键恢复当前账号已提交的任务
+      parameters:
+        - in: query
+          name: key
+          required: true
+          description: 非空，最多 160 个 UTF-8 字节，不含控制字符
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 信封 data 为当前账号的任务；未找到时为 null，不返回其他账号任务或密钥
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
           $ref: "#/components/responses/Error"
   /tasks/{id}/recover-media:
     post:
@@ -1780,6 +2144,31 @@ paths:
           $ref: "#/components/responses/Error"
 components:
   parameters:
+    AgentSessionID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, maxLength: 80 }
+    AgentSessionLimit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    ResourceUploadID:
+      name: id
+      in: path
+      required: true
+      description: 浏览器直传预留 ID
+      schema: { type: string }
+    GeneratedResourceUploadID:
+      name: uploadId
+      in: path
+      required: true
+      schema: { type: string }
     AgentRunID:
       name: id
       in: path
@@ -1956,17 +2345,172 @@ components:
           type: integer
           minimum: 0
           description: 待更新层的数字 revision；首次创建为 0
+    CloudAgentSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, maxLength: 240 }
+        surface:
+          type: string
+          maxLength: 64
+          default: canvas
+          description: 会话场景，首页创作使用 creation，画布使用 canvas
+    CloudAgentSession:
+      type: object
+      required: [id, surface, status, revision, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        surface: { type: string }
+        lastSurface: { type: string }
+        status: { type: string }
+        revision: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreationPreferences:
+      type: object
+      additionalProperties: false
+      description: 所有字段均可选；字符串最多 256 个 UTF-8 字节，数值为 0–10000000。保存偏好不代表当前模型支持该参数，执行时再次校验。
+      properties:
+        mode: { type: string, enum: [text, image, video, agent] }
+        outputPreference: { type: string, enum: [concise, detailed] }
+        image:
+          type: object
+          additionalProperties: false
+          properties:
+            model: { type: string }
+            ratio: { type: string }
+            quality: { type: string }
+            imageResolution: { type: string }
+            count: { type: string }
+            transparentBackground: { type: string, enum: ["true", "false"] }
+        video:
+          type: object
+          additionalProperties: false
+          properties:
+            ratio: { type: string }
+            seconds: { type: string }
+            videoQuality: { type: string }
+        models:
+          type: object
+          additionalProperties: false
+          properties:
+            textModel: { type: string }
+            imageModel: { type: string }
+            videoModel: { type: string }
+        agent:
+          type: object
+          additionalProperties: false
+          properties:
+            permissionMode: { type: string, enum: [read_only, request_approval, auto] }
+            imageParameterMode: { type: string, enum: [auto, manual] }
+            videoParameterMode: { type: string, enum: [auto, manual] }
+            budget:
+              type: object
+              additionalProperties: false
+              properties:
+                maxCredits: { type: number, minimum: 0, maximum: 10000000 }
+                maxGenerationTasks: { type: integer, minimum: 0, maximum: 10000000 }
+                maxVideoSeconds: { type: integer, minimum: 0, maximum: 10000000 }
+            image:
+              type: object
+              additionalProperties: false
+              properties:
+                size: { type: string }
+                quality: { type: string }
+                count: { type: integer, minimum: 0, maximum: 10000000 }
+            video:
+              type: object
+              additionalProperties: false
+              properties:
+                size: { type: string }
+                quality: { type: string }
+                durationSeconds: { type: integer, minimum: 0, maximum: 10000000 }
+    BrowserResourceUploadInput:
+      type: object
+      required: [mimeType, size]
+      properties:
+        fileName:
+          type: string
+          description: 普通文件直传时必填，最多 255 个 UTF-8 字节
+        mimeType: { type: string }
+        size: { type: integer, format: int64, minimum: 1, description: 文件字节数 }
+        width: { type: integer, minimum: 0 }
+        height: { type: integer, minimum: 0 }
+        durationMs: { type: integer, format: int64, minimum: 0 }
+        idempotencyKey: { type: string, description: 普通文件直传的幂等标识 }
+    BrowserResourceUploadResult:
+      type: object
+      properties:
+        upload:
+          type: object
+          required: [id, url, method, headers, expiresAt]
+          properties:
+            id: { type: string }
+            url: { type: string, format: uri, description: 短期签名上传地址，不应持久化或记录到日志 }
+            method: { type: string, enum: [PUT] }
+            headers:
+              type: object
+              additionalProperties: { type: string }
+            expiresAt: { type: string, format: date-time }
+        resource:
+          type: object
+          description: 已存在或已完成的资源；存在时无需再次 PUT
+        fallbackReason:
+          type: string
+          description: 本次无法直传的机器可读原因；根据调用场景使用普通上传或后台补存
+    CloudAgentAttachment:
+      type: object
+      additionalProperties: false
+      required: [resourceId, storageKey, kind, role, name]
+      properties:
+        resourceId: { type: string, maxLength: 80 }
+        storageKey: { type: string, description: "必须为 resource: 加 resourceId，不接受任意上游 URL" }
+        kind: { type: string, enum: [image, video, audio] }
+        role: { type: string, enum: [product, person, reference, competitor, style, source] }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        turnIndex: { type: integer, description: 服务端维护的本轮同类附件序号，继承素材为 0；客户端值会被覆盖 }
+    CloudAgentCreationMediaChoice:
+      type: object
+      additionalProperties: false
+      required: [selection, parameterMode]
+      description: auto 不接受手动参数；manual 按所选模型能力校验。count 仅用于图片，durationSeconds 仅用于视频。
+      properties:
+        selection:
+          type: object
+          additionalProperties: false
+          description: logicalModelId 与 channelId + channelModelKey 二选一，仅使用后端受管模型
+          properties:
+            logicalModelId: { type: string }
+            channelId: { type: string }
+            channelModelKey: { type: string }
+        parameterMode: { type: string, enum: [auto, manual] }
+        size: { type: string }
+        quality: { type: string }
+        durationSeconds: { type: integer, minimum: 0, maximum: 600 }
+        count: { type: integer, minimum: 0, maximum: 10 }
     CloudAgentRequest:
       type: object
       additionalProperties: false
-      required: [canvasId, prompt, permissionMode, contextScope, budget, idempotencyKey]
+      required: [prompt, permissionMode, budget, idempotencyKey]
       properties:
+        sessionId:
+          type: string
+          maxLength: 80
+          description: 当前账号的会话 ID；用于跨设备恢复与后续轮次
+        surface:
+          type: string
+          enum: [canvas, creation]
+          default: canvas
         canvasId:
           type: string
           maxLength: 80
+          description: canvas 场景必填；creation 场景必须为空或省略
         prompt:
           type: string
-          description: 非空，最多 16000 字节
+          minLength: 1
+          maxLength: 16000
+          description: 非空，最多 16000 个 Unicode 字符
         logicalModelId:
           type: string
         model:
@@ -1987,15 +2531,73 @@ components:
           description: GET /agent/profile 的生效合并 revision；变化时拒绝创建新轮次
         skillIds:
           type: array
-          maxItems: 8
+          uniqueItems: true
           items:
             type: string
+            maxLength: 80
+        focusNodeIds:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items: { type: string, maxLength: 80 }
         contextScope:
           type: array
           maxItems: 1
+          description: creation 场景必须为空；画布摘要仅在 canvas 场景可用
           items:
             type: string
             enum: [canvas]
+        contextSelection:
+          type: object
+          additionalProperties: false
+          description: surface 必须与本轮一致；creation 不能设置 scopes、canvasId 或 projectId
+          properties:
+            surface: { type: string, enum: [canvas, creation] }
+            scopes:
+              type: array
+              maxItems: 1
+              items: { type: string, enum: [canvas] }
+            canvasId: { type: string, maxLength: 80 }
+            projectId: { type: string, maxLength: 80 }
+        attachments:
+          type: array
+          maxItems: 16
+          description: 仅 creation 场景可用，资源必须属于当前账号且已就绪
+          items:
+            $ref: "#/components/schemas/CloudAgentAttachment"
+        attachmentMode:
+          type: string
+          enum: [inherit, replace, append]
+          description: 仅 creation 场景可用；inherit 不能同时提交新附件
+        outputPreference:
+          type: string
+          enum: [concise, detailed]
+          description: 仅用于首页创作的结果展示偏好
+        mediaSettings:
+          type: object
+          additionalProperties: false
+          description: 仅 creation 场景可用
+          properties:
+            image:
+              $ref: "#/components/schemas/CloudAgentCreationMediaChoice"
+            video:
+              $ref: "#/components/schemas/CloudAgentCreationMediaChoice"
+        retry:
+          type: object
+          additionalProperties: false
+          required: [runId]
+          description: 仅后续 creation 轮次可用；源轮次必须属于当前会话且已结束。taskId 与 taskIds 不能混用；进行中、已成功或待恢复产物的任务拒绝重新生成。
+          properties:
+            runId: { type: string }
+            taskId: { type: string, maxLength: 80 }
+            taskIds:
+              type: array
+              maxItems: 20
+              uniqueItems: true
+              items: { type: string, maxLength: 80 }
+        visionEnabled:
+          type: boolean
+          description: 客户端值不作为授权依据；服务端根据所选文本模型的图像引用能力覆盖
         budget:
           type: object
           additionalProperties: false
@@ -2009,11 +2611,15 @@ components:
             maxGenerationTasks:
               type: integer
               minimum: 0
-              maximum: 8
+              description: 0 不设置数量上限，仍受积分预算约束；只读模式必须为 0
             maxVideoSeconds:
               type: integer
               minimum: 0
-              maximum: 120
+              description: 0 不设置视频秒数上限；只读模式必须为 0
+            maxSteps:
+              type: integer
+              minimum: 0
+              description: 0 不限制模型调用步数；正数在执行时限制为最多 9999
         idempotencyKey:
           type: string
           minLength: 8
@@ -2064,7 +2670,39 @@ components:
                 - provider_request_failed
                 - model_catalog_mismatch
                 - invalid_model_selection
+  requestBodies:
+    BrowserResourceUpload:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BrowserResourceUploadInput"
   responses:
+    CreationPreferences:
+      description: 当前账号的创作偏好，位于信封 data.preferences
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      preferences:
+                        $ref: "#/components/schemas/CreationPreferences"
+    BrowserResourceUpload:
+      description: 信封 data 为直传描述、已存在资源或回退原因；响应禁止缓存
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BrowserResourceUploadResult"
     ModelQuote:
       description: 当前参数对应的费用报价，位于信封 data.quote
       content:

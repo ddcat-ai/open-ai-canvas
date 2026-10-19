@@ -1,16 +1,17 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AgentEvent, CreateAgentRunInput } from "../src/services/api/agent";
 
 // Exercise the production protocol, isolating only transport/storage dependencies.
 // Temporary modules avoid mock.module leaking into unrelated Bun test suites.
-const dir = mkdtempSync(join(tmpdir(), "agent-reliability-"));
+// Bun resolves temporary TypeScript modules relative to the package project;
+// keep the fixture under this test directory and remove it after the suite.
+const dir = mkdtempSync(join(fileURLToPath(new URL(".", import.meta.url)), ".agent-reliability-"));
 const root = new URL("../src/", import.meta.url);
 const requestPath = join(dir, "request.ts");
-writeFileSync(requestPath, 'export const apiBaseURL = "https://agent.invalid/api"; export const http = { post: async () => { throw new Error("unexpected POST"); } };');
+writeFileSync(requestPath, 'export const apiBaseURL = "https://agent.invalid/api"; export const compactApiParams = (params) => Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined)); export const http = { post: async () => { throw new Error("unexpected POST"); } };');
 writeFileSync(join(dir, "agent.ts"), readFileSync(new URL("services/api/agent.ts", root), "utf8")
     .replace('"@/services/api/request"', JSON.stringify(requestPath))
     .replace('"@/services/api/task-text-stream"', JSON.stringify(fileURLToPath(new URL("services/api/task-text-stream.ts", root)))));
@@ -23,7 +24,7 @@ writeFileSync(join(dir, "conversations.ts"), readFileSync(new URL("services/clou
     .replace('"@/lib/localforage-storage"', JSON.stringify(storagePath))
     .replace('"@/lib/user-scope"', JSON.stringify(join(dir, "scope.ts")))
     .replace('"@/lib/markdown-plain-text"', JSON.stringify(fileURLToPath(new URL("lib/markdown-plain-text.ts", root)))));
-const conversations: typeof import("../src/services/cloud-agent-conversations") = await import(join(dir, "conversations.ts"));
+const conversations: typeof import("../src/services/cloud-agent-conversations") = await import(pathToFileURL(join(dir, "conversations.ts")).href);
 const storage = await import(storagePath);
 const nativeFetch = globalThis.fetch;
 const nativeTimer = globalThis.setTimeout;
@@ -49,6 +50,23 @@ const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.s
 const snapshot = (status: string, extra = {}) => frame("run_snapshot", { id: "run", status, ...extra });
 const event = (seq: number) => frame("agent_event", { runId: "run", eventId: `run:${seq}`, seq, type: "tool_completed", payload: { nodeId: "node" } });
 const stream = (body: string) => new Response(body, { headers: { "content-type": "text/event-stream" } });
+
+describe("Agent session deletion", () => {
+    it("deletes the server session using its encoded ID without deleting runs or assets", async () => {
+        const requests: unknown[][] = [];
+        transport.http.delete = async (...args: unknown[]) => { requests.push(args); return { id: "session/id", deleted: true }; };
+        expect(typeof api.deleteAgentSession).toBe("function");
+        expect(await api.deleteAgentSession("session/id")).toEqual({ id: "session/id", deleted: true });
+        expect(requests).toEqual([["/agent/sessions/session%2Fid", { timeout: 15_000 }]]);
+    });
+
+    it("propagates an active-run rejection instead of reporting a successful deletion", async () => {
+        transport.http.delete = async () => { throw new Error("请先停止或等待任务结束"); };
+        expect(typeof api.deleteAgentSession).toBe("function");
+        await expect(api.deleteAgentSession("running-session")).rejects.toThrow("请先停止或等待任务结束");
+    });
+});
+
 function observe(options: { timeoutMs?: number; after?: number } = {}) {
     const events: AgentEvent[] = [];
     const statuses: string[] = [];

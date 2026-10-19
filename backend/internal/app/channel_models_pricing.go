@@ -63,10 +63,6 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 			resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
 		}
 	}
-	durationSupported := make(map[int]bool, len(config.Video.Duration.Values))
-	for _, seconds := range config.Video.Duration.Values {
-		durationSupported[seconds] = true
-	}
 	for _, tier := range tiers {
 		if tier.Resolution != "*" && !resolutionSupported[normalizeChannelModelTierResolution(tier.Resolution)] {
 			return BadAuthRequest("价格档分辨率不在该视频模型支持范围内：" + tier.Resolution)
@@ -77,10 +73,8 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 		if !videoDurationSupported(config.Video) {
 			continue
 		}
-		if config.Video.Duration.Selection == "enum" && !durationSupported[tier.VideoSeconds] {
-			return BadAuthRequest(fmt.Sprintf("价格档时长 %d 秒不在该视频模型支持范围内", tier.VideoSeconds))
-		}
-		if config.Video.Duration.Selection == "range" && (tier.VideoSeconds < config.Video.Duration.Min || tier.VideoSeconds > config.Video.Duration.Max || (config.Video.Duration.Step > 0 && (tier.VideoSeconds-config.Video.Duration.Min)%config.Video.Duration.Step != 0)) {
+		duration := videoDurationConfigForResolution(config.Video, tier.Resolution)
+		if !videoDurationAllowed(duration, tier.VideoSeconds) {
 			return BadAuthRequest(fmt.Sprintf("价格档时长 %d 秒不在该视频模型支持范围内", tier.VideoSeconds))
 		}
 	}

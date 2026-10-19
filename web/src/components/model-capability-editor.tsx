@@ -1,11 +1,12 @@
 import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
+import { imageQualityLabel } from "@/lib/image-quality";
 import { Input, InputNumber } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 
-import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ImageResponseFormat, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, defaultModelCapabilityConfig, IMAGE_QUALITY_CAPABILITY_OPTIONS, normalizeModelCapabilityConfig, normalizeVideoResolutionKey, videoDurationConfigForResolution, type ImageCapabilityConfig, type ImageResponseFormat, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig, type VideoDurationConfig } from "@/lib/model-capabilities";
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
@@ -56,9 +57,17 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     const update = (patch: Partial<VideoCapabilityConfig>) => onChange?.({ version: 1, video: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateDuration = (patch: Partial<VideoCapabilityConfig["duration"]>) => update({ duration: { ...profile.duration, ...patch } });
-    const durationValues = (profile.duration.values || []).join(",");
     const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
     const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
+
+    const updateResolutions = (resolutions: string[]) => {
+        const durationByResolution = profile.durationByResolution
+            ? Object.fromEntries(
+                  Object.entries(profile.durationByResolution).filter(([key]) => resolutions.some((resolution) => normalizeVideoResolutionKey(resolution) === normalizeVideoResolutionKey(key))),
+              )
+            : undefined;
+        update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "", durationByResolution });
+    };
 
     if (section === "references") {
         return (
@@ -123,7 +132,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                             />
                         </Field>
                     </ProtocolParameterCard>
-                    <ProtocolParameterCard step="02" title="输出时长" description="定义可用秒数及默认时长">
+                    <ProtocolParameterCard step="02" title="输出时长" description="定义通用时长、默认值及分辨率独立时长">
                         <SegmentedControl
                             block
                             disabled={disabled}
@@ -141,14 +150,11 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                             }
                         />
                         {profile.duration.selection === "enum" ? (
-                            <Field label="固定时长（秒）">
-                                <Input
-                                    disabled={disabled}
-                                    value={durationValues}
-                                    placeholder="例如：5,10"
-                                    onChange={(event) => updateDuration({ values: parseIntegerList(event.target.value), default: parseIntegerList(event.target.value)[0] || profile.duration.default })}
-                                />
-                            </Field>
+                            <DurationValuesField
+                                values={profile.duration.values || []}
+                                disabled={disabled}
+                                onChange={(values) => updateDuration({ values, default: values[0] || profile.duration.default })}
+                            />
                         ) : (
                             <div className="admin-capability-duration-grid">
                                 <NumberField label="最短" value={profile.duration.min} min={1} disabled={disabled} onChange={(value) => updateDuration({ min: value || 1 })} />
@@ -157,6 +163,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                                 <NumberField label="默认" value={profile.duration.default} min={1} disabled={disabled} onChange={(value) => updateDuration({ default: value || 1 })} />
                             </div>
                         )}
+                        <ResolutionDurationEditor profile={profile} disabled={disabled} onChange={update} />
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="03" title="画面规格" description="控制比例、分辨率及默认输出">
                         {autoDL ? autoDLSpecFields : <div className="admin-capability-spec-grid">
@@ -182,7 +189,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                                     tokenSeparators={[","]}
                                     placeholder="选择或输入模型档位"
                                     options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                    onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
+                                    onChange={updateResolutions}
                                 />
                             </Field>
                             <Field label="默认分辨率">
@@ -253,14 +260,11 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         }
                     />
                     {profile.duration.selection === "enum" ? (
-                        <Field label="固定时长（秒）">
-                            <Input
-                                disabled={disabled}
-                                value={durationValues}
-                                placeholder="例如：5,10"
-                                onChange={(event) => updateDuration({ values: parseIntegerList(event.target.value), default: parseIntegerList(event.target.value)[0] || profile.duration.default })}
-                            />
-                        </Field>
+                        <DurationValuesField
+                            values={profile.duration.values || []}
+                            disabled={disabled}
+                            onChange={(values) => updateDuration({ values, default: values[0] || profile.duration.default })}
+                        />
                     ) : (
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <NumberField label="最短" value={profile.duration.min} min={1} disabled={disabled} onChange={(value) => updateDuration({ min: value || 1 })} />
@@ -269,6 +273,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                             <NumberField label="默认" value={profile.duration.default} min={1} disabled={disabled} onChange={(value) => updateDuration({ default: value || 1 })} />
                         </div>
                     )}
+                    <ResolutionDurationEditor profile={profile} disabled={disabled} onChange={update} />
                 </CapabilityBlock>
                 <CapabilityBlock title="画面规格">
                     {autoDL ? autoDLSpecFields : <div className="grid gap-3 sm:grid-cols-2">
@@ -294,7 +299,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                                 tokenSeparators={[","]}
                                 placeholder="选择标准档位或输入 768p 等模型专属值"
                                 options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
+                                onChange={updateResolutions}
                             />
                         </Field>
                         <Field label="默认分辨率">
@@ -394,6 +399,7 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
                     <ReferenceCard title="图片引用" description="文本模型可接收的图片范围">
                         <NumberField label="最大参考图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
                         <NumberField label="单张图片上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImageBytes: mbToBytes(next) })} />
+                        <p className="text-[var(--fs-tiny)] leading-relaxed text-foreground/60">最大参考图片数为 0：不接收图片输入。单张图片上限为 0 MB：不额外限制大小，仍受平台上传和读取安全上限约束。</p>
                     </ReferenceCard>
                     <ReferenceCard title="视频引用" description="文本模型可接收的视频范围">
                         <NumberField label="最大参考视频数" value={profile.references.maxVideos} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideos: next || 0 })} />
@@ -521,7 +527,8 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                                         disabled={disabled}
                                         value={profile.quality.values}
                                         tokenSeparators={[","]}
-                                        placeholder="例如 auto, low, medium, high, 1k, 2k, 4k"
+                                        placeholder="自动、低、中、高、超高、最高；也可填 1k/2k/4k"
+                                        options={IMAGE_QUALITY_CAPABILITY_OPTIONS.map((item) => ({ label: imageQualityLabel(item), value: item }))}
                                         onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })}
                                     />
                                 </Field>
@@ -530,7 +537,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                                         className="w-full"
                                         disabled={disabled}
                                         value={profile.quality.default}
-                                        options={profile.quality.values.map((item) => ({ label: item, value: item }))}
+                                        options={profile.quality.values.map((item) => ({ label: imageQualityLabel(item), value: item }))}
                                         onChange={(defaultValue) => updateQuality({ default: defaultValue })}
                                     />
                                 </Field>
@@ -605,7 +612,8 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                                 disabled={disabled}
                                 value={profile.quality.values}
                                 tokenSeparators={[","]}
-                                placeholder="例如 auto, low, medium, high, 1k, 2k, 4k"
+                                placeholder="自动、低、中、高、超高、最高；也可填 1k/2k/4k"
+                                options={IMAGE_QUALITY_CAPABILITY_OPTIONS.map((item) => ({ label: imageQualityLabel(item), value: item }))}
                                 onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })}
                             />
                         </Field>
@@ -614,7 +622,7 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                                 className="w-full"
                                 disabled={disabled}
                                 value={profile.quality.default}
-                                options={profile.quality.values.map((item) => ({ label: item, value: item }))}
+                                options={profile.quality.values.map((item) => ({ label: imageQualityLabel(item), value: item }))}
                                 onChange={(defaultValue) => updateQuality({ default: defaultValue })}
                             />
                         </Field>
@@ -709,6 +717,76 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
             <span className="mb-1 block text-[var(--fs-tiny)] text-foreground/48">{label}</span>
             {children}
         </label>
+    );
+}
+
+function DurationValuesField({ values, disabled, onChange }: { values: number[]; disabled: boolean; onChange: (values: number[]) => void }) {
+    return (
+        <Field label="固定时长（秒）">
+            <Input
+                disabled={disabled}
+                value={values.join(",")}
+                placeholder="例如：5,10"
+                onChange={(event) => onChange(parseIntegerList(event.target.value))}
+            />
+        </Field>
+    );
+}
+
+function ResolutionDurationEditor({ profile, disabled, onChange }: { profile: VideoCapabilityConfig; disabled: boolean; onChange: (patch: Partial<VideoCapabilityConfig>) => void }) {
+    if (!profile.resolutions.length) return null;
+
+    const updateResolutionDuration = (resolution: string, patch: Partial<VideoDurationConfig>) => {
+        const resolutionKey = normalizeVideoResolutionKey(resolution);
+        const existing = Object.entries(profile.durationByResolution || {}).find(([key]) => normalizeVideoResolutionKey(key) === resolutionKey);
+        const key = existing?.[0] || resolution;
+        const current = existing?.[1] || profile.duration;
+        onChange({ durationByResolution: { ...profile.durationByResolution, [key]: { ...current, ...patch } } });
+    };
+
+    return (
+        <div className="mt-3 rounded-md border border-border/40 p-3">
+            <div className="mb-1 text-xs font-medium">按分辨率配置时长</div>
+            <div className="mb-2 text-[var(--fs-tiny)] text-foreground/50">每个分辨率可单独设置范围、固定值和默认时长；未配置时继承上方通用时长。</div>
+            <div className="space-y-3">
+                {profile.resolutions.map((resolution) => {
+                    const duration = videoDurationConfigForResolution(profile, resolution);
+                    return (
+                        <div key={resolution} className="rounded-md bg-muted/20 p-2">
+                            <div className="mb-2 text-xs font-medium">{resolution.toUpperCase()}</div>
+                            <SegmentedControl
+                                block
+                                disabled={disabled}
+                                value={duration.selection}
+                                options={[{ label: "范围", value: "range" }, { label: "固定值", value: "enum" }]}
+                                onChange={(selection) =>
+                                    updateResolutionDuration(
+                                        resolution,
+                                        selection === "enum"
+                                            ? { selection: "enum", values: duration.values?.length ? duration.values : [duration.default] }
+                                            : { selection: "range", min: duration.min || 1, max: duration.max || 15, step: duration.step || 1 },
+                                    )
+                                }
+                            />
+                            {duration.selection === "enum" ? (
+                                <DurationValuesField
+                                    values={duration.values || []}
+                                    disabled={disabled}
+                                    onChange={(values) => updateResolutionDuration(resolution, { values, default: values[0] || duration.default })}
+                                />
+                            ) : (
+                                <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                                    <NumberField label="最短" value={duration.min} min={1} disabled={disabled} onChange={(value) => updateResolutionDuration(resolution, { min: value || 1 })} />
+                                    <NumberField label="最长" value={duration.max} min={1} disabled={disabled} onChange={(value) => updateResolutionDuration(resolution, { max: value || 1 })} />
+                                    <NumberField label="步长" value={duration.step} min={1} disabled={disabled} onChange={(value) => updateResolutionDuration(resolution, { step: value || 1 })} />
+                                    <NumberField label="默认" value={duration.default} min={1} disabled={disabled} onChange={(value) => updateResolutionDuration(resolution, { default: value || 1 })} />
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 

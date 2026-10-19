@@ -67,7 +67,7 @@ func attachCloudAgentPlan(canonical *canonicalAgentRequest, plan []cloudAgentPla
 }
 
 func cloudAgentPlanRequiresFirstApproval(state *cloudAgentRuntime, call cloudAgentCall) bool {
-	if state == nil || state.Approval != nil || len(state.Plan) != 0 || state.Request.PermissionMode != "request_approval" {
+	if state == nil || state.Request.Surface == "creation" || state.Approval != nil || len(state.Plan) != 0 || state.Request.PermissionMode != "request_approval" {
 		return false
 	}
 	_, ok := cloudAgentPlanApprovalPreview(call)
@@ -180,9 +180,11 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 		state = states[0]
 	}
 	var args struct {
-		Question   string `json:"question"`
-		QuestionID string `json:"questionId"`
-		Options    []struct {
+		Question       string `json:"question"`
+		QuestionID     string `json:"questionId"`
+		DecisionType   string `json:"decisionType"`
+		BlockingDetail string `json:"blockingDetail"`
+		Options        []struct {
 			Label  string `json:"label"`
 			Detail string `json:"detail"`
 		} `json:"options"`
@@ -211,6 +213,23 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 	question := strings.TrimSpace(args.Question)
 	if question == "" {
 		return nil, BadAuthRequest("ask_user 必须给出 question：把要用户拍板的那一个问题一句话写清")
+	}
+	if state != nil && state.Request.Surface == "creation" {
+		switch args.DecisionType {
+		case "", "preference":
+			if state.Request.PermissionMode == "auto" {
+				return map[string]any{
+					"phase": "defaulted", "defaulted": true, "reason": "auto_execution_preference",
+					"text": "用户已选择自动执行，不展示此偏好确认表单。沿用已明确的平台、语言、数量、比例和素材；自行选择版式与配色，仅采用有依据的商品事实，未知规格省略。继续真实报价与生成，不把本结果当作用户回答或新增授权。若确有无法执行的目标歧义、必需素材缺失或要求冲突，按对应 decisionType 说明 blockingDetail 再询问；不能把可省略的参数或审核步骤当作阻塞。",
+				}, nil
+			}
+		case "ambiguous_target", "missing_required_input", "conflicting_requirements":
+			if strings.TrimSpace(args.BlockingDetail) == "" {
+				return nil, BadAuthRequest("阻塞问题必须填写 blockingDetail，说明尚未解决的具体歧义/必需输入/冲突，以及为何无法按已知要求继续")
+			}
+		default:
+			return nil, BadAuthRequest("decisionType 必须是 preference、ambiguous_target、missing_required_input 或 conflicting_requirements")
+		}
 	}
 	options := make([]map[string]any, 0, len(args.Options))
 	for _, option := range args.Options {

@@ -46,7 +46,7 @@ func interjectionApprovalRun(t *testing.T, s *Service, db *gorm.DB, run *model.C
 	interjectionSaveState(t, s, db, run, state)
 }
 
-// interjectionModelPayload 组装运行时风格的 /model 请求（conversation）。
+// interjectionModelPayload 组装运行时风格的 /model 请求（dialogue）。
 func interjectionModelPayload(t *testing.T, messages []map[string]any) map[string]json.RawMessage {
 	t.Helper()
 	encoded, err := json.Marshal(messages)
@@ -55,7 +55,7 @@ func interjectionModelPayload(t *testing.T, messages []map[string]any) map[strin
 	}
 	return map[string]json.RawMessage{
 		"modelId":       json.RawMessage(`"text-test"`),
-		"purpose":       json.RawMessage(`"conversation"`),
+		"purpose":       json.RawMessage(`"dialogue"`),
 		"messages":      encoded,
 		"thinkingLevel": json.RawMessage(`"off"`),
 	}
@@ -231,7 +231,7 @@ func TestCloudAgentPiInterjectionQueuedDuringApprovalDeliversOnResume(t *testing
 }
 
 // 已送达插话经过运行时投影回写后来源标记被洗掉：下一步模型步按指纹补回，
-// 且插话在两份历史之间不重复（长度相等时采用运行时投影，插话只出现一次）。
+// 且插话在运行时投影中只出现一次。
 func TestCloudAgentPiInterjectionMarkerSurvivesRuntimeProjection(t *testing.T) {
 	s, db, root := interjectionPiRoot(t)
 	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-1", "改成 16:9"); err != nil {
@@ -240,8 +240,15 @@ func TestCloudAgentPiInterjectionMarkerSurvivesRuntimeProjection(t *testing.T) {
 	first := []map[string]any{{"role": "user", "content": []any{map[string]any{"type": "text", "text": "继续"}}}}
 	interjectionModelStep(t, s, db, "user", root.ID, first, `{"text":"好的","toolCalls":[]}`)
 	_, state := agentInterjectionState(t, s, root.ID)
-	if len(state.Canonical.Messages) == 0 || stringField(state.Canonical.Messages[len(state.Canonical.Messages)-1], "role") != "assistant" {
-		t.Fatalf("这一步的助手回复没有落检查点: %+v", state.Canonical.Messages)
+	// /model 持久化响应事件；下一步完整会话由 Pi 投影传回，不在这里追加一份。
+	responseSaved := false
+	for _, event := range state.Events {
+		if event.Type == "assistant_message" && event.Payload["text"] == "好的" {
+			responseSaved = true
+		}
+	}
+	if !responseSaved {
+		t.Fatal("这一步的助手回复没有持久化")
 	}
 	// 下一拍的运行时会话：插话（steer 落盘）排在助手回复之后，且不带标记。
 	second := []map[string]any{
@@ -264,7 +271,7 @@ func TestCloudAgentPiInterjectionMarkerSurvivesRuntimeProjection(t *testing.T) {
 	}
 	marked := false
 	for _, message := range state.Canonical.Messages {
-		content, _ := message["content"].(string)
+		content := runtimeContentText(message["content"])
 		if strings.Contains(content, "改成 16:9") && message[cloudAgentContextSourceKey] == "user_interjection" {
 			marked = true
 		}
@@ -290,8 +297,8 @@ func TestCloudAgentPiInterjectionResumesAfterFinalAnswer(t *testing.T) {
 	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-late", "补一句：加字幕"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.completeCloudAgentPiRun("user", root.ID); err != nil {
-		t.Fatal(err)
+	if err := s.completeCloudAgentPiRun("user", root.ID, 0); !errors.Is(err, errCloudAgentInterjectionPending) {
+		t.Fatalf("完成闸应通知持有者继续执行插话，实际 err=%v", err)
 	}
 	run, state = agentInterjectionState(t, s, root.ID)
 	if run.Status != "running" {
@@ -328,7 +335,7 @@ func TestCloudAgentPiInterjectionDroppedWhenStepBudgetExhausted(t *testing.T) {
 	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-late", "补一句：加字幕"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.completeCloudAgentPiRun("user", root.ID); err != nil {
+	if err := s.completeCloudAgentPiRun("user", root.ID, 0); err != nil {
 		t.Fatal(err)
 	}
 	run, state = agentInterjectionState(t, s, root.ID)
@@ -481,8 +488,8 @@ func TestCloudAgentPiInterjectionResumePromptRecognisedForSeveralInterjections(t
 			t.Fatal(err)
 		}
 	}
-	if err := s.completeCloudAgentPiRun("user", root.ID); err != nil {
-		t.Fatal(err)
+	if err := s.completeCloudAgentPiRun("user", root.ID, 0); !errors.Is(err, errCloudAgentInterjectionPending) {
+		t.Fatalf("完成闸应通知持有者继续执行插话，实际 err=%v", err)
 	}
 	run, state = agentInterjectionState(t, s, root.ID)
 	if run.Status != "running" || len(state.PendingInterjections) != 0 {

@@ -149,11 +149,11 @@ func TestPiOutputLimitCorrection(t *testing.T) {
 			if tc.fail {
 				want = 0
 			}
-			if state.ActiveTaskID != "" || len(state.Calls) != want || state.CallIndex != 0 {
+			if state.ActiveTaskID != "" || len(state.PiModelCalls) != want || len(state.Calls) != 0 || state.CallIndex != 0 {
 				t.Fatal("output admission left invalid state")
 			}
 			for _, message := range state.Canonical.Messages {
-				if strings.Contains(stringField(message, "content"), "invalid_output") {
+				if stringField(message, cloudAgentContextSourceKey) == "runtime" && strings.Contains(stringField(message, "content"), "invalid_output") {
 					t.Fatal("retry correction leaked into canonical history")
 				}
 			}

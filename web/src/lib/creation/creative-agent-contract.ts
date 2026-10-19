@@ -1,5 +1,6 @@
 import type { CanvasWorkflowInput } from "../canvas/canvas-workflow-builder";
 import { CREATIVE_SCENARIOS, type CreativeScenarioId } from "./creative-scenarios";
+import type { CreativeStyleBible } from "./creative-style-plan";
 export { CREATIVE_SCENARIOS, type CreativeScenario, type CreativeScenarioId } from "./creative-scenarios";
 
 export type CreativeBriefValue = string | string[] | number;
@@ -11,8 +12,8 @@ export type CreativeAnswer = { selected: string[]; custom: string };
 export type CreativeAnswers = Record<string, CreativeAnswer>;
 export type CreativeInteractionIdentity = { interactionId: string; revision: number; status: "pending" | "submitted" | "superseded" };
 export type CreativeQuestionRequest = CreativeInteractionIdentity & { kind: "question_request"; questions: CreativeQuestion[] };
-export type CreativeGenerationItem = { ref: string; mode: "image" | "video"; model: string; size?: string; seconds?: number; quality?: string; referenceRefs?: string[] };
-export type CreativeProposal<T = unknown> = { id: string; version: number; title: string; summary: string; markdown: string; deliverables: string[]; workflow: CanvasWorkflowInput & { autoRun: false }; generationItems: CreativeGenerationItem[]; extra?: T };
+export type CreativeGenerationItem = { ref: string; mode: "image" | "video"; model: string; size?: string; seconds?: number; quality?: string; referenceRefs?: string[]; styleFingerprint?: string };
+export type CreativeProposal<T = unknown> = { id: string; version: number; title: string; summary: string; markdown: string; deliverables: string[]; styleBible?: CreativeStyleBible; workflow: CanvasWorkflowInput & { autoRun: false }; generationItems: CreativeGenerationItem[]; extra?: T };
 export type CreativePlanStep = { id: string; title: string; status: "pending" | "running" | "waiting" | "completed" | "failed" | "cancelled"; detail?: string; nodeIds?: string[] };
 export type CreativePlan = { id: string; steps: CreativePlanStep[] };
 export type CreativeQuote = { id: string; title: string; items: { id: string; label: string; model: string; quantity: number; specification: string }[]; amountLabel: string; basis: string; expiresAt?: string; approvedQuantity?: number; externalBilling?: boolean };

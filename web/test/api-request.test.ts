@@ -1,8 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
-import { ApiError, apiClient, compactApiParams, http, request, serializeApiParams } from "../src/services/api/request";
+import { ApiError, apiClient, compactApiParams, http, request, retryApiRead, serializeApiParams } from "../src/services/api/request";
 
 describe("backend API request error semantics", () => {
+
+    test("短暂 503 的只读请求恢复，持续故障最多三次；普通 POST 不自动重发", async () => {
+        let reads = 0;
+        await expect(retryApiRead(async () => {
+            if (++reads === 1) throw new ApiError("暂时不可用", { status: 503 });
+            return "ready";
+        })).resolves.toBe("ready");
+        expect(reads).toBe(2);
+        reads = 0;
+        await expect(retryApiRead(async () => { reads++; throw new ApiError("持续故障", { status: 503 }); })).rejects.toThrow("持续故障");
+        expect(reads).toBe(3);
+        const original = apiClient.request;
+        let posts = 0;
+        apiClient.request = (async () => { posts++; throw new ApiError("写入结果未知", { status: 503 }); }) as typeof apiClient.request;
+        try { await expect(http.post("/tasks", {})).rejects.toThrow("写入结果未知"); }
+        finally { apiClient.request = original; }
+        expect(posts).toBe(1);
+    });
     test("unwraps a successful backend envelope", async () => {
         await expect(request(Promise.resolve({ data: { code: 0, data: { id: "task-1" }, msg: "ok" }, status: 200 }))).resolves.toEqual({ id: "task-1" });
     });

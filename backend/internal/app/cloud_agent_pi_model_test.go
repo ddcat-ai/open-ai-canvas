@@ -11,7 +11,7 @@ import (
 	"yingce/backend/internal/model"
 )
 
-func TestCloudAgentPiCompactionSummaryUsesStandardStepWithoutAssistantEvent(t *testing.T) {
+func TestCloudAgentPiCompactionSummaryUsesDedicatedStepWithoutAssistantEvent(t *testing.T) {
 	s, db, _ := agentMediaFixture(t)
 	s.disablePiRuntime = true
 	root, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
@@ -28,7 +28,7 @@ func TestCloudAgentPiCompactionSummaryUsesStandardStepWithoutAssistantEvent(t *t
 	}
 
 	messages := []map[string]any{
-		{"role": "system", "content": []any{map[string]any{"type": "text", "text": cloudAgentCompactionSummarySystemPromptPrefix + " Summarize the conversation."}}},
+		{"role": "system", "content": []any{map[string]any{"type": "text", "text": "Summarize the conversation."}}},
 		{"role": "user", "content": []any{map[string]any{"type": "text", "text": "<conversation>Earlier context</conversation>"}}},
 	}
 	encodedMessages, err := json.Marshal(messages)
@@ -38,6 +38,8 @@ func TestCloudAgentPiCompactionSummaryUsesStandardStepWithoutAssistantEvent(t *t
 	payload := map[string]json.RawMessage{
 		"messages":      encodedMessages,
 		"thinkingLevel": json.RawMessage(`"off"`),
+		"purpose":       json.RawMessage(`"compaction"`),
+		"systemPrompt":  json.RawMessage(`"Summarize the conversation."`),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -81,8 +83,8 @@ func TestCloudAgentPiCompactionSummaryUsesStandardStepWithoutAssistantEvent(t *t
 	if err := db.First(&task, "id = ?", taskID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if task.Operation != cloudAgentStepOperation {
-		t.Fatalf("summary operation = %q, want standard %q", task.Operation, cloudAgentStepOperation)
+	if task.Operation != cloudAgentContextCompactionOperation {
+		t.Fatalf("summary operation = %q, want %q", task.Operation, cloudAgentContextCompactionOperation)
 	}
 	var input map[string]any
 	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
@@ -95,7 +97,7 @@ func TestCloudAgentPiCompactionSummaryUsesStandardStepWithoutAssistantEvent(t *t
 		t.Fatalf("scheduled summary request has no canonical messages: %#v", canonical)
 	}
 	firstMessage, _ := canonicalMessages[0].(map[string]any)
-	if stringField(firstMessage, "role") != "system" || !strings.HasPrefix(stringField(firstMessage, "content"), cloudAgentCompactionSummarySystemPromptPrefix) {
+	if stringField(firstMessage, "role") != "system" || stringField(firstMessage, "content") != "Summarize the conversation." {
 		t.Fatalf("Pi summary system prompt was not preserved: %#v", firstMessage)
 	}
 
@@ -129,8 +131,8 @@ func TestCloudAgentPiCompactionSummaryUsesStandardStepWithoutAssistantEvent(t *t
 	if state.ActiveTaskID != "" {
 		t.Fatalf("summary step remained active: %q", state.ActiveTaskID)
 	}
-	if state.Step != initialState.Step+1 {
-		t.Fatalf("summary step = %d, want %d", state.Step, initialState.Step+1)
+	if state.Step != initialState.Step {
+		t.Fatalf("summary step = %d, want %d", state.Step, initialState.Step)
 	}
 	if !reflect.DeepEqual(state.Canonical, initialState.Canonical) {
 		t.Fatal("internal summary replaced canonical conversation")
@@ -179,26 +181,18 @@ func TestCloudAgentPiCompactedProjectionPreservesSummaryAndRecentToolResult(t *t
 	}
 }
 
-func TestCloudAgentPiCompactionSummarySkipsOrdinaryTranscriptValidation(t *testing.T) {
-	messages := []map[string]any{
-		{"role": "system", "content": cloudAgentCompactionSummarySystemPromptPrefix},
-		{"role": "assistant", "content": []any{map[string]any{
-			"type": "toolCall", "id": "unfinished", "name": "canvas_read", "arguments": map[string]any{},
-		}}},
-		{"role": "user", "content": "Serialized conversation."},
-	}
-	canonical, err := cloudAgentPiCanonicalForModelRequest(messages, canonicalAgentRequest{
-		Tools:        []map[string]interface{}{{"type": "function"}},
-		SystemPrompt: "ordinary Agent system prompt",
-	})
+func TestCloudAgentPiCompactionRequiresExplicitPurpose(t *testing.T) {
+	s, _, _ := agentMediaFixture(t)
+	root, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
 	if err != nil {
-		t.Fatalf("summary request failed validation: %v", err)
+		t.Fatal(err)
 	}
-	if len(canonical.Tools) != 0 {
-		t.Fatalf("summary request included Agent tools: %#v", canonical.Tools)
+	payload := piEventForTest(t, map[string]any{"purpose": "compaction", "messages": []map[string]any{{"role": "user", "content": "Summarize the conversation."}}})
+	if _, err := s.cloudAgentPiModel(context.Background(), "user", root.ID, payload); err == nil {
+		t.Fatal("compaction was accepted without its explicit system prompt")
 	}
-	if canonical.SystemPrompt != "" || stringField(canonical.Messages[0], "content") != cloudAgentCompactionSummarySystemPromptPrefix {
-		t.Fatalf("summary system prompt not isolated: %#v", canonical)
+	if got := cloudAgentPiModelOperation(context.Background()); got != cloudAgentStepOperation {
+		t.Fatalf("ordinary user text changed model operation: %s", got)
 	}
 }
 

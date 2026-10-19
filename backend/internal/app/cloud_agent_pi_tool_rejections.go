@@ -21,8 +21,30 @@ func (s *Service) handlePiToolValidationFailure(userID, runID string, data map[s
 			if err != nil {
 				return err
 			}
-			if _, recorded := cloudAgentToolMessage(&state, callID); recorded {
-				return nil
+			// 供应商可以跨步骤复用 call ID；只认当前 assistant 批次之后的回执。
+			for index := len(state.Canonical.Messages) - 1; index >= 0; index-- {
+				message := state.Canonical.Messages[index]
+				if stringField(message, "role") == "assistant" {
+					break
+				}
+				if stringField(message, "role") == "tool" && stringField(message, "tool_call_id") == callID {
+					return nil
+				}
+			}
+			// SDK rejects arguments before /tool advances Calls. Its declaration
+			// belongs to the latest committed model step, not the last executor.
+			if state.PiModelTaskID != "" {
+				var declared *cloudAgentCall
+				for i := range state.PiModelCalls {
+					if state.PiModelCalls[i].ID == callID && state.PiModelCalls[i].Function.Name == toolName {
+						declared = &state.PiModelCalls[i]
+						break
+					}
+				}
+				if declared == nil {
+					return fmt.Errorf("工具调用 %q 与已提交模型声明不一致", callID)
+				}
+				state.Calls, state.CallIndex = []cloudAgentCall{*declared}, 0
 			}
 			if state.CallIndex < 0 || state.CallIndex >= len(state.Calls) {
 				return fmt.Errorf("工具调用 %q 没有对应的模型工具调用", callID)

@@ -48,6 +48,19 @@ func TestCloudAgentPlanRequiresFirstApprovalOnlyInRequestApproval(t *testing.T) 
 	}
 }
 
+func TestCreationPlanningContinuesUntilConcreteMediaReview(t *testing.T) {
+	call := cloudAgentCall{ID: "planning-only"}
+	call.Function.Name = "plan_update"
+	call.Function.Arguments = `{"items":[{"id":"revise","title":"按备注调整规格与风格","status":"doing"},{"id":"review","title":"提交完整方案及报价","status":"pending"}]}`
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{Surface: "creation", PermissionMode: "request_approval"}}
+	if cloudAgentPlanRequiresFirstApproval(state, call) {
+		t.Fatal("creation paused before producing a concrete media plan and quote")
+	}
+	if _, err := cloudAgentApplyPlanUpdate(state, call); err != nil || len(state.Plan) != 2 {
+		t.Fatalf("planning checklist could not update: %v", err)
+	}
+}
+
 func TestCloudAgentInheritedPlanReachesFirstModelRequest(t *testing.T) {
 	s, db, root := reliableAgentRoot(t)
 	run, state := agentInterjectionState(t, s, root.ID)
@@ -121,6 +134,49 @@ func TestCloudAgentAskUserRequiresChoices(t *testing.T) {
 	call.Function.Arguments = `{"question":"只有一个选项","options":[{"label":"A"}]}`
 	if _, err := cloudAgentAskUser(call); err == nil {
 		t.Fatal("ask_user accepted a single option")
+	}
+}
+
+func TestCreationAutoQuestionsOnlyBlockForNecessaryDecisions(t *testing.T) {
+	for _, tc := range []struct{ permission, reason, detail, phase string }{
+		{"auto", "", "", "defaulted"},
+		{"auto", "preference", "", "defaulted"},
+		{"auto", "ambiguous_target", "两张历史图都有狗，无法确定用户指哪张", "question"},
+		{"auto", "missing_required_input", "用户要替换产品，但没有新产品图片或外观描述", "question"},
+		{"auto", "conflicting_requirements", "同时要求无字图和在图中显示标题", "question"},
+		{"request_approval", "preference", "", "question"},
+		{"read_only", "preference", "", "question"},
+	} {
+		t.Run(tc.permission+tc.reason, func(t *testing.T) {
+			state := &cloudAgentRuntime{Request: CloudAgentRequest{Surface: "creation", PermissionMode: tc.permission}}
+			call := cloudAgentCall{ID: "ask-creation"}
+			call.Function.Name = "ask_user"
+			call.Function.Arguments = mustMarshal(map[string]any{"question": "确认创作信息", "decisionType": tc.reason, "blockingDetail": tc.detail, "options": []map[string]any{{"label": "A"}, {"label": "B"}}})
+			result, err := cloudAgentAskUser(call, state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := result.(map[string]any)
+			if body["phase"] != tc.phase {
+				t.Fatalf("wrong decision: %#v", body)
+			}
+			bridge := cloudAgentPiToolResult(call, mustMarshal(result))
+			if (bridge["terminate"] == true) != (tc.phase == "question") {
+				t.Fatalf("runtime paused incorrectly: %#v", bridge)
+			}
+			if tc.phase == "defaulted" && (state.ConfirmationRounds != 0 || state.PendingConfirmationFingerprint != "") {
+				t.Fatal("optional question consumed a confirmation round")
+			}
+		})
+	}
+}
+
+func TestCreationBlockingQuestionRequiresReason(t *testing.T) {
+	state := &cloudAgentRuntime{Request: CloudAgentRequest{Surface: "creation", PermissionMode: "auto"}}
+	call := cloudAgentCall{}
+	call.Function.Arguments = `{"question":"确认信息","decisionType":"missing_required_input","options":[{"label":"A"},{"label":"B"}]}`
+	if _, err := cloudAgentAskUser(call, state); err == nil {
+		t.Fatal("unexplained blocking question accepted")
 	}
 }
 

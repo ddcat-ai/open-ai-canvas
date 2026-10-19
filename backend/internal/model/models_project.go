@@ -46,6 +46,10 @@ type Resource struct {
 	Height           int    `json:"height"`
 	DurationMs       int64  `json:"durationMs"`
 	ETag             string `json:"etag" gorm:"size:160"`
+	// URL 作品先按稳定资源身份交付，原件落盘不阻塞后续创作。
+	SourceTaskID    string `json:"-" gorm:"size:36"`
+	TransferPending bool   `json:"transferPending,omitempty" gorm:"not null;default:false"`
+	BrowserDirect   bool   `json:"browserDirect,omitempty" gorm:"not null;default:false"`
 	// 浏览器兼容播放副本（HEVC/H.265 原片在 Chrome 等无法解码，由 ffmpeg 转 H.264）：
 	// PlaybackStatus: none|processing|ready|failed；PlaybackObjectKey 为本地播放目录下的文件名。
 	PlaybackStatus    string `json:"playbackStatus" gorm:"index;size:24"`
@@ -62,6 +66,21 @@ type Resource struct {
 	Error     string    `json:"error"`
 	CreatedAt time.Time `json:"createdAt" gorm:"index:idx_resources_user_created,priority:2"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ResourceTransfer keeps temporary upstream credentials encrypted and survives browser/server restarts.
+type ResourceTransfer struct {
+	ResourceID     string `gorm:"primaryKey;size:36"`
+	UserID         string `gorm:"index;size:36"`
+	SourceURL      string `json:"-" gorm:"type:text"`
+	UploadJSON     string `gorm:"type:text"`
+	Attempts       int
+	NextAttemptAt  time.Time  `gorm:"index:idx_resource_transfers_due,priority:1"`
+	LeaseOwner     string     `gorm:"size:64"`
+	LeaseExpiresAt *time.Time `gorm:"index:idx_resource_transfers_due,priority:2"`
+	LastError      string     `gorm:"type:text"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // ResourceDeletionJob is the durable handoff between database deletion and

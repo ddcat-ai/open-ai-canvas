@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { canvasResourceMentionToken } from "../src/lib/canvas/canvas-resource-references";
-import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio, creationUploadAccept, type CreationAttachment } from "../src/pages/create/creation-assets";
+import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio, creationUploadAccept, splitCreationAttachments, type CreationAttachment } from "../src/pages/create/creation-assets";
 import {
     buildCreationMentionReferences,
     displayCreationPrompt,
@@ -27,6 +27,18 @@ function mediaAttachment(id: string, type: string): CreationAttachment {
 }
 
 describe("creation references", () => {
+    test("商品和竞品用途保留在 Agent 附件，不串入供应商的首尾帧角色", () => {
+        const product: CreationAttachment = { ...imageAttachment("product"), role: "product", storageKey: "resource:product" };
+        const competitor: CreationAttachment = { ...mediaAttachment("competitor", "video/mp4"), role: "competitor" };
+        const references = splitCreationAttachments([product, competitor]);
+        expect(references.referenceImages[0]).toMatchObject({ id: "product", storageKey: "resource:product" });
+        expect(references.referenceImages[0].role).toBeUndefined();
+        expect(references.referenceVideos[0]).toMatchObject({ id: "competitor", url: "blob:competitor" });
+        expect(references.referenceVideos[0].role).toBeUndefined();
+        expect(product.role).toBe("product");
+        expect(competitor.role).toBe("competitor");
+    });
+
     test("removes attachments and prompt tokens beyond the current model limit", () => {
         const attachments = [imageAttachment("first"), imageAttachment("second"), imageAttachment("third")];
         const references = buildCreationMentionReferences([], attachments);

@@ -97,14 +97,14 @@ func stripCloudAgentLessonBlock(system string) string {
 	return system
 }
 
-func (s *Service) attachCloudAgentLessons(canonical *canonicalAgentRequest, userID, taskText string) {
+func (s *Service) attachCloudAgentLessons(canonical *canonicalAgentRequest, userID, taskText, surface string) {
 	if canonical == nil || strings.TrimSpace(userID) == "" {
 		return
 	}
 	if strings.Contains(canonical.SystemPrompt, cloudAgentLessonBlockMarker) {
 		return
 	}
-	if block := s.cloudAgentLessonsBlock(userID, taskText); block != "" {
+	if block := s.cloudAgentLessonsBlock(userID, taskText, surface); block != "" {
 		canonical.SystemPrompt += block
 	}
 }
@@ -116,7 +116,21 @@ func cloudAgentRememberLesson(repo *repository.Repository, userID string, state 
 	if state.Request.PermissionMode == "read_only" {
 		return nil, BadAuthRequest("只读模式不能写入个人记忆")
 	}
-	if cloudAgentLessonEligibleSuccesses(state) == 0 {
+	eligible := cloudAgentLessonEligibleSuccesses(state) > 0
+	if state.Request.Surface == "creation" {
+		eligible = false
+		for _, id := range state.TaskIDs {
+			task, err := repo.TaskForUser(userID, id)
+			if err != nil {
+				return nil, err
+			}
+			if task.AgentRunID != "" && task.Status == model.TaskStatusSucceeded && (task.Type == "canvas_image" || task.Type == "canvas_video" || task.Type == "canvas_audio") {
+				eligible = true
+				break
+			}
+		}
+	}
+	if !eligible {
 		return nil, BadAuthRequest("本轮还没有任何会改变画布或生成结果的工具成功执行过，没有可沉淀的经验；先在真实任务里跑通，再把跑通的路线记下来")
 	}
 	if cloudAgentRememberLessonCount(state) >= cloudAgentRememberLessonMaxPerRun {
@@ -143,6 +157,11 @@ func cloudAgentRememberLesson(repo *repository.Repository, userID string, state 
 	}
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, BadAuthRequest("工具参数必须是只含支持字段的JSON对象")
+	}
+	if state.Request.Surface == "creation" {
+		args.Category = "smart_creation"
+	} else if args.Category == "smart_creation" {
+		return nil, BadAuthRequest("智能创作记忆只能在首页创作入口记录")
 	}
 	if _, known := cloudAgentLessonCategoryOf(args.Category); !known {
 		return nil, BadAuthRequest("category 必须是以下之一：" + strings.Join(cloudAgentLessonCategoryKeys(), " / ") +
@@ -275,7 +294,7 @@ func cloudAgentFindDuplicateLesson(repo *repository.Repository, userID string, c
 	want := cloudAgentLessonFingerprint(candidate.Situation, candidate.Lesson, candidate.StepsJSON)
 	for index := range existing {
 		lesson := existing[index]
-		if lesson.Status == model.AgentLessonStatusRejected {
+		if lesson.Status == model.AgentLessonStatusRejected || (lesson.Category == "smart_creation") != (candidate.Category == "smart_creation") {
 			continue
 		}
 		if cloudAgentLessonFingerprint(lesson.Situation, lesson.Lesson, lesson.StepsJSON) == want {
@@ -334,6 +353,7 @@ type cloudAgentLessonCategory struct {
 }
 
 var cloudAgentLessonCategories = []cloudAgentLessonCategory{
+	{Key: "smart_creation", Label: "智能创作"},
 	{Key: "storyboard", Label: "分镜"},
 	{Key: "video", Label: "视频生成"},
 	{Key: "image", Label: "图像生成"},
@@ -388,19 +408,24 @@ type cloudAgentLessonView struct {
 	MatchedN int
 }
 
-func (s *Service) cloudAgentLessonsBlock(userID, taskText string) string {
+func (s *Service) cloudAgentLessonsBlock(userID, taskText, surface string) string {
 	counts, err := s.repo.ApprovedAgentLessonCategoryCounts(userID)
 	if err != nil {
 		return ""
 	}
 	total := 0
+	scopedCounts := counts[:0]
 	for _, row := range counts {
-		total += int(row.Count)
+		if (row.Category == "smart_creation") == (surface == "creation") {
+			total += int(row.Count)
+			scopedCounts = append(scopedCounts, row)
+		}
 	}
+	counts = scopedCounts
 	if total == 0 {
 		return cloudAgentLessonsBlock(cloudAgentLessonView{})
 	}
-	lessons, err := s.repo.ApprovedAgentLessons(userID, 0)
+	lessons, err := s.repo.ApprovedAgentLessonsForSurface(userID, surface, 0)
 	if err != nil {
 		return cloudAgentLessonsBlock(cloudAgentLessonView{Total: total, Counts: counts})
 	}
@@ -644,11 +669,20 @@ func cloudAgentLessonMatchScore(lesson model.AgentLesson, tokens []string) int {
 	return score
 }
 
-func cloudAgentSearchLessons(repo *repository.Repository, userID, keyword string, limit int) ([]model.AgentLesson, error) {
+func cloudAgentSearchLessons(repo *repository.Repository, userID, keyword, surface, category string, limit int) ([]model.AgentLesson, error) {
 	tokens := cloudAgentLessonSearchTokens(keyword)
-	all, err := repo.ApprovedAgentLessons(userID, 0)
+	all, err := repo.ApprovedAgentLessonsForSurface(userID, surface, 0)
 	if err != nil {
 		return nil, err
+	}
+	if category != "" {
+		filtered := all[:0]
+		for _, lesson := range all {
+			if lesson.Category == category {
+				filtered = append(filtered, lesson)
+			}
+		}
+		all = filtered
 	}
 	if len(tokens) == 0 {
 		return cloudAgentLimitLessons(all, limit), nil
@@ -687,7 +721,7 @@ func cloudAgentLimitLessons(lessons []model.AgentLesson, limit int) []model.Agen
 	return lessons[:limit]
 }
 
-func cloudAgentRecallLessons(repo *repository.Repository, userID string, call cloudAgentCall) (any, error) {
+func cloudAgentRecallLessons(repo *repository.Repository, userID, surface string, call cloudAgentCall) (any, error) {
 	var args struct {
 		Keyword  string `json:"keyword"`
 		Category string `json:"category"`
@@ -698,20 +732,33 @@ func cloudAgentRecallLessons(repo *repository.Repository, userID string, call cl
 		return nil, BadAuthRequest("工具参数必须是只含支持字段的JSON对象")
 	}
 	keyword, category, topic := strings.TrimSpace(args.Keyword), strings.TrimSpace(args.Category), strings.TrimSpace(args.Topic)
+	if category != "" && (category == "smart_creation") != (surface == "creation") {
+		return nil, BadAuthRequest("该分类不适用于当前创作入口")
+	}
 
 	if topic != "" {
-		lesson, err := repo.AgentLessonByTopic(userID, topic)
+		lessons, err := repo.ApprovedAgentLessonsForSurface(userID, surface, 0)
 		if err != nil {
-			return nil, BadAuthRequest("没有这个 topic 的已批准记忆：" + topic + "。先用 recall_lessons 不带参数（或带 category）列出索引，照抄其中的 topic")
-		}
-		if err := repo.BumpAgentLessonHits(userID, []string{lesson.ID}); err != nil {
 			return nil, err
 		}
-		return cloudAgentLessonResult([]model.AgentLesson{*lesson}, true), nil
+		var match *model.AgentLesson
+		for i := range lessons {
+			lesson := &lessons[i]
+			if lesson.Topic == topic && (category == "" || lesson.Category == category) && (match == nil || lesson.UpdatedAt.After(match.UpdatedAt)) {
+				match = lesson
+			}
+		}
+		if match == nil {
+			return nil, BadAuthRequest("没有这个 topic 的已批准记忆：" + topic + "。先用 recall_lessons 不带参数（或带 category）列出索引，照抄其中的 topic")
+		}
+		if err := repo.BumpAgentLessonHits(userID, []string{match.ID}); err != nil {
+			return nil, err
+		}
+		return cloudAgentLessonResult([]model.AgentLesson{*match}, true), nil
 	}
 
 	if keyword != "" {
-		lessons, err := cloudAgentSearchLessons(repo, userID, keyword, args.Limit)
+		lessons, err := cloudAgentSearchLessons(repo, userID, keyword, surface, category, args.Limit)
 		if err != nil {
 			return nil, err
 		}
@@ -738,7 +785,7 @@ func cloudAgentRecallLessons(repo *repository.Repository, userID string, call cl
 		}
 		return cloudAgentLessonResult(lessons, false), nil
 	}
-	lessons, err := repo.ApprovedAgentLessons(userID, 0)
+	lessons, err := repo.ApprovedAgentLessonsForSurface(userID, surface, 0)
 	if err != nil {
 		return nil, err
 	}

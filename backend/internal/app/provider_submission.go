@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,14 +22,31 @@ func withProviderSubmissionKey(ctx context.Context, attempt *model.RouteAttempt)
 }
 
 func (s *Service) createDirectTaskAttempt(task *model.Task) (*model.RouteAttempt, error) {
-	if task.Attempts > 1 && task.ProviderRequestID == "" {
+	attempts, err := s.repo.RouteAttempts(task.ID, task.RouteRun)
+	if err != nil {
+		return nil, err
+	}
+	if task.Attempts > 1 && task.ProviderRequestID == "" && (len(attempts) == 0 || attempts[len(attempts)-1].DispatchState != "rejected_no_job") {
 		return nil, routeDispatchUncertainError{"旧任务已尝试执行但缺少提交记录，为避免重复扣费已停止自动重发"}
 	}
 	id, err := s.repo.NextPrefixedID("ATTEMPT")
 	if err != nil {
 		return nil, err
 	}
-	attempt := &model.RouteAttempt{ID: id, TaskID: task.ID, RouteRun: task.RouteRun, AttemptNumber: 1, ChannelModelID: task.ChannelModelID, Status: "selected", DispatchState: "not_sent", StartedAt: time.Now()}
+	attempt := &model.RouteAttempt{ID: id, TaskID: task.ID, RouteRun: task.RouteRun, AttemptNumber: len(attempts) + 1, ChannelModelID: task.ChannelModelID, Status: "selected", DispatchState: "not_sent", StartedAt: time.Now()}
+	attempt.RouteID = task.RouteID
+	if task.InputJSON != "" {
+		raw, err := s.decryptTaskInputJSON(task.InputJSON)
+		if err != nil {
+			return nil, err
+		}
+		var input map[string]any
+		if err := json.Unmarshal([]byte(raw), &input); err != nil {
+			return nil, err
+		}
+		config, _ := input["config"].(map[string]any)
+		attempt.ChannelID = stringValue(config["channelId"])
+	}
 	if task.ProviderRequestID != "" {
 		attempt.ProviderRequestID, attempt.DispatchState = task.ProviderRequestID, "accepted"
 	}

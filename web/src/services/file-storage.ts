@@ -105,6 +105,7 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
                 preview: poster,
             };
         } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") throw error;
             // 与图片上传同一套判定：永久性失败必须当场暴露，不能混进“稍后自动同步”。
             if (error instanceof ResourceUploadError && error.permanent) throw error;
             remoteUploadError = error instanceof Error ? error.message : "媒体直传失败";
@@ -125,6 +126,8 @@ export async function resolveMediaUrl(storageKey?: string, fallback = "", varian
     if (!storageKey) return fallback;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (resourceId) {
+        // Worker/SSR consumers cannot resolve the browser-relative `/api` base URL.
+        if ((typeof window === "undefined" || typeof window.location === "undefined") && typeof document === "undefined") return fallback;
         // 展示直接命中 OSS/CDN；平台资源文件接口只保留给私有源站代理或本地存储兜底。
         return resolveResourceAccessURL((await getResourceAccess(storageKey, "display", variant)).url);
     }

@@ -50,4 +50,30 @@ describe("创作方案执行合同", () => {
         expect(mergeCreativeBrief(known, [{ field: "seconds", value: 6, source: "user", status: "confirmed" }], "short-film", "请继续")).toEqual(known);
         expect(mergeCreativeBrief(known, [{ field: "seconds", value: 30, source: "user", status: "confirmed", evidence: "改为30秒" }], "short-film", "时长改为30秒").seconds?.value).toBe(30);
     });
+    test("电商方案把同一份风格锁编译到每个待生成图片", () => {
+        const proposal = normalizeCreativeProposal({
+            title: "地垫套图",
+            summary: "统一风格的商品图",
+            markdown: "先确认风格锚点，再批量生成。",
+            deliverables: ["主图", "浴室场景图"],
+            styleBible: {
+                summary: "温暖自然的北欧家居商业摄影",
+                globalPrompt: "温暖自然的北欧家居商业摄影，柔和侧光，真实材质",
+                negativePrompt: "不要改变商品结构",
+                palette: ["米白", "木色"],
+                lighting: "柔和侧光",
+                camera: "轻微俯拍",
+                composition: "主体完整可见",
+                material: "真实布料纹理",
+                preserve: ["商品轮廓", "商品颜色"],
+                avoid: ["多余配件"],
+                anchorRef: "hero",
+            },
+            workflow: { nodes: [{ ref: "hero", kind: "image", title: "主图", prompt: "白底主图" }, { ref: "scene", kind: "image", title: "浴室场景", prompt: "浴室使用场景" }], edges: [] },
+            generationItems: [{ ref: "hero", mode: "image", model: "managed::image-model" }, { ref: "scene", mode: "image", model: "managed::image-model" }],
+        }, "p", 1, config);
+        expect(proposal.styleBible?.fingerprint).toMatch(/^style-/);
+        expect(proposal.workflow.nodes.every((node) => node.prompt.includes(`风格锁定（${proposal.styleBible!.fingerprint}）`))).toBe(true);
+        expect(proposal.generationItems.every((item) => item.styleFingerprint === proposal.styleBible!.fingerprint)).toBe(true);
+    });
 });

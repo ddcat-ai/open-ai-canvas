@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 
 	"yingce/backend/internal/model"
@@ -58,11 +59,26 @@ func (r *Repository) CanvasAgentActivity(userID, canvasID string) (*CanvasAgentA
 	return &activity, nil
 }
 
-// Must run first in the task-creation transaction, before reads/credit writes.
-// The canvas row serializes admission across processes as well as browsers.
+// Runs after the user/session lock and before credit writes. The canvas row
+// serializes canvas admission; homepage creation uses its own session boundary.
 func (r *Repository) requireExclusiveCanvasAgent(task *model.Task) error {
 	if task.Operation != "cloud_agent" {
 		return nil
+	}
+	if task.ProjectID == "" {
+		var input struct {
+			Agent struct {
+				Request struct {
+					Surface string `json:"surface"`
+				} `json:"request"`
+			} `json:"cloudAgent"`
+		}
+		if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+			return err
+		}
+		if input.Agent.Request.Surface == "creation" {
+			return nil
+		}
 	}
 	if err := r.LockCanvasMutation(task.UserID, task.ProjectID); err != nil {
 		return err

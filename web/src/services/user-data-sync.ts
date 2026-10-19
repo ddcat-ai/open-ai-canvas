@@ -8,7 +8,7 @@ import { rebaseCanvasLocalEdits } from "@/lib/canvas/canvas-sync-rebase";
 import { fenceRejectedTaskTimestampMutation, repairLegacyTaskIdFence } from "@/lib/canvas/canvas-task-mutation";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
-import { appQueryClient } from "@/lib/query-client";
+import { appQueryClient, invalidateAssetCatalogQueries } from "@/lib/query-client";
 import { parseAssetRecordList } from "@/lib/asset-record";
 import { rebaseAssetSnapshot } from "@/lib/asset-storage-revision";
 import { assetForRemoteSync } from "@/lib/asset-remote-sync";
@@ -1398,6 +1398,7 @@ async function syncRemoteAssetBatch(dirtyAssets: Asset[], uploaded: Map<string, 
         requireCurrentSession();
         acknowledgedAssets.set(source.id, source);
         verifiedAssets.add(source.id);
+        invalidateAssetCatalogQueries();
     }
 }
 

@@ -130,7 +130,7 @@ func (r *Repository) UserStoredFileBytes(userID string) (int64, error) {
 			COALESCE((
 				SELECT SUM(physical_resources.size)
 				FROM (
-					SELECT MAX(size) AS size
+					SELECT MAX(size + CASE WHEN thumbnail_status = 'ready' THEN thumbnail_size ELSE 0 END) AS size
 					FROM resources
 					WHERE user_id = ? AND status = ?
 					GROUP BY COALESCE(NULLIF(provider, ''), 'local'), endpoint, bucket, object_key
@@ -152,6 +152,16 @@ func (r *Repository) CreateResource(resource *model.Resource) error {
 
 func (r *Repository) SaveResource(resource *model.Resource) error {
 	return r.db.Save(resource).Error
+}
+
+func (r *Repository) SetGeneratedResourceSourceTask(userID, id, taskID string) error {
+	return r.db.Model(&model.Resource{}).Where("id = ? AND user_id = ? AND (source_task_id = '' OR source_task_id IS NULL)", id, userID).UpdateColumn("source_task_id", taskID).Error
+}
+
+func (r *Repository) BeginResourceThumbnailUpload(userID, id string) (bool, error) {
+	result := r.db.Model(&model.Resource{}).Where("id = ? AND user_id = ? AND status = ? AND transfer_pending = ?", id, userID, model.ResourceStatusReady, false).
+		Updates(map[string]any{"thumbnail_status": "processing", "updated_at": time.Now()})
+	return result.RowsAffected == 1, result.Error
 }
 
 // UpdateResourceThumbnail only updates a still-ready row and cannot resurrect a deleted resource.
@@ -261,7 +271,7 @@ func (r *Repository) ResourceCleanupCandidates(incompleteBefore time.Time, ready
 	}
 	err := r.db.Where(
 		"(status IN ? AND updated_at <= ?) OR (status = ? AND created_at <= ?)",
-		[]model.ResourceStatus{model.ResourceStatusPending, model.ResourceStatusFailed}, incompleteBefore,
+		[]model.ResourceStatus{model.ResourceStatusPending, model.ResourceStatusFailed, model.ResourceStatusCanceling}, incompleteBefore,
 		model.ResourceStatusReady, readyBefore,
 	).Order("created_at asc, id asc").Limit(limit).Find(&resources).Error
 	return resources, err

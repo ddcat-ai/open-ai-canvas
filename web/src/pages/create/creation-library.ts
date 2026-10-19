@@ -1,5 +1,5 @@
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
-import type { CreationMode } from "@/lib/creation-mode";
+import type { CreationMode } from "./creation-types";
 import type { CreationReferenceLimits } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromAudioAsset, creationAttachmentFromExternalAsset, creationAttachmentFromVideoAsset, type CreationAttachment } from "./creation-assets";
 

@@ -402,6 +402,10 @@ func applyImageParameterValues(config *providerConfig, profile *ImageCapabilityC
 				values["size"] = pixels
 			} else if ratio := imageSizeRatioForDeclaredPreset(profile, size, resolution); ratio != "" && field.Accepts(ratio) {
 				values["size"] = ratio
+			} else if !profile.Resolution.Supported && field.Encoding == "pixels" {
+				if pixels := imageParameterPixelsForRatio(field, size); pixels != "" {
+					values["size"] = pixels
+				}
 			}
 		}
 	}
@@ -420,11 +424,47 @@ func applyImageParameterValues(config *providerConfig, profile *ImageCapabilityC
 	config.Count, config.TransparentBackground = text("count"), text("transparentBackground")
 	if imageSizePixelOutbound(profile, config.InterfaceType) {
 		config.Size = resolveImageTaskSize(profile, config.InterfaceType, config.Size, config.ImageResolution)
+		if strings.Contains(config.Size, ":") && !profile.Resolution.Supported {
+			for _, field := range profile.Parameters {
+				if field.Name == "size" && field.IsEnabled() {
+					if pixels := imageParameterPixelsForRatio(field, config.Size); pixels != "" {
+						config.Size, config.ImageParameters["size"] = pixels, pixels
+					}
+				}
+			}
+		}
 		if strings.Contains(config.Size, ":") {
 			return BadAuthRequest("当前比例与分辨率缺少明确的像素尺寸映射")
 		}
 	}
 	return nil
+}
+
+// Pixel-only models need no ratio preset table. Prefer their same-ratio default,
+// otherwise the smallest declared size. Normal price/budget checks still apply.
+func imageParameterPixelsForRatio(field protocol.ImageParameter, size string) string {
+	if !strings.Contains(size, ":") {
+		return ""
+	}
+	ratio := normalizeDeclaredImageRatio(size)
+	best, bestArea := "", int64(0)
+	for _, value := range field.Values {
+		pixels := fmt.Sprint(value)
+		w, h, ok := strings.Cut(strings.ToLower(pixels), "x")
+		width, errW := strconv.ParseInt(w, 10, 32)
+		height, errH := strconv.ParseInt(h, 10, 32)
+		if !ok || errW != nil || errH != nil || width <= 0 || height <= 0 || normalizeDeclaredImageRatio(w+":"+h) != ratio {
+			continue
+		}
+		if pixels == fmt.Sprint(field.Default) {
+			return pixels
+		}
+		area := width * height
+		if best == "" || area < bestArea {
+			best, bestArea = pixels, area
+		}
+	}
+	return best
 }
 
 func imagePriceSelectorForParameters(parameters []protocol.ImageParameter, intent ModelRequestIntent) map[string]string {

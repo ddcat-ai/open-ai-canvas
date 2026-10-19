@@ -1,4 +1,4 @@
-import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, normalizeVideoResolutionKey, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imageParameterRequest, imageParameterDefaults, imageParameterAccepts } from "./image-parameters";
 import { imageSizePresets } from "@/lib/image-size-presets";
@@ -18,6 +18,7 @@ export type ModelRequirements = {
     input?: ModelInputSummary;
     videoOperation?: string;
     videoSeconds?: string;
+    vquality?: string;
     imageSize?: string;
     options?: Record<string, unknown>;
 };
@@ -140,7 +141,8 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
 
     if (capability === "video") {
         const profile = modelCapabilityConfigFor(config, model).video!;
-        if (requirements.videoSeconds && !videoDurationAllowed(profile, Number(requirements.videoSeconds))) return "不支持当前视频时长";
+        const resolution = requirements.vquality || String(requirements.options?.vquality || requirements.options?.resolution || "");
+        if (requirements.videoSeconds && !videoDurationAllowed(profile, Number(requirements.videoSeconds), resolution)) return "不支持当前视频时长";
         if (!input) return "";
         if (visualInputCount > profile.references.maxImages) return `最多支持 ${profile.references.maxImages} 张参考图`;
         if (input.videoCount > profile.references.maxVideos) return `最多支持 ${profile.references.maxVideos} 个参考视频`;
@@ -222,7 +224,7 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
     if (operation && spec.operations?.length && !spec.operations.includes(operation)) return "不支持当前生成模式";
     // 图片创作状态也会携带全局默认视频时长；这个字段只对视频模型有意义，
     // 不能把它拼进图片逻辑模型的能力匹配，否则图片模型会被误判为“不支持当前时长”。
-    const options = {
+    const options: Record<string, unknown> = {
         ...requirements.options,
         ...(requirements.capability === "video" && requirements.videoSeconds ? { videoSeconds: requirements.videoSeconds } : {}),
         ...(requirements.capability === "image" && requirements.imageSize ? { size: requirements.imageSize } : {}),
@@ -232,7 +234,10 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
         const field = spec.imageParameters?.find((p) => p.name === name);
         if (field && name !== "size" && !imageParameterAccepts(field, value)) return `不支持当前${field.label}`;
         if ((name === "quality" || name === "imageResolution") && /^(auto|any)$/i.test(String(value).trim())) continue;
-        const constraint = spec.options?.[name];
+        const durationByResolution = name === "videoSeconds" && spec.capability === "video"
+            ? Object.entries(spec.videoDurationByResolution || {}).find(([resolution]) => normalizeVideoResolutionKey(resolution) === normalizeVideoResolutionKey(String(options.vquality || requirements.vquality || "")))?.[1]
+            : undefined;
+        const constraint = durationByResolution || spec.options?.[name];
         if (!constraint || !logicalOptionMatches(name, constraint, value)) return logicalOptionError(name);
     }
     return "";

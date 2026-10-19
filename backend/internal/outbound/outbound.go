@@ -135,6 +135,53 @@ func OutboundHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
+// ModelMediaHTTPClient prevents provider writes from being replayed and strips
+// credentials from redirects that leave the request origin.
+func ModelMediaHTTPClient(timeout time.Duration) *http.Client {
+	client := OutboundHTTPClient(timeout)
+	client.CheckRedirect = modelMediaRedirect
+	return client
+}
+
+func ModelMediaHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.Client {
+	client := OutboundHTTPClientWithProxy(timeout, proxyURL)
+	client.CheckRedirect = modelMediaRedirect
+	return client
+}
+
+func modelMediaRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxOutboundRedirects {
+		return errors.New("外部服务重定向次数过多")
+	}
+	if len(via) == 0 || (via[0].Method != http.MethodGet && via[0].Method != http.MethodHead) {
+		return errors.New("外部服务不允许重定向写入请求")
+	}
+	// Go copies the initial headers on every hop, including redirects back to
+	// the original origin; clear them for the rest of a cross-origin chain.
+	for _, previous := range via {
+		if !sameRedirectOrigin(previous.URL, req.URL) {
+			req.Header = make(http.Header)
+			req.Host = ""
+			break
+		}
+	}
+	_, err := ValidateOutboundURL(req.URL.String())
+	return err
+}
+
+func sameRedirectOrigin(a, b *url.URL) bool {
+	port := func(u *url.URL) string {
+		if p := u.Port(); p != "" {
+			return p
+		}
+		if strings.EqualFold(u.Scheme, "https") {
+			return "443"
+		}
+		return "80"
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Hostname(), b.Hostname()) && port(a) == port(b)
+}
+
 // OutboundHTTPClientWithProxy 创建使用指定代理的出站客户端。
 // proxyURL 支持 socks5://、http://、https:// 格式；空字符串时回退到全局客户端。
 func OutboundHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.Client {

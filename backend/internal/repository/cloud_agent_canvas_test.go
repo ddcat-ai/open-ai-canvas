@@ -47,7 +47,7 @@ func testCanvasAgentAdmissionAcrossConnections(t *testing.T, a, b *Repository) {
 		go func(i int, repo *Repository) {
 			defer wg.Done()
 			<-start
-			results <- repo.CreateTaskWithActiveLimit(&model.Task{ID: fmt.Sprintf("run-%d", i), UserID: "user", ProjectID: "canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay}, 100)
+			results <- repo.CreateTaskWithActiveLimit(&model.Task{ID: fmt.Sprintf("run-%d", i), UserID: "user", ProjectID: "canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, InputJSON: `{}`}, 100)
 		}(i, repo)
 	}
 	close(start)
@@ -85,7 +85,7 @@ func testCanvasAgentAdmissionAcrossConnections(t *testing.T, a, b *Repository) {
 	if err := b.db.Create(&model.CanvasProject{ID: "other-canvas", UserID: "user"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := b.CreateTaskWithActiveLimit(&model.Task{ID: "other-agent", UserID: "user", ProjectID: "other-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay}, 100); err != nil {
+	if err := b.CreateTaskWithActiveLimit(&model.Task{ID: "other-agent", UserID: "user", ProjectID: "other-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, InputJSON: `{}`}, 100); err != nil {
 		t.Fatalf("different canvas blocked: %v", err)
 	}
 }

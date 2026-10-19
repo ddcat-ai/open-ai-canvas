@@ -219,6 +219,11 @@ func resourceDeletionJobs(userID string, physicalObjects map[string]*model.Resou
 			StorageSettingID: resource.StorageSettingID, ObjectKey: resource.ObjectKey,
 			Status: model.ResourceDeletionStatusPending, NextAttemptAt: now,
 		})
+		if resource.ThumbnailStatus == "ready" {
+			job := jobs[len(jobs)-1]
+			job.ID, job.ObjectKey = newID(), assets.ThumbnailObjectKey(resource.ObjectKey)
+			jobs = append(jobs, job)
+		}
 	}
 	return jobs
 }
@@ -297,6 +302,11 @@ func (s *Service) deleteStoredResourceObject(userID string, resource *model.Reso
 	if protected {
 		return errors.New("资源仍被画布历史版本引用")
 	}
+	return s.deleteResourceObjectAtKey(userID, resource)
+}
+
+// Caller must establish that this exact object key is unreferenced or an unpublished derivative.
+func (s *Service) deleteResourceObjectAtKey(userID string, resource *model.Resource) error {
 	switch strings.ToLower(strings.TrimSpace(resource.Provider)) {
 	case "", "local":
 		return s.deleteLocalResourceObject(resource.ObjectKey)

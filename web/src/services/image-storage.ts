@@ -51,7 +51,7 @@ export async function uploadImage(input: string | Blob, onProgress?: (uploadedBy
     let remoteUploadError = "";
     try {
         const resource = await uploadResourceFile(blob, "image", { width: meta.width, height: meta.height, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey }, onProgress);
-        await primeResourceBlobCache(resourceStorageKey(resource.id), blob).catch(() => "");
+        await primeResourceBlobCache(resourceStorageKey(resource.id), blob.type ? blob : blob.slice(0, blob.size, resource.mimeType)).catch(() => "");
         URL.revokeObjectURL(previewUrl);
         return {
             url: resource.publicUrl || resourceFileUrl(resource.id),
@@ -62,6 +62,7 @@ export async function uploadImage(input: string | Blob, onProgress?: (uploadedBy
             mimeType: resource.mimeType || blob.type || meta.mimeType,
         };
     } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") throw error;
         // 鉴权失效、越权、体积超限这类失败重传也是同样结果，不能退化成"稍后自动同步"。
         if (error instanceof ResourceUploadError && error.permanent) throw error;
         remoteUploadError = error instanceof Error ? error.message : "图片直传失败";
@@ -81,6 +82,10 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
     if (!storageKey) return fallback;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (resourceId) {
+        // Worker/SSR consumers cannot resolve the browser-relative `/api` base URL.
+        // They already carry a usable fallback from the materialized asset and must
+        // not turn a local persistence pass into a network URL parsing failure.
+        if ((typeof window === "undefined" || typeof window.location === "undefined") && typeof document === "undefined") return fallback;
         // 远程资源展示直接使用 OSS/CDN 授权地址，不把媒体内容读进浏览器 Blob。
         return resolveResourceAccessURL((await getResourceAccess(storageKey, "display")).url);
     }

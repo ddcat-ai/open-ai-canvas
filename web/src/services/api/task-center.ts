@@ -1,5 +1,5 @@
 import { generationErrorMessage } from "@/lib/generation-error";
-import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
+import { ApiError, http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -20,6 +20,7 @@ export type GenerationTaskOutput = {
 
 export type GenerationTask = {
     id: string;
+    source?: "public-api";
     clientOperationId?: string;
     retryOf?: string;
     attemptGroupId?: string;
@@ -123,9 +124,10 @@ export type CreateTaskInput = {
     operation?: string;
     prompt: string;
     provider?: string;
-    model?: string;
+	model?: string;
 	logicalModelId?: string;
-    input?: Record<string, unknown>;
+	idempotencyKey?: string;
+	input?: Record<string, unknown>;
 };
 export function createGenerationTask(input: CreateTaskInput) {
     return http.post<GenerationTask>("/tasks", input).then((task) => {
@@ -207,17 +209,18 @@ async function collectGenerationTaskPages<T>(readPage: (request: GenerationTaskP
 }
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
-    return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
+    return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal, timeout: 15_000 });
 }
 
 type GenerationTaskSubscriptionDependencies = {
     queryTask(id: string, options?: { signal?: AbortSignal }): Promise<GenerationTask>;
-    waitTask(id: string, options?: { signal?: AbortSignal; initialTask?: GenerationTask; onTaskUpdate?: (task: GenerationTask) => void }): Promise<GenerationTask>;
+    waitTask(id: string, options?: WaitForGenerationTaskOptions): Promise<GenerationTask>;
 };
 
 export function createGenerationTaskSubscriptionService(dependencies: GenerationTaskSubscriptionDependencies) {
     type Entry = {
         listeners: Set<(task: GenerationTask) => void>;
+        errorListeners: Set<(taskId: string, error: unknown) => void>;
         latest?: GenerationTask;
         observation?: Promise<void>;
         controller?: AbortController;
@@ -227,7 +230,7 @@ export function createGenerationTaskSubscriptionService(dependencies: Generation
     };
     const entries = new Map<string, Entry>();
     const publish = (entry: Entry, task: GenerationTask) => {
-        if (entry.scope !== getActiveUserScope() || !entry.listeners.size) return;
+        if (entry.scope !== getActiveUserScope() || !entry.listeners.size || entry.controller?.signal.aborted) return;
         entry.latest = task;
         for (const listener of entry.listeners) listener(task);
     };
@@ -250,8 +253,11 @@ export function createGenerationTaskSubscriptionService(dependencies: Generation
             });
             publish(entry, terminal);
         })().catch((error) => {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError") || entry.scope !== getActiveUserScope() || !entry.listeners.size) return;
             console.warn("生成任务观察中断，将重连原任务", { taskId: id, error });
+            if (!entry.latest || !isTerminalGenerationTask(entry.latest)) {
+                for (const listener of entry.errorListeners) listener(id, error);
+            }
         }).finally(() => {
             entry.observation = undefined;
             if (controller.signal.aborted || !entry.listeners.size || entry.scope !== getActiveUserScope()) return;
@@ -265,39 +271,48 @@ export function createGenerationTaskSubscriptionService(dependencies: Generation
     };
     let listening = false;
     return {
-        subscribe(ids: readonly string[], listener: (task: GenerationTask) => void) {
+        subscribe(ids: readonly string[], listener: (task: GenerationTask) => void, onError?: (taskId: string, error: unknown) => void) {
             if (!listening && typeof window !== "undefined") {
                 window.addEventListener("online", reconnect);
                 listening = true;
             }
             const uniqueIds = [...new Set(ids)];
             const ownedEntries = new Map<string, Entry>();
+            const errorListener = onError ? (taskId: string, error: unknown) => onError(taskId, error) : undefined;
             for (const id of uniqueIds) {
                 const old = entries.get(id);
                 if (old && old.scope !== getActiveUserScope()) {
                     old.controller?.abort();
                     if (old.retry) clearTimeout(old.retry);
                     old.listeners.clear();
+                    old.errorListeners.clear();
                     entries.delete(id);
                 }
-                const entry = entries.get(id) ?? { listeners: new Set<(task: GenerationTask) => void>(), failures: 0, scope: getActiveUserScope() };
+                const entry = entries.get(id) ?? { listeners: new Set<(task: GenerationTask) => void>(), errorListeners: new Set<(taskId: string, error: unknown) => void>(), failures: 0, scope: getActiveUserScope() };
                 entries.set(id, entry);
                 ownedEntries.set(id, entry);
                 entry.listeners.add(listener);
-                if (entry.latest) listener(entry.latest);
+                if (errorListener) entry.errorListeners.add(errorListener);
+                // 保存重试可以让同一个失败任务重新运行，不能回放过期终态。
+                if (entry.latest && isTerminalGenerationTask(entry.latest) && entry.latest.status !== "succeeded" && !entry.observation) entry.latest = undefined;
+                if (entry.latest && (!isTerminalGenerationTask(entry.latest) || !entry.observation)) listener(entry.latest);
                 observe(id, entry);
             }
             return () => {
                 for (const [id, entry] of ownedEntries) {
                     entry.listeners.delete(listener);
-                    if (entry.listeners.size) continue;
-                    entry.controller?.abort();
-                    if (entry.retry) clearTimeout(entry.retry);
-                    if (entries.get(id) === entry) entries.delete(id);
-                }
-                if (!entries.size && listening) {
-                    window.removeEventListener("online", reconnect);
-                    listening = false;
+                    if (errorListener) entry.errorListeners.delete(errorListener);
+                    // React 同轮重新订阅复用连接；离页或换号时释放原连接。
+                    queueMicrotask(() => {
+                        if (entry.listeners.size > 0 || entries.get(id) !== entry) return;
+                        entry.controller?.abort();
+                        if (entry.retry) clearTimeout(entry.retry);
+                        entries.delete(id);
+                        if (!entries.size && listening) {
+                            window.removeEventListener("online", reconnect);
+                            listening = false;
+                        }
+                    });
                 }
             };
         },
@@ -309,8 +324,8 @@ const generationTaskSubscriptionService = createGenerationTaskSubscriptionServic
     waitTask: (id, options) => waitForGenerationTask(id, options),
 });
 
-export function subscribeGenerationTasks(ids: readonly string[], listener: (task: GenerationTask) => void) {
-    return generationTaskSubscriptionService.subscribe(ids, listener);
+export function subscribeGenerationTasks(ids: readonly string[], listener: (task: GenerationTask) => void, onError?: (taskId: string, error: unknown) => void) {
+    return generationTaskSubscriptionService.subscribe(ids, listener, onError);
 }
 
 export function appendTaskTextDelta(id: string, content: string) {
@@ -410,30 +425,30 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
     if (options?.onTextDelta || options?.useTextEvents) return waitForGenerationTaskTextEvents(id, options);
     const startedAt = Date.now();
     const intervalMs = options?.intervalMs || 2000;
-    let lastTask = options?.initialTask;
+    // 后端决定任务超时；前端默认持续观察，不再按媒体类型推断失败。
+    const timeoutMs = options?.timeoutMs ?? Infinity;
     let lastQueryError: unknown;
     let consecutiveFailures = 0;
     try {
-        while (Date.now() - startedAt < (options?.timeoutMs || taskWaitTimeoutMs(lastTask))) {
+        while (Date.now() - startedAt < timeoutMs) {
             if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
             let task: GenerationTask;
             try {
                 task = await queryGenerationTask(id, { signal: options?.signal });
-                lastTask = task;
                 lastQueryError = undefined;
                 consecutiveFailures = 0;
-                options?.onTaskUpdate?.(task);
             } catch (error) {
+                if (options?.signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+                if (error instanceof ApiError && !error.retryable) throw error;
                 lastQueryError = error;
                 consecutiveFailures += 1;
-                // 连续失败说明查询通道已不可用，继续轮询只会空转到整体超时；
-                // 保留少量容忍度（约 10 秒）以跳过瞬时抖动后直接报错，便于用户尽早处理。
-                if (consecutiveFailures >= 5) {
-                    throw error instanceof Error ? error : new Error(String(error));
-                }
-                await delay(intervalMs, options?.signal);
+                // 查询断网不等于生成失败；退避重连同一任务，不重新提交生成。
+                const retryMs = Math.min(intervalMs * 2 ** Math.min(consecutiveFailures - 1, 4), 30_000);
+                await delay(Math.min(retryMs, Math.max(0, timeoutMs - (Date.now() - startedAt))), options?.signal);
                 continue;
             }
+            if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+            options?.onTaskUpdate?.(task);
             if (task.status === "succeeded") {
                 window.dispatchEvent(new CustomEvent("wallet:updated"));
                 return task;
@@ -451,7 +466,7 @@ export async function waitForGenerationTask(id: string, options?: WaitForGenerat
         }
         throw error;
     }
-    throw new Error(lastQueryError instanceof Error ? `任务状态同步失败：${lastQueryError.message}` : "任务执行超时，请稍后重试");
+    throw new Error(lastQueryError instanceof Error ? `任务状态同步暂时中断：${lastQueryError.message}` : "等待任务状态超时，后台任务未取消，请到任务中心核对结果");
 }
 
 async function waitForGenerationTaskTextEvents(id: string, options: WaitForGenerationTaskOptions) {
@@ -591,12 +606,22 @@ function taskWaitTimeoutMs(task?: GenerationTask) {
     return 10 * 60 * 1000;
 }
 
+function isTerminalGenerationTask(task: GenerationTask) {
+    return task.status === "succeeded" || task.status === "failed" || task.status === "cancelled";
+}
+
 function delay(ms: number, signal?: AbortSignal) {
     return new Promise<void>((resolve, reject) => {
-        if (signal?.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
-        const abort = () => { window.clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
-        const timer = window.setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, ms);
-        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
+        const onAbort = () => {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener("abort", onAbort, { once: true });
     });
 }
 

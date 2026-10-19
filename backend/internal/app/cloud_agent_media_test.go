@@ -16,6 +16,9 @@ import (
 func agentMediaFixture(t *testing.T) (*Service, *gorm.DB, cloudAgentMediaArgs) {
 	t.Helper()
 	s, db, _, _ := creationTestService(t)
+	// These transition tests advance the run explicitly. Do not race their
+	// controlled task/canvas mutations with the production approval waiter.
+	s.closeApprovedCloudAgentMediaWaiters()
 	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceVolcengineArkVideo), "seedance-test")
 	capability.Video.References.PromptMaxChars = 16000
 	for _, row := range []any{
@@ -232,68 +235,6 @@ func TestCloudAgentMediaReferenceAndSnapshotGuards(t *testing.T) {
 	}
 }
 
-func TestCloudAgentMediaArgumentFailureContinuesRun(t *testing.T) {
-	s, db, args := agentMediaFixture(t)
-	args.SourceNodeID = "cat" // Existing media node, invalid as a text source.
-	args.ReferenceNodeIDs = []string{"hero"}
-	run, state := agentMediaRun(t, s, args, "request_approval")
-	if err := s.advanceCloudAgentTool(run, &state); err != nil {
-		t.Fatal(err)
-	}
-	stored, err := s.repo.CloudAgent("user", run.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	state, err = cloudAgentDecode(stored)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Status != "running" {
-		t.Fatalf("repairable media argument failure terminated run: status=%s message=%s", stored.Status, stored.FailureMessage)
-	}
-	var failed *CloudAgentEvent
-	for i := range state.Events {
-		if state.Events[i].Type == "tool_failed" {
-			failed = &state.Events[i]
-		}
-		if state.Events[i].Type == "run_failed" {
-			t.Fatalf("argument error emitted run_failed: %+v", state.Events[i])
-		}
-	}
-	if failed == nil {
-		t.Fatal("missing tool_failed event")
-	}
-	result, _ := failed.Payload["result"].(map[string]any)
-	if result["field"] != "sourceNodeId" || result["issue"] != "invalid_value" || result["requiredAction"] != "fix_arguments" {
-		t.Fatalf("missing actionable field feedback: %+v", result)
-	}
-	var tasks int64
-	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
-		t.Fatal(err)
-	}
-	if tasks != 0 {
-		t.Fatalf("invalid arguments submitted %d media tasks", tasks)
-	}
-}
-
-func TestCloudAgentUnavailableTransientReferenceIsNotRetryable(t *testing.T) {
-	s, _, args := agentMediaFixture(t)
-	args.ReferenceNodeIDs = nil
-	args.ReferenceTransientIDs = []string{"missing-transient"}
-	_, _, _, err := cloudAgentMediaDocument(s.repo, "user", "agent-canvas", args, map[string]cloudAgentTransientReference{})
-	if err == nil {
-		t.Fatal("missing transient reference was accepted")
-	}
-	var argumentErr *cloudAgentArgumentError
-	if errors.As(err, &argumentErr) {
-		t.Fatalf("unavailable transient reference was classified as a model-correctable argument: %v", err)
-	}
-	class, retryable, action := cloudAgentToolErrorClass(agentTestRequest(), agentMediaCall(args), cloudAgentWrapMediaAdmissionError(err), true)
-	if class != cloudAgentToolErrorAdmission || retryable || action != "report_to_user" {
-		t.Fatalf("unavailable transient reference entered correction retry: class=%s retryable=%v action=%s", class, retryable, action)
-	}
-}
-
 func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
@@ -308,13 +249,20 @@ func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	a.Mode, a.ChannelModelKey, a.Duration, a.VideoGenerateAudio = "image", "grok-image", 0, nil
 	a.Size, a.Quality, a.NodeID = "1:1", "2k", "image-shot-1"
 	a.ReferenceNodeIDs = []string{"cat"}
-	run, _ := agentMediaRun(t, s, a, "request_approval")
+	a.ConfigurationChange = &cloudAgentMediaConfigurationChange{Fields: []string{"size"}, UserInstruction: "按1:1生成图片"}
+	run, state := agentMediaRun(t, s, a, "request_approval")
+	state.Canonical.Messages = []map[string]any{{"role": "user", "content": "按1:1生成图片"}}
+	if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
 	}
 	approveAgentMediaDraft(t, s, run.ID)
 	run, _ = s.repo.CloudAgent("user", run.ID)
-	state, _ := cloudAgentDecode(run)
+	state, _ = cloudAgentDecode(run)
 	if state.MediaTaskID == "" {
 		t.Fatalf("image admission failed: %+v", state.Events[len(state.Events)-1])
 	}
@@ -334,6 +282,9 @@ func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	nodes, _ := creationObjects(doc["nodes"])
 	if nodes[a.NodeID]["type"] != "image" || len(creationMaps(doc["connections"])) != 2 {
 		t.Fatal("image node/references missing")
+	}
+	if width, _ := nodes[a.NodeID]["width"].(float64); width != 540 {
+		t.Fatalf("square draft frame width = %v, want 540", nodes[a.NodeID]["width"])
 	}
 }
 
@@ -1081,8 +1032,8 @@ func TestCloudAgentCanvasUpdatesExistingVideoDraftThroughCapabilityContract(t *t
 	}
 	updated := updatedNodes["video-1789310237935-mmh3-baby-fullmoon"]
 	metadata := updated["metadata"].(map[string]any)
-	generationSpec := metadata["generationSpec"].(map[string]any)
-	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || generationSpec["prompt"] != "下一版舒缓视频提示词" {
+	spec := metadata["generationSpec"].(map[string]any)
+	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || spec["prompt"] != "下一版舒缓视频提示词" {
 		t.Fatalf("video draft was not updated: %#v", updated)
 	}
 	if metadata["prompt"] != "原始已提交提示词" || metadata["status"] != "error" || metadata["referenceIssue"] != "参考资产尚未准备完成" {
@@ -1136,5 +1087,67 @@ func TestCloudAgentMediaDependencyIgnoresNodeMovement(t *testing.T) {
 	}
 	if got != base {
 		t.Fatalf("moving target or input nodes changed generation dependency: base=%s got=%s", base, got)
+	}
+}
+
+func TestCloudAgentMediaArgumentFailureContinuesRun(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	args.SourceNodeID = "cat" // Existing media node, invalid as a text source.
+	args.ReferenceNodeIDs = []string{"hero"}
+	run, state := agentMediaRun(t, s, args, "request_approval")
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "running" {
+		t.Fatalf("repairable media argument failure terminated run: status=%s message=%s", stored.Status, stored.FailureMessage)
+	}
+	var failed *CloudAgentEvent
+	for i := range state.Events {
+		if state.Events[i].Type == "tool_failed" {
+			failed = &state.Events[i]
+		}
+		if state.Events[i].Type == "run_failed" {
+			t.Fatalf("argument error emitted run_failed: %+v", state.Events[i])
+		}
+	}
+	if failed == nil {
+		t.Fatal("missing tool_failed event")
+	}
+	result, _ := failed.Payload["result"].(map[string]any)
+	if result["field"] != "sourceNodeId" || result["issue"] != "invalid_value" || result["requiredAction"] != "fix_arguments" {
+		t.Fatalf("missing actionable field feedback: %+v", result)
+	}
+	var tasks int64
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 0 {
+		t.Fatalf("invalid arguments submitted %d media tasks", tasks)
+	}
+}
+
+func TestCloudAgentUnavailableTransientReferenceIsNotRetryable(t *testing.T) {
+	s, _, args := agentMediaFixture(t)
+	args.ReferenceNodeIDs = nil
+	args.ReferenceTransientIDs = []string{"missing-transient"}
+	_, _, _, err := cloudAgentMediaDocument(s.repo, "user", "agent-canvas", args, map[string]cloudAgentTransientReference{})
+	if err == nil {
+		t.Fatal("missing transient reference was accepted")
+	}
+	var argumentErr *cloudAgentArgumentError
+	if errors.As(err, &argumentErr) {
+		t.Fatalf("unavailable transient reference was classified as a model-correctable argument: %v", err)
+	}
+	class, retryable, action := cloudAgentToolErrorClass(agentTestRequest(), agentMediaCall(args), cloudAgentWrapMediaAdmissionError(err), true)
+	if class != cloudAgentToolErrorAdmission || retryable || action != "report_to_user" {
+		t.Fatalf("unavailable transient reference entered correction retry: class=%s retryable=%v action=%s", class, retryable, action)
 	}
 }

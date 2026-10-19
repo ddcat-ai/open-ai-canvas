@@ -5,6 +5,15 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 首页 Agent 完整链路
+
+- 首页与交付 UI：`web/src/pages/create/index.tsx`、`creation-workspace.tsx`、`creation-workspace-messages.tsx`；图库规则同时依赖 `web/src/styles/globals.css` 与页面 CSS。
+- 账号偏好：`lib/user-session.ts` 的初始化/停止接线 → `services/creation-preferences-sync.ts` → `services/api/creation-preferences.ts`；后端 `handler/creation_preferences.go` → `app/creation_preferences.go` → `repository/creation_preferences.go`。
+- 会话、上下文、停止与重试：`creation-agent-conversation.ts`、`creation-agent-cancel.ts`、`creation-agent-request.ts`，后端 `cloud_agent_session.go`、`cloud_agent_creation_*.go` 和 Pi runtime；根任务准入与会话删除通过 `repository/finance.go` 共用账号锁。
+- 图片优先展示与补存：`services/api/resources.ts` → `generated-resource-transfer.ts`、`resource-thumbnail.ts`；后端 `resource_generated_browser.go`、`resource_generated_transfer.go`，Worker 在 `app/service.go` 启动。
+- 智能创作记忆：`cloud_agent_lessons.go`、`cloud_agent_memory_compact.go` 与 `services/api/agent-memories.ts`；按 `smart_creation` 分类隔离。
+- 结构迁移：`database/homepage_agent.go` 的 Schema 58 与 `cmd/migrate-sqlite-postgres/main.go` 表清单，详见 [后端数据库](./backend-database)。
+
 ## 画布实时会话
 
 - 传输入口：`backend/internal/handler/canvas_realtime.go` 校验登录与 Origin、管理 WebSocket；`app/canvas_realtime.go` 校验画布归属，`internal/canvas/realtime.go` 负责临时 Presence、房间隔离与 Redis 分发，`realtime_devices.go` 管理跨实例统一窗口编号及临时租期。

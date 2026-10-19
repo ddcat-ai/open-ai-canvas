@@ -13,6 +13,7 @@ import (
 // TaskSummary 是任务列表/会话详情的读模型，不直接复用数据库 Task，避免把
 // 渠道模型、供应线路和受保护输入泄露到普通用户接口。
 type TaskSummary struct {
+	Source                    string                     `json:"source,omitempty"`
 	ID                        string                     `json:"id"`
 	ProjectID                 string                     `json:"projectId,omitempty"`
 	Type                      string                     `json:"type"`
@@ -105,6 +106,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	}
 	previewURL, previewKind, previewPosterURL := taskMediaPreviewWithPoster(task.ResultJSON, task.Type)
 	return TaskSummary{
+		Source:                    task.Source,
 		ID:                        task.ID,
 		ProjectID:                 task.ProjectID,
 		Type:                      task.Type,
@@ -292,9 +294,11 @@ func truncateRunes(value string, limit int) string {
 func taskForOutput(task model.Task) *model.Task {
 	task.CanRecoverMedia = task.MediaRecoveryJSON != "" && task.Status == model.TaskStatusFailed
 	task.Diagnostic = taskExecutionDiagnostic(&task)
+	if task.Diagnostic != nil {
+		task.Diagnostic.SafeMessage = sanitizeUserVisibleError(task.Diagnostic.SafeMessage)
+		task.Diagnostic.WritebackMessage = sanitizeUserVisibleError(task.Diagnostic.WritebackMessage)
+	}
 	task.InputJSON = publicTaskInputJSON(task.InputJSON)
-	// Task.Error 可能来自历史记录中的“前置原因；上游：原文”。
-	// 普通用户任务接口只返回可行动提示，完整上游诊断留在后台请求日志。
 	if strings.TrimSpace(task.Error) != "" {
 		task.Error = userFacingTaskError(task.Error)
 	}

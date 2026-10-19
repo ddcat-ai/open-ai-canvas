@@ -73,18 +73,15 @@ export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClo
             className="canvas-image-preview-modal"
         >
             <div
-                className="flex min-h-[min(72vh,680px)] items-center justify-center border-t p-4 sm:p-6"
+                className="canvas-image-preview-surface flex min-h-[min(72vh,680px)] items-center justify-center p-4 sm:p-6"
                 style={{
-                    borderColor: "var(--workspace-border)",
-                    background: "color-mix(in srgb, var(--workspace-surface) 86%, var(--background))",
+                    background: "var(--workspace-surface)",
                 }}
             >
                 <div
-                    className="relative flex min-h-[min(62vh,560px)] w-full items-center justify-center overflow-hidden rounded-[var(--r-lg)] border p-3 sm:p-5"
+                    className="canvas-image-preview-stage relative flex min-h-[min(62vh,560px)] w-full items-center justify-center overflow-hidden p-3 sm:p-5"
                     style={{
-                        borderColor: "var(--workspace-border-strong)",
-                        background: "var(--workspace-surface-strong)",
-                        boxShadow: "inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 18px 50px color-mix(in srgb, var(--foreground) 14%, transparent)",
+                        background: "var(--workspace-surface)",
                     }}
                 >
                     {loading && !error ? (
@@ -129,8 +126,7 @@ export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClo
                             src={resolvedSrc}
                             alt={alt}
                             draggable={false}
-                            className={`max-h-[min(66vh,620px)] max-w-full rounded-[var(--r-sm)] border object-contain shadow-xl transition-opacity duration-200 motion-reduce:transition-none ${loading || error ? "opacity-0" : "opacity-100"}`}
-                            style={{ borderColor: "var(--workspace-border-strong)" }}
+                            className={`max-h-[min(66vh,620px)] max-w-full rounded-[var(--r-sm)] object-contain transition-opacity duration-200 motion-reduce:transition-none ${loading || error ? "opacity-0" : "opacity-100"}`}
                             onLoad={() => {
                                 setLoading(false);
                                 setError(false);
