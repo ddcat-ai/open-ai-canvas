@@ -25,6 +25,10 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 详见[生图与视频工作台](./workbench)。
 
+## 百炼 MiniMax 视频
+
+`dashscope-minimax-video` 独立插件接入百炼 `MiniMax/MiniMax-H3`，支持文生视频、首帧、仅尾帧、首尾帧与图像/视频/音频多模态参考。插件校验 4–15 秒、768P/2K、7000 字符提示词及媒体角色和数量，模型能力由渠道配置。任务经统一宿主鉴权、轮询与结果持久化，恢复时查询原任务；真实文生视频创建、轮询与下载已验证，多模态及应用内完整链路仍待验收。配置见[百炼 MiniMax 视频](/docs/backend/bailian-minimax-video)。
+
 ## 可美 KM Seedream 图片
 
 `km-kemei-seedream` 声明式插件接入 Seedream 5.0 Pro / Flash 的文生图与参考图编辑，支持 URL / Base64 响应并由宿主统一保存图片。精确模型 ID 与扩展参数见插件包内 `docs/interface.md`。
