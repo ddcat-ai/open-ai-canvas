@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.6.8.12-topapis-r1
+
+- 新增微信服务号「关注即登录」：临时带参二维码、access_token 进程内串行缓存、subscribe/SCAN 事件回调、扫码确认后建会话。
+- 新增 Google OAuth 2.0 登录：id_token 完整验签（RS256 / iss / aud / exp / email_verified），拒绝 alg=none 与 HS256 混淆。
+- 扫码确认态借用 OAuthState.NextPath 存储，不新增数据库列，避免与上游后续 schema 版本校验冲突。
+- 认证响应支持多第三方身份（linuxdo / google / wechat），管理后台新增独立第三方登录配置面板。
+- 升级注意：数据库 Schema 保持 v57，无需迁移；服务器需将 CANVAS_UPDATER_REPOSITORY 指向本仓库，否则在线升级会被上游镜像覆盖。
+
 ## v1.6.8.12
 
 - 画布 Agent 支持导入包含 `avatar.json` 和多个 MP4 的 ZIP 动画包，按运行状态切换动画；内置多状态动画作为默认形象，并修复加载闪烁与入口布局。
