@@ -276,7 +276,7 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                     )}
                     <div className="flex flex-wrap gap-1.5">
                         {(asset.tags || []).map((tag) => (
-                            <Tag key={tag} className="m-0">
+                            <Tag key={tag} className="asset-archive-tag m-0">
                                 {tag}
                             </Tag>
                         ))}

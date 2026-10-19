@@ -1,0 +1,1723 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "dashscope-minimax-video",
+  "name": "百炼 MiniMax H3 Video",
+  "version": "2.0.0",
+  "author": "Alibaba Cloud / 影策",
+  "description": "百炼 MiniMax H3 Video 独立请求协议插件。",
+  "documentation": "# 百炼 MiniMax H3 Video\n\n该目录是独立官方协议插件源码。后端从生成的 `dashscope-minimax-video.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# 百炼 MiniMax H3 Video 接口字段\n\n## 协议身份\n\n- 插件 ID：`dashscope-minimax-video`。\n- Provider ID：`dashscope-minimax-video`。\n- 能力：`video`。\n- 默认 Base URL：``。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /api/v1/services/aigc/video-generation/video-synthesis`。\n- 查询：`GET /api/v1/tasks/{{taskId}}`。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | 固定为 MiniMax/MiniMax-H3。 |\n| `prompt` | string | 是 | `input.prompt` | 中英文提示词，最多 7000 个字符。 |\n| `images` | media[] | 否 | `input.media` | 显式首帧、尾帧或参考图；支持仅尾帧。 |\n| `videos` | media[] | 否 | `input.media[type=feature]` | 最多 3 个参考视频。 |\n| `audios` | media[] | 否 | `input.media[type=driving_audio]` | 最多 3 个参考音频。 |\n| `duration` | integer | 是 | `parameters.duration` | 4-15 秒整数，不沿用原生 MiniMax 的 30 秒上限。 |\n| `aspectRatio` | string | 否 | `parameters.ratio` | 文生视频必须指定具体比例；首尾帧恒为 adaptive，多模态默认 adaptive。 |\n| `resolution` | string | 是 | `parameters.resolution` | 768P 或 2K。 |\n| `watermark` | boolean | 否 | `parameters.watermark` | 是否添加 AI 生成水印，默认关闭。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/api/v1/services/aigc/video-generation/video-synthesis\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.model` | `{\"$ref\":\"request.model\"}` |\n| `create.body.input.prompt` | `{\"$ref\":\"request.prompt\"}` |\n| `create.body.input.media` | `{\"$omitEmpty\":{\"$map\":{\"from\":{\"$sortByOrder\":{\"$coalesce\":[{\"$concatArrays\":[{\"$map\":{\"from\":{\"$ref\":\"request.images\"},\"as\":\"media\",\"in\":{\"$merge\":[{\"$ref\":\"media\"},{\"kind\":\"image\"}]}}},{\"$map\":{\"from\":{\"$ref\":\"request.videos\"},\"as\":\"media\",\"in\":{\"$merge\":[{\"$ref\":\"media\"},{\"kind\":\"video\"}]}}},{\"$map\":{\"from\":{\"$ref\":\"request.audios\"},\"as\":\"media\",\"in\":{\"$merge\":[{\"$ref\":\"media\"},{\"kind\":\"audio\"}]}}}]},{\"$ref\":\"request.inputs\"}]}},\"as\":\"media\",\"in\":{\"type\":{\"$if\":{\"condition\":{\"$eq\":[{\"$ref\":\"media.kind\"},\"image\"]},\"then\":{\"$if\":{\"condition\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"last_frame\"]]},\"then\":{\"$ref\":\"media.role\"},\"else\":\"image_url\"}},\"else\":{\"$if\":{\"condition\":{\"$eq\":[{\"$ref\":\"media.kind\"},\"video\"]},\"then\":\"feature\",\"else\":\"driving_audio\"}}}},\"url\":{\"$ref\":\"media.value\"}}}}}` |\n| `create.body.parameters.resolution` | `{\"$upper\":{\"$ref\":\"request.output.resolution\"}}` |\n| `create.body.parameters.ratio` | `{\"$if\":{\"condition\":{\"$gt\":[{\"$len\":{\"$filter\":{\"from\":{\"$coalesce\":[{\"$concatArrays\":[{\"$map\":{\"from\":{\"$ref\":\"request.images\"},\"as\":\"media\",\"in\":{\"$merge\":[{\"$ref\":\"media\"},{\"kind\":\"image\"}]}}},{\"$map\":{\"from\":{\"$ref\":\"request.videos\"},\"as\":\"media\",\"in\":{\"$merge\":[{\"$ref\":\"media\"},{\"kind\":\"video\"}]}}},{\"$map\":{\"from\":{\"$ref\":\"request.audios\"},\"as\":\"media\",\"in\":{\"$merge\":[{\"$ref\":\"media\"},{\"kind\":\"audio\"}]}}}]},{\"$ref\":\"request.inputs\"}]},\"as\":\"media\",\"where\":{\"$in\":[{\"$ref\":\"media.role\"},[\"first_frame\",\"last_frame\"]]}}}},0]},\"then\":\"adaptive\",\"else\":{\"$coalesce\":[{\"$ref\":\"request.output.aspectRatio\"},\"adaptive\"]}}}` |\n| `create.body.parameters.duration` | `{\"$ref\":\"request.output.duration\"}` |\n| `create.body.parameters.watermark` | `{\"$coalesce\":[{\"$ref\":\"request.output.watermark\"},false]}` |\n| `create.headers.X-DashScope-Async` | `\"enable\"` |\n| `poll.method` | `\"GET\"` |\n| `poll.path` | `\"/api/v1/tasks/{{taskId}}\"` |\n| `poll.contentType` | `\"application/json\"` |\n\n## Provider 扩展键\n\n- 无额外扩展键。\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.taskId` | `{\"$coalesce\":[{\"$ref\":\"response.output.task_id\"},{\"$ref\":\"taskId\"}]}` |\n| `response.status` | `{\"$if\":{\"condition\":{\"$eq\":[{\"$ref\":\"response.output.task_status\"},\"UNKNOWN\"]},\"then\":\"failed\",\"else\":{\"$ref\":\"response.output.task_status\"}}}` |\n| `response.message` | `{\"$coalesce\":[{\"$ref\":\"response.output.message\"},{\"$ref\":\"response.message\"},{\"$if\":{\"condition\":{\"$eq\":[{\"$ref\":\"response.output.task_status\"},\"UNKNOWN\"]},\"then\":\"百炼 MiniMax 任务不存在或已超过 24 小时查询有效期\",\"else\":null}}]}` |\n| `response.videos` | `{\"$ref\":\"response.output.video_url\"}` |\n| `response.usage` | `{\"$ref\":\"response.usage\"}` |\n| `response.errorPaths[0]` | `\"code\"` |\n| `response.errorPaths[1]` | `\"output.code\"` |\n| `response.resultEphemeral` | `true` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n适配阿里云百炼 MiniMax/MiniMax-H3，渠道 Base URL 使用百炼业务空间 Endpoint。\n\n首帧、尾帧各最多 1 张，支持仅尾帧；首尾帧与多模态参考互斥。参考图最多 9 张、每张 30 MB，JPG/JPEG/PNG/WEBP/HEIC/HEIF，宽高 256-5760、宽高比 0.4-2.5。参考视频最多 3 个、每个 50 MB、2-15 秒且总时长不超过 15 秒，MP4/MOV、23.976-60 fps，宽高和比例限制同图片。音频最多 3 个、每个 15 MB、2-15 秒且总时长不超过 15 秒，WAV/MP3。插件校验已提供的角色、数量、URL、提示词和生成规格；媒体编码、尺寸、帧率及参考总时长仍需满足上游限制，不在协议模板内执行媒体探测。\n\n不发送原生 content[]、generate_audio、seed 或 prompt_optimizer，也不开放绕过统一媒体校验的 raw media 扩展。创建任务后仅轮询原 task_id，UNKNOWN 终止为失败；任务查询有效期 24 小时，结果 URL 有效期 30 天，宿主持久化临时结果。usage 保留输入视频、输出视频和图片计数，不把供应商统计直接改写为本地计费规则。\n\n官方接口：[MiniMax 视频生成 API](https://docs.bailian.console.aliyun.com/zh/model-studio/minimax-video-generation-api-reference)。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"dashscope-minimax-video\",\n  \"name\": \"百炼 MiniMax H3 Video\",\n  \"version\": \"2.0.0\",\n  \"author\": \"Alibaba Cloud / 影策\",\n  \"description\": \"百炼 MiniMax H3 Video 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"dashscope-minimax-video\",\n        \"label\": \"百炼 MiniMax H3 Video\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"固定为 MiniMax/MiniMax-H3。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"input.prompt\",\n            \"description\": \"中英文提示词，最多 7000 个字符。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"input.media\",\n            \"description\": \"显式首帧、尾帧或参考图；支持仅尾帧。\"\n          },\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"input.media[type=feature]\",\n            \"description\": \"最多 3 个参考视频。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"input.media[type=driving_audio]\",\n            \"description\": \"最多 3 个参考音频。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": true,\n            \"mapping\": \"parameters.duration\",\n            \"description\": \"4-15 秒整数，不沿用原生 MiniMax 的 30 秒上限。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"parameters.ratio\",\n            \"description\": \"文生视频必须指定具体比例；首尾帧恒为 adaptive，多模态默认 adaptive。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"parameters.resolution\",\n            \"description\": \"768P 或 2K。\"\n          },\n          {\n            \"name\": \"watermark\",\n            \"type\": \"boolean\",\n            \"required\": false,\n            \"mapping\": \"parameters.watermark\",\n            \"description\": \"是否添加 AI 生成水印，默认关闭。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$ref\": \"request.model\"\n                },\n                \"MiniMax/MiniMax-H3\"\n              ]\n            },\n            \"message\": \"百炼 MiniMax 视频仅支持 MiniMax/MiniMax-H3\"\n          },\n          {\n            \"assert\": {\n              \"$and\": [\n                {\n                  \"$gt\": [\n                    {\n                      \"$len\": {\n                        \"$trim\": {\n                          \"$ref\": \"request.prompt\"\n                        }\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$lte\": [\n                    {\n                      \"$len\": {\n                        \"$ref\": \"request.prompt\"\n                      }\n                    },\n                    7000\n                  ]\n                }\n              ]\n            },\n            \"message\": \"百炼 MiniMax 提示词不能为空且不能超过 7000 个字符\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$ref\": \"request.output.duration\"\n                },\n                [\n                  4,\n                  5,\n                  6,\n                  7,\n                  8,\n                  9,\n                  10,\n                  11,\n                  12,\n                  13,\n                  14,\n                  15\n                ]\n              ]\n            },\n            \"message\": \"百炼 MiniMax duration 必须为 4-15 秒整数\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$upper\": {\n                    \"$ref\": \"request.output.resolution\"\n                  }\n                },\n                [\n                  \"768P\",\n                  \"2K\"\n                ]\n              ]\n            },\n            \"message\": \"百炼 MiniMax resolution 仅支持 768P 或 2K\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$not\": {\n                          \"$or\": [\n                            {\n                              \"$and\": [\n                                {\n                                  \"$eq\": [\n                                    {\n                                      \"$ref\": \"media.kind\"\n                                    },\n                                    \"image\"\n                                  ]\n                                },\n                                {\n                                  \"$in\": [\n                                    {\n                                      \"$ref\": \"media.role\"\n                                    },\n                                    [\n                                      \"\",\n                                      \"first_frame\",\n                                      \"last_frame\",\n                                      \"reference_image\",\n                                      \"subject_reference\",\n                                      \"style_reference\"\n                                    ]\n                                  ]\n                                }\n                              ]\n                            },\n                            {\n                              \"$and\": [\n                                {\n                                  \"$eq\": [\n                                    {\n                                      \"$ref\": \"media.kind\"\n                                    },\n                                    \"video\"\n                                  ]\n                                },\n                                {\n                                  \"$in\": [\n                                    {\n                                      \"$ref\": \"media.role\"\n                                    },\n                                    [\n                                      \"\",\n                                      \"reference_video\"\n                                    ]\n                                  ]\n                                }\n                              ]\n                            },\n                            {\n                              \"$and\": [\n                                {\n                                  \"$eq\": [\n                                    {\n                                      \"$ref\": \"media.kind\"\n                                    },\n                                    \"audio\"\n                                  ]\n                                },\n                                {\n                                  \"$in\": [\n                                    {\n                                      \"$ref\": \"media.role\"\n                                    },\n                                    [\n                                      \"\",\n                                      \"reference_audio\",\n                                      \"reference_voice\"\n                                    ]\n                                  ]\n                                }\n                              ]\n                            }\n                          ]\n                        }\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"百炼 MiniMax 媒体类型或角色不受支持\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$not\": {\n                          \"$in\": [\n                            {\n                              \"$first\": {\n                                \"$split\": [\n                                  {\n                                    \"$ref\": \"media.value\"\n                                  },\n                                  \"://\"\n                                ]\n                              }\n                            },\n                            [\n                              \"http\",\n                              \"https\"\n                            ]\n                          ]\n                        }\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"百炼 MiniMax 媒体必须使用 HTTP 或 HTTPS 公网 URL\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$and\": [\n                          {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.kind\"\n                              },\n                              \"image\"\n                            ]\n                          }\n                        ]\n                      }\n                    }\n                  }\n                },\n                9\n              ]\n            },\n            \"message\": \"百炼 MiniMax 最多支持 9 张参考图片\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$and\": [\n                          {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.kind\"\n                              },\n                              \"video\"\n                            ]\n                          }\n                        ]\n                      }\n                    }\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"百炼 MiniMax 最多支持 3 个参考视频\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$and\": [\n                          {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.kind\"\n                              },\n                              \"audio\"\n                            ]\n                          }\n                        ]\n                      }\n                    }\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"百炼 MiniMax 最多支持 3 个参考音频\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$and\": [\n                          {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.kind\"\n                              },\n                              \"image\"\n                            ]\n                          },\n                          {\n                            \"$in\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              [\n                                \"first_frame\"\n                              ]\n                            ]\n                          }\n                        ]\n                      }\n                    }\n                  }\n                },\n                1\n              ]\n            },\n            \"message\": \"百炼 MiniMax 最多只能有一个首帧\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$and\": [\n                          {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.kind\"\n                              },\n                              \"image\"\n                            ]\n                          },\n                          {\n                            \"$in\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              [\n                                \"last_frame\"\n                              ]\n                            ]\n                          }\n                        ]\n                      }\n                    }\n                  }\n                },\n                1\n              ]\n            },\n            \"message\": \"百炼 MiniMax 最多只能有一个尾帧\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$len\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$coalesce\": [\n                              {\n                                \"$concatArrays\": [\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.images\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"image\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.videos\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"video\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.audios\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"audio\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  }\n                                ]\n                              },\n                              {\n                                \"$ref\": \"request.inputs\"\n                              }\n                            ]\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$in\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              [\n                                \"first_frame\",\n                                \"last_frame\"\n                              ]\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$eq\": [\n                    {\n                      \"$len\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$coalesce\": [\n                              {\n                                \"$concatArrays\": [\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.images\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"image\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.videos\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"video\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.audios\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"audio\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  }\n                                ]\n                              },\n                              {\n                                \"$ref\": \"request.inputs\"\n                              }\n                            ]\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$in\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              [\n                                \"first_frame\",\n                                \"last_frame\"\n                              ]\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    {\n                      \"$len\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      }\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"百炼 MiniMax 首尾帧不能与参考图片、视频或音频混用\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$gt\": [\n                    {\n                      \"$len\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$coalesce\": [\n                              {\n                                \"$concatArrays\": [\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.images\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"image\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.videos\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"video\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  },\n                                  {\n                                    \"$map\": {\n                                      \"from\": {\n                                        \"$ref\": \"request.audios\"\n                                      },\n                                      \"as\": \"media\",\n                                      \"in\": {\n                                        \"$merge\": [\n                                          {\n                                            \"$ref\": \"media\"\n                                          },\n                                          {\n                                            \"kind\": \"audio\"\n                                          }\n                                        ]\n                                      }\n                                    }\n                                  }\n                                ]\n                              },\n                              {\n                                \"$ref\": \"request.inputs\"\n                              }\n                            ]\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$in\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              [\n                                \"first_frame\",\n                                \"last_frame\"\n                              ]\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$in\": [\n                    {\n                      \"$coalesce\": [\n                        {\n                          \"$ref\": \"request.output.aspectRatio\"\n                        },\n                        \"adaptive\"\n                      ]\n                    },\n                    [\n                      \"adaptive\",\n                      \"16:9\",\n                      \"9:16\",\n                      \"1:1\",\n                      \"4:3\",\n                      \"3:4\",\n                      \"21:9\"\n                    ]\n                  ]\n                }\n              ]\n            },\n            \"message\": \"百炼 MiniMax ratio 不受支持\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$gt\": [\n                    {\n                      \"$len\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$in\": [\n                    {\n                      \"$ref\": \"request.output.aspectRatio\"\n                    },\n                    [\n                      \"16:9\",\n                      \"9:16\",\n                      \"1:1\",\n                      \"4:3\",\n                      \"3:4\",\n                      \"21:9\"\n                    ]\n                  ]\n                }\n              ]\n            },\n            \"message\": \"百炼 MiniMax 文生视频必须指定具体画幅比例，不能使用 adaptive\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v1/services/aigc/video-generation/video-synthesis\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"input\": {\n              \"prompt\": {\n                \"$ref\": \"request.prompt\"\n              },\n              \"media\": {\n                \"$omitEmpty\": {\n                  \"$map\": {\n                    \"from\": {\n                      \"$sortByOrder\": {\n                        \"$coalesce\": [\n                          {\n                            \"$concatArrays\": [\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.images\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"image\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.videos\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"video\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              },\n                              {\n                                \"$map\": {\n                                  \"from\": {\n                                    \"$ref\": \"request.audios\"\n                                  },\n                                  \"as\": \"media\",\n                                  \"in\": {\n                                    \"$merge\": [\n                                      {\n                                        \"$ref\": \"media\"\n                                      },\n                                      {\n                                        \"kind\": \"audio\"\n                                      }\n                                    ]\n                                  }\n                                }\n                              }\n                            ]\n                          },\n                          {\n                            \"$ref\": \"request.inputs\"\n                          }\n                        ]\n                      }\n                    },\n                    \"as\": \"media\",\n                    \"in\": {\n                      \"type\": {\n                        \"$if\": {\n                          \"condition\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.kind\"\n                              },\n                              \"image\"\n                            ]\n                          },\n                          \"then\": {\n                            \"$if\": {\n                              \"condition\": {\n                                \"$in\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  [\n                                    \"first_frame\",\n                                    \"last_frame\"\n                                  ]\n                                ]\n                              },\n                              \"then\": {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"else\": \"image_url\"\n                            }\n                          },\n                          \"else\": {\n                            \"$if\": {\n                              \"condition\": {\n                                \"$eq\": [\n                                  {\n                                    \"$ref\": \"media.kind\"\n                                  },\n                                  \"video\"\n                                ]\n                              },\n                              \"then\": \"feature\",\n                              \"else\": \"driving_audio\"\n                            }\n                          }\n                        }\n                      },\n                      \"url\": {\n                        \"$ref\": \"media.value\"\n                      }\n                    }\n                  }\n                }\n              }\n            },\n            \"parameters\": {\n              \"resolution\": {\n                \"$upper\": {\n                  \"$ref\": \"request.output.resolution\"\n                }\n              },\n              \"ratio\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$gt\": [\n                      {\n                        \"$len\": {\n                          \"$filter\": {\n                            \"from\": {\n                              \"$coalesce\": [\n                                {\n                                  \"$concatArrays\": [\n                                    {\n                                      \"$map\": {\n                                        \"from\": {\n                                          \"$ref\": \"request.images\"\n                                        },\n                                        \"as\": \"media\",\n                                        \"in\": {\n                                          \"$merge\": [\n                                            {\n                                              \"$ref\": \"media\"\n                                            },\n                                            {\n                                              \"kind\": \"image\"\n                                            }\n                                          ]\n                                        }\n                                      }\n                                    },\n                                    {\n                                      \"$map\": {\n                                        \"from\": {\n                                          \"$ref\": \"request.videos\"\n                                        },\n                                        \"as\": \"media\",\n                                        \"in\": {\n                                          \"$merge\": [\n                                            {\n                                              \"$ref\": \"media\"\n                                            },\n                                            {\n                                              \"kind\": \"video\"\n                                            }\n                                          ]\n                                        }\n                                      }\n                                    },\n                                    {\n                                      \"$map\": {\n                                        \"from\": {\n                                          \"$ref\": \"request.audios\"\n                                        },\n                                        \"as\": \"media\",\n                                        \"in\": {\n                                          \"$merge\": [\n                                            {\n                                              \"$ref\": \"media\"\n                                            },\n                                            {\n                                              \"kind\": \"audio\"\n                                            }\n                                          ]\n                                        }\n                                      }\n                                    }\n                                  ]\n                                },\n                                {\n                                  \"$ref\": \"request.inputs\"\n                                }\n                              ]\n                            },\n                            \"as\": \"media\",\n                            \"where\": {\n                              \"$in\": [\n                                {\n                                  \"$ref\": \"media.role\"\n                                },\n                                [\n                                  \"first_frame\",\n                                  \"last_frame\"\n                                ]\n                              ]\n                            }\n                          }\n                        }\n                      },\n                      0\n                    ]\n                  },\n                  \"then\": \"adaptive\",\n                  \"else\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.output.aspectRatio\"\n                      },\n                      \"adaptive\"\n                    ]\n                  }\n                }\n              },\n              \"duration\": {\n                \"$ref\": \"request.output.duration\"\n              },\n              \"watermark\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.output.watermark\"\n                  },\n                  false\n                ]\n              }\n            }\n          },\n          \"headers\": {\n            \"X-DashScope-Async\": \"enable\"\n          },\n          \"originPath\": true\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/api/v1/tasks/{{taskId}}\",\n          \"originPath\": true\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.output.task_id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$if\": {\n              \"condition\": {\n                \"$eq\": [\n                  {\n                    \"$ref\": \"response.output.task_status\"\n                  },\n                  \"UNKNOWN\"\n                ]\n              },\n              \"then\": \"failed\",\n              \"else\": {\n                \"$ref\": \"response.output.task_status\"\n              }\n            }\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.output.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$if\": {\n                  \"condition\": {\n                    \"$eq\": [\n                      {\n                        \"$ref\": \"response.output.task_status\"\n                      },\n                      \"UNKNOWN\"\n                    ]\n                  },\n                  \"then\": \"百炼 MiniMax 任务不存在或已超过 24 小时查询有效期\",\n                  \"else\": null\n                }\n              }\n            ]\n          },\n          \"videos\": {\n            \"$ref\": \"response.output.video_url\"\n          },\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"code\",\n            \"output.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "dashscope-minimax-video",
+        "label": "百炼 MiniMax H3 Video",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "固定为 MiniMax/MiniMax-H3。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "input.prompt",
+            "description": "中英文提示词，最多 7000 个字符。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "input.media",
+            "description": "显式首帧、尾帧或参考图；支持仅尾帧。"
+          },
+          {
+            "name": "videos",
+            "type": "media[]",
+            "required": false,
+            "mapping": "input.media[type=feature]",
+            "description": "最多 3 个参考视频。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "input.media[type=driving_audio]",
+            "description": "最多 3 个参考音频。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "mapping": "parameters.duration",
+            "description": "4-15 秒整数，不沿用原生 MiniMax 的 30 秒上限。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "parameters.ratio",
+            "description": "文生视频必须指定具体比例；首尾帧恒为 adaptive，多模态默认 adaptive。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": true,
+            "mapping": "parameters.resolution",
+            "description": "768P 或 2K。"
+          },
+          {
+            "name": "watermark",
+            "type": "boolean",
+            "required": false,
+            "mapping": "parameters.watermark",
+            "description": "是否添加 AI 生成水印，默认关闭。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.model"
+                },
+                "MiniMax/MiniMax-H3"
+              ]
+            },
+            "message": "百炼 MiniMax 视频仅支持 MiniMax/MiniMax-H3"
+          },
+          {
+            "assert": {
+              "$and": [
+                {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$trim": {
+                          "$ref": "request.prompt"
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$lte": [
+                    {
+                      "$len": {
+                        "$ref": "request.prompt"
+                      }
+                    },
+                    7000
+                  ]
+                }
+              ]
+            },
+            "message": "百炼 MiniMax 提示词不能为空且不能超过 7000 个字符"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.output.duration"
+                },
+                [
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14,
+                  15
+                ]
+              ]
+            },
+            "message": "百炼 MiniMax duration 必须为 4-15 秒整数"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$upper": {
+                    "$ref": "request.output.resolution"
+                  }
+                },
+                [
+                  "768P",
+                  "2K"
+                ]
+              ]
+            },
+            "message": "百炼 MiniMax resolution 仅支持 768P 或 2K"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$not": {
+                          "$or": [
+                            {
+                              "$and": [
+                                {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "image"
+                                  ]
+                                },
+                                {
+                                  "$in": [
+                                    {
+                                      "$ref": "media.role"
+                                    },
+                                    [
+                                      "",
+                                      "first_frame",
+                                      "last_frame",
+                                      "reference_image",
+                                      "subject_reference",
+                                      "style_reference"
+                                    ]
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "$and": [
+                                {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "video"
+                                  ]
+                                },
+                                {
+                                  "$in": [
+                                    {
+                                      "$ref": "media.role"
+                                    },
+                                    [
+                                      "",
+                                      "reference_video"
+                                    ]
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "$and": [
+                                {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "audio"
+                                  ]
+                                },
+                                {
+                                  "$in": [
+                                    {
+                                      "$ref": "media.role"
+                                    },
+                                    [
+                                      "",
+                                      "reference_audio",
+                                      "reference_voice"
+                                    ]
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "百炼 MiniMax 媒体类型或角色不受支持"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$first": {
+                                "$split": [
+                                  {
+                                    "$ref": "media.value"
+                                  },
+                                  "://"
+                                ]
+                              }
+                            },
+                            [
+                              "http",
+                              "https"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "百炼 MiniMax 媒体必须使用 HTTP 或 HTTPS 公网 URL"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "image"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                9
+              ]
+            },
+            "message": "百炼 MiniMax 最多支持 9 张参考图片"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "video"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                3
+              ]
+            },
+            "message": "百炼 MiniMax 最多支持 3 个参考视频"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "audio"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                3
+              ]
+            },
+            "message": "百炼 MiniMax 最多支持 3 个参考音频"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "image"
+                            ]
+                          },
+                          {
+                            "$in": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              [
+                                "first_frame"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                1
+              ]
+            },
+            "message": "百炼 MiniMax 最多只能有一个首帧"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "image"
+                            ]
+                          },
+                          {
+                            "$in": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              [
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                1
+              ]
+            },
+            "message": "百炼 MiniMax 最多只能有一个尾帧"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$coalesce": [
+                              {
+                                "$concatArrays": [
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.images"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "image"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.videos"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "video"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.audios"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "audio"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "request.inputs"
+                              }
+                            ]
+                          },
+                          "as": "media",
+                          "where": {
+                            "$in": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              [
+                                "first_frame",
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$coalesce": [
+                              {
+                                "$concatArrays": [
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.images"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "image"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.videos"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "video"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.audios"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "audio"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "request.inputs"
+                              }
+                            ]
+                          },
+                          "as": "media",
+                          "where": {
+                            "$in": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              [
+                                "first_frame",
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$len": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "百炼 MiniMax 首尾帧不能与参考图片、视频或音频混用"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$coalesce": [
+                              {
+                                "$concatArrays": [
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.images"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "image"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.videos"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "video"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$map": {
+                                      "from": {
+                                        "$ref": "request.audios"
+                                      },
+                                      "as": "media",
+                                      "in": {
+                                        "$merge": [
+                                          {
+                                            "$ref": "media"
+                                          },
+                                          {
+                                            "kind": "audio"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "request.inputs"
+                              }
+                            ]
+                          },
+                          "as": "media",
+                          "where": {
+                            "$in": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              [
+                                "first_frame",
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$in": [
+                    {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.output.aspectRatio"
+                        },
+                        "adaptive"
+                      ]
+                    },
+                    [
+                      "adaptive",
+                      "16:9",
+                      "9:16",
+                      "1:1",
+                      "4:3",
+                      "3:4",
+                      "21:9"
+                    ]
+                  ]
+                }
+              ]
+            },
+            "message": "百炼 MiniMax ratio 不受支持"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$in": [
+                    {
+                      "$ref": "request.output.aspectRatio"
+                    },
+                    [
+                      "16:9",
+                      "9:16",
+                      "1:1",
+                      "4:3",
+                      "3:4",
+                      "21:9"
+                    ]
+                  ]
+                }
+              ]
+            },
+            "message": "百炼 MiniMax 文生视频必须指定具体画幅比例，不能使用 adaptive"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/api/v1/services/aigc/video-generation/video-synthesis",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "input": {
+              "prompt": {
+                "$ref": "request.prompt"
+              },
+              "media": {
+                "$omitEmpty": {
+                  "$map": {
+                    "from": {
+                      "$sortByOrder": {
+                        "$coalesce": [
+                          {
+                            "$concatArrays": [
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.images"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "image"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.videos"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "video"
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "$map": {
+                                  "from": {
+                                    "$ref": "request.audios"
+                                  },
+                                  "as": "media",
+                                  "in": {
+                                    "$merge": [
+                                      {
+                                        "$ref": "media"
+                                      },
+                                      {
+                                        "kind": "audio"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "request.inputs"
+                          }
+                        ]
+                      }
+                    },
+                    "as": "media",
+                    "in": {
+                      "type": {
+                        "$if": {
+                          "condition": {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "image"
+                            ]
+                          },
+                          "then": {
+                            "$if": {
+                              "condition": {
+                                "$in": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  [
+                                    "first_frame",
+                                    "last_frame"
+                                  ]
+                                ]
+                              },
+                              "then": {
+                                "$ref": "media.role"
+                              },
+                              "else": "image_url"
+                            }
+                          },
+                          "else": {
+                            "$if": {
+                              "condition": {
+                                "$eq": [
+                                  {
+                                    "$ref": "media.kind"
+                                  },
+                                  "video"
+                                ]
+                              },
+                              "then": "feature",
+                              "else": "driving_audio"
+                            }
+                          }
+                        }
+                      },
+                      "url": {
+                        "$ref": "media.value"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "parameters": {
+              "resolution": {
+                "$upper": {
+                  "$ref": "request.output.resolution"
+                }
+              },
+              "ratio": {
+                "$if": {
+                  "condition": {
+                    "$gt": [
+                      {
+                        "$len": {
+                          "$filter": {
+                            "from": {
+                              "$coalesce": [
+                                {
+                                  "$concatArrays": [
+                                    {
+                                      "$map": {
+                                        "from": {
+                                          "$ref": "request.images"
+                                        },
+                                        "as": "media",
+                                        "in": {
+                                          "$merge": [
+                                            {
+                                              "$ref": "media"
+                                            },
+                                            {
+                                              "kind": "image"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$map": {
+                                        "from": {
+                                          "$ref": "request.videos"
+                                        },
+                                        "as": "media",
+                                        "in": {
+                                          "$merge": [
+                                            {
+                                              "$ref": "media"
+                                            },
+                                            {
+                                              "kind": "video"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$map": {
+                                        "from": {
+                                          "$ref": "request.audios"
+                                        },
+                                        "as": "media",
+                                        "in": {
+                                          "$merge": [
+                                            {
+                                              "$ref": "media"
+                                            },
+                                            {
+                                              "kind": "audio"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "$ref": "request.inputs"
+                                }
+                              ]
+                            },
+                            "as": "media",
+                            "where": {
+                              "$in": [
+                                {
+                                  "$ref": "media.role"
+                                },
+                                [
+                                  "first_frame",
+                                  "last_frame"
+                                ]
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      0
+                    ]
+                  },
+                  "then": "adaptive",
+                  "else": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.output.aspectRatio"
+                      },
+                      "adaptive"
+                    ]
+                  }
+                }
+              },
+              "duration": {
+                "$ref": "request.output.duration"
+              },
+              "watermark": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.output.watermark"
+                  },
+                  false
+                ]
+              }
+            }
+          },
+          "headers": {
+            "X-DashScope-Async": "enable"
+          },
+          "originPath": true
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/api/v1/tasks/{{taskId}}",
+          "originPath": true
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.output.task_id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$if": {
+              "condition": {
+                "$eq": [
+                  {
+                    "$ref": "response.output.task_status"
+                  },
+                  "UNKNOWN"
+                ]
+              },
+              "then": "failed",
+              "else": {
+                "$ref": "response.output.task_status"
+              }
+            }
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.output.message"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$if": {
+                  "condition": {
+                    "$eq": [
+                      {
+                        "$ref": "response.output.task_status"
+                      },
+                      "UNKNOWN"
+                    ]
+                  },
+                  "then": "百炼 MiniMax 任务不存在或已超过 24 小时查询有效期",
+                  "else": null
+                }
+              }
+            ]
+          },
+          "videos": {
+            "$ref": "response.output.video_url"
+          },
+          "usage": {
+            "$ref": "response.usage"
+          },
+          "errorPaths": [
+            "code",
+            "output.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  }
+}

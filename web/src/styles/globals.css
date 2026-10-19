@@ -14736,6 +14736,11 @@ html:not(.dark) .creation-history-drawer-root {
 .asset-archive-section-title { display: block; margin-bottom: 8px; color: color-mix(in srgb, var(--foreground) 40%, transparent); font-size: var(--fs-tiny); font-weight: 560; letter-spacing: .05em; }
 .asset-archive-section-body { margin: 0; color: color-mix(in srgb, var(--foreground) 74%, transparent); font-size: var(--fs-label); line-height: 1.7; white-space: pre-wrap; }
 .asset-archive-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.library-drawer .asset-archive-tag {
+    border-color: color-mix(in srgb, var(--foreground) 14%, transparent) !important;
+    background: color-mix(in srgb, var(--foreground) 6%, transparent) !important;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
+}
 .library-drawer .ant-btn-primary { box-shadow: none; font-weight: 560; }
 
 @media (max-width: 680px) {

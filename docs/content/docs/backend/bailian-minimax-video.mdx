@@ -1,0 +1,62 @@
+---
+title: 百炼 MiniMax 视频
+description: 阿里云百炼 MiniMax H3 视频协议的渠道配置、媒体角色、参数和任务生命周期
+---
+
+# 百炼 MiniMax 视频
+
+`dashscope-minimax-video` 是独立声明式协议插件，适配百炼的 `MiniMax/MiniMax-H3`。它与原生 `minimax-video`、秘塔 H3、Wan 视频使用不同请求合同，不按模型名称自动切换协议。
+
+## 渠道配置
+
+| 配置 | 值 |
+| --- | --- |
+| 协议 | 百炼 MiniMax H3 Video（`dashscope-minimax-video`） |
+| Base URL | 百炼业务空间 Endpoint |
+| API Key | 百炼 API Key |
+| 模型 ID | `MiniMax/MiniMax-H3` |
+
+插件源码位于 `plugin-packages/dashscope-minimax-video/`，运行时从随应用分发的 `dashscope-minimax-video.yingce-plugin` 自动安装。更新包后重启后端；管理员停用的插件不会被更新过程自动启用。插件中心详情包含完整字段和 Manifest 合同。
+
+## 生成参数
+
+- 提示词：必填，最多 7000 个字符。
+- 时长：4–15 秒整数，必填。
+- 分辨率：`768P`、`2K`，必填；请求时规范为大写。
+- 比例：`16:9`、`9:16`、`1:1`、`4:3`、`3:4`、`21:9`、`adaptive`。文生视频必须指定具体比例；首尾帧使用 `adaptive`，多模态参考未指定时使用 `adaptive`。
+
+- 水印：`parameters.watermark`，默认关闭。
+
+渠道模型的「能力与参数」按上述范围配置。
+
+不发送原生 `content[]`、`aigc_watermark`、`generate_audio`、`seed` 或 `prompt_optimizer`。该接口未声明音频生成开关，不能将参考音频能力视为开关支持。
+
+## 媒体角色与约束
+
+| 统一角色 | 百炼 `input.media[].type` |
+| --- | --- |
+| `first_frame` | `first_frame` |
+| `last_frame` | `last_frame` |
+| `reference_image`、`subject_reference`、`style_reference`，或未指定角色的图片 | `image_url` |
+| `reference_video`，或未指定角色的视频 | `feature` |
+| `reference_audio`、`reference_voice`，或未指定角色的音频 | `driving_audio` |
+
+素材按显式 `order` 输出，不按图片数组下标猜测首尾帧。支持仅首帧、仅尾帧以及首尾帧；首尾帧各最多 1 张，不能与参考图片、参考视频或参考音频混用。未指定角色的图片保持普通参考图，不自动变成首帧。
+
+- 图片：最多 9 张，每张不超过 30 MB；JPG/JPEG/PNG/WEBP/HEIC/HEIF，宽高 256–5760 像素，宽高比 0.4–2.5。
+- 视频：最多 3 个，每个不超过 50 MB，单段 2–15 秒且总时长不超过 15 秒；MP4/MOV，23.976–60 fps，宽高和比例限制同图片。
+- 音频：最多 3 个，每个不超过 15 MB，单段 2–15 秒且总时长不超过 15 秒；WAV/MP3。
+
+上游只接收 HTTP/HTTPS 公网素材地址；上传、资源归属和出站安全继续由宿主处理。插件校验角色、数量、地址形式和生成规格；尺寸、编码、帧率及参考素材总时长仍须满足上游要求。不能通过 `providerOptions` 覆盖原始媒体数组来绕过统一校验。
+
+## 请求与任务
+
+1. 创建：`POST /api/v1/services/aigc/video-generation/video-synthesis`，Bearer 鉴权，设置 `X-DashScope-Async: enable`。
+2. 查询：`GET /api/v1/tasks/{task_id}`，继续使用同一业务空间和 Bearer 鉴权。
+3. 请求路径相对于域名根目录，避免拼入渠道地址已有的 `/compatible-mode/v1` 等路径。
+
+创建后保存 `output.task_id`，恢复查询原任务，不再次提交收费生成。`PENDING`、`RUNNING` 分别映射为等待和处理中；`SUCCEEDED` 读取 `output.video_url`；`FAILED`、`CANCELED`、`UNKNOWN` 为终态，其中 `UNKNOWN` 提示任务不存在或已超过 24 小时有效期。
+
+顶层 `code/message` 和任务内 `output.code/output.message` 都保留失败语义。结果 URL 有效期为 30 天，宿主按临时媒体下载并持久化，不将供应商 URL 当作永久资源。原样保留 `usage` 的输入秒数、输出秒数、图片计数等统计，不直接将供应商统计替换本地计费规则；系统模型价格仍由管理员配置。
+
+接口依据：[阿里云百炼 MiniMax 视频生成 API](https://docs.bailian.console.aliyun.com/zh/model-studio/minimax-video-generation-api-reference)。

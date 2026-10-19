@@ -447,6 +447,76 @@
     opacity: .55;
 }
 
+/* Keep the settings popover inside the viewport and preserve every option label. */
+.app-user-overlays .creation-control-popover-surface,
+.app-product-overlays .creation-control-popover-surface {
+    box-sizing: border-box !important;
+    max-width: calc(100vw - 24px) !important;
+    overflow: hidden !important;
+}
+
+.app-user-overlays .creation-control-popover-surface :is(.ant-popover-inner, .ant-popover-inner-content, .creation-control-popover-content),
+.app-product-overlays .creation-control-popover-surface :is(.ant-popover-inner, .ant-popover-inner-content, .creation-control-popover-content) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.app-user-overlays .creation-parameter-menu,
+.app-product-overlays .creation-parameter-menu {
+    box-sizing: border-box !important;
+    width: min(288px, calc(100vw - 48px)) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden;
+}
+
+.creation-parameter-menu :is(.image-size-picker, .image-size-ratios, .image-size-tiers, .creation-choice-grid, .creation-parameter-content) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.creation-parameter-menu .image-size-ratios,
+.creation-parameter-menu .image-size-tiers {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-auto-flow: row;
+    gap: 6px;
+}
+
+.creation-parameter-menu :is(.image-size-ratios button, .image-size-tiers button, .creation-choice-grid button) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    line-height: 1.2;
+}
+
+.creation-parameter-menu .image-size-picker :is(.image-size-tiers button, .image-size-ratios button) {
+    min-height: 36px;
+    padding-inline: 4px;
+    font-size: 11px;
+}
+
+.creation-parameter-menu .creation-choice-grid :is(.is-quality button, .is-count button) {
+    font-size: 11px !important;
+}
+
+.creation-parameter-menu :is(.creation-choice-grid button > span, .image-size-picker button > span) {
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+}
+
 html:not(.dark) .app-user-overlays .creation-control-popover.ant-popover,
 html:not(.dark) .app-user-overlays .creation-control-popover .ant-popover-container,
 html:not(.dark) .app-user-overlays .creation-control-popover .ant-popover-inner,
