@@ -118,6 +118,8 @@ type cloudAgentApproval struct {
 }
 
 type cloudAgentRuntime struct {
+	RetryBudgetRunID      string                                 `json:"retryBudgetRunId,omitempty"`
+	RetryReplay           []string                               `json:"retryReplay,omitempty"`
 	CreationOutputRefs    map[string]cloudAgentCreationOutputRef `json:"creationOutputRefs,omitempty"`
 	CreationPendingImages []string                               `json:"creationPendingImages,omitempty"`
 	CommerceToolsEnabled  bool                                   `json:"commerceToolsEnabled,omitempty"`
@@ -292,6 +294,12 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	// immutable task-history anchor. Leaving this nil makes every new Pi run
 	// fail its first checkpoint with "Agent runtime task history is invalid".
 	state := cloudAgentRuntime{Request: initial.Request, Policy: initial.Policy, ParentID: initial.ParentID, Fingerprint: initial.Fingerprint, CreativeAnchor: initial.CreativeAnchor, TextHistory: input.TextHistory, Skills: initial.Skills, Profile: initial.Profile, Canonical: canonical, ActiveTaskID: "", TaskIDs: []string{task.ID}, Step: 0, Decisions: map[string]string{}, Plan: initial.Plan, CommercePlan: initial.CommercePlan, ConfirmationRounds: initial.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), initial.ConfirmationFingerprints...), PendingConfirmationFingerprint: "", Events: []CloudAgentEvent{}, StepLimits: limits}
+	state.RetryReplay = append([]string(nil), initial.RetryReplay...)
+	if len(state.RetryReplay) > 0 {
+		call := cloudAgentCall{ID: "retry-media"}
+		call.Function.Name, call.Function.Arguments = "generate_image_batch", mustMarshal(map[string]any{"retryTaskIds": state.RetryReplay})
+		state.Calls = []cloudAgentCall{call}
+	}
 	if !carrier {
 		state.ActiveTaskID = task.ID
 		state.Step = 1

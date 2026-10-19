@@ -278,11 +278,20 @@ func (r *Repository) RouteAttempts(taskID string, routeRun int) ([]model.RouteAt
 
 // SwitchTaskLogicalRoute 同时更新任务执行目标和账单。跟随供应价格时会原子调整预留积分，
 // 保证明确未创建上游任务后的故障切线不会沿用上一条线路的价格快照。
-func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID string, routeID string, inputJSON string, billingOrderID string, channelID string, channelModelID string, replacement *model.BillingOrder, cost model.BillingCostSnapshot) error {
+func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID string, routeID string, inputJSON string, billingOrderID string, channelID string, channelModelID string, replacement *model.BillingOrder, cost model.BillingCostSnapshot, directModel ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		updated := tx.Model(&model.Task{}).
-			Where("id = ? AND status = ? AND route_id = ?", taskID, model.TaskStatusRunning, expectedRouteID).
-			Updates(map[string]any{"route_id": routeID, "channel_model_id": channelModelID, "input_json": inputJSON, "updated_at": time.Now()})
+		taskUpdates := map[string]any{"route_id": routeID, "channel_model_id": channelModelID, "input_json": inputJSON, "updated_at": time.Now()}
+		query := tx.Model(&model.Task{}).Where("id = ? AND status = ? AND route_id = ?", taskID, model.TaskStatusRunning, expectedRouteID)
+		if len(directModel) > 0 {
+			if len(directModel) != 1 || directModel[0] == "" {
+				return ErrTaskStateConflict
+			}
+			// Public logical models keep their stable identity. Only a direct task
+			// can atomically publish the actual fallback model alongside its charge.
+			query = query.Where("logical_model_id = '' OR logical_model_id IS NULL")
+			taskUpdates["model"] = directModel[0]
+		}
+		updated := query.Updates(taskUpdates)
 		if updated.Error != nil {
 			return updated.Error
 		}
@@ -314,6 +323,10 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			// Keep the existing cap; replacement is a price snapshot, not a new grant.
 			if err := validateBillingChargeLimit(order, replacement.AmountMicrocredits); err != nil {
 				return err
+			}
+			if len(directModel) == 1 {
+				updates["model"] = directModel[0]
+				order.Model = directModel[0]
 			}
 			reserved := order.ReservedAmountMicrocredits
 			if reserved <= 0 {

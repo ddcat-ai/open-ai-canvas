@@ -57,3 +57,14 @@ func TestCreationDefaultQualityDoesNotRejectUnsupportedOptionalParameter(t *test
 		t.Fatal("explicit unsupported quality silently discarded")
 	}
 }
+
+func TestCreationModelSelectionPreferenceValidation(t *testing.T) {
+	for _, mode := range []string{"preferred", "fixed"} {
+		if err := validateCreationPreferenceFields(map[string]any{"agent": map[string]any{"imageSelectionMode": mode, "videoSelectionMode": mode}}, ""); err != nil {
+			t.Fatalf("valid model selection preference %s rejected: %v", mode, err)
+		}
+	}
+	if err := validateCreationPreferenceFields(map[string]any{"agent": map[string]any{"imageSelectionMode": "all"}}, ""); err == nil {
+		t.Fatal("unknown model selection policy accepted")
+	}
+}

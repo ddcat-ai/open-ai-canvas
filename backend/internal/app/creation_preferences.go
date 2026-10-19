@@ -46,6 +46,8 @@ func validateCreationPreferenceFields(value map[string]any, prefix string) error
 			options = "read_only,request_approval,auto"
 		case "agent.imageParameterMode", "agent.videoParameterMode":
 			options = "auto,manual"
+		case "agent.imageSelectionMode", "agent.videoSelectionMode":
+			options = "preferred,fixed"
 		case "image.transparentBackground":
 			options = "true,false"
 		case "image.model", "image.ratio", "image.quality", "image.imageResolution", "image.count", "video.ratio", "video.seconds", "video.videoQuality", "models.textModel", "models.imageModel", "models.videoModel", "agent.image.size", "agent.image.quality", "agent.video.size", "agent.video.quality":

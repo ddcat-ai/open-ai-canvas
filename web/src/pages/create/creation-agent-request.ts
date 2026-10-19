@@ -70,6 +70,7 @@ export function buildCreationAgentRunInput(input: CreationAgentRequestOptions): 
         selection
             ? {
                   selection,
+                  selectionMode: parameters?.selectionMode || "preferred",
                   parameterMode: parameters?.parameterMode || "auto",
                   ...(parameters?.parameterMode === "manual" ? { size: parameters.size, quality: parameters.quality, durationSeconds: parameters.durationSeconds, count: parameters.count } : {}),
               }

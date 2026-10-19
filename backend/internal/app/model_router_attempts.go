@@ -76,7 +76,7 @@ func (s *Service) beginTaskRouteAttempt(task *model.Task) (*model.RouteAttempt, 
 			return nil, routeDispatchUncertainError{"上一次提交结果不明确，为避免重复扣费已停止自动重发"}
 		case "rejected_no_job":
 			if task.LogicalModelID == "" {
-				if task.Type == "canvas_image" && task.AgentRunID != "" {
+				if (task.Type == "canvas_image" || task.Type == "canvas_video") && task.AgentRunID != "" {
 					next, err := s.switchTaskToNextImageChannel(task, attempts)
 					if err != nil || next != nil {
 						return next, err
@@ -325,7 +325,7 @@ func (s *Service) nextRouteAttemptAfterFailure(task *model.Task, attempt *model.
 		return nil, err
 	}
 	if task.LogicalModelID == "" {
-		if task.Type != "canvas_image" || task.AgentRunID == "" {
+		if (task.Type != "canvas_image" && task.Type != "canvas_video") || task.AgentRunID == "" {
 			return nil, nil
 		}
 		return s.switchTaskToNextImageChannel(task, attempts)

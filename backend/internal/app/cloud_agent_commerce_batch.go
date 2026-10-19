@@ -114,13 +114,9 @@ func (s *Service) prepareCloudAgentCommerceBatch(run *model.CloudAgentExecution,
 	if limit := state.Request.Budget.MaxVideoSeconds; limit > 0 && state.VideoSeconds+duration > limit {
 		return batch, BadAuthRequest("整套视频时长超过本轮预算；请修改方案")
 	}
-	orders, err := s.repo.BillingOrdersByTaskIDs(run.UserID, state.TaskIDs)
+	remaining, err := s.cloudAgentRemainingBudget(run.UserID, state)
 	if err != nil {
 		return nil, err
-	}
-	remaining := int64(math.Floor(state.Request.Budget.MaxCredits * float64(CreditScale)))
-	for _, order := range orders {
-		remaining -= order.AmountMicrocredits
 	}
 	if remaining < 0 || batch.QuoteMicrocredits > remaining {
 		return batch, BadAuthRequest("整套真实报价超过本轮剩余积分预算；请修改方案或预算")

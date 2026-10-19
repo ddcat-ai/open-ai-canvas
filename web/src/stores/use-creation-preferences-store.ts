@@ -9,6 +9,8 @@ export type CreationModePreference = "text" | "image" | "video" | "agent";
 
 export type CreationAgentPreferences = {
     permissionMode: "read_only" | "request_approval" | "auto";
+    imageSelectionMode: "preferred" | "fixed";
+    videoSelectionMode: "preferred" | "fixed";
     imageParameterMode: "auto" | "manual";
     videoParameterMode: "auto" | "manual";
     budget: { maxCredits: number; maxGenerationTasks: number; maxVideoSeconds: number };
@@ -20,6 +22,8 @@ export const defaultCreationAgentPreferences: CreationAgentPreferences = {
     permissionMode: "request_approval",
     imageParameterMode: "auto",
     videoParameterMode: "auto",
+    imageSelectionMode: "preferred",
+    videoSelectionMode: "preferred",
     budget: { maxCredits: 200, maxGenerationTasks: 0, maxVideoSeconds: 30 },
     image: { size: "1:1", quality: "auto", count: 1 },
     video: { size: "16:9", quality: "720", durationSeconds: 6 },
@@ -124,6 +128,8 @@ function normalizeCreationAgentPreferences(value: unknown): CreationAgentPrefere
     const string = (value: unknown, fallback: string) => (typeof value === "string" && value.length <= 256 ? value : fallback);
     return {
         permissionMode: ["auto", "read_only", "request_approval"].includes(raw.permissionMode || "") ? raw.permissionMode! : defaults.permissionMode,
+        imageSelectionMode: raw.imageSelectionMode === "fixed" ? "fixed" : "preferred",
+        videoSelectionMode: raw.videoSelectionMode === "fixed" ? "fixed" : "preferred",
         imageParameterMode: raw.imageParameterMode === "manual" ? "manual" : "auto",
         videoParameterMode: raw.videoParameterMode === "manual" ? "manual" : "auto",
         budget: { maxCredits: number(raw.budget?.maxCredits, defaults.budget.maxCredits, false), maxGenerationTasks: number(raw.budget?.maxGenerationTasks, 0), maxVideoSeconds: number(raw.budget?.maxVideoSeconds, defaults.budget.maxVideoSeconds) },
@@ -186,5 +192,9 @@ export function useCreationAgentPreferences() {
         setAgentImageSettings: (value: (previous: CreationAgentPreferences["image"]) => CreationAgentPreferences["image"]) => update("image", value),
         agentVideoSettings: agent.video,
         setAgentVideoSettings: (value: (previous: CreationAgentPreferences["video"]) => CreationAgentPreferences["video"]) => update("video", value),
+        agentImageSelectionMode: agent.imageSelectionMode,
+        setAgentImageSelectionMode: (value: CreationAgentPreferences["imageSelectionMode"]) => update("imageSelectionMode", value),
+        agentVideoSelectionMode: agent.videoSelectionMode,
+        setAgentVideoSelectionMode: (value: CreationAgentPreferences["videoSelectionMode"]) => update("videoSelectionMode", value),
     };
 }

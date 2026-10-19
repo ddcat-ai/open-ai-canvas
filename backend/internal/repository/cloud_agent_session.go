@@ -39,6 +39,13 @@ func lockOwnedWriteUser(tx *gorm.DB, userID string) error {
 	}
 }
 
+// LockTaskAdmission must be called on the repository supplied by Transaction or
+// MutateCloudAgentRun. It shares the task/session admission lock across replicas;
+// the caller's budget check and reservation remain in that same transaction.
+func (r *Repository) LockTaskAdmission(userID string) error {
+	return lockOwnedWriteUser(r.db, userID)
+}
+
 // CreateAgentSession persists a durable Agent conversation identity.
 //
 // The application layer is responsible for validating the session contract
@@ -215,6 +222,16 @@ func (r *Repository) MutateAgentSession(userID, id string, revision int64, fn fu
 // cursor is resolved inside the same user/session scope to prevent probing
 // another user's run ID. Legacy ConversationID rows remain readable.
 func (r *Repository) CloudAgentExecutionsBySession(userID, sessionID string, limit int, before ...string) ([]model.CloudAgentExecution, error) {
+	return r.cloudAgentExecutionsBySession(userID, sessionID, limit, true, before...)
+}
+
+// Budget admission needs immutable request lineage and task IDs, not hydrated
+// transcripts or journal windows while holding the user's admission lock.
+func (r *Repository) CloudAgentBudgetRecordsBySession(userID, sessionID string, limit int, before ...string) ([]model.CloudAgentExecution, error) {
+	return r.cloudAgentExecutionsBySession(userID, sessionID, limit, false, before...)
+}
+
+func (r *Repository) cloudAgentExecutionsBySession(userID, sessionID string, limit int, hydrate bool, before ...string) ([]model.CloudAgentExecution, error) {
 	userID = strings.TrimSpace(userID)
 	sessionID = strings.TrimSpace(sessionID)
 	if userID == "" || sessionID == "" {
@@ -232,6 +249,9 @@ func (r *Repository) CloudAgentExecutionsBySession(userID, sessionID string, lim
 			"user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))",
 			userID, sessionID, sessionID,
 		)
+		if !hydrate {
+			query = query.Select("id", "state_json", "created_at")
+		}
 		if len(before) > 0 && strings.TrimSpace(before[0]) != "" {
 			var cursor model.CloudAgentExecution
 			if err := tx.Where("id = ? AND user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))", strings.TrimSpace(before[0]), userID, sessionID, sessionID).First(&cursor).Error; err != nil {
@@ -241,6 +261,9 @@ func (r *Repository) CloudAgentExecutionsBySession(userID, sessionID string, lim
 		}
 		if err := query.Order("created_at DESC, id DESC").Limit(limit).Find(&runs).Error; err != nil {
 			return err
+		}
+		if !hydrate {
+			return nil
 		}
 		scoped := New(tx)
 		for index := range runs {

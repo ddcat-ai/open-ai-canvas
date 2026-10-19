@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -56,6 +55,13 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 		}
 		if media.CommerceRetryFailedTaskID != "" {
+			original, err := s.repo.TaskForUser(run.UserID, media.CommerceRetryFailedTaskID)
+			if err != nil {
+				return err
+			}
+			if _, err := s.cloudAgentMediaRetryPolicy(run.UserID, original); err != nil {
+				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
+			}
 			autoRepair, err := s.cloudAgentCommerceAutoImageRetry(run, state, media.CommerceItemID, media.CommerceRetryFailedTaskID, media.CommerceRetryPromptHash)
 			if err != nil {
 				return err
@@ -68,13 +74,9 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			}
 		}
 	}
-	orders, err := s.repo.BillingOrdersByTaskIDs(run.UserID, state.TaskIDs)
+	remaining, err := s.cloudAgentRemainingBudget(run.UserID, state)
 	if err != nil {
 		return err
-	}
-	remaining := int64(math.Floor(state.Request.Budget.MaxCredits * float64(CreditScale)))
-	for _, order := range orders {
-		remaining -= order.AmountMicrocredits
 	}
 	if remaining < 0 {
 		return s.failCloudAgent(run, state, "Agent 累计预算已耗尽")
@@ -91,6 +93,7 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			metadata["commercePlanId"], metadata["commerceVersion"] = state.CommercePlan.PlanID, state.CommercePlan.Version
 			metadata["commerceItemId"], metadata["commercePlanHash"] = media.CommerceItemID, cloudAgentCommercePlanHash(state.CommercePlan)
 			if media.CommerceRetryFailedTaskID != "" {
+				metadata["retryOf"] = media.CommerceRetryFailedTaskID
 				metadata["commerceRetryFailedTaskId"] = media.CommerceRetryFailedTaskID
 				metadata["commerceRootTaskId"] = cloudAgentCommerceTaskID(run.UserID, state.CommercePlan, media.CommerceItemID, state.Request.SessionID)
 				metadata["commerceRetryPromptHash"] = media.CommerceRetryPromptHash
@@ -199,6 +202,20 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	err = s.mutateCloudAgentTool(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+		if err := repo.LockTaskAdmission(run.UserID); err != nil {
+			return err
+		}
+		remaining, err := cloudAgentRemainingBudget(repo, run.UserID, state)
+		if err != nil {
+			return err
+		}
+		charge := int64(0)
+		if prepare.Order != nil {
+			charge = max(prepare.Order.AmountMicrocredits, prepare.Order.ReservedAmountMicrocredits, prepare.Order.ActualAmountMicrocredits)
+		}
+		if remaining < 0 || charge > remaining {
+			return BadAuthRequest("生成报价超过累计剩余预算，未提交任务")
+		}
 		if media != nil {
 			doc := cloudAgentCreationMediaDocument()
 			if state.Request.Surface != "creation" {
@@ -696,6 +713,10 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 	}
 	if err != nil || decision != "approve" {
 		return err
+	}
+	if len(state.RetryReplay) > 0 {
+		s.resumeCloudAgentPi(userID, id)
+		return nil
 	}
 	var executionFence *model.CloudAgentFence
 	if !s.disablePiRuntime {

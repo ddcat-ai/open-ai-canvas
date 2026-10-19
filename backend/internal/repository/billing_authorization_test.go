@@ -73,3 +73,49 @@ func TestBillingSettlementRejectsFixedChargeBeyondAuthorization(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectModelReplacementUpdatesIdentityAtomicallyWithinAuthorization(t *testing.T) {
+	for _, logical := range []bool{false, true} {
+		repo, db := newRefundedBillingRecoveryRepository(t)
+		if err := db.AutoMigrate(&model.Task{}); err != nil {
+			t.Fatal(err)
+		}
+		task := model.Task{ID: "generation", UserID: "user", Status: model.TaskStatusRunning, RouteID: "original", Model: "original-model", BillingOrderID: "order"}
+		if logical {
+			task.LogicalModelID = "public-product"
+		}
+		order := model.BillingOrder{ID: "order", TaskID: task.ID, UserID: task.UserID, Model: task.Model, Status: model.BillingStatusRunning, BillingMode: "fixed_request", AmountMicrocredits: 100, ReservedAmountMicrocredits: 100, ChargeLimitSet: true, ChargeLimitMicrocredits: 100}
+		for _, item := range []any{&task, &order, &model.CreditAccount{UserID: "user", AvailableMicrocredits: 1000, ReservedMicrocredits: 100}} {
+			if err := db.Create(item).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+		replacement := order
+		replacement.AmountMicrocredits = 101
+		err := repo.SwitchTaskLogicalRoute(task.ID, "original", "backup", "{}", order.ID, "backup-channel", "backup-model-id", &replacement, model.BillingCostSnapshot{}, "backup-model")
+		if logical && !errors.Is(err, ErrTaskStateConflict) || !logical && !errors.Is(err, ErrBillingChargeLimit) {
+			t.Fatalf("unsafe replacement allowed: logical=%v err=%v", logical, err)
+		}
+		stored, _ := repo.Task(task.ID)
+		storedOrder, _ := repo.BillingOrder(order.ID)
+		if stored.Model != task.Model || stored.RouteID != task.RouteID || storedOrder.Model != order.Model {
+			t.Fatalf("rejected replacement changed identity: %+v %+v", stored, storedOrder)
+		}
+		if logical {
+			continue
+		}
+		replacement.AmountMicrocredits = 90
+		if err := repo.SwitchTaskLogicalRoute(task.ID, "original", "backup", "{}", order.ID, "backup-channel", "backup-model-id", &replacement, model.BillingCostSnapshot{}, "backup-model"); err != nil {
+			t.Fatal(err)
+		}
+		stored, _ = repo.Task(task.ID)
+		storedOrder, _ = repo.BillingOrder(order.ID)
+		if stored.Model != "backup-model" || storedOrder.Model != stored.Model || storedOrder.ChargeLimitMicrocredits != 100 {
+			t.Fatalf("actual model or approved cap not preserved: %+v %+v", stored, storedOrder)
+		}
+		var entry model.CreditLedgerEntry
+		if err := db.First(&entry, "billing_order_id = ?", order.ID).Error; err != nil || entry.Model != "backup-model" {
+			t.Fatalf("price adjustment ledger used stale model: %+v %v", entry, err)
+		}
+	}
+}

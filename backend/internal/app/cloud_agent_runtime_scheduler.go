@@ -210,6 +210,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		}
 		return s.terminateCloudAgent(run, "Agent 运行状态损坏，本轮已停止")
 	}
+	if len(state.RetryReplay) > 0 {
+		return s.advanceCloudAgentCreationReplay(run, &state)
+	}
 	// 单步边界每次推进都重新解析：管理员改配置后，正在跑的这一轮下一步就用新值。
 	state.StepLimits, err = s.cloudAgentStepLimits()
 	if err != nil {

@@ -49,6 +49,11 @@ func TestCreationImageAgentSwitchesChannelsReplansOnlyFailureAndFinishesWholeSet
 			imageRequests = append(imageRequests, r.URL.Path+"\n"+prompt)
 			mu.Unlock()
 			if strings.Contains(prompt, "Original scene direction") {
+				if strings.HasPrefix(r.URL.Path, "/primary/") {
+					w.WriteHeader(http.StatusTooManyRequests)
+					_, _ = w.Write([]byte(`{"error":{"message":"channel capacity exhausted"}}`))
+					return
+				}
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = w.Write([]byte(`{"error":{"message":"prompt may violate our content policies"}}`))
 				return

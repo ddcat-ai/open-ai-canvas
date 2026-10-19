@@ -20,6 +20,7 @@ type cloudAgentImageBatchItem struct {
 	References            []cloudAgentCreationReference `json:"references,omitempty"`
 	Size                  string                        `json:"size,omitempty"`
 	Quality               string                        `json:"quality,omitempty"`
+	RequirePreferredModel bool                          `json:"requirePreferredModel,omitempty"`
 }
 
 func cloudAgentImageBatchProperties() map[string]any {
@@ -32,6 +33,7 @@ func cloudAgentImageBatchProperties() map[string]any {
 			"id": str("本批唯一图片交付项 ID，与阶段计划 ID 分开"), "title": str("这张图的标题"), "prompt": str("该图完整提示词；编辑时明确只改什么、保留什么"),
 			"attachmentResourceIds": map[string]any{"type": "array", "maxItems": 16, "items": str("仅此项需要的已授权素材或精读原图 ID；不同项各自映射，不混入其他原图")},
 			"references":            cloudAgentCreationReferenceSchema(), "size": str("自动参数模式下按已选模型能力选择画幅"), "quality": str("自动参数模式下按已选模型能力选择质量"),
+			"requirePreferredModel": map[string]any{"type": "boolean", "description": "仅当用户明确要求必须使用已选型号时设为 true；只收紧该项模型范围，不能扩大授权或预算"},
 		},
 	}}}
 }
@@ -60,7 +62,7 @@ func (s *Service) prepareCloudAgentImageBatch(run *model.CloudAgentExecution, st
 			return nil, &cloudAgentArgumentError{BadAuthRequest("图片交付项必须具有唯一有效 ID、标题和完整提示词")}
 		}
 		seen[item.ID] = true
-		mediaArgs := cloudAgentMediaArgs{Mode: "image", Title: item.Title, Prompt: item.Prompt, AttachmentResourceIDs: item.AttachmentResourceIDs, References: item.References, Size: item.Size, Quality: item.Quality}
+		mediaArgs := cloudAgentMediaArgs{Mode: "image", Title: item.Title, Prompt: item.Prompt, AttachmentResourceIDs: item.AttachmentResourceIDs, References: item.References, Size: item.Size, Quality: item.Quality, RequirePreferredModel: item.RequirePreferredModel}
 		mediaCall := cloudAgentCall{ID: cloudAgentID(run.UserID, batch.PlanID+":"+item.ID)}
 		mediaCall.Function.Name, mediaCall.Function.Arguments = "generate_media", mustMarshal(mediaArgs)
 		request, media, err := s.prepareCloudAgentMedia(run, &copyState, mediaCall)
@@ -89,13 +91,9 @@ func (s *Service) prepareCloudAgentImageBatch(run *model.CloudAgentExecution, st
 		request.creationPrepare = nil
 		batch.Items = append(batch.Items, cloudAgentCommerceBatchItem{ItemID: item.ID, TaskID: mediaCall.ID, Args: media.Args, Request: request, Prepared: prepared})
 	}
-	orders, err := s.repo.BillingOrdersByTaskIDs(run.UserID, state.TaskIDs)
+	remaining, err := s.cloudAgentRemainingBudget(run.UserID, state)
 	if err != nil {
 		return nil, err
-	}
-	remaining := int64(math.Floor(state.Request.Budget.MaxCredits * float64(CreditScale)))
-	for _, order := range orders {
-		remaining -= order.AmountMicrocredits
 	}
 	if remaining < 0 || batch.QuoteMicrocredits > remaining {
 		return nil, BadAuthRequest("图片批次真实报价超过本轮剩余积分预算，未提交任务")
@@ -105,8 +103,18 @@ func (s *Service) prepareCloudAgentImageBatch(run *model.CloudAgentExecution, st
 
 func cloudAgentImageBatchPreview(batch *cloudAgentCommerceBatch) cloudAgentApprovalPreview {
 	items := make([]cloudAgentApprovalPreviewItem, 0, len(batch.Items))
+	hasVideo := false
 	for _, item := range batch.Items {
-		items = append(items, cloudAgentApprovalPreviewItem{Operation: "generate_media", Summary: item.Args.Title, Details: []string{fmt.Sprintf("预计 %.4f 积分", float64(item.Prepared.Quote.AmountMicrocredits)/float64(CreditScale))}})
+		details := []string{fmt.Sprintf("预计 %.4f 积分", float64(item.Prepared.Quote.AmountMicrocredits)/float64(CreditScale))}
+		metadata, _ := item.Request.Input["metadata"].(map[string]any)
+		if stringValue(metadata["retryOf"]) != "" {
+			details = append(details, "生成模型："+item.Request.Model)
+		}
+		hasVideo = hasVideo || item.Args.Mode == "video"
+		items = append(items, cloudAgentApprovalPreviewItem{Operation: "generate_media", Summary: item.Args.Title, Details: details})
+	}
+	if hasVideo {
+		return cloudAgentApprovalPreview{Kind: "image_batch", Title: "确认重试生成", Description: fmt.Sprintf("共 %d 项媒体，预计 %.4f 积分；批准后各自入队。", len(items), float64(batch.QuoteMicrocredits)/float64(CreditScale)), Items: items}
 	}
 	return cloudAgentApprovalPreview{Kind: "image_batch", Title: "确认批量生成", Description: fmt.Sprintf("共 %d 张独立图片，预计 %.4f 积分；批准后各自入队，不逐张等待。", len(items), float64(batch.QuoteMicrocredits)/float64(CreditScale)), Items: items}
 }
@@ -124,7 +132,11 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 	}
 	if batch == nil {
 		var err error
-		batch, err = s.prepareCloudAgentImageBatch(run, state, call)
+		if len(state.RetryReplay) > 0 {
+			batch, err = s.prepareCloudAgentReplayBatch(run, state, call)
+		} else {
+			batch, err = s.prepareCloudAgentImageBatch(run, state, call)
+		}
 		if err != nil {
 			return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 		}
@@ -158,7 +170,11 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 		}
 		return s.advanceCloudAgentImageBatch(latest, &fresh, call)
 	}
-	if batch.Kind != "images" || batch.PlanID != cloudAgentID(run.UserID, run.ID+":image-batch:"+call.ID) || batch.PlanHash != cloudAgentApprovalCallHash(call) || len(batch.Items) < 2 || len(batch.Items) > 20 {
+	minimum := 2
+	if len(state.RetryReplay) > 0 {
+		minimum = 1
+	}
+	if batch.Kind != "images" || batch.PlanID != cloudAgentID(run.UserID, run.ID+":image-batch:"+call.ID) || batch.PlanHash != cloudAgentApprovalCallHash(call) || len(batch.Items) < minimum || len(batch.Items) > 20 {
 		return s.terminateCloudAgent(run, "图片批次与已提交调用不一致，未继续提交任务")
 	}
 	if state.Approval != nil && (state.Approval.Decision != "approve" || state.DecisionPreparedHashes[state.Approval.ID] != cloudAgentCommerceBatchHash(batch)) {
@@ -173,6 +189,15 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			if capacityBlocked {
 				continue
+			}
+			if len(state.RetryReplay) > 0 {
+				original, lookupErr := s.repo.TaskForUser(run.UserID, item.ItemID)
+				if lookupErr != nil {
+					return lookupErr
+				}
+				if _, retryErr := s.cloudAgentMediaRetryPolicy(run.UserID, original); retryErr != nil {
+					return s.cloudAgentMediaError(run, state, "admission", false, false, retryErr)
+				}
 			}
 			var input map[string]any
 			if err := json.Unmarshal([]byte(mustMarshal(item.Request.Input)), &input); err != nil {
@@ -212,7 +237,7 @@ func (s *Service) advanceCloudAgentImageBatch(run *model.CloudAgentExecution, st
 				ItemID  string `json:"imageBatchItemId"`
 			} `json:"metadata"`
 		}
-		if json.Unmarshal([]byte(task.InputJSON), &input) != nil || task.AgentRunID != run.ID || task.Type != "canvas_image" || input.Metadata.BatchID != batch.PlanID || input.Metadata.ItemID != item.ItemID {
+		if json.Unmarshal([]byte(task.InputJSON), &input) != nil || task.AgentRunID != run.ID || task.Type != "canvas_"+item.Args.Mode || input.Metadata.BatchID != batch.PlanID || input.Metadata.ItemID != item.ItemID {
 			return s.terminateCloudAgent(run, "图片批次任务归属不一致，未重复提交")
 		}
 		result := map[string]any{"taskId": task.ID, "itemId": item.ItemID, "status": task.Status}

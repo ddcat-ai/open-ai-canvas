@@ -100,6 +100,11 @@ func failCommerceImage(t *testing.T, s *Service, db *gorm.DB, taskID string) {
 	if err := db.Create(&model.RouteAttempt{ID: taskID + "-failed-route", TaskID: taskID, RouteRun: task.RouteRun, Status: "failed", DispatchState: "rejected_no_job", FailureMessage: "prompt may violate our content policies"}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if task.BillingOrderID != "" {
+		if err := s.repo.RefundBillingOrder(task.BillingOrderID, "test provider rejection"); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestCommerceImageFailureReachesAgentWhileOtherImagesAreStillRunning(t *testing.T) {

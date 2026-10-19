@@ -8,6 +8,14 @@ test("首页默认模型偏好单独保存，规范化后仍能恢复三类模�
     expect((saved as any).models.canvasModel).toBeUndefined();
 });
 
+test("模型选择策略默认优先使用所选模型，显式固定策略可保存恢复", () => {
+    expect(preferences.defaultCreationAgentPreferences).toMatchObject({ imageSelectionMode: "preferred", videoSelectionMode: "preferred" });
+    const fixed = preferences.normalizeCreationComposerPreferences({ agent: { imageSelectionMode: "fixed", videoSelectionMode: "fixed", imageParameterMode: "auto" } });
+    expect(fixed.agent).toMatchObject({ imageSelectionMode: "fixed", videoSelectionMode: "fixed", imageParameterMode: "auto" });
+    const invalid = preferences.normalizeCreationComposerPreferences({ agent: { imageSelectionMode: "anything", videoSelectionMode: null } });
+    expect(invalid.agent).toMatchObject({ imageSelectionMode: "preferred", videoSelectionMode: "preferred" });
+});
+
 test("输出偏好只接受简洁和详细，旧偏好及无效值保持可恢复", () => {
     for (const outputPreference of ["concise", "detailed"] as const) {
         expect(preferences.normalizeCreationComposerPreferences({ outputPreference })).toEqual({ outputPreference });

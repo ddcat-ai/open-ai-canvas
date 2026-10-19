@@ -52,13 +52,20 @@ func (s *Service) cloudAgentCommerceImageCanRepair(run *model.CloudAgentExecutio
 	if json.Unmarshal([]byte(task.InputJSON), &input) != nil || input.Metadata.RunID != run.ID {
 		return false, nil
 	}
-	orders, err := s.repo.BillingOrdersByTaskIDs(run.UserID, state.TaskIDs)
+	policy, err := s.cloudAgentMediaRetryPolicy(run.UserID, task)
 	if err != nil {
+		var appErr *AppError
+		if errors.As(err, &appErr) {
+			return false, nil
+		}
 		return false, err
 	}
-	remaining := int64(state.Request.Budget.MaxCredits * float64(CreditScale))
-	for _, order := range orders {
-		remaining -= order.AmountMicrocredits
+	if !policy.RequiresPromptChange {
+		return false, nil
+	}
+	remaining, err := s.cloudAgentRemainingBudget(run.UserID, state)
+	if err != nil {
+		return false, err
 	}
 	for _, entry := range state.CommerceBatch.Items {
 		if cloudAgentCommerceTaskMatches(task, state.CommercePlan, entry.ItemID) && entry.Prepared != nil && entry.Prepared.Quote.AmountMicrocredits > remaining {

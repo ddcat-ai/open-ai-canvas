@@ -229,7 +229,7 @@ export default function CreatePage() {
     const activeIdRef = useRef("");
     const [hydrated, setHydrated] = useState(false);
     const [mode, setMode] = useState<CreationMode>(defaultCreationMode);
-    const { agentPermissionMode, setAgentPermissionMode, agentImageParameterMode, setAgentImageParameterMode, agentVideoParameterMode, setAgentVideoParameterMode, agentBudget, setAgentBudget, agentImageSettings, setAgentImageSettings, agentVideoSettings, setAgentVideoSettings } = useCreationAgentPreferences();
+    const { agentPermissionMode, setAgentPermissionMode, agentImageSelectionMode, setAgentImageSelectionMode, agentVideoSelectionMode, setAgentVideoSelectionMode, agentImageParameterMode, setAgentImageParameterMode, agentVideoParameterMode, setAgentVideoParameterMode, agentBudget, setAgentBudget, agentImageSettings, setAgentImageSettings, agentVideoSettings, setAgentVideoSettings } = useCreationAgentPreferences();
     const [agentConnectionError, setAgentConnectionError] = useState("");
     const [agentConnectionEpoch, setAgentConnectionEpoch] = useState(0);
     const [agentTaskSyncFailures, setAgentTaskSyncFailures] = useState<Set<string>>(new Set());
@@ -291,7 +291,7 @@ export default function CreatePage() {
     const agentAttachmentSelection = creationAgentAttachmentSelection(attachments, activeAgentRun?.attachments || []);
     const agentInputError = creationAgentImageInputError(config, config.textModel, agentAttachmentSelection.imageCount);
     const agentContextView = useMemo(() => presentAgentContextUsage(activeConversation?.agentContextUsage || emptyAgentContextUsage("")), [activeConversation?.agentContextUsage]);
-    const agentSettingsFingerprint = JSON.stringify({ permissionMode: agentPermissionMode, imageModel: config.imageModel, videoModel: config.videoModel, imageParameterMode: agentImageParameterMode, videoParameterMode: agentVideoParameterMode, imageSettings: agentImageSettings, videoSettings: agentVideoSettings, budget: agentBudget });
+    const agentSettingsFingerprint = JSON.stringify({ permissionMode: agentPermissionMode, imageModel: config.imageModel, videoModel: config.videoModel, imageSelectionMode: agentImageSelectionMode, videoSelectionMode: agentVideoSelectionMode, imageParameterMode: agentImageParameterMode, videoParameterMode: agentVideoParameterMode, imageSettings: agentImageSettings, videoSettings: agentVideoSettings, budget: agentBudget });
     useEffect(() => { setAgentApprovalBaseline(activeConversation?.agentApproval?.approvalId ? agentSettingsFingerprint : ""); }, [activeConversation?.agentApproval?.approvalId]);
     const agentApprovalSettingsChanged = Boolean(activeConversation?.agentApproval && agentApprovalBaseline && agentApprovalBaseline !== agentSettingsFingerprint);
     const historyConversations = useMemo(() => {
@@ -1107,8 +1107,8 @@ export default function CreatePage() {
                 retry: action?.retry,
                 prompt: text, idempotencyKey: key, sessionId, permissionMode: agentPermissionMode,
                 textSelection: creationManagedModelSelection(config, config.textModel), imageSelection, videoSelection,
-                imageParameters: { parameterMode: replanning ? "auto" : agentImageParameterMode, size: agentImageSettings.size, quality: agentImageSettings.quality, count: agentImageSettings.count },
-                videoParameters: { parameterMode: replanning ? "auto" : agentVideoParameterMode, size: agentVideoSettings.size, quality: agentVideoSettings.quality, durationSeconds: agentVideoSettings.durationSeconds },
+                imageParameters: { selectionMode: agentImageSelectionMode, parameterMode: replanning ? "auto" : agentImageParameterMode, size: agentImageSettings.size, quality: agentImageSettings.quality, count: agentImageSettings.count },
+                videoParameters: { selectionMode: agentVideoSelectionMode, parameterMode: replanning ? "auto" : agentVideoParameterMode, size: agentVideoSettings.size, quality: agentVideoSettings.quality, durationSeconds: agentVideoSettings.durationSeconds },
                 budget: agentBudget, attachments: action ? [] : attachments, attachmentMode: action ? "inherit" : agentAttachmentSelection.attachmentMode,
                 outputPreference: pending ? pending.request.outputPreference : agentOutputPreference,
                 skillIds: addedSkills.filter((skill) => text.includes(`/${skill.skillName}`)).map((skill) => skill.skillId),
@@ -1926,6 +1926,10 @@ export default function CreatePage() {
         agentContextView,
         agentInputError,
         agentImageModel: config.imageModel,
+        agentImageSelectionMode,
+        agentVideoSelectionMode,
+        onAgentImageSelectionModeChange: setAgentImageSelectionMode,
+        onAgentVideoSelectionModeChange: setAgentVideoSelectionMode,
         agentVideoModel: config.videoModel,
         onAgentImageModelChange: (value: string) => updateConfig("imageModel", value),
         onAgentVideoModelChange: (value: string) => updateConfig("videoModel", value),

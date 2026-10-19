@@ -75,6 +75,7 @@ type CloudAgentCreationMedia struct {
 
 type CloudAgentCreationMediaChoice struct {
 	Selection       CloudAgentMediaModelSelection `json:"selection"`
+	SelectionMode   string                        `json:"selectionMode,omitempty"`
 	ParameterMode   string                        `json:"parameterMode"`
 	Size            string                        `json:"size,omitempty"`
 	Quality         string                        `json:"quality,omitempty"`
@@ -109,6 +110,7 @@ func cloudAgentStepLimit(req CloudAgentRequest) int {
 }
 
 type cloudAgentState struct {
+	RetryReplay                    []string                  `json:"retryReplay,omitempty"`
 	Version                        int                       `json:"version"`
 	Request                        CloudAgentRequest         `json:"request"`
 	ParentID                       string                    `json:"parentId"`
@@ -476,6 +478,7 @@ func (s *Service) cloudAgentTask(userID, id string) (*model.Task, cloudAgentStat
 		return nil, input.Agent, kernel.NotFound("Agent 运行不存在")
 	}
 	input.Agent = cloudAgentState{Version: 1, Request: state.Request, ParentID: state.ParentID, Fingerprint: state.Fingerprint, CreativeAnchor: state.CreativeAnchor, CommercePlan: state.CommercePlan, ConfirmationRounds: state.ConfirmationRounds, ConfirmationFingerprints: append([]string(nil), state.ConfirmationFingerprints...), PendingConfirmationFingerprint: state.PendingConfirmationFingerprint, Skills: state.Skills, Profile: state.Profile, Policy: state.Policy}
+	input.Agent.RetryReplay = append([]string(nil), state.RetryReplay...)
 	return task, input.Agent, nil
 }
 
@@ -565,6 +568,12 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 				continue
 			}
 			choice := item.choice
+			if choice.SelectionMode == "" {
+				choice.SelectionMode = "preferred"
+			}
+			if choice.SelectionMode != "preferred" && choice.SelectionMode != "fixed" {
+				return nil, BadAuthRequest("媒体模型选择模式必须是 preferred 或 fixed")
+			}
 			selection := choice.Selection
 			if choice.ParameterMode != "auto" && choice.ParameterMode != "manual" {
 				return nil, BadAuthRequest("媒体参数模式必须是 auto 或 manual")
@@ -725,12 +734,30 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 		}
 	}
+	var retryReplay []string
 	if req.Retry != nil {
 		retryContext, err := s.cloudAgentCreationRetryContext(userID, &req, parentID)
 		if err != nil {
 			return nil, err
 		}
 		history = append(history, providerTextMessage{Role: "user", Content: retryContext, AgentContextSource: "continuation"})
+		retryReplay, err = s.cloudAgentCreationReplayTargets(userID, req)
+		if err != nil {
+			return nil, err
+		}
+		if len(retryReplay) > 0 {
+			source, err := s.repo.CloudAgent(userID, req.Retry.RunID)
+			if err != nil {
+				return nil, err
+			}
+			sourceState, err := cloudAgentDecode(source)
+			if err != nil {
+				return nil, err
+			}
+			// Retain the original plan for subsequent retry lineage, without
+			// executing it again or redoing successful items.
+			inheritedCommercePlan = sourceState.CommercePlan
+		}
 	}
 	encodedHistory, err := json.Marshal(history)
 	if err != nil {
@@ -779,6 +806,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		return nil, err
 	}
 	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, CommercePlan: inheritedCommercePlan, ConfirmationRounds: inheritedConfirmationRounds, ConfirmationFingerprints: inheritedConfirmationFingerprints, Skills: skillSnapshots, Profile: profile, Policy: policy}
+	state.RetryReplay = retryReplay
 	canonical := cloudAgentCanonicalFor(system, history, req.Prompt, req, len(profile.Layers) > 0)
 	// Keep the catalog out of TextHistory (which defines conversation turns),
 	// while exposing it as a fresh data message for this run immediately before

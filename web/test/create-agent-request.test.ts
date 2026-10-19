@@ -37,6 +37,20 @@ test("输出偏好传给服务端，保留真实用户提示词和生成参数",
     expect(request.buildCreationAgentRunInput(base).outputPreference).toBeUndefined();
 });
 
+test("默认媒体模型作为偏好传递，固定模型不因自动参数而放宽", () => {
+    const automatic = request.buildCreationAgentRunInput(base);
+    expect(automatic.mediaSettings?.image?.selectionMode).toBe("preferred");
+    expect(automatic.mediaSettings?.video?.selectionMode).toBe("preferred");
+    const fixed = request.buildCreationAgentRunInput({
+        ...base,
+        imageParameters: { selectionMode: "fixed", parameterMode: "auto" },
+        videoParameters: { selectionMode: "fixed", parameterMode: "manual", size: "9:16", quality: "1080P", durationSeconds: 10 },
+    });
+    expect(fixed.mediaSettings?.image).toMatchObject({ selectionMode: "fixed", parameterMode: "auto", selection: base.imageSelection });
+    expect(fixed.mediaSettings?.video).toMatchObject({ selectionMode: "fixed", parameterMode: "manual", size: "9:16", quality: "1080P", durationSeconds: 10 });
+    expect(fixed.prompt).toBe(base.prompt);
+});
+
 test("只读权限的媒体任务预算恒为零，手动参数作为约束传递", () => {
     const input = (request as any).buildCreationAgentRunInput?.({ ...base, permissionMode: "read_only", imageParameters: { parameterMode: "manual", size: "1:1", quality: "high", count: 2 } });
     expect(input.budget).toMatchObject({ maxGenerationTasks: 0, maxVideoSeconds: 0 });

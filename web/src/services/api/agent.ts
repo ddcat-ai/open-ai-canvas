@@ -19,7 +19,7 @@ export type AgentMediaSettings = {
 };
 export type AgentModelSelection = { logicalModelId: string; channelId?: never; channelModelKey?: never } | { logicalModelId?: never; channelId: string; channelModelKey: string };
 export type AgentCreationAttachment = { resourceId: string; storageKey: `resource:${string}`; kind: "image" | "video" | "audio"; role: "product" | "reference" | "competitor" | "style" | "source" | "person"; name: string };
-export type AgentMediaChoice = { selection: AgentModelSelection; parameterMode: "auto" | "manual"; size?: string; quality?: string; durationSeconds?: number; count?: number };
+export type AgentMediaChoice = { selection: AgentModelSelection; selectionMode?: "preferred" | "fixed"; parameterMode: "auto" | "manual"; size?: string; quality?: string; durationSeconds?: number; count?: number };
 export type AgentProfileScope = "user" | "project" | "canvas";
 
 export type AgentProfileLayer = {

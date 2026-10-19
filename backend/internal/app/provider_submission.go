@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 	"yingce/backend/internal/model"
 )
 
@@ -46,6 +48,15 @@ func (s *Service) createDirectTaskAttempt(task *model.Task) (*model.RouteAttempt
 		}
 		config, _ := input["config"].(map[string]any)
 		attempt.ChannelID = stringValue(config["channelId"])
+		if attempt.ChannelModelID == "" && attempt.ChannelID != "" {
+			selected, err := s.repo.ChannelModelByKeyIncludingDisabled(attempt.ChannelID, firstNonEmpty(stringValue(config["channelModelKey"]), stringValue(config["model"])))
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, err
+			}
+			if selected != nil {
+				attempt.ChannelModelID = selected.ID
+			}
+		}
 	}
 	if task.ProviderRequestID != "" {
 		attempt.ProviderRequestID, attempt.DispatchState = task.ProviderRequestID, "accepted"

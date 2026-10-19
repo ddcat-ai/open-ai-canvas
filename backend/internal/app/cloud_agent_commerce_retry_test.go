@@ -17,7 +17,7 @@ func TestCommerceNewTurnRestoresOnlyExplicitOwnedFailedItemForRetry(t *testing.T
 		"agentRunId": run.ID, "commercePlanId": plan.PlanID, "commerceVersion": plan.Version,
 		"commerceItemId": "hero", "commercePlanHash": cloudAgentCommercePlanHash(plan),
 	}})
-	if err := db.Create(&model.Task{ID: taskID, UserID: "user", Type: "canvas_video", Status: model.TaskStatusFailed, InputJSON: string(input)}).Error; err != nil {
+	if err := db.Create(&model.Task{ID: taskID, UserID: "user", Type: "canvas_video", Status: model.TaskStatusFailed, InputJSON: string(input), ExecutionDiagnosticJSON: `{"submissionOutcome":"not_submitted"}`}).Error; err != nil {
 		t.Fatal(err)
 	}
 	call := cloudAgentCall{ID: "new-turn-retry"}
@@ -133,6 +133,18 @@ func TestCommerceFailedItemRetryNeedsNewApprovalAndKeepsSuccessfulDependency(t *
 		}
 		if err := db.Model(&model.Task{}).Where("id = ?", taskID).Update("status", item.status).Error; err != nil {
 			t.Fatal(err)
+		}
+		if item.status == model.TaskStatusFailed {
+			if err := db.Model(&model.Task{}).Where("id = ?", taskID).Update("execution_diagnostic_json", `{"submissionOutcome":"not_submitted"}`).Error; err != nil {
+				t.Fatal(err)
+			}
+			task, err := s.repo.TaskForUser("user", taskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.repo.RefundBillingOrder(task.BillingOrderID, "test admission failure"); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 			t.Fatal(err)

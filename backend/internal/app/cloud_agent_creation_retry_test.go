@@ -24,6 +24,9 @@ func TestCreationBatchRetryValidatesAllTargetsAndRestoresTheirSources(t *testing
 		{ID: "recoverable", UserID: "user", AgentRunID: root.ID, Type: "canvas_image", Status: model.TaskStatusFailed, InputJSON: `{}`, MediaRecoveryJSON: `{}`},
 		{ID: "foreign", UserID: "another-user", AgentRunID: root.ID, Type: "canvas_image", Status: model.TaskStatusFailed, InputJSON: `{}`},
 	} {
+		if task.Status == model.TaskStatusFailed {
+			task.ExecutionDiagnosticJSON = `{"submissionOutcome":"not_submitted"}`
+		}
 		if err := db.Create(&task).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -72,6 +75,9 @@ func TestCreationRetryRestoresOriginalSourceInsteadOfLaterUpload(t *testing.T) {
 				{ID: "original-dog", UserID: "user", AgentRunID: root.ID, Type: "canvas_image", Status: model.TaskStatusSucceeded, InputJSON: `{}`, ResultJSON: `{"images":[{"storageKey":"resource:ref-two"}]}`},
 				{ID: "failed-edit", UserID: "user", AgentRunID: root.ID, Type: "canvas_image", Status: model.TaskStatusFailed, InputJSON: `{"referenceImages":[{"id":"ref-two","storageKey":"resource:ref-two","role":"source"}]}`},
 			} {
+				if task.Status == model.TaskStatusFailed {
+					task.ExecutionDiagnosticJSON = `{"submissionOutcome":"not_submitted"}`
+				}
 				if err := db.Create(&task).Error; err != nil {
 					t.Fatal(err)
 				}
@@ -134,7 +140,7 @@ func TestCreationRetryRequiresFailedOwnedTarget(t *testing.T) {
 	}
 	req.SessionID = root.SessionID
 	for _, status := range []model.TaskStatus{model.TaskStatusRunning, model.TaskStatusSucceeded, model.TaskStatusFailed} {
-		media := model.Task{ID: string(status), UserID: "user", AgentRunID: root.ID, Type: "canvas_image", Status: status, InputJSON: `{}`}
+		media := model.Task{ID: string(status), UserID: "user", AgentRunID: root.ID, Type: "canvas_image", Status: status, InputJSON: `{}`, ExecutionDiagnosticJSON: `{"submissionOutcome":"not_submitted"}`}
 		if err := db.Create(&media).Error; err != nil {
 			t.Fatal(err)
 		}

@@ -114,6 +114,7 @@ type cloudAgentMediaArgs struct {
 	LogicalModelID             string                              `json:"logicalModelId"`
 	ChannelID                  string                              `json:"channelId"`
 	ChannelModelKey            string                              `json:"channelModelKey"`
+	RequirePreferredModel      bool                                `json:"requirePreferredModel,omitempty"`
 	Duration                   int                                 `json:"durationSeconds"`
 	Size                       string                              `json:"size"`
 	ImageResolution            string                              `json:"imageResolution"`

@@ -151,6 +151,10 @@ type ComposerProps = {
     agentInputError?: string;
     agentImageModel: string;
     agentVideoModel: string;
+    agentImageSelectionMode: "preferred" | "fixed";
+    agentVideoSelectionMode: "preferred" | "fixed";
+    onAgentImageSelectionModeChange: (mode: "preferred" | "fixed") => void;
+    onAgentVideoSelectionModeChange: (mode: "preferred" | "fixed") => void;
     onAgentImageModelChange: (value: string) => void;
     onAgentVideoModelChange: (value: string) => void;
     agentImageParameterMode: "auto" | "manual";
@@ -543,6 +547,12 @@ function AgentExecutionSettings(props: ComposerProps) {
         <section><h3>输出偏好</h3><div className="creation-agent-parameter-switch" role="group" aria-label="输出偏好"><button type="button" aria-pressed={props.agentOutputPreference === "concise"} onClick={() => props.onAgentOutputPreferenceChange("concise")}>简洁</button><button type="button" aria-pressed={props.agentOutputPreference === "detailed"} onClick={() => props.onAgentOutputPreferenceChange("detailed")}>详细</button></div><p className="creation-agent-output-help">{props.agentOutputPreference === "concise" ? "直接展示图片和主要信息，完整说明可按需展开。" : "展示完整说明、重要信息和逐图方案。"}</p></section>
         <section><h3>默认图片模型</h3><ModelPicker config={props.config} value={props.agentImageModel} onChange={props.onAgentImageModelChange} capability="image" className="creation-model-picker" placeholder="选择默认图片模型" fullWidth showSelectedPrice={false} showOptionPrices variant="creation" /></section>
         <section><h3>默认视频模型</h3><ModelPicker config={props.config} value={props.agentVideoModel} onChange={props.onAgentVideoModelChange} capability="video" className="creation-model-picker" placeholder="选择默认视频模型" fullWidth showSelectedPrice={false} showOptionPrices variant="creation" /></section>
+        <section><h3>模型选择</h3><p className="creation-agent-output-help">优先使用所选模型；服务明确拒绝且未创建任务时，可在已授权费用内尝试兼容模型，保留素材和规格。</p>{(["image", "video"] as const).map((kind) => {
+            const image = kind === "image";
+            const value = image ? props.agentImageSelectionMode : props.agentVideoSelectionMode;
+            const change = image ? props.onAgentImageSelectionModeChange : props.onAgentVideoSelectionModeChange;
+            return <div key={kind}><span>{image ? "图片" : "视频"}</span><div className="creation-agent-parameter-switch" role="group" aria-label={`${image ? "图片" : "视频"}模型选择`}><button type="button" aria-pressed={value === "preferred"} onClick={() => change("preferred")}>优先使用</button><button type="button" aria-pressed={value === "fixed"} onClick={() => change("fixed")}>固定模型</button></div></div>;
+        })}</section>
         <details className="creation-agent-advanced-preferences"><summary>生成偏好与预算</summary><div>
         <section><h3>执行预算</h3><div className="creation-agent-budget-grid">
             <label>积分上限<input type="number" min="0" value={props.agentMaxCredits} onChange={(event) => props.onAgentBudgetChange("maxCredits", boundedNumber(event.target.value, 200, 100000))} /></label>

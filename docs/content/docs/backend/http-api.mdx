@@ -330,6 +330,8 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 
 所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、技能和工具清单；跨轮历史仍按可恢复事实和发送预算整理，不把某个固定字节数当作模型窗口。Agent 运行由服务端任务 Worker 驱动，浏览器断开不会停止运行。
 
+首页 `mediaSettings.image/video.selectionMode` 支持 `preferred|fixed`，新请求默认 `preferred`，区分默认模型偏好和固定前台型号；旧持久运行缺少该字段时不扩大换型号授权。兼容模型切换保留参考素材与硬参数，并受已授权预算约束。明确失败且生成设置未变的 `retry` 直接恢复原提示词、参数和逐项素材，未知提交先核对原任务；重试共享原轮剩余积分，不新发整轮预算。
+
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
 
 - `POST /agent/runs` 创建一轮；`POST /agent/runs/:id/messages` 以上一轮为父节点创建新的不可变轮次，两者返回 `{ run }`，追加后必须使用新的 `run.id` 订阅。

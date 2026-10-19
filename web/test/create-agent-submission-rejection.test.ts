@@ -95,6 +95,8 @@ function fixture(followup = false) {
             config: { textModel: model },
             creationManagedModelSelection: (_config: unknown, value: string) => ({ logicalModelId: value }),
             agentPermissionMode: "request_approval",
+            agentImageSelectionMode: "preferred",
+            agentVideoSelectionMode: "preferred",
             agentImageParameterMode: "auto",
             agentImageSettings: {},
             agentVideoParameterMode: "auto",

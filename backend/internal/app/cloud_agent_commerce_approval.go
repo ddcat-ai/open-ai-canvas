@@ -61,7 +61,11 @@ func (s *Service) refreshCloudAgentCommerceApproval(userID, id, approvalID strin
 		var batch *cloudAgentCommerceBatch
 		var preview cloudAgentApprovalPreview
 		if approval.Batch.Kind == "images" {
-			batch, err = s.prepareCloudAgentImageBatch(run, &state, approval.Call)
+			if len(state.RetryReplay) > 0 {
+				batch, err = s.prepareCloudAgentReplayBatch(run, &state, approval.Call)
+			} else {
+				batch, err = s.prepareCloudAgentImageBatch(run, &state, approval.Call)
+			}
 			if err == nil {
 				preview = cloudAgentImageBatchPreview(batch)
 			}

@@ -49,6 +49,9 @@ func (s *Service) cloudAgentCreationRetryContext(userID string, req *CloudAgentR
 		if err != nil || task.AgentRunID != run.ID || task.Status != model.TaskStatusFailed || task.MediaRecoveryJSON != "" {
 			return "", BadAuthRequest("原任务仍在生成、已完成或有待恢复产物，请先读取原任务，不重复生成")
 		}
+		if _, err := s.cloudAgentMediaRetryPolicy(userID, task); err != nil {
+			return "", err
+		}
 		var input map[string]any
 		if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
 			return "", BadAuthRequest("原任务输入无法恢复，请重新选择素材")

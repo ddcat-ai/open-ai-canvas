@@ -41,6 +41,7 @@ func (s *Service) cloudAgentResolvedMediaCall(userID string, state *cloudAgentRu
 			compiled, retryIdentity, err := s.cloudAgentResolvedMediaCall(userID, &copyState, call)
 			if err == nil {
 				state.CommercePlan = plan
+				state.RetryBudgetRunID = copyState.RetryBudgetRunID
 			}
 			return compiled, retryIdentity, err
 		}
@@ -58,11 +59,15 @@ func (s *Service) cloudAgentResolvedMediaCall(userID string, state *cloudAgentRu
 		}
 		identity.RetryFailedTaskID = args.RetryFailedTaskID
 		identity.TaskID = cloudAgentCommerceRetryTaskID(userID, args.RetryFailedTaskID)
-		if args.RetryPrompt != "" {
-			failed, err := s.repo.TaskForUser(userID, args.RetryFailedTaskID)
-			if err != nil {
-				return call, identity, err
-			}
+		failed, err := s.repo.TaskForUser(userID, args.RetryFailedTaskID)
+		if err != nil {
+			return call, identity, err
+		}
+		policy, err := s.cloudAgentMediaRetryPolicy(userID, failed)
+		if err != nil {
+			return call, identity, err
+		}
+		if policy.RequiresPromptChange {
 			var media cloudAgentMediaArgs
 			if err := json.Unmarshal([]byte(compiled.Function.Arguments), &media); err != nil {
 				return call, identity, err
@@ -70,7 +75,12 @@ func (s *Service) cloudAgentResolvedMediaCall(userID string, state *cloudAgentRu
 			if strings.HasPrefix(failed.Prompt, media.Prompt) {
 				return call, identity, BadAuthRequest("修复提示词须根据失败原因调整，不能原样重发已失败的提示词")
 			}
+		}
+		if args.RetryPrompt != "" {
 			identity.RetryPromptHash = creationHash(strings.TrimSpace(args.RetryPrompt))
+		}
+		if err := s.bindCloudAgentRetryBudget(userID, state, failed); err != nil {
+			return call, identity, err
 		}
 	}
 	return compiled, identity, nil
@@ -211,7 +221,11 @@ func (s *Service) prepareCloudAgentCreationMedia(run *model.CloudAgentExecution,
 	}
 	input := refs
 	input["mode"], input["prompt"], input["config"] = a.Mode, a.Prompt, config
-	input["metadata"] = map[string]any{"source": "cloud_agent_creation", "agentRunId": run.ID, "title": a.Title}
+	selectionMode := firstNonEmpty(choice.SelectionMode, "fixed")
+	if a.RequirePreferredModel {
+		selectionMode = "fixed"
+	}
+	input["metadata"] = map[string]any{"source": "cloud_agent_creation", "agentRunId": run.ID, "title": a.Title, "modelSelectionMode": selectionMode, "preferredModelSelection": choice.Selection}
 	operation := cloudAgentMediaOperation(a.Mode, refs)
 	if operation == "" {
 		return CreateTaskRequest{}, nil, BadAuthRequest("生成模式尚未实现媒体任务适配器")

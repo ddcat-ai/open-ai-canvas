@@ -483,11 +483,12 @@ func cloudAgentCommerceMediaCall(plan *cloudAgentCommercePlan, call cloudAgentCa
 		return call, err
 	}
 	var args struct {
-		Mode              string `json:"mode"`
-		PlanID            string `json:"commercePlanId"`
-		ItemID            string `json:"commerceItemId"`
-		RetryFailedTaskID string `json:"retryFailedTaskId"`
-		RetryPrompt       string `json:"retryPrompt"`
+		Mode                  string `json:"mode"`
+		PlanID                string `json:"commercePlanId"`
+		ItemID                string `json:"commerceItemId"`
+		RetryFailedTaskID     string `json:"retryFailedTaskId"`
+		RetryPrompt           string `json:"retryPrompt"`
+		RequirePreferredModel bool   `json:"requirePreferredModel"`
 	}
 	if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 		return call, cloudAgentJSONArgumentError(err)
@@ -591,7 +592,7 @@ func cloudAgentCommerceMediaCall(plan *cloudAgentCommercePlan, call cloudAgentCa
 	} else {
 		prompt += "\n\nNo visible text: do not render words, labels or captions."
 	}
-	mediaArgs := cloudAgentMediaArgs{Mode: item.Type, Prompt: prompt, Title: item.Title, AttachmentResourceIDs: item.AttachmentResourceIDs, References: plan.References, Size: size, Quality: quality, Duration: duration}
+	mediaArgs := cloudAgentMediaArgs{Mode: item.Type, Prompt: prompt, Title: item.Title, AttachmentResourceIDs: item.AttachmentResourceIDs, References: plan.References, Size: size, Quality: quality, Duration: duration, RequirePreferredModel: args.RequirePreferredModel}
 	raw, err := json.Marshal(mediaArgs)
 	if err != nil {
 		return call, err

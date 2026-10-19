@@ -151,7 +151,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 		if req.MediaSettings.Video != nil {
 			modes = append(modes, "video")
 		}
-		add("generate_media", "在创作入口提交非套图媒体；整套交付不重复逐项调用。仅重试已核对失败的电商项时传 retryFailedTaskId；本轮套图返回 rewrite_prompt 时，静默规划 retryPrompt 并仅重试该失败图片，其他任务继续，随后 commerce_plan_wait。服务端保留原方案风格和商品合同并校验报价、累计预算及任务上限；本轮授权内图片修复无需新审批，视频及跨轮重试仍须审批。模型和手动参数由用户设置锁定。未知结果先查原任务。", map[string]any{
+		add("generate_media", "在创作入口提交非套图媒体；整套交付不重复逐项调用。仅重试已核对失败的电商项时传 retryFailedTaskId；本轮套图返回 rewrite_prompt 时，静默规划 retryPrompt 并仅重试该失败图片，其他任务继续，随后 commerce_plan_wait。服务端保留原方案风格和商品合同并校验报价、累计预算及任务上限；本轮授权内图片修复无需新审批，视频及跨轮重试仍须审批。默认优先使用用户选择的模型；用户明确限定型号时设 requirePreferredModel=true。手动参数仍由用户设置锁定。未知结果先查原任务。", map[string]any{
 			"mode":                  map[string]any{"type": "string", "enum": modes},
 			"prompt":                str("非电商计划调用必填的生成提示词；如果引用素材，可按各媒体类型分别使用 @图片1、@视频1、@音频1"),
 			"title":                 str("生成任务的显示名称"),
@@ -159,6 +159,7 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 			"commerceItemId":        str("使用电商计划时必填：本次交付项的 itemId"),
 			"retryFailedTaskId":     str("仅重试已确认失败的电商项时传失败 taskId；重复调用复用同一重试任务"),
 			"retryPrompt":           str("图片失败后根据具体原因重写的该项场景描述。去除拒绝内容或歧义，不规避内容规则；保留原用途、商品、文案、素材、规格和风格。仅与 retryFailedTaskId 同传，不修改整套计划；服务端重新套用原风格锁"),
+			"requirePreferredModel": map[string]any{"type": "boolean", "description": "仅当用户明确要求必须使用已选型号时设为 true；只能收紧模型范围，不能扩大授权或预算"},
 			"attachmentResourceIds": map[string]any{"type": "array", "maxItems": 16, "items": str("本次创作需要的授权上传素材或 creation_media_read 精读成品 resourceId；编辑必须传目标原图，首次文生图不带无关历史图")},
 			"references":            cloudAgentCreationReferenceSchema(),
 			"durationSeconds":       map[string]any{"type": "integer", "minimum": 0},

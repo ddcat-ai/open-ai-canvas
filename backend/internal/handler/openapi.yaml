@@ -2485,6 +2485,7 @@ components:
             channelId: { type: string }
             channelModelKey: { type: string }
         parameterMode: { type: string, enum: [auto, manual] }
+        selectionMode: { type: string, enum: [preferred, fixed], default: preferred, description: "优先使用或固定前台型号；兼容切换保留素材与规格，不能扩大已授权费用。" }
         size: { type: string }
         quality: { type: string }
         durationSeconds: { type: integer, minimum: 0, maximum: 600 }

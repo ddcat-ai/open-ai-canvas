@@ -247,6 +247,10 @@ func (s *Service) recoverCloudAgentPiRunners() {
 			// 批准后的媒体任务仍在生成。进程重启后内存 waiter 已经消失，这里按
 			// 持久化的任务 ID 重建；不能同时再启动一轮模型步骤。
 			state, decodeErr := cloudAgentDecode(&run)
+			if decodeErr == nil && len(state.RetryReplay) > 0 {
+				s.startCloudAgentPi(run.UserID, run.ID)
+				continue
+			}
 			if decodeErr == nil && cloudAgentMediaPending(&state) {
 				s.startApprovedCloudAgentMediaWaiter(run.UserID, run.ID, state.MediaTaskID)
 				continue
@@ -280,6 +284,9 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	runtimeState, err := cloudAgentDecodeForExecution(run)
 	if err != nil {
 		return fmt.Errorf("decode state: %w", err)
+	}
+	if len(runtimeState.RetryReplay) > 0 {
+		return s.runCloudAgentCreationReplay(ctx, userID, runID)
 	}
 	if runtimeState.Approval != nil && runtimeState.Approval.Decision == "approve" {
 		run.ExecutionFence = cloudAgentFence(ctx)
