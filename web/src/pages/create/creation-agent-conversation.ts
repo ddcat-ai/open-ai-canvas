@@ -395,7 +395,11 @@ function mergeCreationAgentAttachments(local: CreationMessage["attachments"], re
 }
 
 function confirmedCreationAgentSubmissions(current: CreationConversation, incoming: CreationConversation) {
-    const pending = new Map(current.messages.filter((message) => message.role === "user" && message.mode === "agent" && message.clientOperationId && message.agentIdempotencyKey).map((message) => [message.agentIdempotencyKey!, message]));
+    const pending = new Map<string, CreationMessage>();
+    for (const message of current.messages) {
+        if (message.mode !== "agent" || !message.clientOperationId || !message.agentIdempotencyKey) continue;
+        if (!pending.has(message.agentIdempotencyKey) || message.role === "user") pending.set(message.agentIdempotencyKey, message);
+    }
     return new Map(
         (incoming.agentRuns || []).flatMap((run) => {
             const submitted = run.idempotencyKey ? pending.get(run.idempotencyKey) : undefined;

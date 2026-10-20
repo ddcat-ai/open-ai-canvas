@@ -39,6 +39,20 @@ test("按钮重试直接进入执行，恢复历史也不会插入伪造的用�
     expect(restored.messages.at(-1)?.status).toBe("streaming");
 });
 
+test("静默重试回执恢复后移除临时错误并确认原提交，未知身份仍保留", () => {
+    const original = conversation.projectCreationAgentConversation(session, [run("failed", "生成一只猫", "failed", [])]);
+    const submitting = conversation.beginCreationAgentSubmission(original, { id: "retry", prompt: "重试失败步骤", createdAt: at, silent: true });
+    const bound = conversation.bindCreationAgentSubmission(submitting, "retry", session.id, "retry-key");
+    const pending = conversation.failCreationAgentSubmission(bound, "retry", "网络异常");
+    const restored = conversation.projectCreationAgentConversation(session, [{ ...run("retry-run", "重试失败步骤", "running", []), retry: { runId: "failed" }, idempotencyKey: "retry-key" }]);
+    const merged = conversation.mergeCreationAgentConversation(pending, restored);
+    expect(merged.messages.some((message) => message.clientOperationId === "retry")).toBe(false);
+    expect(merged.messages.find((message) => message.id === "retry-run:assistant")?.status).toBe("streaming");
+    expect(merged.messages.some((message) => message.id === "failed:assistant")).toBe(true);
+    expect(conversation.mergeCreationConversationHistory([pending], [restored]).confirmedSubmissions).toEqual([{ conversationId: pending.id, key: "retry-key" }]);
+    expect(conversation.mergeCreationAgentConversation(pending, original).messages.some((message) => message.clientOperationId === "retry" && message.error === "网络异常")).toBe(true);
+});
+
 test("恢复旧图片的本地缓存时间不把旧会话顶到历史最前，新消息时间仍保留", () => {
     const remote = conversation.projectCreationAgentConversation(session, [run("run-1", "旧会话", "completed", [])]);
     const cached = { ...remote, updatedAt: "2026-10-16T00:00:00Z" };
