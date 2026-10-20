@@ -25,6 +25,7 @@ type mediaCheckpoint struct {
 	Attempts       int                   `json:"attempts"`
 	ManualAttempts int                   `json:"manualAttempts"`
 	LastManualAt   time.Time             `json:"lastManualAt"`
+	WaitingForSlot bool                  `json:"waitingForSlot,omitempty"`
 }
 
 type mediaCheckpointItem struct {
@@ -179,6 +180,14 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 	default:
 		return nil, &mediaRecoveryError{stage: task.MediaStage, retryable: true, cause: errMediaRecoveryBusy}
 	}
+	// Queue time must not consume the retry window for actual transfer failures.
+	if checkpoint.WaitingForSlot {
+		checkpoint.StartedAt = time.Now()
+		checkpoint.WaitingForSlot = false
+		if err := s.saveMediaCheckpoint(task, checkpoint, task.MediaStage); err != nil {
+			return nil, &mediaRecoveryError{stage: "checkpoint", retryable: true, cause: err}
+		}
+	}
 	if _, err := s.mediaTaskProject(task); err != nil {
 		return nil, &mediaRecoveryError{stage: "register", cause: err}
 	}
@@ -283,7 +292,13 @@ func (s *Service) handleMediaRecoveryFailure(task *model.Task, cause error) erro
 		if decodeErr != nil {
 			return decodeErr
 		}
-		if errors.Is(cause, errMediaRecoveryBusy) && time.Since(checkpoint.StartedAt) < 20*time.Minute {
+		if errors.Is(cause, errMediaRecoveryBusy) {
+			if !checkpoint.WaitingForSlot {
+				checkpoint.WaitingForSlot = true
+				if err := s.saveMediaCheckpoint(task, checkpoint, failure.stage); err != nil {
+					return err
+				}
+			}
 			return s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "作品已生成，等待保存", 5*time.Second)
 		}
 		if failure.retryable && checkpoint.Attempts < len(mediaRecoveryDelays) && time.Since(checkpoint.StartedAt) < 20*time.Minute {
