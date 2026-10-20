@@ -42,6 +42,9 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 	if args.Mode != "image" && args.Mode != "video" {
 		return BadAuthRequest("仅图片或视频生成审批支持修改模型和规格")
 	}
+	if _, _, err := s.prepareCloudAgentMedia(run, state, call); err != nil {
+		return err
+	}
 	args.LogicalModelID, args.ChannelID, args.ChannelModelKey = settings.LogicalModelID, settings.ChannelID, settings.ChannelModelKey
 	// These settings now come directly from the user, not the Agent's proposal.
 	args.ConfigurationChange = nil
@@ -66,7 +69,11 @@ func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run
 		return err
 	}
 	call.Function.Arguments = string(raw)
-	req, plan, err := s.prepareCloudAgentMedia(run, state, call)
+	editedState := *state
+	editedApproval := *state.Approval
+	editedApproval.CallHash = cloudAgentApprovalCallHash(call)
+	editedState.Approval = &editedApproval
+	req, plan, err := s.prepareCloudAgentMedia(run, &editedState, call)
 	if err != nil {
 		return err
 	}

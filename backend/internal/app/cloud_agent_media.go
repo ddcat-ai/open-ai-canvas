@@ -147,7 +147,7 @@ func cloudAgentMediaConnections(edges []map[string]any, a cloudAgentMediaArgs) [
 	incoming := map[string]map[string]any{}
 	result := make([]map[string]any, 0, len(edges))
 	for _, edge := range edges {
-		if stringValue(edge["toNodeId"]) != a.NodeID {
+		if stringValue(edge["toNodeId"]) != a.NodeID || stringValue(edge["relation"]) == "storyboard-output" {
 			result = append(result, edge)
 		} else {
 			incoming[stringValue(edge["fromNodeId"])] = edge
@@ -250,7 +250,7 @@ func cloudAgentReference(repo *repository.Repository, userID string, node map[st
 func cloudAgentMediaTargetIssue(node map[string]any, nodeType string) (string, string) {
 	meta, _ := node["metadata"].(map[string]any)
 	switch {
-	case meta["locked"] == true:
+	case node["locked"] == true || meta["locked"] == true:
 		return "target_locked", "目标节点已锁定，不能提交生成"
 	case stringValue(meta["taskId"]) != "" || stringValue(meta["generationTaskId"]) != "":
 		return "task_bound", "目标节点已关联任务，不能覆盖；可读取 generation 或 task_get 查询原任务状态和错误"
@@ -354,6 +354,9 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 	}
 	nodes, err := creationObjects(doc["nodes"])
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := validateCloudAgentStoryboardImageInputs(doc, args); err != nil {
 		return nil, nil, nil, err
 	}
 	existing := nodes[args.NodeID]
@@ -751,6 +754,15 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	if a.Prepared != nil {
 		a.Prompt = stringValue(a.Prepared.Input["prompt"])
 	} else {
+		if a.Mode == "image" {
+			_, row, err := cloudAgentStoryboardImageSource(doc, a.NodeID)
+			if err != nil {
+				return CreateTaskRequest{}, nil, err
+			}
+			if row != nil {
+				a.Prompt = cloudAgentStoryboardImagePrompt(row, a.Prompt, creationMaps(row["assetBindings"]), refs)
+			}
+		}
 		for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
 			if character := characters[id]; character != nil {
 				if text := character.prompt(); text != "" {
@@ -1051,6 +1063,15 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 	}
 	meta["prompt"] = cloudAgentMediaComposerPrompt(a.Prompt, refs)
 	meta["composerContent"] = meta["prompt"]
+	if a.Mode == "image" {
+		_, row, err := cloudAgentStoryboardImageSource(doc, a.NodeID)
+		if err != nil {
+			return err
+		}
+		if row != nil {
+			meta["workflowKind"], meta["workflowTitle"], meta["shotIndex"] = "shot", fmt.Sprintf("镜头 %v 分镜图", row["shotNumber"]), row["shotNumber"]
+		}
+	}
 	if task != nil {
 		meta["status"], meta["taskId"], meta["taskStatus"] = "loading", task.ID, "queued"
 		delete(meta, "agentDraftRunId")

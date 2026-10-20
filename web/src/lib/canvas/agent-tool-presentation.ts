@@ -20,6 +20,7 @@ export const AGENT_TOOL_NAMES = [
     "canvas_get_state",
     "canvas_inspect_image",
     "canvas_list_node_types",
+    "canvas_prepare_storyboard_image",
     "canvas_read_batch_table",
     "canvas_read_storyboard",
     "finish_run",
@@ -50,6 +51,7 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
     canvas_get_state: { summary: "已读取画布清单（未查看画面）", failureMessage: "获取画布清单失败" },
     task_get: { summary: "已查询任务状态", failureMessage: "查询任务状态失败" },
     canvas_apply_ops: { summary: ({ pending }) => (pending ? "准备更新画布内容" : "画布内容已保存至服务端"), failureMessage: "更新画布内容失败" },
+    canvas_prepare_storyboard_image: { summary: ({ pending }) => (pending ? "准备关联镜头与图片草稿" : "分镜图片草稿与参考素材已关联，尚未提交生成"), failureMessage: "准备分镜图片失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
     canvas_create_character: { summary: ({ pending }) => (pending ? "准备创建角色卡" : "角色卡已创建并放到画布"), failureMessage: "创建角色卡失败" },
     generate_media: { summary: ({ pending, detail }) => (pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交"), failureMessage: "媒体生成未完成" },
@@ -80,7 +82,7 @@ const AGENT_CANVAS_READ_TOOLS = new Set(["canvas_get_state", "canvas_list_node_t
 const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_read_file", "skills_load", "agent_profile_read"]);
 const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image"]);
 const AGENT_CREATE_TOOLS = new Set(["generate_media", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
-const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_edit_batch_table", "image_layer_split", "image_text_detect"]);
+const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_prepare_storyboard_image", "canvas_edit_batch_table", "image_layer_split", "image_text_detect"]);
 
 export type AgentToolCategory = "read" | "vision" | "create" | "operate" | "other";
 

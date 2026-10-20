@@ -25,7 +25,7 @@ import (
 )
 
 func cloudAgentWrite(name string) bool {
-	return name == "canvas_apply_ops" || name == "canvas_arrange_nodes" || name == "generate_media" || name == "image_layer_split" || name == "canvas_create_storyboard" || name == "canvas_edit_storyboard" || name == "canvas_edit_batch_table" || name == "canvas_create_character" || name == "previs_scene_create" || name == "previs_apply_patch"
+	return name == "canvas_apply_ops" || name == "canvas_arrange_nodes" || name == "generate_media" || name == "image_layer_split" || name == "canvas_create_storyboard" || name == "canvas_edit_storyboard" || name == "canvas_edit_batch_table" || name == "canvas_prepare_storyboard_image" || name == "canvas_create_character" || name == "previs_scene_create" || name == "previs_apply_patch"
 }
 
 // 同参缓存只能拦住“原样重复”的读取。模型也可能不断修改 offset、nodeIds 或
@@ -454,7 +454,17 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		if err != nil {
 			return nil, err
 		}
-		return cloudAgentStoryboardReadResult(view, args.NodeID, cloudAgentNodeHash(doc, args.NodeID))
+		result, err := cloudAgentStoryboardReadResult(view, args.NodeID, cloudAgentNodeHash(doc, args.NodeID))
+		if err != nil {
+			return nil, err
+		}
+		storyboard, _ := result["storyboard"].(map[string]any)
+		for _, row := range creationMaps(storyboard["rows"]) {
+			if imageID := stringValue(row["imageNodeId"]); imageID != "" {
+				row["imageSnapshotHash"] = cloudAgentNodeHash(doc, imageID)
+			}
+		}
+		return result, nil
 	case "canvas_read_batch_table":
 		var args struct {
 			NodeID string `json:"nodeId"`

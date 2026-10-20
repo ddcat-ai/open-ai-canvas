@@ -674,6 +674,11 @@ export function ApprovalCard({
                     你已在节点《{targetGenerating.title || "未命名节点"}》上直接提交了生成，Agent 不会重复提交；本次审批会自动关闭。
                 </p>
             ) : null}
+            {approval.submissionError ? (
+                <p role="alert" className="text-xs" style={{ color: theme.accent.danger }}>
+                    审批未通过：{approval.submissionError}
+                </p>
+            ) : null}
             <div className="canvas-agent-approval-actions">
                 <button type="button" className="canvas-agent-approval-reject" disabled={submitting} onClick={onReject}>
                     暂不执行

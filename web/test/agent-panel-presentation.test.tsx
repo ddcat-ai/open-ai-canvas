@@ -2,11 +2,38 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentWelcome } from "@/components/canvas/canvas-agent-welcome";
 import { AgentChatComposer } from "@/components/canvas/canvas-cloud-agent-chat-ui";
+import { ApprovalCard } from "@/components/canvas/canvas-cloud-agent-panel-parts";
+import { applyAgentEvent, type ApprovalState } from "@/components/canvas/canvas-cloud-agent-events";
 import { agentPermissionVisual } from "@/components/canvas/canvas-cloud-agent-settings";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { DEFAULT_CANVAS_APPEARANCE, agentCopy } from "@/lib/canvas/agent-appearance";
 
 const noop = () => {};
+
+test("replayed approval snapshots preserve the error only for the same approval", () => {
+    let approval: ApprovalState | null = { approvalId: "approval", detail: {}, reason: "", submissionError: "真实审批错误" };
+    const setApproval: Parameters<typeof applyAgentEvent>[3] = (action) => {
+        approval = typeof action === "function" ? action(approval) : action;
+    };
+    for (const eventType of ["run_status", "approval_requested"]) {
+        applyAgentEvent({ eventId: "event", runId: "run", seq: 1, type: eventType, createdAt: "", payload: { status: "waiting_approval", approvalId: "approval", approval: { approvalId: "approval" } } }, noop, noop, setApproval);
+        expect(approval?.submissionError).toBe("真实审批错误");
+    }
+    applyAgentEvent({ eventId: "next", runId: "run", seq: 2, type: "approval_requested", createdAt: "", payload: { approvalId: "next" } }, noop, noop, setApproval);
+    expect(approval?.submissionError).toBeUndefined();
+});
+
+test("approval failure stays visible beside the controls in both themes", () => {
+    for (const theme of [canvasThemes.light, canvasThemes.dark]) {
+        const html = renderToStaticMarkup(
+            <ApprovalCard approval={{ approvalId: "approval", reason: "", detail: {}, submissionError: "画布内容已变化，未提交任务" }} theme={theme} submitting={false} onReasonChange={noop} onApprove={noop} onReject={noop} />,
+        );
+        expect(html).toContain('role="alert"');
+        expect(html).toContain("审批未通过：画布内容已变化，未提交任务");
+        expect(html).toContain("同意执行");
+        expect(html).not.toContain("正在提交");
+    }
+});
 
 test("welcome uses the independent assistant name and escapes it as text", () => {
     const html = renderToStaticMarkup(<AgentWelcome appearance={{ ...DEFAULT_CANVAS_APPEARANCE, agentName: "我的<工作室>" }} nodeCount={2} onChooseSkill={noop} onDraftPrompt={noop} />);

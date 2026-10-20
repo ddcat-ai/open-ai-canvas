@@ -124,6 +124,10 @@ Pi SDK 执行前的参数校验失败由 `agent-runtime/pi/agent-runtime.mjs` �
 
 ## 前端 HTTP 与产品壳
 
+Agent 逐镜图片准备入口为 `backend/internal/app/cloud_agent_storyboard_image.go`，单帧要求和参考职责编排为 `cloud_agent_storyboard_image_prompt.go`；`cloud_agent_runtime_tools.go` 负责工具授权、审批及调度，`cloud_agent_media.go` / `cloud_agent_prepared_media.go` 负责真实生成准入、镜头依赖快照及结果回写。行级数据沿用前端 `canvas-storyboard-materializer.ts` 和 `row.imageNodeId / assetBindings`，没有新增数据库字段或 REST 路由。
+
+`cloud_agent_pi_request.go` 从真实画布归属和本轮权限模式编译运行时权限；准备阶段区分剧情文本来源与媒体参考，仅修复目标镜头的失效输出关系。`cloud_agent_storyboard_image_readonly_test.go` 支持显式配置数据库与节点后进行只读准备烟测，不保存真实画布或调用模型。
+
 | 职责 | 代码位置 |
 | --- | --- |
 | 业务 JSON 调用面 | `web/src/services/api/request.ts` 的 `http`；拦截器仍挂 `apiClient` |

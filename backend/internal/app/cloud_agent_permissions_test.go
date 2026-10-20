@@ -90,10 +90,19 @@ func TestAgentPermissionsUseCanvasProjects(t *testing.T) {
 		{"owner", "missing", false}, {"owner", "domain-project", false},
 	} {
 		t.Run(tc.user+"/"+tc.canvas, func(t *testing.T) {
-			permissions := s.buildPermissionsConfig(tc.user, tc.canvas)
+			permissions, err := s.buildPermissionsConfig(tc.user, tc.canvas, "auto")
+			if !tc.allowed {
+				if err == nil || permissions != nil {
+					t.Fatalf("未验证画布归属时不得下发权限: %+v %v", permissions, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
 			for _, key := range []string{"canReadCanvas", "canWriteCanvas", "canDeleteNodes", "canCreateNodes", "canMoveNodes", "canDuplicateNodes", "canManageRelations", "canInviteUsers", "canExportCanvas"} {
-				if permissions[key] != tc.allowed {
-					t.Errorf("%s=%v, want %t", key, permissions[key], tc.allowed)
+				if permissions[key] != true {
+					t.Errorf("%s=%v, want true", key, permissions[key])
 				}
 			}
 		})
@@ -102,10 +111,8 @@ func TestAgentPermissionsUseCanvasProjects(t *testing.T) {
 	if err := db.Migrator().DropTable(&model.CanvasProject{}); err != nil {
 		t.Fatal(err)
 	}
-	permissions := s.buildPermissionsConfig("owner", "independent")
-	for _, key := range []string{"canReadCanvas", "canWriteCanvas", "canExportCanvas"} {
-		if permissions[key] != false {
-			t.Errorf("数据库故障时 %s=%v", key, permissions[key])
-		}
+	permissions, err := s.buildPermissionsConfig("owner", "independent", "auto")
+	if err == nil || permissions != nil {
+		t.Fatalf("数据库故障时不得下发权限: %+v %v", permissions, err)
 	}
 }

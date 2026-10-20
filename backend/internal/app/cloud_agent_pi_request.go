@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"path/filepath"
 )
@@ -72,7 +71,10 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 	compaction := s.buildCompactionStrategy(params.UserID, params.CanvasID, contextBudget)
 
 	// 8. 构建权限配置
-	permissions := s.buildPermissionsConfig(params.UserID, params.CanvasID)
+	permissions, err := s.buildPermissionsConfig(params.UserID, params.CanvasID, params.RuntimeState.Request.PermissionMode)
+	if err != nil {
+		return cloudAgentPiProcessRequest{}, fmt.Errorf("build permissions: %w", err)
+	}
 
 	// 9. 构建模型配置
 	modelConfig := s.buildModelConfig(params.ModelID, params.RuntimeState)
@@ -170,42 +172,33 @@ func (s *Service) buildFeaturesConfig(state *cloudAgentRuntime) map[string]any {
 	}
 }
 
-// buildPermissionsConfig 根据当前账号的画布归属生成运行时权限。
-// userID 是登录账号，canvasID 是画布 ID（不是所属项目 ID）；查询失败时拒绝访问。
-func (s *Service) buildPermissionsConfig(userID, canvasID string) map[string]any {
-	// 与画布读写工具共用账号归属查询，不访问旧的 Canvas 扩展模型。
-	_, err := s.repo.CanvasProjectForUser(userID, canvasID)
-	if err != nil {
-		log.Printf("[Agent] failed to get canvas for permissions: %v", err)
-		// 返回最小权限集
-		return map[string]any{
-			"canReadCanvas":      false,
-			"canWriteCanvas":     false,
-			"canDeleteNodes":     false,
-			"canCreateNodes":     false,
-			"canMoveNodes":       false,
-			"canDuplicateNodes":  false,
-			"canManageRelations": false,
-			"canInviteUsers":     false,
-			"canExportCanvas":    false,
-			"maxTokenBudget":     200000,
-			"maxSteps":           50,
-		}
+// buildPermissionsConfig 根据当前账号的画布归属与本轮权限模式生成运行时权限。
+// canvasID 是画布 ID（不是项目 ID）；归属查询失败或权限模式无效时拒绝请求。
+func (s *Service) buildPermissionsConfig(userID, canvasID, permissionMode string) (map[string]any, error) {
+	if _, err := s.repo.CanvasProjectForUser(userID, canvasID); err != nil {
+		return nil, err
 	}
-
+	canWrite := false
+	switch permissionMode {
+	case "auto", "request_approval":
+		canWrite = true
+	case "read_only":
+	default:
+		return nil, BadAuthRequest("Agent 权限模式无效，不能推断画布写入权限")
+	}
 	return map[string]any{
 		"canReadCanvas":      true,
-		"canWriteCanvas":     true,
-		"canDeleteNodes":     true,
-		"canCreateNodes":     true,
-		"canMoveNodes":       true,
-		"canDuplicateNodes":  true,
-		"canManageRelations": true,
-		"canInviteUsers":     true,
+		"canWriteCanvas":     canWrite,
+		"canDeleteNodes":     canWrite,
+		"canCreateNodes":     canWrite,
+		"canMoveNodes":       canWrite,
+		"canDuplicateNodes":  canWrite,
+		"canManageRelations": canWrite,
+		"canInviteUsers":     canWrite,
 		"canExportCanvas":    true,
 		"maxTokenBudget":     200000,
 		"maxSteps":           50,
-	}
+	}, nil
 }
 
 // buildModelConfig 构建模型配置

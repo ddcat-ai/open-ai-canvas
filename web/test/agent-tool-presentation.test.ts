@@ -2,11 +2,21 @@ import { describe, expect, it } from "bun:test";
 import { AGENT_TOOL_NAMES, agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolStatus, agentVisionFailureSummary, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
 
 describe("Agent tool presentation", () => {
+    it("describes storyboard preparation without claiming generation", () => {
+        expect(AGENT_TOOL_NAMES).toContain("canvas_prepare_storyboard_image");
+        expect(agentToolCategory("canvas_prepare_storyboard_image", { eventType: "tool_completed" })).toBe("operate");
+        const summary = friendlyAgentToolSummary("canvas_prepare_storyboard_image", "工具执行成功", { eventType: "tool_completed" });
+        expect(summary).toContain("已关联");
+        expect(summary).toContain("尚未提交生成");
+        expect(summary).not.toContain("生成结果已回写");
+    });
     it("separates read, create, and canvas operation activity", () => {
         expect(agentToolCategory("canvas_get_state", { eventType: "tool_completed" })).toBe("read");
         expect(agentToolCategoryLabel("canvas_get_state", "read")).toBe("读取清单");
         expect(agentToolCategoryLabel("model_list", "read")).toBe("读取信息");
         expect(agentToolCategory("generate_media", { eventType: "generation_task_created" })).toBe("create");
+        expect(agentToolCategory("canvas_create_character", { eventType: "tool_completed" })).toBe("create");
+        expect(agentToolCategory("canvas_prepare_storyboard_image", { eventType: "tool_completed" })).toBe("operate");
         expect(agentToolCategoryLabel("generate_media", "create")).toBe("创建节点");
         expect(agentToolCategory("canvas_apply_ops", { eventType: "canvas_updated", actions: [{ action: "updated" }] })).toBe("operate");
         expect(agentToolCategoryLabel("canvas_apply_ops", "operate")).toBe("修改画布");

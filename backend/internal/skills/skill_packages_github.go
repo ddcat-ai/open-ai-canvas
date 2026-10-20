@@ -4,6 +4,7 @@ package skills
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,7 +46,12 @@ func parseGitHubSkillURL(rawURL string, requestedRef string, requestedSubdir str
 }
 
 func fetchGitHubSkillArchive(ctx context.Context, spec githubSkillSpec) (skillPackageArchive, string, string, string, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
+	return fetchGitHubSkillArchiveWithClient(ctx, spec, &http.Client{Timeout: 30 * time.Second})
+}
+
+func fetchGitHubSkillArchiveWithClient(ctx context.Context, spec githubSkillSpec, client *http.Client) (skillPackageArchive, string, string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
 	resolvedRef := spec.Ref
 	if resolvedRef == "" {
 		var repoInfo struct {
@@ -56,19 +62,16 @@ func fetchGitHubSkillArchive(ctx context.Context, spec githubSkillSpec) (skillPa
 		}
 		resolvedRef = repoInfo.DefaultBranch
 	}
-	var commitInfo struct {
-		SHA string `json:"sha"`
-	}
-	if err := githubJSON(ctx, client, fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s", url.PathEscape(spec.Owner), url.PathEscape(spec.Repo), url.PathEscape(resolvedRef)), &commitInfo); err != nil {
+	commitSHA, err := githubCommitSHA(ctx, client, fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s", url.PathEscape(spec.Owner), url.PathEscape(spec.Repo), url.PathEscape(resolvedRef)))
+	if err != nil {
 		return skillPackageArchive{}, "", "", "", err
 	}
-	if commitInfo.SHA == "" {
-		return skillPackageArchive{}, "", "", "", errors.New("GitHub 未返回提交版本")
-	}
-	downloadURL := fmt.Sprintf("https://codeload.github.com/%s/%s/zip/%s", url.PathEscape(spec.Owner), url.PathEscape(spec.Repo), url.PathEscape(commitInfo.SHA))
+	downloadURL := fmt.Sprintf("https://codeload.github.com/%s/%s/zip/%s", url.PathEscape(spec.Owner), url.PathEscape(spec.Repo), url.PathEscape(commitSHA))
+	archiveClient := *client
+	archiveClient.Timeout = 2 * time.Minute
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	request.Header.Set("User-Agent", outbound.DefaultOutboundUserAgent)
-	response, err := client.Do(request)
+	response, err := archiveClient.Do(request)
 	if err != nil {
 		return skillPackageArchive{}, "", "", "", fmt.Errorf("下载 GitHub 技能失败: %w", err)
 	}
@@ -78,7 +81,7 @@ func fetchGitHubSkillArchive(ctx context.Context, spec githubSkillSpec) (skillPa
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxSkillPackageBytes+1))
 	if err != nil {
-		return skillPackageArchive{}, "", "", "", err
+		return skillPackageArchive{}, "", "", "", fmt.Errorf("读取 GitHub 技能 ZIP 失败: %w", err)
 	}
 	if len(data) > maxSkillPackageBytes {
 		return skillPackageArchive{}, "", "", "", kernel.BadAuthRequest("GitHub 技能包超过 20MB")
@@ -88,7 +91,37 @@ func fetchGitHubSkillArchive(ctx context.Context, spec githubSkillSpec) (skillPa
 		return skillPackageArchive{}, "", "", "", err
 	}
 	canonicalURL := fmt.Sprintf("https://github.com/%s/%s", spec.Owner, spec.Repo)
-	return archive, commitInfo.SHA, canonicalURL, resolvedRef, nil
+	return archive, commitSHA, canonicalURL, resolvedRef, nil
+}
+
+func githubCommitSHA(ctx context.Context, client *http.Client, target string) (string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Accept", "application/vnd.github.sha")
+	request.Header.Set("User-Agent", outbound.DefaultOutboundUserAgent)
+	response, err := client.Do(request)
+	if err != nil {
+		return "", fmt.Errorf("读取 GitHub 提交失败: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", fmt.Errorf("读取 GitHub 提交失败: HTTP %d", response.StatusCode)
+	}
+	const maxResponseBytes = 64
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("读取 GitHub 提交失败: %w", err)
+	}
+	commitSHA := strings.TrimSpace(string(data))
+	if len(data) > maxResponseBytes || len(commitSHA) != 40 {
+		return "", errors.New("GitHub 未返回有效提交版本")
+	}
+	if _, err := hex.DecodeString(commitSHA); err != nil {
+		return "", errors.New("GitHub 未返回有效提交版本")
+	}
+	return strings.ToLower(commitSHA), nil
 }
 
 func githubJSON(ctx context.Context, client *http.Client, target string, output any) error {
@@ -103,5 +136,8 @@ func githubJSON(ctx context.Context, client *http.Client, target string, output 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("读取 GitHub 信息失败: HTTP %d", response.StatusCode)
 	}
-	return json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(output)
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(output); err != nil {
+		return fmt.Errorf("读取 GitHub 仓库信息失败: %w", err)
+	}
+	return nil
 }

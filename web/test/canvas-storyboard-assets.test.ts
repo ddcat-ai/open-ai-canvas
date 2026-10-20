@@ -63,6 +63,20 @@ describe("storyboard asset catalog", () => {
 });
 
 describe("storyboard target materializer", () => {
+    it("retains backend-prepared row and asset relations without duplicating them", () => {
+        const output = node("first-frame", CanvasNodeType.Image, { workflowKind: "shot", status: "idle" });
+        const preparedScript = node("script", CanvasNodeType.Script, { storyboard: { rows: [row], visibleColumns: [], referenceNodeIds: [] } });
+        const preparedNodes = [preparedScript, output, node("prop", CanvasNodeType.Image, { storageKey: "resource:prop" })];
+        const preparedEdges: CanvasConnection[] = [
+            { id: "agent-row", fromNodeId: "script", toNodeId: "first-frame", fromHandleId: "row:row-1", toHandleId: "", relation: "storyboard-output", storyboardRowId: "row-1" },
+            { id: "agent-ref", fromNodeId: "prop", toNodeId: "first-frame", fromHandleId: "", toHandleId: "", relation: "storyboard-asset-reference", storyboardRowId: "row-1" },
+            { id: "agent-input", fromNodeId: "prop", toNodeId: "script", fromHandleId: "", toHandleId: "row:row-1", relation: "storyboard-asset-reference", storyboardRowId: "row-1" },
+        ];
+        expect(storyboardRowReferenceNodeIds(preparedScript, row, preparedNodes, preparedEdges, false, output.id)).toEqual(["prop"]);
+        const reconciled = reconcileStoryboardTargetConnections(preparedEdges, preparedScript, row, output.id, ["prop"]);
+        expect(reconciled).toEqual(preparedEdges);
+        expect(storyboardComposerContent("王座中远景", ["prop"], preparedNodes)).toBe("参考资产：@图片1\n王座中远景");
+    });
     const script = node("script", CanvasNodeType.Script, { storyboard: { rows: [row], visibleColumns: [], referenceNodeIds: ["project-style"] } });
     const nodes = [
         script,

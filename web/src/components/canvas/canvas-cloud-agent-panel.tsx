@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { MoveDiagonal2 } from "lucide-react";
 import { saveAs } from "file-saver";
 import { buildAgentDebugExport } from "@/lib/canvas/agent-debug-export";
+import { appendAgentPromptMentions, appendAgentPromptPrefill } from "@/lib/canvas/agent-prompt-prefill";
 import { agentPlanVisible, latestAgentPlanItems, latestAgentPlanTerminal, pendingAgentQuestion } from "@/lib/canvas/cloud-agent-plan";
 import { emptyAgentContextUsage, presentAgentContextUsage, reduceAgentContextUsage, type AgentContextUsage } from "@/lib/canvas/agent-context-usage";
 import { nanoid } from "nanoid";
@@ -30,7 +31,6 @@ import {
     type AgentRun,
 } from "@/services/api/agent";
 import { agentApprovalMatchesSettings, agentApprovalTargetGenerating } from "@/lib/canvas/agent-media-approval";
-import { appendAgentPromptPrefill } from "@/lib/canvas/agent-prompt-prefill";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { addSkill, listAddedSkills, listSkillLibraryCategories, listSkills, listSkillPresets, type Skill, type SkillCategory, type SkillLibraryCategory, type SkillPreset } from "@/services/api/skills";
@@ -61,6 +61,7 @@ import { CanvasCloudAgentSettings, type AgentContextKey } from "./canvas-cloud-a
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
 import "./canvas-cloud-agent.css";
 import { appendAgentError, appendUniqueMessage, applyAgentEvent, positiveNumber, type ApprovalState } from "./canvas-cloud-agent-events";
+import { agentErrorPresentation } from "@/lib/canvas/agent-error-presentation";
 import { AgentContextRing, AgentConversation, AgentHeader, AgentHistory, AgentLauncher, ComposerControls } from "./canvas-cloud-agent-panel-parts";
 import { AgentConnectorsBar } from "./canvas-cloud-agent-connectors";
 
@@ -71,7 +72,7 @@ type CloudAgentPanelProps = {
     selectedNodeIds: string[];
     references: CanvasResourceReference[];
     open: boolean;
-    /** 外部预填请求（如右键“发送到 Agent”）；id 变化即追加一次 text，可选自动提交和视觉模型路由。 */
+    /** 普通预填只追加缺少的引用；预演台请求保留展示文本、自动提交与视觉模型路由。 */
     prefillRequest?: (CloudAgentMessagePresentation & { id: number; text: string; autoSubmit?: boolean; requiresVision?: boolean }) | null;
     onOpen: () => void;
     onCollapse: () => void;
@@ -330,7 +331,9 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         if (!prefillRequest || prefillRequest.id === lastPrefillIdRef.current) return;
         lastPrefillIdRef.current = prefillRequest.id;
         if (!prefillRequest.text.trim()) return;
-        setPrompt((current) => appendAgentPromptPrefill(current, prefillRequest.displayText || prefillRequest.text));
+        setPrompt((current) => prefillRequest.autoSubmit
+            ? appendAgentPromptPrefill(current, prefillRequest.displayText || prefillRequest.text)
+            : appendAgentPromptMentions(current, prefillRequest.text));
         prefilledSubmissionRef.current = prefillRequest;
         setPendingAutoSubmit(prefillRequest.autoSubmit ? prefillRequest : null);
         setView("chat");
@@ -807,6 +810,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         const approvalId = approval.approvalId;
         const scope = conversationScope;
         approvalRequestRef.current = approvalId;
+        setApproval((current) => current?.approvalId === approvalId ? { ...current, submissionError: undefined } : current);
         setApprovalSubmitting(true);
         try {
             if (decision === "approve") {
@@ -841,6 +845,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             } catch {
                 // Preserve the pending approval so the same decision can be retried.
             }
+            setApproval((current) => current?.approvalId === approvalId ? { ...current, submissionError: agentErrorPresentation(cause, "审批未确认").text } : current);
             setMessages((current) => appendAgentError(current, `approval-error-${Date.now()}`, cause, "审批未确认，请重试"));
         } finally {
             if (approvalRequestRef.current === approvalId) approvalRequestRef.current = null;

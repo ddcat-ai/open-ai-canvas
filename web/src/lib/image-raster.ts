@@ -12,7 +12,7 @@ export async function prepareRasterSource(source: string, readBlob?: () => Promi
     return { url, release: () => URL.revokeObjectURL(url) };
 }
 
-export function loadRasterImage(source: string, signal?: AbortSignal): Promise<HTMLImageElement> {
+export function loadRasterImage(source: string, signal?: AbortSignal, options: { readPixels?: boolean } = {}): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
         const picture = new Image();
         let finished = false;
@@ -39,8 +39,8 @@ export function loadRasterImage(source: string, signal?: AbortSignal): Promise<H
             const location = globalThis.location;
             if (location) {
                 const address = new URL(source, location.href);
-                // Same-origin resource URLs can redirect to OSS/CDN, so they also need a CORS image request.
-                if (["https:", "http:"].includes(address.protocol)) picture.crossOrigin = "anonymous";
+                // Same-origin resource URLs can redirect to OSS/CDN, so pixel reads also need a CORS image request.
+                if (options.readPixels !== false && ["https:", "http:"].includes(address.protocol)) picture.crossOrigin = "anonymous";
             }
             picture.src = source;
         } catch (error) {

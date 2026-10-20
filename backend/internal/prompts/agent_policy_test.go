@@ -36,6 +36,18 @@ func TestLoadAgentPoliciesUsesDocumentMetadata(t *testing.T) {
 	}
 }
 
+func TestStoryboardImagePolicyRequiresRowPreparationAndRealReferences(t *testing.T) {
+	system, _, err := LoadAgentPolicies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"canvas_prepare_storyboard_image", "referenceBindings", "完整结构化内容", "不得少传角色、场景或道具", "图片生成仍须界面独立审批", "不代表镜头行不能关联图片", "普通文本到镜头行", "不得建议换节点、换模型或重试来绕过保护"} {
+		if !strings.Contains(system.Text, phrase) {
+			t.Fatalf("missing storyboard execution contract: %s", phrase)
+		}
+	}
+}
+
 func TestParsePolicyDocumentRejectsInvalidMetadata(t *testing.T) {
 	for _, test := range []struct {
 		name string
