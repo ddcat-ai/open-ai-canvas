@@ -1,6 +1,6 @@
 import { useEffect, useRef, type PointerEvent } from "react";
 import type { CanvasNodeData, Position } from "@/types/canvas";
-import { getNodeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
+import { getNodeResizeMinSize, shouldKeepAspectRatio } from "@/lib/canvas/node-registry";
 import { solveNodeResize, type NodeResizeCorner } from "@/lib/canvas/node-resize-geometry";
 
 type ResizeCallback = (id: string, width: number, height: number, position?: Position) => void;
@@ -23,7 +23,7 @@ export function useCanvasNodeResize(node: CanvasNodeData, scale: number, minimum
         const pointer = event.pointerId;
         const origin = { x: event.clientX, y: event.clientY };
         let previous = origin;
-        const minimum = getNodeMinSize(node.type);
+        const minimum = getNodeResizeMinSize(node);
         const snapshot = {
             position: { ...node.position },
             width: node.width,

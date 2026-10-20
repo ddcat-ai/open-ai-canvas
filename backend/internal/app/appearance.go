@@ -34,7 +34,7 @@ const (
 )
 
 const (
-	appearanceSchemaVersion        = 10
+	appearanceSchemaVersion        = 11
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -133,6 +133,7 @@ func defaultAppearanceSetting() AppearanceSetting {
 }
 
 func AppearanceAssetMaxBytes(slot string) (int64, error) {
+	slot = strings.TrimSpace(slot)
 	switch strings.TrimSpace(slot) {
 	case AppearanceAssetLogo, AppearanceAssetDarkLogo:
 		return appearanceLogoMaxBytes, nil
@@ -143,6 +144,14 @@ func AppearanceAssetMaxBytes(slot string) (int64, error) {
 	default:
 		return 0, BadAuthRequest("外观资源类型无效")
 	}
+}
+
+func appearanceSlotIsVideo(slot string) bool {
+	return slot == AppearanceAssetVideo || slot == AppearanceAssetUpdateVideo
+}
+
+func appearanceAssetSlots() []string {
+	return []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster}
 }
 
 func (s *Service) Appearance() (*PublicAppearanceSetting, error) {
@@ -181,6 +190,7 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 		return nil, err
 	}
 	value.SchemaVersion = appearanceSchemaVersion
+	value.Canvas.AvatarBundleResourceID = strings.TrimSpace(value.Canvas.AvatarBundleResourceID)
 	canvas, canvasErr := normalizeCanvasAppearance(value.Canvas)
 	if canvasErr != nil {
 		return nil, canvasErr
@@ -226,6 +236,17 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 			return nil, err
 		}
 		value.Canvas.Live2DEntry = entry
+	}
+	if value.Canvas.AvatarBundleResourceID != "" {
+		manifest, err := s.validateAgentAvatarBundleResource(actor, value.Canvas.AvatarBundleResourceID, before.Canvas.AvatarBundleResourceID)
+		if err != nil {
+			return nil, err
+		}
+		for _, clip := range value.Canvas.AvatarClipStates {
+			if _, exists := manifest.Clips[clip]; !exists {
+				return nil, BadAuthRequest("状态映射引用的动画不存在：" + clip)
+			}
+		}
 	}
 	if err := s.validateUpdateAnnouncementResources(actor, value.Updates, before.Updates); err != nil {
 		return nil, err
@@ -294,7 +315,7 @@ func (s *Service) UploadAppearanceAsset(actor *model.User, slot string, header *
 	// the sniffed value so the persisted resource contract matches the bytes.
 	header.Header.Set("Content-Type", mimeType)
 	kind := "image"
-	if slot == AppearanceAssetVideo || slot == AppearanceAssetUpdateVideo {
+	if appearanceSlotIsVideo(slot) {
 		kind = "video"
 	}
 	var resource *model.Resource
@@ -380,6 +401,7 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.AuthVideoResourceID, title: "登录页品牌视频"},
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
 		{resourceID: value.Canvas.Live2DResourceID, title: "画布 Agent Live2D 形象"},
+		{resourceID: value.Canvas.AvatarBundleResourceID, title: "画布 Agent 动画包"},
 	}
 	for _, release := range value.Updates.Releases {
 		for _, block := range release.Blocks {
@@ -457,7 +479,7 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 // Remote objects are not probed on every appearance request; the frontend has
 // its own load-error fallback for objects that disappear outside the system.
 func (s *Service) resolveAvailableAppearanceAssets(value AppearanceSetting) AppearanceSetting {
-	for _, slot := range []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster} {
+	for _, slot := range appearanceAssetSlots() {
 		resourceID := appearanceResourceID(value, slot)
 		if resourceID == "" || s.appearanceAssetAvailable(slot, resourceID) {
 			continue
@@ -472,6 +494,9 @@ func (s *Service) resolveAvailableAppearanceAssets(value AppearanceSetting) Appe
 		case AppearanceAssetPoster:
 			value.AuthVideoPosterResourceID = ""
 		}
+	}
+	if value.Canvas.AvatarBundleResourceID != "" && !s.agentAvatarBundleAvailable(value.Canvas.AvatarBundleResourceID) {
+		value.Canvas.AvatarBundleResourceID = ""
 	}
 	return value
 }
@@ -532,6 +557,9 @@ func validateAppearanceSetting(value AppearanceSetting) error {
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 			return BadAuthRequest("兑换码购买链接必须是有效的 HTTPS 地址")
 		}
+	}
+	if len(value.Canvas.AvatarBundleResourceID) > 80 {
+		return BadAuthRequest("Agent 动画包资源 ID 无效")
 	}
 	for _, resourceID := range []string{value.LogoResourceID, value.DarkLogoResourceID, value.AuthVideoResourceID, value.AuthVideoPosterResourceID} {
 		if len(resourceID) > 80 {
@@ -599,10 +627,10 @@ func validateAppearanceResourceType(slot string, resource *model.Resource) error
 	if _, exists := allowed[mimeType]; !exists {
 		return BadAuthRequest("外观资源文件类型不受支持")
 	}
-	if (slot == AppearanceAssetVideo || slot == AppearanceAssetUpdateVideo) && resource.Kind != "video" {
-		return BadAuthRequest("登录页品牌视频必须是视频资源")
+	if appearanceSlotIsVideo(slot) && resource.Kind != "video" {
+		return BadAuthRequest("该外观资源必须是视频")
 	}
-	if slot != AppearanceAssetVideo && slot != AppearanceAssetUpdateVideo && resource.Kind != "image" {
+	if !appearanceSlotIsVideo(slot) && resource.Kind != "image" {
 		return BadAuthRequest("Logo 和视频封面必须是图片资源")
 	}
 	return nil
@@ -635,7 +663,7 @@ func validateAppearanceUpload(slot string, header *multipart.FileHeader) (string
 
 func detectAppearanceMIME(slot string, data []byte, fileSize int64) string {
 	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
-	if (slot != AppearanceAssetVideo && slot != AppearanceAssetUpdateVideo) || mimeType == "video/mp4" || len(data) < 12 {
+	if !appearanceSlotIsVideo(slot) || mimeType == "video/mp4" || len(data) < 12 {
 		return mimeType
 	}
 	// Go's generic sniffer only recognises a subset of MP4 compatible brands.
@@ -649,7 +677,7 @@ func detectAppearanceMIME(slot string, data []byte, fileSize int64) string {
 }
 
 func appearanceAllowedMIMETypes(slot string) map[string]struct{} {
-	if slot == AppearanceAssetVideo || slot == AppearanceAssetUpdateVideo {
+	if appearanceSlotIsVideo(slot) {
 		return map[string]struct{}{"video/mp4": {}, "video/webm": {}}
 	}
 	return map[string]struct{}{"image/png": {}, "image/jpeg": {}, "image/webp": {}}

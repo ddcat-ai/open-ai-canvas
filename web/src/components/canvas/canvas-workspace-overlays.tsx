@@ -5,6 +5,7 @@ import { Clapperboard, Image as ImageIcon, List, Music2, Pencil, Table2, Video, 
 import { useCanvasOverlayLayer } from "@/components/canvas/canvas-overlay-layer";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { aceternityMotion } from "@/lib/aceternity-motion";
+import { canvasOverlayBounds, observeCanvasOverlayBounds, placeCanvasNodePanel, updateCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ConnectionHandle, type Position, type ViewportTransform } from "@/types/canvas";
@@ -133,22 +134,32 @@ export function CanvasNodePanelOverlay({
         if (!container || !panel) return;
         let liveViewport = viewport;
         let liveDragOffset = dragOffset;
-        let viewportSize = { width: container.clientWidth, height: container.clientHeight };
+        let availableBounds = canvasOverlayBounds({ width: container.clientWidth, height: container.clientHeight });
+        let measuredHeight = panel.scrollHeight || panelHeight;
         const update = (nextViewport: ViewportTransform) => {
             liveViewport = nextViewport;
-            const nextWidth = resolveNodePanelWidth(node, nextViewport, panelWidth);
+            const nextWidth = Math.min(resolveNodePanelWidth(node, nextViewport, panelWidth), Math.max(0, availableBounds.right - availableBounds.left));
+            const availableHeight = Math.max(0, availableBounds.bottom - availableBounds.top);
             panel.style.width = `${nextWidth}px`;
+            panel.style.maxHeight = `${availableHeight}px`;
+            panel.style.overflowY = measuredHeight > availableHeight || !allowOverflow ? "auto" : "visible";
             // 视口预览期间世界层刚写入 transform，读取节点布局会强制浏览器同步
             // layout。节点位置和拖拽偏移已经在这里可用，直接用世界坐标计算浮层位置。
-            const position = getNodePanelPosition(node, nextViewport, viewportSize, nextWidth, panelHeight, liveDragOffset);
+            const position = placeCanvasNodePanel(node, nextViewport, availableBounds, { width: nextWidth, height: measuredHeight }, liveDragOffset);
             panel.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
+            updateCanvasNodePanelBounds(container, panel, { left: position.left, top: position.top, right: position.left + nextWidth, bottom: position.top + Math.min(measuredHeight, availableHeight) });
         };
         update(viewport);
         const resizeObserver = new ResizeObserver(() => {
-            viewportSize = { width: container.clientWidth, height: container.clientHeight };
+            measuredHeight = panel.scrollHeight || panelHeight;
             update(liveViewport);
         });
-        resizeObserver.observe(container);
+        resizeObserver.observe(panel);
+        if (panel.firstElementChild) resizeObserver.observe(panel.firstElementChild);
+        const stopBounds = observeCanvasOverlayBounds(container, (bounds) => {
+            availableBounds = bounds;
+            update(liveViewport);
+        });
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, update);
         const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             liveDragOffset = preview?.nodeIds.has(node.id) ? { x: preview.x, y: preview.y } : null;
@@ -156,22 +167,26 @@ export function CanvasNodePanelOverlay({
         });
         return () => {
             resizeObserver.disconnect();
+            stopBounds();
             unsubscribeViewport();
             unsubscribeDrag();
+            updateCanvasNodePanelBounds(container, panel, null);
         };
-    }, [containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, viewport]);
+    }, [allowOverflow, containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, viewport]);
 
     return (
         <div
             ref={panelRef}
             data-canvas-no-zoom
             data-canvas-node-panel
+            data-canvas-wheel-scroll
             className={`thin-scrollbar absolute max-w-[calc(100%_-_24px)] ${allowOverflow ? "overflow-visible" : "overflow-y-auto"}`}
             style={{ left: 0, top: 0, transform: `translate3d(${initialPosition.left}px, ${initialPosition.top}px, 0)`, width: initialWidth, maxHeight: allowOverflow ? "none" : "calc(100% - 84px)", zIndex }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDownCapture={bringToFront}
             onFocusCapture={bringToFront}
             onPointerDown={(event) => event.stopPropagation()}
+            onWheel={(event) => event.stopPropagation()}
         >
             {children}
         </div>
@@ -427,15 +442,6 @@ function getConnectionMenuPosition(position: Position, viewport: ViewportTransfo
     };
 }
 
-export function getNodePanelPosition(node: CanvasNodeData, viewport: ViewportTransform, _viewportSize: { width: number; height: number }, panelWidth: number, _panelHeight: number, dragOffset?: Position | null) {
-    const gap = 10;
-    const offsetX = dragOffset?.x || 0;
-    const offsetY = dragOffset?.y || 0;
-    const nodeCenterX = viewport.x + (node.position.x + offsetX + node.width / 2) * viewport.k;
-    const nodeBottom = viewport.y + (node.position.y + offsetY + node.height) * viewport.k;
-    return {
-        left: nodeCenterX - panelWidth / 2,
-        top: nodeBottom + gap,
-        placement: "below" as const,
-    };
+export function getNodePanelPosition(node: CanvasNodeData, viewport: ViewportTransform, viewportSize: { width: number; height: number }, panelWidth: number, panelHeight: number, dragOffset?: Position | null) {
+    return placeCanvasNodePanel(node, viewport, canvasOverlayBounds(viewportSize), { width: panelWidth, height: panelHeight }, dragOffset);
 }

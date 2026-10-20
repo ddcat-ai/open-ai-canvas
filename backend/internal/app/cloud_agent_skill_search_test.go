@@ -91,11 +91,27 @@ func TestCloudAgentSkillSearchClampsLimitAndReturnsCandidateIndexOnNoHit(t *test
 	if len(result["matches"].([]map[string]any)) != 1 {
 		t.Fatalf("expected single hit for 钩子, got %v", result["matches"])
 	}
-	result, err = cloudAgentSearchSkills(skills, "量子纠缠炒菜", 0)
+	limited, err := cloudAgentSearchSkills(skills, "当", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result["matches"].([]map[string]any)) != len(skills) || result["total"] != len(skills) || result["fallback"] != true {
+	if len(limited["matches"].([]map[string]any)) != 1 || limited["total"].(int) != 3 {
+		t.Fatalf("total must count all matches before limit, got %#v", limited)
+	}
+	result, err = cloudAgentSearchSkills(skills, "量子纠缠炒菜", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 零命中降级：返回已启用技能索引而不是空列表——「没搜到」不该被模型
+	// 解读成「没有适用技能」后直接放弃技能裸做任务。
+	degraded := result["matches"].([]map[string]any)
+	if len(degraded) != 1 {
+		t.Fatalf("zero-hit query must return one indexed skill at limit 1, got %v", result["matches"])
+	}
+	if result["total"].(int) != 3 {
+		t.Fatalf("expected total 3 on degraded index, got %v", result["total"])
+	}
+	if result["fallback"] != true {
 		t.Fatalf("expected an explicitly labelled candidate index, got %v", result)
 	}
 	if guidance, _ := result["guidance"].(string); !strings.Contains(guidance, "skill_read_file") {
@@ -365,5 +381,42 @@ func TestCloudAgentSkillSearchTokensKeepsSingleCJKRune(t *testing.T) {
 	skill := cloudAgentSkill{ID: "x1", Name: "comedy-beat-lab", Description: "专门讲「梗」的密度、预期违背与排布节奏"}
 	if score, _ := cloudAgentSkillMatch(skill, []string{"梗"}); score == 0 {
 		t.Fatal("单个汉字 token 应该能命中描述")
+	}
+}
+
+func TestCloudAgentSkillSearchTokensExpandHanBigrams(t *testing.T) {
+	// 中文自然语句没有分隔符时整句是一个 token，整串 Contains 必然落空；
+	// 展开重叠 2-gram 后任一片段命中即可参与排序。整串 token 保留在最前，
+	// 整串命中时全部 gram 命中，得分自然更高。
+	got := cloudAgentSkillSearchTokens("给这个短剧设计反转结尾")
+	want := []string{"给这个短剧设计反转结尾", "给这", "这个", "个短", "短剧", "剧设", "设计", "计反", "反转", "转结", "结尾"}
+	if len(got) != len(want) {
+		t.Fatalf("切词结果 %v，期望 %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("切词结果 %v，期望 %v", got, want)
+		}
+	}
+	// 纯 ASCII token 不展开 gram，保持整串匹配。
+	if got := cloudAgentSkillSearchTokens("hook-paywall"); len(got) != 1 || got[0] != "hook-paywall" {
+		t.Fatalf("ASCII token 不应展开 gram，得到 %v", got)
+	}
+}
+
+func TestCloudAgentSkillSearchMatchesNaturalPhraseViaGrams(t *testing.T) {
+	// 回归：模型把自然语句整句当关键词时，旧逻辑整串 Contains 落空 →
+	// 「没有命中」→ 模型得出「没有适用技能」并放弃技能裸做任务。
+	// 2-gram 展开后整句也必须命中描述含「短剧」「反转」的 s2。
+	result, err := cloudAgentSearchSkills(skillSearchTestSkills(), "给这个短剧设计一个反转结尾", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := result["matches"].([]map[string]any)
+	if len(matches) == 0 {
+		t.Fatal("natural phrase must not produce an empty result")
+	}
+	if matches[0]["skillId"] != "s2" {
+		t.Fatalf("expected shortform-drama-playbook first, got %v", matches[0]["skillId"])
 	}
 }

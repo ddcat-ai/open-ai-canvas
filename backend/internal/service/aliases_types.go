@@ -2,6 +2,9 @@ package service
 
 import "yingce/backend/internal/app"
 
+type AgentAvatarBundleManifest = app.AgentAvatarBundleManifest
+type AgentAvatarBundleImport = app.AgentAvatarBundleImport
+
 const (
 	WorkbenchKindImage = app.WorkbenchKindImage
 	WorkbenchKindVideo = app.WorkbenchKindVideo

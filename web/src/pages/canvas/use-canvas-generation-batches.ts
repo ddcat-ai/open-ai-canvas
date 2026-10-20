@@ -3,13 +3,16 @@ import { App } from "antd";
 import { nanoid } from "nanoid";
 
 import { generationBatchStatus, isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
+import { createCanvasBatchInputSnapshot } from "@/lib/canvas/canvas-batch-input-snapshot";
+import { batchOutputResultPending } from "@/lib/canvas/canvas-batch-references";
 import { buildGenerationConfig, createGenerationRetryContext, generationTaskMetadata, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { unchangedModeratedPrompt } from "@/lib/generation-error";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { listGenerationTasks } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
-import type { CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchMode, CanvasNodeData } from "@/types/canvas";
+import type { Asset } from "@/stores/use-asset-store";
+import type { CanvasConnection, CanvasGenerationBatch, CanvasGenerationBatchItem, CanvasGenerationBatchMode, CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasNodeGenerationOptions } from "./use-canvas-generation-executor";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -17,18 +20,20 @@ import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-p
 const SCHEDULER_INTERVAL_MS = 2_000;
 const MAX_BATCH_HISTORY = 20;
 
-type BatchTarget = Pick<CanvasGenerationBatchItem, "rowId" | "nodeId">;
+type BatchTarget = Pick<CanvasGenerationBatchItem, "rowId" | "nodeId" | "inputSnapshot">;
 
 type UseCanvasGenerationBatchesOptions = {
     projectId: string;
     projectLoaded: boolean;
     nodes: CanvasNodeData[];
     nodesRef: { current: CanvasNodeData[] };
+    connectionsRef: { current: CanvasConnection[] };
+    assets: Asset[];
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     handleGenerateNode: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => Promise<void>;
 };
 
-export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, nodesRef, setNodes, handleGenerateNode }: UseCanvasGenerationBatchesOptions) {
+export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, nodesRef, connectionsRef, assets, setNodes, handleGenerateNode }: UseCanvasGenerationBatchesOptions) {
     const { message, modal } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
@@ -67,13 +72,28 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                 return;
             }
             const now = new Date().toISOString();
+            const nodeById = new Map(nodesRef.current.map((node) => [node.id, node]));
+            let items: CanvasGenerationBatchItem[];
+            try {
+                items = availableTargets.map((target) => {
+                    const node = nodeById.get(target.nodeId);
+                    if (!node) throw new Error("任务目标节点已不存在，请重新生成");
+                    return {
+                        id: nanoid(), ...target, status: "waiting" as const, retryCount: 0,
+                        inputSnapshot: mode === "batch_image" ? target.inputSnapshot ?? createCanvasBatchInputSnapshot(node, nodesRef.current, connectionsRef.current, assets) : undefined,
+                    };
+                });
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "任务输入快照保存失败，未加入生成队列");
+                return;
+            }
             const batch: CanvasGenerationBatch = {
                 id: nanoid(),
                 projectId,
                 sourceNodeId,
                 mode,
                 status: "queued",
-                items: availableTargets.map((target) => ({ id: nanoid(), ...target, status: "waiting", retryCount: 0 })),
+                items,
                 concurrency: options?.concurrency ? Math.max(1, Math.min(10, Math.floor(options.concurrency))) : undefined,
                 createdAt: now,
                 updatedAt: now,
@@ -93,7 +113,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
             );
             return batch.id;
         },
-        [message, nodesRef, projectId, setNodes],
+        [assets, connectionsRef, message, nodesRef, projectId, setNodes],
     );
 
     const reconcileBatches = useCallback(() => {
@@ -113,7 +133,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                         let patch: Partial<CanvasGenerationBatchItem> | null = null;
                         if (!node) {
                             patch = { status: "failed", errorDetails: "目标节点已不存在" };
-                        } else if (node.metadata?.status === "success" && node.metadata.content) {
+                        } else if (node.metadata?.status === "success" && node.metadata.content && !batchOutputResultPending(node.metadata)) {
                             patch = { status: "succeeded", taskId: node.metadata.taskId, errorDetails: undefined, costUncertain: false };
                         } else if (node.metadata?.status === "error") {
                             const errorDetails = node.metadata.errorDetails || "生成失败";
@@ -191,7 +211,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                         const node = nodeById.get(item.nodeId);
                         if (!node) continue;
                         // 已绑定任务或已有成品的节点交给恢复/对账链路处理，绝不重复提交。
-                        if (node.metadata?.taskId || (node.metadata?.status === "success" && node.metadata.content)) continue;
+                        if (node.metadata?.taskId || (node.metadata?.status === "success" && node.metadata.content && !batchOutputResultPending(node.metadata))) continue;
                         candidates.push({ batch, item, node });
                         availableSlots -= 1;
                         batchAvailableSlots -= 1;
@@ -208,7 +228,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                     updateBatch(batch.sourceNodeId, batch.id, (current) => withUpdatedItem(current, item.id, { status: "failed", errorDetails: "生成模型未配置，请完成配置后重试" }));
                     continue;
                 }
-                const prompt = nodeGenerationPrompt(node).trim();
+                const prompt = item.inputSnapshot?.prompt ?? nodeGenerationPrompt(node).trim();
                 if (!prompt) {
                     updateBatch(batch.sourceNodeId, batch.id, (current) => withUpdatedItem(current, item.id, { status: "failed", errorDetails: "生成提示词为空" }));
                     continue;
@@ -220,6 +240,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                     controller,
                     waitForTaskCapacity: true,
                     skipDuplicateConfirmation: true,
+                    inputSnapshot: item.inputSnapshot,
                     retryContext:
                         node.metadata?.retryOf && node.metadata.attemptGroupId && node.metadata.taskClientOperationId
                             ? { retryOf: node.metadata.retryOf, attemptGroupId: node.metadata.attemptGroupId, clientOperationId: node.metadata.taskClientOperationId }
@@ -243,10 +264,12 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
             const nodeById = new Map(nodesRef.current.map((node) => [node.id, node]));
             const blockedItems = failedItems.filter((item) => {
                 const node = nodeById.get(item.nodeId);
-                return unchangedModeratedPrompt(node?.metadata, node ? nodeGenerationPrompt(node) : "");
+                return unchangedModeratedPrompt(node?.metadata, item.inputSnapshot?.prompt ?? (node ? nodeGenerationPrompt(node) : ""));
             });
             const retryableItems = failedItems.filter((item) => !blockedItems.includes(item));
-            if (blockedItems.length) message.warning(`${blockedItems.length} 个镜头未通过内容审核，请先修改提示词`);
+            if (blockedItems.length) message.warning(blockedItems.some((item) => item.inputSnapshot)
+                ? `${blockedItems.length} 个任务未通过内容审核；重试保留原输入，请在表格中修改后重新生成`
+                : `${blockedItems.length} 个镜头未通过内容审核，请先修改提示词`);
             if (!retryableItems.length) return;
             const retry = async () => {
                 const retryContexts = new Map<string, Awaited<ReturnType<typeof createGenerationRetryContext>>>();
@@ -289,7 +312,7 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                         };
                     }),
                 );
-                message.success(`已将 ${retryableItems.length} 个失败项重新加入等待队列`);
+                message.success(`已将 ${retryableItems.length} 个失败项重新加入等待队列${retryableItems.some((item) => item.inputSnapshot) ? "，沿用原任务提示词和参考图" : ""}`);
             };
             if (retryableItems.some((item) => item.costUncertain)) {
                 modal.confirm({

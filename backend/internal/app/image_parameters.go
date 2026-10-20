@@ -436,6 +436,13 @@ func applyImageParameterValues(config *providerConfig, profile *ImageCapabilityC
 		if strings.Contains(config.Size, ":") {
 			return BadAuthRequest("当前比例与分辨率缺少明确的像素尺寸映射")
 		}
+		// Free pixel parameters must carry the encoded value to the adapter;
+		// ratio enums retain their declared value for plugin validation.
+		for _, field := range profile.Parameters {
+			if field.Name == "size" && field.Accepts(config.Size) {
+				config.ImageParameters["size"] = config.Size
+			}
+		}
 	}
 	return nil
 }

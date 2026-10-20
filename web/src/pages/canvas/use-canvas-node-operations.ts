@@ -9,6 +9,7 @@ import { alignCanvasNodes, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodes
 import { applyCanvasConnectionPromptSync } from "@/lib/canvas/canvas-resource-references";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
+import { createCanvasImageEditCopy } from "@/lib/canvas/canvas-image-edit-copy";
 import { copyImageLayerSources } from "@/lib/canvas/canvas-image-layers";
 import { CanvasNodeType, type CanvasConnection, type CanvasFolderStyle, type CanvasFolderTheme, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ContextMenuState, type Position } from "@/types/canvas";
 import { cloneCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
@@ -361,14 +362,23 @@ export function useCanvasNodeOperations({
         setContextMenu((current) => current?.type === "connection" && current.connectionId === connectionId ? null : current);
     }, [commitConnections, commitNodes, connectionsRef, nodesRef, setContextMenu, setSelectedConnectionId]);
 
-    const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" = "variant") => {
+    const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" | "linked-copy" = "variant") => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
         if (!source) return;
+        if (duplicateMode === "linked-copy") {
+            const copy = createCanvasImageEditCopy(source, nodesRef.current);
+            if (!copy) return;
+            commitNodes([...nodesRef.current, copy.node]);
+            commitConnections([...connectionsRef.current, copy.connection]);
+            selectNodes(new Set([copy.node.id]));
+            setDialogNodeId(null);
+            return copy.node.id;
+        }
         const sources = isFrameNode(source) ? [source, ...getFrameChildren(source.id, nodesRef.current)] : copyImageLayerSources(source, nodesRef.current);
         const idMap = new Map(sources.map((node, index) => [node.id, `${node.type}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`]));
         const versionRootId = duplicateMode === "variant" && !isFrameNode(source) ? source.metadata?.versionOfNodeId || source.id : undefined;
         const versionLabel = versionRootId ? nextCanvasVersionLabel(versionRootId, nodesRef.current) : undefined;
-        const copyTitle = duplicateMode === "copy" ? nextCopiedNodeTitle(source.title, nodesRef.current.map((node) => node.title)) : undefined;
+        const copyTitle = duplicateMode !== "variant" ? nextCopiedNodeTitle(source.title, nodesRef.current.map((node) => node.title)) : undefined;
         const copiedNodes = sources.map((node) => {
             const metadata = isolateCopiedNodeMetadata(node, idMap);
             if (node.type === CanvasNodeType.Drawing) {

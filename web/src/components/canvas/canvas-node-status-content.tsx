@@ -4,7 +4,7 @@ import { type GenerationTask } from "@/services/api/task-center";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { AlertCircle, Clock3, Download, FileText, RefreshCw } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { idleTaskTickerSubscribe, subscribeTaskTicker, taskTickerSnapshot } from "@/lib/canvas/task-ticker";
+import { formatTaskElapsed, idleTaskTickerSubscribe, subscribeTaskTicker, taskTickerSnapshot } from "@/lib/canvas/task-ticker";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
 
@@ -24,7 +24,7 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const statusLabel = taskId ? generationTaskStatusLabel(displayTask) : "等待任务状态";
     const workflow = node.metadata?.imageLayerWorkflow;
     const stageLabel = workflow ? (workflow.stage === "planning" ? "拆解规划中" : `拆解中，共 ${workflow.total} 张图`) : node.metadata?.experimentalLayerPlan?.progress || (taskId ? generationTaskStageLabel(displayTask) : "正在创建任务");
-    const elapsed = useTaskElapsed(workflow?.startedAt || node.metadata?.taskCreatedAt);
+    const elapsed = useTaskElapsed(workflow?.startedAt || node.metadata?.taskCreatedAt, taskTerminalStatus(node.metadata?.taskStatus) ? node.metadata?.taskCompletedAt : undefined);
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
             {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
@@ -71,15 +71,15 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     );
 }
 
-export function useTaskElapsed(createdAt?: string) {
-    const now = useSyncExternalStore(createdAt ? subscribeTaskTicker : idleTaskTickerSubscribe, taskTickerSnapshot, taskTickerSnapshot);
-    if (!createdAt) return "刚刚";
-    const started = new Date(createdAt).getTime();
-    if (!Number.isFinite(started)) return "刚刚";
-    const seconds = Math.max(0, Math.floor((now - started) / 1000));
-    if (seconds < 60) return `${seconds}秒`;
-    const minutes = Math.floor(seconds / 60);
-    return minutes < 60 ? `${minutes}分${seconds % 60}秒` : `${Math.floor(minutes / 60)}时${minutes % 60}分`;
+/** 终态时不再订阅每秒 ticker，耗时冻结在完成时刻。 */
+export function useTaskElapsed(createdAt?: string, completedAt?: string) {
+    const live = Boolean(createdAt) && !completedAt;
+    const now = useSyncExternalStore(live ? subscribeTaskTicker : idleTaskTickerSubscribe, taskTickerSnapshot, taskTickerSnapshot);
+    return formatTaskElapsed(createdAt, now, completedAt);
+}
+
+function taskTerminalStatus(status?: string) {
+    return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
 export function shortTaskId(id: string) {

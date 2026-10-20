@@ -2,22 +2,23 @@ import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } fr
 import { App } from "antd";
 import { nanoid } from "nanoid";
 
-import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { MAX_BATCH_REFERENCE_COLUMNS, batchGenerationRows, batchInputColumns, batchPromptForRow, batchReferenceColumns, batchReferenceHandleId, batchTextInputColumns, createInheritedBatchRow, createBatchRowsFromColumns, moveBatchReferenceCell, removeLastBatchReferenceColumn, reorderBatchReferenceColumns } from "@/lib/canvas/canvas-batch-table";
-import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
-import { buildGenerationConfig, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
+import { MAX_BATCH_REFERENCE_COLUMNS, batchGenerationRows, batchInputColumns, batchReferenceColumns, batchReferenceHandleId, batchTextInputColumns, insertBatchRow, createBatchRowsFromColumns, moveBatchReferenceCell, removeLastBatchReferenceColumn, reorderBatchReferenceColumns } from "@/lib/canvas/canvas-batch-table";
+import { reconcileBatchCellConnections } from "@/lib/canvas/canvas-batch-references";
+import { patchCanvasBatchTableData, prepareCanvasBatchTableGeneration, type CanvasBatchGenerationTarget } from "@/lib/canvas/canvas-batch-table-state";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasBatchRow, type CanvasBatchTableData, type CanvasConnection, type CanvasGenerationBatchMode, type CanvasNodeData } from "@/types/canvas";
 import type { BatchGenerationSettings } from "@/components/canvas/batch-generation-settings-dialog";
+import type { Asset } from "@/stores/use-asset-store";
 
 type Options = {
     nodesRef: { current: CanvasNodeData[] };
     connectionsRef: { current: CanvasConnection[] };
+    assets: Asset[];
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
-    enqueueGenerationBatch: (sourceNodeId: string, mode: CanvasGenerationBatchMode, targets: Array<{ rowId: string; nodeId: string }>, options?: { concurrency?: number }) => string | undefined;
+    enqueueGenerationBatch: (sourceNodeId: string, mode: CanvasGenerationBatchMode, targets: CanvasBatchGenerationTarget[], options?: { concurrency?: number }) => string | undefined;
 };
 
 type PendingBatchGen = {
@@ -28,7 +29,7 @@ type PendingBatchGen = {
     requestedRowIds?: string[];
 };
 
-export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setConnections, setSelectedNodeIds, enqueueGenerationBatch }: Options) {
+export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes, setConnections, setSelectedNodeIds, enqueueGenerationBatch }: Options) {
     const { message } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
@@ -36,8 +37,13 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
     const [batchGenDialog, setBatchGenDialog] = useState<{ open: boolean; pending: PendingBatchGen | null }>({ open: false, pending: null });
 
     const patchTable = useCallback((nodeId: string, patch: Partial<CanvasBatchTableData>) => {
-        setNodes((current) => current.map((node) => node.id !== nodeId ? node : { ...node, metadata: { ...node.metadata, batchTable: { operation: "try_on", concurrency: 10, rows: [], ...node.metadata?.batchTable, ...patch } } }));
-    }, [setNodes]);
+        const next = nodesRef.current.map((node) => {
+            if (node.id !== nodeId || node.metadata?.locked) return node;
+            return { ...node, metadata: { ...node.metadata, batchTable: patchCanvasBatchTableData(node.metadata?.batchTable, patch) } };
+        });
+        const edges = reconcileBatchCellConnections(next, connectionsRef.current);
+        setNodes(next); setConnections(edges);
+    }, [nodesRef, connectionsRef, setNodes, setConnections]);
 
     const updateRow = useCallback((nodeId: string, rowId: string, patch: Partial<CanvasBatchRow>) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
@@ -45,10 +51,13 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
         patchTable(nodeId, { rows: node.metadata.batchTable.rows.map((row) => row.id === rowId ? { ...row, ...patch } : row) });
     }, [nodesRef, patchTable]);
 
-    const addRow = useCallback((nodeId: string) => {
+    const addRow = useCallback((nodeId: string, afterRowId?: string) => {
         const table = nodesRef.current.find((item) => item.id === nodeId)?.metadata?.batchTable;
         if (!table) return;
-        patchTable(nodeId, { rows: [...table.rows, createInheritedBatchRow(table.operation, table.rows)] });
+        const inserted = insertBatchRow(table, afterRowId);
+        if (!inserted) return;
+        patchTable(nodeId, { rows: inserted.rows });
+        return inserted.row.id;
     }, [nodesRef, patchTable]);
 
     const removeRow = useCallback((nodeId: string, rowId: string) => {
@@ -94,7 +103,7 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
         if (!node || !table) return false;
         // AI 列表模式已经根据用户要求生成了独立行；参考图连线只负责
         // 提供素材，不能在保存/连线刷新时把 N 行重置成“每张图一行”。
-        if (table.aiGenerated) return false;
+        if (table.aiGenerated || table.referenceMode === "cells") return false;
         const nodeById = new Map(nodesRef.current.map((item) => [item.id, item]));
         const columns = batchInputColumns(node, connectionsRef.current).map((column) => column.filter((inputNodeId) => {
             const input = nodeById.get(inputNodeId);
@@ -163,58 +172,21 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, setNodes, setCon
             return;
         }
 
-        const imageSpec = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
-        const nextNodes = [...nodesRef.current];
-        let nextConnections = [...connectionsRef.current];
-        const outputByRowId = new Map<string, string>();
-        const targets: Array<{ rowId: string; nodeId: string }> = [];
-        rows.forEach((row, index) => {
-            const existingIndex = row.outputNodeId ? nextNodes.findIndex((node) => node.id === row.outputNodeId && node.type === CanvasNodeType.Image) : -1;
-            const prompt = batchPromptForRow(table, row).trim();
-            const metadata = {
-                ...(existingIndex >= 0 ? resetGenerationTaskMetadata(nextNodes[existingIndex].metadata) : {}),
-                prompt,
-                composerContent: [prompt, ...(row.textNodeIds || []).map((textNodeId) => {
-                    const textNode = nodesRef.current.find((node) => node.id === textNodeId);
-                    return textNode?.metadata?.content || textNode?.metadata?.prompt || "";
-                })].filter(Boolean).join("\n\n"),
-                model: buildGenerationConfig(mergedConfig, undefined, "image").model,
-                size: mergedConfig.size,
-                quality: mergedConfig.quality,
-                transparentBackground: mergedConfig.transparentBackground,
-                count: 1,
-                generationMode: "image" as const,
-                generationType: "edit" as const,
-                workflowKind: "final" as const,
-                workflowTitle: `${table.operation === "try_on" ? "换装" : "创意"}任务 ${index + 1}`,
-                status: "idle" as const,
-                batchSourceNodeId: nodeId,
-                batchRowId: row.id,
-                batchOperation: table.operation,
-                batchInputNodeIds: row.inputNodeIds,
-                cameraControl: settings.cameraControl,
-            };
-            const output = existingIndex >= 0
-                ? { ...nextNodes[existingIndex], metadata }
-                : createCanvasNode(CanvasNodeType.Image, { x: sourceNode.position.x + sourceNode.width + 120 + imageSpec.width / 2, y: sourceNode.position.y + index * (imageSpec.height + 32) + imageSpec.height / 2 }, metadata);
-            output.title = `${table.operation === "try_on" ? "换装" : "创意"} · ${index + 1}`;
-            if (existingIndex >= 0) nextNodes[existingIndex] = output;
-            else nextNodes.push(output);
-            nextConnections = nextConnections.filter((connection) => connection.toNodeId !== output.id);
-            row.inputNodeIds.filter(Boolean).forEach((inputNodeId) => nextConnections.push({ id: nanoid(), fromNodeId: inputNodeId, toNodeId: output.id }));
-            nextConnections.push({ id: nanoid(), fromNodeId: sourceNode.id, toNodeId: output.id, relation: "batch-output", storyboardRowId: row.id });
-            outputByRowId.set(row.id, output.id);
-            targets.push({ rowId: row.id, nodeId: output.id });
-        });
-        const sourceIndex = nextNodes.findIndex((node) => node.id === sourceNode.id);
-        nextNodes[sourceIndex] = { ...sourceNode, metadata: { ...sourceNode.metadata, batchTable: { ...table, rows: table.rows.map((row) => outputByRowId.has(row.id) ? { ...row, outputNodeId: outputByRowId.get(row.id) } : row) } } };
+        let prepared: ReturnType<typeof prepareCanvasBatchTableGeneration>;
+        try {
+            prepared = prepareCanvasBatchTableGeneration({ nodes: nodesRef.current, connections: connectionsRef.current, sourceNodeId: nodeId, rows, config: effectiveConfig, settings, assets });
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "任务输入快照保存失败，未加入生成队列");
+            return;
+        }
+        const { nodes: nextNodes, connections: nextConnections, targets } = prepared;
         nodesRef.current = nextNodes;
         connectionsRef.current = nextConnections;
         setNodes(nextNodes);
         setConnections(nextConnections);
         setSelectedNodeIds(new Set(targets.map((target) => target.nodeId)));
         if (enqueueGenerationBatch(nodeId, "batch_image", targets, { concurrency })) message.success(`${targets.length} 个任务已加入并发队列`);
-    }, [connectionsRef, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes, setSelectedNodeIds]);
+    }, [assets, connectionsRef, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes, setSelectedNodeIds]);
 
     const generateRows = useCallback((nodeId: string, requestedRowIds?: string[]) => {
         const sourceNode = nodesRef.current.find((item) => item.id === nodeId);

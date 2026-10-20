@@ -175,6 +175,74 @@ paths:
         "400": {$ref: "#/components/responses/Error"}
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/settings/appearance/avatar-bundles:
+    post:
+      tags: [admin]
+      summary: 导入 Agent 状态动画 ZIP 草稿（不自动启用）
+      description: ZIP 最大 128 MiB，解压累计最大 384 MiB、最多 128 个条目；根目录须包含 version 1 的 avatar.json 和其引用的 MP4。上传后需通过 PATCH /admin/settings/appearance 配置 avatarBundleResourceId 与 avatarClipStates 才会公开播放。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        "200":
+          description: 成功信封 data.bundle 包含 resourceId 和已校验 manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer, enum: [0]}
+                  msg: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      bundle:
+                        type: object
+                        required: [resourceId, manifest]
+                        properties:
+                          resourceId: {type: string}
+                          manifest:
+                            type: object
+                            required: [version, width, height, clips]
+                            properties:
+                              version: {type: integer, enum: [1]}
+                              width: {type: integer, minimum: 1, maximum: 4096}
+                              height: {type: integer, minimum: 1, maximum: 4096}
+                              clips: {type: object, additionalProperties: {type: string}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /admin/settings/appearance/avatar/{id}/{file}:
+    get:
+      tags: [admin]
+      summary: 预览动画包文件（上传者或当前配置引用的管理员）
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: file, required: true, description: avatar.json 或 manifest 引用的 MP4 文件名, schema: {type: string}}
+      responses:
+        "200": {description: JSON 或 MP4 原始内容，支持 MP4 Range 请求}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /public/appearance/avatar/{id}/{file}:
+    get:
+      tags: [meta]
+      security: []
+      summary: 读取当前启用的 Agent 动画包文件
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: file, required: true, description: avatar.json 或 manifest 引用的 MP4 文件名, schema: {type: string}}
+      responses:
+        "200": {description: JSON 或 MP4 原始内容，支持 Range；停用后拒绝公开读取}
+        "400": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /tools:
     get:
       tags: [canvas]

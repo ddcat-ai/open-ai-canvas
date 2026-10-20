@@ -3,6 +3,22 @@ import { CanvasNodeType, isBuiltinCanvasNodeType, type CanvasNodeData } from "@/
 
 export const MEDIA_NODE_MIN_SIZE = { width: 420, height: 236 } as const;
 export const VIDEO_NODE_MAX_SIZE = { width: 720, height: 520 } as const;
+export const IMAGE_NODE_MAX_SIZE = { width: 720, height: 520 } as const;
+
+/** 图片预览以最大边界为准；最短边不能反过来撑大竖图或长图。 */
+export function fitImageNodeSize(width: number, height: number, maxWidth: number = IMAGE_NODE_MAX_SIZE.width, maxHeight: number = IMAGE_NODE_MAX_SIZE.height) {
+    const w = Number.isFinite(width) && width > 0 ? width : NODE_DEFAULT_SIZE[CanvasNodeType.Image].width;
+    const h = Number.isFinite(height) && height > 0 ? height : NODE_DEFAULT_SIZE[CanvasNodeType.Image].height;
+    const limit = Math.min(maxWidth / w, maxHeight / h);
+    const scale = Math.min(limit, Math.max(Math.min(1, limit), 320 / Math.max(w, h)));
+    return { width: w * scale, height: h * scale };
+}
+
+/** 异步产物回填只更新媒体；用户在等待期间确定的显示尺寸仍然有效。 */
+export function preserveImageNodeSize(node: CanvasNodeData | null | undefined, suggested: { width: number; height: number }) {
+    return node && (node.metadata?.manualSize || node.metadata?.locked || node.metadata?.freeResize)
+        ? { width: node.width, height: node.height } : suggested;
+}
 
 /** 素材使用有界预览框，极宽文字/极窄装饰不能把整组撑大；文件比例由 object-contain 保留。 */
 export function fitImageMaterialNodeSize(width: number, height: number) {
@@ -20,7 +36,7 @@ export function fitNodeSize(width: number, height: number, maxWidth = 720, maxHe
     return { width: w * scale, height: h * scale };
 }
 
-export function nodeSizeFromRatio(size: string, baseWidth: number, baseHeight: number) {
+export function nodeSizeFromRatio(size: string, baseWidth: number, baseHeight: number, image = false) {
     const raw = String(size || "").trim();
     if (!raw || raw.toLowerCase() === "auto") return null;
     let width = 0;
@@ -53,14 +69,30 @@ export function nodeSizeFromRatio(size: string, baseWidth: number, baseHeight: n
     }
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
     const ratio = width / Math.max(1, height);
-    if (ratio < 0.25 || ratio > 4) return { width: baseWidth, height: baseHeight };
+    if (!image && (ratio < 0.25 || ratio > 4)) return { width: baseWidth, height: baseHeight };
     const candidateSize = ratio >= baseWidth / baseHeight ? { width: baseWidth, height: baseWidth / ratio } : { width: baseHeight * ratio, height: baseHeight };
-    return fitNodeSize(candidateSize.width, candidateSize.height, baseWidth, baseHeight);
+    return image ? fitImageNodeSize(candidateSize.width, candidateSize.height, baseWidth, baseHeight) : fitNodeSize(candidateSize.width, candidateSize.height, baseWidth, baseHeight);
+}
+
+export function imageNodeSizeFromRatio(size: string, baseWidth = 720, baseHeight = 520) {
+    return nodeSizeFromRatio(size, baseWidth, baseHeight, true);
 }
 
 export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
     if (node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video) return node;
     const title = node.title === "New Generation" ? "图片" : node.title === "Video" ? "视频" : node.title;
+    if (node.type === CanvasNodeType.Image) {
+        const metadata = node.metadata;
+        // 手动尺寸、自由拉伸及锁定布局必须跨保存和重载保持不变。
+        if (metadata?.manualSize || metadata?.freeResize || metadata?.locked) return title === node.title ? node : { ...node, title };
+        const natural = metadata?.naturalWidth && metadata.naturalHeight
+            ? (metadata.imageLayerMaterial ? fitImageMaterialNodeSize(metadata.naturalWidth, metadata.naturalHeight) : fitImageNodeSize(metadata.naturalWidth, metadata.naturalHeight))
+            : null;
+        const size = natural || (!metadata?.content && metadata?.size ? imageNodeSizeFromRatio(metadata.size) : null)
+            || (node.width > 0 && node.height > 0 ? fitImageNodeSize(node.width, node.height) : NODE_DEFAULT_SIZE[CanvasNodeType.Image]);
+        if (size.width === node.width && size.height === node.height && title === node.title) return node;
+        return { ...node, title, width: size.width, height: size.height, position: { x: node.position.x + node.width / 2 - size.width / 2, y: node.position.y + node.height / 2 - size.height / 2 } };
+    }
     let width = node.width;
     let height = node.height;
     const emptyStage = isBuiltinCanvasNodeType(node.type) ? NODE_DEFAULT_SIZE[node.type] : undefined;
@@ -80,19 +112,6 @@ export function ensureMediaNodeMinimumSize(node: CanvasNodeData) {
             width = emptyStage.width;
             height = emptyStage.height;
         }
-    }
-    const naturalWidth = node.metadata?.naturalWidth || 0;
-    const naturalHeight = node.metadata?.naturalHeight || 0;
-    const requestedSize = node.type === CanvasNodeType.Image && node.metadata?.generationType === "edit"
-        ? nodeSizeFromRatio(node.metadata.size || "auto", node.width, node.height)
-        : null;
-    const naturalRatio = naturalWidth / Math.max(1, naturalHeight);
-    const nodeRatio = node.width / Math.max(1, node.height);
-    // 修复旧版图生图无条件继承参考节点尺寸造成的比例错误，不覆盖自由拉伸或锁定布局。
-    if (requestedSize && naturalWidth > 0 && naturalHeight > 0 && !node.metadata?.freeResize && !node.metadata?.locked && Math.abs(naturalRatio - nodeRatio) > 0.01) {
-        const alignedSize = fitNodeSize(naturalWidth, naturalHeight, requestedSize.width, requestedSize.height);
-        width = alignedSize.width;
-        height = alignedSize.height;
     }
     if (width < MEDIA_NODE_MIN_SIZE.width || height < MEDIA_NODE_MIN_SIZE.height) {
         const scale = Math.max(1, MEDIA_NODE_MIN_SIZE.width / Math.max(1, width), MEDIA_NODE_MIN_SIZE.height / Math.max(1, height));

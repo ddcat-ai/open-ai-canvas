@@ -35,3 +35,17 @@ export function subscribeTaskTicker(listener: () => void) {
         }
     };
 }
+
+/** 终态（completedAt 有效）以完成时刻为终点冻结耗时，避免任务结束后数字继续增长。 */
+export function formatTaskElapsed(createdAt: string | undefined, now: number, completedAt?: string) {
+    if (!createdAt) return "刚刚";
+    const started = new Date(createdAt).getTime();
+    if (!Number.isFinite(started)) return "刚刚";
+    const completed = completedAt ? new Date(completedAt).getTime() : Number.NaN;
+    // 时钟偏差或异常时间戳可能让 completedAt 早于 createdAt，夹紧避免显示负值。
+    const end = Number.isFinite(completed) ? Math.max(completed, started) : now;
+    const seconds = Math.max(0, Math.floor((end - started) / 1000));
+    if (seconds < 60) return `${seconds}秒`;
+    const minutes = Math.floor(seconds / 60);
+    return minutes < 60 ? `${minutes}分${seconds % 60}秒` : `${Math.floor(minutes / 60)}时${minutes % 60}分`;
+}

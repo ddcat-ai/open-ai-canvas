@@ -89,7 +89,7 @@ export function imageResolutionUsesQuality(profile: ImageCapabilityConfig) {
 }
 
 export function imageTierAvailable(profile: ImageCapabilityConfig, tier: ImageResolutionTier) {
-    if (profile.parameters) return profile.resolution.supported ? profile.resolution.values.includes(tier) : Boolean(profile.size.presets?.some((preset) => preset.tier === tier));
+    if (profile.parameters) return profile.resolution.supported ? profile.resolution.values.includes(tier) : (profile.size.parameter === "size" && profile.size.allowCustom) || Boolean(profile.size.presets?.some((preset) => preset.tier === tier));
     // 质量参数能映射档位时按上游质量裁剪；管理员尺寸预设存在时再取交集，避免默认 low/medium/high 把未启用的 1K 显示出来。
     if (profile.size.parameter !== "aspect_ratio") return profile.size.parameter !== "none";
     const configuredTiers = new Set(profile.size.presets?.map((preset) => preset.tier));

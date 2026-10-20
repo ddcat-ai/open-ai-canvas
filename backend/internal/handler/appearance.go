@@ -12,6 +12,7 @@ import (
 
 func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerLive2DRoutes(r, svc)
+	registerAgentAvatarBundleRoutes(r, svc)
 	serveUpdateMedia := func(admin bool) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			var actor *model.User

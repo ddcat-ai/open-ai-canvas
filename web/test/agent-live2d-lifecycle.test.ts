@@ -14,9 +14,9 @@ test("Live2D launcher remains mounted while the Agent panel is open", () => {
     expect(partsSource).toContain('display: "none"');
 });
 
-test("launcher waits for appearance configuration before displaying the default orb", () => {
+test("launcher waits for appearance configuration and avatar manifest before displaying the default orb", () => {
     expect(partsSource).toContain("const appearanceResolved = useAppearanceStore((state) => state.resolved)");
-    expect(partsSource).toContain(") : appearanceResolved ? (");
+    expect(partsSource).toContain("bundleManifestLoading || !appearanceResolved");
     expect(partsSource).toContain("正在加载助手形象");
 });
 

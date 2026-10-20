@@ -1,0 +1,19 @@
+{
+    "version": 1,
+    "width": 480,
+    "height": 432,
+    "clips": {
+        "idle": "mascot-idle.mp4",
+        "wave": "mascot-wave.mp4",
+        "jump": "mascot-jump.mp4",
+        "talk": "mascot-talk.mp4",
+        "sleep": "mascot-sleep.mp4",
+        "lie_down": "mascot-lie-down.mp4",
+        "sleep_loop": "mascot-sleep-loop.mp4",
+        "think": "mascot-think.mp4",
+        "work_start": "mascot-work-start.mp4",
+        "working_loop": "mascot-working-loop.mp4",
+        "wipe_sweat": "mascot-wipe-sweat.mp4",
+        "wake_up": "mascot-wake-up.mp4"
+    }
+}

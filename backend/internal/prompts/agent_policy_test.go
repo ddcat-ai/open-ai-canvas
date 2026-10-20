@@ -10,7 +10,7 @@ func TestLoadAgentPoliciesUsesDocumentMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if system.ID != "cloud-agent-system" || system.Version != 14 || media.ID != "cloud-agent-media" || media.Version != 7 {
+	if system.ID != "cloud-agent-system" || system.Version != 16 || media.ID != "cloud-agent-media" || media.Version != 7 {
 		t.Fatalf("unexpected policy metadata: system=%+v media=%+v", system, media)
 	}
 	if strings.Contains(system.Text, "id: cloud-agent-system") || !strings.HasPrefix(system.Text, "# Cloud Agent") {
@@ -18,6 +18,12 @@ func TestLoadAgentPoliciesUsesDocumentMetadata(t *testing.T) {
 	}
 	if !strings.Contains(system.Text, "maxToolCalls") || !strings.Contains(system.Text, "收到这一批的真实执行结果后再继续") {
 		t.Fatal("system policy lost the tool-call batching instruction")
+	}
+	if !strings.Contains(system.Text, "先用 `skill_search` 检索定位，再按返回的 path 用 `skill_read_file` 读取") {
+		t.Fatal("system and operations policies must require skill search before reading")
+	}
+	if strings.Contains(system.Text, "已能对应到具体技能时可直接 `skill_read_file`") {
+		t.Fatal("system policy must not permit skipping skill search")
 	}
 	for _, phrase := range []string{
 		"auto 只豁免其他画布修改，不豁免媒体生成",

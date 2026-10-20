@@ -1,4 +1,5 @@
-// Agent 技能检索：按关键词在已启用技能的名称、描述与方法卡文件名中打分、截取片段。
+// Agent 的技能（Skills）检索：按关键词在已启用技能的名称、描述与方法卡文件名中
+// 打分（含中文 2-gram 展开）、截取片段。
 //
 // 检索完全在内存中进行，不调用模型；结果按预算裁剪，避免把整份技能正文塞进上下文。
 //
@@ -375,7 +376,8 @@ func cloudAgentSearchSkills(skills []cloudAgentSkill, keyword string, limit int)
 		}
 		entries = append(entries, item)
 	}
-	return map[string]any{"matches": entries, "total": len(entries), "keyword": keyword, "guidance": guidance}, nil
+	// total counts all matched candidates before limit; matches contains only this response page.
+	return map[string]any{"matches": entries, "total": len(ranked), "keyword": keyword, "guidance": guidance}, nil
 }
 
 func (s *Service) cloudAgentSkills(userID string, ids []string, surfaces ...string) ([]cloudAgentSkill, error) {

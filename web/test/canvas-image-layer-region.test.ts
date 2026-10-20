@@ -13,7 +13,14 @@ test("extreme material ratios use bounded preview frames and remain stable after
         const size = fitImageMaterialNodeSize(width, height);
         expect(size.width).toBeLessThanOrEqual(720);
         expect(size.height).toBeLessThanOrEqual(520);
-        const node = { id: "material", type: CanvasNodeType.Image, title: "素材", position: { x: 10, y: 20 }, ...size, metadata: { content: "/material.png", naturalWidth: width, naturalHeight: height } };
+        const node = {
+            id: "material",
+            type: CanvasNodeType.Image,
+            title: "素材",
+            position: { x: 10, y: 20 },
+            ...size,
+            metadata: { content: "/material.png", naturalWidth: width, naturalHeight: height, imageLayerMaterial: { sourceLayerId: "layer", sourceGroupId: "group", bounds: { left: 0, top: 0, width, height } } },
+        };
         expect(ensureMediaNodeMinimumSize(node)).toEqual(node);
     }
 });

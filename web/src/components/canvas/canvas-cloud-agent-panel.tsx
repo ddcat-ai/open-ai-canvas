@@ -334,7 +334,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
     );
     const status = run?.status || "idle";
     const statusLabel =
-        status === "waiting_approval" ? "等待审批" : status === "running" || status === "queued" ? "运行中" : status === "completed" ? "已完成" : status === "failed" ? "异常" : status === "cancelled" ? "已停止" : status === "rejected" ? "已拒绝" : "待命";
+        status === "waiting_approval" ? "等待审批" : status === "queued" ? "排队中" : status === "running" ? "运行中" : status === "completed" ? "已完成" : status === "failed" ? "异常" : status === "cancelled" ? "已停止" : status === "rejected" ? "已拒绝" : "待命";
     const statusColor = status === "failed" ? "#e66b6b" : status === "rejected" || status === "cancelled" ? theme.node.muted : status === "waiting_approval" ? "#d6a24a" : status === "running" || status === "queued" ? "#69c29b" : theme.node.muted;
 
     useEffect(() => {
@@ -1014,7 +1014,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
 
     return (
         <>
-            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} hidden={open} onOpen={onOpen} />
+            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} status={status} hidden={open} onOpen={onOpen} />
             <AnimatePresence>
                 {open ? (
                     <motion.aside

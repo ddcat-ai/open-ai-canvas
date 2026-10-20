@@ -1,8 +1,9 @@
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
+import { batchOutputResultPending } from "@/lib/canvas/canvas-batch-references";
 import { findCanvasNodeAsset } from "@/lib/canvas/canvas-node-asset";
 import { findAvailableGenerationGroupPosition, imageGenerationChildPosition } from "@/lib/canvas/canvas-generation-layout";
-import { fitNodeSize, nodeSizeFromRatio, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize, fitNodeSize, imageNodeSizeFromRatio, preserveImageNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
 import { compositeEmotionImage } from "@/lib/canvas/canvas-emotion";
 import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
@@ -129,6 +130,13 @@ export function applyGeneratedMediaResultMetadata(node: CanvasNodeData, media: C
             ...workflowMetadataForResultNode(),
             ...media,
             ...extra,
+            ...(batchOutputResultPending(node.metadata) && media.status === "success" && (media.content || media.storageKey)
+                ? {
+                      batchResultInputSignature: node.metadata?.batchInputSignature,
+                      previewContent: undefined,
+                      imageRotation: undefined,
+                  }
+                : {}),
             errorDetails: undefined,
             assetId: undefined,
         },
@@ -199,23 +207,17 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
         }
         const uploaded =
             image.storageKey && !emotionEdit
-                ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 1024, height: image.height || 1024, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
+                ? { url: await resolveImageUrl(image.storageKey, image.dataUrl), storageKey: image.storageKey, width: image.width || 0, height: image.height || 0, bytes: image.bytes || 0, mimeType: image.mimeType || "image/png" }
                 : extraction || emotionEdit
                   ? await uploadDerivedImageResult(resultDataUrl)
                   : await uploadImage(resultDataUrl);
         const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
         if (extraction) extraction = { ...extraction, sourceResultStorageKey: uploaded.storageKey !== sourceResultStorageKey ? sourceResultStorageKey : undefined };
         const directEdit = ["mask", "annotation", "text"].includes(generationTaskInput(task)?.metadata?.edit || "");
-        const requestedImageSize = directEdit ? undefined : nodeSizeFromRatio(node.metadata?.size || "auto", imageConfig.width, imageConfig.height);
-        const imageSizeBounds = requestedImageSize || { width: node.width || imageConfig.width, height: node.height || imageConfig.height };
-        const hasReportedImageSize = Boolean(image.width && image.width > 0 && image.height && image.height > 0);
-        const resultWidth = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.width : uploaded.width;
-        const resultHeight = image.storageKey && !hasReportedImageSize && requestedImageSize ? requestedImageSize.height : uploaded.height;
-        const normalizedImage = resultWidth === uploaded.width && resultHeight === uploaded.height ? uploaded : { ...uploaded, width: resultWidth, height: resultHeight };
-        const imageSize =
-            !directEdit && node.metadata?.generationType === "edit" && !requestedImageSize
-                ? { width: node.width || imageConfig.width, height: node.height || imageConfig.height }
-                : fitNodeSize(resultWidth, resultHeight, imageSizeBounds.width, imageSizeBounds.height);
+        const requestedImageSize = directEdit ? null : imageNodeSizeFromRatio(node.metadata?.size || "auto");
+        // 未报告文件像素时只用请求比例安排预览；不能把预览宽高冒充原图像素。
+        const displaySize = uploaded.width > 0 && uploaded.height > 0 ? fitImageNodeSize(uploaded.width, uploaded.height) : requestedImageSize || fitImageNodeSize(node.width || imageConfig.width, node.height || imageConfig.height);
+        const imageSize = preserveImageNodeSize(node, displaySize);
         return {
             ...node,
             type: CanvasNodeType.Image,
@@ -224,7 +226,7 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
             position: directEdit ? node.position : { x: node.position.x + node.width / 2 - imageSize.width / 2, y: node.position.y + node.height / 2 - imageSize.height / 2 },
             metadata: applyGeneratedMediaResultMetadata(
                 node,
-                imageMetadata(normalizedImage),
+                imageMetadata(uploaded),
                 { prompt, ...completedTaskMetadata(task), generationOutputCount: 1, ...(extraction ? { layerExtraction: extraction, status: needsRemoval ? "idle" : "success" } : {}) },
                 task.model,
             ),
@@ -380,6 +382,7 @@ export async function applyMaterializedGenerationTaskResultToNodes(nodes: Canvas
 }
 
 export function generationTaskOutputsApplied(node: CanvasNodeData, task: GenerationTask, nodes: CanvasNodeData[] = [node]) {
+    if (batchOutputResultPending(node.metadata)) return false;
     if (generationTaskMode(task) !== "text") {
         const assets = useAssetStore.getState().assets;
         const hasBoundAsset = (item: CanvasNodeData) => Boolean(item.metadata?.assetId && findCanvasNodeAsset(assets, item, task.projectId || "")?.id === item.metadata.assetId);
@@ -428,9 +431,7 @@ async function buildGenerationTaskNodeResults(node: CanvasNodeData, task: Genera
         );
         children.push({
             ...child,
-            ...(existing
-                ? { title: existing.title, position: existing.position, width: existing.metadata?.manualSize ? existing.width : child.width, height: existing.metadata?.manualSize ? existing.height : child.height }
-                : { position: imageGenerationChildPosition(resultNode.position, resultNode.width, child, index) }),
+            ...(existing ? { title: existing.title, position: existing.position, ...preserveImageNodeSize(existing, child) } : { position: imageGenerationChildPosition(resultNode.position, resultNode.width, child, index) }),
             metadata: {
                 ...child.metadata,
                 assetId: task.outputs?.find((output) => output.outputIndex === index)?.materializedAssetId,
@@ -482,7 +483,7 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
     const layerImages = [];
     for (const image of images) layerImages.push((await normalizeImageLayerCanvas(image, node.metadata?.layerDecomposition?.canvas)).image);
     const decoded = await decodeAndComposeImageLayers(layerImages);
-    const size = fitNodeSize(decoded.width, decoded.height, node.width, node.height);
+    const size = fitImageNodeSize(decoded.width, decoded.height);
     const firstPosition = imageGenerationChildPosition(node.position, size.width, size, 0);
     const lastPosition = imageGenerationChildPosition(node.position, size.width, size, images.length - 1);
     const secondPosition = imageGenerationChildPosition(node.position, size.width, size, 1);
@@ -521,8 +522,7 @@ export async function buildImageLayerTaskResult(node: CanvasNodeData, task: Gene
             children.push({
                 ...existing,
                 type: CanvasNodeType.Image,
-                width: existing.metadata?.manualSize ? existing.width : size.width,
-                height: existing.metadata?.manualSize ? existing.height : size.height,
+                ...preserveImageNodeSize(existing, size),
                 position: existing.position,
                 metadata,
             });
@@ -636,7 +636,7 @@ export async function buildExperimentalImageLayerResult(root: CanvasNodeData, no
     return {
         node: {
             ...root,
-            ...fitNodeSize(decoded.width, decoded.height, root.width, root.height),
+            ...preserveImageNodeSize(root, fitImageNodeSize(decoded.width, decoded.height)),
             metadata: applyGeneratedMediaResultMetadata(root, imageMetadata(composite), {
                 imageLayerGroup: group,
                 isBatchRoot: true,
@@ -732,6 +732,7 @@ function completedTaskMetadata(task: GenerationTask): CanvasNodeMetadata {
         taskCreatedAt: task.createdAt || task.created_at,
         taskUpdatedAt: task.updatedAt || task.updated_at,
         errorDetails: undefined,
+        resourceReloadAvailable: undefined,
         generationErrorCode: undefined,
         failedPromptFingerprint: undefined,
     };

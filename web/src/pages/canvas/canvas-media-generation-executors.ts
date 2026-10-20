@@ -4,7 +4,7 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { canGenerateMediaInPlace } from "@/lib/canvas/canvas-generation-layout";
 import { nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { nextCanvasVersionLabel } from "@/lib/canvas/canvas-layout";
-import { buildAudioGenerationMetadata, buildVideoGenerationMetadata, generationReferenceUrls, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
+import { buildAudioGenerationMetadata, buildVideoGenerationMetadata, generationReferenceUrls, resetGenerationTaskMetadata, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { isDoubaoAudioConfig } from "@/lib/audio-generation";
@@ -52,7 +52,9 @@ export async function executeVideoGeneration({
         width: reuseSourceNode ? sourceNode!.width : spec.width,
         height: reuseSourceNode ? sourceNode!.height : spec.height,
         metadata: {
-            ...(reuseSourceNode ? sourceNode?.metadata || {} : {}),
+            // 就地重生成不能继承旧任务的计时字段；媒体内容与提示词不在清理范围内。
+            ...resetGenerationTaskMetadata(reuseSourceNode ? sourceNode?.metadata : undefined, NODE_STATUS_LOADING),
+            taskCreatedAt: new Date().toISOString(),
             ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
             status: NODE_STATUS_LOADING,
             errorDetails: undefined,

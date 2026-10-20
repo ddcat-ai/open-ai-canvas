@@ -11,7 +11,7 @@ import { canvasThemes } from "../src/lib/canvas-theme";
 
 const file = { name: "photo.png", size: 1234, type: "image/png" };
 const placeholder = () => createImageUploadPlaceholder("upload", file, { x: 100, y: 200 }, { width: 1920, height: 1080 });
-const read = (path: string) => readFileSync(resolve(import.meta.dir, "../src", path), "utf8");
+const read = (path: string) => readFileSync(resolve(import.meta.dir, "../src", path), "utf8").replace(/\r\n/g, "\n");
 
 describe("图片上传占位", () => {
     for (const [width, height] of [[1920, 1080], [900, 1600], [800, 800], [4000, 500]]) {

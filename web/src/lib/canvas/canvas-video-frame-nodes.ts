@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
-import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { formatVideoFrameTime } from "@/lib/canvas/canvas-video-frame";
 import type { UploadedImage } from "@/services/image-storage";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -17,7 +17,7 @@ const FRAME_GRID_MAX_COLUMNS = 3;
 
 export function buildVideoFrameNodes(source: CanvasNodeData, frames: UploadedVideoFrame[]): CanvasNodeData[] {
     if (!frames.length) return [];
-    const sizes = frames.map(({ image }) => fitNodeSize(image.width, image.height, source.width, source.height));
+    const sizes = frames.map(({ image }) => fitImageNodeSize(image.width, image.height));
     const cellWidth = Math.max(...sizes.map((size) => size.width));
     const cellHeight = Math.max(...sizes.map((size) => size.height));
     const columns = Math.min(FRAME_GRID_MAX_COLUMNS, Math.max(1, Math.ceil(Math.sqrt(frames.length))));

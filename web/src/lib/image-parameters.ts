@@ -168,6 +168,10 @@ export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, def
     if (!field || field.enabled === false || !definition) return profile;
     const ratios = preferredRatios.filter((ratio) => imageParameterAccepts(definition, ratio));
     if (!ratios.length) return profile;
+    if (!profile.resolution.supported && field.encoding === "pixels" && !definition.values?.length && !profile.size.presets?.length && tiers === undefined) {
+        const tier = profile.size.defaultTier || "1k";
+        return projectImageParameters({ ...profile, size: { ...profile.size, defaultTier: tier, presets: ratios.map((ratio) => imagePresetForRatio(tier, ratio)) } }, profile.parameters!);
+    }
     if (!profile.resolution.supported && field.encoding !== "pixels" && tiers === undefined) {
         return projectImageParameters(
             profile,
@@ -197,8 +201,22 @@ export function resolveImageParameters(profile: ImageCapabilityConfig, definitio
     const hasQuality = applicable.some((p) => p.name === "quality");
     const parameters = applicable.map((definition) => {
         const current = configured.get(definition.name);
-        if (current) return { ...definition, enabled: current.enabled, values: current.values ?? definition.values, min: current.min ?? definition.min, max: current.max ?? definition.max, step: current.step ?? definition.step, default: current.default };
-        if (profile.parameters) return definition;
+        if (current)
+            return {
+                ...definition,
+                enabled: current.enabled,
+                values: current.values ?? definition.values,
+                min: current.min ?? definition.min,
+                max: current.max ?? definition.max,
+                step: current.step ?? definition.step,
+                default: current.default,
+            };
+        if (profile.parameters) {
+            if (definition.name === "imageResolution" && !definition.values?.length && profile.resolution.supported) {
+                return { ...definition, values: profile.resolution.values, default: profile.resolution.default };
+            }
+            return definition;
+        }
         let enabled = definition.enabled !== false;
         let values: string[] | undefined;
         let initial: ImageParameterValue | undefined = definition.default;
@@ -254,6 +272,6 @@ export function imageParametersForSpec(spec: CapabilitySpec): ImageParameter[] {
         const constraint = spec.options?.[p.name];
         if (!constraint) return { ...p, enabled: false };
         const values = constraint.values?.filter((v): v is ImageParameterValue => v !== "*" && (typeof v === "string" || typeof v === "number" || typeof v === "boolean"));
-        return { ...p, enabled: true, ...(values?.length ? { values } : {}), min: constraint.min ?? p.min, max: constraint.max ?? p.max, step: constraint.step ?? p.step };
+        return { ...p, enabled: true, ...(constraint.values?.includes("*") ? { values: [] } : values?.length ? { values } : {}), min: constraint.min ?? p.min, max: constraint.max ?? p.max, step: constraint.step ?? p.step };
     });
 }

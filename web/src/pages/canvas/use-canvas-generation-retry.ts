@@ -25,6 +25,7 @@ import {
     generationWorkflowMetadata,
     isGenerationCanceled,
     canvasImageReferenceLimitError,
+    resetGenerationTaskMetadata,
     resolveMetadataReferences,
     resolveStoredReferenceImages,
     runBackendCanvasGenerationTask,
@@ -355,7 +356,8 @@ export function useCanvasGenerationRetry({
                     : undefined;
 
             setRunningNodeId(node.id);
-            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : item)));
+            // 新尝试必须清掉上一次的任务字段，否则卡片会沿用旧 taskCreatedAt 继续计时。
+            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...resetGenerationTaskMetadata(item.metadata, NODE_STATUS_LOADING), taskCreatedAt: new Date().toISOString(), errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined } } : item)));
             const controller = startGenerationRequest(node.id, sourceNode.id, node.id);
             const retryContext = node.metadata?.taskId ? await createGenerationRetryContext(node.metadata.taskId, node.metadata.attemptGroupId) : {};
             const runAndConsumeRetry = async (input: Parameters<typeof runBackendCanvasGenerationTask>[0]) => {

@@ -1,6 +1,6 @@
 ---
 id: cloud-agent-operations
-version: 7
+version: 8
 ---
 
 # Agent 操作合同
@@ -61,15 +61,16 @@ version: 7
 
 ## 执行顺序
 
-1. 先调用 `canvas_get_state`，获取真实节点、连线、内容和 `snapshotHash`。
-2. 用通用画布工具创建节点前调用 `canvas_list_node_types`，只使用返回的类型、字段和连接能力；媒体生成由 `generate_media` 完成草稿和连线。
-3. 修改分镜或批量计划前，分别调用 `canvas_read_storyboard` 或 `canvas_read_batch_table`，使用返回的真实 `rowId` 和 `snapshotHash`。
-4. 需要生成媒体时，先调用 `model_list`，传入实际的 `mode` 和 `referenceNodeIds`；只使用返回的完整模型选择结果。
-5. 仅准备或修改节点时使用 `canvas_apply_ops`，该工具不提交生成；用户要求直接生成媒体时使用 `generate_media`，不先拆成多次建节点和连线调用。
-6. 分镜使用 `canvas_create_storyboard` 创建，使用 `canvas_edit_storyboard` 局部修改。
-7. 获得明确的对象、数量、模型、规格和费用授权后，才调用 `generate_media`。
-8. 生成后使用 `task_get` 查询真实任务状态；确认任务和资源成功后，才能报告完成。
-9. 只有用户要求整理，或明确存在重叠风险时，才调用 `canvas_arrange_nodes`；整理后重新读取画布状态。
+1. 本轮已启用技能时，先用任务对照技能名称与描述；匹配某技能的适用范围或触发词就调用 `skill_search` 检索，再按返回 path `skill_read_file` 读取，带着该技能的工作法进入后续步骤。
+2. 先调用 `canvas_get_state`，获取真实节点、连线、内容和 `snapshotHash`。
+3. 用通用画布工具创建节点前调用 `canvas_list_node_types`，只使用返回的类型、字段和连接能力；媒体生成由 `generate_media` 完成草稿和连线。
+4. 修改分镜或批量计划前，分别调用 `canvas_read_storyboard` 或 `canvas_read_batch_table`，使用返回的真实 `rowId` 和 `snapshotHash`。
+5. 需要生成媒体时，先调用 `model_list`，传入实际的 `mode` 和 `referenceNodeIds`；只使用返回的完整模型选择结果。
+6. 仅准备或修改节点时使用 `canvas_apply_ops`，该工具不提交生成；用户要求直接生成媒体时使用 `generate_media`，不先拆成多次建节点和连线调用。
+7. 分镜使用 `canvas_create_storyboard` 创建，使用 `canvas_edit_storyboard` 局部修改。
+8. 获得明确的对象、数量、模型、规格和费用授权后，才调用 `generate_media`。
+9. 生成后使用 `task_get` 查询真实任务状态；确认任务和资源成功后，才能报告完成。
+10. 只有用户要求整理，或明确存在重叠风险时，才调用 `canvas_arrange_nodes`；整理后重新读取画布状态。
 
 ## 关键工具约束
 
@@ -82,7 +83,7 @@ version: 7
 - `canvas_read_storyboard` 和 `canvas_read_batch_table` 返回真实行、`rowId` 及快照；分页和后续修改必须基于最近一次读取结果。
 - `model_list` 的 `mode` 必须符合当前 schema。文生媒体使用空的 `referenceNodeIds`；参考生成使用真实媒体节点 ID。没有候选模型时停止，不自行替换模型。
 - `task_get` 只查询当前用户的真实任务，不能用标题、文件名或节点状态代替。
-- `skill_search` 和 `skill_read_file` 只读取已安装技能。需要判断图片内容时使用 `canvas_inspect_image`；标题和提示词不能代替看图。`image_text_detect` 只做识别准备，不修改画布。
+- `skill_search` 和 `skill_read_file` 只读取已安装技能。任务与某个已启用技能的适用范围或触发词匹配时，先 `skill_search` 检索、再按返回 path 读取，不要凭印象复述技能内容。需要判断图片内容时使用 `canvas_inspect_image`；标题和提示词不能代替看图。`image_text_detect` 只做识别准备，不修改画布。
 
 ### 画布和结构化内容
 

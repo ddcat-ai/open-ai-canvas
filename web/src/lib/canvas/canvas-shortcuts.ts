@@ -74,6 +74,14 @@ export const CANVAS_SHORTCUTS: CanvasShortcutItem[] = [
         keywords: ["放大", "缩小", "zoom"],
     },
     {
+        id: "resize-selected-image",
+        category: "navigation",
+        title: "等比例调整选中图片大小",
+        description: "单选一张未锁定的图片，按住 Ctrl 滚动滚轮；只改变画布上的显示尺寸，原图像素不变。触控板捏合仍缩放画布",
+        keys: [["Ctrl", "滚轮"]],
+        keywords: ["图片", "节点", "大小", "比例"],
+    },
+    {
         id: "zoom-controls",
         category: "navigation",
         title: "精确调整缩放",

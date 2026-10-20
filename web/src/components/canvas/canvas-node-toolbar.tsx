@@ -4,6 +4,7 @@ import type { MenuProps } from "antd";
 import { Camera, Check, ChevronDown, ChevronRight, Ellipsis, Grid3x3, Images, Plus, SlidersHorizontal, UserRound } from "lucide-react";
 
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
+import { avoidCanvasNodePanels, canvasNodePanelBounds, canvasOverlayBounds, canvasToolbarLayoutLevel, observeCanvasOverlayBounds, subscribeCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
 import { ASSET_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
@@ -45,6 +46,9 @@ type CanvasNodeToolbarProps = {
     onEmotion: (node: CanvasNodeData) => void;
     onPortraitTexture: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
+    onCreateEditCopy?: (node: CanvasNodeData) => void;
+    onRotateImage?: (node: CanvasNodeData, direction: -1 | 0 | 1) => void;
+    rotatingImage?: boolean;
     onSplit: (node: CanvasNodeData, params: ImageSplitParams) => void;
     onUpscale: (node: CanvasNodeData) => void;
     onSuperResolve: (node: CanvasNodeData) => void;
@@ -112,6 +116,9 @@ export function CanvasNodeToolbar({
     onEmotion,
     onPortraitTexture,
     onCrop,
+    onCreateEditCopy,
+    onRotateImage,
+    rotatingImage = false,
     onSplit,
     onUpscale,
     onSuperResolve,
@@ -138,6 +145,8 @@ export function CanvasNodeToolbar({
 }: CanvasNodeToolbarProps) {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [containerWidth, setContainerWidth] = useState(1000);
+    const [layoutLevel, setLayoutLevel] = useState(0);
+    const measuredToolbarWidths = useRef<number[]>([0, 0, 0]);
     const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
     const toolbarRef = useRef<HTMLDivElement>(null);
     const { message } = App.useApp();
@@ -149,6 +158,11 @@ export function CanvasNodeToolbar({
     useEffect(() => {
         setOpenMenuId(null);
     }, [node?.id]);
+
+    useEffect(() => {
+        measuredToolbarWidths.current = [0, 0, 0];
+        setLayoutLevel(0);
+    }, [node?.id, workspaceMode]);
 
     useLayoutEffect(() => {
         const container = containerRef.current;
@@ -166,6 +180,7 @@ export function CanvasNodeToolbar({
         let liveViewport = viewport;
         let liveDragOffset: Position | null = null;
         let containerRect = container.getBoundingClientRect();
+        let availableBounds = canvasOverlayBounds(containerRect);
         let toolbarWidth = toolbarRef.current?.offsetWidth || 0;
         let toolbarHeight = toolbarRef.current?.offsetHeight || 44;
         const update = () => {
@@ -179,26 +194,11 @@ export function CanvasNodeToolbar({
             const nodeWidth = node.width * scale;
             const preferredLeft = nodeLeft + nodeWidth / 2;
             const halfToolbar = toolbarWidth / 2;
-            const canClamp = toolbarWidth > 0 && toolbarWidth <= containerRect.width - 20;
-            let left = canClamp ? Math.min(Math.max(preferredLeft, halfToolbar + 10), containerRect.width - halfToolbar - 10) : preferredLeft;
+            const preferredAnchorLeft = Math.min(Math.max(preferredLeft, availableBounds.left + halfToolbar), Math.max(availableBounds.left + halfToolbar, availableBounds.right - halfToolbar));
             const above = nodeTop - 30;
-            let top = Math.max(toolbarHeight + 8, Math.min(above, containerRect.height - 8));
-            // 交互期只走轻量定位；面板碰撞读取会在 transform 后触发 layout，
-            // 提交完成后的下一次更新再恢复精确避让。
-            if (container.dataset.canvasViewportInteracting !== "true") {
-                for (const panel of container.querySelectorAll<HTMLElement>("[data-canvas-node-panel]")) {
-                    const panelRect = panel.getBoundingClientRect();
-                    const panelLeft = panelRect.left - containerRect.left;
-                    const panelRight = panelRect.right - containerRect.left;
-                    const panelTop = panelRect.top - containerRect.top;
-                    const panelBottom = panelRect.bottom - containerRect.top;
-                    if (left + halfToolbar <= panelLeft || left - halfToolbar >= panelRight || top <= panelTop || top - toolbarHeight >= panelBottom) continue;
-                    if (panelLeft >= toolbarWidth + 18) left = panelLeft - halfToolbar - 8;
-                    else if (containerRect.width - panelRight >= toolbarWidth + 18) left = panelRight + halfToolbar + 8;
-                    else if (panelTop >= toolbarHeight + 16) top = panelTop - 8;
-                    else if (containerRect.height - panelBottom >= toolbarHeight + 16) top = panelBottom + toolbarHeight + 8;
-                }
-            }
+            const preferredAnchorTop = Math.max(availableBounds.top + toolbarHeight, Math.min(above, availableBounds.bottom));
+            // 面板在定位时发布矩形；这里不读取 DOM，可在实时平移和尺寸收敛后继续避让。
+            const { left, top } = avoidCanvasNodePanels({ left: preferredAnchorLeft, top: preferredAnchorTop }, { width: toolbarWidth, height: toolbarHeight }, availableBounds, canvasNodePanelBounds(container));
             if (toolbarRef.current) {
                 toolbarRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`;
                 return;
@@ -218,7 +218,13 @@ export function CanvasNodeToolbar({
             containerRect = container.getBoundingClientRect();
             toolbarWidth = toolbarRef.current?.offsetWidth || 0;
             toolbarHeight = toolbarRef.current?.offsetHeight || 44;
-            setContainerWidth(containerRect.width);
+            const availableWidth = Math.max(0, availableBounds.right - availableBounds.left);
+            const dock = toolbarRef.current?.firstElementChild as HTMLElement | null;
+            if (dock) {
+                measuredToolbarWidths.current[layoutLevel] = dock.scrollWidth;
+                setLayoutLevel(canvasToolbarLayoutLevel(availableWidth, measuredToolbarWidths.current, layoutLevel));
+            }
+            setContainerWidth(availableWidth);
             scheduleUpdate();
         };
         measure();
@@ -226,6 +232,8 @@ export function CanvasNodeToolbar({
         resizeObserver.observe(element);
         resizeObserver.observe(container);
         if (toolbarRef.current) resizeObserver.observe(toolbarRef.current);
+        const stopBounds = observeCanvasOverlayBounds(container, (bounds) => { availableBounds = bounds; measure(); });
+        const unsubscribePanels = subscribeCanvasNodePanelBounds(container, () => scheduleUpdate());
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, scheduleUpdate);
         const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             liveDragOffset = preview?.nodeIds.has(node.id) ? { x: preview.x, y: preview.y } : null;
@@ -235,11 +243,13 @@ export function CanvasNodeToolbar({
         return () => {
             disposed = true;
             resizeObserver.disconnect();
+            stopBounds();
+            unsubscribePanels();
             unsubscribeViewport();
             unsubscribeDrag();
             window.removeEventListener("resize", measure);
         };
-    }, [anchor === null, containerRef, node, viewport.k, viewport.x, viewport.y]);
+    }, [anchor === null, containerRef, layoutLevel, node, viewport.k, viewport.x, viewport.y]);
 
     if (!node || !anchor) return null;
 
@@ -262,6 +272,7 @@ export function CanvasNodeToolbar({
         onNodeInfo: onInfo, onNodeDelete: onDelete, onNodeRetry: onRetry, onNodeEditText: onEditText, onNodeDecreaseFont: onDecreaseFont, onNodeIncreaseFont: onIncreaseFont,
         onNodeToggleDialog: onToggleDialog, onNodeAnnotate: onAnnotate, onNodeGenerateImage: onGenerateImage, onNodeUpload: onUpload, onNodeDownload: onDownload,
         onNodeSaveAsset: onSaveAsset, onNodeMaskEdit: onMaskEdit, onNodeRemoveBackground: onRemoveBackground, onNodeEmotion: onEmotion, onNodePortraitTexture: onPortraitTexture, onNodeCrop: onCrop,
+        onNodeCreateEditCopy: onCreateEditCopy, onNodeRotateImage: onRotateImage,
         onNodeSplit: (target) => onSplit(target, { rows: 2, columns: 2 }), onNodeUpscale: onUpscale, onNodeSuperResolve: onSuperResolve, onNodeAngle: onAngle, onNodeViewImage: onViewImage,
         onNodeExtractVideoFrames: onExtractVideoFrames, onNodeExtractAudioFromVideo: onExtractAudioFromVideo, onNodeTrimVideoSegments: onTrimVideoSegments, onNodeReversePrompt: onReversePrompt, onNodeToggleFreeResize: onToggleFreeResize,
         onNodeSubtitles: onSubtitles, onNodeTimeline: onTimeline, onNodeToggleLocked: onToggleLocked, onNodeCopyPrompt: copyImagePrompt,
@@ -281,6 +292,7 @@ export function CanvasNodeToolbar({
         extractingVideoFrames,
         extractingAudio,
         trimmingVideo,
+        rotatingImage,
         mergingVideos: false,
         addPanelOpen: false,
         appearancePanelOpen: false,
@@ -309,19 +321,19 @@ export function CanvasNodeToolbar({
     const allTools: ToolbarTool[] = hasImage && !simpleMode
         ? [...registryToolbarTools, ...imageTools]
         : registryToolbarTools;
-    const compact = containerWidth < 640;
-    const narrow = containerWidth < 420;
+    const compact = layoutLevel >= 1;
+    const narrow = layoutLevel >= 2;
     const inGroup = (group: NodeToolbarGroup) => allTools.filter((tool) => tool.group === group).sort(compareToolbarTools);
     const primary = inGroup("primary");
-    const primaryTools = narrow ? primary.slice(0, 1) : primary;
+    const primaryTools = narrow ? primary.filter((tool, index) => index === 0 || tool.id === "rotateClockwise" || tool.id === "rotateCounterclockwise") : primary;
     const portraitTools = compact ? [] : inGroup("portrait");
     const viewpointLightingTools = compact ? [] : [...inGroup("viewpoint"), ...inGroup("lighting")];
     const panoramaTools = compact ? [] : inGroup("panorama");
     const processTools = compact ? [...inGroup("portrait"), ...inGroup("viewpoint"), ...inGroup("lighting"), ...inGroup("panorama"), ...inGroup("process")] : inGroup("process");
     const nineGridTools = compact ? [] : inGroup("nine_grid");
     const workspaceTools = narrow ? [] : inGroup("workspace");
-    const utilityTools = inGroup("utility");
-    const moreTools = [...(narrow ? [...primary.slice(1), ...inGroup("workspace")] : []), ...inGroup("more")];
+    const utilityTools = narrow ? [] : inGroup("utility");
+    const moreTools = [...(narrow ? [...primary.filter(tool => !primaryTools.includes(tool)), ...inGroup("workspace"), ...inGroup("utility")] : []), ...inGroup("more")];
     const processMenuLabel = compact ? "工具" : isVideo ? "提取素材" : isImage ? "图片工具" : isAudio ? "音频处理" : "文本调整";
     const handleMenuOpenChange = (menuId: string, open: boolean) => {
         setOpenMenuId((current) => open ? menuId : current === menuId ? null : current);
@@ -334,7 +346,7 @@ export function CanvasNodeToolbar({
         <div
             ref={toolbarRef}
             className="canvas-node-toolbar absolute z-[var(--z-node-toolbar)] -translate-x-1/2 -translate-y-full"
-            style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: "calc(100% - 20px)", color: theme.node.text }}
+            style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: containerWidth, color: theme.node.text }}
             onMouseEnter={() => onKeep(node.id)}
             onMouseLeave={() => { if (!openMenuId) onLeave(); }}
             onMouseDown={(event) => event.stopPropagation()}
@@ -350,7 +362,7 @@ export function CanvasNodeToolbar({
                 className="flex h-11 max-w-full items-center gap-0.5 overflow-visible rounded-[var(--dock-radius-tight)] px-2 backdrop-blur-2xl"
                 style={{ ...dockStyle, border: 0 }}
             >
-                {primaryTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} />)}
+                {primaryTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} iconOnly={narrow} />)}
                 {nineGridTools.length ? <NodeDockMenuButton menuId="nine-grid" label="九宫格" icon={<Grid3x3 className="size-3.5" />} tools={nineGridTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} /> : null}
                 {panoramaTools.map((tool) => <NodeDockToolButton key={tool.id} tool={tool} />)}
                 {portraitTools.length ? <NodeDockMenuButton menuId="portrait" label="人像调整" icon={<UserRound className="size-3.5" />} tools={portraitTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} /> : null}
@@ -394,6 +406,7 @@ function compareToolbarTools(left: ToolbarTool, right: ToolbarTool) {
 function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChange, placement = "top", iconOnly = false, split }: { menuId: string; label: string; icon: ReactNode; tools: ToolbarTool[]; openMenuId: string | null; onOpenChange: (menuId: string, open: boolean) => void; placement?: "top" | "topRight"; iconOnly?: boolean; split?: { node: CanvasNodeData; onSplit: (node: CanvasNodeData, params: ImageSplitParams) => void } }) {
     const open = openMenuId === menuId;
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
     const [splitPanelOpen, setSplitPanelOpen] = useState(false);
     useEffect(() => {
         if (!open) {
@@ -403,6 +416,44 @@ function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChan
         const frame = requestAnimationFrame(() => triggerRef.current?.focus());
         return () => cancelAnimationFrame(frame);
     }, [open]);
+    useLayoutEffect(() => {
+        if (!open || !splitPanelOpen) return;
+        const menu = menuRef.current;
+        const picker = menu?.querySelector<HTMLElement>(".canvas-grid-split-picker");
+        if (!menu || !picker) return;
+        let frame = 0;
+        const placePicker = () => {
+            frame = 0;
+            const anchor = menu.getBoundingClientRect();
+            const width = picker.offsetWidth;
+            const height = picker.offsetHeight;
+            const gap = 4;
+            const inset = 12;
+            const preferredLeft = anchor.right + gap + width <= window.innerWidth - inset
+                ? anchor.right + gap : anchor.left - width - gap;
+            const left = Math.max(inset, Math.min(preferredLeft, window.innerWidth - width - inset));
+            const top = Math.max(inset, Math.min(anchor.top, window.innerHeight - height - inset));
+            picker.style.left = `${left - anchor.left}px`;
+            picker.style.top = `${top - anchor.top}px`;
+        };
+        const schedule = () => { if (!frame) frame = requestAnimationFrame(placePicker); };
+        const resizeObserver = new ResizeObserver(schedule);
+        resizeObserver.observe(menu);
+        resizeObserver.observe(picker);
+        const popup = menu.closest(".ant-dropdown");
+        const positionObserver = new MutationObserver(schedule);
+        if (popup) positionObserver.observe(popup, { attributes: true, attributeFilter: ["style"] });
+        window.addEventListener("resize", schedule);
+        window.addEventListener("scroll", schedule, true);
+        placePicker();
+        return () => {
+            if (frame) cancelAnimationFrame(frame);
+            resizeObserver.disconnect();
+            positionObserver.disconnect();
+            window.removeEventListener("resize", schedule);
+            window.removeEventListener("scroll", schedule, true);
+        };
+    }, [open, splitPanelOpen]);
     const keepSplitMenuOpenRef = useRef(false);
     const splitEntry = split ? tools.find((tool) => tool.id === "split") : undefined;
     const sections = new Map<string, ToolbarTool[]>();
@@ -420,12 +471,13 @@ function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChan
                 className: isSplit ? `canvas-grid-split-menu-item${splitPanelOpen ? " is-open" : ""}` : undefined,
                 label: (
                     <div
-                        className={isSplit ? "canvas-grid-split-menu-label" : undefined}
+                        className={`canvas-node-toolbar-menu-label${isSplit ? " canvas-grid-split-menu-label" : ""}`}
+                        title={tool.description ? `${tool.label}：${tool.description}` : tool.label}
                         onMouseDown={isSplit ? () => { keepSplitMenuOpenRef.current = true; } : undefined}
                     >
                         <div>
-                            <span className="inline-flex items-center gap-2">{tool.label}{tool.active ? <Check className="size-3.5" /> : null}</span>
-                            {tool.description ? <div className="text-[var(--fs-tiny)] opacity-60">{tool.description}</div> : null}
+                            <span className="canvas-node-toolbar-menu-name">{tool.label}{tool.active ? <Check className="size-3.5 shrink-0" /> : null}</span>
+                            {tool.description ? <div className="canvas-node-toolbar-menu-description">{tool.description}</div> : null}
                         </div>
                         {isSplit ? <ChevronRight className="canvas-grid-split-chevron" strokeWidth={2} /> : null}
                     </div>
@@ -451,6 +503,11 @@ function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChan
             open={open}
             trigger={["click"]}
             placement={placement}
+            autoAdjustOverflow
+            // rc-trigger preserves the placement offset while shifting. Use measured
+            // padding for the gap so either flipped placement stays inside the viewport.
+            align={{ offset: [0, 0], overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true } }}
+            styles={{ root: { paddingBlock: 12 } }}
             onOpenChange={(nextOpen) => {
                 if (!nextOpen && (keepSplitMenuOpenRef.current || document.querySelector(".canvas-node-toolbar-menu-split:hover, .canvas-grid-split-picker:hover"))) {
                     keepSplitMenuOpenRef.current = false;
@@ -463,7 +520,8 @@ function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChan
             autoFocus
             popupRender={(menu) => (
                 <div
-                    className={`canvas-node-toolbar-menu${splitEntry && split ? " canvas-node-toolbar-menu-split" : ""}`}
+                    ref={menuRef}
+                    className={`canvas-node-toolbar-menu canvas-node-toolbar-menu-actions${splitEntry && split ? " canvas-node-toolbar-menu-split" : ""}`}
                     data-canvas-no-zoom
                     data-canvas-wheel-scroll
                     onPointerDown={(event) => event.stopPropagation()}

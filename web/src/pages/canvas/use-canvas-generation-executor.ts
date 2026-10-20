@@ -7,8 +7,8 @@ import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-p
 import { buildGenerationConfig, isGenerationCanceled } from "@/lib/canvas/canvas-project-generation";
 import { canvasGenerationPromptMetadata, canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce } from "@/lib/canvas/canvas-generation-submission";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
-import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture";
-import { buildCameraPrompt } from "@/lib/canvas/camera-prompt-library";
+import { canvasGenerationInputPrompt } from "@/lib/canvas/canvas-generation-input-prompt";
+import { resolveCanvasBatchInputContext } from "@/lib/canvas/canvas-batch-input-snapshot";
 import { buildTextRewritePrompt } from "@/lib/prompts";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
@@ -19,7 +19,7 @@ import { skillRuntime } from "@/services/skill-runtime";
 import type { GenerationTask } from "@/services/api/task-center";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeType, type CanvasBatchInputSnapshot, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 import { executeImageGeneration } from "./canvas-image-generation-executor";
 import { executeAudioGeneration, executeVideoGeneration } from "./canvas-media-generation-executors";
@@ -55,6 +55,7 @@ export type CanvasNodeGenerationOptions = {
     retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
     onTaskUpdate?: (task: GenerationTask) => void;
     skipDuplicateConfirmation?: boolean;
+    inputSnapshot?: CanvasBatchInputSnapshot;
 };
 
 export function useCanvasGenerationExecutor({
@@ -137,12 +138,7 @@ export function useCanvasGenerationExecutor({
                     const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
                     const editingTextNode = mode === "text" && Boolean(sourceTextContent);
                     const markSourceStatus = !sourceNode?.metadata?.content && !editingTextNode;
-                    let generationPrompt = mode === "image" && sourceNode?.metadata?.portraitTexture ? buildPortraitTexturePrompt(prompt, sourceNode.metadata.portraitTexture) : prompt;
-                    if (mode === "image" && sourceNode?.metadata?.cameraControl?.enabled) {
-                        const cameraControl = sourceNode.metadata.cameraControl;
-                        const cameraPrompt = buildCameraPrompt({ cameraId: cameraControl.camera, lensId: cameraControl.lens, focalLengthMm: cameraControl.focalLength, apertureF: cameraControl.aperture });
-                        generationPrompt = `${generationPrompt}\n${cameraPrompt}`;
-                    }
+                    const generationPrompt = options?.inputSnapshot?.context.prompt ?? canvasGenerationInputPrompt(sourceNode, mode, prompt);
                     const isPreparingEmptyImage = mode === "image" && sourceNode?.type === CanvasNodeType.Image && !sourceNode.metadata?.content;
                     const preparationController = startGenerationRequest(nodeId, nodeId, nodeId, options?.controller);
                     setRunningNodeId(nodeId);
@@ -176,14 +172,14 @@ export function useCanvasGenerationExecutor({
                     // 普通视频协议只保留输入框文本（显式 @文本 引用仍会展开为真实内容）；声明式工作流还要保留连接媒体。
                     const promptOnly = mode === "video" && !usesWorkflowProvider;
                     try {
-                        const baseContext = buildNodeGenerationContext(
+                        const baseContext = resolveCanvasBatchInputContext(options?.inputSnapshot, () => buildNodeGenerationContext(
                             nodeId,
                             nodesRef.current,
                             connectionsRef.current,
                             editingTextNode ? buildTextRewritePrompt(sourceTextContent, prompt) : generationPrompt,
                             assets,
                             promptOnly,
-                        );
+                        ));
                         const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig, true);
                         generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements);
                         const compatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, requirements);
