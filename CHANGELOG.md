@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v1.6.8.12-topapis-r2
+
+- 登录页第三方登录（Google / Linux.do）增加服务协议确认：未同意协议时先弹出协议弹窗，勾选同意后携带 acceptedTerms 继续登录，修复新用户第三方注册被「请先同意服务协议」拦截的问题。
+
 ## v1.6.8.12-topapis-r1
 
 - 新增微信服务号「关注即登录」：临时带参二维码、access_token 进程内串行缓存、subscribe/SCAN 事件回调、扫码确认后建会话。

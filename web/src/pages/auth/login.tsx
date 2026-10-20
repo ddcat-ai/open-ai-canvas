@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState, type ReactNode } from "react";
-import { App, Button, Divider, Input, Modal, Segmented } from "antd";
+import { App, Button, Checkbox, Divider, Input, Modal, Segmented } from "antd";
 import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -24,6 +24,13 @@ export default function LoginPage() {
     const [methods, setMethods] = useState<VerificationMethod[]>([]);
     const [method, setMethod] = useState<"password" | VerificationMethod>("password");
     const [verification, setVerification] = useState({ ...emptyVerification });
+    // 第三方登录走「新用户注册」路径时后端要求已同意服务协议，
+    // 与注册页保持一致：未勾选时先弹协议，勾选后携带 acceptedTerms 跳转。
+    const [agreementAccepted, setAgreementAccepted] = useState(false);
+    const [agreementOpen, setAgreementOpen] = useState(false);
+    const [agreementTitle, setAgreementTitle] = useState("服务协议");
+    const [agreementContent, setAgreementContent] = useState("");
+    const [pendingProvider, setPendingProvider] = useState<"google" | "linuxdo" | null>(null);
     const next = safeNext(params.get("next"));
     const forgotPasswordURL = `/forgot-password?next=${encodeURIComponent(next)}`;
     const user = useUserStore((state) => state.user);
@@ -43,6 +50,10 @@ export default function LoginPage() {
                 setWechatEnabled(settings.wechatEnabled);
                 setGoogleEnabled(settings.googleEnabled);
                 setMethods(verificationMethods(settings, "login"));
+                if ((settings.agreementTitle ?? "").trim()) {
+                    setAgreementTitle((settings.agreementTitle ?? "").trim().replace(/^《|》$/g, ""));
+                }
+                setAgreementContent((settings.agreementContent || "").trim());
             })
             .catch((error) => {
                 // 这是登录页的展示配置读取：失败时明确隐藏第三方入口，
@@ -114,7 +125,19 @@ export default function LoginPage() {
                 </Divider>
             ) : null}
             {googleEnabled ? (
-                <Button size="large" block icon={<GoogleIcon />} href={googleLoginURL(next)}>
+                <Button
+                    size="large"
+                    block
+                    icon={<GoogleIcon />}
+                    onClick={() => {
+                        if (agreementAccepted) {
+                            window.location.href = googleLoginURL(next, true);
+                            return;
+                        }
+                        setPendingProvider("google");
+                        setAgreementOpen(true);
+                    }}
+                >
                     使用 Google 登录
                 </Button>
             ) : null}
@@ -124,7 +147,19 @@ export default function LoginPage() {
                 </Button>
             ) : null}
             {linuxdoEnabled ? (
-                <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
+                <Button
+                    size="large"
+                    block
+                    icon={<LinuxDOIcon />}
+                    onClick={() => {
+                        if (agreementAccepted) {
+                            window.location.href = linuxDOLoginURL(next, true);
+                            return;
+                        }
+                        setPendingProvider("linuxdo");
+                        setAgreementOpen(true);
+                    }}
+                >
                     使用 Linux.do 登录
                 </Button>
             ) : null}
@@ -147,6 +182,50 @@ export default function LoginPage() {
                     }}
                 />
             ) : null}
+        </Modal>
+        <Modal
+            className="workspace-modal workspace-modal-compact auth-agreement-modal"
+            title={agreementTitle}
+            open={agreementOpen}
+            onCancel={() => setAgreementOpen(false)}
+            footer={
+                <div className="flex items-center justify-between gap-3">
+                    <Checkbox
+                        checked={agreementAccepted}
+                        onChange={(event) => setAgreementAccepted(event.target.checked)}
+                    >
+                        <span className="auth-agreement-label">我已阅读并同意</span>
+                    </Checkbox>
+                    <Button
+                        type="primary"
+                        disabled={!agreementAccepted}
+                        onClick={() => {
+                            setAgreementOpen(false);
+                            if (pendingProvider === "google") {
+                                window.location.href = googleLoginURL(next, true);
+                            } else if (pendingProvider === "linuxdo") {
+                                window.location.href = linuxDOLoginURL(next, true);
+                            }
+                            setPendingProvider(null);
+                        }}
+                    >
+                        同意并继续
+                    </Button>
+                </div>
+            }
+            destroyOnHidden
+        >
+            {agreementContent ? (
+                agreementContent.split(/\n\s*\n/).map((paragraph, index) => (
+                    <p key={index} className="auth-agreement-paragraph whitespace-pre-wrap text-sm leading-6">
+                        {paragraph}
+                    </p>
+                ))
+            ) : (
+                <p className="text-sm leading-6 text-muted-foreground">
+                    管理员尚未配置协议内容。勾选同意后即可继续使用第三方账号登录。
+                </p>
+            )}
         </Modal>
         </>
     );
