@@ -225,7 +225,7 @@ func applyCloudAgentCanvasPlan(doc map[string]any, ops []agentCanvasOp) ([]cloud
 				return nil, &cloudAgentArgumentError{BadAuthRequest("更新节点必须提供 patch")}
 			}
 			if index < 0 {
-				return nil, BadAuthRequest("只能更新现有且受 Agent 支持的节点")
+				return nil, cloudAgentFieldError(fmt.Sprintf("ops[%d].id", opIndex), "not_found", "目标节点不在当前画布；请重新读取画布，并使用真实节点 ID 或改用 add_node 新建节点")
 			}
 			capability, ok := cloudAgentNodeCapabilityForNode(nodes[index])
 			if !ok || !capability.CanUpdate {
