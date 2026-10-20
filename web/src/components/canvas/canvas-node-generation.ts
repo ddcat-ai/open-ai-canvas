@@ -456,12 +456,15 @@ export async function hydrateNodeGenerationContext(
     materializeStoredMedia = true,
 ) {
     const { imageToDataUrl } = await import("@/services/image-storage");
+    const hydrateImageReference = async (image: ReferenceImage): Promise<ReferenceImage> => {
+        if ((mode === "image" || !materializeStoredMedia) && resourceIdFromStorageKey(image.storageKey)) return { ...image, dataUrl: "" };
+        return { ...image, dataUrl: await imageToDataUrl(image) };
+    };
     let referenceImages = await Promise.all(
         context.referenceImages.map(async (image) => {
             if (image.source?.kind === "drawing") return resolveCanvasDrawingReference(projectId, image);
             if (image.source?.kind === "colorgrade") return resolveCanvasColorGradeReference(image);
-            if (!materializeStoredMedia && resourceIdFromStorageKey(image.storageKey)) return image;
-            return { ...image, dataUrl: await imageToDataUrl(image) };
+            return hydrateImageReference(image);
         }),
     );
     if (!context.characterReferences.length) return { ...context, referenceImages };
@@ -495,9 +498,7 @@ export async function hydrateNodeGenerationContext(
         dataUrl: "",
         storageKey: resourceStorageKey(entry.representation.resourceId),
     } satisfies ReferenceImage));
-    const hydratedCharacterImages = materializeStoredMedia
-        ? await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })))
-        : characterImages;
+    const hydratedCharacterImages = await Promise.all(characterImages.map(hydrateImageReference));
     const primaryByNodeId = new Map<string, ReferenceImage>();
     selectedEntries.forEach((entry, index) => {
         const image = hydratedCharacterImages[index];

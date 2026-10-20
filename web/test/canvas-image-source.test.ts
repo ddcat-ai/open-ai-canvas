@@ -60,6 +60,9 @@ describe("上传图片是输入素材", () => {
         const dialog = read("components/canvas/canvas-node-mask-edit-dialog.tsx");
         expect(dialog).toContain("ModelPicker");
         expect(dialog).toContain("ImageSettingsPanel");
+        expect(dialog).toContain("useImageToolSource(dataUrl, { storageKey, readPixels: false })");
+        expect(dialog).toContain("src={resolvedSource}");
+        expect(read("pages/canvas/canvas-project-media-dialogs.tsx")).toContain("storageKey={maskEditNode.metadata?.storageKey}");
     });
 });
 

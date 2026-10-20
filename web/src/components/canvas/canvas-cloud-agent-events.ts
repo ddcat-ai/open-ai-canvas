@@ -12,7 +12,7 @@ import { agentToolRetry, mergeAgentToolRetry } from "@/lib/canvas/agent-tool-ret
 import { agentErrorPresentation } from "@/lib/canvas/agent-error-presentation";
 
 /** 待用户处理的 Agent 审批（面板状态与事件归约共用）。 */
-export type ApprovalState = { approvalId: string; detail: Record<string, unknown>; reason: string };
+export type ApprovalState = { approvalId: string; detail: Record<string, unknown>; reason: string; submissionError?: string };
 
 export function positiveNumber(value: string) {
     const number = Number(value);
@@ -74,7 +74,12 @@ export function applyAgentEvent(
             setMessages((current) => upsertRunFailure(current, event, String(payload.failureMessage || "")));
         }
         if (snapshotApproval && !snapshotApproval.decision && snapshotApproval.approvalId) {
-            setApproval((current) => ({ approvalId: snapshotApproval.approvalId, detail: snapshotApproval, reason: current?.approvalId === snapshotApproval.approvalId ? current.reason : snapshotApproval.reason || "" }));
+            setApproval((current) => ({
+                approvalId: snapshotApproval.approvalId,
+                detail: snapshotApproval,
+                reason: current?.approvalId === snapshotApproval.approvalId ? current.reason : snapshotApproval.reason || "",
+                submissionError: current?.approvalId === snapshotApproval.approvalId ? current.submissionError : undefined,
+            }));
         } else {
             setApproval(null);
         }
@@ -265,7 +270,7 @@ export function applyAgentEvent(
     }
     if (event.type === "approval_requested") {
         const approvalId = String(payload.approvalId || "");
-        setApproval((current) => ({ approvalId, detail: payload, reason: current?.approvalId === approvalId ? current.reason : "" }));
+        setApproval((current) => ({ approvalId, detail: payload, reason: current?.approvalId === approvalId ? current.reason : "", submissionError: current?.approvalId === approvalId ? current.submissionError : undefined }));
         return;
     }
     if (event.type === "canvas_updated" && Array.isArray(payload.actions)) {

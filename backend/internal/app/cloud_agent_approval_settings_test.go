@@ -36,7 +36,7 @@ func TestCloudAgentMediaReadHashSurvivesMoveBeforeDraft(t *testing.T) {
 }
 
 func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T) {
-	for _, change := range []string{"move", "presentation", "prompt", "resource", "connection", "locked", "task", "unknown_metadata"} {
+	for _, change := range []string{"move", "presentation", "connection_order", "prompt", "resource", "connection", "locked", "task", "unknown_metadata"} {
 		t.Run(change, func(t *testing.T) {
 			s, db, a := agentMediaFixture(t)
 			run, _ := agentMediaRun(t, s, a, "request_approval")
@@ -66,6 +66,12 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 				nodes["cat"]["metadata"].(map[string]any)["storageKey"] = "resource:ref-two"
 			case "connection":
 				doc["connections"] = []any{}
+			case "connection_order":
+				edges := creationMaps(doc["connections"])
+				for left, right := 0, len(edges)-1; left < right; left, right = left+1, right-1 {
+					edges[left], edges[right] = edges[right], edges[left]
+				}
+				doc["connections"] = edges
 			case "locked":
 				nodes[a.NodeID]["metadata"].(map[string]any)["locked"] = true
 			case "task":
@@ -88,7 +94,7 @@ func TestCloudAgentMediaApprovalAllowsMovesButRejectsContentChanges(t *testing.T
 			}
 			var count int64
 			db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
-			if change != "move" && change != "presentation" {
+			if change != "move" && change != "presentation" && change != "connection_order" {
 				if count != 0 {
 					t.Fatal("content change submitted generation")
 				}
@@ -184,6 +190,22 @@ func TestCloudAgentImageApprovalEditsAreValidatedAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := state.Approval.ID
+	canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := creationDocument(canvas.PayloadJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodes, _ := creationObjects(doc["nodes"])
+	nodes[a.NodeID]["position"] = map[string]any{"x": 1800, "y": 900}
+	doc["nodes"] = append(creationMaps(doc["nodes"]), map[string]any{"id": "unrelated-text", "type": "text", "metadata": map[string]any{"content": "其他镜头的备注"}})
+	doc["chatMessages"] = []any{map[string]any{"text": "审批期间保留的聊天记录"}}
+	updated, _ := json.Marshal(doc)
+	if err := db.Model(canvas).Update("payload_json", string(updated)).Error; err != nil {
+		t.Fatal(err)
+	}
 	settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "grok-image-alternative", Size: "16:9", ImageResolution: "1k"}
 	for _, invalid := range []CloudAgentMediaSettings{
 		{ChannelID: "channel", ChannelModelKey: "missing", Size: "16:9", ImageResolution: "1k"},

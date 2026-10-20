@@ -107,6 +107,44 @@ describe("canvas character reference delivery", () => {
         expect(images).toHaveBeenCalledTimes(1);
     });
 
+    test("manual image generation submits stored references without browser image downloads", async () => {
+        const { images } = mockResources([detail("a")]);
+        images.mockRejectedValue(new TypeError("Failed to fetch"));
+        const context = contextFor([node("scene", CanvasNodeType.Image, { storageKey: "resource:scene" }), characterNode("a")], "@图片1场景中的@角色2", [], CanvasNodeType.Image);
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "image");
+        expect(images).not.toHaveBeenCalled();
+        expect(hydrated.referenceImages.map((image) => image.storageKey)).toEqual(["resource:scene", "resource:a-main"]);
+        expect(hydrated.referenceImages.every((image) => image.dataUrl === "")).toBe(true);
+        expect(hydrated.prompt).toStartWith("@图片1场景中的@图片2");
+        const channel = createModelChannel({
+            id: "image-test",
+            name: "Image",
+            baseUrl: "https://example.com",
+            apiKey: "test-key",
+            interfaceType: "openai-image",
+            models: ["image-model"],
+            modelCosts: [{ model: "image-model", capability: "image", protocol: "openai-image", billingMode: "fixed_request", unitPriceMicrocredits: 1 }],
+        });
+        const input = await prepareBackendGenerationTask({
+            mode: "image",
+            prompt: hydrated.prompt,
+            config: { ...defaultConfig, channels: [channel], model: encodeChannelModel(channel.id, "image-model") },
+            referenceImages: hydrated.referenceImages,
+        });
+        expect(input.input.referenceImages.map((image) => image.storageKey)).toEqual(["resource:scene", "resource:a-main"]);
+        expect(images).not.toHaveBeenCalled();
+    });
+
+    test("manual image generation still hydrates local references and checks character access", async () => {
+        const { get, images } = mockResources([detail("a")]);
+        const context = contextFor([node("local", CanvasNodeType.Image, { storageKey: "image:local" })], "@图片1", [], CanvasNodeType.Image);
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "image");
+        expect(images).toHaveBeenCalledTimes(1);
+        expect(hydrated.referenceImages[0].dataUrl).toStartWith("data:image/png;base64,");
+        get.mockRejectedValueOnce(new Error("无权读取角色"));
+        await expect(hydrateNodeGenerationContext(contextFor([characterNode("a")], "@角色1"), "canvas", undefined, "image")).rejects.toThrow("无权读取角色");
+    });
+
     test("mixed references preserve primary slots through hydration and backend task preparation", async () => {
         const a = detail("a", [
             ["primary", "a-main"],

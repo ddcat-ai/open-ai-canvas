@@ -116,10 +116,39 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 	edges := []any{}
 	for _, edge := range creationMaps(doc["connections"]) {
 		if stringValue(edge["toNodeId"]) == args.NodeID {
-			edges = append(edges, map[string]any{"fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"], "fromPort": edge["fromPort"], "toPort": edge["toPort"], "role": edge["role"]})
+			edges = append(edges, map[string]any{"fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"], "fromPort": edge["fromPort"], "toPort": edge["toPort"], "role": edge["role"], "fromHandleId": edge["fromHandleId"], "toHandleId": edge["toHandleId"], "relation": edge["relation"], "storyboardRowId": edge["storyboardRowId"]})
 		}
 	}
-	return creationHash(map[string]any{"version": 2, "target": targetInput, "bindings": bindings, "source": source, "edges": edges}), nil
+	edgeOrder := func(value any) int {
+		edge := value.(map[string]any)
+		if stringValue(edge["relation"]) == "storyboard-output" {
+			return -1
+		}
+		for index, id := range append(append([]string{}, args.ReferenceNodeIDs...), args.SourceNodeID) {
+			if stringValue(edge["fromNodeId"]) == id {
+				return index
+			}
+		}
+		return len(args.ReferenceNodeIDs) + 1
+	}
+	sort.Slice(edges, func(left, right int) bool {
+		leftOrder, rightOrder := edgeOrder(edges[left]), edgeOrder(edges[right])
+		if leftOrder != rightOrder {
+			return leftOrder < rightOrder
+		}
+		return creationHash(edges[left]) < creationHash(edges[right])
+	})
+	var storyboardInput any
+	if args.Mode == "image" {
+		script, row, err := cloudAgentStoryboardImageSource(doc, args.NodeID)
+		if err != nil {
+			return "", err
+		}
+		if row != nil {
+			storyboardInput = map[string]any{"nodeId": script["id"], "row": row}
+		}
+	}
+	return creationHash(map[string]any{"version": 3, "target": targetInput, "bindings": bindings, "source": source, "edges": edges, "storyboard": storyboardInput}), nil
 }
 
 func cloudAgentResourceSignature(resource *model.Resource) string {

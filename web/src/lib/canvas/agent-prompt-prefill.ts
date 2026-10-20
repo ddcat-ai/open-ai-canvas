@@ -6,3 +6,15 @@ export function appendAgentPromptPrefill(current: string, prefill: string) {
     const separator = current.endsWith(" ") ? "" : " ";
     return `${current}${separator}${prefill.trim()}`;
 }
+
+export function appendAgentPromptMentions(current: string, incoming: string): string {
+    const existing = new Set(current.match(/@\[[^\]]+\]/g) ?? []);
+    const additions = (incoming.match(/@\[[^\]]+\]/g) ?? []).filter((token) => {
+        if (existing.has(token)) return false;
+        existing.add(token);
+        return true;
+    });
+    if (!additions.length) return current;
+    const separator = current && !/\s$/.test(current) ? " " : "";
+    return `${current}${separator}${additions.join(" ")} `;
+}

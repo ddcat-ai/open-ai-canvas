@@ -463,6 +463,16 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 
 常量：后端标准原因定义在 `backend/internal/kernel/error_codes.go`，由 `app` 和 `service` 兼容导出；前端业务模块按 `ApiError.reason` 分支。
 
+## GitHub 技能安装与同步
+
+登录后可通过 `POST /api/skills/install/github` 安装公开仓库中的技能，通过 `POST /api/skills/:id/sync` 同步自己创建的 GitHub 技能。
+
+后端将分支、标签或提交引用解析为完整提交 SHA，再下载该提交的 ZIP 并读取指定子目录。提交解析只请求 GitHub 的 `application/vnd.github.sha` 响应，不下载文件 diff；因此提交详情大小不影响安装。返回值必须是有效的 40 位十六进制 SHA，技能 ZIP 仍限制为 20MB。
+
+仓库信息与提交查询各限时 30 秒；ZIP 下载独立限时 2 分钟，整个读取流程最多 3 分钟，避免慢速传输占用小型元信息请求的超时预算。ZIP 读取仍受大小限制与调用方取消信号约束。
+
+GitHub 请求或提交解析失败返回 502；这表示上游技能读取失败，不代表整个后端服务离线。ZIP 超限或技能包格式不合法仍返回参数校验错误，不会写入不完整的技能版本。
+
 ## 技能库分类 API
 
 以下接口需要登录。技能库分类与技能广场共享分类分离：`skills.tag` 仍表示共享市场分类；用户技能库分类记录在用户自己的技能状态中，只影响该用户技能库和画布 Agent。

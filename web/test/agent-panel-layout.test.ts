@@ -54,7 +54,7 @@ describe("Agent window layout", () => {
 
 describe("Agent submission sync preflight contract", () => {
     it("scopes submit and approval saves to the active canvas before Agent POST", () => {
-        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8");
+        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8").replace(/\r\n/g, "\n");
         expect(source.match(/await prepareCanvasForCloudAction\(canvasId\)/g)).toHaveLength(2);
         expect(source).toContain('if (decision === "approve") {');
         expect(source).not.toContain("cloudNodeIds");
