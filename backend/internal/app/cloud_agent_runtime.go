@@ -118,12 +118,13 @@ type cloudAgentApproval struct {
 }
 
 type cloudAgentRuntime struct {
-	RetryBudgetRunID      string                                 `json:"retryBudgetRunId,omitempty"`
-	RetryReplay           []string                               `json:"retryReplay,omitempty"`
-	CreationOutputRefs    map[string]cloudAgentCreationOutputRef `json:"creationOutputRefs,omitempty"`
-	CreationPendingImages []string                               `json:"creationPendingImages,omitempty"`
-	CommerceToolsEnabled  bool                                   `json:"commerceToolsEnabled,omitempty"`
-	PiInspectedImages     map[string]cloudAgentImageInspection   `json:"piInspectedImages,omitempty"`
+	RetryBudgetRunID       string                                 `json:"retryBudgetRunId,omitempty"`
+	RetryReplay            []string                               `json:"retryReplay,omitempty"`
+	CreationOutputRefs     map[string]cloudAgentCreationOutputRef `json:"creationOutputRefs,omitempty"`
+	CreationAttachmentRefs map[string]string                      `json:"creationAttachmentRefs,omitempty"`
+	CreationPendingImages  []string                               `json:"creationPendingImages,omitempty"`
+	CommerceToolsEnabled   bool                                   `json:"commerceToolsEnabled,omitempty"`
+	PiInspectedImages      map[string]cloudAgentImageInspection   `json:"piInspectedImages,omitempty"`
 	// Server-committed model declarations prove which tools may execute or be repaired.
 	PiModelCalls                 []cloudAgentCall `json:"piModelCalls,omitempty"`
 	PiModelTaskID                string           `json:"piModelTaskId,omitempty"`

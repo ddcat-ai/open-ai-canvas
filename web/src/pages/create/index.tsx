@@ -289,7 +289,7 @@ export default function CreatePage() {
 
     const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
     const activeAgentRun = activeConversation?.agentRuns?.find((run) => run.id === activeConversation.agentRunId);
-    const agentAttachmentSelection = creationAgentAttachmentSelection(attachments, activeAgentRun?.attachments || []);
+    const agentAttachmentSelection = creationAgentAttachmentSelection(attachments);
     const agentInputError = creationAgentImageInputError(config, config.textModel, agentAttachmentSelection.imageCount);
     const agentContextView = useMemo(() => presentAgentContextUsage(activeConversation?.agentContextUsage || emptyAgentContextUsage("")), [activeConversation?.agentContextUsage]);
     const agentSettingsFingerprint = JSON.stringify({ permissionMode: agentPermissionMode, imageModel: config.imageModel, videoModel: config.videoModel, imageSelectionMode: agentImageSelectionMode, videoSelectionMode: agentVideoSelectionMode, imageParameterMode: agentImageParameterMode, videoParameterMode: agentVideoParameterMode, imageSettings: agentImageSettings, videoSettings: agentVideoSettings, budget: agentBudget });
@@ -1124,7 +1124,6 @@ export default function CreatePage() {
             const videoSelection = config.videoModel ? creationManagedModelSelection(config, config.videoModel) : undefined;
             const request = action && pending ? pending.request : buildCreationAgentRunInput({
                 conversation,
-                inheritedAttachments: snapshot?.runs.find((run) => run.id === parentRunId)?.attachments || conversation.agentRuns?.find((run) => run.id === parentRunId)?.attachments,
                 retry: action?.retry,
                 prompt: text, idempotencyKey: key, sessionId, permissionMode: agentPermissionMode,
                 textSelection: creationManagedModelSelection(config, config.textModel), imageSelection, videoSelection,

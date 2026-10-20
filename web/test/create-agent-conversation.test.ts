@@ -480,9 +480,11 @@ test("提交开始就显示用户输入和助手占位，服务端接收后替�
     const attachment = { id: "image-1", name: "参考图", type: "image/png", storageKey: "resource:image-1", previewUrl: "https://example.com/a.png", url: "https://example.com/a.png", bytes: 10 };
     const pending = (conversation as any).beginCreationAgentSubmission?.(local, { id: "submit-1", prompt: "看看参考图", createdAt: at, attachments: [attachment] });
     expect(pending?.messages).toEqual([expect.objectContaining({ role: "user", content: "看看参考图", attachments: [attachment] }), expect.objectContaining({ role: "assistant", content: "", status: "streaming" })]);
-    const incoming = conversation.projectCreationAgentConversation(session, [run("run-1", "看看参考图", "running", []) as any]);
+    const incoming = conversation.projectCreationAgentConversation(session, [
+        { ...run("run-1", "看看参考图", "running", []), attachments: [{ resourceId: "image-1", storageKey: "resource:image-1", kind: "image", role: "reference", name: "参考图", turnIndex: 1 }] } as any,
+    ]);
     const settled = (conversation as any).settleCreationAgentSubmission?.(pending, incoming, "submit-1");
-    expect(settled?.messages).toEqual([expect.objectContaining({ id: "user-run-1", role: "user", attachments: [attachment] }), expect.objectContaining({ role: "assistant", status: "streaming" })]);
+    expect(settled?.messages).toEqual([expect.objectContaining({ id: "user-run-1", role: "user", attachments: [expect.objectContaining(attachment)] }), expect.objectContaining({ role: "assistant", status: "streaming" })]);
 });
 
 test("提交失败停止占位动画，原提示词保留，重试仍只保留一组待提交消息", () => {
@@ -504,7 +506,7 @@ test("旧版按步骤存下的两个助手气泡恢复后合并，不残留旧�
 });
 
 test("服务端恢复的本轮有效附件保留稳定资源键，不从旧轮复活已清除素材", () => {
-    const first = { ...run("run-1", "看看参考图", "completed", []), attachments: [{ resourceId: "image-1", storageKey: "resource:image-1", kind: "image", role: "product", name: "水杯图" }] };
+    const first = { ...run("run-1", "看看参考图", "completed", []), attachments: [{ resourceId: "image-1", storageKey: "resource:image-1", kind: "image", role: "product", name: "水杯图", turnIndex: 1 }] };
     const second = { ...run("run-2", "不要用旧图", "completed", []), attachments: [] };
     const restored = conversation.projectCreationAgentConversation(session, [first as any, second as any]);
     expect(restored.messages.find((item) => item.id === "user-run-1")?.attachments).toEqual([expect.objectContaining({ storageKey: "resource:image-1", type: "image/*", role: "product", name: "水杯图" })]);
@@ -532,11 +534,17 @@ test("服务端接收但回执丢失后刷新，按幂等键替换乐观气泡�
     const attachment = { id: "image-1", name: "参考图", type: "image/png", storageKey: "resource:image-1", previewUrl: "https://example.com/a.png", url: "https://example.com/a.png", bytes: 10 };
     const pending = conversation.beginCreationAgentSubmission({ id: "local", title: "新创作", updatedAt: at, agentSessionId: session.id, messages: [] }, { id: "agent-submission-local", prompt: "看看参考图", createdAt: at, attachments: [attachment] });
     const keyed = { ...pending, messages: pending.messages.map((message) => ({ ...message, agentIdempotencyKey: "request-key-1" })) };
-    const remote = conversation.projectCreationAgentConversation(session, [{ ...run("run-1", "看看参考图", "completed", [event("run-1", 1, "assistant_message", { messageId: "step-1", text: "已查看图片" })]), idempotencyKey: "request-key-1" } as any]);
+    const remote = conversation.projectCreationAgentConversation(session, [
+        {
+            ...run("run-1", "看看参考图", "completed", [event("run-1", 1, "assistant_message", { messageId: "step-1", text: "已查看图片" })]),
+            idempotencyKey: "request-key-1",
+            attachments: [{ resourceId: "image-1", storageKey: "resource:image-1", kind: "image", role: "reference", name: "参考图", turnIndex: 1 }],
+        } as any,
+    ]);
     const recovered = conversation.mergeCreationConversationHistory([keyed], [remote], "local");
     expect(recovered.conversations).toHaveLength(1);
     expect(recovered.conversations[0].messages).toEqual([
-        expect.objectContaining({ id: "user-run-1", role: "user", attachments: [attachment] }),
+        expect.objectContaining({ id: "user-run-1", role: "user", attachments: [expect.objectContaining(attachment)] }),
         expect.objectContaining({ id: "run-1:assistant", role: "assistant", content: "已查看图片", status: "done" }),
     ]);
     expect((recovered as any).confirmedSubmissions).toEqual([{ conversationId: "local", key: "request-key-1" }]);
@@ -560,7 +568,9 @@ test("旧请求待确认时修改草稿重试，不覆盖已绑定幂等键的�
 });
 
 test("首个流式事件按稳定资源键保留本地视频地址、预览和尺寸", () => {
-    const remote = conversation.projectCreationAgentConversation(session, [{ ...run("run-1", "看看视频", "running", []), attachments: [{ resourceId: "video-1", storageKey: "resource:video-1", kind: "video", role: "reference", name: "视频" }] } as any]);
+    const remote = conversation.projectCreationAgentConversation(session, [
+        { ...run("run-1", "看看视频", "running", []), attachments: [{ resourceId: "video-1", storageKey: "resource:video-1", kind: "video", role: "reference", name: "视频", turnIndex: 1 }] } as any,
+    ]);
     const localVideo = { id: "upload:video-1", storageKey: "resource:video-1", type: "video/mp4", name: "视频", url: "blob:video-local", previewUrl: "blob:poster-local", bytes: 1024, width: 1920, height: 1080, durationMs: 5000 };
     const current = { ...remote, messages: remote.messages.map((message) => (message.role === "user" ? { ...message, attachments: [localVideo] } : message)) };
     const streamed = conversation.appendCreationAgentEvent(current, event("run-1", 1, "assistant_delta", { messageId: "answer", text: "我先查看视频" }));
@@ -571,7 +581,7 @@ test("首个流式事件按稳定资源键保留本地视频地址、预览和�
 
 test("只从服务端恢复的视频仍具有稳定资源播放地址", () => {
     const restored = conversation.projectCreationAgentConversation(session, [
-        { ...run("run-1", "看看视频", "completed", []), attachments: [{ resourceId: "video-1", storageKey: "resource:video-1", kind: "video", role: "reference", name: "视频" }] } as any,
+        { ...run("run-1", "看看视频", "completed", []), attachments: [{ resourceId: "video-1", storageKey: "resource:video-1", kind: "video", role: "reference", name: "视频", turnIndex: 1 }] } as any,
     ]);
     expect(restored.messages[0].attachments?.[0].url).toContain("/resources/video-1/file");
 });

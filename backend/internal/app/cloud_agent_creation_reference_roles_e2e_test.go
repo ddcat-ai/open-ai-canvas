@@ -47,6 +47,7 @@ func TestCreationCompetitorThenProductReachesOrderedImageUpstream(t *testing.T) 
 	var mu sync.Mutex
 	var textBodies []map[string]any
 	var imageBody map[string]any
+	var parentRunID string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -81,15 +82,23 @@ func TestCreationCompetitorThenProductReachesOrderedImageUpstream(t *testing.T) 
 			return
 		}
 		message := map[string]any{"content": "已收到竞品构图，等待用户发送产品图。"}
-		if step == 2 || step == 3 {
+		if step == 2 {
+			if strings.Contains(mustMarshal(body), base64.StdEncoding.EncodeToString(scenePixels)) {
+				t.Error("historical image bytes were automatically sent before explicit reading")
+			}
+			mu.Lock()
+			sourceRunID := parentRunID
+			mu.Unlock()
+			message = map[string]any{"content": "按用户要求查阅先前竞品图。", "tool_calls": []any{map[string]any{"id": "read-competitor", "type": "function", "function": map[string]any{"name": "creation_media_read", "arguments": mustMarshal(map[string]any{"runId": sourceRunID, "resourceId": "ref-one"})}}}}
+		} else if step == 3 || step == 4 {
 			candidate := plan
 			candidate.Items = append([]cloudAgentCommerceItem(nil), plan.Items...)
-			if step == 2 {
+			if step == 3 {
 				candidate.Items[0].ChineseReviewCopy = ""
 			}
 			raw, _ := json.Marshal(candidate)
 			message = map[string]any{"content": "按图片顺序规划商品替换。", "tool_calls": []any{map[string]any{"id": "plan-" + string(rune('0'+step)), "type": "function", "function": map[string]any{"name": "commerce_plan_submit", "arguments": string(raw)}}}}
-		} else if step > 3 {
+		} else if step > 4 {
 			message["content"] = "图片任务已成功，竞品场景与新产品按计划配对。"
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": message}}})
@@ -129,6 +138,9 @@ func TestCreationCompetitorThenProductReachesOrderedImageUpstream(t *testing.T) 
 		t.Fatal(err)
 	}
 	waitCloudAgentStatus(t, s, first.ID, "completed")
+	mu.Lock()
+	parentRunID = first.ID
+	mu.Unlock()
 	req.IdempotencyKey, req.Prompt = "later-product", "现在产品图已上传，把先前图1中的产品换成图2，做日本站场景图"
 	req.Attachments = []CloudAgentAttachment{{ResourceID: "ref-two", StorageKey: "resource:ref-two", Kind: "image", Role: "reference", Name: "商品"}}
 	child, err := s.CreateCloudAgentRun("user", req, first.ID)
@@ -136,8 +148,8 @@ func TestCreationCompetitorThenProductReachesOrderedImageUpstream(t *testing.T) 
 		t.Fatal(err)
 	}
 	waiting := waitCloudAgentStatus(t, s, child.ID, "waiting_approval")
-	if waiting.Approval == nil || len(waiting.Attachments) != 2 || waiting.Attachments[0].ResourceID != "ref-one" || waiting.Attachments[0].TurnIndex != 0 || waiting.Attachments[1].ResourceID != "ref-two" || waiting.Attachments[1].TurnIndex != 1 {
-		t.Fatalf("lost historical/current reference order: %+v", waiting)
+	if waiting.Approval == nil || len(waiting.Attachments) != 1 || waiting.Attachments[0].ResourceID != "ref-two" || waiting.Attachments[0].TurnIndex != 1 {
+		t.Fatalf("history was promoted into current-message attachments: %+v", waiting)
 	}
 	mu.Lock()
 	before := imageBody
@@ -163,7 +175,7 @@ func TestCreationCompetitorThenProductReachesOrderedImageUpstream(t *testing.T) 
 			t.Errorf("actual image-model prompt lost %q", want)
 		}
 	}
-	if strings.Contains(prompt, "双幅搭配") || len(textBodies) != 4 {
+	if strings.Contains(prompt, "双幅搭配") || len(textBodies) != 5 {
 		t.Fatalf("review text leaked or model steps repeated: text requests=%d", len(textBodies))
 	}
 }

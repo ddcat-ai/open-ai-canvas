@@ -17,11 +17,6 @@ func (s *Service) resolveCloudAgentCreationAttachments(userID string, req *Cloud
 	mode := req.AttachmentMode
 	if mode == "" {
 		mode = "replace"
-		if len(req.Attachments) == 0 {
-			mode = "inherit"
-		} else if len(previous) > 0 {
-			mode = "append"
-		}
 	}
 	req.Attachments = append([]CloudAgentAttachment(nil), req.Attachments...)
 	turnCounts := map[string]int{}

@@ -8,11 +8,10 @@ type InputAttachment = { name: string; type: string; storageKey?: string; role?:
 type MediaParameters = Partial<Omit<AgentMediaChoice, "selection">>;
 export const defaultCreationAgentBudget = { maxCredits: 200, maxGenerationTasks: 0, maxVideoSeconds: 30 };
 
-export function creationAgentAttachmentSelection(attachments: InputAttachment[], previous: AgentCreationAttachment[]) {
-    const existing = new Set(previous.map((item) => item.storageKey));
+export function creationAgentAttachmentSelection(attachments: InputAttachment[]) {
     return {
-        attachmentMode: !attachments.length ? ("inherit" as const) : previous.length ? ("append" as const) : ("replace" as const),
-        imageCount: previous.filter((item) => item.kind === "image").length + attachments.filter((item) => item.type.startsWith("image/") && !existing.has(item.storageKey as `resource:${string}`)).length,
+        attachmentMode: "replace" as const,
+        imageCount: attachments.filter((item) => item.type.startsWith("image/")).length,
     };
 }
 
@@ -41,7 +40,6 @@ export function creationManagedModelSelection(config: AiConfig, value: string): 
 
 export type CreationAgentRequestOptions = {
     conversation?: Pick<CreationConversation, "messages">;
-    inheritedAttachments?: AgentCreationAttachment[];
     retry?: CreateAgentRunInput["retry"];
     prompt: string;
     idempotencyKey: string;
@@ -72,18 +70,8 @@ export function buildCreationAgentRunInput(input: CreationAgentRequestOptions): 
     const budget = input.budget || defaultCreationAgentBudget;
     const context = creationAgentDirectContext(input.retry ? undefined : input.conversation);
     const selected = new Map((input.attachments || []).map((item) => [item.storageKey, item]));
-    const occupied = new Set([...selected.keys(), ...(input.attachmentMode === "replace" ? [] : (input.inheritedAttachments || []).map((item) => item.storageKey))]);
-    let appendedHistory = false;
-    if (input.attachmentMode !== "replace") {
-        for (const item of [...context.attachments].reverse()) {
-            if (occupied.has(item.storageKey) || occupied.size >= 16) continue;
-            selected.set(item.storageKey, item);
-            occupied.add(item.storageKey);
-            appendedHistory = true;
-        }
-    }
     const selectedAttachments = [...selected.values()];
-    const attachmentMode = appendedHistory ? "append" : input.attachmentMode;
+    const attachmentMode = input.attachmentMode || "replace";
     const mediaChoice = (selection: AgentModelSelection | undefined, parameters?: MediaParameters): AgentMediaChoice | undefined =>
         selection
             ? {

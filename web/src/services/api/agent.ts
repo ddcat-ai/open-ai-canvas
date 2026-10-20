@@ -18,7 +18,7 @@ export type AgentMediaSettings = {
     videoArkPrivateAssetUpload?: boolean;
 };
 export type AgentModelSelection = { logicalModelId: string; channelId?: never; channelModelKey?: never } | { logicalModelId?: never; channelId: string; channelModelKey: string };
-export type AgentCreationAttachment = { resourceId: string; storageKey: `resource:${string}`; kind: "image" | "video" | "audio"; role: "product" | "reference" | "competitor" | "style" | "source" | "person"; name: string };
+export type AgentCreationAttachment = { resourceId: string; storageKey: `resource:${string}`; kind: "image" | "video" | "audio"; role: "product" | "reference" | "competitor" | "style" | "source" | "person"; name: string; turnIndex?: number };
 export type AgentMediaChoice = { selection: AgentModelSelection; selectionMode?: "preferred" | "fixed"; parameterMode: "auto" | "manual"; size?: string; quality?: string; durationSeconds?: number; count?: number };
 export type AgentProfileScope = "user" | "project" | "canvas";
 
@@ -149,6 +149,7 @@ export type AgentCreationContextEntry = {
     mode: "image" | "video" | "text";
     content?: string;
     taskIds?: string[];
+    resourceIds?: string[];
 };
 
 export type CreateAgentRunInput = {

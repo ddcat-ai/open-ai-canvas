@@ -62,6 +62,22 @@ export function assertCreationAgentSession(session: AgentSession, runs: AgentRun
     }
 }
 
+function creationAgentUserAttachments(run: AgentRun): NonNullable<CreationMessage["attachments"]> {
+    // 授权列表还包括后台引用的历史素材；只有本轮主动上传的素材才属于用户消息。
+    return (run.attachments || [])
+        .filter((item) => (item.turnIndex || 0) > 0)
+        .map((item) => ({
+            id: `resource:${item.resourceId}`,
+            storageKey: item.storageKey,
+            name: item.name,
+            role: item.role,
+            type: `${item.kind}/*`,
+            url: resolveResourceUrl(item.storageKey),
+            previewUrl: "",
+            bytes: 0,
+        }));
+}
+
 export function projectCreationAgentConversation(session: AgentSession, unsortedRuns: AgentRun[]): CreationConversation {
     assertCreationAgentSession(session, unsortedRuns);
     const runs = [...unsortedRuns].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id));
@@ -85,20 +101,7 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
                 content: run.userPrompt,
                 createdAt: run.createdAt,
                 model: run.model,
-                ...(run.attachments?.length
-                    ? {
-                          attachments: run.attachments.map((item) => ({
-                              id: `resource:${item.resourceId}`,
-                              storageKey: item.storageKey,
-                              name: item.name,
-                              role: item.role,
-                              type: `${item.kind}/*`,
-                              url: resolveResourceUrl(item.storageKey),
-                              previewUrl: "",
-                              bytes: 0,
-                          })),
-                      }
-                    : {}),
+                attachments: creationAgentUserAttachments(run),
             });
         const replyIndex = messages.length;
         const imageBatches = new Map<string, number>();
@@ -443,6 +446,7 @@ export function failCreationAgentSubmission(conversation: CreationConversation, 
 }
 
 function prepareCachedCreationAgentConversation(conversation: CreationConversation): CreationConversation {
+    const userAttachments = new Map((conversation.agentRuns || []).map((run) => [`user-${run.id}`, creationAgentUserAttachments(run)]));
     const titles = new Map<string, string>(
         (conversation.agentRuns || []).flatMap((run) =>
             (run.events || []).flatMap((event) => {
@@ -454,6 +458,7 @@ function prepareCachedCreationAgentConversation(conversation: CreationConversati
     return {
         ...conversation,
         messages: conversation.messages.map((message) => {
+            if (message.role === "user" && userAttachments.has(message.id)) return { ...message, attachments: mergeCreationAgentAttachments(message.attachments, userAttachments.get(message.id)) };
             if (!message.agentRunId || !message.id.startsWith("task-") || (message.mode !== "image" && message.mode !== "video")) return message;
             // 场景标题来自创建事件；旧缓存可能被批次进度覆盖。失败状态等待原任务复核，不阻塞已成功素材。
             return { ...message, content: titles.get(message.id) || message.content, taskStatePending: Boolean(message.taskIds?.length && (message.status === "error" || (message.status === "pending" && message.error))) };

@@ -335,9 +335,15 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 
 首页 `mediaSettings.image/video.selectionMode` 支持 `preferred|fixed`，新请求默认 `preferred`，区分默认模型偏好和固定前台型号；旧持久运行缺少该字段时不扩大换型号授权。兼容模型切换保留参考素材与硬参数，并受已授权预算约束。明确失败且生成设置未变的 `retry` 直接恢复原提示词、参数和逐项素材，未知提交先核对原任务；重试共享原轮剩余积分，不新发整轮预算。
 
-从普通图片、视频或文本模式切回 Agent 时，可提交 `creationContext`：当前会话最近最多 20 条普通模式历史，每条含 `role`、`mode`、可选 `content` 和 `taskIds`，总计最多 12000 字符及 32 个任务。文本按低信任用户内容处理，状态及成品目录从归属校验后的任务记录读取；未完成或失败任务不提供成功成品。本轮明确带入的普通任务可由 `creation_media_read` 按任务和成品序号读取；未带入的普通任务不可读取。历史参考素材仍走 `attachments` 的受管归属和就绪校验，显式替换不会恢复旧素材。此上下文不修改当前提示词、预算和权限，不包含浏览器结果 URL 或未发送草稿。
-
-普通生成查询和重试沿用真实提交诊断：精确匹配已知“无可用兼容账号”拒绝的记录可按 `rejected_no_job` 恢复重试；普通 HTTP 503、超时或有上游受理凭证的任务仍须核对原请求，退款本身不证明可以重复提交。读取历史任务时的诊断修正不改写原始供应商尝试记录。
+- `POST /agent/sessions` 接收 `{ title?, surface? }`，返回 `data.session`；`GET /agent/sessions` 支持 `surface/status/canvasId/limit`，`limit` 为 1–100，默认 50，返回 `data.sessions`。
+- `GET /agent/sessions/:id` 返回 `session/runs/nextRunCursor`，首次最多 50 轮；`GET /agent/sessions/:id/runs?before=<runId>&limit=<n>` 分页读取更早轮次。每轮完整事件按运行详情的事件游标单独恢复。
+- `DELETE /agent/sessions/:id` 返回 `{ id, deleted: true }`；只删除当前用户的会话索引，活动或待审批轮次返回冲突，不删除历史生成素材与任务。
+- 首页请求增加 `attachments`（最多 16 项，含真实 `resourceId/storageKey/kind/role/name`）、`attachmentMode: inherit|append|replace`、`outputPreference: concise|detailed` 和图片/视频 `mediaSettings`。`attachmentMode` 默认 `replace`，只携带本条消息主动选择的附件，未上传时不自动继承；只有显式 `inherit/append` 才继承或追加。模型以受管 selection 指定，`parameterMode: auto|manual` 决定是否携带手动规格；`selectionMode: preferred|fixed`（新请求默认 preferred）区分模型偏好与固定前台型号。兼容模型切换必须保留参考素材与硬参数、满足授权预算；旧持久运行缺少该字段时不扩大换型号授权。素材的商品/竞品/风格等用途不扩大访问权限。
+- 从普通图片、视频或文本模式切回 Agent 时，可提交 `creationContext`：当前会话最近最多 20 条普通模式历史，每条含 `role`、`mode`、可选 `content`、`taskIds` 和 `resourceIds`，总计最多 12000 字符、32 个任务和 32 个历史素材 ID。文本按低信任用户内容处理，状态及成品目录从归属校验后的任务记录读取；未完成或失败任务不提供成功成品。本轮明确带入的普通任务可由 `task_get` 查询最新执行、提交结果及账务事实，由 `creation_media_read` 按任务和成品序号读取；未带入的普通任务不可读取。入场事实和实时查询都核对上游回执与已记录的明确拒绝，`unknown` 不因已退款变成允许重发。`resourceIds` 只提供归属校验后的历史元数据，不放入 `attachments`，不自动加载图片；旧素材不存在或未就绪时标为不可用，实际精读和生成引用时才强校验就绪状态。他人资源仍拒绝。此上下文不修改当前提示词、预算和权限，不包含浏览器结果 URL 或未发送草稿。
+- 普通生成查询和重试沿用真实提交诊断：精确匹配已知“无可用兼容账号”拒绝的记录可按 `rejected_no_job` 恢复重试；普通 HTTP 503、超时或有上游受理凭证的任务仍须核对原请求，退款本身不证明可以重复提交。读取历史任务时的诊断修正不改写原始供应商尝试记录。
+- 首页续轮支持 `retry: { runId, taskId? }` 或 `retry: { runId, taskIds }`，表示用户点击“重试失败项”，运行视图保留此字段。单项与非空批量字段互斥，批量最多 20 个不重复任务；服务端逐项限定同账号、同会话、同轮次的真实失败目标，恢复各自原引用并注入原要求，任一目标不满足则拒绝创建重试轮次。已有待恢复产物、成功、停止或仍在执行的任务不重复生成。前端一次提交全部待重试项，无需插入重试指令消息，保留未发送草稿。
+- 首页模型默认仅看到通用工具；通过 `load_creation_workflow` 显式选择 `commerce` 后才提供专业规则与电商工具。`creation_media_read` 默认返回生成任务 `items` 及历史上传 `references` 的元数据目录，分别用 `offset/nextOffset` 和 `beforeRunId/nextBeforeRunId` 分页，`runId` 可限定历史轮次。传 `taskId/outputIndex` 精读成品；传 `runId/resourceId` 精读同会话历史上传，普通模式历史只传本轮 `creationContext.resourceIds` 中的 `resourceId`。本轮最多精读 16 个历史资源，选择独立保存到运行状态，不写回消息 `attachments`。生成工具还须明确传 `attachmentResourceIds`，不把查看过的资源自动用于无关新创作；每次准入重新核对归属及来源，不能跨用户或会话使用。
+- 审批 `decision: refresh` 仅刷新当前方案报价及审批身份，不重新规划或生成；`approve/reject` 保留既有含义。规格或素材变化仍需重新校验，不能通过刷新绕过审批。
 
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
 

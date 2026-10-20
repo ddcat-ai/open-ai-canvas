@@ -79,12 +79,33 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 		OutputIndex int    `json:"outputIndex"`
 		RunID       string `json:"runId"`
 		Offset      int    `json:"offset"`
+		ResourceID  string `json:"resourceId"`
+		BeforeRunID string `json:"beforeRunId"`
 	}
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, cloudAgentJSONArgumentError(err)
 	}
 	if state.Request.Surface != "creation" || state.Request.SessionID == "" || args.Offset < 0 {
 		return nil, BadAuthRequest("需要当前创作会话及有效目录位置")
+	}
+	if args.ResourceID != "" {
+		if args.TaskID != "" || args.OutputIndex != 0 {
+			return nil, BadAuthRequest("精读历史上传图与任务成品不能同时指定")
+		}
+		attachment, err := cloudAgentCreationHistoricalAttachment(repo, userID, state, args.ResourceID, args.RunID)
+		if err != nil {
+			return nil, err
+		}
+		if len(state.CreationOutputRefs)+len(state.CreationAttachmentRefs) >= 16 {
+			if _, exists := state.CreationAttachmentRefs[args.ResourceID]; !exists {
+				return nil, BadAuthRequest("本轮最多精读 16 个历史素材，请缩小目标范围")
+			}
+		}
+		if state.CreationAttachmentRefs == nil {
+			state.CreationAttachmentRefs = map[string]string{}
+		}
+		state.CreationAttachmentRefs[args.ResourceID] = args.RunID
+		return map[string]any{"resourceId": attachment.ResourceID, "runId": args.RunID, "kind": attachment.Kind, "name": attachment.Name, "guidance": "已精读选定历史素材，仅作为后台上下文，不加入当前消息附件。需要引用时在生成参数 attachmentResourceIds 中明确指定，并用 references 说明用途；无关新创作不引用。"}, nil
 	}
 	if args.TaskID != "" {
 		ref := cloudAgentCreationOutputRef{TaskID: args.TaskID, OutputIndex: args.OutputIndex}
@@ -95,13 +116,17 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 		if state.CreationOutputRefs == nil {
 			state.CreationOutputRefs = map[string]cloudAgentCreationOutputRef{}
 		}
-		if len(state.CreationOutputRefs) >= 16 {
+		if len(state.CreationOutputRefs)+len(state.CreationAttachmentRefs) >= 16 {
 			if _, exists := state.CreationOutputRefs[resource.ID]; !exists {
 				return nil, BadAuthRequest("本轮最多精读 16 个成品，请缩小目标范围")
 			}
 		}
 		state.CreationOutputRefs[resource.ID] = ref
 		return map[string]any{"taskId": task.ID, "runId": task.AgentRunID, "outputIndex": args.OutputIndex, "resourceId": resource.ID, "kind": strings.SplitN(resource.MimeType, "/", 2)[0], "prompt": truncateRunes(task.Prompt, 1600), "guidance": "已选定此成品。编辑时将 resourceId 放入 attachmentResourceIds，references 说明保留与修改部分；仅查看不会自动把它作为生成参考。图片内容将按当前对话模型能力附在下一步，视频仅返回元数据。"}, nil
+	}
+	references, nextRunID, err := cloudAgentCreationHistoricalCatalogue(repo, userID, state, args.RunID, args.BeforeRunID)
+	if err != nil {
+		return nil, err
 	}
 	tasks, err := repo.CreationMediaTasks(userID, state.Request.SessionID, args.RunID, args.Offset, 21)
 	if err != nil {
@@ -122,7 +147,7 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 		_ = json.Unmarshal([]byte(task.InputJSON), &input)
 		items = append(items, map[string]any{"taskIndex": args.Offset + i + 1, "taskId": task.ID, "runId": task.AgentRunID, "kind": strings.TrimPrefix(task.Type, "canvas_"), "title": input.Metadata.Title, "prompt": truncateRunes(task.Prompt, 1200), "status": task.Status, "outputs": cloudAgentCreationTaskOutputs(task)})
 	}
-	return map[string]any{"items": items, "nextOffset": next, "guidance": "按提交顺序列出；taskIndex 是任务序号，outputIndex 是该任务内成品序号，不混为总图号。结合用户指向的轮次和实际成品顺序定位第几张；按内容查找时提示词只是索引，需精读候选图。多个合理候选先澄清。传 taskId 和 outputIndex 读取目标原图。"}, nil
+	return map[string]any{"items": items, "references": references, "nextOffset": next, "nextBeforeRunId": nextRunID, "guidance": "items 为生成任务，按提交顺序列出；taskIndex 是任务序号，outputIndex 是任务内成品序号。references 为历史上传素材，仅元数据。先按用户意图定位目标：成品传 taskId/outputIndex，历史上传传 resourceId 及目录中的 runId（普通模式历史无 runId）。ready=false 不可选；多个合理候选先澄清。任务用 offset、历史上传用 beforeRunId 分别续页；查看目录不会把素材加入本轮附件或生成参考。"}, nil
 }
 
 func cloudAgentCreationRequestWithOutputs(repo *repository.Repository, userID string, state *cloudAgentRuntime) (CloudAgentRequest, error) {
@@ -131,6 +156,21 @@ func cloudAgentCreationRequestWithOutputs(repo *repository.Repository, userID st
 	seen := map[string]bool{}
 	for _, item := range req.Attachments {
 		seen[item.ResourceID] = true
+	}
+	historyIDs := make([]string, 0, len(state.CreationAttachmentRefs))
+	for id := range state.CreationAttachmentRefs {
+		historyIDs = append(historyIDs, id)
+	}
+	sort.Strings(historyIDs)
+	for _, id := range historyIDs {
+		attachment, err := cloudAgentCreationHistoricalAttachment(repo, userID, state, id, state.CreationAttachmentRefs[id])
+		if err != nil {
+			return req, err
+		}
+		if !seen[id] {
+			req.Attachments = append(req.Attachments, attachment)
+			seen[id] = true
+		}
 	}
 	// Iterate selected reads in a deterministic order for a stable model prefix.
 	ids := make([]string, 0, len(state.CreationOutputRefs))

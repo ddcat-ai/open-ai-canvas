@@ -5,6 +5,7 @@ export function creationAgentDirectContext(conversation?: Pick<CreationConversat
     const messages = (conversation?.messages || []).filter((item) => !item.agentRunId && item.mode && item.mode !== "agent").slice(-20);
     const entries: AgentCreationContextEntry[] = [];
     const taskIds = new Set<string>();
+    const resourceIds = new Set<string>();
     let remaining = 12000;
     for (const item of [...messages].reverse()) {
         const content = item.role === "user" || (item.mode === "text" && item.status === "done") ? item.content.trim().slice(0, Math.min(2000, remaining)) : "";
@@ -14,14 +15,16 @@ export function creationAgentDirectContext(conversation?: Pick<CreationConversat
             taskIds.add(id);
             return true;
         });
-        if (content || ids.length) entries.unshift({ role: item.role, mode: item.mode as "image" | "video" | "text", ...(content ? { content } : {}), ...(ids.length ? { taskIds: ids } : {}) });
-    }
-    const references = new Map<string, NonNullable<(typeof messages)[number]["attachments"]>[number]>();
-    for (const item of [...messages].reverse()) {
-        for (const attachment of item.attachments || []) {
+        const resources = (item.attachments || []).flatMap((attachment) => {
             const key = attachment.storageKey || "";
-            if (references.size < 16 && /^resource:[\w-]+$/.test(key) && /^(image|video|audio)\//.test(attachment.type) && !references.has(key)) references.set(key, attachment);
-        }
+            if (!/^resource:[\w-]+$/.test(key) || !/^(image|video|audio)\//.test(attachment.type)) return [];
+            const id = key.slice("resource:".length);
+            if (resourceIds.has(id) || resourceIds.size >= 32) return [];
+            resourceIds.add(id);
+            return [id];
+        });
+        if (content || ids.length || resources.length)
+            entries.unshift({ role: item.role, mode: item.mode as "image" | "video" | "text", ...(content ? { content } : {}), ...(ids.length ? { taskIds: ids } : {}), ...(resources.length ? { resourceIds: resources } : {}) });
     }
-    return { entries, attachments: [...references.values()].reverse() };
+    return { entries };
 }

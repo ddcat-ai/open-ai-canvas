@@ -80,12 +80,11 @@ test("显式附件替换保留空集合，追加和继承模式独立传递", ()
     expect(request.buildCreationAgentRunInput({ ...base, attachmentMode: "inherit", attachments: [] } as any)).toMatchObject({ attachmentMode: "inherit" });
 });
 
-test("Agent 会话保留历史素材顺序，后续上传追加而非替换竞品图", () => {
-    const previous = [{ resourceId: "old", storageKey: "resource:old", kind: "image", role: "reference", name: "旧图" }];
-    expect(request.creationAgentAttachmentSelection([], previous as any)).toEqual({ attachmentMode: "inherit", imageCount: 1 });
-    expect(request.creationAgentAttachmentSelection(base.attachments, previous as any)).toEqual({ attachmentMode: "append", imageCount: 2 });
-    expect(request.creationAgentAttachmentSelection([], [])).toEqual({ attachmentMode: "inherit", imageCount: 0 });
-    expect(request.creationAgentAttachmentSelection([{ name: "同一图", type: "image/png", storageKey: "resource:old" }], previous as any)).toEqual({ attachmentMode: "append", imageCount: 1 });
+test("新一轮只提交用户主动选择的附件，空上传区不继承历史图片", () => {
+    expect(request.creationAgentAttachmentSelection([])).toEqual({ attachmentMode: "replace", imageCount: 0 });
+    expect(request.creationAgentAttachmentSelection(base.attachments)).toEqual({ attachmentMode: "replace", imageCount: 1 });
+    expect(request.buildCreationAgentRunInput({ ...base, attachments: [] })).toMatchObject({ attachmentMode: "replace", attachments: [] });
+    expect(request.buildCreationAgentRunInput(base)).toMatchObject({ attachmentMode: "replace", attachments: [{ resourceId: "r-1" }] });
 });
 
 test("非视觉模型遇到有效图片明确提示，不自动改选其他模型", () => {

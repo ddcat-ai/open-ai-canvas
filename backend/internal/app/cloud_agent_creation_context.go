@@ -9,10 +9,11 @@ import (
 )
 
 type CloudAgentCreationContextEntry struct {
-	Role    string   `json:"role"`
-	Mode    string   `json:"mode"`
-	Content string   `json:"content,omitempty"`
-	TaskIDs []string `json:"taskIds,omitempty"`
+	Role        string   `json:"role"`
+	Mode        string   `json:"mode"`
+	Content     string   `json:"content,omitempty"`
+	TaskIDs     []string `json:"taskIds,omitempty"`
+	ResourceIDs []string `json:"resourceIds,omitempty"`
 }
 
 func validateCloudAgentCreationContext(req *CloudAgentRequest) error {
@@ -22,21 +23,27 @@ func validateCloudAgentCreationContext(req *CloudAgentRequest) error {
 	if req.Surface != "creation" || len(req.CreationContext) > 20 {
 		return BadAuthRequest("普通创作上下文仅适用于首页，最多 20 条")
 	}
-	chars, tasks := 0, 0
+	chars, tasks, resources := 0, 0, 0
 	for _, entry := range req.CreationContext {
 		if (entry.Role != "user" && entry.Role != "assistant") || (entry.Mode != "image" && entry.Mode != "video" && entry.Mode != "text") || !utf8.ValidString(entry.Content) {
 			return BadAuthRequest("普通创作上下文类型无效")
 		}
 		chars += utf8.RuneCountInString(entry.Content)
 		tasks += len(entry.TaskIDs)
+		resources += len(entry.ResourceIDs)
 		for _, id := range entry.TaskIDs {
 			if err := validateCloudAgentID(id, "普通创作任务 ID", 80); err != nil {
 				return err
 			}
 		}
+		for _, id := range entry.ResourceIDs {
+			if err := validateCloudAgentID(id, "普通创作素材 ID", 80); err != nil {
+				return err
+			}
+		}
 	}
-	if chars > 12000 || tasks > 32 {
-		return BadAuthRequest("普通创作上下文超过 12000 字符或 32 个任务，请缩小范围")
+	if chars > 12000 || tasks > 32 || resources > 32 {
+		return BadAuthRequest("普通创作上下文超过 12000 字符、32 个任务或 32 个素材，请缩小范围")
 	}
 	return nil
 }
@@ -79,6 +86,7 @@ func (s *Service) cloudAgentCreationContext(userID string, req CloudAgentRequest
 	}
 	entries := make([]map[string]any, 0, len(req.CreationContext))
 	seen := map[string]bool{}
+	seenResources := map[string]bool{}
 	for _, entry := range req.CreationContext {
 		item := map[string]any{"role": entry.Role, "mode": entry.Mode}
 		if entry.Content != "" {
@@ -112,6 +120,21 @@ func (s *Service) cloudAgentCreationContext(userID string, req CloudAgentRequest
 		}
 		if len(tasks) > 0 {
 			item["tasks"] = tasks
+		}
+		var references []map[string]any
+		for _, id := range entry.ResourceIDs {
+			if seenResources[id] {
+				continue
+			}
+			seenResources[id] = true
+			fact, err := cloudAgentCreationReferenceMetadata(s.repo, userID, CloudAgentAttachment{ResourceID: id})
+			if err != nil {
+				return "", err
+			}
+			references = append(references, fact)
+		}
+		if len(references) > 0 {
+			item["references"] = references
 		}
 		entries = append(entries, item)
 	}

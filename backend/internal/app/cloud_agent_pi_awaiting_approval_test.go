@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,7 +73,12 @@ func TestCloudAgentPiSessionModelApprovalPause(t *testing.T) {
 				}
 				defer resp.Body.Close()
 				var result map[string]any
-				err = json.NewDecoder(resp.Body).Decode(&result)
+				responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+				if readErr != nil {
+					err = readErr
+				} else if err = json.Unmarshal(responseBody, &result); err != nil {
+					err = fmt.Errorf("bridge HTTP %d returned invalid JSON: %w; body=%q", resp.StatusCode, err, responseBody)
+				}
 				callback <- callbackResult{status: resp.StatusCode, paused: result["pause"] == true, err: err}
 				w.Header().Set("Content-Type", "application/x-ndjson")
 				if resp.StatusCode != 200 {

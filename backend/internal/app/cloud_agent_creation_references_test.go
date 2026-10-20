@@ -61,9 +61,9 @@ func TestCreationReferenceContinuationUsesOnlyCurrentEffectiveAttachments(t *tes
 		ids  []string
 		want []string
 	}{
-		{"continue", "", nil, []string{"ref-one"}},
+		{"continue", "", nil, []string{}},
 		{"explicit-inherit", "inherit", nil, []string{"ref-one"}},
-		{"new-upload-keeps-previous", "", []string{"ref-two"}, []string{"ref-one", "ref-two"}},
+		{"new-upload-replaces-previous", "", []string{"ref-two"}, []string{"ref-two"}},
 		{"explicit-replace", "replace", []string{"ref-two"}, []string{"ref-two"}},
 		{"explicit-append", "append", []string{"ref-two"}, []string{"ref-one", "ref-two"}},
 		{"append-deduplicates", "append", []string{"ref-one", "ref-two"}, []string{"ref-one", "ref-two"}},
@@ -101,8 +101,8 @@ func TestCreationReferenceContinuationUsesOnlyCurrentEffectiveAttachments(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := creationReferenceIDs(state.Request.Attachments); !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("next turn resurrected or lost references: got %v, want %v", got, tc.want)
+			if got := creationReferenceIDs(state.Request.Attachments); len(got) != 0 {
+				t.Fatalf("next turn automatically inherited references: %v", got)
 			}
 		})
 	}
@@ -142,7 +142,7 @@ func TestCreationReferenceContinuationRevalidatesInheritedResource(t *testing.T)
 	if err := db.Model(&model.Resource{}).Where("id = ?", "ref-one").Update("status", "uploading").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateCloudAgentRun("user", creationReferenceRequest(t, "reference-revoked-child", ""), parent.ID); err == nil {
+	if _, err := s.CreateCloudAgentRun("user", creationReferenceRequest(t, "reference-revoked-child", "inherit"), parent.ID); err == nil {
 		t.Fatal("continuation accepted a no-longer-ready inherited resource")
 	}
 }
@@ -171,9 +171,9 @@ func TestCreationNextTurnKeepsReferenceContextWithoutInheritingExecutablePlan(t 
 		ids  []string
 		keep bool
 	}{
-		{"inherit", "", nil, true},
+		{"inherit", "inherit", nil, true},
 		{"append", "append", []string{"ref-two"}, true},
-		{"default-append", "", []string{"ref-two"}, true},
+		{"default-replace", "", []string{"ref-two"}, false},
 		{"replace", "replace", []string{"ref-two"}, false},
 		{"clear", "replace", nil, false},
 	} {

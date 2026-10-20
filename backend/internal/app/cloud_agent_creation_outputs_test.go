@@ -16,12 +16,17 @@ func TestCreationSelectedOutputCommerceExecution(t *testing.T) {
 		name       string
 		permission string
 		ordinary   bool
+		historical bool
 		invalidate string
 	}{
 		{name: "agent-auto", permission: "auto"},
 		{name: "agent-approval", permission: "request_approval"},
 		{name: "ordinary-auto", permission: "auto", ordinary: true},
 		{name: "ordinary-approval", permission: "request_approval", ordinary: true},
+		{name: "historical-upload-auto", permission: "auto", historical: true},
+		{name: "historical-upload-approval", permission: "request_approval", historical: true},
+		{name: "ordinary-upload-auto", permission: "auto", ordinary: true, historical: true},
+		{name: "ordinary-upload-approval", permission: "request_approval", ordinary: true, historical: true},
 		{name: "unselected", permission: "auto", invalidate: "unselected"},
 		{name: "foreign-resource", permission: "auto", invalidate: "foreign-resource"},
 		{name: "changed-output", permission: "request_approval", invalidate: "changed-output"},
@@ -36,17 +41,29 @@ func TestCreationSelectedOutputCommerceExecution(t *testing.T) {
 			req.Attachments = []CloudAgentAttachment{{ResourceID: "ref-one", StorageKey: "resource:ref-one", Kind: "image", Role: "reference", Name: "原附件"}}
 			req.MediaSettings = &CloudAgentCreationMedia{Image: &CloudAgentCreationMediaChoice{Selection: CloudAgentMediaModelSelection{ChannelID: "channel", ChannelModelKey: "image-test"}, ParameterMode: "manual", Size: "1024x1024"}}
 			source := model.Task{ID: "selected-product", UserID: "user", Type: "canvas_image", Status: model.TaskStatusSucceeded, InputJSON: `{}`, ResultJSON: `{"images":[{"storageKey":"resource:ref-two"}]}`}
-			if scenario.ordinary {
+			parentID := ""
+			if scenario.historical {
+				if scenario.ordinary {
+					req.CreationContext = []CloudAgentCreationContextEntry{{Role: "user", Mode: "image", ResourceIDs: []string{"ref-two"}}}
+				} else {
+					parent, err := s.CreateCloudAgentRun("user", creationReferenceRequest(t, "historical-plan-parent", "", "ref-two"), "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					parentID = parent.ID
+					completeCreationReferenceRun(t, db, parentID)
+				}
+			} else if scenario.ordinary {
 				req.CreationContext = []CloudAgentCreationContextEntry{{Role: "assistant", Mode: "image", TaskIDs: []string{source.ID}}}
 				if err := db.Create(&source).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
-			root, err := s.CreateCloudAgentRun("user", req, "")
+			root, err := s.CreateCloudAgentRun("user", req, parentID)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !scenario.ordinary {
+			if !scenario.ordinary && !scenario.historical {
 				source.AgentRunID = root.ID
 				if err := db.Create(&source).Error; err != nil {
 					t.Fatal(err)
@@ -55,6 +72,9 @@ func TestCreationSelectedOutputCommerceExecution(t *testing.T) {
 			if scenario.invalidate != "unselected" {
 				read := cloudAgentCall{ID: "read-selected-product"}
 				read.Function.Name, read.Function.Arguments = "creation_media_read", `{"taskId":"selected-product","outputIndex":1}`
+				if scenario.historical {
+					read.Function.Arguments = mustMarshal(map[string]any{"runId": parentID, "resourceId": "ref-two"})
+				}
 				result, err := s.executeCloudAgentRuntimeTool(context.Background(), "user", root.ID, read)
 				if err != nil || result.(map[string]any)["isError"] == true {
 					t.Fatalf("read selected product: %+v %v", result, err)
@@ -115,6 +135,9 @@ func TestCreationSelectedOutputCommerceExecution(t *testing.T) {
 				}
 			}
 			_, state = agentInterjectionState(t, s, root.ID)
+			if scenario.historical && (len(state.Request.Attachments) != 1 || state.Request.Attachments[0].ResourceID != "ref-one") {
+				t.Fatal("commerce admission promoted historical selection into request attachments")
+			}
 			reviews := 0
 			for _, event := range state.Events {
 				if event.Type != "plan_updated" || event.Payload["plan"] == nil {

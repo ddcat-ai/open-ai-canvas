@@ -2619,7 +2619,7 @@ components:
         creationContext:
           type: array
           maxItems: 20
-          description: 仅 creation 接受当前会话普通模式历史。文本为用户提供的低信任内容，所有 content 合计最多 12000 字符，taskIds 合计最多 32 个；任务归属、状态及成品由服务端重新读取，仅允许无画布归属的普通任务。服务端事实快照最多 64KB，过长时裁剪较旧条目，每项成品目录最多 10 条。不会扩大预算或权限，不接受客户端结果 URL 和状态。
+          description: 仅 creation 接受当前会话普通模式历史。文本为低信任内容，content 合计最多 12000 字符，taskIds 和 resourceIds 分别合计最多 32 个。任务事实及历史素材元数据由服务端核对归属，历史素材不自动作为本轮附件或生成参考，需 creation_media_read 精读后按意图明确引用；不存在或未就绪的旧素材只标不可用，其他用户素材拒绝。服务端事实快照最多 64KB，过长时裁剪较旧条目，每项成品目录最多 10 条。不扩大预算或权限，不接受客户端结果 URL 和状态。
           items:
             type: object
             additionalProperties: false
@@ -2629,6 +2629,10 @@ components:
               mode: { type: string, enum: [image, video, text] }
               content: { type: string, maxLength: 12000 }
               taskIds:
+                type: array
+                maxItems: 32
+                items: { type: string, minLength: 1, maxLength: 80 }
+              resourceIds:
                 type: array
                 maxItems: 32
                 items: { type: string, minLength: 1, maxLength: 80 }
@@ -2653,7 +2657,8 @@ components:
         attachmentMode:
           type: string
           enum: [inherit, replace, append]
-          description: 仅 creation 场景可用；inherit 不能同时提交新附件
+          default: replace
+          description: 默认 replace，仅携带本条消息主动选择的附件；空数组不继承历史素材。历史素材可通过 creation_media_read 按意图查询精读。只有显式 inherit/append 才继承/追加，inherit 不接受新附件。
         outputPreference:
           type: string
           enum: [concise, detailed]

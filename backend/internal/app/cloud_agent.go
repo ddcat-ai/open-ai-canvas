@@ -692,7 +692,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if err != nil {
 			return nil, WrapAppError(409, "上一轮 Agent 历史记录不完整，无法继续对话；请新建对话", err)
 		}
-		appendAttachments := req.AttachmentMode == "append" || req.AttachmentMode == "" && len(req.Attachments) > 0
+		appendAttachments := req.AttachmentMode == "append"
 		if req.Retry == nil {
 			if err := s.resolveCloudAgentCreationAttachments(userID, &req, parentState.Request.Attachments); err != nil {
 				return nil, err

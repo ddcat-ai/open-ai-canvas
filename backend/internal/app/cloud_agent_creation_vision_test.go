@@ -97,12 +97,11 @@ func TestCreationNativePiRuntimeUsesHomepageContractAndImages(t *testing.T) {
 		t.Fatal("native snapshot persisted attachment pixels")
 	}
 
-	// The next user message carries no upload. The direct parent's effective
-	// resource must still reach the real worker as pixels, not just a filename
-	// in Pi's restored TurnContext transcript.
+	// A fresh message keeps dialogue context, but historical image pixels are
+	// only loaded after the model explicitly reads an intended source.
 	next := creationAgentRequest()
 	next.IdempotencyKey = "creation-native-reference-continuation"
-	next.Prompt = "帮我生成亚马逊美国站5张套图"
+	next.Prompt = "换个话题，帮我设计雪山风景"
 	continued, err := s.CreateCloudAgentRun("user", next, run.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -113,8 +112,11 @@ func TestCreationNativePiRuntimeUsesHomepageContractAndImages(t *testing.T) {
 	select {
 	case body := <-received:
 		encoded, _ := json.Marshal(body)
-		if !strings.Contains(string(encoded), base64.StdEncoding.EncodeToString(pixels)) || !strings.Contains(string(encoded), next.Prompt) {
-			t.Fatal("second native turn sent filename/history without current attachment pixels")
+		if strings.Contains(string(encoded), base64.StdEncoding.EncodeToString(pixels)) || len(continued.Attachments) != 0 {
+			t.Fatal("fresh native turn automatically carried historical image pixels or attachments")
+		}
+		if !strings.Contains(string(encoded), next.Prompt) || !strings.Contains(string(encoded), "已收到当前上传的商品图片") || !strings.Contains(string(encoded), "creation_media_read") {
+			t.Fatal("fresh native turn lost dialogue history or historical source lookup")
 		}
 		if stringField(body, "model") != "text-test" {
 			t.Fatal("continuation silently changed the selected dialogue model")

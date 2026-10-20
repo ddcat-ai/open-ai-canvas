@@ -28,12 +28,34 @@ test("切回 Agent 传入普通模式文本与任务身份，不信任浏览器�
     expect(input.permissionMode).toBe(base.permissionMode);
 });
 
-test("普通模式历史参考素材走受管追加校验，显式替换不恢复旧图", () => {
+test("历史素材保留在上下文，明确引用或换新主题都不自动变成本轮附件", () => {
     const conversation = { messages: [message("reference", { role: "user", content: "照着产品图生成", attachments: [{ id: "reference", name: "产品图", type: "image/png", storageKey: "resource:owned", previewUrl: "blob:local" }] as any })] };
-    const input = buildCreationAgentRunInput({ ...base, conversation, attachmentMode: "inherit" } as any);
-    expect(input.attachmentMode).toBe("append");
-    expect(input.attachments).toEqual([{ resourceId: "owned", storageKey: "resource:owned", name: "产品图", kind: "image", role: "reference" }]);
-    expect(buildCreationAgentRunInput({ ...base, conversation, attachmentMode: "replace", attachments: [] } as any).attachments).toEqual([]);
+    for (const prompt of [base.prompt, "生成一张无关的太空风景，不参考之前的图片"]) {
+        const input = buildCreationAgentRunInput({ ...base, conversation, prompt });
+        expect(input.attachmentMode).toBe("replace");
+        expect(input.attachments).toEqual([]);
+        expect(input.creationContext).toEqual([{ role: "user", mode: "image", content: "照着产品图生成", resourceIds: ["owned"] }]);
+        expect(JSON.stringify(input)).not.toContain("resource:owned");
+    }
+});
+
+test("历史素材目录只传受管媒体ID，去重并限制数量，不传图片内容或下载地址", () => {
+    const attachments = Array.from({ length: 40 }, (_, i) => ({ storageKey: `resource:history-${i}`, name: "历史图", type: "image/png", previewUrl: "https://signed.example/history", dataUrl: "data:image/png;base64,private" }));
+    const conversation = {
+        messages: [
+            message("first", { role: "user", attachments: attachments as any }),
+            message("latest", { role: "user", attachments: [attachments[39], attachments[39], { storageKey: "https://signed.example/forged", type: "image/png" }, { storageKey: "resource:document", type: "application/pdf" }] as any }),
+        ],
+    };
+    const input = buildCreationAgentRunInput({ ...base, conversation });
+    const ids = input.creationContext!.flatMap((entry) => entry.resourceIds || []);
+    expect(ids).toHaveLength(32);
+    expect(new Set(ids).size).toBe(32);
+    expect(input.creationContext!.at(-1)?.resourceIds).toEqual(["history-39"]);
+    expect(input.attachments).toEqual([]);
+    expect(JSON.stringify(input)).not.toContain("signed.example");
+    expect(JSON.stringify(input)).not.toContain("base64");
+    expect(ids).not.toContain("document");
 });
 
 test("上下文限制在最近20条和12000字符，重试不重复注入历史", () => {
@@ -45,10 +67,10 @@ test("上下文限制在最近20条和12000字符，重试不重复注入历史"
     expect((buildCreationAgentRunInput({ ...base, conversation, retry: { runId: "run-one" } } as any) as any).creationContext).toBeUndefined();
 });
 
-test("历史参考只补剩余名额，当前选择和已有Agent素材优先", () => {
+test("历史素材不占用本轮上传名额，新上传只携带用户本轮选择", () => {
     const conversation = { messages: [message("ref", { role: "user", attachments: [{ name: "旧图", type: "image/png", storageKey: "resource:old" }] as any })] };
-    const inheritedAttachments = Array.from({ length: 15 }, (_, i) => ({ storageKey: `resource:prior-${i}`, resourceId: `prior-${i}`, kind: "image", name: "已有素材", role: "reference" }));
     const attachments = [{ storageKey: "resource:new", name: "本轮新图", type: "image/png" }];
-    const input = buildCreationAgentRunInput({ ...base, conversation, attachments, inheritedAttachments, attachmentMode: "append" } as any);
+    const input = buildCreationAgentRunInput({ ...base, conversation, attachments });
+    expect(input.attachmentMode).toBe("replace");
     expect(input.attachments?.map((item) => item.resourceId)).toEqual(["new"]);
 });

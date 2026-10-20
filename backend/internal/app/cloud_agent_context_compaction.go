@@ -350,15 +350,24 @@ func cloudAgentFallbackCheckpoint(state *cloudAgentRuntime) agentcontext.Checkpo
 }
 
 // Source identities and plan content come from the durable run, never from a
-// model summary. Omitted resources are excluded, including after a clear.
+// model summary. Historical selection stays separate from message attachments.
 func cloudAgentCreationCheckpointState(state *cloudAgentRuntime) []string {
 	if state == nil || state.Request.Surface != "creation" {
 		return nil
 	}
-	entries := []string{"当前有效素材仅为以下集合；空集合表示已清除，不得从历史轮次恢复旧素材。"}
+	entries := []string{"以下为本轮请求有效输入素材，来源可能是主动上传、显式继承或失败任务重试；空集合表示本轮没有直接输入素材。其他历史素材按用户意图通过 creation_media_read 查询和精读，不自动附带，也不能引用用户已排除的素材。"}
 	for _, asset := range state.Request.Attachments {
 		entries = append(entries, fmt.Sprintf("素材 id=%s kind=%s role=%s", asset.ResourceID, asset.Kind, asset.Role))
 	}
+	historical := []string{}
+	for id, runID := range state.CreationAttachmentRefs {
+		historical = append(historical, fmt.Sprintf("已精读历史上传 id=%s runId=%s；仅明确需要时作为生成参考", id, runID))
+	}
+	for id, ref := range state.CreationOutputRefs {
+		historical = append(historical, fmt.Sprintf("已精读历史成品 id=%s taskId=%s outputIndex=%d；仅明确需要时作为生成参考", id, ref.TaskID, ref.OutputIndex))
+	}
+	sort.Strings(historical)
+	entries = append(entries, historical...)
 	if plan := state.CommercePlan; plan != nil {
 		entries = append(entries, fmt.Sprintf("当前方案 id=%s version=%d hash=%s platform=%s site=%s language=%s variants=%s", plan.PlanID, plan.Version, cloudAgentCommercePlanHash(plan), plan.Platform, plan.Site, plan.Language, strings.Join(plan.LanguageVariants, ",")))
 		entries = append(entries, "整套风格与产品外观约束："+plan.StyleBible)
