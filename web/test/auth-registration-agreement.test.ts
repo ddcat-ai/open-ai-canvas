@@ -26,7 +26,12 @@ describe("注册服务协议", () => {
         expect(page).toContain("acceptedTerms: agreementAccepted");
         expect(page).toContain("agreementAccepted ? linuxDOLoginURL(next, true) : undefined");
         expect(page).toContain("message.warning(`请先同意${agreementTitle}`)");
-        expect(login).toContain("linuxDOLoginURL(next)");
+        // 登录页第三方登录同样要求先同意协议：未勾选时弹协议弹窗，
+        // 勾选后携带 acceptedTerms=true 跳转（新用户经第三方注册时后端强校验）。
+        expect(login).toContain("agreementAccepted");
+        expect(login).toContain("googleLoginURL(next, true)");
+        expect(login).toContain("linuxDOLoginURL(next, true)");
+        expect(login).toContain("setAgreementOpen(true)");
         expect(api).toContain("acceptedTerms: boolean");
         expect(api).toContain("acceptedTerms?: boolean");
     });
