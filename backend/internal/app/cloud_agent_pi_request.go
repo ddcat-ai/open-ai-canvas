@@ -139,13 +139,21 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 	if err != nil {
 		return cloudAgentPiProcessRequest{}, err
 	}
-	request.TurnContext = cloudAgentPiTurnContextPrefix + mustMarshal(map[string]any{
+	latestResult, err := s.cloudAgentCreationVisibleResult(params.UserID, params.RuntimeState.Request)
+	if err != nil {
+		return cloudAgentPiProcessRequest{}, err
+	}
+	turnContext := map[string]any{
 		"runId": params.RunID, "plan": params.RuntimeState.Plan, "submittedTaskIds": params.RuntimeState.TaskIDs,
 		"commercePlan": params.RuntimeState.CommercePlan,
 		"attachments":  params.RuntimeState.Request.Attachments, "mediaSettings": params.RuntimeState.Request.MediaSettings,
 		"mediaModels":    mediaModels,
 		"permissionMode": params.RuntimeState.Request.PermissionMode, "budget": params.RuntimeState.Request.Budget, "handoff": contextMessages,
-	})
+	}
+	if latestResult != nil {
+		turnContext["conversationPosition"] = map[string]any{"latestVisibleResult": latestResult, "meaning": "latestVisibleResult 是用户当前页面最后一条已展示媒体结果的位置，不是默认生成参考，也不是最近一次 Agent 工具调用。指代需结合用户本轮文字和附件；明确指定旧图时仍按指定对象。查看图片须精读对应 taskId/outputIndex，不能凭旧提示词描述。"}
+	}
+	request.TurnContext = cloudAgentPiTurnContextPrefix + mustMarshal(turnContext)
 	if err := validatePiRequestBudget(request); err != nil {
 		return cloudAgentPiProcessRequest{}, err
 	}

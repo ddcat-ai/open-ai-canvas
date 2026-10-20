@@ -36,7 +36,7 @@ const submitCode = compile("    const submit = async (", "\n    useEffect(() => 
 const retryCode = compile("    const retryFailedMessage = async (", "\n    const createVariant = (");
 const call = (code: string, name: string, scope: Record<string, unknown>, args: unknown[] = []) => new Function(...Object.keys(scope), `${code}\nreturn ${name};`)(...Object.values(scope))(...args);
 
-function harness(mode: "video" | "image", behavior: "lost" | "offline" | "rejected" | "partial" = "lost") {
+function harness(mode: "video" | "image", behavior: "lost" | "offline" | "rejected" | "partial" = "lost", taskCompletion?: Promise<void>) {
     const requests: CreateTaskInput[] = [],
         queries: string[] = [],
         notices: string[] = [],
@@ -48,6 +48,8 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         busy = false,
         retrySequence = 0,
         queryError = false;
+    let submitting = new Set<string>();
+    const unconfirmed = Promise.withResolvers<void>();
     const gate = createCreationSubmitGate(),
         abortRef = { current: null },
         pendingRetryRef = { current: null },
@@ -79,6 +81,7 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         createTask: async (input) => {
             expect(persisted?.messages.at(-1)?.clientOperationId).toBeTruthy();
             expect(persisted?.messages.at(-1)?.submissionPending).toBe(true);
+            if (!requests.length) expect(submitting.has(persisted!.messages.at(-1)!.id)).toBe(true);
             requests.push(input);
             if (behavior === "rejected") throw new ApiError("余额不足", { status: 400 });
             if (behavior === "offline" && requests.length === 1) throw new ApiError("offline", { retryable: true });
@@ -100,6 +103,7 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
             throw new ApiError("Bad Gateway", { status: 502 });
         },
         waitTask: async (id, options) => {
+            await taskCompletion;
             const task = [...accepted.values()].find((task) => task.id === id)!;
             options?.onTaskUpdate?.(task);
             return task;
@@ -145,6 +149,16 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         busy,
         activeConversation: conversation,
         creationHasInput,
+        conversationsRef: {
+            get current() {
+                return [conversation];
+            },
+        },
+        syncConversationHistory: async (current: CreationConversation) => {
+            persisted = structuredClone(current);
+            return current.agentSessionId || current.id;
+        },
+        conversationRoute: { show: () => {} },
         submitGateRef: { current: gate },
         retryPreparingRef,
         createCreationSubmitGateRelease,
@@ -205,6 +219,11 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         },
         setAttachments: () => {},
         setDraftReferences: () => {},
+        setSubmittingMessageIds: (update: (ids: Set<string>) => Set<string>) => {
+            const wasSubmitting = submitting.size > 0;
+            submitting = update(submitting);
+            if (wasSubmitting && !submitting.size) unconfirmed.resolve();
+        },
         restoreMessageDraft: (message: CreationMessage) => {
             prompt = message.content;
         },
@@ -219,6 +238,7 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         queries,
         notices,
         runtime,
+        unconfirmed: unconfirmed.promise,
         get messages() {
             return conversation.messages;
         },
@@ -227,6 +247,9 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         },
         get retrySequence() {
             return retrySequence;
+        },
+        get submitting() {
+            return submitting;
         },
         start: () => call(submitCode, "submit", scope()),
         retry: (item: CreationMessage) => call(retryCode, "retryFailedMessage", scope(), [item, conversation.messages.indexOf(item)]),
@@ -256,6 +279,7 @@ test.each(["video", "image"] as const)("%s 创建回执丢失，刷新后实际�
     expect(original.clientOperationId).toBeTruthy();
     expect(original.taskIds).toBeUndefined();
     expect(original.error).toBeUndefined();
+    expect(page.submitting.size).toBe(0);
     expect(page.requests[0].idempotencyKey).toContain(original.clientOperationId!);
     expect(page.busy).toBe(false);
     page.reload();
@@ -304,6 +328,25 @@ test("图片批次部分回执丢失保留已有图片，不把已确认项重�
     expect(page.messages.at(-1)?.submissionPending).toBeUndefined();
     expect(page.requests).toHaveLength(2);
     expect(page.accepted.size).toBe(2);
+});
+
+test("批次有一项回执未知时立即展示核对入口，不等待已受理任务生成结束", async () => {
+    const completion = Promise.withResolvers<void>();
+    const page = harness("image", "partial", completion.promise);
+    let finished = false;
+    const pending = page.start().then(() => {
+        finished = true;
+    });
+    try {
+        await page.unconfirmed;
+        expect(finished).toBe(false);
+        expect(page.messages.at(-1)?.submissionPending).toBe(true);
+        expect(page.submitting.size).toBe(0);
+        expect(page.requests).toHaveLength(2);
+    } finally {
+        completion.resolve();
+        await pending;
+    }
 });
 
 test("旧缓存丢失批次待确认标记时，按原张数找回缺失回执而非重试已知项", async () => {

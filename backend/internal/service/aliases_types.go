@@ -17,6 +17,7 @@ type (
 	CloudAgentRequest                      = app.CloudAgentRequest
 	CloudAgentContextSelection             = app.CloudAgentContextSelection
 	CloudAgentSessionRequest               = app.CloudAgentSessionRequest
+	CreationHistoryRequest                 = app.CreationHistoryRequest
 	CloudAgentSession                      = app.CloudAgentSession
 	CloudAgentSessionDetail                = app.CloudAgentSessionDetail
 	CloudAgentRunViewOptions               = app.CloudAgentRunViewOptions

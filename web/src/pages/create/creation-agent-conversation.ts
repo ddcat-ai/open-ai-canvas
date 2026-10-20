@@ -431,7 +431,14 @@ export function mergeCreationAgentConversation(current: CreationConversation, in
         .reduce((latest, at) => (Date.parse(at) > Date.parse(latest) ? at : latest), incoming.updatedAt);
     const session: AgentSession = { id: incoming.agentSessionId, title: incoming.title, surface: "creation", status: "active", revision: 0, createdAt: incoming.updatedAt, updatedAt };
     const projected = projectCreationAgentConversation(session, [...runs.values()]);
-    return mergeProjectedCreationAgentConversation(current, projected, current.agentRuns || []);
+    const ordinary = new Map(current.messages.map((message) => [message.id, message]));
+    for (const message of incoming.messages) {
+        if (!message.mode || message.mode === "agent" || message.agentRunId) continue;
+        const previous = ordinary.get(message.id);
+        const taskIds = [...new Set([...(previous?.taskIds || []), ...(message.taskIds || [])])];
+        ordinary.set(message.id, previous ? { ...message, ...previous, ...(taskIds.length ? { taskIds, submissionPending: undefined } : {}) } : message);
+    }
+    return mergeProjectedCreationAgentConversation({ ...current, historySourceId: incoming.historySourceId || current.historySourceId, messages: [...ordinary.values()] }, projected, current.agentRuns || []);
 }
 
 function mergeProjectedCreationAgentConversation(current: CreationConversation, projected: CreationConversation, previousRuns: AgentRun[]): CreationConversation {

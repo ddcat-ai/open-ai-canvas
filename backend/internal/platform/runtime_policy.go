@@ -57,17 +57,18 @@ func agentStepTimeoutSecondsDefault() int {
 }
 
 type RuntimeResourcePolicy struct {
-	ResourceUploadMB        int64 `json:"resourceUploadMB"`
-	GeneratedFileMB         int64 `json:"generatedFileMB"`
-	DailyUploadMB           int64 `json:"dailyUploadMB"`
-	StoredFileGB            int64 `json:"storedFileGB"`
-	StructuredDataMB        int64 `json:"structuredDataMB"`
-	TaskDataGB              int64 `json:"taskDataGB"`
-	AssetCount              int64 `json:"assetCount"`
-	CanvasCount             int64 `json:"canvasCount"`
-	TaskCount               int64 `json:"taskCount"`
-	APICallLogCount         int64 `json:"apiCallLogCount"`
-	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
+	ResourceUploadMB          int64 `json:"resourceUploadMB"`
+	GeneratedFileMB           int64 `json:"generatedFileMB"`
+	DailyUploadMB             int64 `json:"dailyUploadMB"`
+	StoredFileGB              int64 `json:"storedFileGB"`
+	StructuredDataMB          int64 `json:"structuredDataMB"`
+	TaskDataGB                int64 `json:"taskDataGB"`
+	AssetCount                int64 `json:"assetCount"`
+	CanvasCount               int64 `json:"canvasCount"`
+	TaskCount                 int64 `json:"taskCount"`
+	APICallLogCount           int64 `json:"apiCallLogCount"`
+	RecycleBinRetentionDays   int   `json:"recycleBinRetentionDays"`
+	ConversationRetentionDays int   `json:"conversationRetentionDays"`
 }
 
 type RuntimeStoragePolicy struct {
@@ -135,10 +136,11 @@ type PublicRuntimePolicySetting struct {
 }
 
 type PublicRuntimeLimits struct {
-	ActiveTaskLimit         int   `json:"activeTaskLimit"`
-	ResourceUploadMB        int64 `json:"resourceUploadMB"`
-	StoredFileGB            int64 `json:"storedFileGB"`
-	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
+	ActiveTaskLimit           int   `json:"activeTaskLimit"`
+	ResourceUploadMB          int64 `json:"resourceUploadMB"`
+	StoredFileGB              int64 `json:"storedFileGB"`
+	RecycleBinRetentionDays   int   `json:"recycleBinRetentionDays"`
+	ConversationRetentionDays int   `json:"conversationRetentionDays"`
 }
 
 // DefaultRuntimePolicy returns the effective baseline policy, including
@@ -275,8 +277,9 @@ func (s *Service) PublicRuntimeLimits() (*PublicRuntimeLimits, error) {
 	}
 	return &PublicRuntimeLimits{
 		ActiveTaskLimit: policy.Task.ActiveTaskLimit, ResourceUploadMB: policy.Resource.ResourceUploadMB,
-		StoredFileGB:            policy.Resource.StoredFileGB,
-		RecycleBinRetentionDays: policy.Resource.RecycleBinRetentionDays,
+		StoredFileGB:              policy.Resource.StoredFileGB,
+		RecycleBinRetentionDays:   policy.Resource.RecycleBinRetentionDays,
+		ConversationRetentionDays: policy.Resource.ConversationRetentionDays,
 	}, nil
 }
 
@@ -406,6 +409,9 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	}
 	if resource.RecycleBinRetentionDays < 0 || resource.RecycleBinRetentionDays > 365 {
 		return kernel.BadAuthRequest("回收站保留天数必须是 0-365 的整数 (0 表示不自动清理)")
+	}
+	if resource.ConversationRetentionDays < 0 || resource.ConversationRetentionDays > 3650 {
+		return kernel.BadAuthRequest("历史会话保留天数必须是 0-3650 的整数（0 表示不自动清理）")
 	}
 	storage := value.Storage
 	if storage.TransferTimeoutSeconds < 10 || storage.TransferTimeoutSeconds > 3_600 {

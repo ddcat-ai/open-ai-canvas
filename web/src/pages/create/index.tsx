@@ -3,8 +3,10 @@ import { App, Spin } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { History, Sparkles, Maximize2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useCreationHomeNavigation } from "./use-creation-home-navigation";
+import { useCreationConversationRoute } from "./use-creation-conversation-route";
+import { createCreationHistoryWriter, creationConversationPath, creationHistoryInput, restoreCreationConversation } from "./creation-conversation-history";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { generationErrorMessage } from "@/lib/generation-error";
@@ -37,7 +39,6 @@ import {
 import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useEffectiveConfig } from "@/stores/use-config-store";
 import {
     createAgentRun,
-    createAgentSession,
     decideAgentApproval,
     deleteAgentSession,
     getAgentRun,
@@ -267,6 +268,7 @@ export default function CreatePage() {
     const [smartCreationPlanning, setSmartCreationPlanning] = useState(false);
     const { message: toast, modal } = App.useApp();
     const navigate = useNavigate();
+    const location = useLocation();
     const [openingCanvas, setOpeningCanvas] = useState(false);
     const [loginDialogOpen, setLoginDialogOpen] = useState(false);
     const openingCanvasRef = useRef(false);
@@ -335,6 +337,10 @@ export default function CreatePage() {
     const conversationUserRef = useRef(smartCreationUserId);
     const recoveryTaskSnapshotRef = useRef<{ userId: string | undefined; tasks: Map<string, PersistedCreationTask> }>({ userId: smartCreationUserId, tasks: new Map() });
     const conversationSaveChainRef = useRef(Promise.resolve());
+    const cloudHistoryWriterRef = useRef(createCreationHistoryWriter());
+    const cloudHistoryFingerprintsRef = useRef(new Map<string, string>());
+    const [cloudHistoryError, setCloudHistoryError] = useState("");
+    const [conversationRetentionDays, setConversationRetentionDays] = useState<number | undefined>(undefined);
     const [activeId, setActiveId] = useState("");
     const activeIdRef = useRef("");
     const [hydrated, setHydrated] = useState(false);
@@ -380,6 +386,7 @@ export default function CreatePage() {
     const [textStreaming, setTextStreaming] = useState(() => readComposerPref(TEXT_STREAMING_PREF_KEY, true));
     const [textThinking, setTextThinking] = useState(() => readComposerPref(TEXT_THINKING_PREF_KEY, false));
     const [busy, setBusy] = useState(false);
+    const [submittingMessageIds, setSubmittingMessageIds] = useState<Set<string>>(() => new Set());
     const [stoppingConversationId, setStoppingConversationId] = useState("");
     const stoppingConversationRef = useRef("");
     const [referenceReplacementBusy, setReferenceReplacementBusy] = useState(false);
@@ -413,7 +420,7 @@ export default function CreatePage() {
     promptRef.current = prompt;
     attachmentsRef.current = attachments;
 
-    const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
+    const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId), [activeId, conversations]);
     const activeAgentRun = activeConversation?.agentRuns?.find((run) => run.id === activeConversation.agentRunId);
     const agentAttachmentSelection = creationAgentAttachmentSelection(attachments);
     const agentInputError = creationAgentImageInputError(config, config.textModel, agentAttachmentSelection.imageCount);
@@ -583,6 +590,10 @@ export default function CreatePage() {
             setPrompt("");
             setAttachments([]);
             setDraftReferences([]);
+            cloudHistoryWriterRef.current = createCreationHistoryWriter();
+            cloudHistoryFingerprintsRef.current.clear();
+            setCloudHistoryError("");
+            setConversationRetentionDays(undefined);
         }
         if (!composerPreferencesHydrated) return;
         setHistoryLoading(Boolean(smartCreationUserId));
@@ -608,8 +619,19 @@ export default function CreatePage() {
             setHydrated(true);
             if (smartCreationUserId)
                 try {
-                    const { sessions } = await retryCreationHistoryRead(() => listAgentSessions({ surface: "creation", limit: 100, signal: controller.signal }), controller.signal);
+                    const { sessions, deletedSessionIds = [], conversationRetentionDays: retentionDays } = await retryCreationHistoryRead(() => listAgentSessions({ surface: "creation", limit: 100, signal: controller.signal }), controller.signal);
                     if (cancelled) return;
+                    setConversationRetentionDays(retentionDays);
+                    for (const id of deletedSessionIds) historyRecoveryDeletedRef.current.add(id);
+                    const retained = conversationsRef.current.filter((entry) => !historyRecoveryDeletedRef.current.has(entry.agentSessionId || entry.id));
+                    if (retained.length !== conversationsRef.current.length) {
+                        conversationsRef.current = retained.length ? retained : [newConversation()];
+                        setConversations(conversationsRef.current);
+                        if (!conversationsRef.current.some((entry) => entry.id === activeIdRef.current)) {
+                            activeIdRef.current = conversationsRef.current[0].id;
+                            setActiveId(activeIdRef.current);
+                        }
+                    }
                     // 目录只保存标题与时间；正文、事件和图片只在用户打开该会话时读取。
                     setHistoryPending((current) =>
                         sessions
@@ -752,6 +774,49 @@ export default function CreatePage() {
         return next;
     }, []);
     const updateActive = useCallback((updater: (conversation: CreationConversation) => CreationConversation) => updateConversation(activeId, updater), [activeId, updateConversation]);
+
+    const syncConversationHistory = useCallback(
+        async (conversation: CreationConversation, title?: string) => {
+            const scope = getActiveUserScope();
+            if (!smartCreationUserId || scope !== smartCreationUserId) throw new Error("请先登录后保存会话");
+            const id = await cloudHistoryWriterRef.current(conversation, scope, title);
+            if (scope !== getActiveUserScope()) throw new Error("账号已切换，请重新打开会话");
+            const current = conversationsRef.current.find((item) => item.id === conversation.id);
+            if (current && current.agentSessionId !== id) {
+                const next = updateConversation(current.id, (item) => ({ ...item, agentSessionId: id }));
+                const save = queueCreationConversationsSave(conversationSaveChainRef.current, next, scope);
+                conversationSaveChainRef.current = save;
+                await save;
+            }
+            cloudHistoryFingerprintsRef.current.set(conversation.id, JSON.stringify(creationHistoryInput(conversation)));
+            setCloudHistoryError("");
+            return id;
+        },
+        [smartCreationUserId, updateConversation],
+    );
+
+    useEffect(() => {
+        if (!hydrated || !smartCreationUserId) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            void (async () => {
+                for (const conversation of conversationsRef.current) {
+                    if (cancelled) break;
+                    if (!conversation.messages.length || historyRecoveryDeletedRef.current.has(conversation.agentSessionId || conversation.id)) continue;
+                    if (cloudHistoryFingerprintsRef.current.get(conversation.id) === JSON.stringify(creationHistoryInput(conversation))) continue;
+                    try {
+                        await syncConversationHistory(conversation);
+                    } catch (error) {
+                        if (!cancelled) setCloudHistoryError(`会话已缓存到本机，云端同步未完成：${error instanceof Error ? error.message : "请稍后重试"}`);
+                    }
+                }
+            })();
+        }, 500);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [conversations, hydrated, smartCreationUserId, syncConversationHistory]);
 
     useEffect(() => {
         const id = activeConversation?.id;
@@ -1409,8 +1474,9 @@ export default function CreatePage() {
             if (pending) mayClearDraft = text === pending.prompt && attachments.map((item) => item.storageKey).join("|") === (pending.request.attachments || []).map((item) => item.storageKey).join("|");
             assertScope();
             if (action?.recoverPending && !pending) throw new Error("待确认请求已处理，请刷新本会话后查看结果");
-            const sessionId = pending?.sessionId || conversation.agentSessionId || (await createAgentSession({ surface: "creation", title: creationAgentConversationTitle(text, attachments) })).session.id;
+            const sessionId = pending?.sessionId || (await syncConversationHistory({ ...conversation, title: conversation.messages.length ? conversation.title : creationAgentConversationTitle(text, attachments) }));
             assertScope();
+            if (activeIdRef.current === conversationId) conversationRoute.show(sessionId, true);
             const snapshot = pending || conversation.agentSessionId ? await getAgentSession(sessionId) : undefined;
             assertScope();
             if (snapshot) {
@@ -1717,7 +1783,7 @@ export default function CreatePage() {
             return;
         }
         const expandedPrompt = skillExecution.prompt;
-        const referenceMetadata = skillExecution.metadata;
+        const referenceMetadata: Record<string, unknown> = { ...skillExecution.metadata };
         followLatestMessageRef.current = true;
         const batchSubmission = Boolean(generationOverride?.batchMessageId);
         const clientOperationId = retryContext?.clientOperationId || createClientId();
@@ -1727,6 +1793,15 @@ export default function CreatePage() {
             ? ({ id: generationOverride!.batchMessageId!, createdAt: new Date().toISOString() } as CreationMessage)
             : newMessage("assistant", "", { mode, model: requestModel, status: mode === "text" && textStreaming ? "streaming" : "pending", settings, ...retryContext, clientOperationId, ...(trackSubmission ? { submissionPending: true } : {}) });
         const updateOriginAssistant = (updater: (item: CreationMessage) => CreationMessage) => updateConversationMessage(originConversationId, assistantMessage.id, updater);
+        // 仅表示本页请求仍在发送；不落盘，刷新后仍按原操作身份核对回执。
+        const finishSubmitting = () =>
+            setSubmittingMessageIds((ids) => {
+                if (!ids.has(assistantMessage.id)) return ids;
+                const next = new Set(ids);
+                next.delete(assistantMessage.id);
+                return next;
+            });
+        if (trackSubmission) setSubmittingMessageIds((ids) => new Set(ids).add(assistantMessage.id));
         const boundTaskIds = new Set<string>();
         const boundTaskIdsByBatchIndex = new Map<number, string>();
         const boundTasks = new Map<string, GenerationTask>();
@@ -1785,6 +1860,11 @@ export default function CreatePage() {
         try {
             // 先保存本次操作标识。创建回执丢失或刷新后仍能沿原请求恢复。
             if (trackSubmission) await updateOriginAssistant((item) => item);
+            const current = conversationsRef.current.find((item) => item.id === originConversationId);
+            if (!current) throw new Error("创作会话已关闭，未提交生成请求");
+            const creationSessionId = await syncConversationHistory(current);
+            referenceMetadata.creationSessionId = creationSessionId;
+            if (activeIdRef.current === originConversationId) conversationRoute.show(creationSessionId, true);
             if (requestScope !== getActiveUserScope()) throw new Error("账号已切换，未提交原账号的生成请求");
             if (mode === "text") {
                 const result = await runtime.runGenerationOperationOnce(clientOperationId, () =>
@@ -1844,6 +1924,7 @@ export default function CreatePage() {
                         },
                         onTaskUpdate: bindTask,
                         count: taskCount,
+                        onSubmissionUnconfirmed: finishSubmitting,
                         ...retryContext,
                         clientOperationId,
                     }),
@@ -1901,6 +1982,7 @@ export default function CreatePage() {
                         signal: requestLifecycle.signal,
                         metadata: { source: "create-page", conversationId: activeConversation.id, messageId: assistantMessage.id, videoEditOperation: videoOperation, ...referenceMetadata },
                         onTaskUpdate: bindTask,
+                        onSubmissionUnconfirmed: finishSubmitting,
                         ...retryContext,
                         clientOperationId,
                     }),
@@ -1946,6 +2028,7 @@ export default function CreatePage() {
             if ((!batchSubmission && cancelled) || (unmountedRef.current && boundTaskIds.size > 0)) return;
             if (generationOverride) throw error;
         } finally {
+            if (trackSubmission) finishSubmitting();
             for (const taskId of boundTaskIds) activeGenerationTaskIdsRef.current.delete(taskId);
             requestLifecycle.release();
             releaseRetryLock();
@@ -1978,6 +2061,7 @@ export default function CreatePage() {
         setAttachments([]);
         setDraftReferences([]);
         setHistoryOpen(false);
+        void navigate("/", { replace: false });
     };
 
     const continueOnCanvas = async (selectedAssetIds?: string[]) => {
@@ -2038,9 +2122,11 @@ export default function CreatePage() {
         setHistoryPending((current) => current.map((entry) => (entry.historyStatus === "loading" ? { ...entry, historyStatus: "unloaded" } : entry)));
     };
 
-    const selectConversation = async (conversation: CreationConversation) => {
+    const selectConversation = async (conversation: CreationConversation, options: { fromRoute?: boolean; signal?: AbortSignal } = {}) => {
         cancelHistorySelection();
         const controller = new AbortController();
+        options.signal?.addEventListener("abort", () => controller.abort(), { once: true, signal: controller.signal });
+        if (options.signal?.aborted) controller.abort();
         historySelectionRef.current = controller;
         const scope = getActiveUserScope();
         let selected = conversation;
@@ -2048,8 +2134,9 @@ export default function CreatePage() {
         if (sessionId) {
             setHistoryPending((current) => [...current.filter((entry) => entry.id !== sessionId), { ...conversation, id: sessionId, historyStatus: "loading" }]);
             try {
-                const incoming = await restoreCreationAgentConversation(sessionId, creationAgentRecoveryClient, controller.signal);
-                if (controller.signal.aborted || scope !== getActiveUserScope() || historyRecoveryDeletedRef.current.has(sessionId)) return;
+                const incoming = await restoreCreationConversation(sessionId, controller.signal);
+                if (controller.signal.aborted || scope !== getActiveUserScope()) return;
+                if (historyRecoveryDeletedRef.current.has(sessionId)) throw new Error("会话已删除或已超过保留期限");
                 const merged = mergeCreationConversationHistory(conversationsRef.current, [incoming], conversation.id, false);
                 selected = merged.conversations.find((entry) => entry.agentSessionId === sessionId)!;
                 conversationsRef.current = merged.conversations;
@@ -2068,6 +2155,7 @@ export default function CreatePage() {
                 if (controller.signal.aborted || scope !== getActiveUserScope()) return;
                 setHistoryPending((current) => current.map((entry) => (entry.id === sessionId ? { ...entry, historyStatus: "error" } : entry)));
                 toast.error(error instanceof Error ? error.message : "对话加载失败，请点击该标题重试");
+                if (options.fromRoute) throw error;
                 return;
             }
         }
@@ -2081,6 +2169,41 @@ export default function CreatePage() {
         setAttachments([]);
         setDraftReferences([]);
         setHistoryOpen(false);
+        if (!options.fromRoute) {
+            try {
+                const id = await syncConversationHistory(selected);
+                if (!controller.signal.aborted && scope === getActiveUserScope() && activeIdRef.current === selected.id) conversationRoute.show(id);
+            } catch (error) {
+                if (scope === getActiveUserScope()) setCloudHistoryError(`会话已缓存到本机，云端同步未完成：${error instanceof Error ? error.message : "请重试"}`);
+            }
+        }
+    };
+
+    const conversationRoute = useCreationConversationRoute(
+        hydrated && composerPreferencesHydrated,
+        smartCreationUserId,
+        async (id, signal) => {
+            if (!smartCreationUserId) throw new Error("请先登录后打开该会话");
+            const cached = conversationsRef.current.find((item) => (item.agentSessionId || item.id) === id);
+            const conversation = cached || { id, agentSessionId: id, title: "创作会话", updatedAt: new Date().toISOString(), messages: [] };
+            await selectConversation({ ...conversation, agentSessionId: id }, { fromRoute: true, signal });
+        },
+        historyRecoveryDeletedRef.current,
+    );
+
+    useEffect(() => {
+        if (!hydrated || location.state?.creationHome || conversationRoute.conversationId || !activeConversation?.agentSessionId || !activeConversation.messages.length) return;
+        conversationRoute.show(activeConversation.agentSessionId, true);
+    }, [hydrated, location.state, conversationRoute.conversationId, conversationRoute.show, activeConversation?.id, activeConversation?.agentSessionId]);
+
+    const copyConversationLink = async (conversation: CreationConversation) => {
+        try {
+            const id = await syncConversationHistory(conversation);
+            await navigator.clipboard.writeText(new URL(creationConversationPath({ id }), window.location.origin).href);
+            toast.success("会话链接已复制，仅登录该账号后可访问");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "会话链接复制失败");
+        }
     };
 
     const confirmDeleteConversation = (conversation: CreationConversation) => {
@@ -2129,6 +2252,8 @@ export default function CreatePage() {
                         setPrompt("");
                         setAttachments([]);
                         setDraftReferences([]);
+                        if (fallback.agentSessionId) conversationRoute.show(fallback.agentSessionId, true);
+                        else void navigate("/", { replace: true });
                     }
                     await save;
                     void clearPendingCreationAgentSubmission(conversation.id, scope).catch(() => undefined);
@@ -2142,13 +2267,17 @@ export default function CreatePage() {
         });
     };
 
-    const renameConversationTitle = (conversation: CreationConversation, title: string) => {
-        if (conversation.agentSessionId) {
-            toast.warning("Agent 对话标题由服务端保管，当前暂不支持在此重命名");
-            return;
-        }
+    const renameConversationTitle = async (conversation: CreationConversation, title: string) => {
         const nextTitle = title.trim().slice(0, 120);
         if (!nextTitle || nextTitle === conversation.title.trim()) return;
+        const scope = getActiveUserScope();
+        try {
+            await syncConversationHistory(conversation, nextTitle);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "对话重命名保存失败");
+            return;
+        }
+        if (scope !== getActiveUserScope()) return;
         const next = updateCreationConversationSnapshot(conversationsRef.current, conversation.id, (item) => ({ ...item, title: nextTitle }));
         conversationsRef.current = next;
         setConversations(next);
@@ -2393,6 +2522,23 @@ export default function CreatePage() {
 
     useCreationHomeNavigation(hydrated && composerPreferencesHydrated, startNewConversation);
 
+    if (conversationRoute.loading)
+        return (
+            <div className="grid h-full place-items-center" role="status">
+                <Spin tip="正在打开会话…" />
+            </div>
+        );
+    if (conversationRoute.error)
+        return (
+            <div className="grid h-full place-content-center gap-4 text-center">
+                <h2>无法打开会话</h2>
+                <p role="alert">{conversationRoute.error}</p>
+                <p>请确认链接及登录账号。会话可能已删除或已超过保留期限。</p>
+                <button type="button" onClick={startNewConversation}>
+                    开始新创作
+                </button>
+            </div>
+        );
     if (!hydrated || !activeConversation)
         return (
             <div className="grid h-full place-items-center">
@@ -2525,6 +2671,20 @@ export default function CreatePage() {
     return (
         <>
             <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
+                {cloudHistoryError ? (
+                    <div className="creation-agent-connection-error" role="status">
+                        <span>{cloudHistoryError}</span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                cloudHistoryFingerprintsRef.current.clear();
+                                setConversations([...conversationsRef.current]);
+                            }}
+                        >
+                            重试同步
+                        </button>
+                    </div>
+                ) : null}
                 {pendingApproval ? (
                     <div className="creation-agent-pending-notice" role="status">
                         <span>
@@ -2644,6 +2804,7 @@ export default function CreatePage() {
                                             <div key={item.id} id={`creation-shot-${item.id}`} className="creation-thread-message">
                                                 <CreationMessageView
                                                     item={item}
+                                                    submitting={submittingMessageIds.has(item.id)}
                                                     shotNumber={creationVideoShotOrdinal(videoShots, item)}
                                                     onRetryFailure={() => retryFailedMessage(item, index)}
                                                     onQueryInterjection={async (message) => {
@@ -2720,6 +2881,8 @@ export default function CreatePage() {
                 activeId={activeConversation.id}
                 loading={historyLoading}
                 syncError={historySyncError}
+                retentionDays={conversationRetentionDays}
+                onCopyLink={copyConversationLink}
                 onRefresh={refreshHistory}
                 onNew={startNewConversation}
                 onClose={() => {

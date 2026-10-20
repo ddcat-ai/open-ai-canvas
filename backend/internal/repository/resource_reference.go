@@ -189,6 +189,22 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	for _, canvas := range canvases {
 		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "画布", ID: canvas.ID, Title: canvas.Title, PrimaryJSON: canvas.PayloadJSON})
 	}
+	var histories []model.AgentSession
+	historyQuery := r.db.Select("id", "title", "checkpoint_json").Where("user_id = ? AND surface = 'creation' AND status <> ? AND checkpoint_json <> ''", userID, AgentSessionDeleted)
+	if len(resourceIDs) <= 100 {
+		conditions, args := make([]string, 0, len(resourceIDs)), make([]any, 0, len(resourceIDs))
+		for _, id := range resourceIDs {
+			conditions = append(conditions, "checkpoint_json LIKE ?")
+			args = append(args, "%"+id+"%")
+		}
+		historyQuery = historyQuery.Where(strings.Join(conditions, " OR "), args...)
+	}
+	if err := historyQuery.Find(&histories).Error; err != nil {
+		return snapshot, err
+	}
+	for _, history := range histories {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "创作会话", ID: history.ID, Title: history.Title, PrimaryJSON: history.CheckpointJSON})
+	}
 
 	var tasks []model.Task
 	taskQuery := r.db.Select("id", "prompt", "status", "input_json", "result_json").Where("user_id = ?", userID)

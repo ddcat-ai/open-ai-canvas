@@ -99,7 +99,7 @@ func (r *Repository) AgentSessions(userID, surface, status string, limit int) ([
 		limit = maxAgentSessionListLimit
 	}
 	var sessions []model.AgentSession
-	err := query.Order("updated_at DESC, id DESC").Limit(limit).Find(&sessions).Error
+	err := query.Select("id", "user_id", "title", "surface", "last_surface", "status", "revision", "created_at", "updated_at").Order("updated_at DESC, id DESC").Limit(limit).Find(&sessions).Error
 	return sessions, err
 }
 
@@ -293,6 +293,10 @@ func (r *Repository) cloudAgentExecutionsBySession(userID, sessionID string, lim
 // journal, billing evidence or generated assets. The user write lock is shared
 // with task admission so an in-flight submission cannot revive a deleted row.
 func (r *Repository) DeleteAgentSession(userID, id string) error {
+	return r.deleteAgentSession(userID, id, nil)
+}
+
+func (r *Repository) deleteAgentSession(userID, id string, cutoff *time.Time) error {
 	userID, id = strings.TrimSpace(userID), strings.TrimSpace(id)
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := lockOwnedWriteUser(tx, userID); err != nil {
@@ -302,6 +306,31 @@ func (r *Repository) DeleteAgentSession(userID, id string) error {
 		if err != nil || session.Status == AgentSessionDeleted {
 			return err
 		}
+		if cutoff != nil && (session.Surface != "creation" || !session.UpdatedAt.Before(*cutoff)) {
+			return nil
+		}
+		if session.Surface == "creation" {
+			var history struct {
+				SourceConversationID string `json:"sourceConversationId"`
+			}
+			if session.CheckpointJSON != "" {
+				if err := json.Unmarshal([]byte(session.CheckpointJSON), &history); err != nil {
+					return err
+				}
+			}
+			tasks, err := New(tx).CreationSessionTasks(userID, id, history.SourceConversationID)
+			if err != nil {
+				return err
+			}
+			for _, task := range tasks {
+				if task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning {
+					return ErrAgentSessionBusy
+				}
+				if cutoff != nil && !task.UpdatedAt.Before(*cutoff) {
+					return nil
+				}
+			}
+		}
 		runs := tx.Model(&model.CloudAgentExecution{}).
 			Where("user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))", userID, id, id)
 		var count int64
@@ -310,6 +339,15 @@ func (r *Repository) DeleteAgentSession(userID, id string) error {
 		}
 		if count > 0 {
 			return ErrAgentSessionBusy
+		}
+		if cutoff != nil {
+			var recent int64
+			if err := tx.Model(&model.CloudAgentExecution{}).Where("user_id = ? AND (session_id = ? OR conversation_id = ?) AND updated_at >= ?", userID, id, id, *cutoff).Count(&recent).Error; err != nil {
+				return err
+			}
+			if recent > 0 {
+				return nil
+			}
 		}
 		runIDs := tx.Model(&model.CloudAgentExecution{}).Select("id").
 			Where("user_id = ? AND (session_id = ? OR (session_id = '' AND conversation_id = ?))", userID, id, id)
@@ -359,7 +397,7 @@ func cloudAgentTaskSessionID(inputJSON string) (string, error) {
 // any task or billing write. Older roots without session IDs stay compatible.
 func requireActiveAgentSessionForTask(tx *gorm.DB, task *model.Task) error {
 	if task.Operation != "cloud_agent" {
-		return nil
+		return requireActiveCreationSessionForTask(tx, task)
 	}
 	id, err := cloudAgentTaskSessionID(task.InputJSON)
 	if err != nil || id == "" {

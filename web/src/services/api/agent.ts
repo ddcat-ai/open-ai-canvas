@@ -156,6 +156,7 @@ export type AgentCreationContextEntry = {
 
 export type CreateAgentRunInput = {
     creationContext?: AgentCreationContextEntry[];
+    latestVisibleResult?: { messageId: string; taskIds: string[] };
     retry?: { runId: string; taskId?: string; taskIds?: string[] };
     reasoningMode?: AgentReasoningMode;
     profileRevision?: string;
@@ -181,6 +182,7 @@ export type CreateAgentRunInput = {
 };
 
 export type CreateAgentSessionInput = {
+    id?: string;
     title?: string;
     surface?: string;
 };
@@ -238,7 +240,7 @@ export async function sendAgentMessage(runId: string, input: CreateAgentRunInput
 }
 
 export function listAgentSessions(options: ListAgentSessionsOptions = {}) {
-    return http.get<{ sessions: AgentSession[] }>("/agent/sessions", {
+    return http.get<{ sessions: AgentSession[]; deletedSessionIds?: string[]; conversationRetentionDays?: number }>("/agent/sessions", {
         params: compactApiParams({ canvasId: options.canvasId, surface: options.surface, status: options.status, limit: options.limit }),
         signal: options.signal,
         timeout: 15_000,

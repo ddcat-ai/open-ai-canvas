@@ -7,7 +7,8 @@ import { useUserStore } from "@/stores/use-user-store";
 import { App, Dropdown } from "antd";
 import { displayCreationPrompt } from "./creation-references";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
-import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Clapperboard, Download, Image as ImageIcon, Link as LinkIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Link } from "react-router";
 import { conversationTimestamp } from "./creation-conversations";
 import { formatMessageTime } from "./creation-workspace-messages";
 
@@ -40,6 +41,8 @@ export function CreationHistoryDrawer({
     onSelect,
     onDelete,
     onRename,
+    onCopyLink,
+    retentionDays,
 }: {
     open: boolean;
     deleteConfirmOpen?: boolean;
@@ -53,6 +56,8 @@ export function CreationHistoryDrawer({
     onSelect: (conversation: CreationConversation) => void;
     onDelete: (conversation: CreationConversation) => void;
     onRename: (conversation: CreationConversation, title: string) => void;
+    onCopyLink?: (conversation: CreationConversation) => void;
+    retentionDays?: number;
 }) {
     const [keyword, setKeyword] = useState("");
     const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -127,6 +132,17 @@ export function CreationHistoryDrawer({
             }
         >
             <div className="creation-history-content">
+                <p className="creation-history-retention">
+                    {retentionDays === undefined ? "正在读取历史对话保留期限…" : retentionDays > 0 ? `历史对话只保留 ${retentionDays} 天，按最后活动时间计算；运行中的任务不受影响。` : "历史对话长期保留，当前未开启自动清理。"}
+                    {exportUser?.role === "admin" ? (
+                        <>
+                            {" "}
+                            <Link to="/admin/settings/runtime-policy#conversation-retention" onClick={onClose}>
+                                管理保留设置
+                            </Link>
+                        </>
+                    ) : null}
+                </p>
                 {syncError || loading ? (
                     <p className="creation-history-sync" role="status">
                         {syncError || "正在同步历史对话…"}
@@ -217,13 +233,16 @@ export function CreationHistoryDrawer({
                                                 overlayClassName="creation-history-menu-overlay"
                                                 menu={{
                                                     items: [
+                                                        ...(onCopyLink ? [{ key: "link", label: "复制会话链接", icon: <LinkIcon /> }] : []),
                                                         { key: "rename", label: "重命名", icon: <Pencil />, disabled: Boolean(conversation.historyStatus) },
                                                         { key: "export", label: "导出对话", icon: <Download />, disabled: Boolean(conversation.historyStatus) },
                                                         { key: "delete", label: "删除对话", danger: true, icon: <Trash2 /> },
                                                     ],
                                                     onClick: ({ key }) => {
                                                         setMenuOpenId(null);
-                                                        if (key === "rename") {
+                                                        if (key === "link") {
+                                                            onCopyLink?.(conversation);
+                                                        } else if (key === "rename") {
                                                             beginRename(conversation);
                                                         } else if (key === "export") {
                                                             downloadCreationConversation(conversation, assistantName, exportUser?.displayName || "你");

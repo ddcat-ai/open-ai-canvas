@@ -122,6 +122,7 @@ export type CreationConversation = {
     canvasId?: string;
     composerMode?: CreationMode;
     messages: CreationMessage[];
+    historySourceId?: string;
     agentSessionId?: string;
     agentRunId?: string;
     agentRuns?: AgentRun[];

@@ -5,6 +5,64 @@ import type { CreationMessage } from "../src/pages/create/creation-types";
 const base = { prompt: "继续把刚才那张图做成视频", idempotencyKey: "direct-context-test", permissionMode: "request_approval" as const, textSelection: { channelId: "text-channel", channelModelKey: "text-model" } };
 const message = (id: string, value: Partial<CreationMessage>): CreationMessage => ({ id, role: "assistant", content: "", mode: "image", createdAt: "2026-10-19T10:00:00Z", ...value });
 
+test("普通生图后切回 Agent，当前可见成品定位最新消息而非旧 Agent 任务", () => {
+    const messages = [
+        message("old-agent-result", { agentRunId: "old-run", taskIds: ["mug"], resultStorageKeys: ["resource:mug"] }),
+        message("new-result", { taskIds: ["street"], resultStorageKeys: ["resource:street"] }),
+        message("pending", { taskIds: ["not-finished"], status: "pending" }),
+    ];
+    const input = buildCreationAgentRunInput({ ...base, prompt: "上面这张图是什么", conversation: { messages } });
+    expect(input.latestVisibleResult).toEqual({ messageId: "new-result", taskIds: ["street"] });
+    const imported = buildCreationAgentRunInput({ ...base, conversation: { messages, agentRuns: [{ id: "later", creationContextMessageIds: ["new-result"] }] } } as any);
+    expect(imported.latestVisibleResult).toEqual(input.latestVisibleResult);
+    expect(imported.creationContext?.some((item) => item.messageId === "new-result")).toBe(false);
+    expect(buildCreationAgentRunInput({ ...base, conversation: { messages }, retry: { runId: "old-run" } }).latestVisibleResult).toBeUndefined();
+});
+
+test("最新结果的位置不依赖提示词关键词，保留一条消息内全部成品任务", () => {
+    const conversation = { messages: [message("batch", { taskIds: ["one", "two"], resultUrls: ["blob:one", "blob:two"] })] };
+    for (const prompt of ["上面这张图是什么", "继续", "换话题写一首诗"]) {
+        const input = buildCreationAgentRunInput({ ...base, prompt, conversation });
+        expect(input.latestVisibleResult).toEqual({ messageId: "batch", taskIds: ["one", "two"] });
+        expect(input.attachments).toEqual([]);
+        expect(input.prompt).toBe(prompt);
+    }
+});
+
+test("Agent 聚合图片按可见卡片定位，保留整批并按方案顺序排列", () => {
+    const conversation = {
+        messages: [
+            message("direct", { taskIds: ["street"], resultUrls: ["blob:street"] }),
+            message("run:assistant", {
+                mode: "agent",
+                agentRunId: "run",
+                status: "done",
+                commercePlan: {
+                    items: [
+                        { id: "one", type: "image" },
+                        { id: "two", type: "image" },
+                    ],
+                } as any,
+            }),
+            message("task-two", { agentRunId: "run", commerceItemId: "two", status: "done", taskIds: ["two"], resultUrls: ["blob:two"] }),
+            message("task-one", { agentRunId: "run", commerceItemId: "one", status: "done", taskIds: ["one"], resultUrls: ["blob:one"] }),
+        ],
+    };
+    const input = buildCreationAgentRunInput({ ...base, conversation });
+    expect(input.latestVisibleResult).toEqual({ messageId: "task-batch-run-image", taskIds: ["one", "two"] });
+});
+
+test("旧 Agent 的迟到任务仍展示在旧卡片内，不覆盖更新的普通成品位置", () => {
+    const conversation = {
+        messages: [
+            message("run:assistant", { mode: "agent", agentRunId: "run", status: "done" }),
+            message("direct", { taskIds: ["street"], resultUrls: ["blob:street"] }),
+            message("task-mug", { agentRunId: "run", status: "done", taskIds: ["mug"], resultUrls: ["blob:mug"] }),
+        ],
+    };
+    expect(buildCreationAgentRunInput({ ...base, conversation }).latestVisibleResult).toEqual({ messageId: "direct", taskIds: ["street"] });
+});
+
 test("切回 Agent 传入普通模式文本与任务身份，不信任浏览器成品和状态", () => {
     const input = buildCreationAgentRunInput({
         ...base,

@@ -24,7 +24,7 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.Shot{}, &model.ShotArtifact{}, &model.VoiceProfile{},
 		&model.Task{}, &model.TaskLog{}, &model.Result{},
 		&model.CreationRun{}, &model.CreationSubmission{},
-		&model.CloudAgentResourceLease{}, &model.Tool{}, &model.WorkbenchTool{},
+		&model.CloudAgentResourceLease{}, &model.AgentSession{}, &model.Tool{}, &model.WorkbenchTool{},
 		&model.Announcement{}, &model.AnnouncementImageDraft{},
 	); err != nil {
 		t.Fatal(err)
@@ -168,5 +168,26 @@ func TestProjectCoverAppearsInResourceReferences(t *testing.T) {
 	}
 	if len(snapshot.Direct) != 1 || snapshot.Direct[0].ResourceID != "cover-resource" || snapshot.Direct[0].Kind != "项目主图" {
 		t.Fatalf("direct references = %+v", snapshot.Direct)
+	}
+}
+
+func TestCreationHistoryKeepsOwnedActiveResourceReferences(t *testing.T) {
+	service, db := newProjectSettingsTestService(t)
+	for _, row := range []model.AgentSession{
+		{ID: "active", UserID: "user-1", Surface: "creation", Status: "active", CheckpointJSON: `{"version":1,"messages":[{"attachments":[{"storageKey":"resource:reference"}]}]}`},
+		{ID: "unrelated", UserID: "user-1", Surface: "creation", Status: "active", CheckpointJSON: `{"version":1,"messages":[]}`},
+		{ID: "deleted", UserID: "user-1", Surface: "creation", Status: "deleted", CheckpointJSON: `{"storageKey":"resource:reference"}`},
+		{ID: "foreign", UserID: "user-2", Surface: "creation", Status: "active", CheckpointJSON: `{"storageKey":"resource:reference"}`},
+	} {
+		if err := db.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshot, err := service.repo.ResourceReferenceSnapshot("user-1", "", []string{"reference"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Documents) != 1 || snapshot.Documents[0].ID != "active" || !documentReferencesResources(snapshot.Documents[0].PrimaryJSON, map[string]struct{}{"reference": {}}) {
+		t.Fatalf("wrong creation reference scope: %+v", snapshot.Documents)
 	}
 }

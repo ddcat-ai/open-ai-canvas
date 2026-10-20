@@ -13,7 +13,7 @@ const newEnd = source.indexOf("    const continueOnCanvas =", newStart);
 if (newStart < 0 || newEnd < 0) throw new Error("new conversation handler missing");
 const newCode = new Bun.Transpiler({ loader: "tsx" }).transformSync(source.slice(newStart, newEnd));
 const selectStart = source.indexOf("    const cancelHistorySelection = () => {");
-const selectEnd = source.indexOf("    const confirmDeleteConversation =", selectStart);
+const selectEnd = source.indexOf("    const conversationRoute =", selectStart);
 if (selectStart < 0 || selectEnd < 0) throw new Error("history selection handler missing");
 const selectCode = new Bun.Transpiler({ loader: "tsx" }).transformSync(source.slice(selectStart, selectEnd));
 const at = "2026-10-01T00:00:00Z";
@@ -58,7 +58,7 @@ async function startHistory(local: CreationConversation[] = [conversation("activ
         loadCreationConversations: async () => local,
         useCreationPreferencesStore: { getState: () => ({ preferences: { activeConversationId: "active" } }) },
         listAgentSessions: async () => ({ sessions: ["slow", "active", "other"].map((id) => ({ id, title: id, surface: "creation", status: "active", revision: 1, createdAt: at, updatedAt: at })) }),
-        restoreCreationAgentConversation: async (id: string) => {
+        restoreCreationConversation: async (id: string) => {
             calls.push(id);
             if (failures.has(id)) throw new Error("模拟正文请求失败");
             if (id === "slow") return slow.promise;
@@ -78,6 +78,11 @@ async function startHistory(local: CreationConversation[] = [conversation("activ
         setHistoryLoading: (value: boolean) => {
             loading = value;
         },
+        setConversationRetentionDays: () => {},
+        syncConversationHistory: async (current: CreationConversation) => current.agentSessionId || current.id,
+        conversationRoute: { show: () => {} },
+        setCloudHistoryError: () => {},
+        navigate: () => {},
         loadPendingCreationAgentSubmission: async () => null,
         clearPendingCreationAgentSubmission: async () => {},
         newConversation: () => ({ ...conversation("new"), agentSessionId: undefined }),

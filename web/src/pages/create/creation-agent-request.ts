@@ -86,6 +86,7 @@ export function buildCreationAgentRunInput(input: CreationAgentRequestOptions): 
         ...(input.retry ? { retry: input.retry } : {}),
         prompt: input.prompt.trim(),
         ...(context.entries.length ? { creationContext: context.entries } : {}),
+        ...(context.latestVisibleResult ? { latestVisibleResult: context.latestVisibleResult } : {}),
         idempotencyKey: input.idempotencyKey,
         ...(input.sessionId ? { sessionId: input.sessionId } : {}),
         ...input.textSelection,

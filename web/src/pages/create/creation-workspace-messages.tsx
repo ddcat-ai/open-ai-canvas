@@ -46,6 +46,7 @@ export function CreationMessageView({
     retryDisabled = false,
     onCreateAgentTaskVariant,
     onQueryInterjection,
+    submitting = false,
     nested = false,
 }: {
     item: CreationMessage;
@@ -64,6 +65,7 @@ export function CreationMessageView({
     retryDisabled?: boolean;
     onCreateAgentTaskVariant?: (task: CreationMessage) => void;
     onQueryInterjection?: (message: CreationMessage) => Promise<void>;
+    submitting?: boolean;
     nested?: boolean;
 }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
@@ -136,7 +138,9 @@ export function CreationMessageView({
         ? `${deliveryTotal} 项交付${taskSummary ? `：${taskSummary}${deliveryTotal > mediaTasks.length ? `，${deliveryTotal - mediaTasks.length} 项待提交` : ""}` : "，状态待确认"}。`
         : `创作方案已准备，共 ${deliveryTotal} 项交付。`;
     const stateLabel = item.submissionPending
-        ? "提交待确认"
+        ? submitting
+            ? "提交中"
+            : "提交待确认"
         : item.taskStatePending
           ? "状态待确认"
           : item.status === "pending"
@@ -159,7 +163,11 @@ export function CreationMessageView({
                 {item.status === "pending" ? (
                     <span className="creation-message-progress-copy">
                         {item.submissionPending ? (
-                            "正在确认提交状态…"
+                            submitting ? (
+                                "正在提交…"
+                            ) : (
+                                "正在确认提交状态…"
+                            )
                         ) : item.taskStatePending ? (
                             "正在同步任务状态…"
                         ) : (
@@ -319,7 +327,7 @@ export function CreationMessageView({
             ) : (
                 <GenerationToolCard status={toolStatus} heading={heading}>
                     {nested && (item.status === "error" || item.status === "cancelled") ? null : (
-                        <MediaResult item={item} onRetryFailure={nested ? undefined : onRetryFailure} onCreateVariant={onCreateVariant} onContinueCanvas={onContinueCanvas} openingCanvas={openingCanvas} />
+                        <MediaResult item={item} submitting={submitting} onRetryFailure={nested ? undefined : onRetryFailure} onCreateVariant={onCreateVariant} onContinueCanvas={onContinueCanvas} openingCanvas={openingCanvas} />
                     )}
                 </GenerationToolCard>
             )}
@@ -499,12 +507,14 @@ function SquareResultImage({ url, alt }: { url: string; alt: string }) {
 
 export function MediaResult({
     item,
+    submitting = false,
     onRetryFailure,
     onCreateVariant,
     onContinueCanvas,
     openingCanvas,
 }: {
     item: CreationMessage;
+    submitting?: boolean;
     onRetryFailure?: () => void | Promise<void>;
     onCreateVariant: () => void;
     onContinueCanvas: (ids?: string[]) => void;
@@ -599,23 +609,25 @@ export function MediaResult({
             setRecoveringSubmission(false);
         }
     };
-    const submissionNotice = item.submissionPending ? (
-        <div className="creation-media-empty" role="status">
-            提交状态待确认，原任务可能仍在运行。
-            {onRetryFailure ? (
-                <button type="button" disabled={recoveringSubmission} aria-busy={recoveringSubmission} onClick={() => void retryFailure()}>
-                    <RefreshCw size={16} />
-                    {recoveringSubmission ? "正在核对原任务…" : "查询原任务"}
-                </button>
-            ) : null}
-        </div>
-    ) : null;
+    const submissionNotice =
+        item.submissionPending && !submitting ? (
+            <div className="creation-media-empty" role="status">
+                提交状态待确认，原任务可能仍在运行。
+                {onRetryFailure ? (
+                    <button type="button" disabled={recoveringSubmission} aria-busy={recoveringSubmission} onClick={() => void retryFailure()}>
+                        <RefreshCw size={16} />
+                        {recoveringSubmission ? "正在核对原任务…" : "查询原任务"}
+                    </button>
+                ) : null}
+            </div>
+        ) : null;
     if (submissionNotice && !expectedResultCount) return submissionNotice;
     if (item.status === "pending" && !displayResultUrls.length)
         return (
             <CreationMediaPending
                 mode={item.mode || "image"}
                 ratio={item.settings?.ratio}
+                submitting={submitting && item.submissionPending}
                 verifying={item.taskStatePending}
                 progress={item.batchTotal ? `${item.batchCompletedCount || 0}/${item.batchTotal}${item.batchFailedCount ? `（${item.batchFailedCount} 项未成功）` : ""}` : undefined}
             />
@@ -833,9 +845,9 @@ export function MediaResult({
     );
 }
 
-export function CreationMediaPending({ mode, ratio, progress, verifying = false }: { mode: CreationMode; ratio?: string; progress?: string; verifying?: boolean }) {
+export function CreationMediaPending({ mode, ratio, progress, submitting = false, verifying = false }: { mode: CreationMode; ratio?: string; progress?: string; submitting?: boolean; verifying?: boolean }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
-    const label = verifying ? "正在同步任务状态" : `${brandName}正在生成${mode === "video" ? "视频" : "图像"}`;
+    const label = submitting ? "正在提交" : verifying ? "正在同步任务状态" : `${brandName}正在生成${mode === "video" ? "视频" : "图像"}`;
     return (
         <div className={`creation-media-pending is-${mode}`} style={{ aspectRatio: creationMediaAspectRatio(ratio, mode) }} aria-live="polite">
             <span className="creation-media-pending-icon">

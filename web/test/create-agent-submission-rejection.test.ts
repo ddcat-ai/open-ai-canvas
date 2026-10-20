@@ -72,6 +72,11 @@ function fixture(followup = false) {
             buildCreationAgentRunInput,
             creationHasInput,
             activeConversation: conversation,
+            syncConversationHistory: async (current: CreationConversation) => {
+                if (!current.agentSessionId) createdSessions.push({ title: current.title });
+                return current.agentSessionId || session.id;
+            },
+            conversationRoute: { show: () => {} },
             prompt,
             promptRef: {
                 get current() {

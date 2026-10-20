@@ -24,7 +24,8 @@ const cloudAgentOperation = "cloud_agent"
 // turns reference the previous run, not a mutable in-memory conversation. This
 // reuses transactional billing, worker leases, cancellation and text replay.
 type CloudAgentRequest struct {
-	CreationContext []CloudAgentCreationContextEntry `json:"creationContext,omitempty"`
+	CreationContext     []CloudAgentCreationContextEntry `json:"creationContext,omitempty"`
+	LatestVisibleResult *CloudAgentCreationVisibleResult `json:"latestVisibleResult,omitempty"`
 
 	Retry            *CloudAgentCreationRetry   `json:"retry,omitempty"`
 	ReasoningMode    string                     `json:"reasoningMode,omitempty"`
@@ -778,6 +779,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	} else if context != "" {
 		history = cloudAgentWithoutPriorCreationContext(history)
 		history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
+	}
+	if _, err := s.cloudAgentCreationVisibleResult(userID, req); err != nil {
+		return nil, err
 	}
 	encodedHistory, err := json.Marshal(history)
 	if err != nil {

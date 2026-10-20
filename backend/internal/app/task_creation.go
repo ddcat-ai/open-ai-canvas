@@ -269,6 +269,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if errors.Is(err, repository.ErrLogicalModelUnavailable) {
 		return nil, BadAuthRequest("所选模型已停用、归档或配置已更新，请重新选择")
 	}
+	if errors.Is(err, repository.ErrAgentSessionUnavailable) {
+		return nil, NotFound("创作会话已删除或已超过保留期限，请新建会话")
+	}
 	if err != nil {
 		return nil, err
 	}

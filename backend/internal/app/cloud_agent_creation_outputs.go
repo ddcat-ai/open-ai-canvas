@@ -144,7 +144,11 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 	if err != nil {
 		return nil, err
 	}
-	tasks, err := repo.CreationMediaTasks(userID, state.Request.SessionID, args.RunID, args.Offset, 21)
+	var ordinaryTaskIDs []string
+	for _, entry := range state.Request.CreationContext {
+		ordinaryTaskIDs = append(ordinaryTaskIDs, entry.TaskIDs...)
+	}
+	tasks, err := repo.CreationMediaTasks(userID, state.Request.SessionID, args.RunID, args.Offset, 21, ordinaryTaskIDs...)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ description: 从产品功能快速定位主要代码入口
 
 ## 首页 Agent 完整链路
 
+- 私有会话链接与普通历史：`pages/create/use-creation-conversation-route.ts`、`creation-conversation-history.ts` 和 `services/api/creation-history.ts`；后端 `app/creation_history.go` 校验权限及资源，`repository/creation_history.go` 关联任务和并发准入，`app/creation_history_retention.go` 清理过期索引，策略入口在 `platform/runtime_policy.go`。
 - 首页与交付 UI：`web/src/pages/create/index.tsx`、`creation-workspace.tsx`、`creation-workspace-messages.tsx`；图库规则同时依赖 `web/src/styles/globals.css` 与页面 CSS。
 - 账号偏好：`lib/user-session.ts` 的初始化/停止接线 → `services/creation-preferences-sync.ts` → `services/api/creation-preferences.ts`；后端 `handler/creation_preferences.go` → `app/creation_preferences.go` → `repository/creation_preferences.go`。
 - 会话、上下文、停止与重试：`creation-agent-conversation.ts`、`creation-agent-cancel.ts`、`creation-agent-request.ts`，后端 `cloud_agent_session.go`、`cloud_agent_creation_*.go` 和 Pi runtime；根任务准入与会话删除通过 `repository/finance.go` 共用账号锁。

@@ -16,6 +16,8 @@
 .creation-history-refresh:focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 2px; }
 .creation-history-refresh svg { width: var(--user-icon-size); height: var(--user-icon-size); }
 .creation-history-sync { margin: 0; color: var(--user-ink-muted); font-size: var(--fs-caption); line-height: 1.6; }
+.creation-history-retention { margin: 0; color: var(--user-ink-muted); font-size: var(--fs-caption); line-height: 1.6; }
+.creation-history-retention a { display: inline-block; white-space: nowrap; color: var(--user-accent); text-decoration: underline; text-underline-offset: 3px; }
 .creation-recent-canvases { margin-top: var(--space-6); }
 .creation-section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
 .creation-section-heading h2 { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--user-ink); font-size: var(--fs-body); font-weight: 600; }

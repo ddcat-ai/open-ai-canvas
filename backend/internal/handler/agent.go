@@ -66,7 +66,22 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"sessions": items})
+		response := gin.H{"sessions": items}
+		if c.Query("surface") == "creation" {
+			ids, err := svc.DeletedCreationSessionIDs(user.ID)
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			limits, err := svc.PublicRuntimeLimits()
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			response["deletedSessionIds"] = ids
+			response["conversationRetentionDays"] = limits.ConversationRetentionDays
+		}
+		ok(c, response)
 	})
 	r.POST("/agent/sessions", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -104,6 +119,43 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"id": c.Param("id"), "deleted": true})
+	})
+	r.GET("/agent/sessions/:id/creation-history", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		history, err := svc.CreationHistory(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, history)
+	})
+	r.PUT("/agent/sessions/:id/creation-history", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.CreationHistoryRequest
+		decoder := json.NewDecoder(c.Request.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			fail(c, http.StatusBadRequest, errors.New("请求必须只包含一个 JSON 对象"))
+			return
+		}
+		_, err = svc.SaveCreationHistory(user.ID, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"saved": true})
 	})
 	r.GET("/agent/sessions/:id/runs", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

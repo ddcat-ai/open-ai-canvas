@@ -12,6 +12,7 @@ description: 影策后端核心持久化表与状态边界
 | 表或字段 | 用途与边界 |
 | --- | --- |
 | `agent_sessions` | 按当前账号和 `surface` 隔离会话；首页不借用画布会话 |
+| `agent_sessions.checkpoint_json` | 复用已有列保存版本 1 的普通创作历史 `sourceConversationId/messages`，包含用户原文、必要参数、引用标签、素材身份、任务与操作 ID；不保存像素、签名地址、密钥或原生 Agent 正文。普通任务通过 `input_json.metadata.creationSessionId` 关联并校验本人活跃会话 |
 | `cloud_agent_receipts` | 保存工具执行回执，跨重启恢复原任务，避免压缩上下文丢失收费事实 |
 | `cloud_agent_executions.session_id/surface/context_selection_json` | 关联会话、入口与本轮上下文选择 |
 | `creation_preferences` | `user_id/value_json/updated_at`，每账号一条白名单偏好；不保存 API Key 或媒体文件 |
@@ -20,6 +21,8 @@ description: 影策后端核心持久化表与状态边界
 | `resource_transfers` | 以 `resource_id` 为主键的持久补存队列；保存归属、加密来源与上传会话、重试次数、下次执行时间、租约与脱敏错误 |
 
 SQLite → PostgreSQL 工具同时迁移四张新增表（会话、回执、偏好和资源转存）。既有用户、任务、媒体与画布协作结构保留。资源来源和上传会话使用 `.settings-key` 加密，数据库与该密钥文件必须一起备份；实际补存仍检查归属、SSRF、配额和存储对象。临时 URL 不作为长期资源身份。完整运行合同见 [首页创作 Agent](./creative-agent-runtime)。
+
+运行策略 JSON 的 `resource.conversationRetentionDays` 默认为 0（长期保留）。启用后按会话及关联任务最后活动时间清理已结束的 creation 索引，不取消任务或删除账务、媒体；读取和重复同步不延长保留期。普通历史追加合并，目录查询不载入正文，本次复用已有字段，无新增数值迁移。
 
 ## 画布多端协作（Schema 57）
 

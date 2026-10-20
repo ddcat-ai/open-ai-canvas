@@ -119,6 +119,7 @@ export const router = createBrowserRouter([
         children: [
             { path: "/", element: deferred(<CreatePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/c/:conversationId", element: deferred(<CreatePage />) },
             {
                 path: "/toolbox/image",
                 element: (

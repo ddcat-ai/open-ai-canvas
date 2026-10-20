@@ -9,6 +9,118 @@ import (
 	"yingce/backend/internal/model"
 )
 
+func TestCreationVisibleResultUsesOwnedCurrentMessageTasks(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	for _, task := range []model.Task{
+		{ID: "street", UserID: "user", Type: "canvas_image", Status: model.TaskStatusSucceeded, ResultJSON: `{"images":[{"storageKey":"resource:ref-one"}]}`},
+		{ID: "foreign-street", UserID: "other", Type: "canvas_image", Status: model.TaskStatusSucceeded},
+		{ID: "canvas-street", UserID: "user", ProjectID: "canvas", Type: "canvas_image", Status: model.TaskStatusSucceeded},
+		{ID: "unselected-street", UserID: "user", Type: "canvas_image", Status: model.TaskStatusSucceeded},
+	} {
+		if err := db.Create(&task).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := creationRequestWithDirectContext(t, `[{"messageId":"street-message","role":"assistant","mode":"image","taskIds":["street"]}]`)
+	req.SessionID = "session"
+	req.LatestVisibleResult = &CloudAgentCreationVisibleResult{MessageID: "street-message", TaskIDs: []string{"street", "street"}}
+	facts, err := s.cloudAgentCreationVisibleResult("user", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks := facts["tasks"].([]map[string]any)
+	if facts["messageId"] != "street-message" || len(tasks) != 1 || tasks[0]["taskId"] != "street" || !strings.Contains(mustMarshal(tasks[0]), "ref-one") {
+		t.Fatalf("visible result lost exact source: %+v", facts)
+	}
+	for _, id := range []string{"foreign-street", "canvas-street", "unselected-street", "missing"} {
+		req.LatestVisibleResult.TaskIDs = []string{id}
+		if _, err := s.cloudAgentCreationVisibleResult("user", req); err == nil {
+			t.Fatalf("visible position authorized %s", id)
+		}
+	}
+}
+
+func TestCreationVisibleResultRejectsForeignTaskBeforeAdmission(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	if err := db.Create(&model.Task{ID: "foreign-visible", UserID: "other", Type: "canvas_image", Status: model.TaskStatusSucceeded}).Error; err != nil {
+		t.Fatal(err)
+	}
+	req := creationAgentRequest()
+	req.LatestVisibleResult = &CloudAgentCreationVisibleResult{MessageID: "visible", TaskIDs: []string{"foreign-visible"}}
+	var before, after int64
+	db.Model(&model.Task{}).Count(&before)
+	if _, err := s.CreateCloudAgentRun("user", req, ""); err == nil {
+		t.Fatal("foreign visible result admitted")
+	}
+	db.Model(&model.Task{}).Count(&after)
+	if before != after {
+		t.Fatal("invalid result position created a model task")
+	}
+}
+
+func TestCreationCatalogueIncludesOrdinaryContextTasks(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	for _, id := range []string{"ordinary-street", "unselected-output"} {
+		if err := db.Create(&model.Task{ID: id, UserID: "user", Type: "canvas_image", Status: model.TaskStatusSucceeded, ResultJSON: `{"images":[{"storageKey":"resource:ref-one"}]}`}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := creationRequestWithDirectContext(t, `[{"messageId":"street-message","role":"assistant","mode":"image","taskIds":["ordinary-street"]}]`)
+	run, err := s.CreateCloudAgentRun("user", req, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, state := agentInterjectionState(t, s, run.ID)
+	call := cloudAgentCall{}
+	call.Function.Arguments = `{}`
+	result, err := cloudAgentCreationMediaRead(s.repo, "user", &state, call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := mustMarshal(result)
+	if !strings.Contains(raw, "ordinary-street") || strings.Contains(raw, "unselected-output") {
+		t.Fatalf("catalogue differs from visible conversation: %s", raw)
+	}
+}
+
+func TestCreationMixedCatalogueKeepsUserSessionAndProjectBoundaries(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	for _, run := range []model.CloudAgentExecution{
+		{ID: "catalogue-current", UserID: "user", SessionID: "session", Surface: "creation"},
+		{ID: "catalogue-other", UserID: "user", SessionID: "other-session", Surface: "creation"},
+	} {
+		if err := db.Create(&run).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, task := range []model.Task{
+		{ID: "ordinary", UserID: "user", Type: "canvas_image"},
+		{ID: "current-agent", UserID: "user", Type: "canvas_image", AgentRunID: "catalogue-current"},
+		{ID: "other-agent", UserID: "user", Type: "canvas_image", AgentRunID: "catalogue-other"},
+		{ID: "foreign", UserID: "other", Type: "canvas_image"},
+		{ID: "canvas", UserID: "user", ProjectID: "canvas", Type: "canvas_image"},
+		{ID: "text", UserID: "user", Type: "canvas_text"},
+		{ID: "unselected", UserID: "user", Type: "canvas_image"},
+	} {
+		if err := db.Create(&task).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := []string{"ordinary", "other-agent", "foreign", "canvas", "text"}
+	tasks, err := s.repo.CreationMediaTasks("user", "session", "", 0, 20, ids...)
+	if err != nil || len(tasks) != 2 || tasks[0].ID != "ordinary" || tasks[1].ID != "current-agent" {
+		t.Fatalf("mixed catalogue widened scope: %+v, %v", tasks, err)
+	}
+	page, err := s.repo.CreationMediaTasks("user", "session", "", 1, 1, ids...)
+	if err != nil || len(page) != 1 || page[0].ID != tasks[1].ID {
+		t.Fatalf("mixed catalogue pagination changed order: %+v, %v", page, err)
+	}
+	filtered, err := s.repo.CreationMediaTasks("user", "session", "catalogue-current", 0, 20, ids...)
+	if err != nil || len(filtered) != 1 || filtered[0].ID != "current-agent" {
+		t.Fatalf("run filter included ordinary tasks: %+v, %v", filtered, err)
+	}
+}
+
 func creationRequestWithDirectContext(t *testing.T, entries string) CloudAgentRequest {
 	t.Helper()
 	raw := mustMarshal(creationAgentRequest())

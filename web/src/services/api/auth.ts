@@ -52,6 +52,7 @@ export type RuntimeLimits = {
     resourceUploadMB: number;
     storedFileGB: number;
     recycleBinRetentionDays?: number;
+    conversationRetentionDays?: number;
 };
 
 export type ApiCallLog = {
@@ -331,6 +332,7 @@ export type RuntimeResourcePolicy = {
     taskCount: number;
     apiCallLogCount: number;
     recycleBinRetentionDays?: number;
+    conversationRetentionDays?: number;
 };
 
 export type RuntimeStoragePolicy = {
@@ -443,7 +445,22 @@ export function getAdminFeatureAvailability() {
 }
 
 export function updateAdminFeatureAvailability(
-    features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "inspirationSourcesVisible" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled">>,
+    features: Partial<
+        Pick<
+            FeatureAvailability,
+            | "welcomeEnabled"
+            | "shortDramaEnabled"
+            | "taskCenterEnabled"
+            | "creditsEnabled"
+            | "customChannelsEnabled"
+            | "frontendModelsEnabled"
+            | "pluginCenterEnabled"
+            | "systemPluginsVisibleToUsers"
+            | "inspirationSourcesVisible"
+            | "imageWorkbenchEnabled"
+            | "videoWorkbenchEnabled"
+        >
+    >,
 ) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }

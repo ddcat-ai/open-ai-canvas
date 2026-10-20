@@ -1,7 +1,7 @@
 import { App, Button, Form, InputNumber, Skeleton } from "antd";
 import { AlertTriangle, Bot, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useBlocker } from "react-router";
+import { useBlocker, useLocation } from "react-router";
 
 import { cn } from "@/lib/utils";
 import { getAdminRuntimePolicySetting, getAdminSelfUseRuntimePolicy, resetAdminRuntimePolicySetting, updateAdminRuntimePolicySetting, type RuntimePolicySetting } from "@/services/api/auth";
@@ -34,6 +34,7 @@ const resourceFields: PolicyField[] = [
     { group: "resource", name: "taskCount", label: "任务历史数量", extra: "单账号保留的任务历史记录数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "apiCallLogCount", label: "请求日志数量", extra: "单账号保留的上游请求日志数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "recycleBinRetentionDays", label: "回收站自动清理时间", extra: "素材移入回收站后自动彻底删除的天数，0 表示不自动清理。", unit: "天", min: 0, max: 365 },
+    { group: "resource", name: "conversationRetentionDays", label: "历史会话保留天数", extra: "按创作会话最后活动时间计算，0 表示长期保留。到期移出历史记录；运行中的任务、账务和媒体文件不受影响。", unit: "天", min: 0, max: 3650 },
 ];
 
 const storageFields: PolicyField[] = [
@@ -148,11 +149,17 @@ const policySections: PolicySectionDefinition[] = [
 const allPolicyFields = policySections.flatMap((section) => section.fields);
 
 export default function RuntimePolicySettingsPage() {
+    const location = useLocation();
     const { message, modal } = App.useApp();
     const { references } = useAdminContext();
     const [savedSetting, setSavedSetting] = useState<RuntimePolicySetting | null>(null);
     const [draft, setDraft] = useState<RuntimePolicyDraft | null>(null);
     const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        if (loading || location.hash !== "#conversation-retention") return;
+        document.getElementById("conversation-retention")?.scrollIntoView({ block: "center" });
+        document.getElementById("admin-runtime-policy-resource-conversationRetentionDays")?.focus({ preventScroll: true });
+    }, [loading, location.hash]);
     const [refreshing, setRefreshing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [resetting, setResetting] = useState(false);
@@ -525,7 +532,7 @@ function PolicySection({ icon, title, description, fields, status }: PolicySecti
                     const inputId = `admin-runtime-policy-${field.group}-${field.name}`;
                     const min = field.min ?? 1;
                     return (
-                        <Form.Item key={`${field.group}.${field.name}`} label={field.label} htmlFor={inputId} extra={field.extra}>
+                        <Form.Item key={`${field.group}.${field.name}`} id={field.name === "conversationRetentionDays" ? "conversation-retention" : undefined} label={field.label} htmlFor={inputId} extra={field.extra}>
                             <div className="admin-runtime-policy-number-control">
                                 <Form.Item
                                     noStyle

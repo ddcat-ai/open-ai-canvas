@@ -39,6 +39,7 @@ function videoSubmissionHarness() {
     const abortRef = { current: null as AbortController | null };
     const activeTaskIds = new Set<string>();
     let busy = false;
+    let submitting = new Set<string>();
     let conversation: CreationConversation = { id: "video-conversation", title: "视频", updatedAt: "2026-10-18T00:00:00Z", messages: [] };
     const channel = createModelChannel({ id: "video-test", name: "Video", interfaceType: "minimax-video", baseUrl: "https://video.example/v1", models: ["MiniMax-H3"] });
     const model = encodeChannelModel(channel.id, "MiniMax-H3");
@@ -83,6 +84,13 @@ function videoSubmissionHarness() {
             prompt,
             busy,
             activeConversation: conversation,
+            conversationsRef: {
+                get current() {
+                    return [conversation];
+                },
+            },
+            syncConversationHistory: async (current: CreationConversation) => current.agentSessionId || current.id,
+            conversationRoute: { show: () => {} },
             submitGateRef: { current: gate },
             retryPreparingRef: { current: new Set() },
             createCreationSubmitGateRelease,
@@ -132,6 +140,9 @@ function videoSubmissionHarness() {
             setPrompt: () => undefined,
             setAttachments: () => undefined,
             setDraftReferences: () => undefined,
+            setSubmittingMessageIds: (update: (ids: Set<string>) => Set<string>) => {
+                submitting = update(submitting);
+            },
         };
         return new Function(...Object.keys(bindings), `${submitCode}\nreturn submit;`)(...Object.values(bindings))();
     };
@@ -153,6 +164,9 @@ function videoSubmissionHarness() {
         get busy() {
             return busy;
         },
+        get submitting() {
+            return submitting;
+        },
         get messages() {
             return conversation.messages.filter((message) => message.role === "assistant");
         },
@@ -170,6 +184,7 @@ test("首页视频创建回执后即可提交第二条，交错完成的结果�
     const first = page.start("第一条视频");
     await page.controls[0].requested.promise;
     expect(page.busy).toBe(true);
+    expect(page.submitting.has(page.messages[0].id)).toBe(true);
     await page.start("重复点击");
     expect(page.requests).toHaveLength(1);
     await page.accept(0);
@@ -202,6 +217,8 @@ test.each(["完成", "失败"])("旧视频%s后的 finally 不释放新视频尚
     else page.controls[0].finished.reject(new Error("任务等待失败"));
     await first;
     expect(page.busy).toBe(true);
+    expect(page.submitting.has(page.messages[0].id)).toBe(false);
+    expect(page.submitting.has(page.messages[1].id)).toBe(true);
     expect(page.gate.tryAcquire()).toBeNull();
     await page.start("重复点击不能穿透");
     expect(page.requests).toHaveLength(2);

@@ -199,12 +199,17 @@ func TestRuntimePolicySaveAndResetTakeEffectImmediately(t *testing.T) {
 	actor := &model.User{ID: "admin", Role: model.UserRoleAdmin}
 	policy := defaultRuntimePolicy()
 	policy.Task.ActiveTaskLimit = 17
+	policy.Resource.ConversationRetentionDays = 30
 	if _, err := svc.UpdateRuntimePolicySetting(actor, policy); err != nil {
 		t.Fatal(err)
 	}
 	effective, err := svc.RuntimePolicy()
 	if err != nil || effective.Task.ActiveTaskLimit != 17 {
 		t.Fatalf("effective active task limit = %d, error = %v", effective.Task.ActiveTaskLimit, err)
+	}
+	limits, err := svc.PublicRuntimeLimits()
+	if err != nil || limits.ConversationRetentionDays != 30 {
+		t.Fatalf("conversation retention did not hot reload: %+v %v", limits, err)
 	}
 	if _, err := svc.ResetRuntimePolicySetting(actor); err != nil {
 		t.Fatal(err)
@@ -234,6 +239,7 @@ func TestRuntimePolicyBackfillsRecycleBinRetentionForLegacyJSON(t *testing.T) {
 	}
 	resource := value["resource"].(map[string]any)
 	delete(resource, "recycleBinRetentionDays")
+	delete(resource, "conversationRetentionDays")
 	encoded, err = json.Marshal(value)
 	if err != nil {
 		t.Fatal(err)
@@ -248,5 +254,8 @@ func TestRuntimePolicyBackfillsRecycleBinRetentionForLegacyJSON(t *testing.T) {
 	}
 	if policy.Resource.RecycleBinRetentionDays != 30 {
 		t.Fatalf("legacy recycle bin retention = %d, want 30", policy.Resource.RecycleBinRetentionDays)
+	}
+	if policy.Resource.ConversationRetentionDays != 0 {
+		t.Fatal("legacy policy must not expire existing conversations")
 	}
 }

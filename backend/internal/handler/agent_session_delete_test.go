@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"yingce/backend/internal/service"
 )
 
-func agentSessionDeleteFixture(t *testing.T) (*gorm.DB, func(string, string, bool) *httptest.ResponseRecorder) {
+func agentSessionDeleteFixture(t *testing.T) (*gorm.DB, func(string, string, bool, ...string) *httptest.ResponseRecorder) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -46,14 +47,50 @@ func agentSessionDeleteFixture(t *testing.T) (*gorm.DB, func(string, string, boo
 	}
 	router := gin.New()
 	RegisterAgentRoutes(router.Group("/api"), service.New(repository.New(db), t.TempDir()))
-	return db, func(method, path string, authenticated bool) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, "/api"+path, nil)
+	return db, func(method, path string, authenticated bool, body ...string) *httptest.ResponseRecorder {
+		payload := ""
+		if len(body) > 0 {
+			payload = body[0]
+		}
+		r := httptest.NewRequest(method, "/api"+path, strings.NewReader(payload))
 		if authenticated {
 			r.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: "auth.test-token"})
 		}
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, r)
 		return w
+	}
+}
+
+func TestCreationHistoryRoutesValidateOwnershipAndPayload(t *testing.T) {
+	_, call := agentSessionDeleteFixture(t)
+	payload := `{"sourceConversationId":"session","messages":[{"id":"message","role":"user","mode":"image","content":"原始输入","createdAt":"2026-10-20T00:00:00Z"}]}`
+	for _, tc := range []struct {
+		method, id, body string
+		auth             bool
+		want             int
+	}{
+		{"PUT", "session", payload, false, 401},
+		{"GET", "foreign", "", true, 404},
+		{"PUT", "foreign", payload, true, 404},
+		{"PUT", "session", `{"sourceConversationId":"session","messages":[],"agentState":{}}`, true, 400},
+		{"PUT", "session", payload + `{}`, true, 400},
+		{"PUT", "session", payload, true, 200},
+		{"GET", "session", "", true, 200},
+	} {
+		if w := call(tc.method, "/agent/sessions/"+tc.id+"/creation-history", tc.auth, tc.body); w.Code != tc.want {
+			t.Fatalf("%s %s: %d %s", tc.method, tc.id, w.Code, w.Body.String())
+		}
+	}
+	w := call("GET", "/agent/sessions?surface=creation", true)
+	var response struct {
+		Data struct {
+			Days    *int     `json:"conversationRetentionDays"`
+			Deleted []string `json:"deletedSessionIds"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.Data.Days == nil || *response.Data.Days != 0 {
+		t.Fatalf("missing default retention: %s %v", w.Body.String(), err)
 	}
 }
 

@@ -161,7 +161,7 @@ func taskClientContext(raw string) *TaskClientContext {
 	}
 	metadata := input.Metadata
 	context := &TaskClientContext{NodeID: metadata.NodeID}
-	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
+	if (metadata.Source == "create-page" || metadata.Source == "homepage-agent" || metadata.Source == "smart-creation-agent") && metadata.ConversationID != "" && metadata.MessageID != "" {
 		context.ConversationID = metadata.ConversationID
 		context.MessageID = metadata.MessageID
 		context.BatchIndex = metadata.BatchIndex

@@ -63,6 +63,7 @@ async function delayedSubmit(change: "conversation" | "account" | "none") {
         setBusy: () => undefined,
         activeIdRef,
         getActiveUserScope: () => scope,
+        setSubmittingMessageIds: () => undefined,
     };
     const submit = new Function(...Object.keys(deps), `${code}\nreturn submit;`)(...Object.values(deps));
     const running = submit();

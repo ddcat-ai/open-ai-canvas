@@ -78,6 +78,9 @@ func TestCreationDirectContextNativeImportsOnceAndRefreshesTaskFacts(t *testing.
 			req.CreationContext = nil // Browser has the native import receipt.
 		}
 		req.Prompt, req.IdempotencyKey = fmt.Sprintf("继续讨论第%d轮", turn), fmt.Sprintf("direct-native-%d", turn)
+		if turn > 0 {
+			req.LatestVisibleResult = &CloudAgentCreationVisibleResult{MessageID: "ordinary-result", TaskIDs: []string{task.ID}}
+		}
 		run, err := s.CreateCloudAgentRun("user", req, parentID)
 		if err != nil {
 			t.Fatal(err)
@@ -95,6 +98,29 @@ func TestCreationDirectContextNativeImportsOnceAndRefreshesTaskFacts(t *testing.
 		}
 		body := <-received
 		raw := mustMarshal(body["messages"])
+		if turn > 0 {
+			found := false
+			for _, value := range body["messages"].([]any) {
+				message := value.(map[string]any)
+				content := runtimeContentText(message["content"])
+				if !strings.HasPrefix(content, cloudAgentPiTurnContextPrefix) {
+					continue
+				}
+				var context struct {
+					RunID    string `json:"runId"`
+					Position struct {
+						Latest map[string]any `json:"latestVisibleResult"`
+					} `json:"conversationPosition"`
+				}
+				if json.Unmarshal([]byte(strings.TrimPrefix(content, cloudAgentPiTurnContextPrefix)), &context) != nil || context.RunID != run.ID {
+					continue
+				}
+				found = context.Position.Latest["messageId"] == "ordinary-result" && strings.Contains(mustMarshal(context.Position.Latest), "ref-one")
+			}
+			if !found {
+				t.Fatal("native model request lost the currently visible ordinary image position")
+			}
+		}
 		if count := strings.Count(raw, agreement); count != 1 {
 			t.Fatalf("turn %d imported the same ordinary message %d times", turn, count)
 		}

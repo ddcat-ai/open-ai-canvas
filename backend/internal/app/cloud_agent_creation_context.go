@@ -17,7 +17,25 @@ type CloudAgentCreationContextEntry struct {
 	ResourceIDs []string `json:"resourceIds,omitempty"`
 }
 
+type CloudAgentCreationVisibleResult struct {
+	MessageID string   `json:"messageId"`
+	TaskIDs   []string `json:"taskIds"`
+}
+
 func validateCloudAgentCreationContext(req *CloudAgentRequest) error {
+	if latest := req.LatestVisibleResult; latest != nil {
+		if req.Surface != "creation" || latest.MessageID == "" || len(latest.TaskIDs) == 0 {
+			return BadAuthRequest("当前可见成品需要首页消息和任务身份")
+		}
+		if err := validateCloudAgentID(latest.MessageID, "成品消息 ID", 80); err != nil {
+			return err
+		}
+		for _, id := range latest.TaskIDs {
+			if err := validateCloudAgentID(id, "成品任务 ID", 80); err != nil {
+				return err
+			}
+		}
+	}
 	if len(req.CreationContext) == 0 {
 		return nil
 	}
@@ -50,6 +68,28 @@ func validateCloudAgentCreationContext(req *CloudAgentRequest) error {
 		}
 	}
 	return nil
+}
+
+// 页面位置只是指代线索，不授权新资源；成品事实仍通过原有会话归属边界读取。
+func (s *Service) cloudAgentCreationVisibleResult(userID string, req CloudAgentRequest) (map[string]any, error) {
+	if req.LatestVisibleResult == nil {
+		return nil, nil
+	}
+	state := cloudAgentRuntime{Request: req}
+	tasks := []map[string]any{}
+	seen := map[string]bool{}
+	for _, id := range req.LatestVisibleResult.TaskIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		task, err := cloudAgentCreationSessionTask(s.repo, userID, &state, id)
+		if err != nil {
+			return nil, BadAuthRequest("当前可见成品不属于本会话，请刷新后重试")
+		}
+		tasks = append(tasks, map[string]any{"taskId": task.ID, "kind": strings.TrimPrefix(task.Type, "canvas_"), "status": task.Status, "outputs": cloudAgentCreationTaskOutputs(task)})
+	}
+	return map[string]any{"messageId": req.LatestVisibleResult.MessageID, "tasks": tasks}, nil
 }
 
 func cloudAgentCreationContextHasTask(req CloudAgentRequest, taskID string) bool {

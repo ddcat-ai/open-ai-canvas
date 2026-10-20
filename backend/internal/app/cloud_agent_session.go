@@ -19,6 +19,7 @@ const (
 )
 
 type CloudAgentSessionRequest struct {
+	ID      string `json:"id,omitempty"`
 	Title   string `json:"title,omitempty"`
 	Surface string `json:"surface,omitempty"`
 }
@@ -71,13 +72,42 @@ func (s *Service) CreateCloudAgentSession(userID string, req CloudAgentSessionRe
 	if err := normalizeCloudAgentSessionRequest(&req); err != nil {
 		return nil, err
 	}
-	id, err := s.repo.NextPrefixedID("AGS")
+	id := strings.TrimSpace(req.ID)
+	if id != "" {
+		if req.Surface != "creation" || len(id) < 16 {
+			return nil, BadAuthRequest("创作会话 ID 无效")
+		}
+		if err := validateCloudAgentID(id, "会话 ID", 80); err != nil {
+			return nil, err
+		}
+		if existing, err := s.repo.AgentSession(userID, id); err == nil {
+			if existing.Status == repository.AgentSessionDeleted || existing.Surface != "creation" {
+				return nil, kernel.NotFound("创作会话不存在")
+			}
+			view := cloudAgentSessionView(existing)
+			return &view, nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	var err error
+	if id == "" {
+		id, err = s.repo.NextPrefixedID("AGS")
+	}
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
 	row := &model.AgentSession{ID: id, UserID: userID, Title: req.Title, Surface: req.Surface, LastSurface: req.Surface, Status: cloudAgentSessionActive, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateAgentSession(row); err != nil {
+		// A retry after a lost response uses the same caller-generated identity.
+		if req.ID != "" {
+			if existing, readErr := s.repo.AgentSession(userID, id); readErr == nil && existing.Status != repository.AgentSessionDeleted && existing.Surface == "creation" {
+				view := cloudAgentSessionView(existing)
+				return &view, nil
+			}
+			return nil, kernel.NotFound("创作会话不存在")
+		}
 		return nil, err
 	}
 	view := cloudAgentSessionView(row)

@@ -20,16 +20,22 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 		s.drainResourceDeletionJobs(32)
 		s.cleanupStaleAnnouncementImageDrafts()
 		s.cleanupExpiredArchivedAssets()
+		s.cleanupExpiredCreationHistory(ctx)
 		s.cleanupDetachedResources()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		lastPeriodicCleanup := time.Now()
+		lastHistoryCleanup := time.Now()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				s.drainResourceDeletionJobs(32)
+				if time.Since(lastHistoryCleanup) >= time.Minute {
+					s.cleanupExpiredCreationHistory(ctx)
+					lastHistoryCleanup = time.Now()
+				}
 				if time.Since(lastPeriodicCleanup) >= time.Hour {
 					s.cleanupStaleAnnouncementImageDrafts()
 					s.cleanupExpiredArchivedAssets()
