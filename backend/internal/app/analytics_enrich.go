@@ -28,7 +28,11 @@ func (s *Service) estimateCallCost(log *model.ApiCallLog) {
 	if log.Billable {
 		cost = pricing.PerRequestMicros
 	}
-	cost += log.InputTokens * pricing.InputPerMillionMicros / 1_000_000
+	uncachedInputTokens := log.InputTokens - log.CachedTokens
+	if uncachedInputTokens < 0 {
+		uncachedInputTokens = 0
+	}
+	cost += uncachedInputTokens * pricing.InputPerMillionMicros / 1_000_000
 	cost += log.OutputTokens * pricing.OutputPerMillionMicros / 1_000_000
 	cost += log.CachedTokens * pricing.CachedPerMillionMicros / 1_000_000
 	cost += int64(log.MediaCount) * pricing.PerMediaMicros

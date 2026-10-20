@@ -244,7 +244,6 @@ func cloudAgentContextCompactionPrompt(state *cloudAgentRuntime) string {
 // 有它才能保证"压缩调用失败"只是少了一份更好的摘要，而不是整轮没有上下文可用。
 func cloudAgentFallbackCheckpoint(state *cloudAgentRuntime) agentcontext.Checkpoint {
 	checkpoint := agentcontext.Checkpoint{Version: agentcontext.Version}
-	checkpoint.CreationState = cloudAgentCreationCheckpointState(state)
 	if state.ContextCompaction != nil {
 		checkpoint.CompactedTurnCount = state.ContextCompaction.TurnCount
 	}
@@ -262,12 +261,15 @@ func cloudAgentFallbackCheckpoint(state *cloudAgentRuntime) agentcontext.Checkpo
 			history = append(history, role+": "+truncateRunes(content, 1800))
 		}
 	}
+	// Historical summaries retain dialogue, but current sources and plans must
+	// come from this run even when compacting an earlier checkpoint again.
+	checkpoint.CreationState = cloudAgentCreationCheckpointState(state)
 	if len(history) > 8 {
 		history = history[len(history)-8:]
 	}
 	currentHistory := strings.Join(history, "\n")
-	checkpoint.HistorySummary = truncateRunes(strings.TrimSpace(checkpoint.HistorySummary+"\n"+currentHistory), 10000)
-	checkpoint.ScriptDesign = truncateRunes(strings.TrimSpace(checkpoint.ScriptDesign+"\n"+state.CreativeAnchor.UserPrompt+"\n"+currentHistory), 10000)
+	checkpoint.HistorySummary = cloudAgentFallbackSummary(checkpoint.HistorySummary, currentHistory, 3000)
+	checkpoint.ScriptDesign = cloudAgentFallbackSummary(checkpoint.ScriptDesign, state.CreativeAnchor.UserPrompt+"\n"+currentHistory, 4000)
 	checkpoint.CurrentWork = truncateRunes(state.Request.Prompt, 3000)
 	for index := len(state.Canonical.Messages) - 1; index >= 0; index-- {
 		message := state.Canonical.Messages[index]
@@ -347,6 +349,16 @@ func cloudAgentFallbackCheckpoint(state *cloudAgentRuntime) agentcontext.Checkpo
 		checkpoint.PendingTasks = checkpoint.PendingTasks[len(checkpoint.PendingTasks)-12:]
 	}
 	return checkpoint
+}
+
+// A failed semantic compaction must leave room for recent corrections instead
+// of letting a full older summary consume the entire persisted text budget.
+func cloudAgentFallbackSummary(previous, recent string, limit int) string {
+	latest := []rune(strings.TrimSpace(recent))
+	if len(latest) > limit/2 {
+		latest = latest[len(latest)-limit/2:]
+	}
+	return strings.TrimSpace(truncateRunes(strings.TrimSpace(previous), limit-len(latest)-4) + "\n" + string(latest))
 }
 
 // Source identities and plan content come from the durable run, never from a

@@ -50,13 +50,14 @@ func testCloudAgentConcurrentRetryAdmission(t *testing.T, s *Service, db *gorm.D
 		item  cloudAgentCommerceBatchItem
 	}
 	var submissions []submission
+	parentID := root.ID
 	for _, id := range []string{"left", "right"} {
 		input := map[string]any{"mode": "image", "prompt": "Original " + id, "config": map[string]any{"channelId": "channel", "channelModelKey": "image-test", "model": "image-test", "size": "1024x1024", "count": "1"}, "metadata": map[string]any{"source": "cloud_agent_creation", "agentRunId": root.ID}}
 		if err := db.Create(&model.Task{ID: id, UserID: "user", AgentRunID: root.ID, Type: "canvas_image", Operation: "text_to_image", Model: "image-test", Prompt: "Original " + id, InputJSON: mustMarshal(input), Status: model.TaskStatusFailed, ExecutionDiagnosticJSON: `{"submissionOutcome":"not_submitted"}`}).Error; err != nil {
 			t.Fatal(err)
 		}
 		req.IdempotencyKey, req.SessionID, req.Retry = "retry-"+id, root.SessionID, &CloudAgentCreationRetry{RunID: root.ID, TaskID: id}
-		next, err := s.CreateCloudAgentRun("user", req, root.ID)
+		next, err := s.CreateCloudAgentRun("user", req, parentID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,6 +74,18 @@ func testCloudAgentConcurrentRetryAdmission(t *testing.T, s *Service, db *gorm.D
 		}
 		run, state = agentInterjectionState(t, s, run.ID)
 		submissions = append(submissions, submission{run, state, batch.Items[0]})
+		parentID = run.ID
+		if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", run.ID).Update("status", "completed").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Admission now prevents new concurrent creation rounds. Restore two
+	// previously admitted workers to exercise the budget fence for legacy
+	// executions and resumption races, without bypassing it in production.
+	for _, entry := range submissions {
+		if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", entry.run.ID).Update("status", entry.run.Status).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	// Both replicas quote against the same remaining allowance before either
 	// takes its execution write lock. Only transaction-time accounting can win.

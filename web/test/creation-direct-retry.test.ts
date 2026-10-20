@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { generationErrorMessage } from "../src/lib/generation-error";
 import { createGenerationBatchRetryContexts, createGenerationRetryContext } from "../src/lib/canvas/canvas-project-generation";
 import { refreshCreationMessageTasks } from "../src/pages/create/creation-conversations";
-import type { CreationConversation, CreationMessage, CreationRetryContext } from "../src/pages/create/creation-types";
+import { creationHasInput, type CreationConversation, type CreationMessage, type CreationRetryContext } from "../src/pages/create/creation-types";
 import type { GenerationTask } from "../src/services/api/task-center";
 import * as agentConversation from "../src/pages/create/creation-agent-conversation";
 import type { AgentRun } from "../src/services/api/agent";
@@ -20,7 +20,7 @@ function harness(
     mode: "image" | "video",
     tasks: GenerationTask[] = [],
     agentRunId?: string,
-    options: { missingRunId?: boolean; missingTaskIds?: boolean; runStatus?: AgentRun["status"]; noRunMatch?: boolean; agentReply?: boolean; agentAdmission?: "rejected" | "unknown" } = {},
+    options: { missingRunId?: boolean; missingTaskIds?: boolean; runStatus?: AgentRun["status"]; noRunMatch?: boolean; agentReply?: boolean; agentAdmission?: "rejected" | "unknown"; attachmentOnly?: boolean; pendingSubmission?: boolean } = {},
 ) {
     const settings = { ratio: "9:16", seconds: "15", quality: "high", videoQuality: "768", count: String(tasks.length || 1), imageResolution: "2k", imageParameters: '{"seed":7}', transparentBackground: "true" };
     const user: CreationMessage = {
@@ -33,6 +33,10 @@ function harness(
         settings,
         attachments: [{ id: "reference", name: "参考图", dataUrl: "https://fixture.invalid/reference.png", previewUrl: "https://fixture.invalid/reference.png", type: "image/png", storageKey: "resource:reference" }],
     };
+    if (options.attachmentOnly) {
+        user.mode = "agent";
+        user.content = "";
+    }
     const item: CreationMessage = {
         id: options.missingRunId ? `task-${tasks[0]?.id}` : "result",
         role: "assistant",
@@ -80,6 +84,7 @@ function harness(
         createGenerationBatchRetryContexts,
     };
     const scope = {
+        creationHasInput,
         activeConversation: conversation,
         busy: false,
         activeIdRef: { current: conversation.id },
@@ -96,7 +101,7 @@ function harness(
             queries.push("operation:original-operation");
             throw new ApiError("原请求已明确拒绝", { reason: "generation_submission_rejected", status: 400 });
         },
-        loadPendingCreationAgentSubmission: async () => null,
+        loadPendingCreationAgentSubmission: async () => (options.pendingSubmission ? { key: "request-key" } : null),
         creationAgentRecoveryClient: {},
         creationAgentRetryRun: agentConversation.creationAgentRetryRun,
         restoreCreationAgentConversation: async (sessionId: string) => {
@@ -271,6 +276,17 @@ test("Agent 明确拒绝且无 run 时恢复原输入与文本模型，让用户
     expect(page.agentCalls).toEqual([]);
     expect(page.notices.join(" ")).toContain("确认");
     expect(page.notices.join(" ")).not.toContain("未找到");
+});
+
+test("纯附件 Agent 明确拒绝后能恢复原附件草稿，未知回执则核对原请求", async () => {
+    const rejected = harness("image", [], undefined, { agentAdmission: "rejected", attachmentOnly: true });
+    await rejected.retry();
+    expect(rejected.draft).toMatchObject({ mode: "agent", prompt: "", attachments: rejected.user.attachments });
+    const pending = harness("image", [], undefined, { agentAdmission: "unknown", attachmentOnly: true, pendingSubmission: true });
+    await pending.retry();
+    expect(pending.agentCalls[0]?.[0]).toBe("");
+    expect(pending.agentCalls[0]?.[3]).toEqual({ recoverPending: true });
+    expect(pending.draft).toEqual({});
 });
 
 test("Agent 未知提交即便本机索引丢失且服务端暂查不到，也不恢复成可直接重发的请求", async () => {

@@ -54,6 +54,55 @@ func creationReferenceIDs(attachments []CloudAgentAttachment) []string {
 	return ids
 }
 
+func TestCreationFirstTurnAssignsUploadIndexesWithoutChangingIdempotency(t *testing.T) {
+	for _, mode := range []string{"", "replace", "append"} {
+		for _, prompt := range []string{"", "描述本轮图片"} {
+			t.Run(mode+"/"+prompt, func(t *testing.T) {
+				s, _, _ := cloudAgentVisionFixture(t)
+				req := creationReferenceRequest(t, "first-turn-upload-indexes", mode, "ref-one", "ref-two")
+				req.Prompt = prompt
+				run, err := s.CreateCloudAgentRun("user", req, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Browser submissions omit turnIndex; normalizing the persisted
+				// request must not mutate the caller's retry payload.
+				for _, attachment := range req.Attachments {
+					if attachment.TurnIndex != 0 {
+						t.Fatal("normalization mutated the original request")
+					}
+				}
+				replay, err := s.CreateCloudAgentRun("user", req, "")
+				if err != nil || replay.ID != run.ID {
+					t.Fatalf("normalizing first-turn uploads broke idempotency: %+v %v", replay, err)
+				}
+				runs, err := s.CloudAgentSessionRuns("user", run.SessionID, 10)
+				if err != nil || len(runs) != 1 {
+					t.Fatalf("idempotent replay created another run: %+v %v", runs, err)
+				}
+				for _, view := range append(runs, *run, *replay) {
+					raw, err := json.Marshal(view)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var wire CloudAgentRun
+					if err := json.Unmarshal(raw, &wire); err != nil {
+						t.Fatal(err)
+					}
+					if wire.UserPrompt != prompt || len(wire.Attachments) != 2 {
+						t.Fatalf("first-turn receipt lost the user input: %s", raw)
+					}
+					for index, attachment := range wire.Attachments {
+						if attachment.TurnIndex != index+1 || attachment.ResourceID != req.Attachments[index].ResourceID {
+							t.Fatalf("first-turn upload is not visible in receipt/history: %s", raw)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestCreationReferenceContinuationUsesOnlyCurrentEffectiveAttachments(t *testing.T) {
 	for _, tc := range []struct {
 		name string

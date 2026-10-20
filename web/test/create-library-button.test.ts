@@ -34,7 +34,7 @@ describe("creation library button", () => {
         expect(dockSource).not.toContain('aria-label="从本机上传附件"');
         expect(source).toContain("onClick={props.onOpenLibrary}");
         expect(source).toContain("creation-reference-add-button");
-        expect(source).toContain('showSelectedPrice={false} showOptionPrices variant="creation"');
+        expect(compactSource(source)).toContain('showSelectedPrice={false} showOptionPrices variant="creation"');
         expect(source).toContain("creation-submit-cost");
     });
 
@@ -160,7 +160,7 @@ describe("creation library button", () => {
 describe("creation homepage default mode", () => {
     test("opens a fresh homepage in Agent mode rather than restoring a manual media mode", () => {
         const source = readCreateSource();
-        expect(source).toContain("creationModelCapability, defaultCreationMode, modeLabels,");
+        expect(compactSource(source)).toContain("creationModelCapability, defaultCreationMode, modeLabels,");
         expect(source).toContain("useState<CreationMode>(defaultCreationMode)");
         expect(source).toContain("const nextMode = defaultCreationMode");
         expect(source).not.toContain('mode || "video"');

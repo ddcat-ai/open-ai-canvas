@@ -18,9 +18,9 @@ test("切回 Agent 传入普通模式文本与任务身份，不信任浏览器�
         },
     } as any);
     expect((input as any).creationContext).toEqual([
-        { role: "user", mode: "image", content: "画一只猫" },
-        { role: "assistant", mode: "image", taskIds: ["image-task"] },
-        { role: "assistant", mode: "video", taskIds: ["video-task"] },
+        { messageId: "user", role: "user", mode: "image", content: "画一只猫" },
+        { messageId: "image", role: "assistant", mode: "image", taskIds: ["image-task"] },
+        { messageId: "video", role: "assistant", mode: "video", taskIds: ["video-task"] },
     ]);
     expect(JSON.stringify(input)).not.toContain("signed.example");
     expect(JSON.stringify(input)).not.toContain("forged");
@@ -34,12 +34,12 @@ test("历史素材保留在上下文，明确引用或换新主题都不自动�
         const input = buildCreationAgentRunInput({ ...base, conversation, prompt });
         expect(input.attachmentMode).toBe("replace");
         expect(input.attachments).toEqual([]);
-        expect(input.creationContext).toEqual([{ role: "user", mode: "image", content: "照着产品图生成", resourceIds: ["owned"] }]);
+        expect(input.creationContext).toEqual([{ messageId: "reference", role: "user", mode: "image", content: "照着产品图生成", resourceIds: ["owned"] }]);
         expect(JSON.stringify(input)).not.toContain("resource:owned");
     }
 });
 
-test("历史素材目录只传受管媒体ID，去重并限制数量，不传图片内容或下载地址", () => {
+test("历史素材目录只传受管媒体ID，不静默丢弃较早素材、不传图片内容或下载地址", () => {
     const attachments = Array.from({ length: 40 }, (_, i) => ({ storageKey: `resource:history-${i}`, name: "历史图", type: "image/png", previewUrl: "https://signed.example/history", dataUrl: "data:image/png;base64,private" }));
     const conversation = {
         messages: [
@@ -49,8 +49,7 @@ test("历史素材目录只传受管媒体ID，去重并限制数量，不传图
     };
     const input = buildCreationAgentRunInput({ ...base, conversation });
     const ids = input.creationContext!.flatMap((entry) => entry.resourceIds || []);
-    expect(ids).toHaveLength(32);
-    expect(new Set(ids).size).toBe(32);
+    expect(new Set(ids).size).toBe(40);
     expect(input.creationContext!.at(-1)?.resourceIds).toEqual(["history-39"]);
     expect(input.attachments).toEqual([]);
     expect(JSON.stringify(input)).not.toContain("signed.example");
@@ -58,13 +57,59 @@ test("历史素材目录只传受管媒体ID，去重并限制数量，不传图
     expect(ids).not.toContain("document");
 });
 
-test("上下文限制在最近20条和12000字符，重试不重复注入历史", () => {
+test("首次导入保留早期持续约定与完整普通模式历史，重试不重复注入", () => {
     const conversation = { messages: Array.from({ length: 30 }, (_, i) => message(String(i), { role: "user", content: String(i) + "长".repeat(2000) })) };
     const input = buildCreationAgentRunInput({ ...base, conversation } as any) as any;
-    expect(input.creationContext.length).toBeLessThanOrEqual(20);
-    expect(input.creationContext.reduce((n: number, m: any) => n + (m.content?.length || 0), 0)).toBeLessThanOrEqual(12000);
+    expect(input.creationContext.length).toBe(30);
+    expect(input.creationContext[0].content).toBe(conversation.messages[0].content);
+    expect(input.creationContext[0].messageId).toBe("0");
     expect(input.creationContext.at(-1).content.startsWith("29")).toBe(true);
     expect((buildCreationAgentRunInput({ ...base, conversation, retry: { runId: "run-one" } } as any) as any).creationContext).toBeUndefined();
+});
+
+test("已由服务端确认导入的消息不重复发送，本地标记不能伪造导入完成", () => {
+    const messages = [message("old", { role: "user", content: "持续约定" }), message("new", { role: "user", content: "这次改成美国站" })];
+    const input = buildCreationAgentRunInput({
+        ...base,
+        conversation: {
+            messages,
+            agentRuns: [{ id: "run-one", creationContextMessageIds: ["old"] }],
+        },
+    } as any);
+    expect(input.creationContext).toEqual([{ messageId: "new", role: "user", mode: "image", content: "这次改成美国站" }]);
+    const unconfirmed = buildCreationAgentRunInput({ ...base, conversation: { messages, importedMessageIds: ["old"] } } as any);
+    expect(unconfirmed.creationContext?.map((entry: any) => entry.messageId)).toEqual(["old", "new"]);
+});
+
+test("连续切换模式的实际请求只发送新增正文，以当前分支服务端收据为准", () => {
+    const old = message("old", { role: "user", content: "长期约定：" + "产品信息".repeat(3000) });
+    const fresh = message("fresh", { role: "user", content: "新增加的要求" });
+    const first = buildCreationAgentRunInput({ ...base, conversation: { messages: [old] } });
+    const second = buildCreationAgentRunInput({
+        ...base,
+        conversation: {
+            messages: [old, fresh],
+            agentRunId: "current",
+            agentRuns: [
+                { id: "current", creationContextMessageIds: ["old"] },
+                { id: "discarded", creationContextMessageIds: ["old", "fresh"] },
+            ],
+        },
+    } as any);
+    expect(second.creationContext?.map((entry) => entry.messageId)).toEqual(["fresh"]);
+    const firstBytes = new TextEncoder().encode(JSON.stringify(first)).length;
+    const secondBytes = new TextEncoder().encode(JSON.stringify(second)).length;
+    expect(secondBytes).toBeLessThan(firstBytes / 10);
+    expect(JSON.stringify(second)).not.toContain("长期约定");
+    const third = buildCreationAgentRunInput({
+        ...base,
+        conversation: {
+            messages: [old, fresh],
+            agentRuns: [{ id: "next", creationContextMessageIds: ["old", "fresh"] }],
+        },
+    } as any);
+    expect(third.creationContext).toBeUndefined();
+    console.info(`ordinary context request bytes: initial=${firstBytes}, delta=${secondBytes}, confirmed=${new TextEncoder().encode(JSON.stringify(third)).length}`);
 });
 
 test("历史素材不占用本轮上传名额，新上传只携带用户本轮选择", () => {

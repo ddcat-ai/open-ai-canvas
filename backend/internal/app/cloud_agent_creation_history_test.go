@@ -189,15 +189,29 @@ func TestCreationHistoricalCataloguePaginationAndScope(t *testing.T) {
 	}
 }
 
-func TestCreationHistoricalContextResourceLimit(t *testing.T) {
+func TestCreationHistoricalContextPreservesOwnedResources(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
 	ids := make([]string, 33)
 	for i := range ids {
 		ids[i] = "resource-" + strings.Repeat("a", i+1)
+		if err := db.Create(&model.Resource{ID: ids[i], UserID: "user", Kind: "image", Status: model.ResourceStatusReady, MimeType: "image/png"}).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	raw, _ := json.Marshal([]map[string]any{{"role": "user", "mode": "image", "resourceIds": ids}})
 	req := creationRequestWithDirectContext(t, string(raw))
-	if err := validateCloudAgentCreationContext(&req); err == nil {
-		t.Fatal("accepted more than 32 historical resource IDs")
+	if err := validateCloudAgentCreationContext(&req); err != nil {
+		t.Fatal(err)
+	}
+	context, err := s.cloudAgentCreationContext("user", req)
+	if err != nil || strings.Count(context, `"resourceId":`) != len(ids) {
+		t.Fatalf("lost owned historical resources: %v %s", err, context)
+	}
+	if err := db.Model(&model.Resource{}).Where("id = ?", ids[0]).Update("user_id", "other").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.cloudAgentCreationContext("user", req); err == nil {
+		t.Fatal("increasing the catalogue must not bypass resource ownership")
 	}
 }
 

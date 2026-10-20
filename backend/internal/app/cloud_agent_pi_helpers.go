@@ -25,8 +25,6 @@ func (s *Service) buildSkillManifests(skills []cloudAgentSkill) []map[string]any
 			"description": skill.Description,
 			"version":     skill.Version,
 			"hash":        skill.Hash,
-			"instruction": skill.Instruction,
-			"files":       skill.Files,
 		}
 
 		manifests = append(manifests, manifest)

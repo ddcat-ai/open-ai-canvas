@@ -48,16 +48,18 @@ type streamingAgentToolCall struct {
 }
 
 type streamingAgentParser struct {
-	protocol      string
-	buffer        string
-	text          strings.Builder
-	reasoning     strings.Builder
-	toolCalls     map[int]*streamingAgentToolCall
-	toolCallByID  map[string]int
-	completed     map[string]interface{}
-	err           error
-	emit          func(string)
-	emitReasoning func(string)
+	protocol       string
+	buffer         string
+	text           strings.Builder
+	reasoning      strings.Builder
+	toolCalls      map[int]*streamingAgentToolCall
+	toolCallByID   map[string]int
+	completed      map[string]interface{}
+	geminiParts    []any
+	geminiFinished bool
+	err            error
+	emit           func(string)
+	emitReasoning  func(string)
 }
 
 func newStreamingAgentParser(protocol string, emit func(string)) *streamingAgentParser {
@@ -119,6 +121,8 @@ func (p *streamingAgentParser) consumeFrame(frame string) {
 		return
 	}
 	switch p.protocol {
+	case officialGeminiAgentInterface:
+		p.consumeGeminiEvent(payload)
 	case "responses":
 		p.consumeResponsesEvent(eventName, payload)
 	case "claude-api":

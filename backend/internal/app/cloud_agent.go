@@ -129,30 +129,31 @@ type cloudAgentState struct {
 }
 
 type CloudAgentRun struct {
-	Retry            *CloudAgentCreationRetry   `json:"retry,omitempty"`
-	ID               string                     `json:"id"`
-	IdempotencyKey   string                     `json:"idempotencyKey,omitempty"`
-	UserPrompt       string                     `json:"userPrompt,omitempty"`
-	SessionID        string                     `json:"sessionId,omitempty"`
-	CanvasID         string                     `json:"canvasId"`
-	ParentID         string                     `json:"parentId,omitempty"`
-	Surface          string                     `json:"surface,omitempty"`
-	ContextSelection CloudAgentContextSelection `json:"contextSelection,omitempty"`
-	Attachments      []CloudAgentAttachment     `json:"attachments,omitempty"`
-	Status           string                     `json:"status"`
-	Revision         int64                      `json:"revision"`
-	CleanupPending   bool                       `json:"cleanupPending,omitempty"`
-	FailureMessage   string                     `json:"failureMessage,omitempty"`
-	PermissionMode   string                     `json:"permissionMode"`
-	Model            string                     `json:"model"`
-	CreatedAt        time.Time                  `json:"createdAt"`
-	UpdatedAt        time.Time                  `json:"updatedAt"`
-	Events           []CloudAgentEvent          `json:"events,omitempty"`
-	Skills           []cloudAgentSkill          `json:"skills,omitempty"`
-	Approval         *cloudAgentApproval        `json:"approval,omitempty"`
-	SpentCredits     float64                    `json:"spentCredits"`
-	Step             int                        `json:"step"`
-	ActiveMessage    map[string]string          `json:"activeMessage,omitempty"`
+	CreationContextMessageIDs []string                   `json:"creationContextMessageIds,omitempty"`
+	Retry                     *CloudAgentCreationRetry   `json:"retry,omitempty"`
+	ID                        string                     `json:"id"`
+	IdempotencyKey            string                     `json:"idempotencyKey,omitempty"`
+	UserPrompt                string                     `json:"userPrompt,omitempty"`
+	SessionID                 string                     `json:"sessionId,omitempty"`
+	CanvasID                  string                     `json:"canvasId"`
+	ParentID                  string                     `json:"parentId,omitempty"`
+	Surface                   string                     `json:"surface,omitempty"`
+	ContextSelection          CloudAgentContextSelection `json:"contextSelection,omitempty"`
+	Attachments               []CloudAgentAttachment     `json:"attachments,omitempty"`
+	Status                    string                     `json:"status"`
+	Revision                  int64                      `json:"revision"`
+	CleanupPending            bool                       `json:"cleanupPending,omitempty"`
+	FailureMessage            string                     `json:"failureMessage,omitempty"`
+	PermissionMode            string                     `json:"permissionMode"`
+	Model                     string                     `json:"model"`
+	CreatedAt                 time.Time                  `json:"createdAt"`
+	UpdatedAt                 time.Time                  `json:"updatedAt"`
+	Events                    []CloudAgentEvent          `json:"events,omitempty"`
+	Skills                    []cloudAgentSkill          `json:"skills,omitempty"`
+	Approval                  *cloudAgentApproval        `json:"approval,omitempty"`
+	SpentCredits              float64                    `json:"spentCredits"`
+	Step                      int                        `json:"step"`
+	ActiveMessage             map[string]string          `json:"activeMessage,omitempty"`
 	// 事件已全量落库，运行详情只返回一页，因此必须把"这一页在整条日志里的位置"说清楚：
 	// EventSeqBase 是本次返回的首条事件之前已入库的条数（不变量 events[i].seq ==
 	// eventSeqBase + i + 1），EventCount 是该运行累计事件条数，LatestSeq 可直接当作下次
@@ -196,7 +197,8 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	if err := normalizeCloudAgentContextSelection(req); err != nil {
 		return err
 	}
-	if err := validateCloudAgentPrompt(req.Prompt, 16000); err != nil {
+	mediaMessage := req.Surface == "creation" && len(req.Attachments) > 0 && req.AttachmentMode != "inherit"
+	if err := validateCloudAgentPrompt(req.Prompt, 16000, mediaMessage); err != nil {
 		return err
 	}
 	req.Prompt = strings.TrimSpace(req.Prompt)
@@ -400,9 +402,9 @@ func normalizeCloudAgentContextSelection(req *CloudAgentRequest) error {
 	return nil
 }
 
-func validateCloudAgentPrompt(value string, maxRunes int) error {
-	if !utf8.ValidString(value) || strings.TrimSpace(value) == "" || utf8.RuneCountInString(strings.TrimSpace(value)) > maxRunes {
-		return BadAuthRequest("需要有效画布和 1–16000 个字符的提示词")
+func validateCloudAgentPrompt(value string, maxRunes int, allowEmpty bool) error {
+	if !utf8.ValidString(value) || (!allowEmpty && strings.TrimSpace(value) == "") || utf8.RuneCountInString(strings.TrimSpace(value)) > maxRunes {
+		return BadAuthRequest("需要 1–16000 个字符的提示词，或首页本轮主动上传的媒体")
 	}
 	for _, r := range value {
 		if unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t' {
@@ -701,6 +703,9 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
 			nativeSessionJSONL = session.SessionJSONL
 		}
+		if req.Surface == "creation" {
+			req.CreationContext = mergeCloudAgentCreationContext(parentState.Request.CreationContext, req.CreationContext)
+		}
 		// Prior plans remain conversation context. A new creation turn must plan
 		// its own product, market and quantity before exposing executable items.
 		if req.Surface != "creation" {
@@ -738,6 +743,10 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if strings.TrimSpace(context) != "" {
 			history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 		}
+	} else if req.Retry == nil {
+		if err := s.resolveCloudAgentCreationAttachments(userID, &req, nil); err != nil {
+			return nil, err
+		}
 	}
 	var retryReplay []string
 	if req.Retry != nil {
@@ -764,7 +773,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			inheritedCommercePlan = sourceState.CommercePlan
 		}
 	}
-	if context, err := s.cloudAgentCreationContext(userID, req); err != nil {
+	if context, err := s.cloudAgentCreationContext(userID, req, nativeSessionJSONL); err != nil {
 		return nil, err
 	} else if context != "" {
 		history = cloudAgentWithoutPriorCreationContext(history)
@@ -843,7 +852,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
 	input["piSessionJSONL"] = nativeSessionJSONL
 	task, err := s.CreateTask(userID, CreateTaskRequest{ProjectID: req.CanvasID, Type: "canvas_text", Operation: cloudAgentOperation, Prompt: req.Prompt, Model: req.Model, LogicalModelID: req.LogicalModelID, Input: input,
-		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale))), NonBillable: true}})
+		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale))), NonBillable: true, MediaOnlyAgentTurn: req.Prompt == ""}})
 	if err != nil {
 		if errors.Is(err, repository.ErrAgentSessionUnavailable) {
 			return nil, kernel.NotFound("Agent 会话不存在")
@@ -859,6 +868,15 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 				s.startCloudAgentPi(userID, existing.ID)
 			}
 			return run, runErr
+		}
+		var continuation *repository.AgentSessionContinuationError
+		if errors.As(err, &continuation) {
+			failure := cloudAgentBusyRejection(req.CanvasID, err.Error(), continuation.Activity)
+			failure.Details["sessionId"] = continuation.SessionID
+			if continuation.StaleParent {
+				failure.Reason = "agent_session_stale_parent"
+			}
+			return nil, failure
 		}
 		var busy *repository.CanvasAgentBusyError
 		if errors.As(err, &busy) {

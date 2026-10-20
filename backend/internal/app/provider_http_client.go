@@ -244,6 +244,13 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 // 不会绕过完整响应的大小上限或错误判定。
 func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]byte, string, error) {
 	startedAt := time.Now()
+	if surface, agent := req.Context().Value(agentModelRequestMetricsKey{}).(string); agent && req.Method == http.MethodPost {
+		kind := providerRequestKindFromContext(req.Context())
+		if kind != "cache-create" && kind != "cache-delete" {
+			metadata, _ := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+			log.Printf("agent model request: task_id=%s surface=%s request_bytes=%d", metadata.TaskID, surface, req.ContentLength)
+		}
+	}
 	requestTimeout := providerHTTPTimeout
 	if deadline, ok := req.Context().Deadline(); ok {
 		if remaining := time.Until(deadline); remaining > 0 {

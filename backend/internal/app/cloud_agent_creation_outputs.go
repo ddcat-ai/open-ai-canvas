@@ -92,6 +92,19 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 		if args.TaskID != "" || args.OutputIndex != 0 {
 			return nil, BadAuthRequest("精读历史上传图与任务成品不能同时指定")
 		}
+		if args.RunID == "" {
+			for _, attachment := range state.Request.Attachments {
+				if attachment.ResourceID != args.ResourceID {
+					continue
+				}
+				resource, err := repo.ResourceForUser(userID, attachment.ResourceID)
+				if err != nil || resource.Status != model.ResourceStatusReady || !strings.HasPrefix(strings.ToLower(resource.MimeType), attachment.Kind+"/") {
+					return nil, BadAuthRequest("本轮素材不存在、不属于当前用户、尚未就绪或媒体类型不匹配")
+				}
+				state.bindCreationImage(call.ID, attachment.ResourceID, attachment.Kind)
+				return map[string]any{"resourceId": attachment.ResourceID, "kind": attachment.Kind, "name": attachment.Name, "guidance": "已选定当前上传素材；图片优先进入下一步模型视觉输入，实际是否附图以 visualInputStatus 为准。不改变用户附件或生成引用；需要回看其他图片时按 resourceId 或 taskId/outputIndex 精读。"}, nil
+			}
+		}
 		attachment, err := cloudAgentCreationHistoricalAttachment(repo, userID, state, args.ResourceID, args.RunID)
 		if err != nil {
 			return nil, err
@@ -105,7 +118,8 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 			state.CreationAttachmentRefs = map[string]string{}
 		}
 		state.CreationAttachmentRefs[args.ResourceID] = args.RunID
-		return map[string]any{"resourceId": attachment.ResourceID, "runId": args.RunID, "kind": attachment.Kind, "name": attachment.Name, "guidance": "已精读选定历史素材，仅作为后台上下文，不加入当前消息附件。需要引用时在生成参数 attachmentResourceIds 中明确指定，并用 references 说明用途；无关新创作不引用。"}, nil
+		state.bindCreationImage(call.ID, attachment.ResourceID, attachment.Kind)
+		return map[string]any{"resourceId": attachment.ResourceID, "runId": args.RunID, "kind": attachment.Kind, "name": attachment.Name, "guidance": "已选定历史素材，仅作为后台上下文，不加入当前消息附件。图片优先进入下一步视觉输入，实际是否附图以 visualInputStatus 为准。需要引用时在生成参数 attachmentResourceIds 中明确指定，并用 references 说明用途；无关新创作不引用。"}, nil
 	}
 	if args.TaskID != "" {
 		ref := cloudAgentCreationOutputRef{TaskID: args.TaskID, OutputIndex: args.OutputIndex}
@@ -122,7 +136,9 @@ func cloudAgentCreationMediaRead(repo *repository.Repository, userID string, sta
 			}
 		}
 		state.CreationOutputRefs[resource.ID] = ref
-		return map[string]any{"taskId": task.ID, "runId": task.AgentRunID, "outputIndex": args.OutputIndex, "resourceId": resource.ID, "kind": strings.SplitN(resource.MimeType, "/", 2)[0], "prompt": truncateRunes(task.Prompt, 1600), "guidance": "已选定此成品。编辑时将 resourceId 放入 attachmentResourceIds，references 说明保留与修改部分；仅查看不会自动把它作为生成参考。图片内容将按当前对话模型能力附在下一步，视频仅返回元数据。"}, nil
+		kind := strings.SplitN(resource.MimeType, "/", 2)[0]
+		state.bindCreationImage(call.ID, resource.ID, kind)
+		return map[string]any{"taskId": task.ID, "runId": task.AgentRunID, "outputIndex": args.OutputIndex, "resourceId": resource.ID, "kind": kind, "prompt": truncateRunes(task.Prompt, 1600), "guidance": "已选定此成品。编辑时将 resourceId 放入 attachmentResourceIds，references 说明保留与修改部分；仅查看不会自动把它作为生成参考。图片优先进入下一步视觉输入，实际是否附图以 visualInputStatus 为准；视频仅返回元数据。"}, nil
 	}
 	references, nextRunID, err := cloudAgentCreationHistoricalCatalogue(repo, userID, state, args.RunID, args.BeforeRunID)
 	if err != nil {

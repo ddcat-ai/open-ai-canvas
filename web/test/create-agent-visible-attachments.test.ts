@@ -82,3 +82,26 @@ test("用户手动重新选择同一历史素材仍按本轮上传正常回显",
     const projected = projectCreationAgentConversation(session, [record({ attachments: [{ resourceId: "old", storageKey: "resource:old", name: "手动选中", kind: "image", role: "reference", turnIndex: 1 }] })]);
     expect(userAttachments(projected)?.map((item) => item.storageKey)).toEqual(["resource:old"]);
 });
+
+test("仅主动上传的 Agent 消息保留空正文，回执、流式及历史恢复不丢用户气泡", async () => {
+    const pending = beginCreationAgentSubmission({ id: "local", title: "新创作", updatedAt: at, messages: [] }, { id: "submit", prompt: "", attachments: [upload], createdAt: at });
+    expect(pending.title).toBe(upload.name);
+    expect(pending.messages[0]).toMatchObject({ role: "user", content: "", attachments: [upload] });
+    const remote = projectCreationAgentConversation({ ...session, title: "" }, [record({ userPrompt: "" })]);
+    expect(remote.title).toBe(upload.name);
+    expect(remote.messages.find((message) => message.role === "user")).toMatchObject({ content: "", attachments: [expect.objectContaining({ storageKey: upload.storageKey })] });
+    const settled = settleCreationAgentSubmission(pending, remote, "submit");
+    expect(settled.messages.filter((message) => message.role === "user")).toHaveLength(1);
+    expect(userAttachments(settled)?.[0].url).toBe(upload.url);
+    const streamed = appendCreationAgentEvent(settled, { runId: "run", seq: 1, eventId: "run:1", type: "assistant_delta", payload: { messageId: "answer", text: "按之前约定继续" }, createdAt: at });
+    const restored = mergeCreationConversationHistory([JSON.parse(JSON.stringify(streamed))], [remote]).conversations[0];
+    expect(restored.messages.filter((message) => message.role === "user")).toHaveLength(1);
+    expect(userAttachments(restored)?.map((item) => item.storageKey)).toEqual(["resource:new"]);
+    expect(restored.messages.find((message) => message.role === "assistant")?.content).toBe("按之前约定继续");
+});
+
+test("后台继承附件不会为无正文轮次制造用户消息，静默重试仍不插入用户气泡", () => {
+    for (const value of [record({ userPrompt: "", attachments: record().attachments?.slice(0, 2) }), record({ userPrompt: "", retry: { runId: "original" } })]) {
+        expect(projectCreationAgentConversation(session, [value]).messages.filter((message) => message.role === "user")).toEqual([]);
+    }
+});

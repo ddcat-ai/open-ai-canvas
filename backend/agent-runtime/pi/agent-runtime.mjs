@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent, setGlobalDispatcher } from "undici";
-import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { convertToLlm, createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
@@ -18,6 +18,22 @@ setGlobalDispatcher(new Agent({
 
 const providerID = "yingce";
 const api = "openai-completions";
+
+function currentTurnContextIndex(nativeMessages, modelMessages, runId) {
+  if (!nativeMessages.some(message => message.role === "custom"
+    && message.customType === "server-turn-context" && message.details?.runId === runId)) return -1;
+  // Use the SDK's actual projection in sequence, not a text/prefix search:
+  // user-authored copies of the custom message must never acquire its pixels.
+  const projected = nativeMessages.flatMap(message => convertToLlm([message])
+    .filter(item => item.role !== "system").map(item => ({ item, origin: message })));
+  const actual = modelMessages.map((item, index) => ({ item, index })).filter(({ item }) => item.role !== "system");
+  if (projected.length !== actual.length || projected.some(({ item }, index) => JSON.stringify(item) !== JSON.stringify(actual[index].item))) {
+    throw new Error("Agent 原生会话与模型上下文不一致，无法定位本轮素材。");
+  }
+  const index = projected.findIndex(({ origin }) => origin.role === "custom"
+    && origin.customType === "server-turn-context" && origin.details?.runId === runId);
+  return index < 0 ? -1 : actual[index].index;
+}
 
 async function readRequest() {
   const chunks = [];
@@ -157,9 +173,10 @@ async function run() {
             modelId: model.id,
             purpose: compactionActive ? "compaction" : "dialogue",
             systemPrompt: compactionActive
-              ? `${context.systemPrompt || ""}\n保留已经确认的商品事实、素材角色、站点与目标语言、目标语言卖点及中文审核对照、统一风格、已完成/待执行任务、用户最新约束。不能把竞品属性当商品事实；不得把审批或收费事实改写成已获授权。`
+              ? `${context.systemPrompt || ""}\n保留用户当前目标、仍适用的后续处理约定及适用条件，区分单次要求、持续约定和模型建议。记录局部覆盖、撤销与换题；短句或纯附件可能延续前文，不能只因上一轮完成就丢失约定，也不能把已完成任务恢复为待办。保留已确认的产品事实、素材来源与角色、站点与语言、风格、已完成/待执行任务；保留素材之间补充、参考或替换的关系，不能仅凭新上传判定换产品。确认换产品时不沿用旧产品事实和图片。历史素材只能按意图精读后选择，不自动加入本轮附件。不得把审批或收费事实改写成已获授权。`
               : context.systemPrompt,
             messages: context.messages,
+            currentTurnContextIndex: compactionActive || request.canvasId ? -1 : currentTurnContextIndex(session.messages, context.messages, request.runId),
             tools: (context.tools ?? []).map((tool) => ({
               name: tool.name,
               description: tool.description,

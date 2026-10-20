@@ -365,7 +365,9 @@ test("Create forwards owned result assets through one new canvas and the project
     expect(workspace).toContain("onContinueCanvas(resultAssetIds)");
     expect(createPage).toContain("continueCreationConversationOnCanvas(source)");
     expect(createPage).toContain("if (ids.length !== Math.max(resultStorageKeys.length, resultUrls.length)) throw new Error");
-    expect(createPage).toContain("await saveCreationConversations(next, scope)");
+    const handoff = createPage.slice(createPage.indexOf("const continueOnCanvas = async"), createPage.indexOf("const cancelHistorySelection"));
+    expect(handoff).toContain("queueCreationConversationsSave(conversationSaveChainRef.current, next, scope)");
+    expect(handoff.indexOf("await saved")).toBeGreaterThan(handoff.indexOf("queueCreationConversationsSave("));
     expect(createPage.indexOf("await saveCreationConversations(next, scope)")).toBeLessThan(createPage.indexOf("navigate(`/canvas/${result.id}?${params.toString()}`)"));
     expect(canvasIndex).toContain('const handoffMode = mode === "handoff"');
     expect(canvasIndex).toContain('mode !== "new" && mode !== "recent" && mode !== "handoff"');

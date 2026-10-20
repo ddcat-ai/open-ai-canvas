@@ -12,7 +12,7 @@ import {
     completedCreationGenerationTask,
     reconcileCreationTaskMessages,
 } from "../src/pages/create/creation-conversations";
-import type { CreationConversation, CreationMessage } from "../src/pages/create/creation-types";
+import { creationHasInput, type CreationConversation, type CreationMessage } from "../src/pages/create/creation-types";
 import { runBackendGenerationTask, runBackendGenerationTaskBatch, isGenerationTaskCancelled, parseBackendGenerationResult, type GenerationTaskDependencies } from "../src/services/api/generation-task";
 import type { CreateTaskInput, GenerationTask } from "../src/services/api/task-center";
 import { beginGenerationConsumer } from "../src/services/generation-consumer-lifecycle";
@@ -144,6 +144,7 @@ function harness(mode: "video" | "image", behavior: "lost" | "offline" | "reject
         prompt,
         busy,
         activeConversation: conversation,
+        creationHasInput,
         submitGateRef: { current: gate },
         retryPreparingRef,
         createCreationSubmitGateRelease,

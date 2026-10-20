@@ -23,6 +23,19 @@ var (
 	ErrAgentSessionUnavailable = errors.New("Agent 会话不存在")
 )
 
+type AgentSessionContinuationError struct {
+	SessionID   string
+	Activity    CanvasAgentActivity
+	StaleParent bool
+}
+
+func (e *AgentSessionContinuationError) Error() string {
+	if e.StaleParent {
+		return "会话已有更新，请同步最新轮次后重新发送"
+	}
+	return "当前会话仍有 Agent 正在执行，请向该轮补充说明或等待结束"
+}
+
 // Serialize task admission with session deletion across processes. Ownership
 // is checked separately by the scoped queries inside the transaction.
 func lockOwnedWriteUser(tx *gorm.DB, userID string) error {
@@ -358,6 +371,67 @@ func requireActiveAgentSessionForTask(tx *gorm.DB, task *model.Task) error {
 	}
 	if count != 1 {
 		return ErrAgentSessionUnavailable
+	}
+	return requireCurrentCreationAgentParent(tx, task, id)
+}
+
+// Homepage conversations have one continuation path. Check it inside the same
+// user-locked transaction as task creation, including roots whose execution
+// checkpoint has not been initialized yet. Canvas branching is unchanged.
+func requireCurrentCreationAgentParent(tx *gorm.DB, task *model.Task, sessionID string) error {
+	var input struct {
+		Agent struct {
+			ParentID string `json:"parentId"`
+			Request  struct {
+				Surface string `json:"surface"`
+			} `json:"request"`
+		} `json:"cloudAgent"`
+	}
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		return err
+	}
+	if input.Agent.Request.Surface != "creation" {
+		return nil
+	}
+	query := func() *gorm.DB {
+		return tx.Model(&model.CloudAgentExecution{}).
+			Select("id", "status", "cleanup_pending", "created_at").
+			Where("user_id = ? AND session_id = ?", task.UserID, sessionID).
+			Order("created_at DESC, id DESC")
+	}
+	reject := func(run model.CloudAgentExecution, stale bool) error {
+		return &AgentSessionContinuationError{SessionID: sessionID, StaleParent: stale,
+			Activity: CanvasAgentActivity{RunID: run.ID, Status: run.Status, CleanupPending: run.CleanupPending}}
+	}
+	var active model.CloudAgentExecution
+	if err := query().Where("status NOT IN ? OR cleanup_pending = ?", []string{"completed", "failed", "cancelled", "rejected"}, true).Limit(1).Find(&active).Error; err != nil {
+		return err
+	}
+	if active.ID != "" {
+		return reject(active, false)
+	}
+	var pending []model.Task
+	if err := tx.Select("id", "input_json").Where("user_id = ? AND operation = ? AND agent_execution_ready = false", task.UserID, "cloud_agent").
+		Where("status NOT IN ?", []model.TaskStatus{model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled}).
+		Where("NOT EXISTS (SELECT 1 FROM cloud_agent_executions e WHERE e.id = tasks.id AND e.user_id = tasks.user_id)").
+		Find(&pending).Error; err != nil {
+		return err
+	}
+	for _, reserved := range pending {
+		reservedSessionID, err := cloudAgentTaskSessionID(reserved.InputJSON)
+		if err != nil {
+			return err
+		}
+		if reservedSessionID == sessionID {
+			return reject(model.CloudAgentExecution{ID: reserved.ID, Status: "queued"}, false)
+		}
+	}
+	var latest model.CloudAgentExecution
+	if err := query().Limit(1).Find(&latest).Error; err != nil {
+		return err
+	}
+	if latest.ID != "" && input.Agent.ParentID != latest.ID {
+		return reject(latest, true)
 	}
 	return nil
 }

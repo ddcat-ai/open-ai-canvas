@@ -78,6 +78,10 @@ function creationAgentUserAttachments(run: AgentRun): NonNullable<CreationMessag
         }));
 }
 
+export function creationAgentConversationTitle(prompt: string, attachments: Pick<NonNullable<CreationMessage["attachments"]>[number], "name">[] = []) {
+    return (prompt.trim() || attachments[0]?.name?.trim() || "Agent 创作").slice(0, 48);
+}
+
 export function projectCreationAgentConversation(session: AgentSession, unsortedRuns: AgentRun[]): CreationConversation {
     assertCreationAgentSession(session, unsortedRuns);
     const runs = [...unsortedRuns].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id));
@@ -93,20 +97,20 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
         agentCommercePlan = undefined;
         agentContextUsage = previousTextModel && previousTextModel === run.model ? carryAgentContextUsage(agentContextUsage, run.id) : emptyAgentContextUsage(run.id);
         previousTextModel = run.model || "";
-        if (run.userPrompt && !run.retry)
-            messages.push({
-                id: `user-${run.id}`,
-                role: "user",
-                mode: "agent",
-                content: run.userPrompt,
-                createdAt: run.createdAt,
-                model: run.model,
-                attachments: creationAgentUserAttachments(run),
-            });
+        const attachments = creationAgentUserAttachments(run);
+        if ((run.userPrompt || attachments.length) && !run.retry) messages.push({ id: `user-${run.id}`, role: "user", mode: "agent", content: run.userPrompt || "", createdAt: run.createdAt, model: run.model, attachments });
         const replyIndex = messages.length;
         const imageBatches = new Map<string, number>();
-        const parts = new Map<string, { content: string; complete: boolean }>();
+        const parts = new Map<string, { content: string; complete: boolean; continuation: boolean; createdAt: string }>();
+        let hasInterjection = false;
+        const setPart = (id: string, content: string, complete: boolean, createdAt: string) => {
+            const previous = parts.get(id);
+            const part = { content, complete, continuation: previous?.continuation ?? hasInterjection, createdAt: previous?.createdAt || createdAt };
+            parts.set(id, part);
+            if (part.continuation && !previous) messages.push({ id: `${run.id}:assistant:${id}`, role: "assistant", mode: "agent", content: "", createdAt: part.createdAt, agentRunId: run.id, agentContinuation: true });
+        };
         let agentQuestion: CreationAgentQuestion | undefined;
+        let agentActivity: string | undefined;
         const events = [...(run.events || [])].filter((event) => event.runId === run.id && event.seq > 0).sort((a, b) => a.seq - b.seq);
         const seen = new Set<number>();
         for (const event of events) {
@@ -118,7 +122,26 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
             if (event.type === "assistant_message" || event.type === "assistant_snapshot" || event.type === "assistant_delta") {
                 const id = text(payload.messageId) || "assistant";
                 const content = text(payload.text || payload.summary || payload.message);
-                parts.set(id, { content: event.type === "assistant_delta" ? `${parts.get(id)?.content || ""}${content}` : content, complete: event.type === "assistant_message" });
+                setPart(id, event.type === "assistant_delta" ? `${parts.get(id)?.content || ""}${content}` : content, event.type === "assistant_message", event.createdAt);
+                agentActivity = undefined;
+            } else if (["user_interjection", "user_interjection_delivered", "user_interjection_dropped"].includes(event.type)) {
+                const id = text(payload.messageId);
+                if (!id) continue;
+                hasInterjection = true;
+                const previous = messages.find((item) => item.id === id && item.agentRunId === run.id);
+                const message: CreationMessage = {
+                    ...previous,
+                    id,
+                    role: "user",
+                    mode: "agent",
+                    agentRunId: run.id,
+                    content: text(payload.text) || previous?.content || "",
+                    createdAt: previous?.createdAt || event.createdAt,
+                    agentInterjection: event.type === "user_interjection_dropped" ? "undelivered" : event.type === "user_interjection_delivered" ? "delivered" : "queued",
+                    error: event.type === "user_interjection_dropped" ? text(payload.reason) || "本轮已结束，补充说明未送达" : undefined,
+                };
+                if (previous) messages[messages.indexOf(previous)] = message;
+                else messages.push(message);
             } else if (event.type === "generation_task_created") {
                 const taskId = text(payload.taskId);
                 if (!taskId) continue;
@@ -137,6 +160,7 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
                         ...(imageBatches.has(text(payload.imageBatchId)) ? { batchId: text(payload.imageBatchId), batchTotal: imageBatches.get(text(payload.imageBatchId)) } : {}),
                     });
             } else if (event.type === "plan_updated" && payload.inherited !== true && Array.isArray(payload.items)) {
+                agentActivity = "创作计划已更新";
                 agentPlanItems = payload.items.filter((item): item is CreationAgentPlanItem => Boolean(item && typeof item === "object" && "id" in item && "title" in item && "status" in item));
                 if (payload.plan && typeof payload.plan === "object" && !Array.isArray(payload.plan)) {
                     agentCommercePlan = {
@@ -160,6 +184,11 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
                 if (agentApproval?.approvalId === payload.approvalId) agentApproval = undefined;
             } else if (event.type === "user_question") {
                 agentQuestion = creationAgentQuestion(payload);
+            } else if (event.type === "tool_completed") {
+                const labels: Record<string, string> = { creation_media_read: "已查询创作素材", skill_read_file: "已读取创作技能", model_list: "已查询可用模型" };
+                agentActivity = labels[text(payload.toolName)];
+            } else if (event.type === "tool_failed") {
+                agentActivity = undefined;
             }
             agentContextUsage = reduceAgentContextUsage(agentContextUsage, event);
         }
@@ -167,12 +196,24 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
             const id = run.activeMessage.messageId || "assistant";
             const previous = parts.get(id);
             // Snapshots can be ahead of replayed deltas. A persisted final message wins.
-            if (!previous || (!previous.complete && run.activeMessage.text.length > previous.content.length)) parts.set(id, { content: run.activeMessage.text, complete: false });
+            if (!previous || (!previous.complete && run.activeMessage.text.length > previous.content.length)) setPart(id, run.activeMessage.text, false, run.updatedAt);
         }
+        for (const [id, part] of parts)
+            if (part.continuation) {
+                const index = messages.findIndex((item) => item.id === `${run.id}:assistant:${id}`);
+                const streaming = run.status === "running" && !part.complete && Boolean(part.content);
+                messages[index] = { ...messages[index], content: part.content, model: run.model, status: streaming ? "streaming" : "done", agentTextStreaming: streaming };
+            }
         const content = [...parts.values()]
+            .filter((part) => !part.continuation)
             .map((part) => part.content)
             .filter(Boolean)
             .join("\n\n");
+        const latestPart = [...parts.values()].at(-1);
+        const agentTextStreaming = run.status === "running" && !agentQuestion && Boolean(latestPart?.content && !latestPart.complete && !latestPart.continuation);
+        if (terminal.has(run.status)) agentActivity = undefined;
+        else if (agentQuestion) agentActivity = "等待你回复";
+        else if (run.status === "waiting_approval") agentActivity = "等待你确认";
         const hasStructuredOutput = Boolean(agentCommercePlan || agentPlanItems?.length || messages.length > replyIndex);
         if (content || agentQuestion || hasStructuredOutput || !terminal.has(run.status) || run.status === "failed" || run.status === "cancelled") {
             messages.splice(replyIndex, 0, {
@@ -186,6 +227,8 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
                 agentPlanItems,
                 commercePlan: agentCommercePlan,
                 agentQuestion,
+                agentTextStreaming,
+                agentActivity,
                 ...(imageBatches.size ? { batchTotal: [...imageBatches.values()].reduce((total, count) => total + count, 0) } : {}),
                 status: run.status === "failed" ? "error" : run.status === "cancelled" || run.status === "rejected" ? "cancelled" : terminal.has(run.status) ? "done" : "streaming",
                 ...(run.failureMessage ? { error: run.failureMessage } : {}),
@@ -196,12 +239,13 @@ export function projectCreationAgentConversation(session: AgentSession, unsorted
         else if (run.approval && !run.approval.decision) agentApproval = run.approval;
     }
     const latest = runs.at(-1);
+    const firstUser = messages.find((message) => message.role === "user");
     return {
         id: session.id,
         agentSessionId: session.id,
         agentRunId: latest?.id,
         agentRuns: runs,
-        title: session.title || runs[0]?.userPrompt?.slice(0, 24) || "Agent 创作",
+        title: session.title || creationAgentConversationTitle(firstUser?.content || "", firstUser?.attachments).slice(0, 24),
         updatedAt: session.updatedAt,
         messages,
         agentApproval,
@@ -231,28 +275,44 @@ export async function restoreCreationAgentConversation(sessionId: string, client
             }
         cursor = page.nextRunCursor;
     }
-    const fullRuns = await Promise.all(
-        runs.map(async (run) => {
-            const events: AgentEvent[] = [];
-            let seq = 0;
-            let snapshot = run;
-            do {
-                signal?.throwIfAborted();
-                const response = await retryCreationHistoryRead(async () => {
-                    const { run: next } = await client.getRun(run.id, seq, seq === 0, signal);
-                    const page = [...new Map((next.events || []).filter((event) => event.runId === run.id && event.seq > seq).map((event) => [event.seq, event])).values()].sort((a, b) => a.seq - b.seq);
-                    if (page.some((event, index) => event.seq !== seq + index + 1) || (!page.length && seq < (next.eventCount || 0))) {
-                        throw new ApiError("历史事件未完整返回，请重试加载", { retryable: true });
-                    }
-                    return { run: next, page };
-                }, signal);
-                snapshot = response.run;
-                const page = response.page;
-                if (!page.length) break;
-                events.push(...page);
-                seq = page.at(-1)!.seq;
-            } while (seq < (snapshot.eventCount || 0));
-            return { ...snapshot, events };
+    const restoreRun = async (run: AgentRun) => {
+        const prefix = [...new Map((run.events || []).filter((event) => event.runId === run.id && Number.isSafeInteger(event.seq) && event.seq > 0).map((event) => [event.seq, event])).values()].sort((left, right) => left.seq - right.seq);
+        const events: AgentEvent[] = prefix.every((event, index) => event.seq === index + 1) ? prefix : [];
+        let seq = events.at(-1)?.seq || 0;
+        let snapshot = run;
+        if (Number.isSafeInteger(run.eventCount) && run.eventCount === seq) return { ...run, events };
+        do {
+            signal?.throwIfAborted();
+            const response = await retryCreationHistoryRead(async () => {
+                const { run: next } = await client.getRun(run.id, seq, seq === 0, signal);
+                const page = [...new Map((next.events || []).filter((event) => event.runId === run.id && event.seq > seq).map((event) => [event.seq, event])).values()].sort((a, b) => a.seq - b.seq);
+                if (page.some((event, index) => event.seq !== seq + index + 1) || (!page.length && seq < (next.eventCount || 0))) {
+                    throw new ApiError("历史事件未完整返回，请重试加载", { retryable: true });
+                }
+                return { run: next, page };
+            }, signal);
+            snapshot = response.run;
+            const page = response.page;
+            if (!page.length) break;
+            events.push(...page);
+            seq = page.at(-1)!.seq;
+        } while (seq < (snapshot.eventCount || 0));
+        return { ...snapshot, events };
+    };
+    const fullRuns = new Array<AgentRun>(runs.length);
+    let nextRun = 0;
+    let failed = false;
+    await Promise.all(
+        Array.from({ length: Math.min(4, runs.length) }, async () => {
+            while (!failed && nextRun < runs.length) {
+                const index = nextRun++;
+                try {
+                    fullRuns[index] = await restoreRun(runs[index]);
+                } catch (error) {
+                    failed = true;
+                    throw error;
+                }
+            }
         }),
     );
     return projectCreationAgentConversation(first.session, fullRuns);
@@ -349,6 +409,7 @@ export function mergeCreationAgentConversation(current: CreationConversation, in
     const runs = new Map((current.agentRuns || []).map((run) => [run.id, run]));
     for (const run of incoming.agentRuns || []) {
         const previous = runs.get(run.id);
+        if (previous === run) continue;
         if (!previous) {
             runs.set(run.id, run);
             continue;
@@ -366,12 +427,25 @@ export function mergeCreationAgentConversation(current: CreationConversation, in
         .reduce((latest, at) => (Date.parse(at) > Date.parse(latest) ? at : latest), incoming.updatedAt);
     const session: AgentSession = { id: incoming.agentSessionId, title: incoming.title, surface: "creation", status: "active", revision: 0, createdAt: incoming.updatedAt, updatedAt };
     const projected = projectCreationAgentConversation(session, [...runs.values()]);
-    const previousAgentIds = current.agentSessionId ? new Set(projectCreationAgentConversation({ ...session, id: current.agentSessionId }, current.agentRuns || []).messages.map((message) => message.id)) : new Set<string>();
+    return mergeProjectedCreationAgentConversation(current, projected, current.agentRuns || []);
+}
+
+function mergeProjectedCreationAgentConversation(current: CreationConversation, projected: CreationConversation, previousRuns: AgentRun[]): CreationConversation {
+    const previousAgentIds = new Set<string>();
+    const runIds = new Set(previousRuns.map((run) => run.id));
+    for (const run of previousRuns) {
+        previousAgentIds.add(`user-${run.id}`);
+        previousAgentIds.add(`${run.id}:assistant`);
+        previousAgentIds.add(`error-${run.id}`);
+        for (const event of run.events || []) {
+            if (event.type === "generation_task_created" && text(event.payload?.taskId)) previousAgentIds.add(`task-${text(event.payload?.taskId)}`);
+        }
+    }
     for (const message of current.messages) {
-        if (message.role === "assistant" && message.mode === "agent" && (current.agentRuns || []).some((run) => message.id.startsWith(`${run.id}:`) || message.id === `error-${run.id}`)) previousAgentIds.add(message.id);
+        if (message.role === "assistant" && message.mode === "agent" && (runIds.has(message.agentRunId || "") || previousRuns.some((run) => message.id.startsWith(`${run.id}:`)))) previousAgentIds.add(message.id);
     }
     const previousById = new Map(current.messages.map((message) => [message.id, message]));
-    const confirmed = confirmedCreationAgentSubmissions(current, incoming);
+    const confirmed = confirmedCreationAgentSubmissions(current, projected);
     const confirmedOperations = new Set([...confirmed.values()].map((message) => message.clientOperationId));
     const messages = projected.messages.map((message) => {
         const previous = previousById.get(message.id);
@@ -407,7 +481,7 @@ export function beginCreationAgentSubmission(
     return {
         ...conversation,
         updatedAt: submission.createdAt,
-        title: conversation.title === "新创作" ? submission.prompt.slice(0, 24) : conversation.title,
+        title: conversation.title === "新创作" ? creationAgentConversationTitle(submission.prompt, submission.attachments).slice(0, 24) : conversation.title,
         messages: [
             ...conversation.messages.filter((message) => message.clientOperationId !== submission.id),
             ...(submission.silent ? [] : [{ ...common, id: `user-${submission.id}`, role: "user" as const, content: submission.prompt, attachments: submission.attachments, references: submission.references }]),
@@ -628,9 +702,13 @@ export function appendCreationAgentEvent(conversation: CreationConversation, eve
               };
     const nextRuns = [...runs];
     nextRuns[index] = updated;
-    const projected = projectCreationAgentConversation(
-        { id: conversation.agentSessionId || conversation.id, title: conversation.title, surface: "creation", status: "active", revision: 0, createdAt: runs[0]?.createdAt || conversation.updatedAt, updatedAt: event.createdAt },
-        nextRuns,
-    );
-    return mergeCreationAgentConversation(conversation, projected);
+    if ((run.revision || 0) > (updated.revision || 0) || (terminal.has(run.status) && !terminal.has(updated.status))) return conversation;
+    // 迟到的旧轮次和乱序补页走完整合并；实时当前轮次不再反复投影已经完成的历史。
+    if (conversation.agentRunId !== run.id || conversation.agentContextUsage?.runId !== run.id || (event.seq > 0 && (run.events || []).some((item) => item.seq > event.seq))) {
+        return mergeCreationAgentConversation(conversation, { ...conversation, agentSessionId: conversation.agentSessionId || conversation.id, agentRuns: [updated], updatedAt: event.createdAt });
+    }
+    const projected = projectCreationAgentConversation({ id: conversation.agentSessionId || conversation.id, title: conversation.title, surface: "creation", status: "active", revision: 0, createdAt: run.createdAt, updatedAt: event.createdAt }, [updated]);
+    projected.agentRuns = nextRuns;
+    projected.agentContextUsage = reduceAgentContextUsage(reduceAgentContextUsage(conversation.agentContextUsage || emptyAgentContextUsage(run.id), event), { runId: run.id, type: "run_status", payload: { status: updated.status } });
+    return mergeProjectedCreationAgentConversation(conversation, projected, [run]);
 }

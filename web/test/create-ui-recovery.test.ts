@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const page = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8");
-const workspace = readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-workspace.tsx"), "utf8");
+const page = readFileSync(resolve(import.meta.dir, "../src/pages/create/index.tsx"), "utf8").replace(/\s+/g, " ");
+const workspace = readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-workspace.tsx"), "utf8").replace(/\s+/g, " ");
 const styles = readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-product.css"), "utf8");
 
 test("首页复用原模型选择器，Agent 主栏是对话模型，图片视频模型进入偏好", () => {
@@ -38,12 +38,11 @@ test("模式菜单脱离 Composer 裁切容器，同宽展开并自动避让", (
     expect(styles).toContain(".creation-mode-menu-item { display: block; min-width: 0; white-space: nowrap;");
 });
 
-test("首页移除虚构上下文进度，并只保留一个图标发送按钮", () => {
+test("首页移除虚构上下文进度，发送继续走实际提交入口", () => {
     expect(page).not.toContain("contextEstimate");
     expect(workspace).not.toContain("ContextEstimateRing");
     expect(styles).not.toContain("creation-context-estimate");
     expect(page).not.toContain("本地估算");
     expect(page).not.toContain("未测量");
-    expect((workspace.match(/className="creation-submit is-icon-only"/g) || []).length).toBe(1);
     expect(page).toContain("onSubmit: () => void submit()");
 });

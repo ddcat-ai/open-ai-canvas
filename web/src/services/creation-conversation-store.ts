@@ -12,7 +12,9 @@ export async function loadPendingCreationAgentSubmission(conversationId: string)
         const parsed = JSON.parse(value) as PendingCreationAgentSubmission;
         if (!parsed.sessionId || !parsed.key || parsed.request?.idempotencyKey !== parsed.key || parsed.request.sessionId !== parsed.sessionId || parsed.request.surface !== "creation") throw new Error("invalid pending submission");
         return parsed;
-    } catch { throw new Error("待确认的 Agent 请求记录已损坏；请先核对服务端运行记录，避免重复提交任务"); }
+    } catch {
+        throw new Error("待确认的 Agent 请求记录已损坏；请先核对服务端运行记录，避免重复提交任务");
+    }
 }
 
 export async function savePendingCreationAgentSubmission(conversationId: string, pending: PendingCreationAgentSubmission) {
@@ -44,7 +46,13 @@ export type StoredCreationConversation = {
 };
 
 export function updateCreationConversationSnapshot<T extends { id: string }>(conversations: T[], conversationId: string, updater: (conversation: T) => T) {
-    return conversations.map((conversation) => (conversation.id === conversationId ? updater(conversation) : conversation));
+    const index = conversations.findIndex((conversation) => conversation.id === conversationId);
+    if (index < 0) return conversations;
+    const updated = updater(conversations[index]);
+    if (updated === conversations[index]) return conversations;
+    const next = [...conversations];
+    next[index] = updated;
+    return next;
 }
 
 // 对话、生成任务与素材是独立持久状态；删除历史记录不能在这里级联清理任务或资源。
@@ -64,9 +72,7 @@ function isRecoverableCreationMessage(message: PendingCreationMessage) {
 }
 
 export function pendingCreationTaskKey(conversations: StoredCreationConversation[]) {
-    return conversations
-        .flatMap((conversation) => conversation.messages.flatMap((message) => (isRecoverableCreationMessage(message) ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])))
-        .join("|");
+    return conversations.flatMap((conversation) => conversation.messages.flatMap((message) => (isRecoverableCreationMessage(message) ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : []))).join("|");
 }
 
 export function pendingCreationTaskIds(conversations: StoredCreationConversation[]) {
@@ -121,6 +127,50 @@ export async function removeStoredCreationConversation(conversationId: string, s
     await clearPendingCreationAgentSubmission(conversationId, scope);
 }
 
-export function queueCreationConversationsSave<T extends StoredCreationConversation>(previous: Promise<unknown>, conversations: T[], scope = getActiveUserScope()) {
-    return previous.catch(() => undefined).then(() => saveCreationConversations(conversations, scope));
+type PendingConversationSave = {
+    conversations: StoredCreationConversation[];
+    scope: string;
+    started: boolean;
+    failed: boolean;
+    flush: () => void;
+};
+const pendingConversationSaves = new WeakMap<Promise<unknown>, PendingConversationSave>();
+
+export function flushCreationConversationsSave(pending: Promise<void>) {
+    pendingConversationSaves.get(pending)?.flush();
+    return pending;
+}
+
+export function queueCreationConversationsSave<T extends StoredCreationConversation>(previous: Promise<unknown>, conversations: T[], scope = getActiveUserScope(), options: { defer?: boolean } = {}) {
+    const pending = pendingConversationSaves.get(previous);
+    if (!options.defer) pending?.flush();
+    if (pending?.scope === scope && !pending.failed && (!pending.started || pending.conversations === conversations)) {
+        pending.conversations = conversations;
+        return previous as Promise<void>;
+    }
+    let flush = () => {};
+    const delay = options.defer
+        ? new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, 200);
+              flush = () => {
+                  clearTimeout(timer);
+                  resolve();
+              };
+          })
+        : Promise.resolve();
+    const entry: PendingConversationSave = { conversations, scope, started: false, failed: false, flush };
+    // 流式快照只保留最新待写值；间隔不随新事件延长。关键绑定/结果消费默认立即保存并等待落盘。
+    const saved = previous
+        .catch(() => undefined)
+        .then(() => delay)
+        .then(() => {
+            entry.started = true;
+            return saveCreationConversations(entry.conversations, entry.scope);
+        })
+        .catch((error) => {
+            entry.failed = true;
+            throw error;
+        });
+    pendingConversationSaves.set(saved, entry);
+    return saved;
 }

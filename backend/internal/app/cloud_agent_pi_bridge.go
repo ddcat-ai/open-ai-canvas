@@ -52,9 +52,9 @@ func strictRuntimeStringAliases(fields map[string]interface{}, label string, ali
 	return value, nil
 }
 
-func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]interface{}, systemPrompt string) (canonicalAgentRequest, error) {
+func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]interface{}, systemPrompt string, currentTurnContextIndex ...int) (canonicalAgentRequest, error) {
 	canonical := canonicalAgentRequest{Tools: tools, ToolChoice: "auto", SystemPrompt: systemPrompt}
-	for _, message := range messages {
+	for index, message := range messages {
 		switch stringField(message, "role") {
 		case "system":
 			if text := runtimeContentText(message["content"]); strings.TrimSpace(text) != "" {
@@ -69,7 +69,11 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 				})
 			}
 		case "user":
-			canonical.Messages = append(canonical.Messages, map[string]interface{}{"role": "user", "content": runtimeUserContent(message["content"])})
+			converted := map[string]interface{}{"role": "user", "content": runtimeUserContent(message["content"])}
+			if len(currentTurnContextIndex) == 1 && currentTurnContextIndex[0] == index {
+				converted[cloudAgentContextSourceKey] = "creation_turn_context"
+			}
+			canonical.Messages = append(canonical.Messages, converted)
 		case "assistant":
 			text := ""
 			calls := []interface{}{}

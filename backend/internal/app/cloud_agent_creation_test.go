@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"testing"
+
+	"yingce/backend/internal/model"
 )
 
 func creationAgentRequest() CloudAgentRequest {
@@ -78,22 +80,27 @@ func TestCreationAgentRejectsUnavailableMediaChoice(t *testing.T) {
 }
 
 func TestCreationSessionRunPageStartsWithNewestAndRestoresPrompts(t *testing.T) {
-	s, _, _, _ := creationTestService(t)
+	s, db, _, _ := creationTestService(t)
 	session, err := s.CreateCloudAgentSession("user", CloudAgentSessionRequest{Surface: "creation"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids := make([]string, 3)
+	parentID := ""
 	for i, prompt := range []string{"第一轮", "第二轮", "第三轮"} {
 		req := creationAgentRequest()
 		req.SessionID = session.ID
 		req.Prompt = prompt
 		req.IdempotencyKey = "creation-page-key-" + prompt
-		run, err := s.CreateCloudAgentRun("user", req, "")
+		run, err := s.CreateCloudAgentRun("user", req, parentID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids[i] = run.ID
+		parentID = run.ID
+		if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", run.ID).Update("status", "completed").Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	runs, err := s.CloudAgentSessionRuns("user", session.ID, 2)
 	if err != nil {

@@ -218,10 +218,10 @@ func TestCreationDirectContextRejectsForeignTaskBeforeAdmission(t *testing.T) {
 	}
 }
 
-func TestCreationDirectContextRejectsOversizedAndCanvasInput(t *testing.T) {
-	req := creationRequestWithDirectContext(t, `[{"role":"user","mode":"image","content":"`+strings.Repeat("x", 12001)+`"}]`)
+func TestCreationDirectContextRejectsInvalidIdentityAndCanvasInput(t *testing.T) {
+	req := creationRequestWithDirectContext(t, `[{"messageId":"`+strings.Repeat("x", 81)+`","role":"user","mode":"image","content":"hello"}]`)
 	if err := validateCloudAgentRequest(&req); err == nil {
-		t.Fatal("unbounded context accepted")
+		t.Fatal("invalid message identity accepted")
 	}
 	req = creationRequestWithDirectContext(t, `[{"role":"user","mode":"image","content":"hello"}]`)
 	req.Surface, req.CanvasID = "canvas", "canvas-one"
@@ -232,9 +232,9 @@ func TestCreationDirectContextRejectsOversizedAndCanvasInput(t *testing.T) {
 	if err := validateCloudAgentRequest(&req); err == nil {
 		t.Fatal("system role accepted")
 	}
-	req = creationRequestWithDirectContext(t, `[{"role":"user","mode":"image","taskIds":[`+strings.Repeat(`"task",`, 32)+`"task"]}]`)
+	req = creationRequestWithDirectContext(t, `[{"messageId":"duplicate","role":"user","mode":"image"},{"messageId":"duplicate","role":"assistant","mode":"image"}]`)
 	if err := validateCloudAgentRequest(&req); err == nil {
-		t.Fatal("unbounded task set accepted")
+		t.Fatal("duplicate message identity accepted")
 	}
 }
 
@@ -287,7 +287,7 @@ func TestCreationDirectContextContinuesAgentAfterOrdinaryMedia(t *testing.T) {
 	}
 }
 
-func TestCreationDirectContextBoundsServerFactsAndRejectsCanvasTask(t *testing.T) {
+func TestCreationDirectContextPreservesServerFactsAndRejectsCanvasTask(t *testing.T) {
 	s, db, _ := agentMediaFixture(t)
 	req := creationAgentRequest()
 	for i := 0; i < 32; i++ {
@@ -302,8 +302,8 @@ func TestCreationDirectContextBoundsServerFactsAndRejectsCanvasTask(t *testing.T
 		entry.TaskIDs = append(entry.TaskIDs, id)
 	}
 	facts, err := s.cloudAgentCreationContext("user", req)
-	if err != nil || len(facts) > 64<<10 || !strings.Contains(facts, "large-context-31") || !strings.Contains(facts, "olderEntriesTruncated") {
-		t.Fatalf("unbounded or wrong facts: len=%d err=%v", len(facts), err)
+	if err != nil || len(facts) <= 64<<10 || !strings.Contains(facts, "large-context-0") || !strings.Contains(facts, "large-context-31") || strings.Contains(facts, "olderEntriesTruncated") {
+		t.Fatalf("initial owned facts were silently truncated: len=%d err=%v", len(facts), err)
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", "large-context-31").Update("project_id", "canvas-other").Error; err != nil {
 		t.Fatal(err)

@@ -60,6 +60,13 @@ func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgent
 	out.Approval = state.Approval
 	if cloudAgentRunTerminal(run.Status) {
 		out.Approval = nil
+		if state.Request.Surface == "creation" {
+			if session, err := s.repo.CloudAgentPiSession(task.UserID, task.ID); err == nil {
+				out.CreationContextMessageIDs = cloudAgentCreationContextMessageIDs(session.SessionJSONL)
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, err
+			}
+		}
 	}
 	out.Step = state.Step
 	if stateErr == nil && state.ActiveTaskID != "" && (run.Status == "running" || run.Status == "queued") {

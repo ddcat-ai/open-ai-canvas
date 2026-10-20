@@ -59,6 +59,14 @@ export type CreationMessage = {
     generationEffectKeys?: string[];
     agentPlan?: SmartCreationAgentPlan;
     agentRunId?: string;
+    /** 补充说明复用原 run；pending 表示回执不明，不能据此另建收费轮次。 */
+    agentInterjection?: "pending" | "queued" | "delivered" | "undelivered";
+    /** 原 run 中插话后的续答正文；计划和媒体仍由该 run 的主消息呈现。 */
+    agentContinuation?: boolean;
+    /** 正文增量是否仍在输出；媒体任务运行不代表文字仍在流式输出。 */
+    agentTextStreaming?: boolean;
+    /** 由已发生的工具事件投影的简短反馈，不包含内部推理或原始工具结果。 */
+    agentActivity?: string;
     commerceItemId?: string;
     agentQuestion?: CreationAgentQuestion;
     agentPlanItems?: CreationAgentPlanItem[];
@@ -71,17 +79,57 @@ export type CreationMessage = {
 };
 export type CreationAgentPlanItem = { id: string; title: string; status: "pending" | "doing" | "done"; type?: string; targetCopy?: string; zhReviewCopy?: string; specs?: Record<string, unknown> };
 export type CreationCommercePlan = {
-    planVersion: string; planId: string; version: number; planHash?: string; intent: string; platform: string; site: string; language: string;
+    planVersion: string;
+    planId: string;
+    version: number;
+    planHash?: string;
+    intent: string;
+    platform: string;
+    site: string;
+    language: string;
     showImportantInfo?: boolean;
     productFacts: Array<{ id: string; claim: string; sourceIds: string[]; status?: "supported" | "inferred" | "unknown" }>;
-    items: Array<{ id: string; type: string; purpose: string; title: string; prompt: string; targetCopy: string; zhReviewCopy: string; language?: string; factIds?: string[]; attachmentResourceIds: string[]; specs?: Record<string, unknown>; dependencies?: string[]; design?: { role: string; layout: string; focalPoint: string; composition: string; typography: string; palette: string } }>;
-    styleBible?: string; assumptions?: string[]; conflicts?: string[]; languageVariants?: string[];
+    items: Array<{
+        id: string;
+        type: string;
+        purpose: string;
+        title: string;
+        prompt: string;
+        targetCopy: string;
+        zhReviewCopy: string;
+        language?: string;
+        factIds?: string[];
+        attachmentResourceIds: string[];
+        specs?: Record<string, unknown>;
+        dependencies?: string[];
+        design?: { role: string; layout: string; focalPoint: string; composition: string; typography: string; palette: string };
+    }>;
+    styleBible?: string;
+    assumptions?: string[];
+    conflicts?: string[];
+    languageVariants?: string[];
     styleLock?: { fontFamily: string; typography: string; headingColor: string; bodyColor: string; accentColor: string; backgroundColor: string; iconStyle: string };
     references?: Array<{ resourceId: string; name: string; role: string; kind?: string; index?: number; usage?: string; selection?: string }>;
     skills?: Array<{ id: string; name: string }>;
-    estimatedCredits?: number; estimateStatus?: "quoted" | "unavailable"; maxCredits?: number;
+    estimatedCredits?: number;
+    estimateStatus?: "quoted" | "unavailable";
+    maxCredits?: number;
 };
-export type CreationConversation = { id: string; title: string; updatedAt: string; canvasId?: string; composerMode?: CreationMode; messages: CreationMessage[]; agentSessionId?: string; agentRunId?: string; agentRuns?: AgentRun[]; agentApproval?: AgentApproval; agentPlanItems?: CreationAgentPlanItem[]; agentCommercePlan?: CreationCommercePlan; agentContextUsage?: AgentContextUsage };
+export type CreationConversation = {
+    id: string;
+    title: string;
+    updatedAt: string;
+    canvasId?: string;
+    composerMode?: CreationMode;
+    messages: CreationMessage[];
+    agentSessionId?: string;
+    agentRunId?: string;
+    agentRuns?: AgentRun[];
+    agentApproval?: AgentApproval;
+    agentPlanItems?: CreationAgentPlanItem[];
+    agentCommercePlan?: CreationCommercePlan;
+    agentContextUsage?: AgentContextUsage;
+};
 export type CreationHistoryEntry = CreationConversation & { historyStatus?: "unloaded" | "loading" | "error" };
 
 export const modeLabels: Record<CreationMode, string> = { agent: "Agent", text: "文本", image: "图片", video: "视频" };
@@ -91,7 +139,12 @@ export const creationComposerModeOptions = [
     { key: "image", label: "图片", description: "生成图片" },
     { key: "video", label: "视频", description: "生成视频" },
 ] as const;
-export function creationModelCapability(mode: CreationMode) { return mode === "agent" ? "text" : mode; }
+export function creationModelCapability(mode: CreationMode) {
+    return mode === "agent" ? "text" : mode;
+}
+export function creationHasInput(mode: CreationMode, prompt: string, attachments: CreationAttachment[] = []) {
+    return Boolean(prompt.trim()) || (mode === "agent" && attachments.some((item) => /^(image|video|audio)\//.test(item.type) && /^resource:[\w-]+$/.test(item.storageKey || "")));
+}
 export const shotScriptLabels: Record<CreationMode, string> = { agent: "创作思路", text: "创作思路", image: "画面指令", video: "镜头脚本" };
 export const ratioOptions = [
     { value: "1:1", label: "方形" },

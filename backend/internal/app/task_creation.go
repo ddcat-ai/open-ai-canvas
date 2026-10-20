@@ -24,6 +24,8 @@ type taskAdmission struct {
 	GenerationID string
 	ApprovalID   string
 	NonBillable  bool
+	// Only validated Agent messages with current media may omit user text.
+	MediaOnlyAgentTurn bool
 }
 
 func taskActiveLimitError(limit int) *AppError {
@@ -45,7 +47,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
 	}
 	prompt := strings.TrimSpace(req.Prompt)
-	if prompt == "" {
+	mediaOnlyAgentTurn := req.admission != nil && req.admission.MediaOnlyAgentTurn && req.Type == "canvas_text" &&
+		(req.Operation == cloudAgentOperation || req.Operation == cloudAgentStepOperation || req.Operation == cloudAgentContextCompactionOperation)
+	if prompt == "" && !mediaOnlyAgentTurn {
 		return nil, errors.New("prompt is required")
 	}
 	taskType := strings.TrimSpace(req.Type)

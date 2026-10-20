@@ -39,7 +39,7 @@ export function creationManagedModelSelection(config: AiConfig, value: string): 
 }
 
 export type CreationAgentRequestOptions = {
-    conversation?: Pick<CreationConversation, "messages">;
+    conversation?: Pick<CreationConversation, "messages" | "agentRuns" | "agentRunId">;
     retry?: CreateAgentRunInput["retry"];
     prompt: string;
     idempotencyKey: string;

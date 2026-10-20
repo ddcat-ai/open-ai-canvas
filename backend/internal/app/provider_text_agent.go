@@ -17,7 +17,10 @@ import (
 	"yingce/backend/internal/protocol"
 )
 
+type agentModelRequestMetricsKey struct{}
+
 func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	ctx = context.WithValue(ctx, agentModelRequestMetricsKey{}, metadataString(input.Metadata, "agentSurface"))
 	// 浏览器持久化的是协议中立请求；资源水合和模型路由完成后才展开上游协议，
 	// 防止供应商请求体反向污染任务记录，也避免切换模型时复用错误协议。
 	if input.AgentRequests != nil && input.AgentRequests.Canonical != nil {
@@ -213,6 +216,12 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 // optional: cache creation, cleanup, and a single stale-cache rebuild can never
 // turn a valid uncached Agent request into a failed run.
 func executeDeclarativeAgentWithGeminiCache(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, error) {
+	execute := func(spec protocol.RequestSpec) ([]byte, error) {
+		if input.StreamText && input.Config.InterfaceType == officialGeminiAgentInterface {
+			return executeGeminiAgentStream(ctx, input, spec)
+		}
+		return executeProtocolRequest(ctx, input.Config, spec)
+	}
 	baseSpec, err := cloneProtocolRequestSpec(spec)
 	if err != nil {
 		return nil, err
@@ -227,7 +236,7 @@ func executeDeclarativeAgentWithGeminiCache(ctx context.Context, input canvasGen
 			executeSpec, cacheUsed = prepared, used
 		}
 	}
-	body, err := executeProtocolRequest(ctx, input.Config, executeSpec)
+	body, err := execute(executeSpec)
 	if err == nil || input.Config.InterfaceType != officialGeminiAgentInterface || !cacheUsed || !geminiRequestUsesCachedContent(executeSpec) || !isGeminiCachedContentNotFound(err, stringValue(protocolBodyObject(executeSpec.Body)["cachedContent"])) {
 		return body, err
 	}
@@ -249,7 +258,7 @@ func executeDeclarativeAgentWithGeminiCache(ctx context.Context, input canvasGen
 	// The rebuilt request is intentionally executed only once. If it receives
 	// another CachedContent 404, the first stale-cache recovery already happened;
 	// preserve the provider error instead of recursively rebuilding forever.
-	return executeProtocolRequest(ctx, input.Config, rebuilt)
+	return execute(rebuilt)
 }
 
 func claudeAgentBody(request map[string]interface{}) map[string]interface{} {

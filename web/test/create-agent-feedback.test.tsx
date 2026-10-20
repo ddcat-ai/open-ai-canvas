@@ -34,9 +34,10 @@ const renderMessage = (status: CreationMessage["status"], error?: string) =>
 
 test("助手等待首个内容时显示可访问的进行中反馈", () => {
     expect(renderMessage("streaming")).toContain('role="status"');
-    expect(renderMessage("streaming")).toContain("正在思考");
+    expect(renderMessage("streaming")).toContain("正在处理请求");
+    expect(renderMessage("streaming")).not.toContain("正在思考");
     expect(renderMessage("streaming")).not.toContain("正在生成");
-    expect(renderMessage("pending")).toContain("思考中");
+    expect(renderMessage("pending")).toContain("处理中");
     expect(renderMessage("pending")).not.toContain("生成中");
 });
 
@@ -112,6 +113,31 @@ test("失败或终止的空助手消息不再一直显示生成动画", () => {
     expect(failed).not.toContain("正在生成");
     expect(renderMessage("cancelled")).not.toContain("正在生成");
     expect(renderMessage("done")).not.toContain("正在生成");
+});
+
+test("纯图片用户消息展示实际附件与编辑入口，不造空文字气泡或复制按钮", () => {
+    const markup = renderToStaticMarkup(
+        <CreationMessageView
+            item={{
+                id: "user-image",
+                role: "user",
+                mode: "agent",
+                content: "",
+                createdAt: "2026-10-20T09:00:00Z",
+                attachments: [{ id: "image", name: "新商品", type: "image/png", storageKey: "resource:new-product", previewUrl: "/product.png", url: "/product.png", bytes: 10 }],
+            }}
+            shotNumber={0}
+            onRetryFailure={() => {}}
+            onCreateVariant={() => {}}
+            onEditUserMessage={() => {}}
+            onContinueCanvas={() => {}}
+            openingCanvas={false}
+        />,
+    );
+    expect(markup).toContain('aria-label="预览 新商品"');
+    expect(markup).toContain('aria-label="编辑并重新发送"');
+    expect(markup).not.toContain("creation-user-message-copy-wrap");
+    expect(markup).not.toContain('aria-label="复制提示词"');
 });
 
 test("同一次 Agent 回复将审核方案和后续任务放在同一助手容器", () => {

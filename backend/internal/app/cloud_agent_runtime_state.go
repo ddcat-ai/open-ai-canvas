@@ -125,7 +125,7 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 		// execution identity. Durable rows are always validated below.
 		return nil
 	}
-	if (state.Request.Surface != "creation" && state.Request.CanvasID == "") || state.Request.Prompt == "" || state.Request.PermissionMode == "" {
+	if (state.Request.Surface != "creation" && state.Request.CanvasID == "") || state.Request.PermissionMode == "" {
 		return errors.New("Agent runtime request is incomplete")
 	}
 	if err := validateCloudAgentRequest(&state.Request); err != nil {

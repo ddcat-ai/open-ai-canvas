@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,7 +27,8 @@ func TestCreationNativePiRuntimeUsesHomepageContractAndImages(t *testing.T) {
 	s, db, pixels := cloudAgentVisionFixture(t)
 	s = New(s.repo, s.dataDir)
 	t.Cleanup(func() { _ = s.Close() })
-	received := make(chan map[string]any, 2)
+	received := make(chan map[string]any, 3)
+	var steps atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -35,6 +37,12 @@ func TestCreationNativePiRuntimeUsesHomepageContractAndImages(t *testing.T) {
 			return
 		}
 		received <- body
+		if steps.Add(1) == 1 {
+			// The first successful vision step only queries a tool. It has not
+			// written an observation that could replace the actual image.
+			writeSSE(w, sseDelta(map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "read-catalogue", "type": "function", "function": map[string]any{"name": "creation_media_read", "arguments": `{}`}}}}))
+			return
+		}
 		writeSSE(w, sseDelta(map[string]any{"content": "已收到当前上传的商品图片，继续在首页创作。"}))
 	}))
 	t.Cleanup(server.Close)
@@ -64,27 +72,29 @@ func TestCreationNativePiRuntimeUsesHomepageContractAndImages(t *testing.T) {
 	if execution.Status != "completed" {
 		t.Fatalf("native creation failed: %s", execution.FailureMessage)
 	}
-	select {
-	case body := <-received:
-		encoded, _ := json.Marshal(body)
-		for _, forbidden := range []string{"canvas_get_state", "canvas_inspect_image", "节点能力速查", "agent_profile_read", "commerce_plan_submit", "styleLock", "Amazon"} {
-			if strings.Contains(string(encoded), forbidden) {
-				t.Fatalf("native upstream contract leaked canvas capability %s", forbidden)
+	for step := 0; step < 2; step++ {
+		select {
+		case body := <-received:
+			encoded, _ := json.Marshal(body)
+			for _, forbidden := range []string{"canvas_get_state", "canvas_inspect_image", "节点能力速查", "agent_profile_read", "commerce_plan_submit", "styleLock", "Amazon"} {
+				if strings.Contains(string(encoded), forbidden) {
+					t.Fatalf("native upstream contract leaked canvas capability %s", forbidden)
+				}
 			}
-		}
-		for _, required := range []string{"recall_lessons", "remember_lesson", "smart_creation"} {
-			if !strings.Contains(string(encoded), required) {
-				t.Fatalf("native upstream missed homepage memory contract %s", required)
+			for _, required := range []string{"recall_lessons", "remember_lesson", "smart_creation"} {
+				if !strings.Contains(string(encoded), required) {
+					t.Fatalf("native upstream missed homepage memory contract %s", required)
+				}
 			}
+			if !strings.Contains(string(encoded), base64.StdEncoding.EncodeToString(pixels)) || !strings.Contains(string(encoded), "首页创作 Agent") {
+				t.Fatalf("native step %d lost homepage contract or pixels before any visual observation was preserved", step+1)
+			}
+			if stringField(body, "model") != "text-test" {
+				t.Fatal("native runtime changed dialogue model")
+			}
+		default:
+			t.Fatal("native runtime did not call upstream")
 		}
-		if !strings.Contains(string(encoded), base64.StdEncoding.EncodeToString(pixels)) || !strings.Contains(string(encoded), "首页创作 Agent") {
-			t.Fatal("actual native upstream missed homepage contract or pixels")
-		}
-		if stringField(body, "model") != "text-test" {
-			t.Fatal("native runtime changed dialogue model")
-		}
-	default:
-		t.Fatal("native runtime did not call upstream")
 	}
 	if len(received) != 0 {
 		t.Fatal("attachment understanding unexpectedly added another model call")
@@ -178,7 +188,17 @@ func TestPiCreationModelStepDeliversOnlyAuthorizedAttachmentPixels(t *testing.T)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := s.cloudAgentPiModel(ctx, "user", run.ID, piEventForTest(t, map[string]any{"stepId": "creation-vision-step", "purpose": "dialogue", "messages": []map[string]any{{"role": "user", "content": req.Prompt}}}))
+		// Empty system/thinking entries are discarded during canonical
+		// conversion; the source index must still bind the exact user entry.
+		messages := []map[string]any{
+			{"role": "system", "content": ""},
+			{"role": "assistant", "content": []any{map[string]any{"type": "thinking", "thinking": "omitted"}}},
+			{"role": "user", "content": "可信的本轮素材记录"},
+			{"role": "user", "content": req.Prompt},
+			{"role": "assistant", "content": []any{map[string]any{"type": "toolCall", "id": "generation-done", "name": "generate_media", "arguments": map[string]any{"mode": "image", "prompt": "修改文字"}}}},
+			{"role": "toolResult", "toolCallId": "generation-done", "content": []any{map[string]any{"type": "text", "text": `{"status":"succeeded","taskId":"already-finished"}`}}},
+		}
+		_, err := s.cloudAgentPiModel(ctx, "user", run.ID, piEventForTest(t, map[string]any{"stepId": "creation-vision-step", "purpose": "dialogue", "currentTurnContextIndex": 2, "messages": messages}))
 		done <- err
 	}()
 	var step *model.Task
@@ -222,12 +242,20 @@ func TestPiCreationModelStepDeliversOnlyAuthorizedAttachmentPixels(t *testing.T)
 			return
 		}
 		var imageURL string
-		for _, message := range body.Messages {
+		imageIndex, successIndex := -1, -1
+		for index, message := range body.Messages {
+			if stringField(message, "tool_call_id") == "generation-done" {
+				successIndex = index
+			}
 			for _, part := range creationMaps(message["content"]) {
 				if image, ok := part["image_url"].(map[string]any); ok {
 					imageURL = stringField(image, "url")
+					imageIndex = index
 				}
 			}
+		}
+		if imageIndex < 0 || imageIndex >= successIndex || successIndex != len(body.Messages)-1 || !strings.Contains(mustMarshal(body.Messages[imageIndex]), "可信的本轮素材记录") {
+			t.Errorf("real provider request reordered original input after successful generation: image=%d success=%d", imageIndex, successIndex)
 		}
 		received <- imageURL
 		w.Header().Set("Content-Type", "application/json")
@@ -282,8 +310,8 @@ func TestCreationImageInputHonorsModelScopeAndLimits(t *testing.T) {
 			for _, id := range []string{"ref-one", "ref-two"}[:test.count] {
 				req.Attachments = append(req.Attachments, CloudAgentAttachment{ResourceID: id, StorageKey: "resource:" + id, Kind: "image", Role: "product", Name: id})
 			}
-			canonical := canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": "describe"}}}
-			refs, err := s.attachCloudAgentCreationImages("user", req, &canonical)
+			canonical := canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": "describe", cloudAgentContextSourceKey: "creation_turn_context"}}}
+			refs, err := s.attachCloudAgentCreationImages("user", req, &canonical, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -308,13 +336,13 @@ func TestCreationImageInputRejectsForeignAndUnselectedResources(t *testing.T) {
 	req.VisionEnabled = true
 	req.Attachments = []CloudAgentAttachment{{ResourceID: "private", StorageKey: "resource:private", Kind: "image", Role: "product"}}
 	canonical := canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": "describe"}}}
-	if _, err := s.attachCloudAgentCreationImages("user", req, &canonical); err == nil {
+	if _, err := s.attachCloudAgentCreationImages("user", req, &canonical, nil); err == nil {
 		t.Fatal("foreign resource exposed to dialogue")
 	}
 	req.Attachments[0].ResourceID, req.Attachments[0].StorageKey = "ref-one", "resource:ref-one"
 	for _, source := range []string{"resource:ref-two", "data:image/png;base64,dGVzdA==", "https://untrusted.invalid/x.png"} {
 		request := canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": []any{map[string]any{"type": "image_url", "image_url": map[string]any{"url": source}}}}}}
-		if _, err := s.attachCloudAgentCreationImages("user", req, &request); err == nil {
+		if _, err := s.attachCloudAgentCreationImages("user", req, &request, nil); err == nil {
 			t.Fatalf("unselected image input accepted: %s", source)
 		}
 	}

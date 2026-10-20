@@ -45,6 +45,7 @@ export function CreationMessageView({
     onRefreshAgentTasks,
     retryDisabled = false,
     onCreateAgentTaskVariant,
+    onQueryInterjection,
     nested = false,
 }: {
     item: CreationMessage;
@@ -62,6 +63,7 @@ export function CreationMessageView({
     onRefreshAgentTasks?: () => void;
     retryDisabled?: boolean;
     onCreateAgentTaskVariant?: (task: CreationMessage) => void;
+    onQueryInterjection?: (message: CreationMessage) => Promise<void>;
     nested?: boolean;
 }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
@@ -70,20 +72,42 @@ export function CreationMessageView({
     const replyId = useId();
     useEffect(() => {
         setReplyExpanded(false);
-    }, [outputPreference, item.id]);
-    if (item.role === "user") return <CreationUserMessage item={item} shotNumber={shotNumber} onEditUserMessage={onEditUserMessage} />;
+    }, [item.id]);
+    if (item.role === "user") return <CreationUserMessage item={item} shotNumber={shotNumber} onEditUserMessage={onEditUserMessage} onQueryInterjection={onQueryInterjection} />;
     const mode = item.mode || "text";
-    const compactOutput = mode === "agent" && outputPreference === "concise";
-    const compactStructuredOutput = compactOutput && !item.agentQuestion && Boolean(item.commercePlan || agentTasks?.length);
-    const mediaTasks = creationAgentLatestMediaTasks(agentTasks || []);
+    const compactOutput = mode === "agent" && !item.agentContinuation && outputPreference === "concise";
+    const mediaTasks = creationAgentLatestMediaTasks(item.agentContinuation ? [] : agentTasks || []);
     const pendingTaskStates = mediaTasks.filter((task) => task.agentRunId === item.agentRunId && task.taskStatePending);
     const agentRunning = item.status === "pending" || item.status === "streaming";
+    const textStreaming = mode === "agent" ? item.agentTextStreaming === true : item.status === "streaming";
+    const compactStructuredOutput = compactOutput && !item.agentQuestion && Boolean(item.commercePlan || agentTasks?.length);
+    const collapsibleReply = compactStructuredOutput && !agentRunning && !textStreaming;
+    const runningMediaCount = mediaTasks.filter((task) => task.agentRunId === item.agentRunId && !task.taskStatePending && (task.status === "pending" || task.status === "streaming")).length;
+    const agentActivity =
+        mode === "agent" && agentRunning && !textStreaming && !item.agentQuestion
+            ? item.agentActivity === "等待你确认"
+                ? item.agentActivity
+                : pendingTaskStates.length
+                  ? "正在同步任务状态…"
+                  : runningMediaCount
+                    ? `${runningMediaCount} 项媒体任务生成中…`
+                    : item.agentActivity || "正在处理请求…"
+            : "";
     const failedMediaTasks = mode === "agent" && !agentRunning ? mediaTasks.filter((task) => task.agentRunId === item.agentRunId && task.status === "error") : [];
     const retryFailedItems = async () => {
         if (retryPending || retryDisabled || !failedMediaTasks.length || !onRetryAgentTasks) return;
         setRetryPending(true);
         try {
             await onRetryAgentTasks(failedMediaTasks);
+        } finally {
+            setRetryPending(false);
+        }
+    };
+    const retryFailure = async () => {
+        if (retryPending || retryDisabled) return;
+        setRetryPending(true);
+        try {
+            await onRetryFailure();
         } finally {
             setRetryPending(false);
         }
@@ -100,8 +124,7 @@ export function CreationMessageView({
         .map(([status, label]) => {
             const count = mediaTasks.filter((task) => {
                 if (task.taskStatePending) return status === "unconfirmed";
-                const taskStatus = agentRunning && task.mode === "image" && task.status === "error" ? "pending" : task.status;
-                return taskStatus === status || (status === "pending" && taskStatus === "streaming");
+                return task.status === status || (status === "pending" && task.status === "streaming");
             }).length;
             return count ? `${count} 项${label}` : "";
         })
@@ -118,7 +141,7 @@ export function CreationMessageView({
           ? "状态待确认"
           : item.status === "pending"
             ? mode === "agent"
-                ? "思考中"
+                ? "处理中"
                 : "生成中"
             : item.status === "cancelled"
               ? "已停止"
@@ -204,8 +227,8 @@ export function CreationMessageView({
                     <div className="creation-message-error">
                         <span>{multipleDeliveries ? "生成失败，请重试失败项。" : generationErrorMessage(failedMediaTasks[0].error || "生成失败")}</span>
                         <button type="button" disabled={retryPending || retryDisabled} aria-busy={retryPending} onClick={() => void retryFailedItems()}>
-                            <RefreshCw />
-                            重试失败项
+                            <RefreshCw size={16} />
+                            {retryPending ? "正在核对原任务…" : "重试失败项"}
                         </button>
                     </div>
                 ) : null}
@@ -216,7 +239,7 @@ export function CreationMessageView({
             {mode === "text" || mode === "agent" ? (
                 <>
                     <div className="creation-message-heading">{heading}</div>
-                    {item.reasoning && !compactOutput ? (
+                    {mode !== "agent" && item.reasoning ? (
                         <div className="creation-message-reasoning-wrap">
                             <MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} />
                         </div>
@@ -228,29 +251,31 @@ export function CreationMessageView({
                             </p>
                         ) : null}
                         {item.content ? (
-                            compactStructuredOutput ? (
+                            collapsibleReply ? (
                                 <div className="creation-agent-full-reply">
                                     <button type="button" className="creation-agent-plan-toggle" aria-expanded={replyExpanded} aria-controls={replyId} onClick={() => setReplyExpanded((value) => !value)}>
                                         {replyExpanded ? "收起完整回复" : "查看完整回复"}
                                         {replyExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
                                     </button>
                                     <div id={replyId} hidden={!replyExpanded}>
-                                        {replyExpanded ? (
-                                            <AIMessageMarkdown isStreaming={item.status === "streaming"} smoothStreaming>
-                                                {item.content}
-                                            </AIMessageMarkdown>
-                                        ) : null}
+                                        {replyExpanded ? <AIMessageMarkdown>{item.content}</AIMessageMarkdown> : null}
                                     </div>
                                 </div>
                             ) : (
-                                <AIMessageMarkdown isStreaming={item.status === "streaming"} smoothStreaming={mode === "agent"}>
+                                <AIMessageMarkdown isStreaming={textStreaming} streamingAnimation={mode === "agent" ? "none" : "word"}>
                                     {item.content}
                                 </AIMessageMarkdown>
                             )
-                        ) : !item.agentQuestion && (item.status === "streaming" || item.status === "pending") ? (
+                        ) : mode !== "agent" && !item.agentQuestion && agentRunning ? (
                             <span role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                                 <WorkingDots dotSize={5} gap={2} />
-                                <span>{mode === "agent" ? "正在思考…" : "正在生成…"}</span>
+                                <span>正在生成…</span>
+                            </span>
+                        ) : null}
+                        {agentActivity ? (
+                            <span role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                {agentActivity !== "等待你确认" ? <WorkingDots dotSize={5} gap={2} /> : null}
+                                <span>{agentActivity}</span>
                             </span>
                         ) : null}
                     </div>
@@ -288,7 +313,7 @@ export function CreationMessageView({
                         </section>
                     ) : null}
                     {compactOutput ? agentMediaResults : null}
-                    {mode === "agent" ? agentReview : null}
+                    {mode === "agent" && !item.agentContinuation ? agentReview : null}
                     {!compactOutput ? agentMediaResults : null}
                 </>
             ) : (
@@ -312,9 +337,9 @@ export function CreationMessageView({
             {item.error && (mode === "text" || mode === "agent") && !failedMediaTasks.length && !pendingTaskStates.length ? (
                 <div className="creation-message-error">
                     <span>{generationErrorMessage(item.error)}</span>
-                    <button type="button" onClick={onRetryFailure}>
-                        <RefreshCw />
-                        重新生成
+                    <button type="button" disabled={retryPending || retryDisabled} aria-busy={retryPending} onClick={() => void retryFailure()}>
+                        <RefreshCw size={16} />
+                        {retryPending ? "正在核对原任务…" : "重新生成"}
                     </button>
                 </div>
             ) : null}
@@ -322,9 +347,20 @@ export function CreationMessageView({
     );
 }
 
-export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { item: CreationMessage; shotNumber: number; onEditUserMessage: (message: CreationMessage) => void }) {
+export function CreationUserMessage({
+    item,
+    shotNumber,
+    onEditUserMessage,
+    onQueryInterjection,
+}: {
+    item: CreationMessage;
+    shotNumber: number;
+    onEditUserMessage: (message: CreationMessage) => void;
+    onQueryInterjection?: (message: CreationMessage) => Promise<void>;
+}) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
+    const [querying, setQuerying] = useState(false);
     const copyText = useCopyText();
     const visiblePrompt = displayCreationPrompt(item.content, item.references || []);
     const user = useUserStore((state) => state.user);
@@ -342,9 +378,44 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                     </span>
                 )}
             </div>
-            <div className="creation-user-message-copy-wrap">
-                <p>{visiblePrompt}</p>
-            </div>
+            {visiblePrompt ? (
+                <div className="creation-user-message-copy-wrap">
+                    <p>{visiblePrompt}</p>
+                </div>
+            ) : null}
+            {item.agentInterjection ? (
+                <div className="creation-user-message-meta" role="status">
+                    <span>
+                        {item.agentInterjection === "pending"
+                            ? "补充说明回执待确认"
+                            : item.agentInterjection === "queued"
+                              ? "已排队，等待本轮下一步"
+                              : item.agentInterjection === "delivered"
+                                ? "补充说明已送达"
+                                : `补充说明未送达${item.error ? `：${item.error}` : ""}`}
+                    </span>
+                    {item.agentInterjection === "pending" && onQueryInterjection ? (
+                        <button
+                            type="button"
+                            className="creation-agent-plan-toggle"
+                            disabled={querying}
+                            aria-busy={querying}
+                            onClick={async () => {
+                                if (querying) return;
+                                setQuerying(true);
+                                try {
+                                    await onQueryInterjection(item);
+                                } finally {
+                                    setQuerying(false);
+                                }
+                            }}
+                        >
+                            <RefreshCw />
+                            {querying ? "正在核对" : "核对并重试原消息"}
+                        </button>
+                    ) : null}
+                </div>
+            ) : null}
             {item.references?.length ? <CreationMessageReferences references={item.references} /> : null}
             {item.attachments?.length ? (
                 <div className="creation-user-message-attachments">
@@ -387,11 +458,13 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                 </div>
             ) : null}
             <div className="creation-user-message-actions">
-                <Tooltip title="复制提示词">
-                    <button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}>
-                        <Copy />
-                    </button>
-                </Tooltip>
+                {visiblePrompt ? (
+                    <Tooltip title="复制提示词">
+                        <button type="button" className="creation-user-message-copy" aria-label="复制提示词" onClick={() => copyText(visiblePrompt, "提示词已复制")}>
+                            <Copy />
+                        </button>
+                    </Tooltip>
+                ) : null}
                 <Tooltip title="编辑并重新发送">
                     <button type="button" className="creation-user-message-edit" aria-label="编辑并重新发送" onClick={() => onEditUserMessage(item)}>
                         <Pencil />
@@ -517,26 +590,22 @@ export function MediaResult({
     const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
     const expectedResultCount = downloadImages.length;
     const canContinueWithResults = expectedResultCount > 0 && resultAssetIds.length === expectedResultCount;
+    const retryFailure = async () => {
+        if (recoveringSubmission || !onRetryFailure) return;
+        setRecoveringSubmission(true);
+        try {
+            await onRetryFailure();
+        } finally {
+            setRecoveringSubmission(false);
+        }
+    };
     const submissionNotice = item.submissionPending ? (
         <div className="creation-media-empty" role="status">
             提交状态待确认，原任务可能仍在运行。
             {onRetryFailure ? (
-                <button
-                    type="button"
-                    disabled={recoveringSubmission}
-                    aria-busy={recoveringSubmission}
-                    onClick={async () => {
-                        if (recoveringSubmission) return;
-                        setRecoveringSubmission(true);
-                        try {
-                            await onRetryFailure();
-                        } finally {
-                            setRecoveringSubmission(false);
-                        }
-                    }}
-                >
-                    <RefreshCw />
-                    查询原任务
+                <button type="button" disabled={recoveringSubmission} aria-busy={recoveringSubmission} onClick={() => void retryFailure()}>
+                    <RefreshCw size={16} />
+                    {recoveringSubmission ? "正在核对原任务…" : "查询原任务"}
                 </button>
             ) : null}
         </div>
@@ -556,9 +625,9 @@ export function MediaResult({
             <div className="creation-media-error">
                 <span>{item.status === "cancelled" ? item.content || "已停止" : generationErrorMessage(item.error || "生成失败")}</span>
                 {onRetryFailure ? (
-                    <button type="button" onClick={onRetryFailure}>
-                        <RefreshCw />
-                        重新生成
+                    <button type="button" disabled={recoveringSubmission} aria-busy={recoveringSubmission} onClick={() => void retryFailure()}>
+                        <RefreshCw size={16} />
+                        {recoveringSubmission ? "正在核对原任务…" : "重新生成"}
                     </button>
                 ) : null}
             </div>
@@ -568,8 +637,8 @@ export function MediaResult({
             <div className="creation-media-empty">
                 没有返回可预览结果{" "}
                 {onRetryFailure ? (
-                    <button type="button" onClick={onRetryFailure}>
-                        重试
+                    <button type="button" disabled={recoveringSubmission} aria-busy={recoveringSubmission} onClick={() => void retryFailure()}>
+                        {recoveringSubmission ? "正在核对原任务…" : "重试"}
                     </button>
                 ) : null}
             </div>

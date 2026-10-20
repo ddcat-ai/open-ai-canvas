@@ -88,6 +88,31 @@ const props: ComponentProps<typeof CreationComposer> = {
 
 const imageReference = { id: "image", nodeId: "image", kind: "image" as const, label: "参考图", title: "参考图", active: true };
 
+test("Agent 可只发送本轮主动上传的媒体，普通图视频仍需要提示词", () => {
+    const dom = new Window();
+    try {
+        for (const type of ["image/png", "video/mp4", "audio/mpeg"]) {
+            const attachments = [{ id: "upload", name: "商品素材", type, storageKey: "resource:upload", previewUrl: "/upload" }];
+            dom.document.body.innerHTML = renderToStaticMarkup(<CreationComposer {...props} prompt="" attachments={attachments} />);
+            expect(dom.document.querySelector<HTMLButtonElement>(".creation-submit")?.disabled).toBe(false);
+            for (const mode of ["image", "video"] as const) {
+                dom.document.body.innerHTML = renderToStaticMarkup(<CreationComposer {...props} mode={mode} prompt="" attachments={attachments} />);
+                expect(dom.document.querySelector<HTMLButtonElement>(".creation-submit")?.disabled).toBe(true);
+            }
+        }
+        for (const extra of [{ busy: true }, { referencePasteBusy: true }, { agentInputError: "不支持图片" }]) {
+            dom.document.body.innerHTML = renderToStaticMarkup(<CreationComposer {...props} {...extra} prompt="" attachments={[{ id: "upload", name: "商品", type: "image/png", storageKey: "resource:upload", previewUrl: "/upload" }]} />);
+            expect(dom.document.querySelector<HTMLButtonElement>(".creation-submit")?.disabled).toBe(true);
+        }
+        for (const attachments of [[], [{ id: "local", name: "未上传", type: "image/png", storageKey: "", previewUrl: "blob:local" }], [{ id: "doc", name: "文档", type: "application/pdf", storageKey: "resource:doc", previewUrl: "" }]]) {
+            dom.document.body.innerHTML = renderToStaticMarkup(<CreationComposer {...props} prompt=" " attachments={attachments} />);
+            expect(dom.document.querySelector<HTMLButtonElement>(".creation-submit")?.disabled).toBe(true);
+        }
+    } finally {
+        dom.close();
+    }
+});
+
 test("会话输入框使用单个模式下拉入口，不渲染旧模式标签行", () => {
     const dom = new Window();
     try {
@@ -131,15 +156,31 @@ test("画布未指定高度的引用输入仍填充固定容器", () => {
     window.close();
 });
 
-test("运行中发送按钮切换为停止，空草稿也能停止；确认取消期间防止重复点击", () => {
-    const html = renderToStaticMarkup(<CreationComposer {...props} generationActive prompt="" onStop={noop} />);
+test("运行中发送与停止独立，纯文字可插话，空草稿也能停止", () => {
+    const html = renderToStaticMarkup(<CreationComposer {...props} generationActive agentInterjectionStatus="running" prompt="" onStop={noop} />);
     expect(html).toContain('aria-label="停止生成"');
-    expect(html).not.toMatch(/<button[^>]*class="[^"]*creation-submit\s[^>]*disabled=""/);
+    expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*aria-label="停止生成"/);
     const stopping = renderToStaticMarkup(<CreationComposer {...props} generationActive onStop={noop} stopping />);
     expect(stopping).toContain('aria-label="正在停止"');
     expect(stopping).toMatch(/<button[^>]*class="[^"]*creation-submit\s[^>]*disabled=""/);
     const resumed = renderToStaticMarkup(<CreationComposer {...props} prompt="改为蓝色背景" onStop={noop} />);
     expect(resumed).toContain('aria-label="发送"');
+    const dom = new Window();
+    try {
+        dom.document.body.innerHTML = renderToStaticMarkup(<CreationComposer {...props} generationActive agentInterjectionStatus="running" onStop={noop} />);
+        expect(dom.document.querySelector<HTMLButtonElement>('[aria-label="发送补充说明"]')?.disabled).toBe(false);
+        expect(dom.document.querySelector<HTMLButtonElement>('[aria-label="停止生成"]')?.disabled).toBe(false);
+        dom.document.body.innerHTML = renderToStaticMarkup(<CreationComposer {...props} generationActive agentInterjectionStatus="waiting_approval" onStop={noop} />);
+        expect(dom.document.body.textContent).toContain("审批结束后");
+        expect(dom.document.querySelector<HTMLButtonElement>('[aria-label="发送补充说明"]')?.disabled).toBe(false);
+        dom.document.body.innerHTML = renderToStaticMarkup(
+            <CreationComposer {...props} generationActive agentInterjectionStatus="running" onStop={noop} attachments={[{ id: "image", name: "新图", type: "image/png", storageKey: "resource:image", previewUrl: "/image.png" }]} />,
+        );
+        expect(dom.document.body.textContent).toContain("附件已保留");
+        expect(dom.document.querySelector<HTMLButtonElement>('[aria-label="发送补充说明"]')?.disabled).toBe(true);
+    } finally {
+        dom.close();
+    }
 });
 
 for (const mode of ["image", "video"] as const) {

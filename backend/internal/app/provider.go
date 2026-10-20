@@ -152,7 +152,10 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		}
 		input.Prompt = compiled.Content
 	}
-	if strings.TrimSpace(input.Prompt) == "" {
+	// Agent dialogue is carried by canonical messages, including media-only
+	// user turns. Do not invent text to satisfy the ordinary generation guard.
+	hasAgentMessages := input.Mode == "text" && input.AgentRequests != nil && input.AgentRequests.Canonical != nil && len(input.AgentRequests.Canonical.Messages) > 0
+	if strings.TrimSpace(input.Prompt) == "" && !hasAgentMessages {
 		return nil, errors.New("prompt is required")
 	}
 	// 将 @[tool:type:ID:label:icon] 令牌替换为对应工具的提示词文本

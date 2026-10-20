@@ -1097,14 +1097,14 @@ paths:
         "400":
           description: 参数、能力、模型或预算不符合要求，未创建任务
         "409":
-          description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。画布占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending）；本次未创建任务或预留积分，不自动重试。普通幂等键冲突保持 reason=conflict，不能据此清除此前结果未知的提交身份。
+          description: 幂等键已用于不同请求，或画布/首页会话已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending）。首页会话已有后续轮次而请求未继续最新轮时，reason=agent_session_stale_parent，details 另含 sessionId；需同步后由用户重新发送。本次未创建任务或预留积分，不自动重试。普通幂等键冲突保持 reason=conflict，不能据此清除此前结果未知的提交身份。
   /agent/runs/{id}:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
     get:
       tags: [agent]
       summary: 读取当前用户的 Agent 轮次
-      description: data.run 只返回一页事件（默认最新 40 条）并带上 eventSeqBase、eventCount、latestSeq、eventsTruncated：eventSeqBase 是本次首条事件之前已入库的条数（不变量 events[i].seq == eventSeqBase + i + 1），latestSeq 可直接作为下次 sinceSeq，eventsTruncated 表示还有更早的记录未随本次返回。读取走 (run_id, sequence) 的 keyset 分页，不使用 offset；升级前把事件放在 state_json 里的轮次在事件表中没有行，读取回退到内存窗口。
+      description: data.run 只返回一页事件（默认最新 40 条）并带上 eventSeqBase、eventCount、latestSeq、eventsTruncated：eventSeqBase 是本次首条事件之前已入库的条数（不变量 events[i].seq == eventSeqBase + i + 1），latestSeq 可直接作为下次 sinceSeq，eventsTruncated 表示还有更早的记录未随本次返回。读取走 (run_id, sequence) 的 keyset 分页，不使用 offset；升级前把事件放在 state_json 里的轮次在事件表中没有行，读取回退到内存窗口。creation 终态还可返回 creationContextMessageIds（字符串数组），只确认当前原生分支及其已压缩祖先实际导入的普通消息；未导入或仍执行中不返回收据。
       parameters:
         - in: query
           name: fromStart
@@ -1143,7 +1143,7 @@ paths:
         "200":
           description: 信封 data.run（新的 ID）
         "409":
-          description: 父轮仍在执行或终态收尾、幂等键冲突，或画布已有另一轮 Agent 占用。父轮及画布占用拒绝均返回 reason=canvas_agent_busy，details 包含 canvasId（首页创作为空）和拒绝时观察到的 agent（runId、status、cleanupPending）；本次未创建任务或预留积分，不自动重试。相同请求的幂等回放优先返回已存在轮次；普通幂等键冲突保持 reason=conflict，不代表此前未知提交未被接受。
+          description: 父轮仍在执行或终态收尾、幂等键冲突，或画布/首页会话已有另一轮 Agent 占用。占用拒绝返回 reason=canvas_agent_busy，details 包含 canvasId（首页创作为空）和拒绝时观察到的 agent（runId、status、cleanupPending）。首页请求指向旧父轮时返回 reason=agent_session_stale_parent，details 另含 sessionId；同步最新会话后由用户重新发送，不静默改换父轮。本次未创建任务或预留积分，不自动重试。相同请求的幂等回放优先返回已存在轮次；普通幂等键冲突保持 reason=conflict，不代表此前未知提交未被接受。
   /agent/runs/{id}/interjections:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -2577,9 +2577,8 @@ components:
           description: canvas 场景必填；creation 场景必须为空或省略
         prompt:
           type: string
-          minLength: 1
           maxLength: 16000
-          description: 非空，最多 16000 个 Unicode 字符
+          description: 最多 16000 字符；creation 携带非空本轮主动媒体附件时可为空，只有历史上下文或继承附件不能代替新消息。canvas 仍要求非空。
         logicalModelId:
           type: string
         model:
@@ -2618,23 +2617,21 @@ components:
             enum: [canvas]
         creationContext:
           type: array
-          maxItems: 20
-          description: 仅 creation 接受当前会话普通模式历史。文本为低信任内容，content 合计最多 12000 字符，taskIds 和 resourceIds 分别合计最多 32 个。任务事实及历史素材元数据由服务端核对归属，历史素材不自动作为本轮附件或生成参考，需 creation_media_read 精读后按意图明确引用；不存在或未就绪的旧素材只标不可用，其他用户素材拒绝。服务端事实快照最多 64KB，过长时裁剪较旧条目，每项成品目录最多 10 条。不扩大预算或权限，不接受客户端结果 URL 和状态。
+          description: 仅 creation 接受当前会话普通模式历史。messageId 为稳定消息身份；客户端根据最新有效运行的 creationContextMessageIds 收据只发送新增消息，未确认提交仍重放原请求。服务端保留父轮任务/素材授权目录，仅导入原生有效分支尚未记录的正文，并同步真实任务事实变化。首次历史不按固定消息数或字符数静默裁剪，使用原生上下文预算与压缩。文本为低信任内容；任务事实及历史素材元数据每轮核对归属。历史素材不自动作为本轮附件或生成参考，需 creation_media_read 精读后按意图明确引用；不存在或未就绪的旧素材只标不可用，其他用户素材拒绝。每项成品目录最多 10 条。不扩大预算或权限，不接受客户端结果 URL 和状态。
           items:
             type: object
             additionalProperties: false
             required: [role, mode]
             properties:
+              messageId: { type: string, minLength: 1, maxLength: 80 }
               role: { type: string, enum: [user, assistant] }
               mode: { type: string, enum: [image, video, text] }
-              content: { type: string, maxLength: 12000 }
+              content: { type: string }
               taskIds:
                 type: array
-                maxItems: 32
                 items: { type: string, minLength: 1, maxLength: 80 }
               resourceIds:
                 type: array
-                maxItems: 32
                 items: { type: string, minLength: 1, maxLength: 80 }
         contextSelection:
           type: object

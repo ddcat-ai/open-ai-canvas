@@ -139,11 +139,11 @@ test("修改备注沿用当前执行权限，只有已有审批时才提示审�
     expect(awaiting).toContain("按备注修改方案");
 });
 
-test("静默恢复期间不展示失败原因或重试按钮", () => {
+test("Agent 仍在编排时保留真实失败计数，不展示子任务失败原因或重试按钮", () => {
     const markup = renderToStaticMarkup(<CreationMessageView item={{ ...message, status: "streaming" }} agentTasks={tasks} outputPreference="concise" {...messageActions} />);
     expect(markup).not.toContain("模型生成失败");
     expect(markup).not.toContain("重试失败项");
-    expect(markup).not.toContain("1 项失败");
+    expect(markup).toContain("1 项失败");
 });
 
 test("多项最终失败统一展示一次，已修复旧失败不再出现", () => {

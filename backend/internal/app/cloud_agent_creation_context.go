@@ -9,6 +9,7 @@ import (
 )
 
 type CloudAgentCreationContextEntry struct {
+	MessageID   string   `json:"messageId,omitempty"`
 	Role        string   `json:"role"`
 	Mode        string   `json:"mode"`
 	Content     string   `json:"content,omitempty"`
@@ -20,17 +21,23 @@ func validateCloudAgentCreationContext(req *CloudAgentRequest) error {
 	if len(req.CreationContext) == 0 {
 		return nil
 	}
-	if req.Surface != "creation" || len(req.CreationContext) > 20 {
-		return BadAuthRequest("普通创作上下文仅适用于首页，最多 20 条")
+	if req.Surface != "creation" {
+		return BadAuthRequest("普通创作上下文仅适用于首页")
 	}
-	chars, tasks, resources := 0, 0, 0
+	seen := map[string]bool{}
 	for _, entry := range req.CreationContext {
 		if (entry.Role != "user" && entry.Role != "assistant") || (entry.Mode != "image" && entry.Mode != "video" && entry.Mode != "text") || !utf8.ValidString(entry.Content) {
 			return BadAuthRequest("普通创作上下文类型无效")
 		}
-		chars += utf8.RuneCountInString(entry.Content)
-		tasks += len(entry.TaskIDs)
-		resources += len(entry.ResourceIDs)
+		if entry.MessageID != "" {
+			if err := validateCloudAgentID(entry.MessageID, "普通创作消息 ID", 80); err != nil {
+				return err
+			}
+			if seen[entry.MessageID] {
+				return BadAuthRequest("普通创作消息 ID 不能重复")
+			}
+			seen[entry.MessageID] = true
+		}
 		for _, id := range entry.TaskIDs {
 			if err := validateCloudAgentID(id, "普通创作任务 ID", 80); err != nil {
 				return err
@@ -41,9 +48,6 @@ func validateCloudAgentCreationContext(req *CloudAgentRequest) error {
 				return err
 			}
 		}
-	}
-	if chars > 12000 || tasks > 32 || resources > 32 {
-		return BadAuthRequest("普通创作上下文超过 12000 字符、32 个任务或 32 个素材，请缩小范围")
 	}
 	return nil
 }
@@ -80,15 +84,22 @@ func cloudAgentWithoutPriorCreationContext(history []providerTextMessage) []prov
 
 // Browser dialogue is untrusted user content. Task status and output identities
 // are independently resolved from owned records; URLs and client status never enter.
-func (s *Service) cloudAgentCreationContext(userID string, req CloudAgentRequest) (string, error) {
+func (s *Service) cloudAgentCreationContext(userID string, req CloudAgentRequest, nativeSession ...string) (string, error) {
 	if len(req.CreationContext) == 0 {
 		return "", nil
 	}
 	entries := make([]map[string]any, 0, len(req.CreationContext))
+	var imported map[string]map[string]any
+	if len(nativeSession) > 0 {
+		imported = cloudAgentCreationContextImports(nativeSession[0])
+	}
 	seen := map[string]bool{}
 	seenResources := map[string]bool{}
 	for _, entry := range req.CreationContext {
 		item := map[string]any{"role": entry.Role, "mode": entry.Mode}
+		if entry.MessageID != "" {
+			item["messageId"] = entry.MessageID
+		}
 		if entry.Content != "" {
 			item["userProvidedContent"] = entry.Content
 		}
@@ -136,15 +147,14 @@ func (s *Service) cloudAgentCreationContext(userID string, req CloudAgentRequest
 		if len(references) > 0 {
 			item["references"] = references
 		}
-		entries = append(entries, item)
+		if delta := cloudAgentCreationContextDelta(item, imported[entry.MessageID]); len(delta) > 0 {
+			entries = append(entries, delta)
+		}
+	}
+	if len(entries) == 0 {
+		return "", nil
 	}
 	frame := map[string]any{"source": "creation_mode_history", "dialogueTrust": "user_provided_untrusted", "taskFactsSource": "owned_server_records", "snapshot": "current_at_admission", "entries": entries}
-	for {
-		encoded, err := json.Marshal(frame)
-		if err != nil || len(encoded) <= 64<<10 {
-			return string(encoded), err
-		}
-		entries = entries[1:]
-		frame["entries"], frame["olderEntriesTruncated"] = entries, true
-	}
+	encoded, err := json.Marshal(frame)
+	return string(encoded), err
 }

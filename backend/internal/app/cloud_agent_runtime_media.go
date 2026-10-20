@@ -136,6 +136,7 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 		taskID = media.CommerceKey
 	}
 	req.admission = &taskAdmission{ID: taskID, MaxCharge: remaining, AgentRunID: run.ID, GenerationID: generationID, ApprovalID: approvalID}
+	req.admission.MediaOnlyAgentTurn = media == nil && state.Request.Surface == "creation" && state.Request.Prompt == "" && len(state.Request.Attachments) > 0
 	req.creationPrepare = prepare
 	task, err := s.CreateTask(run.UserID, req)
 	if err != nil {

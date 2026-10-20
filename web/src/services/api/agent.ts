@@ -119,6 +119,7 @@ export type AgentRun = {
     step?: number;
     activeMessage?: { messageId: string; text: string };
     attachments?: AgentCreationAttachment[];
+    creationContextMessageIds?: string[];
     approval?: AgentApproval;
 };
 
@@ -145,6 +146,7 @@ export class AgentStreamError extends Error {
 }
 
 export type AgentCreationContextEntry = {
+    messageId?: string;
     role: "user" | "assistant";
     mode: "image" | "video" | "text";
     content?: string;
@@ -202,7 +204,7 @@ export type ListAgentSessionRunsOptions = {
 export function isAgentAdmissionRejection(error: unknown): boolean {
     if (!(error instanceof ApiError)) return false;
     const status = error.status === 200 ? error.code : error.status;
-    return [400, 401, 402, 403, 404, 413, 422].includes(status || 0) || error.reason === "canvas_agent_busy";
+    return [400, 401, 402, 403, 404, 413, 422].includes(status || 0) || error.reason === "canvas_agent_busy" || error.reason === "agent_session_stale_parent";
 }
 
 async function submitAgentRequest(path: string, input: CreateAgentRunInput) {
@@ -268,7 +270,9 @@ export function sendAgentInterjection(runId: string, input: { text: string; mess
 }
 
 export function getAgentCapabilities() {
-    return http.get<{ version: number; permissionModes: AgentPermissionMode[]; contextScopes: string[]; skills: boolean; writeTools: boolean; capabilitySetVersion?: string; capabilitySetHash?: string; nodeTypes?: string[] }>("/agent/capabilities", { timeout: 15_000 });
+    return http.get<{ version: number; permissionModes: AgentPermissionMode[]; contextScopes: string[]; skills: boolean; writeTools: boolean; capabilitySetVersion?: string; capabilitySetHash?: string; nodeTypes?: string[] }>("/agent/capabilities", {
+        timeout: 15_000,
+    });
 }
 
 export function getAgentProfile(options: { projectId?: string; canvasId?: string; scope?: AgentProfileScope } = {}) {
@@ -300,10 +304,14 @@ export async function decideAgentApproval(runId: string, approvalId: string, dec
     return http.post<{ accepted: boolean }>(`/agent/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(approvalId)}/decision`, { decision, reason: reason?.trim() || undefined, ...(mediaSettings ? { mediaSettings } : {}) }, { signal });
 }
 
-export function subscribeAgentEvents(runId: string, onEvent: (event: AgentEvent) => void, options: { after?: number; onError?: (error: unknown) => void; onConnectionChange?: (status: "connecting" | "connected" | "reconnecting" | "disconnected") => void; timeoutMs?: number } = {}) {
+export function subscribeAgentEvents(
+    runId: string,
+    onEvent: (event: AgentEvent) => void,
+    options: { after?: number; onError?: (error: unknown) => void; onConnectionChange?: (status: "connecting" | "connected" | "reconnecting" | "disconnected") => void; timeoutMs?: number } = {},
+) {
     const controller = new AbortController();
     let localSeq = 0;
-    let cursor = Number.isSafeInteger(options.after) && (options.after as number) > 0 ? options.after as number : 0;
+    let cursor = Number.isSafeInteger(options.after) && (options.after as number) > 0 ? (options.after as number) : 0;
     let lastActiveMessageKey = "";
     let lastStatusKey = "";
     const emit = (type: string, payload: Record<string, unknown>) => {
@@ -319,11 +327,18 @@ export function subscribeAgentEvents(runId: string, onEvent: (event: AgentEvent)
             const abortAttempt = () => attempt.abort();
             controller.signal.addEventListener("abort", abortAttempt, { once: true });
             let watchdog: ReturnType<typeof setTimeout>;
-            const touch = () => { clearTimeout(watchdog); watchdog = setTimeout(abortAttempt, options.timeoutMs ?? 45_000); };
+            const touch = () => {
+                clearTimeout(watchdog);
+                watchdog = setTimeout(abortAttempt, options.timeoutMs ?? 45_000);
+            };
             touch();
             options.onConnectionChange?.(failures ? "reconnecting" : "connecting");
             try {
-                const response = await fetch(`${String(apiBaseURL).replace(/\/+$/, "")}/agent/runs/${encodeURIComponent(runId)}/events?after=${cursor}`, { credentials: "include", signal: attempt.signal, headers: { Accept: "text/event-stream", "Last-Event-ID": String(cursor) } });
+                const response = await fetch(`${String(apiBaseURL).replace(/\/+$/, "")}/agent/runs/${encodeURIComponent(runId)}/events?after=${cursor}`, {
+                    credentials: "include",
+                    signal: attempt.signal,
+                    headers: { Accept: "text/event-stream", "Last-Event-ID": String(cursor) },
+                });
                 if (!response.ok) {
                     const error = new AgentStreamError(response.status);
                     const header = response.headers.get("retry-after");
@@ -348,40 +363,57 @@ export function subscribeAgentEvents(runId: string, onEvent: (event: AgentEvent)
                 const parser = createTaskTextStreamParser();
                 const connectedAt = Date.now();
                 touch();
-                const cancelReader = () => { void reader.cancel().catch(() => undefined); };
+                const cancelReader = () => {
+                    void reader.cancel().catch(() => undefined);
+                };
                 attempt.signal.addEventListener("abort", cancelReader, { once: true });
                 try {
                     while (!controller.signal.aborted && !attempt.signal.aborted) {
                         const { value, done } = await reader.read();
                         if (value?.length) touch();
-                        consumeTaskTextStream(parser, decoder.decode(value, { stream: !done }), (item) => {
-                            if (item.event === "agent_event") {
-                                const event = item.data as AgentEvent;
-                                if (event.runId !== runId || !Number.isSafeInteger(event.seq) || event.seq <= cursor) return;
-                                cursor = event.seq;
-                                failures = 0;
-                                options.onConnectionChange?.("connected");
-                                onEvent({ ...event, localSeq: ++localSeq });
-                            } else if (item.event === "run_snapshot") {
-                                const run = item.data as AgentRun;
-                                if (run.id !== runId) return;
-                                options.onConnectionChange?.("connected");
-                                if (run.activeMessage) {
-                                    const messageKey = `${run.activeMessage.messageId}\u0000${run.activeMessage.text}`;
-                                    if (messageKey !== lastActiveMessageKey) {
-                                        lastActiveMessageKey = messageKey;
-                                        emit("assistant_message", run.activeMessage);
+                        consumeTaskTextStream(
+                            parser,
+                            decoder.decode(value, { stream: !done }),
+                            (item) => {
+                                if (item.event === "agent_event") {
+                                    const event = item.data as AgentEvent;
+                                    if (event.runId !== runId || !Number.isSafeInteger(event.seq) || event.seq <= cursor) return;
+                                    cursor = event.seq;
+                                    failures = 0;
+                                    options.onConnectionChange?.("connected");
+                                    onEvent({ ...event, localSeq: ++localSeq });
+                                } else if (item.event === "run_snapshot") {
+                                    const run = item.data as AgentRun;
+                                    if (run.id !== runId) return;
+                                    options.onConnectionChange?.("connected");
+                                    if (run.activeMessage) {
+                                        const messageKey = `${run.activeMessage.messageId}\u0000${run.activeMessage.text}`;
+                                        if (messageKey !== lastActiveMessageKey) {
+                                            lastActiveMessageKey = messageKey;
+                                            emit("assistant_message", run.activeMessage);
+                                        }
                                     }
-                                }
-                                const statusPayload = { status: run.status, revision: run.revision, eventCount: run.eventCount, cleanupPending: run.cleanupPending, failureMessage: run.failureMessage, skills: run.skills, spentCredits: run.spentCredits, step: run.step, approval: run.approval };
-                                const statusKey = JSON.stringify(statusPayload);
-                                if (statusKey !== lastStatusKey) {
-                                    lastStatusKey = statusKey;
-                                    emit("run_status", statusPayload);
-                                }
-                                terminal = !run.cleanupPending && ["completed", "failed", "cancelled", "rejected"].includes(run.status);
-                            } else if (item.event === "error") throw new Error("Agent 状态读取失败");
-                        }, done);
+                                    const statusPayload = {
+                                        status: run.status,
+                                        revision: run.revision,
+                                        eventCount: run.eventCount,
+                                        cleanupPending: run.cleanupPending,
+                                        failureMessage: run.failureMessage,
+                                        skills: run.skills,
+                                        spentCredits: run.spentCredits,
+                                        step: run.step,
+                                        approval: run.approval,
+                                    };
+                                    const statusKey = JSON.stringify(statusPayload);
+                                    if (statusKey !== lastStatusKey) {
+                                        lastStatusKey = statusKey;
+                                        emit("run_status", statusPayload);
+                                    }
+                                    terminal = !run.cleanupPending && ["completed", "failed", "cancelled", "rejected"].includes(run.status);
+                                } else if (item.event === "error") throw new Error("Agent 状态读取失败");
+                            },
+                            done,
+                        );
                         // A repeated initial snapshot is not a healthy connection.
                         // Sustained heartbeat traffic or advancing events reset the budget.
                         if (Date.now() - connectedAt >= 30_000 && value?.length) failures = 0;
@@ -408,7 +440,11 @@ export function subscribeAgentEvents(runId: string, onEvent: (event: AgentEvent)
             }
             options.onConnectionChange?.("reconnecting");
             await new Promise<void>((resolve) => {
-                const finish = () => { clearTimeout(timer); controller.signal.removeEventListener("abort", finish); resolve(); };
+                const finish = () => {
+                    clearTimeout(timer);
+                    controller.signal.removeEventListener("abort", finish);
+                    resolve();
+                };
                 const backoff = Math.min(1000 * 2 ** failures, 15000) * (0.75 + Math.random() * 0.5);
                 const timer = setTimeout(finish, Math.max(backoff, Math.min(retryAfterMs, 300_000)));
                 controller.signal.addEventListener("abort", finish, { once: true });

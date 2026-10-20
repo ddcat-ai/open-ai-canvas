@@ -21,8 +21,9 @@ import (
 
 type cloudAgentPiModelContextKey struct{}
 type cloudAgentPiModelContext struct {
-	Purpose      string
-	SystemPrompt string
+	Purpose                 string
+	SystemPrompt            string
+	CurrentTurnContextIndex int
 }
 
 func cloudAgentPiModelOperation(ctx context.Context) string {
@@ -36,14 +37,15 @@ func cloudAgentPiModelOperation(ctx context.Context) string {
 // cloudAgentPiModel 模型调用桥接
 func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, payload map[string]json.RawMessage) (any, error) {
 	var request struct {
-		StepID        string                    `json:"stepId"`
-		ModelID       string                    `json:"modelId"`
-		ContextUsage  *cloudAgentPiContextUsage `json:"contextUsage"`
-		Purpose       string                    `json:"purpose"`
-		SystemPrompt  string                    `json:"systemPrompt"`
-		Messages      []map[string]any          `json:"messages"`
-		Tools         []map[string]any          `json:"tools"`
-		ThinkingLevel string                    `json:"thinkingLevel"`
+		StepID                  string                    `json:"stepId"`
+		ModelID                 string                    `json:"modelId"`
+		ContextUsage            *cloudAgentPiContextUsage `json:"contextUsage"`
+		Purpose                 string                    `json:"purpose"`
+		SystemPrompt            string                    `json:"systemPrompt"`
+		Messages                []map[string]any          `json:"messages"`
+		Tools                   []map[string]any          `json:"tools"`
+		ThinkingLevel           string                    `json:"thinkingLevel"`
+		CurrentTurnContextIndex *int                      `json:"currentTurnContextIndex"`
 	}
 	if err := decodePiPayload(payload, &request); err != nil {
 		return nil, err
@@ -54,8 +56,6 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 	if request.Purpose == "compaction" && strings.TrimSpace(request.SystemPrompt) == "" {
 		return nil, BadAuthRequest("压缩步骤缺少摘要指令")
 	}
-	ctx = context.WithValue(ctx, cloudAgentPiModelContextKey{}, cloudAgentPiModelContext{request.Purpose, request.SystemPrompt})
-
 	if len(request.Messages) == 0 {
 		return nil, fmt.Errorf("no messages")
 	}
@@ -70,6 +70,17 @@ func (s *Service) cloudAgentPiModel(ctx context.Context, userID, runID string, p
 	if err != nil {
 		return nil, err
 	}
+	currentTurnIndex := -1
+	if state.Request.Surface == "creation" && request.Purpose != "compaction" {
+		if request.CurrentTurnContextIndex == nil || *request.CurrentTurnContextIndex < -1 || *request.CurrentTurnContextIndex >= len(request.Messages) ||
+			(*request.CurrentTurnContextIndex >= 0 && stringField(request.Messages[*request.CurrentTurnContextIndex], "role") != "user") {
+			return nil, BadAuthRequest("Agent 运行时缺少有效视觉上下文位置，请同步更新后端与独立 Agent")
+		}
+		currentTurnIndex = *request.CurrentTurnContextIndex
+	}
+	ctx = context.WithValue(ctx, cloudAgentPiModelContextKey{}, cloudAgentPiModelContext{
+		Purpose: request.Purpose, SystemPrompt: request.SystemPrompt, CurrentTurnContextIndex: currentTurnIndex,
+	})
 	if request.ModelID != "" && request.ModelID != firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model) {
 		return nil, BadAuthRequest("Pi 模型标识与本轮模型不匹配")
 	}
@@ -244,7 +255,12 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		}
 
 		// Pi 的原生分支（含压缩记录）是唯一历史来源。不能因消息变短而恢复旧全文。
-		canonical, historyErr := cloudAgentPiCanonicalForModelRequest(messages, state.Canonical)
+		options, hasModelContext := ctx.Value(cloudAgentPiModelContextKey{}).(cloudAgentPiModelContext)
+		var turnContextIndex []int
+		if hasModelContext && operation != cloudAgentContextCompactionOperation && state.Request.Surface == "creation" {
+			turnContextIndex = []int{options.CurrentTurnContextIndex}
+		}
+		canonical, historyErr := cloudAgentPiCanonicalForModelRequest(messages, state.Canonical, turnContextIndex...)
 		if operation == cloudAgentContextCompactionOperation {
 			options, _ := ctx.Value(cloudAgentPiModelContextKey{}).(cloudAgentPiModelContext)
 			canonical, historyErr = canonicalFromRuntimeMessages(messages, nil, options.SystemPrompt)
@@ -267,7 +283,7 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			if referenceErr != nil {
 				return nil, false, referenceErr
 			}
-			creationImages, err = s.attachCloudAgentCreationImages(userID, referenceRequest, &canonical)
+			creationImages, err = s.attachCloudAgentCreationImages(userID, referenceRequest, &canonical, &state)
 			if err != nil {
 				return nil, false, err
 			}
@@ -307,6 +323,7 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			"mode":          "text",
 			"prompt":        state.Request.Prompt,
 			"agentRequests": map[string]any{"canonical": canonical},
+			"metadata":      map[string]any{"agentSurface": state.Request.Surface},
 			"config": map[string]any{
 				"channelId":       state.Request.ChannelID,
 				"channelModelKey": state.Request.ChannelModelKey,
@@ -461,8 +478,8 @@ func (s *Service) adoptCloudAgentPiModelStep(userID, runID, taskID string, fence
 // cloudAgentPiThinkingEnabled treats an omitted thinking level the same as Pi's
 // explicit "off" value. Pi omits the field when thinking is disabled, and the
 // Go JSON decoder represents that omitted field as an empty string.
-func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing canonicalAgentRequest) (canonicalAgentRequest, error) {
-	canonical, err := canonicalFromRuntimeMessages(messages, existing.Tools, existing.SystemPrompt)
+func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing canonicalAgentRequest, currentTurnContextIndex ...int) (canonicalAgentRequest, error) {
+	canonical, err := canonicalFromRuntimeMessages(messages, existing.Tools, existing.SystemPrompt, currentTurnContextIndex...)
 	canonical.PromptCacheKey = existing.PromptCacheKey
 	return canonical, err
 }

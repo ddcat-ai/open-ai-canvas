@@ -274,6 +274,103 @@ func TestCreationOutputSelectionUsesExactOwnedSource(t *testing.T) {
 	}
 }
 
+func TestCreationCurrentUploadCombinesWithOnlySelectedPreviousOutput(t *testing.T) {
+	for _, tool := range []string{"generate_media", "commerce_plan_submit"} {
+		for _, permission := range []string{"auto", "request_approval"} {
+			t.Run(tool+"/"+permission, func(t *testing.T) {
+				s, db, _ := agentMediaFixture(t)
+				installCreationParallelImageModel(t, db)
+				parentReq := creationAgentRequest()
+				parentReq.Prompt = "接下来发的新商品图与前面的场景成品结合，保留背景"
+				parent, err := s.CreateCloudAgentRun("user", parentReq, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Create(&model.Resource{ID: "unrelated-history", UserID: "user", Kind: "image", Status: model.ResourceStatusReady, MimeType: "image/png", Width: 1024, Height: 1024, Size: 50}).Error; err != nil {
+					t.Fatal(err)
+				}
+				source := model.Task{ID: "previous-scenes", UserID: "user", AgentRunID: parent.ID, Type: "canvas_image", Status: model.TaskStatusSucceeded, Prompt: "两张不同的场景", InputJSON: `{}`, ResultJSON: `{"images":[{"storageKey":"resource:ref-two"},{"storageKey":"resource:unrelated-history"}]}`}
+				if err := db.Create(&source).Error; err != nil {
+					t.Fatal(err)
+				}
+				completeCreationReferenceRun(t, db, parent.ID)
+				req := creationReferenceRequest(t, "combine-current-with-history", "", "ref-one")
+				req.Prompt, req.PermissionMode = "", permission
+				req.Budget.MaxCredits, req.Budget.MaxGenerationTasks = 10, 1
+				req.MediaSettings = &CloudAgentCreationMedia{Image: &CloudAgentCreationMediaChoice{Selection: CloudAgentMediaModelSelection{ChannelID: "channel", ChannelModelKey: "image-test"}, ParameterMode: "manual", Size: "1024x1024"}}
+				root, err := s.CreateCloudAgentRun("user", req, parent.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				read := cloudAgentCall{ID: "read-previous-scene"}
+				read.Function.Name, read.Function.Arguments = "creation_media_read", `{"taskId":"previous-scenes","outputIndex":1}`
+				result, err := s.executeCloudAgentRuntimeTool(context.Background(), "user", root.ID, read)
+				if err != nil || result.(map[string]any)["isError"] == true {
+					t.Fatalf("selected previous output could not be read: %+v %v", result, err)
+				}
+				refs := []cloudAgentCreationReference{
+					{ResourceID: "ref-one", Role: "product", Usage: "保留新上传商品的形状"},
+					{ResourceID: "ref-two", Role: "source", Usage: "保留上一轮场景的背景和构图"},
+				}
+				call := agentMediaCall(cloudAgentMediaArgs{Mode: "image", Prompt: "将新上传商品放入上一轮场景，保留背景", AttachmentResourceIDs: []string{"ref-one", "ref-two"}, References: refs})
+				if tool == "commerce_plan_submit" {
+					plan := commerceFixturePlan()
+					plan.ProductFacts[0].SourceIDs = []string{"ref-one"}
+					plan.Items[0].AttachmentResourceIDs = []string{"ref-one", "ref-two"}
+					plan.References = refs
+					call.Function.Name, call.Function.Arguments = tool, mustMarshal(plan)
+				}
+				run, state := agentInterjectionState(t, s, root.ID)
+				state.ActiveTaskID, state.CallIndex, state.Calls = "", 0, []cloudAgentCall{call}
+				if err := s.repo.MutateCloudAgentRun(run, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+					return cloudAgentSave(current, &state)
+				}); err != nil {
+					t.Fatal(err)
+				}
+				run, state = agentInterjectionState(t, s, root.ID)
+				if err := s.advanceCloudAgentTool(run, &state); err != nil {
+					t.Fatal(err)
+				}
+				if permission == "request_approval" {
+					run, state = agentInterjectionState(t, s, root.ID)
+					var count int64
+					if err := db.Model(&model.Task{}).Where("agent_run_id = ? AND type = ?", root.ID, "canvas_image").Count(&count).Error; err != nil {
+						t.Fatal(err)
+					}
+					if run.Status != "waiting_approval" || state.Approval == nil || count != 0 {
+						t.Fatalf("combined references bypassed approval: status=%s tasks=%d", run.Status, count)
+					}
+					if err := s.DecideCloudAgentApproval("user", root.ID, state.Approval.ID, "approve", ""); err != nil {
+						t.Fatal(err)
+					}
+					if err := s.advanceCloudAgentByID("user", root.ID); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var tasks []model.Task
+				if err := db.Where("agent_run_id = ? AND type = ?", root.ID, "canvas_image").Find(&tasks).Error; err != nil {
+					t.Fatal(err)
+				}
+				if len(tasks) != 1 {
+					_, state = agentInterjectionState(t, s, root.ID)
+					t.Fatalf("combined source admission failed: tasks=%d events=%s", len(tasks), mustMarshal(state.Events))
+				}
+				var input canvasGenerationInput
+				if err := json.Unmarshal([]byte(tasks[0].InputJSON), &input); err != nil {
+					t.Fatal(err)
+				}
+				if len(input.ReferenceImages) != 2 || input.ReferenceImages[0].StorageKey != "resource:ref-one" || input.ReferenceImages[0].Role != "product" || input.ReferenceImages[1].StorageKey != "resource:ref-two" || input.ReferenceImages[1].Role != "source" {
+					t.Fatalf("task lost explicit mixed references or included unrelated history: %+v", input.ReferenceImages)
+				}
+				view, err := s.CloudAgentRun("user", root.ID)
+				if err != nil || len(view.Attachments) != 1 || view.Attachments[0].ResourceID != "ref-one" || view.UserPrompt != "" {
+					t.Fatalf("historical selection became a new user attachment/message: %+v %v", view, err)
+				}
+			})
+		}
+	}
+}
+
 func TestCreationCommerceToolsRequireModelSelectedWorkflow(t *testing.T) {
 	req := creationAgentRequest()
 	req.PermissionMode = "auto"
