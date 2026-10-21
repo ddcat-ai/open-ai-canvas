@@ -72,6 +72,12 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 			var fieldErr *cloudAgentFieldArgumentError
 			if errors.As(err, &fieldErr) {
 				detail["field"], detail["issue"] = fieldErr.Field, fieldErr.Issue
+				if fieldErr.ExpectedType != "" {
+					detail["expectedType"] = fieldErr.ExpectedType
+				}
+				if fieldErr.ActualType != "" {
+					detail["actualType"] = fieldErr.ActualType
+				}
 			}
 			// Use this run's advertised contract, including its permission scope.
 			for _, tool := range state.Canonical.Tools {

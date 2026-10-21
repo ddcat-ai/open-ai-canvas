@@ -1,7 +1,10 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"unicode/utf8"
 
@@ -50,15 +53,59 @@ type cloudAgentCharacterCreatePlan struct {
 	Preview         cloudAgentApprovalPreview
 }
 
-// 设定字段只在描述里列出键名以控制工具 schema 体积；解码时 DisallowUnknownFields 会拒绝未声明的键。
 func cloudAgentCharacterCreateSchema() map[string]any {
 	str := func(description string) map[string]any {
 		return map[string]any{"type": "string", "description": description}
 	}
+	definition := map[string]any{
+		"aliases": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": 16},
+	}
+	for _, field := range []string{"role", "appearance", "physique", "clothing", "personality", "props", "consistencyPrompt", "multiViewPrompt", "voiceLanguage", "voiceAge", "voiceTimbre"} {
+		definition[field] = map[string]any{"type": "string"}
+	}
 	return map[string]any{
-		"nodeId": str("新节点ID"), "name": str("角色名"), "imageNodeId": str("就绪的形象图片节点ID"), "audioNodeId": str("可选，就绪的声音音频节点ID"),
-		"definition": map[string]any{"type": "object", "description": "可选设定：role/appearance/physique/clothing/personality/props/consistencyPrompt/multiViewPrompt/voiceLanguage/voiceAge/voiceTimbre 为字符串，aliases 为字符串数组"},
+		"nodeId": str("新节点ID"), "name": map[string]any{"type": "string"}, "imageNodeId": str("就绪形象图节点ID"), "audioNodeId": str("可选就绪声音节点ID"),
+		"definition": map[string]any{"type": "object", "properties": definition, "additionalProperties": false},
 		"x":          map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
+	}
+}
+
+// 诊断只使用已声明的字段和固定类型名，不回显解码错误里的用户键名或值。
+func cloudAgentCharacterJSONArgumentError(err error) error {
+	var typeErr *json.UnmarshalTypeError
+	if !errors.As(err, &typeErr) {
+		return cloudAgentJSONArgumentError(err)
+	}
+	property := map[string]any{"properties": cloudAgentCharacterCreateSchema()}
+	for _, field := range strings.Split(typeErr.Field, ".") {
+		properties, _ := property["properties"].(map[string]any)
+		property, _ = properties[field].(map[string]any)
+		if property == nil {
+			return cloudAgentJSONArgumentError(err)
+		}
+	}
+	field, expected := typeErr.Field, stringValue(property["type"])
+	if expected == "array" {
+		expected = "string[]"
+		if typeErr.Type.Kind() == reflect.String {
+			field, expected = field+"[]", "string"
+		}
+	}
+	actual := ""
+	switch typeErr.Value {
+	case "object", "array", "string", "bool":
+		actual = typeErr.Value
+		if actual == "bool" {
+			actual = "boolean"
+		}
+	default:
+		if strings.HasPrefix(typeErr.Value, "number") {
+			actual = "number"
+		}
+	}
+	return &cloudAgentFieldArgumentError{
+		error: &cloudAgentArgumentError{BadAuthRequest(fmt.Sprintf("创建角色卡参数 %s 类型不匹配，应为 %s", field, expected))},
+		Field: field, Issue: "type_mismatch", ExpectedType: expected, ActualType: actual,
 	}
 }
 
@@ -126,7 +173,7 @@ func cloudAgentCharacterMediaResource(repo *repository.Repository, userID string
 func prepareCloudAgentCharacterCreate(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (*cloudAgentCharacterCreatePlan, error) {
 	var args cloudAgentCharacterCreateArgs
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
-		return nil, &cloudAgentArgumentError{BadAuthRequest("创建角色卡参数无效：仅允许 nodeId、name、imageNodeId、audioNodeId、definition、x、y")}
+		return nil, cloudAgentCharacterJSONArgumentError(err)
 	}
 	if err := validateCloudAgentID(args.NodeID, "角色卡节点ID", 80); err != nil {
 		return nil, &cloudAgentArgumentError{err}

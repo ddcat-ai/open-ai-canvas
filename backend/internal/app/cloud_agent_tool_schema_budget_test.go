@@ -68,7 +68,47 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// 描述后为 36,072 字节；启用视觉工具后为 29 个工具、36,883 字节，预算显式上调到
 	// 37,500，保留约1.7%的余量。新增工具或字段时请重新测量并有意识地
 	// 调整这个数字，而不是让 schema 悄悄膨胀（它每一步都要发、还在前缀最前面）。
+	// #840 补全角色设定嵌套字段并压缩本工具描述后为 37,480 字节，仍保持原预算。
 	if len(raw) > 37500 {
 		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 37500：请压缩描述或显式调整预算", len(raw))
 	}
+}
+
+func TestCloudAgentCharacterDefinitionSchema(t *testing.T) {
+	tools, _ := platformToolSchema(t)
+	for _, tool := range tools {
+		function := tool["function"].(map[string]any)
+		if function["name"] != "canvas_create_character" {
+			continue
+		}
+		parameters := function["parameters"].(map[string]any)
+		if !reflect.DeepEqual(parameters["required"], []string{"nodeId", "name", "imageNodeId"}) || parameters["additionalProperties"] != false {
+			t.Fatalf("character required fields or strictness changed: %#v", parameters)
+		}
+		definition := parameters["properties"].(map[string]any)["definition"].(map[string]any)
+		if definition["type"] != "object" || definition["additionalProperties"] != false || len(schemaStringList(definition["required"])) != 0 {
+			t.Fatalf("definition must be optional and reject unknown fields: %#v", definition)
+		}
+		properties, ok := definition["properties"].(map[string]any)
+		definitionType := reflect.TypeOf(cloudAgentCharacterDefinitionArgs{})
+		if !ok || len(properties) != definitionType.NumField() {
+			t.Fatalf("definition schema must cover every allowed field: %#v", properties)
+		}
+		for i := 0; i < definitionType.NumField(); i++ {
+			field := definitionType.Field(i).Tag.Get("json")
+			property, ok := properties[field].(map[string]any)
+			if !ok {
+				t.Fatalf("missing schema for %s", field)
+			}
+			if field == "aliases" {
+				if property["type"] != "array" || property["maxItems"] != 16 || !reflect.DeepEqual(property["items"], map[string]any{"type": "string"}) {
+					t.Fatalf("aliases must be a string array with at most 16 items: %#v", property)
+				}
+			} else if property["type"] != "string" {
+				t.Errorf("%s must remain a string: %#v", field, property)
+			}
+		}
+		return
+	}
+	t.Fatal("canvas_create_character was not registered")
 }
