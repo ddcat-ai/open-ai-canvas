@@ -121,6 +121,41 @@ func TestOfficialAtlasCloudChatProfile(t *testing.T) {
 	}
 }
 
+func TestOfficialCheaperInferenceChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "cheaperinference-chat.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "cheaperinference-chat" || provider.BaseURL != "https://api.cheaperinference.com" || provider.Auth.Type != "bearer" {
+		t.Fatalf("Cheaper Inference provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "cheaperinference-chat.yingce-plugin", "cheaperinference-chat")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:    "gpt-5.4-mini",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "gpt-5.4-mini" {
+		t.Fatalf("Cheaper Inference request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"cheaper inference ok"}}],"usage":{"total_tokens":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "cheaper inference ok" {
+		t.Fatalf("Cheaper Inference response = %#v", result)
+	}
+}
+
 func assertManifestContractMatchesPackage(t *testing.T, packageName string, manifestRaw []byte, interfaceDocs string) {
 	t.Helper()
 	start := strings.Index(interfaceDocs, manifestContractStart)
