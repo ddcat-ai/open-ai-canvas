@@ -91,7 +91,7 @@ export function generationErrorMessage(error: unknown) {
         if (hasHttpStatus(raw, 429)) return "服务当前繁忙，请稍后重试。";
         if (hasHttpStatus(raw, 401, 403)) return "生成服务鉴权失败，请检查渠道配置。";
         if (hasHttpStatus(raw, 404)) return "生成服务地址不可用，请检查渠道配置。";
-        if (hasHttpStatus(raw, 500, 502, 503, 504)) return NETWORK_ERROR_MESSAGE;
+        if (hasHttpStatus(raw, 500, 502, 503, 504)) return REASON_MESSAGES.unavailable;
         if (containsInfrastructureDetails(raw)) return NETWORK_ERROR_MESSAGE;
     }
     if (isModelCapabilityFailure(displayMessage)) return MODEL_CAPABILITY_ERROR_MESSAGE;

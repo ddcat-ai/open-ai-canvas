@@ -20,6 +20,8 @@ const (
 	taskErrorModerationMessage = "内容审核未通过，本次平台积分未扣除或已退还。请修改提示词后重新生成。"
 	taskErrorDefaultMessage    = "生成失败，请稍后重试。"
 	taskErrorNetworkMessage    = "网络异常。"
+	// 上游已返回 5xx：链路是通的，故障在模型服务一侧，不能说成网络异常。
+	taskErrorUnavailableMessage = "模型服务暂时不可用，请稍后再试。"
 )
 
 var (
@@ -91,7 +93,7 @@ func classifyUserFacingTaskError(raw string) string {
 			case taskErrorHasStatus(raw, "404"):
 				return "生成服务地址不可用，请检查渠道配置。"
 			case taskErrorHasStatus(raw, "500", "502", "503", "504"):
-				return taskErrorNetworkMessage
+				return taskErrorUnavailableMessage
 			}
 		}
 		if taskErrorInfrastructurePattern.MatchString(raw) {

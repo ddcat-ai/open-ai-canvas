@@ -511,17 +511,23 @@ func userVisibleFailureLabel(requestErr error, stored string) string {
 	if stored != "" {
 		texts = append(texts, stored)
 	}
-	network := false
+	network, unavailable := false, false
 	for _, text := range texts {
 		if speechResourceDeniedUserMessage(text) != "" {
 			return volcengineSpeechResourceDeniedMessage
 		}
-		if userFacingTaskError(text) == taskErrorNetworkMessage {
+		switch userFacingTaskError(text) {
+		case taskErrorNetworkMessage:
 			network = true
+		case taskErrorUnavailableMessage:
+			unavailable = true
 		}
 	}
 	if network {
 		return taskErrorNetworkMessage
+	}
+	if unavailable {
+		return taskErrorUnavailableMessage
 	}
 	return ""
 }

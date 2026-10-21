@@ -183,7 +183,7 @@ func TestRecordProviderRequestKeepsUserVisibleSpeechAndNetworkErrors(t *testing.
 
 	assertLoggedTaskError(t, db, "task-speech", "语音合成服务未开通")
 	assertLoggedTaskError(t, db, "task-network", "网络异常。", "connection refused")
-	assertLoggedTaskError(t, db, "task-gateway", "网络异常。", "502")
+	assertLoggedTaskError(t, db, "task-gateway", taskErrorUnavailableMessage, "502")
 }
 
 func assertLoggedTaskError(t *testing.T, db *gorm.DB, taskID string, parts ...string) {
