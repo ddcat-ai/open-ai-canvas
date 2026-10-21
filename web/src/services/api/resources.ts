@@ -266,23 +266,21 @@ type DirectUploadSession = {
 
 // 预签名直传：init 拿签名 URL → 浏览器 PUT 直传对象存储 → complete 校验落库。
 // 文件字节全程不经过应用服务器，绕开反向代理的体积/超时限制。
-async function uploadResourceFileDirect(
-    file: Blob,
-    name: string,
-    kind: "image" | "video" | "audio" | "file",
-    meta: ResourceUploadMeta | undefined,
-    onProgress?: (uploadedBytes: number, totalBytes: number) => void,
-): Promise<RemoteResource> {
+async function uploadResourceFileDirect(file: Blob, name: string, kind: "image" | "video" | "audio" | "file", meta: ResourceUploadMeta | undefined, onProgress?: (uploadedBytes: number, totalBytes: number) => void): Promise<RemoteResource> {
     const mimeType = file.type || "application/octet-stream";
-    const init = await http.post<{ session: DirectUploadSession }>("/resources/direct-upload/init", {
-        kind,
-        fileName: name,
-        mimeType,
-        size: file.size,
-        width: meta?.width ? Math.round(meta.width) : 0,
-        height: meta?.height ? Math.round(meta.height) : 0,
-        durationMs: meta?.durationMs ? Math.round(meta.durationMs) : 0,
-    }, uploadRequestConfig(meta?.idempotencyKey));
+    const init = await http.post<{ session: DirectUploadSession }>(
+        "/resources/direct-upload/init",
+        {
+            kind,
+            fileName: name,
+            mimeType,
+            size: file.size,
+            width: meta?.width ? Math.round(meta.width) : 0,
+            height: meta?.height ? Math.round(meta.height) : 0,
+            durationMs: meta?.durationMs ? Math.round(meta.durationMs) : 0,
+        },
+        uploadRequestConfig(meta?.idempotencyKey),
+    );
     const session = init.session;
     // 直传目标是对象存储的绝对 URL（非本站 /api），响应也不是业务信封，
     // 必须用原生 axios 而不是 http.* 封装。
@@ -294,11 +292,7 @@ async function uploadResourceFileDirect(
               }
             : undefined,
     });
-    const data = await http.post<{ resource: RemoteResource }>(
-        `/resources/direct-upload/${encodeURIComponent(session.resource.id)}/complete`,
-        {},
-        uploadRequestConfig(meta?.idempotencyKey),
-    );
+    const data = await http.post<{ resource: RemoteResource }>(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/complete`, {}, uploadRequestConfig(meta?.idempotencyKey));
     return data.resource;
 }
 
