@@ -74,6 +74,13 @@ Pi 模型桥在保存待执行调用之前，复用单步输出限制校验：�
 素材绑定使用“素材→分镜”和 `toHandleId: row:<rowId>`；镜头输出使用“分镜→图片/视频”和 `fromHandleId: row:<rowId>`。`rowId` 必须是读取工具返回的真实行 ID，不能用镜头编号代替。普通节点连线与镜头行连线按 handle 区分，已有整表连线不代表该行已经绑定。
 
 handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提供具体 `field`（如 `ops[0].fromHandleId`）、`issue`、方向说明及连线参数模板，不再使用无关的新增节点示例。模板不会被自动执行，不自动交换端点或修改原调用。权限、快照和重复连线校验保持不变；工具契约版本为 v4，重启后端后新会话使用更新后的说明。
+
+## Agent 角色卡创建参数反馈
+
+`canvas_create_character` 的可选 `definition` 在工具 Schema 中完整声明允许字段，`aliases` 是最多 16 项的一维字符串数组，例如 `{"aliases":["别名甲","别名乙"]}`；其他已声明设定字段保持字符串类型，未知字段仍被拒绝。
+
+已知字段类型不匹配时，工具回执在原有 `reason: invalid_tool_arguments`、`parameters` 和 `guidance` 之外提供 `field`、`issue: type_mismatch`、`expectedType`、`actualType`。例如对象形式的别名返回 `field: definition.aliases`、`expectedType: string[]`、`actualType: object`；数组元素类型错误使用 `definition.aliases[]` 指明元素位置。诊断只包含已声明字段和类型名称，不回显参数值、未知键名或底层解码错误。参数修正后仍经过资源归属检查和原有审批流程，不自动转换错误结构，不增加纠错次数。
+
 ## KM 图片尺寸能力
 
 图片能力 `size.presets[].tier` 在已有档位之外接受 `1.5k`；前端档位选择、请求归一化与服务端预设校验保持一致。`km-kemei-seedream` 默认 `2048x2048`、单次一张、最多十张参考图，提供二十四个精确尺寸。透明输出使用插件扩展字段，不开启宿主通用透明背景开关。模型能力仍保存在现有 JSON 字段，无数据库迁移或新端点。

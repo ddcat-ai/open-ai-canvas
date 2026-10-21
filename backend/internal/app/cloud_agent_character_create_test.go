@@ -2,11 +2,221 @@ package app
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
+
+func TestCloudAgentCharacterArgumentTypeFeedback(t *testing.T) {
+	for _, tc := range []struct{ name, args, field, expected, actual string }{
+		{"aliases object", `{"definition":{"aliases":{"item":["private-sentinel"]}}}`, "definition.aliases", "string[]", "object"},
+		{"nested aliases", `{"definition":{"aliases":[["private-sentinel"]]}}`, "definition.aliases[]", "string", "array"},
+		{"aliases string", `{"definition":{"aliases":"private-sentinel"}}`, "definition.aliases", "string[]", "string"},
+		{"alias object", `{"definition":{"aliases":[{"private-sentinel":"private-sentinel"}]}}`, "definition.aliases[]", "string", "object"},
+		{"alias number", `{"definition":{"aliases":[123456789]}}`, "definition.aliases[]", "string", "number"},
+		{"alias boolean", `{"definition":{"aliases":[true]}}`, "definition.aliases[]", "string", "boolean"},
+		{"definition array", `{"definition":["private-sentinel"]}`, "definition", "object", "array"},
+		{"role object", `{"definition":{"role":{"private-sentinel":"private-sentinel"}}}`, "definition.role", "string", "object"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			call := cloudAgentCall{ID: "bad-character"}
+			call.Function.Name, call.Function.Arguments = "canvas_create_character", tc.args
+			// nil 仓储确保类型错误在读取资源或准备审批前被拒绝。
+			plan, err := prepareCloudAgentCharacterCreate(nil, "user", "canvas", call)
+			if err == nil || plan != nil {
+				t.Fatal("invalid character arguments accepted")
+			}
+			req := agentTestRequest()
+			req.PermissionMode = "request_approval"
+			state := &cloudAgentRuntime{Request: req, Canonical: canonicalAgentRequest{Tools: cloudAgentTools(req)}}
+			if cloudAgentToolResult("run", state, call, nil, err) {
+				t.Fatal("first argument failure exhausted repair budget")
+			}
+			content := state.Canonical.Messages[0]["content"].(string)
+			var result map[string]any
+			if err := json.Unmarshal([]byte(content), &result); err != nil {
+				t.Fatal(err)
+			}
+			for key, want := range map[string]string{
+				"field": tc.field, "issue": "type_mismatch", "expectedType": tc.expected, "actualType": tc.actual,
+				"reason": "invalid_tool_arguments", "errorClass": "schema_error", "requiredAction": "fix_arguments",
+			} {
+				if result[key] != want {
+					t.Errorf("%s = %v, want %s", key, result[key], want)
+				}
+			}
+			if result["parameters"] == nil || strings.Contains(content, "private-sentinel") || strings.Contains(content, "123456789") || strings.Contains(content, "json:") {
+				t.Fatalf("unsafe or incomplete feedback: %s", content)
+			}
+			if state.Approval != nil || state.ToolRepairs[call.Function.Name].Attempt != 1 {
+				t.Fatal("invalid call changed approval or repair behavior")
+			}
+		})
+	}
+}
+
+func TestCloudAgentCharacterRejectsUnknownAndMalformedArguments(t *testing.T) {
+	for _, raw := range []string{
+		`{"aliases":["private-sentinel"]}`,
+		`{"definition":{"private-sentinel":"private-sentinel"}}`,
+		`{"definition":{"aliases":[],"private-sentinel":"private-sentinel"}}`,
+		`{"definition":{"aliases":[]}} {"private-sentinel":true}`,
+		`{"definition":{"aliases":["private-sentinel"]}`,
+		`[]`, `null`, `"private-sentinel"`,
+	} {
+		call := cloudAgentCall{ID: "invalid"}
+		call.Function.Name, call.Function.Arguments = "canvas_create_character", raw
+		if _, err := prepareCloudAgentCharacterCreate(nil, "user", "canvas", call); err == nil {
+			t.Fatalf("invalid arguments accepted: %s", raw)
+		} else {
+			state := &cloudAgentRuntime{}
+			cloudAgentToolResult("run", state, call, nil, err)
+			content := state.Canonical.Messages[0]["content"].(string)
+			if strings.Contains(content, "private-sentinel") || !strings.Contains(content, "invalid_tool_arguments") {
+				t.Fatalf("unsafe argument feedback: %s", content)
+			}
+		}
+	}
+}
+
+func TestCloudAgentCharacterDefinitionCompatibility(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	canvas := &model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[{"id":"portrait","type":"image","metadata":{"storageKey":"resource:portrait-res"}}],"connections":[]}`}
+	for _, item := range []any{canvas, &model.Resource{ID: "portrait-res", UserID: "user", Kind: "image", Status: model.ResourceStatusReady, MimeType: "image/png"}} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	definition := map[string]any{"aliases": []string{" 别名甲 ", "", "别名乙"}}
+	for _, field := range []string{"role", "appearance", "physique", "clothing", "personality", "props", "consistencyPrompt", "multiViewPrompt", "voiceLanguage", "voiceAge", "voiceTimbre"} {
+		definition[field] = " 设定 "
+	}
+	for _, value := range []any{definition, map[string]any{}, nil} {
+		args := map[string]any{"nodeId": "character", "name": " 角色 ", "imageNodeId": "portrait", "x": 800, "y": 200}
+		if value != nil {
+			args["definition"] = value
+		}
+		plan, err := prepareCloudAgentCharacterCreate(s.repo, "user", canvas.ID, cloudAgentStoryboardCall(t, "canvas_create_character", "corrected", args))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.Args.Name != "角色" || plan.ImageResourceID != "portrait-res" || plan.AudioResourceID != "" || plan.Position.X != 800 || plan.Position.Y != 200 || plan.Preview.Items[0].Operation != "create_character" {
+			t.Fatalf("optional fields or image-only preview changed: %#v", plan)
+		}
+		if value == nil || len(value.(map[string]any)) == 0 {
+			if !reflect.DeepEqual(plan.Definition, map[string]any{"aliases": []string{}}) {
+				t.Fatalf("empty definition changed: %#v", plan.Definition)
+			}
+		} else {
+			if !reflect.DeepEqual(plan.Definition["aliases"], []string{"别名甲", "别名乙"}) || len(plan.Definition) != 12 {
+				t.Fatalf("definition lost fields: %#v", plan.Definition)
+			}
+			for key := range definition {
+				if key != "aliases" && plan.Definition[key] != "设定" {
+					t.Errorf("%s was not preserved", key)
+				}
+			}
+		}
+	}
+	for _, count := range []int{16, 17} {
+		args := map[string]any{"nodeId": "limit", "name": "角色", "imageNodeId": "portrait", "definition": map[string]any{"aliases": make([]string, count)}}
+		_, err := prepareCloudAgentCharacterCreate(s.repo, "user", canvas.ID, cloudAgentStoryboardCall(t, "canvas_create_character", "limit", args))
+		if (err == nil) != (count == 16) {
+			t.Fatalf("aliases count %d: %v", count, err)
+		}
+	}
+	var count int64
+	if err := db.Model(&model.Asset{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("preparation created assets: count=%d, err=%v", count, err)
+	}
+	stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+	if err != nil || stored.PayloadJSON != canvas.PayloadJSON {
+		t.Fatal("preparation changed canvas")
+	}
+}
+
+func TestCloudAgentCharacterRepairPreservesApproval(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	canvas := &model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[{"id":"portrait","type":"image","metadata":{"storageKey":"resource:portrait-res"}}],"connections":[]}`}
+	for _, item := range []any{canvas, &model.Resource{ID: "portrait-res", UserID: "user", Kind: "image", Status: model.ResourceStatusReady, MimeType: "image/png"}} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := agentTestRequest()
+	req.PermissionMode = "request_approval"
+	root, err := s.CreateCloudAgentRun("user", req, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	load := func() (*model.CloudAgentExecution, cloudAgentRuntime) {
+		t.Helper()
+		run, err := s.repo.CloudAgent("user", root.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, err := cloudAgentDecode(run)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return run, state
+	}
+	// 直接在工具检查点注入模型输出，不启动 worker 或调用模型。
+	for _, aliases := range []any{map[string]any{"item": []string{"别名甲"}}, []string{"别名甲"}} {
+		run, state := load()
+		state.ActiveTaskID, state.CallIndex = "", 0
+		state.Calls = []cloudAgentCall{cloudAgentStoryboardCall(t, "canvas_create_character", "character-call", map[string]any{
+			"nodeId": "character", "name": "角色", "imageNodeId": "portrait", "definition": map[string]any{"aliases": aliases},
+		})}
+		if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+			return cloudAgentSave(current, &state)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		run, state = load()
+		if err := s.advanceCloudAgentTool(run, &state); err != nil {
+			t.Fatal(err)
+		}
+		run, state = load()
+		if _, bad := aliases.(map[string]any); bad {
+			if run.Status == "failed" || state.Approval != nil || state.ToolRepairs["canvas_create_character"].Attempt != 1 {
+				t.Fatal("invalid character arguments did not enter bounded repair")
+			}
+		} else if run.Status != "waiting_approval" || state.Approval == nil {
+			t.Fatal("corrected character call bypassed approval")
+		}
+		var count int64
+		if err := db.Model(&model.Asset{}).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("unapproved call wrote assets: %d, %v", count, err)
+		}
+		stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+		if err != nil || stored.PayloadJSON != canvas.PayloadJSON {
+			t.Fatal("unapproved call changed canvas")
+		}
+	}
+	run, state := load()
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, state = load()
+	recovered := false
+	for _, event := range state.Events {
+		retry, _ := event.Payload["retry"].(map[string]any)
+		if event.Type == "tool_completed" && retry["status"] == "recovered" {
+			recovered = true
+		}
+	}
+	if len(state.ToolRepairs) != 0 || !recovered {
+		t.Fatal("approved correction did not resolve repair state")
+	}
+	var count int64
+	if err := db.Model(&model.Asset{}).Where("category = ?", model.AssetCategoryCharacter).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("approved correction must create exactly one character: %d, %v", count, err)
+	}
+}
 
 func TestCloudAgentCreatesCharacterCardFromCanvasMedia(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
