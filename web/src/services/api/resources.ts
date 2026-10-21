@@ -1,6 +1,6 @@
 import { getActiveUserScope } from "@/lib/user-scope";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
-import { http, apiBaseURL, ApiError } from "@/services/api/request";
+import { http, apiBaseURL, apiClient, ApiError } from "@/services/api/request";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 
 export type RemoteResource = {
@@ -253,9 +253,68 @@ export function isResourceUrl(url?: string) {
 // 超过该阈值（与后端单请求 multipart 上限 50MB 一致）的本地媒体走分片上传，避免大视频导入失败。
 const CHUNK_UPLOAD_THRESHOLD = 50 << 20;
 const CHUNK_UPLOAD_RETRIES = 2;
+// 直传上限与后端 directUploadMaxFileSize 对齐（512MB）。
+const DIRECT_UPLOAD_MAX = 512 << 20;
+
+type DirectUploadSession = {
+    resource: RemoteResource;
+    uploadUrl: string;
+    method: "PUT" | string;
+    headers: Record<string, string>;
+    expiresAt: string;
+};
+
+// 预签名直传：init 拿签名 URL → 浏览器 PUT 直传对象存储 → complete 校验落库。
+// 文件字节全程不经过应用服务器，绕开反向代理的体积/超时限制。
+async function uploadResourceFileDirect(
+    file: Blob,
+    name: string,
+    kind: "image" | "video" | "audio" | "file",
+    meta: ResourceUploadMeta | undefined,
+    onProgress?: (uploadedBytes: number, totalBytes: number) => void,
+): Promise<RemoteResource> {
+    const mimeType = file.type || "application/octet-stream";
+    const init = await http.post<{ session: DirectUploadSession }>("/resources/direct-upload/init", {
+        kind,
+        fileName: name,
+        mimeType,
+        size: file.size,
+        width: meta?.width ? Math.round(meta.width) : 0,
+        height: meta?.height ? Math.round(meta.height) : 0,
+        durationMs: meta?.durationMs ? Math.round(meta.durationMs) : 0,
+    }, uploadRequestConfig(meta?.idempotencyKey));
+    const session = init.session;
+    // 直传目标是对象存储的绝对 URL（非本站 /api），响应也不是业务信封，
+    // 必须用原生 axios 而不是 http.* 封装。
+    await apiClient.put(session.uploadUrl, file, {
+        headers: session.headers,
+        onUploadProgress: onProgress
+            ? ({ loaded, total }) => {
+                  if (total && total > 0) onProgress(Math.min(file.size, (file.size * loaded) / total), file.size);
+              }
+            : undefined,
+    });
+    const data = await http.post<{ resource: RemoteResource }>(
+        `/resources/direct-upload/${encodeURIComponent(session.resource.id)}/complete`,
+        {},
+        uploadRequestConfig(meta?.idempotencyKey),
+    );
+    return data.resource;
+}
 
 export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "audio" | "file", meta?: ResourceUploadMeta, onProgress?: (uploadedBytes: number, totalBytes: number) => void): Promise<RemoteResource> {
     const name = meta?.fileName || (file instanceof File ? file.name : `${kind}.${extensionFromMime(file.type, kind)}`);
+    // 直传优先：文件字节不经过应用服务器，绕开反向代理的体积/超时限制。
+    // 任何一步失败都自动回退经典链路（分片/multipart），行为向后兼容。
+    if (file.size <= DIRECT_UPLOAD_MAX) {
+        try {
+            const resource = await uploadResourceFileDirect(file, name, kind, meta, onProgress);
+            resourceCache.set(resourceCacheKey(resource.id), resource);
+            return resource;
+        } catch (error) {
+            console.warn("[resources] direct upload failed, falling back", error);
+        }
+    }
     // 分片与 multipart 两条路径的失败都要归一成 ResourceUploadError，
     // 否则调用方只能靠文案猜测该重试还是该报错。
     try {

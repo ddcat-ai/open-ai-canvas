@@ -254,6 +254,68 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"resource": resource})
 	})
+	// 直传（presigned PUT）：浏览器拿签名 URL 直传对象存储，字节不经过应用服务器，
+	// 绕开反向代理的体积/超时限制。仅 S3 兼容 provider（含 Cloudflare R2）可用。
+	r.POST("/resources/direct-upload/init", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "resources-direct-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		var req struct {
+			Kind       string `json:"kind"`
+			FileName   string `json:"fileName"`
+			MimeType   string `json:"mimeType"`
+			Size       int64  `json:"size"`
+			Width      int    `json:"width"`
+			Height     int    `json:"height"`
+			DurationMs int64  `json:"durationMs"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		session, err := svc.CreateDirectUploadSession(user.ID, req.Kind, req.FileName, req.MimeType, req.Size, req.Width, req.Height, req.DurationMs, c.GetHeader("X-Idempotency-Key"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"session": session})
+	})
+	r.POST("/resources/direct-upload/:id/complete", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "resources-direct-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
+			return
+		}
+		resource, err := svc.CompleteDirectUpload(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": resource})
+	})
+	r.POST("/resources/direct-upload/:id/abort", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.AbortDirectUpload(user.ID, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"aborted": true})
+	})
 	r.POST("/resources/import", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

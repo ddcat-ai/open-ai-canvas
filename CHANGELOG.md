@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.6.8.12-topapis-r3
+
+- 新增对象存储预签名直传（direct upload）：浏览器先向后端申请签名 PUT URL，再直传 S3 兼容存储（含 Cloudflare R2），最后回执确认落库。文件字节全程不经过应用服务器，绕开反向代理的体积与超时限制，修复大素材上传时客户端 15 秒软超时（`CanvasSyncPendingError`）与素材元数据未落库导致的 `GET /api/assets/:id` 404 循环重试。
+- 直传仅支持 S3 兼容 provider；未配置对象存储或 provider 不匹配时后端明确拒绝，前端自动回退原有分片/multipart 链路，行为向后兼容。
+- 直传上限 512MB，URL 有效期 30 分钟；`complete` 阶段以 HEAD 校验对象已写入且大小一致，避免幽灵资源占用配额。
+- 升级注意：无数据库结构迁移，Schema 保持 v57。
+
 ## v1.6.8.12-topapis-r2
 
 - 登录页第三方登录（Google / Linux.do）增加服务协议确认：未同意协议时先弹出协议弹窗，勾选同意后携带 acceptedTerms 继续登录，修复新用户第三方注册被「请先同意服务协议」拦截的问题。

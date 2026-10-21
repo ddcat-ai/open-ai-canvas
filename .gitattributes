@@ -1,1 +1,7 @@
 plugin-packages/*.sh text eol=lf
+# 容器入口脚本必须是 LF：CRLF 会让 shebang 变成 "#!/bin/sh\r"，
+# 容器启动时报 "exec ...: no such file or directory"（exit 255）且反复重启。
+docker/*.sh text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
