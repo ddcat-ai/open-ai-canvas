@@ -27,7 +27,273 @@ tags:
   - name: admin
   - name: skills
   - name: workbench
+  - name: invites
 paths:
+  /invites/policy:
+    get:
+      tags: [invites]
+      security: []
+      summary: 公开邀请、提现与划转策略
+      description: 默认均关闭；不返回单品奖励率覆盖或收款信息。
+      responses:
+        "200": {description: 成功信封 data.policy}
+        "500": {$ref: "#/components/responses/Error"}
+  /invites/me/overview:
+    get:
+      tags: [invites]
+      summary: 本人的邀请码、邀请人数与奖励余额
+      description: 奖励单位为微元，1 元等于 1000000 微元；不与积分单位混用。
+      responses:
+        "200": {$ref: "#/components/responses/Envelope"}
+        "401": {$ref: "#/components/responses/Error"}
+  /invites/me/records:
+    get:
+      tags: [invites]
+      summary: 分页读取本人的邀请记录
+      parameters:
+        - {$ref: "#/components/parameters/InvitePage"}
+        - {$ref: "#/components/parameters/InvitePageSize"}
+      responses:
+        "200": {description: "成功信封 data={records,total,page,pageSize}"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /invites/me/withdrawals:
+    get:
+      tags: [invites]
+      summary: 分页读取本人的提现记录
+      parameters:
+        - {$ref: "#/components/parameters/InvitePage"}
+        - {$ref: "#/components/parameters/InvitePageSize"}
+      responses:
+        "200": {description: "成功信封 data={records,total,page,pageSize}，不返回收款信息密文"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [invites]
+      summary: 申请提现并冻结奖励余额
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountFen, method, account]
+              properties:
+                amountFen: {type: integer, format: int64, minimum: 1, description: 整数分}
+                method: {type: string, enum: [wechat, alipay, bank]}
+                account: {$ref: "#/components/schemas/WithdrawAccountInfo"}
+                saveAccount: {type: boolean, default: false}
+      responses:
+        "200": {description: "成功信封 data.request；状态 0=审核中，1=驳回，2=成功"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /invites/me/withdraw-account:
+    get:
+      tags: [invites]
+      summary: 读取本人保存的常用收款信息
+      responses:
+        "200": {description: "成功信封 data.account={method,info}，尚未保存时为 null"}
+        "401": {$ref: "#/components/responses/Error"}
+    put:
+      tags: [invites]
+      summary: 加密保存本人常用收款信息
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method, info]
+              properties:
+                method: {type: string, enum: [wechat, alipay, bank]}
+                info: {$ref: "#/components/schemas/WithdrawAccountInfo"}
+      responses:
+        "200": {description: "成功信封 data={saved:true}"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /invites/me/transfers:
+    get:
+      tags: [invites]
+      summary: 分页读取本人的奖励划转记录
+      parameters:
+        - {$ref: "#/components/parameters/InvitePage"}
+        - {$ref: "#/components/parameters/InvitePageSize"}
+      responses:
+        "200": {description: "成功信封 data={records,total,page,pageSize}"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [invites]
+      summary: 将奖励余额划转为积分
+      description: 扣减奖励、积分入账和 invite_transfer 流水在同一事务中提交。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountFen]
+              properties:
+                amountFen: {type: integer, format: int64, minimum: 1, description: 整数分}
+      responses:
+        "200": {description: "成功信封 data={record,account}"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/settings/invite:
+    get:
+      tags: [admin, invites]
+      summary: 管理员读取完整邀请策略
+      responses:
+        "200": {description: 成功信封 data.setting}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    patch:
+      tags: [admin, invites]
+      summary: 管理员整体保存邀请、提现与划转策略
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InvitePolicyWrite"}
+      responses:
+        "200": {description: 成功信封 data.setting}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/invites:
+    get:
+      tags: [admin, invites]
+      summary: 管理员筛选邀请记录
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [pending, approved, frozen]}}
+        - {in: query, name: keyword, schema: {type: string}}
+        - {$ref: "#/components/parameters/InvitePage"}
+        - {$ref: "#/components/parameters/InvitePageSize"}
+      responses:
+        "200": {description: "成功信封 data={records,total,page,pageSize}"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/invites/{userId}:
+    parameters:
+      - {in: path, name: userId, required: true, schema: {type: string}}
+    get:
+      tags: [admin, invites]
+      summary: 管理员读取邀请关系和奖励详情
+      responses:
+        "200": {$ref: "#/components/responses/Envelope"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+    patch:
+      tags: [admin, invites]
+      summary: 管理员调整一级与二级邀请人
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                l1InviterId: {type: string}
+                l2InviterId: {type: string}
+      responses:
+        "200": {description: 成功信封 data.record}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+    delete:
+      tags: [admin, invites]
+      summary: 解除邀请关系并作废待审核奖励
+      responses:
+        "200": {description: "成功信封 data={deleted:true}"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/invites/{userId}/approve:
+    parameters:
+      - {in: path, name: userId, required: true, schema: {type: string}}
+    post:
+      tags: [admin, invites]
+      summary: 通过邀请审核并释放待审核奖励
+      responses:
+        "200": {description: 成功信封 data.record}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/invites/{userId}/freeze:
+    parameters:
+      - {in: path, name: userId, required: true, schema: {type: string}}
+    post:
+      tags: [admin, invites]
+      summary: 冻结邀请关系并作废待审核奖励
+      responses:
+        "200": {description: 成功信封 data.record}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/withdrawals:
+    get:
+      tags: [admin, invites]
+      summary: 管理员筛选提现申请
+      parameters:
+        - {in: query, name: status, schema: {type: integer, enum: [0, 1, 2]}}
+        - {in: query, name: method, schema: {type: string, enum: [wechat, alipay, bank]}}
+        - {in: query, name: keyword, schema: {type: string}}
+        - {in: query, name: from, schema: {type: string, format: date}, description: 本地日期 YYYY-MM-DD，包含开始日}
+        - {in: query, name: until, schema: {type: string, format: date}, description: 本地日期 YYYY-MM-DD，包含结束日}
+        - {$ref: "#/components/parameters/InvitePage"}
+        - {$ref: "#/components/parameters/InvitePageSize"}
+      responses:
+        "200": {description: "成功信封 data={records,total,page,pageSize}，不返回收款信息密文"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/withdrawals/{id}:
+    parameters:
+      - {$ref: "#/components/parameters/InviteID"}
+    get:
+      tags: [admin, invites]
+      summary: 管理员读取提现详情与解密收款信息
+      responses:
+        "200": {description: "成功信封 data={record,account}"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /admin/withdrawals/{id}/approve:
+    parameters:
+      - {$ref: "#/components/parameters/InviteID"}
+    post:
+      tags: [admin, invites]
+      summary: 管理员线下打款后确认提现成功
+      description: 只记账，不调用代付网关；冻结余额转已用，重复审核不得重复扣款。
+      responses:
+        "200": {description: 成功信封 data.request}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/withdrawals/{id}/reject:
+    parameters:
+      - {$ref: "#/components/parameters/InviteID"}
+    post:
+      tags: [admin, invites]
+      summary: 驳回提现并退还冻结余额
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 1, maxLength: 200}
+      responses:
+        "200": {description: 成功信封 data.request}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /projects/{id}/assets/{assetId}/image:
     put:
       tags: [projects, assets]
@@ -1510,6 +1776,50 @@ paths:
           $ref: "#/components/responses/Envelope"
         "401":
           $ref: "#/components/responses/Error"
+  /auth/register:
+    post:
+      tags: [auth, invites]
+      security: []
+      summary: 注册账号并可选绑定邀请关系
+      description: 保留注册开关、验证码票据和协议同意校验。邀请码只用于新账号；无效、停用或人数耗尽时不阻断合法注册。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, acceptedTerms]
+              properties:
+                username: {type: string}
+                displayName: {type: string}
+                password: {type: string, format: password}
+                acceptedTerms: {type: boolean, enum: [true]}
+                email: {type: string, format: email}
+                phone: {type: string}
+                emailCode: {type: string}
+                smsCode: {type: string}
+                ticket: {type: string, description: 普通注册使用已开启验证方式取得的票据；首个管理员注册除外}
+                inviteCode: {type: string, description: 可选邀请码，服务端统一大小写}
+      responses:
+        "200": {description: 成功信封 data.user，同时设置会话 Cookie}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /auth/linuxdo/start:
+    get:
+      tags: [auth, invites]
+      security: []
+      summary: 发起 Linux.do 登录并保存可选邀请码
+      description: 邀请码随一次性 OAuth state 保存，仅首次创建账号时绑定邀请关系；已有账号登录不重绑。
+      parameters:
+        - {in: query, name: next, schema: {type: string}, description: 站内跳转路径}
+        - {in: query, name: acceptedTerms, schema: {type: boolean}, description: 新用户须同意注册协议}
+        - {in: query, name: inviteCode, schema: {type: string}}
+      responses:
+        "302": {description: 跳转第三方授权页面}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
   /auth/login:
     post:
       tags: [auth]
@@ -1848,6 +2158,19 @@ paths:
           $ref: "#/components/responses/Error"
 components:
   parameters:
+    InviteID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+    InvitePage:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    InvitePageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
     AgentRunID:
       name: id
       in: path
@@ -1860,6 +2183,43 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    WithdrawAccountInfo:
+      type: object
+      description: 微信或支付宝要求 account 与 realName；银行卡要求 bankName、cardNumber 与 holderName。
+      properties:
+        account: {type: string, maxLength: 160}
+        realName: {type: string, maxLength: 160}
+        qrCodeUrl: {type: string, maxLength: 500}
+        bankName: {type: string, maxLength: 160}
+        cardNumber: {type: string, maxLength: 32}
+        holderName: {type: string, maxLength: 160}
+    InvitePolicyWrite:
+      type: object
+      description: 整体保存策略；邀请、提现与划转默认关闭，启用后仅对后续成功充值产生奖励。
+      required: [enabled, level, rewardScopes, l1RateBp, l2RateBp, rewardCountLimit, inviteeCountLimit, auditEnabled, withdrawEnabled, withdrawMinFen, withdrawDailyLimit, withdrawFeeBp, withdrawMethods, transferEnabled, transferRateMilli, transferMinFen]
+      properties:
+        enabled: {type: boolean, default: false}
+        level: {type: integer, enum: [1, 2]}
+        rewardScopes: {type: array, items: {type: string, enum: [product]}}
+        l1RateBp: {type: integer, minimum: 0, maximum: 10000}
+        l2RateBp: {type: integer, minimum: 0, maximum: 10000}
+        rewardCountLimit: {type: integer, format: int64, minimum: 0}
+        inviteeCountLimit: {type: integer, format: int64, minimum: 0}
+        auditEnabled: {type: boolean}
+        withdrawEnabled: {type: boolean, default: false}
+        withdrawMinFen: {type: integer, format: int64, minimum: 1}
+        withdrawDailyLimit: {type: integer, format: int64, minimum: 0}
+        withdrawFeeBp: {type: integer, minimum: 0, maximum: 10000}
+        withdrawMethods: {type: array, items: {type: string, enum: [wechat, alipay, bank]}}
+        transferEnabled: {type: boolean, default: false}
+        transferRateMilli: {type: integer, format: int64, minimum: 1}
+        transferMinFen: {type: integer, format: int64, minimum: 1}
+        productRates: {type: object, additionalProperties: {$ref: "#/components/schemas/InviteItemRate"}}
+    InviteItemRate:
+      type: object
+      properties:
+        l1RateBp: {type: integer, minimum: 0, maximum: 10000}
+        l2RateBp: {type: integer, minimum: 0, maximum: 10000}
     LoginLog:
       type: object
       properties:

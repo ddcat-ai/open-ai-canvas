@@ -29,6 +29,7 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/bailian-minimax-video.mdx
 !docs/content/docs/backend/video-token-billing.mdx
 !docs/content/docs/backend/creative-agent-runtime.mdx
+!docs/content/docs/backend/invite-rewards.mdx
 # Keep the creative Agent design versioned without unignoring generated docs.
 !docs/content/docs/overview/
 docs/content/docs/overview/*

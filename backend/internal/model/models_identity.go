@@ -16,6 +16,7 @@ type User struct {
 	Role            UserRole   `json:"role" gorm:"index;size:24"`
 	Status          UserStatus `json:"status" gorm:"index;size:24"`
 	PasswordHash    string     `json:"-"`
+	InviteCode      string     `json:"inviteCode" gorm:"size:16;default:''"`
 	LastLoginAt     *time.Time `json:"lastLoginAt"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
@@ -51,6 +52,7 @@ type OAuthState struct {
 	CodeVerifier    string     `json:"-" gorm:"size:160"`
 	NextPath        string     `json:"nextPath"`
 	AcceptedTerms   bool       `json:"acceptedTerms" gorm:"not null;default:false"`
+	InviteCode      string     `json:"-" gorm:"size:16;default:''"`
 	ExpiresAt       time.Time  `json:"expiresAt" gorm:"index"`
 	UsedAt          *time.Time `json:"usedAt" gorm:"index"`
 	CreatedAt       time.Time  `json:"createdAt"`

@@ -9,6 +9,8 @@ import { ApiError } from "@/services/api/request";
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { emptyVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { getInvitePolicy } from "@/services/api/invite";
+import { normalizeInviteCode } from "@/lib/invite";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 
@@ -27,6 +29,11 @@ export default function RegisterPage() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [agreementAccepted, setAgreementAccepted] = useState(false);
     const [agreementOpen, setAgreementOpen] = useState(false);
+    const [inviteEnabled, setInviteEnabled] = useState(false);
+    const [inviteCode, setInviteCode] = useState(() => normalizeInviteCode(params.get("invite") || ""));
+    const [invitePolicyFailed, setInvitePolicyFailed] = useState(false);
+    const [invitePolicyLoading, setInvitePolicyLoading] = useState(true);
+    const [invitePolicyReloadKey, setInvitePolicyReloadKey] = useState(0);
     const [settingsFailed, setSettingsFailed] = useState(false);
     const [settingsReloadKey, setSettingsReloadKey] = useState(0);
     const [submitting, setSubmitting] = useState(false);
@@ -41,6 +48,17 @@ export default function RegisterPage() {
     const agreementTitle = ((settings?.agreementTitle || "").trim() || `${brandName}服务协议`).replace(/^《|》$/g, "");
     const agreementContent = (settings?.agreementContent || "").trim();
     const agreementParagraphs = agreementContent ? agreementContent.split(/\n\s*\n/) : [];
+
+    useEffect(() => {
+        const controller = new AbortController();
+        setInvitePolicyFailed(false);
+        setInvitePolicyLoading(true);
+        void getInvitePolicy(controller.signal)
+            .then(({ policy }) => { if (!controller.signal.aborted) setInviteEnabled(policy.enabled); })
+            .catch(() => { if (!controller.signal.aborted) { setInviteEnabled(false); setInvitePolicyFailed(true); } })
+            .finally(() => { if (!controller.signal.aborted) setInvitePolicyLoading(false); });
+        return () => controller.abort();
+    }, [invitePolicyReloadKey]);
 
     useEffect(() => {
         let cancelled = false;
@@ -62,6 +80,10 @@ export default function RegisterPage() {
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (registering.current || registerCountdown > 0) return;
+        if (inviteCode && (invitePolicyLoading || invitePolicyFailed)) {
+            message.warning("请先读取邀请信息后再注册");
+            return;
+        }
         if (!agreementAccepted) {
             message.warning(`请先同意${agreementTitle}`);
             return;
@@ -74,7 +96,7 @@ export default function RegisterPage() {
         setSubmitting(true);
         try {
             if (!settings?.firstUser && !verification.ticket) throw new Error("请先获取本次注册验证码");
-            await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted });
+            await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted, inviteCode: inviteEnabled ? normalizeInviteCode(inviteCode) || undefined : undefined });
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("yingce:model-setup-guide", "1");
@@ -170,6 +192,18 @@ export default function RegisterPage() {
                 </AuthField>
             </div>
 
+            {inviteEnabled ? (
+                <AuthField label="邀请码（选填）">
+                    <Input size="large" value={inviteCode} maxLength={16} onChange={(event) => setInviteCode(normalizeInviteCode(event.target.value))} placeholder="好友分享的邀请码" disabled={disabled || submitting} />
+                </AuthField>
+            ) : null}
+            {invitePolicyFailed && inviteCode ? (
+                <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                    邀请信息暂不可用，
+                    <button type="button" className="auth-scene-link" onClick={() => setInvitePolicyReloadKey((value) => value + 1)}>重新读取</button>
+                </Notice>
+            ) : null}
+
             {settingsFailed ? (
                 <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
                     <span>
@@ -200,7 +234,7 @@ export default function RegisterPage() {
                     <Divider plain className="auth-scene-divider">
                         或
                     </Divider>
-                    <Button size="large" block disabled={!agreementAccepted} icon={<LinuxDOIcon />} href={agreementAccepted ? linuxDOLoginURL(next, true) : undefined}>
+                    <Button size="large" block disabled={!agreementAccepted || Boolean(inviteCode && (invitePolicyLoading || invitePolicyFailed))} icon={<LinuxDOIcon />} href={agreementAccepted && !(inviteCode && (invitePolicyLoading || invitePolicyFailed)) ? linuxDOLoginURL(next, true, { inviteCode: inviteEnabled ? normalizeInviteCode(inviteCode) || undefined : undefined }) : undefined}>
                         使用 Linux.do 注册 / 登录
                     </Button>
                 </>

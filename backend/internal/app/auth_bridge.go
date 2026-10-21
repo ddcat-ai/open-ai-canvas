@@ -26,6 +26,7 @@ type (
 	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
 	PublicLinuxDOSetting       = auth.PublicLinuxDOSetting
 	LinuxDOCallbackResult      = auth.LinuxDOCallbackResult
+	LinuxDOLoginOptions        = auth.LinuxDOLoginOptions
 	LibTVSettingRequest        = auth.LibTVSettingRequest
 	PublicLibTVSetting         = auth.PublicLibTVSetting
 	LibTVImportRequest         = auth.LibTVImportRequest
@@ -203,8 +204,8 @@ func (s *Service) LinuxDOEnabled() bool {
 	return s.authDomain().LinuxDOEnabled()
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
-	return s.authDomain().BeginLinuxDOLogin(nextPath, acceptedTerms)
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool, options ...LinuxDOLoginOptions) (string, error) {
+	return s.authDomain().BeginLinuxDOLogin(nextPath, acceptedTerms, options...)
 }
 
 func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (*LinuxDOCallbackResult, error) {

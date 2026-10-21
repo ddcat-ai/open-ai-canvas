@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 邀请奖励与提现
+
+`GET /api/invites/policy` 匿名返回公开策略。登录用户使用 `/api/invites/me/overview`、`records`、`withdrawals`、`withdraw-account`、`transfers` 读取和操作本人数据。管理员通过 `/api/admin/settings/invite`、`/api/admin/invites`、`/api/admin/withdrawals` 配置和审核；匿名返回 401，普通用户请求管理员接口返回 403。
+
+创建提现提交 `{amountFen,method,account,saveAccount}`，划转提交 `{amountFen}`；金额为整数分，响应奖励金额为微元。提现审批只记录管理员线下打款结果，不调用代付网关；驳回要求非空原因，最多 200 字。列表不含收款密文，管理员详情可解密查看；提现筛选的 `from/until` 使用 `YYYY-MM-DD`。完整路径和策略合同见[邀请奖励与提现](./invite-rewards.mdx)和 `/api/openapi.yaml`。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。

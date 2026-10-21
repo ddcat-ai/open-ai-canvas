@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "antd/dist/reset.css";
 import "./styles/globals.css";
 import "./styles/auth-input-fix.css";
+import "./styles/invite.css";
 import "./styles/shared/model-picker.css";
 import "./styles/shared/overlays.css";
 import "./styles/shared/scrollbars.css";

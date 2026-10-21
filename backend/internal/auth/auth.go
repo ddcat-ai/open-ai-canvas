@@ -39,6 +39,7 @@ type RegisterRequest struct {
 	DisplayName   string       `json:"displayName"`
 	Password      string       `json:"password"`
 	AcceptedTerms bool         `json:"acceptedTerms"`
+	InviteCode    string       `json:"inviteCode"`
 }
 
 type LoginRequest struct {
@@ -249,6 +250,8 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
 	}
+	s.ensureInviteCode(&user)
+	s.attachInviteRecord(user.ID, req.InviteCode)
 	event := NewLoginLog("password", "registration", req.LoginContext)
 	result, err := s.createAuthSession(&user, event)
 	if err != nil {

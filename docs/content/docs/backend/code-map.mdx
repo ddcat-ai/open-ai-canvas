@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 邀请奖励与提现审核
+
+- 纯策略与邀请码：`backend/internal/invite/`；数据结构：`model/models_invite.go`；账户、奖励、关系、提现与划转事务：`repository/invite.go`。
+- 用户与管理员编排：`app/invite.go`、`invite_admin.go`；注册绑定：`auth/invite.go`；充值回调和对账复用支付入账；HTTP 入口：`handler/invite.go`，稳定导出：`service/aliases_invite.go`。
+- 数据升级：`database/migrations_invite.go` 追加 Schema 58，`schema.go` 与 SQLite → PostgreSQL 迁移清单包含六张表；专题见[邀请奖励与提现](./invite-rewards.mdx)。
+- 前端：`services/api/invite.ts`、`pages/invite/`、`pages/admin/invites/`、`pages/admin/withdrawals/`、`pages/admin/settings/invite-settings-page.tsx`；注册、菜单和路由接入既有入口。
+
 ## 画布实时会话
 
 - 传输入口：`backend/internal/handler/canvas_realtime.go` 校验登录与 Origin、管理 WebSocket；`app/canvas_realtime.go` 校验画布归属，`internal/canvas/realtime.go` 负责临时 Presence、房间隔离与 Redis 分发，`realtime_devices.go` 管理跨实例统一窗口编号及临时租期。

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/invite"
 	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -287,9 +288,13 @@ func (r *Repository) RetryPaymentNotification(id, message string, next time.Time
 
 // CompletePaymentOrder atomically records provider success and grants credits.
 // The unique ledger reference is the final guard against callback/query races.
-func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence) (*model.PaymentOrder, bool, error) {
+func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, evidence PaymentEvidence, rewardInstructions ...*invite.InviteRewardInstruction) (*model.PaymentOrder, bool, error) {
 	var order model.PaymentOrder
 	granted := false
+	var rewards *invite.InviteRewardInstruction
+	if len(rewardInstructions) > 0 {
+		rewards = rewardInstructions[0]
+	}
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, "provider_id = ? AND merchant_order_no = ?", providerID, merchantOrderNo).Error; err != nil {
 			return err
@@ -371,6 +376,9 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		}
 		if updated.RowsAffected != 1 {
 			return ErrPaymentOrderStateConflict
+		}
+		if err := r.GrantInviteRewardsTx(tx, &order, rewards); err != nil {
+			return err
 		}
 		granted = true
 		return tx.First(&order, "id = ?", order.ID).Error

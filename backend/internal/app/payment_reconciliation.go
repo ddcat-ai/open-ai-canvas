@@ -10,7 +10,6 @@ import (
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/payment"
-	"yingce/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -208,10 +207,9 @@ func (s *Service) comparePaymentReconciliation(ctx context.Context, provider pay
 		if paidAt.IsZero() {
 			paidAt = billDate.Add(12 * time.Hour)
 		}
-		_, _, creditErr := s.repo.CompletePaymentOrder(run.ProviderID, merchantOrderNo, repository.PaymentEvidence{
-			ProviderTradeNo: confirmed.ProviderTradeNo, ProviderStatus: confirmed.ProviderStatus,
-			AmountFen: confirmed.AmountFen, Currency: confirmed.Currency, PaidAt: paidAt,
-		})
+		confirmed.MerchantOrderNo = merchantOrderNo
+		confirmed.PaidAt = paidAt
+		_, creditErr := s.applyPaymentResult(run.ProviderID, confirmed)
 		if creditErr != nil {
 			item.Result = model.PaymentReconciliationCreditFailed
 			item.Detail = "渠道账单确认已支付，但自动补发积分失败：" + safePaymentError(creditErr)

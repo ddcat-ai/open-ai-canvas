@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 邀请奖励（Schema 58）
+
+新增 `invite_records`、`reward_accounts`、`invite_reward_records`、`withdraw_requests`、`withdraw_accounts`、`transfer_records` 六张表，增加 `users.invite_code` 与 `o_auth_states.invite_code`，为旧用户回填独立邀请码并建立非空唯一索引。保留 Schema 1–57 的名称、校验和与应用时间，不产生历史奖励。
+
+奖励以微元存储（1 元 = 1,000,000 微元），满足 `total = available + frozen + used`；积分继续以微积分存储。支付充值与邀请奖励同事务提交，订单/层级引用键唯一；提现申请冻结总金额，驳回退还，线下打款确认后转已用；划转同事务写入积分与 `invite_transfer` 流水。收款信息使用原 `.settings-key` 加密，邀请策略复用 `system_settings.invite_policy`，邀请、提现与划转默认关闭。详见[邀请奖励与提现](./invite-rewards.mdx)。
+
+按既有迁移流程备份、执行 `migrate-schema up` / `verify` 后再启动新后端，备份包含原设置密钥；回退旧二进制需要匹配的数据库备份。SQLite → PostgreSQL 工具包含六张新表。
+
 ## 画布多端协作（Schema 57）
 
 迁移 `canvas_multi_session_sync` 新增 `canvas_edit_leases`，以 `(user_id, canvas_id, node_id)` 为主键，记录浏览器会话、随机租约凭据与到期时间。服务端在画布事务锁内裁决占用和写入，租约有效期 30 秒；读取状态不返回凭据，浏览器计时不能代替服务端授权。

@@ -501,10 +501,14 @@ func (s *Service) applyPaymentResult(providerID string, result payment.Result) (
 		if result.AmountFen != order.AmountFen || result.Currency != order.Currency {
 			return nil, repository.ErrPaymentEvidenceMismatch
 		}
+		rewards, err := s.inviteRewardInstructionForOrder(order)
+		if err != nil {
+			return nil, err
+		}
 		completed, _, err := s.repo.CompletePaymentOrder(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
 			ProviderTradeNo: result.ProviderTradeNo, ProviderStatus: result.ProviderStatus,
 			AmountFen: result.AmountFen, Currency: result.Currency, PaidAt: result.PaidAt,
-		})
+		}, rewards)
 		return completed, err
 	}
 	if result.Closed {

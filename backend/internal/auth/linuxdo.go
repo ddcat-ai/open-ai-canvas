@@ -15,6 +15,7 @@ import (
 	"time"
 	"yingce/backend/internal/kernel"
 
+	"yingce/backend/internal/invite"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/outbound"
 
@@ -141,7 +142,15 @@ func (s *Service) LinuxDOEnabled() bool {
 	return err == nil && setting.Enabled
 }
 
-func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string, error) {
+type LinuxDOLoginOptions struct {
+	InviteCode string
+}
+
+func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool, options ...LinuxDOLoginOptions) (string, error) {
+	var extra LinuxDOLoginOptions
+	if len(options) > 0 {
+		extra = options[0]
+	}
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return "", err
@@ -156,7 +165,14 @@ func (s *Service) BeginLinuxDOLogin(nextPath string, acceptedTerms bool) (string
 	if !setting.Enabled {
 		return "", kernel.Forbidden("Linux.do 登录尚未启用")
 	}
-	return s.beginLinuxDOAuthorization(setting, &model.OAuthState{NextPath: safeOAuthNext(nextPath), AcceptedTerms: acceptedTerms})
+	inviteCode := invite.NormalizeInviteCode(extra.InviteCode)
+	if invite.ValidateInviteCode(inviteCode) != nil {
+		inviteCode = ""
+	}
+	return s.beginLinuxDOAuthorization(setting, &model.OAuthState{
+		NextPath: safeOAuthNext(nextPath), AcceptedTerms: acceptedTerms,
+		InviteCode: inviteCode,
+	})
 }
 
 func (s *Service) BeginLinuxDOReauthentication(actor *model.User, cookie string) (string, error) {
@@ -325,6 +341,8 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieVal
 		if err := s.repo.CreateOAuthUser(user, identity); err != nil {
 			return nil, err
 		}
+		s.ensureInviteCode(user)
+		s.attachInviteRecord(user.ID, state.InviteCode)
 	} else {
 		return nil, err
 	}

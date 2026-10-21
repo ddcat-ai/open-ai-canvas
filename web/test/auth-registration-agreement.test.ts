@@ -15,7 +15,7 @@ describe("注册服务协议", () => {
         expect(source).toContain("[agreementAccepted, setAgreementAccepted] = useState(false)");
         expect(source).toContain("disabled={disabled || registerCountdown > 0 || !agreementAccepted}");
         expect(source).toContain("if (registering.current || registerCountdown > 0) return;");
-        expect(source).toContain("disabled={!agreementAccepted}");
+        expect(source).toMatch(/disabled=\{!agreementAccepted(?: \|\|[^}]+)?\}/);
     });
 
     test("普通注册与 Linux.do 注册传递同意状态，登录入口保留原合同", () => {
@@ -24,7 +24,8 @@ describe("注册服务协议", () => {
         const api = readFileSync(resolve(import.meta.dir, "../src/services/api/auth.ts"), "utf8");
 
         expect(page).toContain("acceptedTerms: agreementAccepted");
-        expect(page).toContain("agreementAccepted ? linuxDOLoginURL(next, true) : undefined");
+        expect(page).toContain("href={agreementAccepted &&");
+        expect(page).toContain("linuxDOLoginURL(next, true, { inviteCode:");
         expect(page).toContain("message.warning(`请先同意${agreementTitle}`)");
         expect(login).toContain("linuxDOLoginURL(next)");
         expect(api).toContain("acceptedTerms: boolean");

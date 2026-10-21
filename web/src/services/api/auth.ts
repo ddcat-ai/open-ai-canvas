@@ -408,10 +408,12 @@ export function getAuthSettings() {
     >("/auth/settings");
 }
 
-export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
+export function linuxDOLoginURL(next: string, acceptedTerms?: boolean, options?: { inviteCode?: string }) {
     const base = String(apiBaseURL).replace(/\/$/, "");
-    const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
-    return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}${termsQuery}`;
+    const params = new URLSearchParams({ next });
+    if (acceptedTerms !== undefined) params.set("acceptedTerms", String(acceptedTerms));
+    if (options?.inviteCode) params.set("inviteCode", options.inviteCode);
+    return `${base}/auth/linuxdo/start?${params}`;
 }
 
 export function getAuthSession() {
@@ -467,7 +469,7 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean }) {
+export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean; inviteCode?: string }) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input);
     invalidateAuthSessionCache();
     return result;

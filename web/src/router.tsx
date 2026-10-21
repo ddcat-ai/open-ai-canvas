@@ -27,6 +27,9 @@ const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments/payments-pag
 const LogsPage = lazy(() => import("@/pages/admin/logs/logs-page"));
 const LoginLogsPage = lazy(() => import("@/pages/admin/login-logs/login-logs-page"));
 const RedemptionCodesPage = lazy(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
+const AdminInvitesPage = lazy(() => import("@/pages/admin/invites/invites-page"));
+const AdminWithdrawalsPage = lazy(() => import("@/pages/admin/withdrawals/withdrawals-page"));
+const InviteSettingsPage = lazy(() => import("@/pages/admin/settings/invite-settings-page"));
 const RuntimePolicySettingsPage = lazy(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
 const AppearanceSettingsPage = lazy(() => import("@/pages/admin/settings/appearance-settings-page"));
 const DrawingEngineSettingsPage = lazy(() => import("@/pages/admin/settings/drawing-engine-settings-page"));
@@ -43,6 +46,7 @@ const AssetsPage = lazy(loadAssetsPage);
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
 const ForgotPasswordPage = lazy(() => import("@/pages/auth/forgot-password"));
+const InvitePage = lazy(() => import("@/pages/invite"));
 const CanvasPage = lazy(loadCanvasPage);
 const CanvasProjectPage = lazy(loadCanvasProjectPage);
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
@@ -144,6 +148,7 @@ export const router = createBrowserRouter([
                 ),
             },
             { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
+            { path: "/invite", element: <RequireAuth>{deferred(<InvitePage />)}</RequireAuth> },
             { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
             {
                 path: "/plugins",
@@ -244,6 +249,8 @@ export const router = createBrowserRouter([
                     { path: "resources", element: <StorageResourcesPage /> },
                     { path: "credit-operations", element: <CreditOperationsPage /> },
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },
+                    { path: "invites", element: <AdminInvitesPage /> },
+                    { path: "withdrawals", element: <AdminWithdrawalsPage /> },
                     { path: "logs", element: <LogsPage /> },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
                     { path: "settings/appearance", element: <AppearanceSettingsPage /> },
@@ -253,6 +260,7 @@ export const router = createBrowserRouter([
                     { path: "settings/features", element: <FeatureAvailabilityPage /> },
                     { path: "settings/access", element: <AccessSettingsPage /> },
                     { path: "settings/email", element: <EmailSettingsPage /> },
+                    { path: "settings/invite", element: <InviteSettingsPage /> },
                     { path: "settings/storage", element: <StorageSettingsPage /> },
                     { path: "settings/ark-private-assets", element: <ArkPrivateAssetsSettingsPage /> },
                     { path: "settings/response-interception", element: <ResponseInterceptionSettingsPage /> },
