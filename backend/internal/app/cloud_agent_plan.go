@@ -81,6 +81,27 @@ func cloudAgentPlanNudgeMessage(state *cloudAgentRuntime, pendingTitle string) m
 	})
 }
 
+// cloudAgentPiPlanNudgePrompt 是 Pi 完成闸的待办催办续跑提示词。Pi 会话投影不保留
+// 消息来源标记，审批恢复提示词也以 user 角色进入历史，所以本轮用户要求取运行请求本身。
+func cloudAgentPiPlanNudgePrompt(state *cloudAgentRuntime, pendingTitle string) string {
+	return stringField(cloudAgentRuntimeMessage(cloudAgentRuntimeContext{
+		Kind: cloudAgentContextPendingPlan, PendingTitle: pendingTitle,
+		LatestUserMessage: state.Request.Prompt,
+	}), "content")
+}
+
+// cloudAgentPiResumePromptNudgesPlan 判断恢复提示词是否为完成闸写下的待办催办。
+func cloudAgentPiResumePromptNudgesPlan(state *cloudAgentRuntime) bool {
+	if state == nil || !state.ActionNudged || !strings.HasPrefix(state.PiResumePrompt, cloudAgentRuntimeContextMarker) {
+		return false
+	}
+	var context cloudAgentRuntimeContext
+	if json.Unmarshal([]byte(strings.TrimPrefix(state.PiResumePrompt, cloudAgentRuntimeContextMarker)), &context) != nil {
+		return false
+	}
+	return context.Kind == cloudAgentContextPendingPlan
+}
+
 func cloudAgentPlanApprovalPreview(call cloudAgentCall) (cloudAgentApprovalPreview, bool) {
 	var args struct {
 		Items []cloudAgentPlanItem `json:"items"`
