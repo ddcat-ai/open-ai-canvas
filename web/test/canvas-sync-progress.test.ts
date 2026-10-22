@@ -60,6 +60,7 @@ export const apiBaseURL = "/api";
 const unexpected = () => { throw new Error("unexpected dependency call"); };
 export const http = { get: unexpected, post: unexpected, put: unexpected, patch: unexpected, delete: unexpected };
 export const apiClient = { get: unexpected, post: unexpected, put: unexpected, patch: unexpected, delete: unexpected };
+export const directUploadClient = { get: unexpected, post: unexpected, put: unexpected, patch: unexpected, delete: unexpected };
 export async function applyRemoteCanvasOperations(id, request) {
     fixture.writes.push(structuredClone(request));
     const writes = fixture.writesById.get(id) ?? [];

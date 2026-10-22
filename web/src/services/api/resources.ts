@@ -1,7 +1,6 @@
 import { getActiveUserScope } from "@/lib/user-scope";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
-import axios from "axios";
-import { http, apiBaseURL, ApiError } from "@/services/api/request";
+import { http, apiBaseURL, directUploadClient, ApiError } from "@/services/api/request";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 
 export type RemoteResource = {
@@ -256,10 +255,6 @@ const CHUNK_UPLOAD_THRESHOLD = 50 << 20;
 const CHUNK_UPLOAD_RETRIES = 2;
 // 直传上限与后端 directUploadMaxFileSize 对齐（512MB）。
 const DIRECT_UPLOAD_MAX = 512 << 20;
-
-// 对象存储直传专用实例：与 apiClient 隔离，绝不能继承它面向本站的 Cookie 与 Accept 默认值。
-// 预签名 URL 自带授权，withCredentials 必须为 false；Accept 固定 `*/*` 以免触发多余预检。
-const directUploadClient = axios.create({ withCredentials: false });
 
 type DirectUploadSession = {
     resource: RemoteResource;

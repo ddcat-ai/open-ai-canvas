@@ -41,6 +41,11 @@ export class ApiError extends Error {
 export const apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
 export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: true });
 
+// 对象存储直传专用实例：目标是第三方绝对 URL，响应也不是业务信封。
+// 必须与 apiClient 隔离 —— 预签名 URL 自带授权，带上本站 Cookie 会因对象存储 CORS
+// 不返回 Access-Control-Allow-Credentials 而被浏览器判为跨域失败。
+export const directUploadClient = axios.create({ withCredentials: false });
+
 /**
  * 解包后端业务信封的唯一边界。这里把非零业务 code 转成 ApiError，保留 reason、重试语义和 Retry-After；
  * 取消请求必须继续抛出 AbortError，不能被包装成普通失败，否则页面切换会被误报为错误。
