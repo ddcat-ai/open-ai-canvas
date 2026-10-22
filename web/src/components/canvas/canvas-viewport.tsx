@@ -462,6 +462,7 @@ export function CanvasViewport({
         <div
             ref={containerRef}
             data-canvas-viewport
+            data-popover-anchor-container
             data-canvas-pan-state={isPanning ? "grabbing" : isSpacePressed || !boxSelectEnabled ? "grab" : undefined}
             className={`relative h-full w-full select-none overflow-clip touch-none ${isPanning ? "cursor-grabbing" : isSpacePressed || !boxSelectEnabled ? "cursor-grab" : "canvas-cursor-select"}`}
             style={
@@ -517,8 +518,8 @@ export function CanvasViewport({
         >
             <CanvasGrid appearance={appearance} mode={backgroundMode} viewport={viewport} />
             {graphicsLayer}
-            <div data-canvas-world-layer className="canvas-world-layer absolute origin-top-left">
-                <div data-canvas-world-raster-layer className="canvas-world-raster-layer absolute origin-top-left">
+            <div data-canvas-world-layer data-popover-anchor-container className="canvas-world-layer absolute origin-top-left">
+                <div data-canvas-world-raster-layer data-popover-anchor-container className="canvas-world-raster-layer absolute origin-top-left">
                     {children}
                 </div>
             </div>

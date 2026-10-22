@@ -14,6 +14,29 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  agent-lint:
+    name: Agent architecture and static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      # v2.5.0 supports Go 1.25. This job scopes linting to Agent domain packages;
+      # the existing backend job continues to own the full integration suite.
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
+          working-directory: backend
+          args: --config=.golangci.yml ./internal/agent/...
+      - name: Check Agent architecture
+        run: go test -count=1 ./internal/agent/architecture
+
   backend:
     name: Backend checks
     runs-on: ubuntu-latest

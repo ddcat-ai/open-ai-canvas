@@ -26,6 +26,8 @@ func (s *Service) resolveCloudAgentMediaConfiguration(a *cloudAgentMediaArgs, st
 	if err := validateCloudAgentModelSelection(raw, *a); err != nil {
 		return err
 	}
+	// 尺寸编码须使用草稿的有效档位；归一化后仍恢复保存值，不能清除用户配置。
+	applyCloudAgentMediaDraftOptions(a, options)
 	if err := s.normalizeCloudAgentImageOptions(a, refs); err != nil {
 		return err
 	}
@@ -115,6 +117,7 @@ func (s *Service) normalizeCloudAgentImageOptions(a *cloudAgentMediaArgs, refs m
 		return nil
 	}
 	var spec CapabilitySpec
+	defaults := map[string]any{}
 	if a.LogicalModelID != "" {
 		snapshot, err := s.routeCatalogSnapshot()
 		if err != nil {
@@ -125,6 +128,7 @@ func (s *Service) normalizeCloudAgentImageOptions(a *cloudAgentMediaArgs, refs m
 			return InvalidModelSelection("指定的逻辑模型不存在")
 		}
 		spec = cached.ProductSpec
+		defaults = cached.Defaults
 	} else {
 		item, err := s.repo.ChannelModelByKey(a.ChannelID, a.ChannelModelKey)
 		if err != nil {
@@ -138,6 +142,7 @@ func (s *Service) normalizeCloudAgentImageOptions(a *cloudAgentMediaArgs, refs m
 		if err != nil {
 			return err
 		}
+		applyChannelCapabilityDefaults(defaults, "image", profile)
 	}
 	if normalizeCapability(spec.Capability) != "image" {
 		return ModelCapabilityNotSupported("所选模型与图片生成能力不匹配")
@@ -156,7 +161,23 @@ func (s *Service) normalizeCloudAgentImageOptions(a *cloudAgentMediaArgs, refs m
 	}
 	if !a.ConfigurationChange.includes("size") && (a.Size == "" || matchOptionConstraint("size", spec.Options["size"], a.Size)) {
 		if ratio := cloudAgentReferenceImageRatio(spec, refs); ratio != "" {
-			a.Size = ratio
+			options := cloudAgentMediaOptions(*a).TaskConfig()
+			options["size"] = ratio
+			if spec.ImageSize != nil && spec.ImageSize.Parameter == "size" && !a.ConfigurationChange.includes("imageResolution") {
+				// 像素预设自带分辨率；继承画幅时只能在同一档位内转换，不能降到目录默认档。
+				if preset, ok := declaredImageSizePreset(spec.ImageSize.Presets, a.Size, "", ""); ok && strings.EqualFold(a.Size, preset.Size) {
+					if normalizeDeclaredImageRatio(preset.Ratio) == normalizeDeclaredImageRatio(ratio) {
+						return nil
+					}
+					if inherited, ok := declaredImageSizePreset(spec.ImageSize.Presets, ratio, preset.Tier, ""); ok {
+						a.Size = inherited.Size
+					}
+					return nil
+				}
+			}
+			// 与能力准入共用预设及默认档位，避免将像素型模型的 size 留成比例字符串。
+			intent := resolveModelRequestIntent(spec, ModelRequestIntent{Capability: "image", Options: options}, defaults)
+			a.Size = stringValue(intent.Options["size"])
 		}
 	}
 	return nil

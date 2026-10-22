@@ -1,4 +1,5 @@
 import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
+import { CanvasNodeResizeMotionProvider } from "@/components/canvas/canvas-node-resize-motion";
 import "@/lib/plugins/builtin/ai-art-critique";
 import "@/lib/plugins/builtin/media-conversion";
 import { useCanvasImageLayerGroups } from "./use-canvas-image-layer-groups";
@@ -2632,7 +2633,7 @@ function CanvasViewportPage() {
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
-        <>
+        <CanvasNodeResizeMotionProvider key={projectId} nodes={visibleNodes}>
             <a
                 href="#canvas-main"
                 className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[var(--z-toast)] focus:rounded-md focus:border focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
@@ -3546,6 +3547,6 @@ function CanvasViewportPage() {
                     </div>
                 </CanvasOverlayLayerProvider>
             </main>
-        </>
+        </CanvasNodeResizeMotionProvider>
     );
 }

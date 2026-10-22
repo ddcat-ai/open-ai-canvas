@@ -26,6 +26,47 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 	}
 }
 
+type channelModelProtocolV58 struct {
+	ID       string `gorm:"primaryKey;size:36"`
+	Protocol string `gorm:"size:32;index"`
+}
+
+func (channelModelProtocolV58) TableName() string { return "channel_models" }
+
+func TestMigrateChannelModelProtocolLengthPreservesExistingRows(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-channel-protocol-length?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&channelModelProtocolV58{}); err != nil {
+		t.Fatal(err)
+	}
+	legacy := channelModelProtocolV58{ID: "existing", Protocol: "chat-completion"}
+	if err := db.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateChannelModelProtocolLength(db); err != nil {
+		t.Fatalf("migrateChannelModelProtocolLength() error = %v", err)
+	}
+	statement := &gorm.Statement{DB: db}
+	if err := statement.Parse(&model.ChannelModel{}); err != nil {
+		t.Fatal(err)
+	}
+	protocolField := statement.Schema.LookUpField("Protocol")
+	if protocolField == nil || protocolField.Size != 64 {
+		t.Fatalf("protocol field size = %#v, want 64", protocolField)
+	}
+	var stored struct {
+		Protocol string
+	}
+	if err := db.Table("channel_models").Select("protocol").Where("id = ?", legacy.ID).Scan(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Protocol != legacy.Protocol {
+		t.Fatalf("existing protocol = %q, want %q", stored.Protocol, legacy.Protocol)
+	}
+}
+
 func TestMigrateSchemaRecordsAndValidatesVersion(t *testing.T) {
 	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-version?mode=memory&cache=shared"})
 	if err != nil {

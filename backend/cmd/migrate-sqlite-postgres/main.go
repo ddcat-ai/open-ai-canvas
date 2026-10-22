@@ -468,6 +468,8 @@ func migrations() []tableMigration {
 		migrateTable[model.AgentProfile]("agent_profiles"),
 		migrateTable[model.AgentLesson]("agent_lessons"),
 		migrateTable[model.AgentMemorySetting]("agent_memory_settings"),
+		migrateTable[model.AgentMemoryProposal]("agent_memory_proposals"),
+		migrateTable[model.AgentMemoryRevision]("agent_memory_revisions"),
 		migrateTable[model.TaskTextDelta]("task_text_delta"),
 		migrateTable[model.TaskLog]("task_logs"),
 		migrateTable[model.Result]("results"),

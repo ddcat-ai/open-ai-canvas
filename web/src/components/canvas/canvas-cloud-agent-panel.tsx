@@ -23,6 +23,7 @@ import {
     sendAgentInterjection,
     sendAgentMessage,
     subscribeAgentEvents,
+    undoAgentCanvasRun,
     updateAgentProfile,
     type AgentPermissionMode,
     type AgentProfileScope,
@@ -53,6 +54,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, prepareCanvasForCloudAction } from "@/services/user-data-sync";
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
+import { agentCanvasUndoKey, type AgentCanvasUndoState, type AgentCanvasUndoTarget } from "@/lib/canvas/agent-canvas-undo";
 import { canvasEditLeases } from "@/services/canvas-edit-leases";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
 import { AGENT_SCENE_DEFS, AgentChatComposer, parseCloudAgentFormAnswer, AgentPlanBar, AgentQuestionBar, AgentSceneCapsules, type AgentSceneBucket, type CloudAgentChatMessage } from "./canvas-cloud-agent-chat-ui";
@@ -131,6 +133,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     useEffect(() => { if (curationState.curation?.enabled) setSkillTag("all"); }, [curationState.curation?.enabled]);
     const [busy, setBusy] = useState(false);
     const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+    const [undoStates, setUndoStates] = useState<Record<string, AgentCanvasUndoState>>({});
+    const undoRequestsRef = useRef(new Set<string>());
     const [exporting, setExporting] = useState(false);
     const [stopping, setStopping] = useState(false);
     const [approval, setApproval] = useState<ApprovalState | null>(null);
@@ -492,6 +496,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         setPresetApplyingId("");
         setConversations([]);
         setRun(null);
+        setUndoStates({});
         setMessages([]);
         setSelectedSkillIds([]);
         setApproval(null);
@@ -701,7 +706,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                     model: modelOptionName(effectiveModel) || undefined,
                     ...(logicalModelId ? { logicalModelId } : requestConfig.channelId ? { channelId: requestConfig.channelId, channelModelKey: modelOptionName(effectiveModel) || undefined } : {}),
                     skillIds: [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])],
-                    focusNodeIds: canvasId && selectedNodeIds.length <= 8 ? selectedNodeIds : [],
+                    focusNodeIds: canvasId ? selectedNodeIds.slice(0, 8) : [],
+                    focusNodeOmittedCount: canvasId ? Math.max(0, selectedNodeIds.length - 8) : 0,
                     permissionMode,
                     contextScope: canvasId ? contextScope : [],
                     budget: { maxCredits: positiveNumber(maxCredits), maxGenerationTasks: permissionMode === "read_only" ? 0 : Number(maxGenerationTasks), maxVideoSeconds: permissionMode === "read_only" ? 0 : Number(maxVideoSeconds) },
@@ -787,6 +793,39 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         setPendingAutoSubmit(null);
         void submit(pending.text, { requiresVision: pending.requiresVision, displayText: pending.displayText, canvasReferenceNodeId: pending.canvasReferenceNodeId });
     }, [busy, historyHydrated, otherAgentRunning, pendingAutoSubmit, pendingHydrated, profileError, profileLoading, profileView, running]);
+
+    const undoCanvasStep = async (target: AgentCanvasUndoTarget) => {
+        const activeRun = run;
+        const scope = conversationScope;
+        const key = agentCanvasUndoKey(target);
+        if (!activeRun?.canvasId || target.canvasId !== activeRun.canvasId || busy || running || otherAgentRunning || currentScope.current !== scope || undoRequestsRef.current.has(key)) return;
+        if (undoStates[key]?.status === "done" || undoStates[key]?.status === "pending") return;
+        undoRequestsRef.current.add(key);
+        setUndoStates((current) => ({ ...current, [key]: { status: "pending" } }));
+        try {
+            const result = await undoAgentCanvasRun(target.runId, { stepId: target.stepId, expectedSnapshotHash: target.expectedSnapshotHash, reason: "用户在 Agent 面板撤销画布写入" });
+            if (!result.accepted) throw new Error("服务端没有确认撤销");
+            if (currentScope.current !== scope) return;
+            setUndoStates((current) => ({ ...current, [key]: { status: "done" } }));
+            setMessages((current) => current.map((item) => {
+                const detail = item.detail as { runId?: string; callId?: string } | undefined;
+                return detail?.runId === target.runId && detail.callId === target.stepId ? { ...item, detail: { ...detail, undoStatus: "undone" } } : item;
+            }));
+            try {
+                const [, snapshot] = await Promise.all([refreshCanvasAfterAgent(target.canvasId), getAgentRun(activeRun.id, AbortSignal.timeout(10_000))]);
+                if (currentScope.current === scope) {
+                    setRun((current) => (current?.id === activeRun.id ? snapshot.run : current));
+                    setConnectionEpoch((value) => value + 1);
+                }
+            } catch (refreshError) {
+                if (currentScope.current === scope) setMessages((current) => appendAgentError(current, `undo-refresh-${key}`, refreshError, "已撤销，但画布或运行状态刷新失败"));
+            }
+        } catch (cause) {
+            if (currentScope.current === scope) setUndoStates((current) => ({ ...current, [key]: { status: "error", error: cause instanceof Error ? cause.message : String(cause) } }));
+        } finally {
+            undoRequestsRef.current.delete(key);
+        }
+    };
 
     const stop = async () => {
         const activeRun = run;
@@ -890,6 +929,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         setApprovalSubmitting(false);
         setActiveConversationId(id);
         setRun(null);
+        setUndoStates({});
         setMessages([]);
         // Skills are a user-selected Agent workspace setting. Keep them when
         // starting a fresh conversation so the skill picker does not appear to
@@ -929,6 +969,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         setApprovalSubmitting(false);
         setActiveConversationId(conversation.id);
         setRun(conversation.run);
+        setUndoStates({});
         setMessages(conversation.messages);
         setPermissionMode(conversation.permissionMode);
         setSelectedSkillIds(conversation.skillIds || []);
@@ -971,6 +1012,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                 Record<`--${string}`, string>
                         }
                         aria-label="Agent 工作台"
+                        data-popover-anchor-container
                         data-canvas-no-zoom
                         data-canvas-wheel-scroll
                         {...panelLayout.pointerHandlers}
@@ -1084,6 +1126,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         theme={theme}
                                         messages={messages}
                                         onFocusNode={onFocusNode}
+                                        onUndo={busy || running || otherAgentRunning ? undefined : (target) => void undoCanvasStep(target)}
+                                        undoStates={undoStates}
                                         references={[...references, ...buildSkillMentionReferences(installedSkills)]}
                                         busy={busy || running}
                                         approval={approval}
@@ -1137,7 +1181,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         references={[...references, ...buildSkillMentionReferences(installedSkills)]}
                                         slashSkills={installedSkills}
                                         includeAssetLibrary={false}
-                                        submitAccessory={<AgentContextRing view={presentAgentContextUsage(contextUsage)} />}
+                                        submitAccessory={<AgentContextRing view={presentAgentContextUsage(contextUsage)} theme={theme} />}
                                         footer={connectorsVisible ? <AgentConnectorsBar onClose={() => setConnectorsVisible(false)} /> : null}
                                         left={
                                             <ComposerControls

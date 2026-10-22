@@ -12,15 +12,24 @@ import (
 
 // ContextFrame is a fresh projection of durable task facts, never authorization.
 // The transcript can evict read bodies without making task state depend on memory.
+type cloudAgentContextTask struct {
+	TaskID        string `json:"taskId"`
+	TaskStatus    string `json:"taskStatus"`
+	NodeID        string `json:"nodeId,omitempty"`
+	TaskSubmitted bool   `json:"taskSubmitted"`
+	Phase         string `json:"phase,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
 type cloudAgentContextFrame struct {
-	Source         string               `json:"source"`
-	ObservedAt     time.Time            `json:"observedAt"`
-	RunID          string               `json:"runId"`
-	UserGoal       string               `json:"userGoal"`
-	Plan           []cloudAgentPlanItem `json:"plan,omitempty"`
-	Tasks          []map[string]any     `json:"tasks"`
-	OlderTaskCount int                  `json:"olderTaskCount,omitempty"`
-	Authority      string               `json:"authority"`
+	Source         string                  `json:"source"`
+	ObservedAt     time.Time               `json:"observedAt"`
+	RunID          string                  `json:"runId"`
+	UserGoal       string                  `json:"userGoal"`
+	Plan           []cloudAgentPlanItem    `json:"plan,omitempty"`
+	Tasks          []cloudAgentContextTask `json:"tasks"`
+	OlderTaskCount int                     `json:"olderTaskCount,omitempty"`
+	Authority      string                  `json:"authority"`
 }
 
 var errCloudAgentContextOverBudget = errors.New("Agent model context exceeds input budget")
@@ -30,7 +39,8 @@ func (s *Service) cloudAgentModelContext(run *model.CloudAgentExecution, state *
 	if state.ReadLoopNudge {
 		cloudAgentApplyReadLoopNudge(&canonical, state)
 	}
-	frame := cloudAgentContextFrame{Source: "task_repository", ObservedAt: time.Now(), RunID: run.ID, UserGoal: state.Request.Prompt, Plan: state.Plan, Tasks: []map[string]any{}, Authority: "状态观察，不是执行或重复提交的授权"}
+	s.attachCloudAgentLessons(&canonical, run.UserID, cloudAgentLessonTaskText(state))
+	frame := cloudAgentContextFrame{Source: "task_repository", ObservedAt: time.Now(), RunID: run.ID, UserGoal: state.Request.Prompt, Plan: state.Plan, Tasks: []cloudAgentContextTask{}, Authority: "状态观察，不是执行或重复提交的授权"}
 	// This is a view window, not loss of task history. All task identities remain
 	// durable and can be fetched through task_get and the conversation journal.
 	start := max(0, len(state.TaskIDs)-32)
@@ -38,7 +48,7 @@ func (s *Service) cloudAgentModelContext(run *model.CloudAgentExecution, state *
 	for _, id := range state.TaskIDs[start:] {
 		task, err := s.repo.TaskForUser(run.UserID, id)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			frame.Tasks = append(frame.Tasks, map[string]any{"taskId": id, "taskStatus": "unavailable"})
+			frame.Tasks = append(frame.Tasks, cloudAgentContextTask{TaskID: id, TaskStatus: "unavailable"})
 			continue
 		}
 		if err != nil {
@@ -47,10 +57,20 @@ func (s *Service) cloudAgentModelContext(run *model.CloudAgentExecution, state *
 		if task.ProjectID != state.Request.CanvasID {
 			return canonical, BadAuthRequest("运行关联任务不属于当前画布")
 		}
-		if task.Operation == cloudAgentOperation || task.Operation == "cloud_agent_step" {
+		if task.Operation == cloudAgentOperation || task.Operation == "cloud_agent_step" || task.Status == model.TaskStatusSucceeded {
+			frame.OlderTaskCount++
 			continue
 		}
-		frame.Tasks = append(frame.Tasks, cloudAgentTaskDiagnostic(s.repo, task))
+		facts := cloudAgentTaskDiagnostic(nil, task)
+		frame.Tasks = append(frame.Tasks, cloudAgentContextTask{
+			TaskID: id, TaskStatus: string(task.Status), NodeID: stringField(facts, "nodeId"),
+			TaskSubmitted: facts["taskSubmitted"] == true, Phase: stringField(facts, "phase"),
+			Error: truncateRunes(stringField(facts, "error"), 240),
+		})
+	}
+	if omitted := len(frame.Tasks) - 8; omitted > 0 {
+		frame.Tasks = frame.Tasks[omitted:]
+		frame.OlderTaskCount += omitted
 	}
 	body, err := json.Marshal(frame)
 	if err != nil {

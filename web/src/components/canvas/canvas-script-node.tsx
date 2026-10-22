@@ -1,4 +1,5 @@
-import { Button, Dropdown, Input, InputNumber, Modal, Segmented, Table } from "antd";
+import { Button, Input, InputNumber, Modal, Segmented, Table } from "antd";
+import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 

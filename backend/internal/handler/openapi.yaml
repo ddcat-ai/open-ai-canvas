@@ -764,7 +764,7 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, approved, rejected]
+            enum: [pending, approved, rejected, expired]
         - in: query
           name: limit
           schema:
@@ -773,7 +773,21 @@ paths:
             maximum: 500
       responses:
         "200":
-          description: 信封 data.memories
+          description: 当前用户的记忆，含可选来源运行与工具执行证据；计数不是有效性评分
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [memories]
+                        properties:
+                          memories:
+                            type: array
+                            items: { $ref: "#/components/schemas/AgentMemory" }
         "401":
           $ref: "#/components/responses/Error"
     post:
@@ -843,7 +857,15 @@ paths:
       summary: 读取当前用户的记忆压缩设置与最近一次压缩状态
       responses:
         "200":
-          description: 信封 data 含 compactInterval、模型字段、lastStatus、summary
+          description: 压缩设置与最新提案状态；awaiting_review 不表示记忆已经修改
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/AgentMemoryCompactView" }
         "401":
           $ref: "#/components/responses/Error"
     patch:
@@ -873,7 +895,8 @@ paths:
   /agent/memories/compact:
     post:
       tags: [agent]
-      summary: 提交一次个人记忆压缩任务（走用户文本模型计费）
+      summary: 生成一次待审批的个人记忆压缩提案（走用户文本模型计费）
+      description: 每批最多80条、输入最多48KiB，按稳定ID公平轮转。模型回调只保存提案，不修改已批准记忆；需由本人带version批准才应用。
       requestBody:
         required: true
         content:
@@ -887,11 +910,141 @@ paths:
                 model: { type: string }
       responses:
         "200":
-          description: 信封 data 为压缩设置视图，lastStatus 为 queued
+          description: 信封 data 为含 taskId/proposalId 的压缩设置视图；通常为 queued，快速完成时可已进入 awaiting_review
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/AgentMemoryCompactView" }
         "400":
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+  /agent/memories/proposals:
+    get:
+      tags: [agent]
+      summary: 列出当前用户的记忆压缩提案
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+      responses:
+        "200":
+          description: 按创建时间倒序的用户私有压缩提案
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [proposals]
+                        properties:
+                          proposals:
+                            type: array
+                            items: { $ref: "#/components/schemas/AgentMemoryProposal" }
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/proposals/{proposalId}/decide:
+    parameters:
+      - in: path
+        name: proposalId
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agent]
+      summary: 按版本批准或拒绝当前用户的压缩提案
+      description: 批准前锁定全部源记忆并比较输入快照，任一内容或状态变化时整批409且不留下部分修改。批准保留完整恢复版本；拒绝不改变记忆。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentMemoryProposalDecision" }
+      responses:
+        "200":
+          description: 操作成功后的压缩提案视图
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/AgentMemoryProposal" }
+        "400":
+          description: 缺少或无效version、决定无效或请求包含未知字段
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: 对象不存在或不属于当前用户
+        "409":
+          description: version或记忆内容前置条件不匹配；整批未执行
+  /agent/memories/revisions:
+    get:
+      tags: [agent]
+      summary: 列出当前用户的记忆可恢复版本
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+      responses:
+        "200":
+          description: 按创建时间倒序的用户私有可恢复版本
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [revisions]
+                        properties:
+                          revisions:
+                            type: array
+                            items: { $ref: "#/components/schemas/AgentMemoryRevision" }
+        "401":
+          $ref: "#/components/responses/Error"
+  /agent/memories/revisions/{revisionId}/restore:
+    parameters:
+      - in: path
+        name: revisionId
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agent]
+      summary: 按版本恢复一次已应用压缩前的记忆
+      description: 要求全部保留条目仍匹配应用后快照，且被删除ID未被复用；有后续编辑、删除或ID复用时整批409。不能覆盖他人记录，同一版本只成功恢复一次。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentMemoryRevisionRestore" }
+      responses:
+        "200":
+          description: 操作成功后的可恢复版本视图
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/AgentMemoryRevision" }
+        "400":
+          description: 缺少或无效version、决定无效或请求包含未知字段
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: 对象不存在或不属于当前用户
+        "409":
+          description: version或记忆内容前置条件不匹配；整批未执行
   /agent/memories/{id}:
     parameters:
       - in: path
@@ -1055,7 +1208,11 @@ paths:
     post:
       tags: [agent]
       summary: 撤销当前 Agent 运行产生的最新画布变更
-      description: 仅撤销仍是最新快照、且未提交生成任务的画布变更；不会取消任务或退款。
+      description: |
+        仅撤销该运行最新一笔且当前完整画布哈希仍匹配的变更，不取消任务或退款。
+        优先使用 canvas_updated.undo 中的原 runId/canvasId/stepId/expectedSnapshotHash；历史卡片不能改用最新运行ID。
+        成功响应丢失可重放原请求，画布仍为撤销后快照时幂等确认；有后续新修改仍返回409。
+        未保留完整快照、超过1MiB快照容量或已提交收费任务的变更不可撤销。
       requestBody:
         required: true
         content:
@@ -1078,11 +1235,11 @@ paths:
                   maxLength: 2000
       responses:
         "200":
-          description: 信封 data.accepted 与当前快照哈希
+          description: 信封 data.accepted 为 true 与当前 snapshotHash；相同原请求重试不会重复撤销
         "400":
           description: 请求无效、快照不可撤销或已提交任务不能撤销
         "409":
-          description: 画布已发生后续变化、操作已处理或 stepId 不匹配
+          description: 画布已发生后续变化，或 stepId 已不是该运行最新变更
   /agent/runs/{id}/approvals/{approvalId}/decision:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -1149,7 +1306,9 @@ paths:
             minimum: 0
       responses:
         "200":
-          description: 首次及 revision 变化时发送紧凑 run_snapshot；无变化时 heartbeat；agent_event.seq 为递增游标，cleanupPending 期间持续发送
+          description: |
+            首次及 revision 变化时发送紧凑 run_snapshot；无变化时 heartbeat；agent_event.seq 为递增游标，cleanupPending 期间持续发送。
+            canvas_updated 的 payload 可含 AgentCanvasUpdatedPayload 中的 undo 凭据。仅无已提交收费任务且有完整快照的普通写入提供非空凭据；缺省或 null 不显示可执行撤销。
           content:
             text/event-stream:
               schema:
@@ -2005,6 +2164,150 @@ components:
               properties:
                 quote:
                   $ref: "#/components/schemas/LogicalModelQuote"
+    AgentMemoryStep:
+      type: object
+      required: [tool, action]
+      properties:
+        tool: { type: string }
+        action: { type: string }
+        note: { type: string }
+    AgentMemoryEvidence:
+      type: object
+      required: [sequence, tool]
+      properties:
+        sequence: { type: integer, minimum: 0 }
+        callId: { type: string }
+        tool: { type: string }
+    AgentMemory:
+      type: object
+      description: 用户私有记忆；来源事件只说明产生依据，不证明经验已验证有效；计数不是效果评分
+      required: [id, topic, category, situation, status, hits, injected, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        topic: { type: string }
+        category: { type: string }
+        situation: { type: string }
+        lesson: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AgentMemoryStep" }
+        source: { type: string }
+        originRunId: { type: string }
+        evidence:
+          type: array
+          maxItems: 8
+          items: { $ref: "#/components/schemas/AgentMemoryEvidence" }
+        status: { type: string, enum: [pending, approved, rejected, expired] }
+        hits: { type: integer, format: int64, minimum: 0, description: 主动查阅次数，不等同成功次数 }
+        injected: { type: integer, format: int64, minimum: 0, description: 含该条目的模型任务实际入队次数 }
+        lastVerifiedAt: { type: string, format: date-time, description: 原始验证时间；新建、去重、压缩及批准不刷新 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AgentMemoryCompactSummary:
+      type: object
+      required: [rewritten, merged, removed, skipped]
+      properties:
+        rewritten: { type: integer, minimum: 0 }
+        merged: { type: integer, minimum: 0 }
+        removed: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+    AgentMemoryCompactView:
+      type: object
+      required: [compactInterval, lastStatus]
+      properties:
+        compactInterval: { type: string, enum: [off, daily, weekly, monthly] }
+        logicalModelId: { type: string }
+        channelId: { type: string }
+        channelModelKey: { type: string }
+        model: { type: string }
+        taskId: { type: string }
+        proposalId: { type: string }
+        lastCompactAt: { type: string, format: date-time }
+        lastStatus:
+          type: string
+          enum: [idle, queued, running, awaiting_review, applied, rejected, restored, succeeded, failed]
+          description: awaiting_review只表示提案生成；applied表示本人批准后已应用；succeeded表示本批无可应用修改
+        lastError: { type: string }
+        summary: { $ref: "#/components/schemas/AgentMemoryCompactSummary" }
+    AgentMemoryChange:
+      type: object
+      required: [kind, before, after]
+      properties:
+        kind: { type: string, enum: [rewrite, merge] }
+        before:
+          type: array
+          minItems: 1
+          maxItems: 80
+          items: { $ref: "#/components/schemas/AgentMemory" }
+        after: { $ref: "#/components/schemas/AgentMemory" }
+    AgentMemoryProposal:
+      type: object
+      required: [id, status, version, summary, changes, createdAt]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [generating, pending, approved, rejected, no_changes, failed] }
+        version: { type: integer, format: int64, minimum: 1 }
+        taskId: { type: string }
+        summary: { $ref: "#/components/schemas/AgentMemoryCompactSummary" }
+        changes:
+          type: array
+          maxItems: 80
+          items: { $ref: "#/components/schemas/AgentMemoryChange" }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+    AgentMemoryProposalDecision:
+      type: object
+      additionalProperties: false
+      required: [decision, version]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        version: { type: integer, format: int64, minimum: 1, description: 列表中读到的提案版本 }
+    AgentMemoryRevision:
+      type: object
+      required: [id, proposalId, version, before, after, createdAt]
+      properties:
+        id: { type: string }
+        proposalId: { type: string }
+        version: { type: integer, format: int64, minimum: 1 }
+        before:
+          type: array
+          maxItems: 80
+          items: { $ref: "#/components/schemas/AgentMemory" }
+        after:
+          type: array
+          maxItems: 80
+          items: { $ref: "#/components/schemas/AgentMemory" }
+        createdAt: { type: string, format: date-time }
+        restoredAt: { type: string, format: date-time }
+    AgentMemoryRevisionRestore:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, format: int64, minimum: 1, description: 列表中读到的恢复版本；当前内容也必须匹配应用后快照 }
+    AgentCanvasUndoReceipt:
+      type: object
+      required: [runId, canvasId, stepId, expectedSnapshotHash]
+      properties:
+        runId: { type: string, description: 产生本次画布变更的原运行ID }
+        canvasId: { type: string, description: 产生本次变更的画布 }
+        stepId: { type: string }
+        expectedSnapshotHash: { type: string, minLength: 64, maxLength: 64, pattern: '^[0-9a-fA-F]{64}$' }
+    AgentCanvasUpdatedPayload:
+      type: object
+      required: [canvasId, operation, callId]
+      properties:
+        canvasId: { type: string }
+        operation: { type: string }
+        callId: { type: string }
+        requiresRefresh: { type: boolean }
+        canvasPatch: { type: object, additionalProperties: true }
+        actions: { type: array, items: { type: object, additionalProperties: true } }
+        undo:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AgentCanvasUndoReceipt"
+          description: 仅有完整快照的未提交收费普通写入携带；不能替代服务端最新变更和完整哈希校验
     AgentProfileRequest:
       type: object
       additionalProperties: false
@@ -2065,6 +2368,17 @@ components:
           items:
             type: string
             enum: [canvas]
+        focusNodeIds:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+          description: 当前焦点节点；前端多选超过 8 个时传前 8 个，剩余数见 focusNodeOmittedCount
+        focusNodeOmittedCount:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          description: 前端实际选中但未附带的焦点节点数，仅用于提示模型，不授予访问权限
         budget:
           type: object
           additionalProperties: false
@@ -2078,11 +2392,15 @@ components:
             maxGenerationTasks:
               type: integer
               minimum: 0
-              maximum: 8
+              description: 本轮累计生成任务数上限；0表示不设此项业务上限，仍受积分预算约束
             maxVideoSeconds:
               type: integer
               minimum: 0
-              maximum: 120
+              description: 本轮累计视频秒数上限；0表示不设此项业务上限，仍受模型能力和积分预算约束
+            maxSteps:
+              type: integer
+              minimum: 0
+              description: 本轮模型调用步数；0表示不设固定步数限制，正数有效上限夹至9999，Go与Pi共用该值
         idempotencyKey:
           type: string
           minLength: 8

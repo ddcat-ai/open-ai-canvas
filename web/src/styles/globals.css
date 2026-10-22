@@ -14641,7 +14641,8 @@ html:not(.dark) .creation-history-drawer-root {
 .asset-zoom-controls button { display: grid; min-width: 30px; height: 30px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: rgba(255,255,255,.86); cursor: pointer; font-size: 11px; }
 .asset-zoom-controls button:hover { background: rgba(255,255,255,.12); color: #fff; }
 .batch-upload-dropzone { display: flex; min-height: 132px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; width: 100%; border: 1px dashed color-mix(in srgb, var(--foreground) 18%, transparent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--foreground) 3%, transparent); color: color-mix(in srgb, var(--foreground) 52%, transparent); cursor: pointer; }
-.batch-upload-dropzone:hover { border-color: var(--workspace-accent); background: color-mix(in srgb, var(--workspace-accent) 6%, transparent); color: var(--foreground); }
+.batch-upload-dropzone:hover, .batch-upload-dropzone.is-dragging { border-color: var(--workspace-accent); background: color-mix(in srgb, var(--workspace-accent) 6%, transparent); color: var(--foreground); }
+.batch-upload-dropzone.is-dragging { border-style: solid; }
 .batch-upload-dropzone strong { color: var(--foreground); font-size: var(--fs-body); }
 .batch-upload-dropzone span { font-size: var(--fs-label); }
 .batch-upload-list { max-height: 260px; overflow: auto; border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent); border-radius: var(--r-lg); }

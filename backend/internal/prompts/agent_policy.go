@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed agent-system-policy.md agent-media-policy.md AGENTS.md
+//go:embed agent-system-policy.md
 var policyFiles embed.FS
 
 type Policy struct {
@@ -24,21 +24,12 @@ func LoadAgentPolicies() (system Policy, media Policy, err error) {
 	if err != nil {
 		return Policy{}, Policy{}, err
 	}
-	operations, err := loadPolicy("AGENTS.md")
-	if err != nil {
-		return Policy{}, Policy{}, err
+	if system.ID != "cloud-agent-system" {
+		return Policy{}, Policy{}, fmt.Errorf("agent policy identity is invalid")
 	}
-	if operations.ID != "cloud-agent-operations" {
-		return Policy{}, Policy{}, fmt.Errorf("agent operations policy identity is invalid")
-	}
-	system.Text += "\n\n" + operations.Text
-	system.Hash = hashPolicy(system.ID, system.Version, system.Text)
-	media, err = loadPolicy("agent-media-policy.md")
-	if err != nil {
-		return Policy{}, Policy{}, err
-	}
-	if system.ID != "cloud-agent-system" || media.ID != "cloud-agent-media" {
-		return Policy{}, Policy{}, fmt.Errorf("agent policy identities are invalid")
+	media = Policy{
+		ID: "cloud-agent-media", Version: system.Version,
+		Hash: hashPolicy("cloud-agent-media", system.Version, system.Hash),
 	}
 	return system, media, nil
 }
