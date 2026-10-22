@@ -6,11 +6,9 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"log"
 	"log/slog"
-	"path/filepath"
+
+	agenttool "yingce/backend/internal/agent/tool"
 )
 
 // EnhancedPiRequestParams 增强的 Pi 请求参数
@@ -18,7 +16,6 @@ type EnhancedPiRequestParams struct {
 	UserID       string
 	RunID        string
 	CanvasID     string
-	FocusNodeIDs []string
 	Prompt       string
 	SystemPrompt string
 	ModelID      string
@@ -28,44 +25,13 @@ type EnhancedPiRequestParams struct {
 }
 
 // buildEnhancedPiRequest 构建增强的 Pi 请求（核心方法）
-func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiRequestParams) (cloudAgentPiProcessRequest, error) {
+func (s *Service) buildEnhancedPiRequest(_ context.Context, params EnhancedPiRequestParams) (cloudAgentPiProcessRequest, error) {
 	slog.Debug("agent building request", "canvas", params.CanvasID)
 
-	// 1. 构建工具列表（包括画布工具）
 	tools := s.buildCompletePiTools(params.Canonical.Tools)
-
-	// 2. 构建 Skills 配置。技能内容只经服务端读取工具提供，不交给运行时按路径加载：
-	// 技能路径是相对路径，运行时按自己的工作目录解析，会读到无关文件。
 	enabledSkills := s.buildSkillManifests(params.RuntimeState.Skills)
-
 	slog.Debug("agent enabled skills", "count", len(enabledSkills))
-
-	// 3. 构建 Profile 配置
 	profile := s.buildProfileConfig(params.RuntimeState.Profile)
-
-	// 4. 构建 Memory 配置
-	memory := s.buildMemoryConfig(params.UserID, params.CanvasID)
-
-	// 5. 构建画布智能上下文（核心创新）。平台级对话没有画布：不传 canvas，权限全关。
-	var canvasData map[string]any
-	if params.CanvasID != "" {
-		canvasIntelligence := s.NewCanvasIntelligence()
-		enhancedCanvas, err := canvasIntelligence.BuildEnhancedCanvasContext(ctx, params.UserID, params.CanvasID, params.FocusNodeIDs)
-		if err != nil {
-			return cloudAgentPiProcessRequest{}, fmt.Errorf("build canvas intelligence: %w", err)
-		}
-		canvasData, err = s.marshalEnhancedCanvas(enhancedCanvas)
-		if err != nil {
-			return cloudAgentPiProcessRequest{}, fmt.Errorf("marshal canvas: %w", err)
-		}
-		slog.Debug("agent canvas intelligence", "nodes",
-			enhancedCanvas.Snapshot.TotalNodes,
-			"focus", len(enhancedCanvas.Snapshot.FocusNodes),
-			"relationships", len(enhancedCanvas.Snapshot.Relationships),
-			"clusters", len(enhancedCanvas.Snapshot.Layout.Clusters))
-	}
-
-	// 6. 构建 Features 配置
 	features := s.buildFeaturesConfig(params.RuntimeState)
 
 	// 7. 构建压缩策略
@@ -73,7 +39,7 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 	compaction := s.buildCompactionStrategy(params.UserID, params.CanvasID, contextBudget)
 
 	// 8. 构建权限配置
-	permissions := s.buildPermissionsConfig(params.UserID, params.CanvasID)
+	permissions := s.buildPermissionsConfig(params.UserID, params.RuntimeState.Request)
 
 	// 9. 构建模型配置
 	modelConfig := s.buildModelConfig(params.ModelID, params.RuntimeState)
@@ -97,8 +63,6 @@ func (s *Service) buildEnhancedPiRequest(ctx context.Context, params EnhancedPiR
 		// 核心增强：完整的上下文传递
 		EnabledSkills: enabledSkills,
 		Profile:       profile,
-		Memory:        memory,
-		Canvas:        canvasData,
 		Features:      features,
 
 		// 配置
@@ -137,82 +101,36 @@ func (s *Service) buildProfileConfig(profile cloudAgentProfileSnapshot) map[stri
 	}
 }
 
-// buildMemoryConfig 构建 Memory 配置
-func (s *Service) buildMemoryConfig(userID, canvasID string) map[string]any {
-	memoryDir := filepath.Join(s.dataDir, "memory", userID)
-	canvasMemoryDir := filepath.Join(memoryDir, canvasID)
-
-	return map[string]any{
-		"enabled":            true,
-		"storePath":          memoryDir,
-		"canvasStorePath":    canvasMemoryDir,
-		"userId":             userID,
-		"canvasId":           canvasID,
-		"maxEntries":         1000,
-		"indexingEnabled":    true,
-		"searchEnabled":      true,
-		"autoSaveInterval":   60, // seconds
-		"compressionEnabled": true,
-	}
-}
-
-// buildFeaturesConfig 构建 Features 配置
+// buildFeaturesConfig projects real tool contracts; it grants no capabilities.
 func (s *Service) buildFeaturesConfig(state *cloudAgentRuntime) map[string]any {
+	approvalTools := []string{}
+	for _, name := range cloudAgentRegistry().Names() {
+		if cloudAgentToolAllowed(state.Request, name) && agenttool.Of(name).ApprovalRequired(state.Request.PermissionMode) {
+			approvalTools = append(approvalTools, name)
+		}
+	}
 	return map[string]any{
-		"planningEnabled":    true,
-		"formsEnabled":       true,
-		"memoryEnabled":      true,
-		"skillsEnabled":      len(state.Skills) > 0,
-		"canvasIntelligence": true,
-		"approvalRequired":   []string{"canvas_node_delete", "canvas_bulk_operation"},
-		"autoSave":           true,
-		"collaborationMode":  "multi-user",
-		"versionControl":     true,
+		"planningEnabled": true, "formsEnabled": true,
+		"approvalRequired": approvalTools,
 	}
 }
 
-// buildPermissionsConfig 根据当前账号的画布归属生成运行时权限。
-// userID 是登录账号，canvasID 是画布 ID（不是所属项目 ID）；查询失败时拒绝访问。
-func (s *Service) buildPermissionsConfig(userID, canvasID string) map[string]any {
-	// 与画布读写工具共用账号归属查询，不访问旧的 Canvas 扩展模型。
-	// 平台级对话（无画布）直接走最小权限集，不是错误。
+// buildPermissionsConfig is a projection of the run's server-derived authority.
+// Ownership alone never enables tools excluded by read_only or context scope.
+func (s *Service) buildPermissionsConfig(userID string, req CloudAgentRequest) map[string]any {
 	allowed := false
-	if canvasID != "" {
-		if _, err := s.repo.CanvasProjectForUser(userID, canvasID); err != nil {
-			log.Printf("[Agent] failed to get canvas for permissions: %v", err)
-		} else {
-			allowed = true
-		}
+	if req.CanvasID != "" && len(req.ContextScope) > 0 {
+		_, err := s.repo.CanvasProjectForUser(userID, req.CanvasID)
+		allowed = err == nil
 	}
-	if !allowed {
-		// 返回最小权限集
-		return map[string]any{
-			"canReadCanvas":      false,
-			"canWriteCanvas":     false,
-			"canDeleteNodes":     false,
-			"canCreateNodes":     false,
-			"canMoveNodes":       false,
-			"canDuplicateNodes":  false,
-			"canManageRelations": false,
-			"canInviteUsers":     false,
-			"canExportCanvas":    false,
-			"maxTokenBudget":     200000,
-			"maxSteps":           50,
-		}
-	}
-
+	writable := allowed && req.PermissionMode != "read_only"
+	budget := s.cloudAgentContextBudgetForRequest(req)
 	return map[string]any{
-		"canReadCanvas":      true,
-		"canWriteCanvas":     true,
-		"canDeleteNodes":     true,
-		"canCreateNodes":     true,
-		"canMoveNodes":       true,
-		"canDuplicateNodes":  true,
-		"canManageRelations": true,
-		"canInviteUsers":     true,
-		"canExportCanvas":    true,
-		"maxTokenBudget":     200000,
-		"maxSteps":           50,
+		"canReadCanvas": allowed, "canWriteCanvas": writable,
+		"canCreateNodes": writable, "canMoveNodes": writable, "canManageRelations": writable,
+		"canDeleteNodes": false, "canDuplicateNodes": false,
+		"canInviteUsers": false, "canExportCanvas": false,
+		"maxTokenBudget": budget.InputBudgetTokens, "maxSteps": cloudAgentStepLimit(req),
 	}
 }
 
@@ -223,7 +141,7 @@ func (s *Service) buildModelConfig(modelID string, state *cloudAgentRuntime) map
 		"id":            modelID,
 		"name":          modelID,
 		"reasoning":     cloudAgentReasoningEnabled(state.Policy.ReasoningMode),
-		"input":         []string{"text", "image"},
+		"input":         cloudAgentModelInputKinds(state.Request),
 		"contextWindow": budget.ContextWindowTokens,
 		"maxTokens":     budget.MaxOutputTokens,
 		"provider":      state.Request.ChannelID,
@@ -233,17 +151,9 @@ func (s *Service) buildModelConfig(modelID string, state *cloudAgentRuntime) map
 	}
 }
 
-// marshalEnhancedCanvas 序列化增强画布
-func (s *Service) marshalEnhancedCanvas(canvas *EnhancedCanvasContext) (map[string]any, error) {
-	data, err := json.Marshal(canvas)
-	if err != nil {
-		return nil, err
+func cloudAgentModelInputKinds(req CloudAgentRequest) []string {
+	if req.VisionEnabled {
+		return []string{"text", "image"}
 	}
-
-	var result map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return []string{"text"}
 }

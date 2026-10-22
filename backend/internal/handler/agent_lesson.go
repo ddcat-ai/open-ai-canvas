@@ -14,6 +14,7 @@ import (
 )
 
 func RegisterAgentMemoryRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerAgentMemoryProposalRoutes(r, svc)
 	r.GET("/agent/memories", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

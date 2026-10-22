@@ -10,14 +10,17 @@ import type { VideoProviderDeps } from "./video-provider-deps";
 import { normalizeVideoSeconds, normalizeVideoSize } from "./video-validation";
 
 export async function createVideoGenerationsTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {
-    if (references.length > 9 || videoReferences.length > 3 || audioReferences.length > 3) throw new Error("NewAPI Video Generations 最多支持 9 张参考图、3 个参考视频和 3 个参考音频");
+    const profile = modelCapabilityConfigFor(config, model).video!;
+    const { maxImages, maxVideos, maxAudios } = profile.references;
+    if (references.length > maxImages || videoReferences.length > maxVideos || audioReferences.length > maxAudios) {
+        throw new Error(`NewAPI Video Generations 当前模型最多支持 ${maxImages} 张参考图、${maxVideos} 个参考视频和 ${maxAudios} 个参考音频`);
+    }
     if (audioReferences.length > 0 && videoReferences.length === 0) throw new Error("NewAPI Video Generations 的参考音频必须同时提供至少 1 个参考视频；纯音频生视频请切换到支持该模式的渠道");
     const [imageUrls, videoUrls, audioUrls] = await Promise.all([
         Promise.all(references.map((item) => resolveVideoGenerationsUrl(item.url || item.dataUrl, item.storageKey))),
         Promise.all(videoReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
         Promise.all(audioReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
     ]);
-    const profile = modelCapabilityConfigFor(config, model).video!;
     const resolution = newAPIVideoResolutionRequest(profile, config.vquality, modelOptionName(model));
     const payload = {
         model: modelOptionName(model),

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { App, Button, Dropdown, Input, Modal, Tag, Tooltip } from "antd";
+import { App, Button, Input, Modal, Tag, Tooltip } from "antd";
+import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import type { MenuProps } from "antd";
 import { Camera, Check, ChevronDown, ChevronRight, Ellipsis, Grid3x3, Images, Plus, SlidersHorizontal, UserRound } from "lucide-react";
 
@@ -21,6 +22,7 @@ import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode, type Position, type ViewportTransform } from "@/types/canvas";
 import { buildImageToolbarTools } from "./canvas-image-toolbar-tools";
 import { CanvasGridSplitPicker } from "./canvas-grid-split-picker";
+import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
 
 type CanvasNodeToolbarProps = {
     node: CanvasNodeData | null;
@@ -156,6 +158,7 @@ export function CanvasNodeToolbar({
     const themeName = useActiveTheme();
     const theme = canvasThemes[themeName];
     const simpleMode = workspaceMode === "simple";
+    const resizeMotion = useCanvasNodeResizeMotion();
 
     useEffect(() => {
         setOpenMenuId(null);
@@ -191,9 +194,10 @@ export function CanvasNodeToolbar({
             const scale = Math.max(liveViewport.k, 0.05);
             const offsetX = liveDragOffset?.x || 0;
             const offsetY = liveDragOffset?.y || 0;
-            const nodeLeft = liveViewport.x + (node.position.x + offsetX) * scale;
-            const nodeTop = liveViewport.y + (node.position.y + offsetY) * scale;
-            const nodeWidth = node.width * scale;
+            const visualNode = resizeMotion?.resolveNode(node) || node;
+            const nodeLeft = liveViewport.x + (visualNode.position.x + offsetX) * scale;
+            const nodeTop = liveViewport.y + (visualNode.position.y + offsetY) * scale;
+            const nodeWidth = visualNode.width * scale;
             const preferredLeft = nodeLeft + nodeWidth / 2;
             const halfToolbar = toolbarWidth / 2;
             const preferredAnchorLeft = Math.min(Math.max(preferredLeft, availableBounds.left + halfToolbar), Math.max(availableBounds.left + halfToolbar, availableBounds.right - halfToolbar));
@@ -237,6 +241,7 @@ export function CanvasNodeToolbar({
         const stopBounds = observeCanvasOverlayBounds(container, (bounds) => { availableBounds = bounds; measure(); });
         const unsubscribePanels = subscribeCanvasNodePanelBounds(container, () => scheduleUpdate());
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, scheduleUpdate);
+        const unsubscribeResize = resizeMotion?.subscribeNode(node.id, () => scheduleUpdate());
         const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             liveDragOffset = preview?.nodeIds.has(node.id) ? { x: preview.x, y: preview.y } : null;
             scheduleUpdate();
@@ -248,10 +253,11 @@ export function CanvasNodeToolbar({
             stopBounds();
             unsubscribePanels();
             unsubscribeViewport();
+            unsubscribeResize?.();
             unsubscribeDrag();
             window.removeEventListener("resize", measure);
         };
-    }, [anchor === null, containerRef, layoutLevel, node, viewport.k, viewport.x, viewport.y]);
+    }, [anchor === null, containerRef, layoutLevel, node, resizeMotion, viewport.k, viewport.x, viewport.y]);
 
     if (!node || !anchor) return null;
 
@@ -347,6 +353,7 @@ export function CanvasNodeToolbar({
     return (
         <div
             ref={toolbarRef}
+            data-popover-anchor-container
             className="canvas-node-toolbar absolute z-[var(--z-node-toolbar)] -translate-x-1/2 -translate-y-full"
             style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: containerWidth, color: theme.node.text }}
             onMouseEnter={() => onKeep(node.id)}
@@ -504,6 +511,11 @@ function NodeDockMenuButton({ menuId, label, icon, tools, openMenuId, onOpenChan
     return (
         <Dropdown
             open={open}
+            onAnchorMove={() => {
+                keepSplitMenuOpenRef.current = false;
+                setSplitPanelOpen(false);
+                onOpenChange(menuId, false);
+            }}
             trigger={["click"]}
             placement={placement}
             autoAdjustOverflow

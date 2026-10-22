@@ -1093,4 +1093,9 @@
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
     }
+    /* transition-property 默认为 all：上面的规则会让浮层根节点的 left/top 也过渡，
+       rc-trigger 同帧改 left/top 后测量到的仍是 -1000vw/-1000vh 预隐藏坐标，Select 下拉等浮层对齐到屏幕外。 */
+    :is([data-admin-root], body.admin-overlays) :is(.ant-popover, .ant-dropdown, .ant-select-dropdown, .ant-tooltip, .ant-picker-dropdown, .ant-cascader-dropdown, .ant-mentions-dropdown, .ant-tree-select-dropdown) {
+        transition-duration: 0s !important;
+    }
 }

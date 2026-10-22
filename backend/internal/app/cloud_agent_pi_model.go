@@ -270,6 +270,13 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			// 只过滤本次请求，不回写长期工具目录；内部压缩不消耗纠偏机会。
 			cloudAgentApplyReadLoopNudge(&canonical, &state)
 		}
+		if !compactionSummary {
+			s.attachCloudAgentLessons(&canonical, userID, cloudAgentLessonTaskText(&state))
+			budget := s.cloudAgentContextBudgetForRequest(state.Request)
+			if err := fitCloudAgentModelContext(&canonical, budget.InputBudgetTokens); err != nil {
+				return nil, false, err
+			}
+		}
 		// 看图后的历史里有 resource: 图片占位，必须随请求带上获准图片清单，
 		// 否则预检以「模型协议引用了未获准的图片」拒绝（见 cloud_agent_pi_image_references.go）。
 		references, refErr := s.cloudAgentPiStepImageReferences(userID, state.Request, &canonical)

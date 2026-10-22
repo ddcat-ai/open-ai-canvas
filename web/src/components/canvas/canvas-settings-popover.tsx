@@ -3,6 +3,7 @@ import { Button, Popover } from "antd";
 import { Settings2 } from "lucide-react";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 
 export type CanvasSettingsPlacement = "topLeft" | "top" | "topRight" | "bottomLeft" | "bottom" | "bottomRight";
 type SettingsPopoverProps = {
@@ -19,6 +20,7 @@ type SettingsPopoverProps = {
 
 export function CanvasSettingsPopover({ label, summary, children, placement = "topLeft", buttonClassName, width = 356, onOpenChange, getPopupContainer, autoAdjustOverflow = true }: SettingsPopoverProps) {
     const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     const id = useId();
     const theme = canvasThemes[useActiveTheme()];
     const change = (next: boolean) => {
@@ -27,12 +29,15 @@ export function CanvasSettingsPopover({ label, summary, children, placement = "t
     };
     return (
         <Popover
+            ref={popoverRef}
             open={open}
             onOpenChange={change}
             trigger="click"
             placement={placement}
             getPopupContainer={getPopupContainer}
             autoAdjustOverflow={autoAdjustOverflow}
+            // 无箭头时不保留 placement 的负间距，避免原生 shift 后仍有边缘越界。
+            align={autoAdjustOverflow ? { offset: [0, 0], overflow: { shiftX: true, shiftY: true } } : undefined}
             arrow={false}
             destroyOnHidden
             styles={{ root: { zIndex: "var(--z-dialog-popover)" }, container: { background: theme.canvas.background, color: theme.node.text, padding: 12 } }}

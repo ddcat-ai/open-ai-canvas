@@ -1,8 +1,8 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
-	"reflect"
 	"testing"
 )
 
@@ -45,7 +45,9 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 			{"properties": map[string]any{"type": map[string]any{"const": "update_node"}}, "required": []string{"patch"}},
 			{"properties": map[string]any{"type": map[string]any{"const": "connect_nodes"}}, "required": []string{"fromNodeId", "toNodeId"}},
 		}
-		if !reflect.DeepEqual(opItem["oneOf"], want) {
+		gotJSON, _ := json.Marshal(opItem["oneOf"])
+		wantJSON, _ := json.Marshal(want)
+		if !bytes.Equal(gotJSON, wantJSON) {
 			t.Fatalf("操作类型条件必填约束丢失: %#v", opItem["oneOf"])
 		}
 		if props, ok := opItem["properties"].(map[string]any); !ok || len(props) == 0 {

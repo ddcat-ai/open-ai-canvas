@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 import { Group, Leafer, Path, Rect } from "leafer-ui";
 
 import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/canvas-connections";
+import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
+import type { CanvasNodeResizeMotion } from "@/lib/canvas/canvas-node-resize-motion";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { batchCellAnchor, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
@@ -40,6 +42,7 @@ type LeaferScene = {
 };
 
 type UnderlayScene = LeaferScene & {
+    resizeMotion: CanvasNodeResizeMotion | null;
     connections: Group;
     connectionEntries: Map<string, ConnectionSceneEntry>;
     connectionIdsByNodeId: Map<string, Set<string>>;
@@ -48,6 +51,7 @@ type UnderlayScene = LeaferScene & {
 };
 
 type ConnectionSceneEntry = {
+    resizeMotion: CanvasNodeResizeMotion | null;
     path: Path;
     connection: CanvasDisplayConnection["connection"];
     from: CanvasNodeData;
@@ -65,6 +69,7 @@ type OverlayScene = LeaferScene & {
 };
 
 export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps) {
+    const resizeMotion = useCanvasNodeResizeMotion();
     const underlayHostRef = useRef<HTMLDivElement>(null);
     const overlayHostRef = useRef<HTMLDivElement>(null);
     const underlayRef = useRef<UnderlayScene | null>(null);
@@ -82,7 +87,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         const container = (props.containerRef.current || underlayHost?.parentElement) as HTMLDivElement | null;
         if (!underlayHost || !overlayHost || !container) return;
 
-        const underlay = createUnderlayScene(underlayHost);
+        const underlay = createUnderlayScene(underlayHost, resizeMotion);
         const overlay = createOverlayScene(overlayHost);
         containerSizeRef.current = { width: Math.max(1, container.clientWidth), height: Math.max(1, container.clientHeight) };
         underlayRef.current = underlay;
@@ -128,12 +133,20 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
             overlay.dragPreview = preview;
             syncLiveSelectionBounds(overlay, propsRef.current, viewportRef.current.k);
         });
+        const unsubscribeResize = resizeMotion?.subscribe((nodeId) => {
+            // 只刷新这个节点的相邻连线，不重建整张图的连接索引。
+            for (const connectionId of underlay.connectionIdsByNodeId.get(nodeId) || []) {
+                const entry = underlay.connectionEntries.get(connectionId);
+                if (entry) syncConnectionPath(entry, propsRef.current, underlay.dragPreview);
+            }
+        });
         resize();
 
         return () => {
             unsubscribe();
             unsubscribeSelection();
             unsubscribeNodeDrag();
+            unsubscribeResize?.();
             resizeObserver.disconnect();
             window.removeEventListener("resize", resize);
             underlay.leafer.destroy(true);
@@ -141,7 +154,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
             underlayRef.current = null;
             overlayRef.current = null;
         };
-    }, [props.containerRef]);
+    }, [props.containerRef, resizeMotion]);
 
     useLayoutEffect(() => {
         const underlay = underlayRef.current;
@@ -190,13 +203,13 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
     );
 }
 
-function createUnderlayScene(host: HTMLDivElement): UnderlayScene {
+function createUnderlayScene(host: HTMLDivElement, resizeMotion: CanvasNodeResizeMotion | null): UnderlayScene {
     const leafer = new Leafer({ view: host, width: 1, height: 1, pixelRatio: canvasPixelRatio(), fill: "transparent", hittable: false, smooth: true });
     const world = new Group({ hittable: false });
     const connections = new Group({ hittable: false });
     world.add(connections);
     leafer.add(world);
-    return { leafer, world, host, connections, connectionEntries: new Map(), connectionIdsByNodeId: new Map(), dragPreview: null, dragPreviewConnectionIds: new Set() };
+    return { leafer, world, host, resizeMotion, connections, connectionEntries: new Map(), connectionIdsByNodeId: new Map(), dragPreview: null, dragPreviewConnectionIds: new Set() };
 }
 
 function createOverlayScene(host: HTMLDivElement): OverlayScene {
@@ -233,7 +246,7 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
         if (!entry) {
             const path = new Path({ hittable: false });
             scene.connections.add(path);
-            entry = { path, connection, from, to, signature: "" };
+            entry = { path, connection, from, to, resizeMotion: scene.resizeMotion, signature: "" };
             scene.connectionEntries.set(connection.id, entry);
         }
         entry.connection = connection;
@@ -285,8 +298,8 @@ function connectionSceneSignature(connection: CanvasDisplayConnection["connectio
 }
 
 function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGraphicsLayerProps, preview: CanvasNodeDragPreview | null, previewIds: ReadonlySet<string> | null = preview?.nodeIds || null) {
-    const from = translatePreviewNode(entry.from, previewIds, preview);
-    const to = translatePreviewNode(entry.to, previewIds, preview);
+    const from = translatePreviewNode(entry.resizeMotion?.resolveNode(entry.from) || entry.from, previewIds, preview);
+    const to = translatePreviewNode(entry.resizeMotion?.resolveNode(entry.to) || entry.to, previewIds, preview);
     const emphasized = props.selectedConnectionId === entry.connection.id || props.relatedConnectionIds.has(entry.connection.id);
     entry.path.set({
         path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0, props.batchScrollById?.[entry.from.id], props.batchScrollById?.[entry.to.id]).pathD,

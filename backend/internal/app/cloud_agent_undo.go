@@ -70,7 +70,7 @@ func (s *Service) UndoCloudAgentCanvas(userID, runID, stepID, expectedSnapshotHa
 		}
 		currentHash := cloudAgentCanvasHash(currentDoc)
 		if mutation.Status == "undone" {
-			if currentHash == mutation.BeforeSnapshotHash && expectedSnapshotHash == currentHash {
+			if currentHash == mutation.BeforeSnapshotHash && (expectedSnapshotHash == currentHash || expectedSnapshotHash == mutation.AfterSnapshotHash) {
 				result = map[string]any{"accepted": true, "snapshotHash": currentHash}
 				return nil
 			}

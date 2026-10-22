@@ -1,6 +1,6 @@
 import { useUserStore } from "@/stores/use-user-store";
 import { useEffect, useState } from "react";
-import { Dropdown } from "antd";
+import { CanvasToolPopover } from "./canvas-tool-popover";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { LoaderCircle, Sparkles, Wrench, X, XCircle } from "lucide-react";
 
@@ -64,13 +64,13 @@ export function CanvasChooseEffectPicker({
     };
 
     return (
-        <Dropdown
+        <CanvasToolPopover
+            label="选择特效"
             open={actualOpen}
             onOpenChange={setOpen}
             trigger={["click"]}
             autoAdjustOverflow
-            menu={{ items: [] }}
-            popupRender={() => (
+            content={
                 <div
                     className="canvas-node-toolbar-menu canvas-node-toolbar-menu-style"
                     data-canvas-no-zoom
@@ -118,7 +118,7 @@ export function CanvasChooseEffectPicker({
                         )}
                     </div>
                 </div>
-            )}
+            }
         >
             <div
                 role="button"
@@ -126,7 +126,7 @@ export function CanvasChooseEffectPicker({
                 className="canvas-node-composer-header-action canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
                 title={resolvedLabel ? `特效：${resolvedLabel}` : "选择特效"}
                 aria-expanded={actualOpen}
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 onClick={() => setOpen(true)}
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -151,7 +151,7 @@ export function CanvasChooseEffectPicker({
                     </button>
                 ) : null}
             </div>
-        </Dropdown>
+        </CanvasToolPopover>
     );
 }
 

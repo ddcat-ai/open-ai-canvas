@@ -14,6 +14,8 @@ import { agentErrorPresentation } from "@/lib/canvas/agent-error-presentation";
 /** 待用户处理的 Agent 审批（面板状态与事件归约共用）。 */
 export type ApprovalState = { approvalId: string; detail: Record<string, unknown>; reason: string };
 
+const CANVAS_MUTATION_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_create_storyboard", "canvas_edit_storyboard", "canvas_create_character", "canvas_edit_batch_table", "previs_scene_create", "previs_apply_patch"]);
+
 export function positiveNumber(value: string) {
     const number = Number(value);
     return Number.isFinite(number) && number > 0 ? number : undefined;
@@ -268,11 +270,21 @@ export function applyAgentEvent(
         setApproval((current) => ({ approvalId, detail: payload, reason: current?.approvalId === approvalId ? current.reason : "" }));
         return;
     }
-    if (event.type === "canvas_updated" && Array.isArray(payload.actions)) {
+    if (event.type === "canvas_undone") {
+        setMessages((current) =>
+            current.map((item) => {
+                const detail = toolDetailRecord(item.detail);
+                if (detail.runId !== event.runId || detail.callId !== payload.stepId) return item;
+                return { ...item, detail: { ...detail, undoStatus: "undone" } };
+            }),
+        );
+        return;
+    }
+    if (event.type === "canvas_updated" && (Array.isArray(payload.actions) || payload.undo)) {
         if (payload.operation === "generate_media_submit" || payload.operation === "generate_media_complete") return;
         const { canvasPatch: _patch, ...detail } = payload;
         const id = payload.callId ? `canvas-${event.runId}-${payload.callId}` : event.eventId;
-        setMessages((current) => appendUniqueMessage(current, { id, role: "tool", title: "canvas_apply_ops", text: String(payload.text || "画布操作已完成"), detail: { ...detail, eventType: event.type } }));
+        setMessages((current) => upsertCloudAgentCanvasMutation(current, { id, role: "tool", title: "canvas_apply_ops", text: String(payload.text || "画布操作已完成"), detail: { ...detail, runId: event.runId, eventType: event.type } }));
         return;
     }
     if (event.type.startsWith("tool_") && agentToolRetry(payload)) {
@@ -305,9 +317,10 @@ export function applyAgentEvent(
         );
         return;
     }
-    if (event.type === "tool_completed" && payload.toolName === "canvas_apply_ops" && payload.callId) {
+    if (event.type === "tool_completed" && typeof payload.callId === "string" && CANVAS_MUTATION_TOOLS.has(String(payload.toolName || ""))) {
         const id = `canvas-${event.runId}-${payload.callId}`;
-        setMessages((current) => appendUniqueMessage(current, { id, role: "tool", title: "canvas_apply_ops", text: text || "画布操作已完成", detail: { ...payload, eventType: event.type } }));
+        const message: CloudAgentChatMessage = { id, role: "tool", title: String(payload.toolName), text: text || "画布操作已完成", detail: { ...payload, runId: event.runId, eventType: event.type, completionEventType: event.type } };
+        setMessages((current) => upsertCloudAgentCanvasMutation(current, message));
         return;
     }
     if (event.type === "generation_task_created") {
@@ -414,6 +427,24 @@ export function upsertMediaToolTrace(current: CloudAgentChatMessage[], message: 
         ...message,
         id: previous.id,
         detail: mergeToolDetails(previous.detail, message.detail),
+    };
+    return next;
+}
+
+export function upsertCloudAgentCanvasMutation(current: CloudAgentChatMessage[], message: CloudAgentChatMessage): CloudAgentChatMessage[] {
+    const index = current.findIndex((item) => item.id === message.id);
+    if (index < 0) return [...current, message];
+    const next = [...current];
+    const previous = next[index];
+    const previousDetail = toolDetailRecord(previous.detail);
+    const nextDetail = toolDetailRecord(message.detail);
+    const canvasUpdate = nextDetail.eventType === "canvas_updated" ? nextDetail : previousDetail;
+    const toolCompletion = nextDetail.completionEventType === "tool_completed" ? nextDetail : previousDetail;
+    next[index] = {
+        ...previous,
+        ...message,
+        id: previous.id,
+        detail: { ...canvasUpdate, ...toolCompletion, eventType: "canvas_updated", completionEventType: "tool_completed" },
     };
     return next;
 }

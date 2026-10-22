@@ -3,7 +3,7 @@ import { Button } from "antd";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, List, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Wrench, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, List, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Undo2, Wrench, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -13,6 +13,7 @@ import { agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, ag
 import { agentOperationCategory, agentOperationFailed, agentOperationSegmentLabel } from "@/lib/canvas/agent-operation-feed";
 import { agentToolRetry, type AgentToolRetryAttempt } from "@/lib/canvas/agent-tool-retry";
 import { agentErrorContent } from "@/lib/canvas/agent-error-presentation";
+import { agentCanvasUndoKey, agentCanvasUndoTarget, type AgentCanvasUndoState, type AgentCanvasUndoTarget } from "@/lib/canvas/agent-canvas-undo";
 import { AgentImagePreview } from "./canvas-cloud-agent-composer";
 
 // 输入区已拆到 canvas-cloud-agent-composer.tsx；附件类型与引用转换在 canvas-cloud-agent-attachments.ts。
@@ -388,6 +389,8 @@ export function AgentChatMessage({
     onApproveTool,
     onRetry,
     onFocusNode,
+    onUndo,
+    undoStates,
 }: {
     item: CloudAgentChatMessage;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -398,6 +401,8 @@ export function AgentChatMessage({
     onApproveTool?: (id: string) => void;
     onRetry?: () => void;
     onFocusNode?: (nodeId: string) => void;
+    onUndo?: (target: AgentCanvasUndoTarget) => void;
+    undoStates?: Record<string, AgentCanvasUndoState>;
 }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
@@ -456,7 +461,7 @@ export function AgentChatMessage({
         if (objectField(item.detail, "status") === "pending") return <AgentPendingToolCard summary={item.text} detail={item.detail} theme={theme} onReject={() => onRejectTool?.(item.id)} onApprove={() => onApproveTool?.(item.id)} />;
         return (
             <div className="flex min-w-0 items-start">
-                <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} references={references} onFocusNode={onFocusNode} />
+                <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
             </div>
         );
     }
@@ -768,6 +773,8 @@ export function AgentToolCard({
     theme,
     references = [],
     onFocusNode,
+    onUndo,
+    undoStates,
 }: {
     title: string;
     text: string;
@@ -775,6 +782,8 @@ export function AgentToolCard({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     references?: CanvasResourceReference[];
     onFocusNode?: (nodeId: string) => void;
+    onUndo?: (target: AgentCanvasUndoTarget) => void;
+    undoStates?: Record<string, AgentCanvasUndoState>;
 }) {
     const state = toolCardState(title, text, detail);
     const toolName = agentToolName(title, detail);
@@ -782,6 +791,8 @@ export function AgentToolCard({
     const categoryLabel = agentToolCategoryLabel(toolName, category);
     const summary = friendlyAgentToolSummary(toolName, text, detail);
     const actions = agentCanvasActions(toolName, detail, references);
+    const undoTarget = agentCanvasUndoTarget(detail);
+    const undoState: AgentCanvasUndoState | undefined = objectField(detail, "undoStatus") === "undone" ? { status: "done" } : undoTarget ? undoStates?.[agentCanvasUndoKey(undoTarget)] : undefined;
     const isNodeRead = toolName === "canvas_get_state" && category === "read";
     const [readExpanded, setReadExpanded] = useState(false);
     const visibleActions = actions.slice(0, isNodeRead && !readExpanded ? 1 : 8);
@@ -864,6 +875,30 @@ export function AgentToolCard({
                         任务 ID：{String(objectField(objectField(detail, "result"), "taskId"))}
                     </span>
                 ) : null}
+                {undoState?.status === "error" ? (
+                    <span className="mt-1 block text-[11px] text-[var(--status-danger)]" role="alert">
+                        撤销失败：{undoState.error || "请检查画布状态后重试"}
+                    </span>
+                ) : null}
+                {undoState?.status === "done" ? (
+                    <span className="mt-1 block text-[11px] text-[var(--status-success)]" role="status">
+                        此步骤已撤销
+                    </span>
+                ) : null}
+                {undoTarget && onUndo && undoState?.status !== "done" ? (
+                    <Button
+                        type="text"
+                        size="small"
+                        className="mt-1 !h-7 !px-1.5"
+                        aria-label="撤销本次画布写入"
+                        icon={undoState?.status === "pending" ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : <Undo2 className="size-3.5" />}
+                        loading={undoState?.status === "pending"}
+                        disabled={undoState?.status === "pending"}
+                        onClick={() => onUndo?.(undoTarget)}
+                    >
+                        {undoState?.status === "pending" ? "撤销中" : undoState?.status === "error" ? "重新撤销" : "撤销这一步"}
+                    </Button>
+                ) : null}
             </div>
             {state.label === "已完成" ? <span className="sr-only">已完成</span> : null}
         </div>
@@ -885,12 +920,16 @@ export function AgentOperationFeed({
     theme,
     references = [],
     onFocusNode,
+    onUndo,
+    undoStates,
     live = false,
 }: {
     items: CloudAgentChatMessage[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     references?: CanvasResourceReference[];
     onFocusNode?: (nodeId: string) => void;
+    onUndo?: (target: AgentCanvasUndoTarget) => void;
+    undoStates?: Record<string, AgentCanvasUndoState>;
     live?: boolean;
 }) {
     const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
@@ -943,7 +982,7 @@ export function AgentOperationFeed({
             {expanded ? (
                 <div id={listId} className="agent-operation-list">
                     {items.map((item) => (
-                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} />
+                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
                     ))}
                 </div>
             ) : null}

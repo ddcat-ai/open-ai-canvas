@@ -11,6 +11,7 @@ import { useSearchParams } from "react-router";
 import { ListToolbar, PaginationBar, AdminDataTable, AdminExportButton, AdminFilterChip, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 import { exportAdminAnalytics, getAdminAnalytics, listAdminUsers, type AdminReferenceData, type AdminAnalytics, type AnalyticsFilters } from "@/services/api/auth";
 import { analyticsFinanceColumns, formatCredits, formatFinanceCost, formatFinanceMargin } from "./analytics-finance";
+import { formatCountDelta, formatNumber, formatRateDelta } from "./analytics-trend-delta";
 import { Select } from "@/components/ui/base/select";
 
 type Props = {
@@ -313,7 +314,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     icon={<Gauge className="size-4" />}
                     label="服务质量"
                     value={data && data.kpi.upstreamRequests > 0 ? percent(data.kpi.successRate) : "--"}
-                    trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate)}
+                    trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate, currentTrend?.requests, previousTrend?.requests)}
                     detail={data ? (data.kpi.upstreamRequests ? "真实上游请求成功率" : "当前范围暂无请求") : undefined}
                     tone={!data || !data.kpi.upstreamRequests ? "neutral" : data.kpi.successRate < 90 ? "warning" : "success"}
                 />
@@ -577,25 +578,6 @@ function percent(value: number) {
 function formatDuration(value: number) {
     if (!value) return "--";
     return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`;
-}
-
-function formatNumber(value: number) {
-    return new Intl.NumberFormat("zh-CN", { notation: value >= 100000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
-}
-
-function formatCountDelta(current?: number, previous?: number) {
-    if (current === undefined || previous === undefined) return undefined;
-    const delta = current - previous;
-    const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
-    const value = previous === 0 ? formatNumber(Math.abs(delta)) : `${Math.abs((delta / previous) * 100).toFixed(1)}%`;
-    return { value: `较前一日 ${direction} ${value}`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
-}
-
-function formatRateDelta(current?: number, previous?: number) {
-    if (current === undefined || previous === undefined) return undefined;
-    const delta = current - previous;
-    const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
-    return { value: `较前一日 ${direction} ${Math.abs(delta).toFixed(1)}pp`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
 }
 
 function filterDate(value: string | null, fallback: Dayjs) {
