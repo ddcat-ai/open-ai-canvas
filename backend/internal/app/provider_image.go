@@ -23,6 +23,12 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if err := validateOpenAIImageInput(input); err != nil {
 			return nil, err
 		}
+		// 必须在声明式插件分流之前判断。生产环境会安装 openai-images 官方插件；
+		// 若放在插件分流之后，此 URL 快速路径永远不可达，插件会继续按其通用
+		// images[] 合同发送请求，而不是已验证可用的 image: "<URL>" 合同。
+		if input.Mask == nil && allReferenceImagesAreURLs(input.ReferenceImages) {
+			return runOpenAIImageURLReferenceTask(ctx, input)
+		}
 	}
 	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
 		return runDeclarativeProtocolTask(ctx, input)
@@ -50,47 +56,6 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		}
 	}
 	if len(input.ReferenceImages) > 0 || input.Mask != nil {
-		// 参考图全部为 URL 引用且无蒙版时，改发 JSON {"image":"<URL>"}：
-		// New API 网关接受该形式并由上游自行拉图（实测 15.6MB 参考图：
-		// URL 引用 46s 成功；multipart 二进制直传被 CF 524 掐断）。请求体
-		// 从十几 MB 降到几百字节，同时消除"慢"与"524"。
-		if input.Mask == nil && !hasMaskField(input) && allReferenceImagesAreURLs(input.ReferenceImages) {
-			jsonBody := map[string]interface{}{
-				"model":  input.Config.Model,
-				"prompt": withSystemPrompt(input.Config, input.Prompt),
-				"n":      1,
-			}
-			if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
-				jsonBody[key] = value
-			}
-			if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" && !strings.EqualFold(strings.TrimSpace(input.Config.Quality), "auto") {
-				jsonBody["quality"] = normalizeImageQuality(input.Config.Quality)
-			}
-			if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
-				jsonBody["background"] = "transparent"
-			}
-			if responseFormat := configuredImageResponseFormat(input.ImageCapability); responseFormat != "" {
-				jsonBody["response_format"] = responseFormat
-			}
-			urls := make([]string, 0, len(input.ReferenceImages))
-			for _, image := range input.ReferenceImages {
-				// 多参考图时 New API 侧接受 image 数组；单张时与实测语法一致用字符串。
-				urls = append(urls, image.URL)
-			}
-			if len(urls) == 1 {
-				jsonBody["image"] = urls[0]
-			} else {
-				jsonBody["image"] = urls
-			}
-			if err := postJSON(ctx, input.Config, "/images/edits", jsonBody, &payload); err != nil {
-				return nil, err
-			}
-			images, err := imageDataURLs(payload)
-			if err != nil {
-				return nil, err
-			}
-			return map[string]interface{}{"mode": "image", "images": images}, nil
-		}
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 		writeField(writer, "model", input.Config.Model)
@@ -151,6 +116,46 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if err := postJSON(ctx, input.Config, "/images/generations", body, &payload); err != nil {
 			return nil, err
 		}
+	}
+	images, err := imageDataURLs(payload)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+// runOpenAIImageURLReferenceTask 使用 New API 已验证的 JSON URL 合同。
+// 它独立于声明式插件执行，保证生产安装官方插件时仍能命中轻量请求路径。
+func runOpenAIImageURLReferenceTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	jsonBody := map[string]interface{}{
+		"model":  input.Config.Model,
+		"prompt": withSystemPrompt(input.Config, input.Prompt),
+		"n":      1,
+	}
+	if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
+		jsonBody[key] = value
+	}
+	if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" && !strings.EqualFold(strings.TrimSpace(input.Config.Quality), "auto") {
+		jsonBody["quality"] = normalizeImageQuality(input.Config.Quality)
+	}
+	if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
+		jsonBody["background"] = "transparent"
+	}
+	if responseFormat := configuredImageResponseFormat(input.ImageCapability); responseFormat != "" {
+		jsonBody["response_format"] = responseFormat
+	}
+	urls := make([]string, 0, len(input.ReferenceImages))
+	for _, image := range input.ReferenceImages {
+		urls = append(urls, strings.TrimSpace(image.URL))
+	}
+	if len(urls) == 1 {
+		jsonBody["image"] = urls[0]
+	} else {
+		jsonBody["image"] = urls
+	}
+	var payload imageResponse
+	if err := postJSON(ctx, input.Config, "/images/edits", jsonBody, &payload); err != nil {
+		return nil, err
 	}
 	images, err := imageDataURLs(payload)
 	if err != nil {

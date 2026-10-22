@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r8
+
+- 修复 r7 的 URL 引用分支在生产环境不可达：生产会安装 `openai-images` 官方声明式插件，`runImageTask` 原先在 URL 判断前就被插件分流，导致 r7 新增的 `image: "<URL>"` 逻辑没有执行。现将 OpenAI Images 的无蒙版 URL 快速路径前移到插件分流之前，确保对象存储参考图直接发送轻量 JSON。
+- 锁定上游合同为已实测成功的 `POST /v1/images/edits` + `{"image":"https://..."}`；不再由插件生成不兼容的 `images:[{"image_url":"..."}]`。多图仍使用 `image` 数组；蒙版与本地资源继续使用原 multipart 路径。
+- 新增生产同构回归测试：显式加载官方声明式插件，断言最终请求体仅含 URL、不含 `data:image/` 或 `base64`、不含旧 `images` 字段，且小于 10 KiB。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。
+
 ## v1.6.8.13-topapis-r7
 
 - 图生图参考图改走 URL 引用，根治大图 524 与慢生成：OpenAI Images 编辑协议（openai-image）在参考图全部带公网 URL 且无蒙版时，改发 JSON {"image":"<URL>"}（多图传数组），由上游自行从 CDN 拉图，请求体从十几 MB 降到几百字节。受控实测（同一张 15.6MB 参考图、同模型同 token）：URL 引用 46 秒成功；multipart 二进制直传被 Cloudflare 524 掐断（127.5s），绕开 CF 直连源站也要 268 秒——222 秒差额即纯上传成本。蒙版编辑仍强制走 multipart 字节路径，不受影响。

@@ -1324,6 +1324,57 @@ func TestRunImageTaskOmitsAutomaticQualityAndSize(t *testing.T) {
 	}
 }
 
+func TestRunOpenAIImageTaskUsesURLContractBeforeDeclarativePlugin(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	const referenceURL = "https://cdn2.topapis.cn/resources/reference.png"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/edits" {
+			t.Errorf("path = %q, want /v1/images/edits", r.URL.Path)
+		}
+		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+			t.Errorf("Content-Type = %q, want application/json", contentType)
+		}
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("ReadAll(body) error = %v", err)
+		}
+		if len(raw) >= 10<<10 {
+			t.Fatalf("request body = %d bytes, want < 10 KiB", len(raw))
+		}
+		if bytes.Contains(raw, []byte("data:image/")) || bytes.Contains(raw, []byte("base64")) {
+			t.Fatalf("request body contains inline image data: %s", raw)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(raw, &body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body["image"] != referenceURL {
+			t.Fatalf("image = %#v, want %q", body["image"], referenceURL)
+		}
+		if _, exists := body["images"]; exists {
+			t.Fatalf("legacy plugin images field must be omitted: %#v", body["images"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"b64_json":"aGVsbG8="}]}`))
+	}))
+	defer server.Close()
+
+	ctx := withProtocolRegistry(context.Background(), loadOfficialFallbackRegistry())
+	result, err := runImageTask(ctx, canvasGenerationInput{
+		Mode:            "image",
+		Prompt:          "add a logo",
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "key", Model: "gpt-image-2.5", InterfaceType: "openai-image", Size: "1024x1024"},
+		ReferenceImages: []providerMedia{{URL: referenceURL, StorageKey: "resource:reference"}},
+	})
+	if err != nil {
+		t.Fatalf("runImageTask() error = %v", err)
+	}
+	images, _ := result["images"].([]map[string]string)
+	if len(images) != 1 || images[0]["dataUrl"] != "data:image/png;base64,aGVsbG8=" {
+		t.Fatalf("images = %#v", result["images"])
+	}
+}
+
 func TestRunOpenAIImageTaskUsesMultipartEditContract(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
