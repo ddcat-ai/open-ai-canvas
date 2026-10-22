@@ -50,6 +50,47 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		}
 	}
 	if len(input.ReferenceImages) > 0 || input.Mask != nil {
+		// 参考图全部为 URL 引用且无蒙版时，改发 JSON {"image":"<URL>"}：
+		// New API 网关接受该形式并由上游自行拉图（实测 15.6MB 参考图：
+		// URL 引用 46s 成功；multipart 二进制直传被 CF 524 掐断）。请求体
+		// 从十几 MB 降到几百字节，同时消除"慢"与"524"。
+		if input.Mask == nil && !hasMaskField(input) && allReferenceImagesAreURLs(input.ReferenceImages) {
+			jsonBody := map[string]interface{}{
+				"model":  input.Config.Model,
+				"prompt": withSystemPrompt(input.Config, input.Prompt),
+				"n":      1,
+			}
+			if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
+				jsonBody[key] = value
+			}
+			if imageQualitySupported(input.ImageCapability) && input.Config.Quality != "" && !strings.EqualFold(strings.TrimSpace(input.Config.Quality), "auto") {
+				jsonBody["quality"] = normalizeImageQuality(input.Config.Quality)
+			}
+			if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
+				jsonBody["background"] = "transparent"
+			}
+			if responseFormat := configuredImageResponseFormat(input.ImageCapability); responseFormat != "" {
+				jsonBody["response_format"] = responseFormat
+			}
+			urls := make([]string, 0, len(input.ReferenceImages))
+			for _, image := range input.ReferenceImages {
+				// 多参考图时 New API 侧接受 image 数组；单张时与实测语法一致用字符串。
+				urls = append(urls, image.URL)
+			}
+			if len(urls) == 1 {
+				jsonBody["image"] = urls[0]
+			} else {
+				jsonBody["image"] = urls
+			}
+			if err := postJSON(ctx, input.Config, "/images/edits", jsonBody, &payload); err != nil {
+				return nil, err
+			}
+			images, err := imageDataURLs(payload)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"mode": "image", "images": images}, nil
+		}
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
 		writeField(writer, "model", input.Config.Model)
@@ -116,6 +157,25 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		return nil, err
 	}
 	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+// allReferenceImagesAreURLs 判断参考图是否全部带公网 URL 引用（无内联数据）。
+// 全部为 URL 时图片编辑可走 JSON {"image":"<URL>"} 形式，由上游自行拉图。
+func allReferenceImagesAreURLs(images []providerMedia) bool {
+	if len(images) == 0 {
+		return false
+	}
+	for _, image := range images {
+		if !strings.HasPrefix(strings.TrimSpace(image.URL), "http") {
+			return false
+		}
+	}
+	return true
+}
+
+// hasMaskField 防御性检查：蒙版只能走 multipart，任何情况下不能走 JSON URL 路径。
+func hasMaskField(input canvasGenerationInput) bool {
+	return input.Mask != nil
 }
 
 // Validate before selecting the plugin so declarative and handwritten paths share

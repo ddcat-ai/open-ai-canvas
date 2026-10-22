@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r7
+
+- 图生图参考图改走 URL 引用，根治大图 524 与慢生成：OpenAI Images 编辑协议（openai-image）在参考图全部带公网 URL 且无蒙版时，改发 JSON {"image":"<URL>"}（多图传数组），由上游自行从 CDN 拉图，请求体从十几 MB 降到几百字节。受控实测（同一张 15.6MB 参考图、同模型同 token）：URL 引用 46 秒成功；multipart 二进制直传被 Cloudflare 524 掐断（127.5s），绕开 CF 直连源站也要 268 秒——222 秒差额即纯上传成本。蒙版编辑仍强制走 multipart 字节路径，不受影响。
+- hydration 层把 openai-image 加入 URL 偏好协议：对象存储资源自动签发上游可读 URL，本地资源仍回退内联，行为向后兼容。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。
+
 ## v1.6.8.13-topapis-r6
 
 - 修复缩略图与冷备状态互相覆盖的竞态：缩略图任务完成/失败时改用单列更新（UpdateResourceThumbnail）而非整行 SaveResource。此前缩略图异步任务持有启动时的资源快照，整行回写会把冷备任务刚写好的 cold_backup_status=ready 覆盖回空值——生产实测：冷备文件已完整落盘（114MB），但数据库状态字段被清空，导致 L3 兜底判定失灵。冷备侧此前已用单列更新，本次补齐缩略图侧，双向不再踩踏。
