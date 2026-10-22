@@ -290,9 +290,19 @@ func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGeneration
 		policy.requireURL = true
 		policy.preferURL = true
 	}
-	if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok && adapter.Metadata().RequiresPublicMediaURLs {
-		policy.requireURL = true
-		policy.preferURL = true
+	if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
+		metadata := adapter.Metadata()
+		if metadata.RequiresPublicMediaURLs {
+			policy.requireURL = true
+			policy.preferURL = true
+		}
+		// 声明式图片编辑插件：其创建路径是 OpenAI 兼容 /images/edits 时，
+		// 宿主会把无蒙版的 URL 参考图改写为 JSON {"image":"<URL>"}，因此这里
+		// 必须优先签发公网 URL，而不是把对象存储资源读成 Base64 内联。
+		if input.Mode == "image" && input.Mask == nil && len(input.ReferenceImages) > 0 &&
+			strings.HasSuffix(strings.TrimRight(strings.TrimSpace(metadata.Create), "/"), "/images/edits") {
+			policy.preferURL = true
+		}
 	}
 	if input.Mask != nil {
 		policy.requireURL = false

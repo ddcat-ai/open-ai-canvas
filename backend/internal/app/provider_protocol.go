@@ -29,6 +29,51 @@ func runProtocolAdapterTask(ctx context.Context, input canvasGenerationInput, ad
 	return runProtocolAdapterTaskWithPolicy(ctx, input, adapter, declarativeProtocolPollPolicy(input.Mode))
 }
 
+// rewriteImageEditSpecForURLReferences 把 OpenAI 兼容图片编辑的 multipart 创建请求
+// 改写为 JSON {"image":"<URL>"}。触发条件全部满足才改写：
+//   - 模式为图片，且无蒙版（蒙版必须走真实文件字节）；
+//   - 目标路径是 OpenAI 兼容的 /images/edits；
+//   - 参考图非空且全部为公网 http(s) URL。
+//
+// 改写只替换请求体与 Content-Type，method/path/query/headers 保持不变，
+// 因此异步网关等插件的 create→poll 流程不受影响，响应解析也无需改动。
+func rewriteImageEditSpecForURLReferences(spec protocol.RequestSpec, input canvasGenerationInput) protocol.RequestSpec {
+	if input.Mode != "image" || input.Mask != nil {
+		return spec
+	}
+	if !strings.HasSuffix(strings.TrimRight(strings.TrimSpace(spec.Path), "/"), "/images/edits") {
+		return spec
+	}
+	if !allReferenceImagesAreURLs(input.ReferenceImages) {
+		return spec
+	}
+	urls := make([]any, 0, len(input.ReferenceImages))
+	for _, image := range input.ReferenceImages {
+		urls = append(urls, strings.TrimSpace(image.URL))
+	}
+	body := protocolBodyObject(spec.Body)
+	if body == nil {
+		return spec
+	}
+	rewritten := make(map[string]any, len(body)+1)
+	for key, value := range body {
+		// 原始 multipart 表单字段直接沿用；仅去掉文件段与旧图片字段。
+		if key == "image" || key == "images" || key == "mask" {
+			continue
+		}
+		rewritten[key] = value
+	}
+	if len(urls) == 1 {
+		rewritten["image"] = urls[0]
+	} else {
+		rewritten["image"] = urls
+	}
+	spec.Body = rewritten
+	spec.ContentType = "application/json"
+	spec.Files = nil
+	return spec
+}
+
 func declarativeProtocolPollPolicy(mode string) videoPollPolicy {
 	if mode == "video" {
 		return defaultVideoPollPolicy()
@@ -59,6 +104,11 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if err != nil {
 			return nil, err
 		}
+		// 部分上游的 /images/edits 同时接受 multipart 文件与 JSON {"image":"<URL>"}。
+		// 插件 manifest 只能声明一种 contentType，通常声明 multipart，于是参考图会被
+		// 读成字节内联上传：大图经 Cloudflare 触发 524，请求体可达十几 MB。参考图
+		// 全部是公网 URL 且无蒙版时改发 JSON，由上游自行拉图。
+		spec = rewriteImageEditSpecForURLReferences(spec, input)
 		body, streamedResult, err := executeProtocolCreateRequest(withProviderRequestKind(ctx, "create"), input, spec)
 		if err != nil {
 			return nil, err

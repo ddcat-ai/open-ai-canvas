@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r10
+
+- 修复声明式异步图片编辑插件仍以 multipart 上传参考图的问题：r8/r9 只覆盖手写路径与 `openai-image`/`a6api-image`，而生产实际渠道（`POST /v1/async/images/edits`，Topapis AsyncGW）是独立声明式插件，manifest 声明 `multipart/form-data` + 文件段，宿主只能按声明把参考图读成字节内联上传，请求体因此超过 1 MiB。
+- 新增宿主级通用改写：声明式插件创建路径为 OpenAI 兼容 `/images/edits`、模式为图片、无蒙版、且参考图全部为公网 URL 时，自动把创建请求改写为 `application/json` + `{"image":"<URL>"}`（多图传数组），并清空文件段。method/path/query/headers 保持不变，异步网关的 create→poll 流程与响应解析不受影响。
+- hydration 策略同步扩展：上述声明式图片编辑插件在无蒙版时优先签发对象存储公网 URL，不再把资源读成 Base64 内联；蒙版与本地资源仍走 multipart 字节路径。
+- 新增两个回归测试：URL 参考图断言请求体为 JSON、小于 10 KiB、不含 `data:image/` 或 `base64`；内联参考图断言仍保持 multipart。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。
+
 ## v1.6.8.13-topapis-r9
 
 - 修复真实生产渠道 `a6api-image` 仍发送超大 multipart 的问题：r8 只覆盖 `openai-image`，而当前 A6API 渠道由独立声明式接口 `a6api-image` 执行，因此仍把参考图下载为字节后上传。现将 `a6api-image` 纳入对象存储 URL hydration，并在插件分流前使用 `POST /v1/images/edits` + `{"image":"https://..."}` 轻量 JSON 合同。

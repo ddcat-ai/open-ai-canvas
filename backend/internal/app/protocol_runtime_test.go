@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -817,6 +819,124 @@ func TestDeclarativeProtocolRuntimeMapsReferenceImageURL(t *testing.T) {
 	}
 	if createBody["prompt"] != "a clip" || createBody["ref_image_0"] != "https://cdn.example/reference.png" {
 		t.Fatalf("create body = %#v", createBody)
+	}
+}
+
+func TestDeclarativeImageEditPluginUsesURLBodyWhenReferencesAreURLs(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	// 模拟生产上的异步图片编辑插件：manifest 声明 multipart 文件段，
+	// 参考图有公网 URL 时宿主应改写为 JSON {"image":"<URL>"}。
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v2",
+		"id":"test-asyncgw-image-edit","version":"1.0.0","name":"Test AsyncGW Image Edit","author":"Test","documentation":"# Test AsyncGW Image Edit",
+		"contributes":{"providers":[{"id":"test-asyncgw-image-edit","label":"Test AsyncGW Image Edit","capabilities":["image"],"scopes":["canvas"],
+			"create":{"method":"POST","path":"/images/edits","contentType":"multipart/form-data",
+				"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}},
+				"files":[{"name":"image","source":{"$ref":"request.images"},"filename":"source.png"}]},
+			"response":{"status":"succeeded","images":{"$ref":"response.data"}}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-asyncgw-image-edit.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+
+	const referenceURL = "https://cdn2.topapis.cn/resources/reference.png"
+	var captured struct {
+		contentType string
+		raw         []byte
+	}
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/result.png" {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00})
+			return
+		}
+		if r.URL.Path != "/v1/images/edits" {
+			http.NotFound(w, r)
+			return
+		}
+		captured.contentType = r.Header.Get("Content-Type")
+		captured.raw, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":[{"url":%q}]}`, server.URL+"/result.png")
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "gpt-image-2.5", APIFormat: "openai", InterfaceType: "test-asyncgw-image-edit"}
+	ctx := withProtocolRegistry(context.Background(), center.registrySnapshot())
+	_, err = runDeclarativeProtocolTask(ctx, canvasGenerationInput{
+		Mode: "image", Prompt: "add a logo", Config: config,
+		ReferenceImages: []providerMedia{{URL: referenceURL, StorageKey: "resource:reference"}},
+	})
+	if err != nil {
+		t.Fatalf("runDeclarativeProtocolTask() error = %v", err)
+	}
+	if !strings.HasPrefix(captured.contentType, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", captured.contentType)
+	}
+	if len(captured.raw) >= 10<<10 {
+		t.Fatalf("request body = %d bytes, want < 10 KiB", len(captured.raw))
+	}
+	if bytes.Contains(captured.raw, []byte("data:image/")) || bytes.Contains(captured.raw, []byte("base64")) {
+		t.Fatalf("request body contains inline image data: %s", captured.raw)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(captured.raw, &body); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	if body["image"] != referenceURL {
+		t.Fatalf("image = %#v, want %q", body["image"], referenceURL)
+	}
+}
+
+func TestDeclarativeImageEditPluginKeepsMultipartWithoutPublicURLs(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v2",
+		"id":"test-asyncgw-image-edit-local","version":"1.0.0","name":"Test AsyncGW Image Edit Local","author":"Test","documentation":"# Test AsyncGW Image Edit Local",
+		"contributes":{"providers":[{"id":"test-asyncgw-image-edit-local","label":"Test AsyncGW Image Edit Local","capabilities":["image"],"scopes":["canvas"],
+			"create":{"method":"POST","path":"/images/edits","contentType":"multipart/form-data",
+				"body":{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"}},
+				"files":[{"name":"image","source":{"$ref":"request.images"},"filename":"source.png"}]},
+			"response":{"status":"succeeded","images":{"$ref":"response.data"}}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-asyncgw-image-edit-local.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+
+	var contentType string
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/result.png" {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write([]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00})
+			return
+		}
+		contentType = r.Header.Get("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":[{"url":%q}]}`, server.URL+"/result.png")
+	}))
+	defer server.Close()
+
+	config := providerConfig{BaseURL: server.URL + "/v1", APIKey: "key", Model: "gpt-image-2.5", APIFormat: "openai", InterfaceType: "test-asyncgw-image-edit-local"}
+	ctx := withProtocolRegistry(context.Background(), center.registrySnapshot())
+	_, err = runDeclarativeProtocolTask(ctx, canvasGenerationInput{
+		Mode: "image", Prompt: "add a logo", Config: config,
+		ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL}},
+	})
+	if err != nil {
+		t.Fatalf("runDeclarativeProtocolTask() error = %v", err)
+	}
+	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		t.Fatalf("Content-Type = %q, want multipart/form-data for inline references", contentType)
 	}
 }
 
