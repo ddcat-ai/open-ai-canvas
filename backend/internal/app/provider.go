@@ -322,7 +322,8 @@ func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput)
 	// 自行从 CDN 拉图。参考图走 URL 可把请求体从十几 MB 降到几百字节，避免
 	// Cloudflare 对大报文的 524 掐断（实测同一张 15.6MB 图：URL 46s 成功，
 	// 二进制直传 524/127s 或直连源站 268s）。蒙版场景已在上方拦截，不走此分支。
-	if strings.TrimSpace(interfaceType) == string(model.ChannelInterfaceOpenAIImage) && len(input.ReferenceImages) > 0 {
+	interfaceType = strings.TrimSpace(interfaceType)
+	if (interfaceType == string(model.ChannelInterfaceOpenAIImage) || interfaceType == "a6api-image") && len(input.ReferenceImages) > 0 {
 		return true
 	}
 	if isGrokVideoConfig(input.Config) || isSeedanceVideoConfig(input.Config) || isArkPlanVideoConfig(input.Config) {

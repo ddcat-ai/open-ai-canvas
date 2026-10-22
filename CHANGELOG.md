@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r9
+
+- 修复真实生产渠道 `a6api-image` 仍发送超大 multipart 的问题：r8 只覆盖 `openai-image`，而当前 A6API 渠道由独立声明式接口 `a6api-image` 执行，因此仍把参考图下载为字节后上传。现将 `a6api-image` 纳入对象存储 URL hydration，并在插件分流前使用 `POST /v1/images/edits` + `{"image":"https://..."}` 轻量 JSON 合同。
+- A6API 图片结果显式请求 `response_format=url`，避免 `b64_json` 让响应日志膨胀到数 MB。A6API 返回的约 1 小时临时 CF URL 会由后端立即下载并转存到自有资源存储，画布最终只保留 `/api/resources/<id>/file` 与 `resource:<id>`。
+- 新增 A6API 生产同构回归测试：加载官方声明式插件，断言请求小于 10 KiB、不含 Base64，且临时结果 URL 被下载成待持久化图片内容。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。
+
 ## v1.6.8.13-topapis-r8
 
 - 修复 r7 的 URL 引用分支在生产环境不可达：生产会安装 `openai-images` 官方声明式插件，`runImageTask` 原先在 URL 判断前就被插件分流，导致 r7 新增的 `image: "<URL>"` 逻辑没有执行。现将 OpenAI Images 的无蒙版 URL 快速路径前移到插件分流之前，确保对象存储参考图直接发送轻量 JSON。

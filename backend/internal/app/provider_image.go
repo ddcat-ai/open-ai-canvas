@@ -19,16 +19,17 @@ import (
 )
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
-	if input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) {
+	interfaceType := strings.TrimSpace(input.Config.InterfaceType)
+	if interfaceType == string(model.ChannelInterfaceOpenAIImage) {
 		if err := validateOpenAIImageInput(input); err != nil {
 			return nil, err
 		}
-		// 必须在声明式插件分流之前判断。生产环境会安装 openai-images 官方插件；
-		// 若放在插件分流之后，此 URL 快速路径永远不可达，插件会继续按其通用
-		// images[] 合同发送请求，而不是已验证可用的 image: "<URL>" 合同。
-		if input.Mask == nil && allReferenceImagesAreURLs(input.ReferenceImages) {
-			return runOpenAIImageURLReferenceTask(ctx, input)
-		}
+	}
+	// 必须在声明式插件分流之前判断。生产既会安装 openai-images 官方插件，
+	// 也会使用 a6api-image 插件；两者的无蒙版 URL 编辑都必须走已验证的
+	// JSON image 合同，否则插件会把参考图重新下载并组装成超大 multipart。
+	if (interfaceType == string(model.ChannelInterfaceOpenAIImage) || interfaceType == "a6api-image") && input.Mask == nil && allReferenceImagesAreURLs(input.ReferenceImages) {
+		return runOpenAIImageURLReferenceTask(ctx, input)
 	}
 	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
 		return runDeclarativeProtocolTask(ctx, input)
@@ -141,7 +142,11 @@ func runOpenAIImageURLReferenceTask(ctx context.Context, input canvasGenerationI
 	if imageTransparentBackgroundSupported(input.ImageCapability) && input.Config.TransparentBackground == "true" {
 		jsonBody["background"] = "transparent"
 	}
-	if responseFormat := configuredImageResponseFormat(input.ImageCapability); responseFormat != "" {
+	// A6API 默认 b64_json 会让响应日志膨胀到数 MB；显式要求 URL 后，后端
+	// 会立即下载临时 CF 地址并转存到自己的资源桶，不会把临时地址留给画布。
+	if strings.TrimSpace(input.Config.InterfaceType) == "a6api-image" {
+		jsonBody["response_format"] = "url"
+	} else if responseFormat := configuredImageResponseFormat(input.ImageCapability); responseFormat != "" {
 		jsonBody["response_format"] = responseFormat
 	}
 	urls := make([]string, 0, len(input.ReferenceImages))
@@ -161,7 +166,39 @@ func runOpenAIImageURLReferenceTask(ctx context.Context, input canvasGenerationI
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(input.Config.InterfaceType) == "a6api-image" {
+		images, err = downloadTemporaryImageResults(ctx, input.Config, images, "A6API")
+		if err != nil {
+			return nil, err
+		}
+	}
 	return map[string]interface{}{"mode": "image", "images": images}, nil
+}
+
+// downloadTemporaryImageResults 把供应商短期 CDN URL 立即下载成待持久化内容。
+// 后续统一持久化会把内容写进自己的 R2，并把任务结果替换为 resource URL。
+func downloadTemporaryImageResults(ctx context.Context, config providerConfig, images []map[string]string, providerName string) ([]map[string]string, error) {
+	for _, image := range images {
+		value := strings.TrimSpace(image["dataUrl"])
+		if strings.HasPrefix(value, "data:image/") {
+			continue
+		}
+		if !isPublicMediaURL(value) {
+			return nil, fmt.Errorf("%s 图片接口没有返回可下载的图片", providerName)
+		}
+		data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
+		if err != nil {
+			return nil, fmt.Errorf("%s 图片结果下载失败：%w", providerName, err)
+		}
+		detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
+		mimeType = strings.ToLower(normalizedMediaMimeType(mimeType, data))
+		if len(data) == 0 || strings.Contains(detected, "json") || strings.HasPrefix(detected, "text/") || !strings.HasPrefix(mimeType, "image/") {
+			return nil, fmt.Errorf("%s 图片结果无效：%s", providerName, defaultString(detected, mimeType))
+		}
+		image["dataUrl"] = dataURL(mimeType, data)
+		image["mimeType"] = mimeType
+	}
+	return images, nil
 }
 
 // allReferenceImagesAreURLs 判断参考图是否全部带公网 URL 引用（无内联数据）。
@@ -501,29 +538,9 @@ func volcengineArkImageDataURLs(ctx context.Context, config providerConfig, payl
 	if err != nil {
 		return nil, err
 	}
-	for _, image := range images {
-		value := strings.TrimSpace(image["dataUrl"])
-		if strings.HasPrefix(value, "data:image/") {
-			continue
-		}
-		if !isPublicMediaURL(value) {
-			return nil, errors.New("火山方舟图片接口没有返回可下载的图片")
-		}
-		// 方舟默认返回临时 CDN 地址。必须由后端下载成内联结果，后续资源持久化才能
-		// 原子地写入服务器或用户配置的对象存储，且不依赖浏览器跨域访问方舟 CDN。
-		data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
-		if err != nil {
-			return nil, fmt.Errorf("火山方舟图片结果下载失败：%w", err)
-		}
-		detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
-		mimeType = strings.ToLower(normalizedMediaMimeType(mimeType, data))
-		if len(data) == 0 || strings.Contains(detected, "json") || strings.HasPrefix(detected, "text/") || !strings.HasPrefix(mimeType, "image/") {
-			return nil, fmt.Errorf("火山方舟图片结果无效：%s", defaultString(detected, mimeType))
-		}
-		image["dataUrl"] = dataURL(mimeType, data)
-		image["mimeType"] = mimeType
-	}
-	return images, nil
+	// 方舟默认返回临时 CDN 地址。必须由后端立即下载，后续统一持久化才能
+	// 原子地写入服务器或用户对象存储，且不依赖浏览器跨域访问方舟 CDN。
+	return downloadTemporaryImageResults(ctx, config, images, "火山方舟")
 }
 
 func volcengineArkImageBody(input canvasGenerationInput) (map[string]interface{}, error) {
