@@ -253,57 +253,14 @@ func lessonWithSteps(topic, category string, tools ...string) model.AgentLesson 
 	}
 }
 
-func TestLessonsBlockIsIndexNotDump(t *testing.T) {
-	view := cloudAgentLessonView{
-		Total: 9,
-		Counts: []repository.AgentLessonCategoryCount{
-			{Category: "storyboard", Count: 6},
-			{Category: "canvas", Count: 3},
-		},
-		Index: []model.AgentLesson{{Topic: "storyboard.row-connect", Situation: "给分镜行接线", Lesson: "不该出现的做法全文"}},
-	}
-	block := cloudAgentLessonsBlock(view)
-	if !strings.Contains(block, "共 9 条") || !strings.Contains(block, "分镜 6") || !strings.Contains(block, "storyboard.row-connect") {
-		t.Fatalf("应注入分类概览和索引：%s", block)
-	}
-	if strings.Contains(block, "不该出现的做法全文") || strings.Contains(block, "；做法：") {
-		t.Fatalf("记忆不得把做法全文塞进系统提示：%s", block)
-	}
-	if strings.Contains(block, "动手前") || strings.Contains(block, "仍应 recall_lessons") {
-		t.Fatalf("索引不应注入强制召回指令：%s", block)
-	}
-}
-
-func TestLessonsBlockDoesNotInlineMatches(t *testing.T) {
-	view := cloudAgentLessonView{
-		Total:    1,
-		MatchedN: 1,
-		Index:    []model.AgentLesson{lessonWithSteps("canvas.snapshot-hash", "canvas", "canvas_apply_ops")},
-	}
-	block := cloudAgentLessonsBlock(view)
-	if !strings.Contains(block, "canvas.snapshot-hash") || !strings.Contains(block, "可能相关") {
-		t.Fatalf("命中项应出现在索引里：%s", block)
-	}
-	if strings.Contains(block, "某做法") || strings.Contains(block, "；做法：") {
-		t.Fatalf("命中项也不该自动注入全文：%s", block)
-	}
-}
-
 func TestLessonsBlockRanksMatchedFirst(t *testing.T) {
 	lessons := []model.AgentLesson{
 		lessonWithSteps("video.duration", "video"),
 		lessonWithSteps("canvas.snapshot-hash", "canvas", "canvas_apply_ops"),
 	}
-	index, matchedN := cloudAgentPickLessonIndex(lessons, "把资产挂上，正在调用 canvas_apply_ops", 20)
-	if matchedN != 1 || len(index) != 2 || index[0].Topic != "canvas.snapshot-hash" {
+	index, matchedN := cloudAgentPickLessonIndex(lessons, "请按 canvas.snapshot-hash 处理", 20)
+	if matchedN != 1 || len(index) != 1 || index[0].Topic != "canvas.snapshot-hash" {
 		t.Fatalf("命中项应排在索引前面：matchedN=%d topics=%v", matchedN, topicsOf(index))
-	}
-}
-
-func TestLessonsBlockEmptyLibrary(t *testing.T) {
-	block := cloudAgentLessonsBlock(cloudAgentLessonView{})
-	if !strings.Contains(block, "还没有已批准记忆") {
-		t.Fatalf("空库提示缺失：%s", block)
 	}
 }
 
@@ -528,12 +485,12 @@ func TestLessonsBlockDoesNotAutoInject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	block := s.cloudAgentLessonsBlock("user-a", "把资产挂上，正在调用 canvas_apply_ops")
-	if !strings.Contains(block, "canvas.snapshot-hash") {
-		t.Fatalf("相关记忆应出现在索引里：%s", block)
+	block, ids := s.cloudAgentRelevantLessonsBlock("user-a", "写画布时报快照过期")
+	if len(ids) != 1 || !strings.Contains(block, "canvas.snapshot-hash") {
+		t.Fatalf("相关记忆应进入召回结果：%s ids=%v", block, ids)
 	}
-	if strings.Contains(block, "用返回的新 snapshotHash") {
-		t.Fatalf("相关记忆也不该自动注入做法全文：%s", block)
+	if !strings.Contains(block, "用返回的新 snapshotHash") {
+		t.Fatalf("召回结果应包含经验全文：%s", block)
 	}
 
 	got, err := s.repo.AgentLessonForUser("user-a", matched.ID)
@@ -542,6 +499,32 @@ func TestLessonsBlockDoesNotAutoInject(t *testing.T) {
 	}
 	if got.Injected != 0 || got.Hits != 0 {
 		t.Fatalf("未主动查阅时 injected/hits 都应是 0：injected=%d hits=%d", got.Injected, got.Hits)
+	}
+}
+
+func TestRememberLessonQueuesUntilSuccessfulRunCompletion(t *testing.T) {
+	repo := agentLessonTestRepo(t)
+	state := &cloudAgentRuntime{
+		Request: CloudAgentRequest{PermissionMode: "auto"},
+		Events:  []CloudAgentEvent{{Type: "tool_completed", Payload: map[string]any{"toolName": "canvas_apply_ops"}}},
+	}
+	result, err := cloudAgentRememberLesson(repo, "user-a", state, rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.(map[string]any)["status"] != "queued_until_success" || len(state.PendingLessonDrafts) != 1 {
+		t.Fatalf("remember_lesson should queue a bounded draft: result=%v state=%+v", result, state.PendingLessonDrafts)
+	}
+	stored, err := repo.UserAgentLessons("user-a", model.AgentLessonStatusPending, 10)
+	if err != nil || len(stored) != 0 {
+		t.Fatalf("a failed or unfinished run must not persist memory: %v (%v)", stored, err)
+	}
+	if err := cloudAgentCommitLessonDrafts(repo, "user-a", "run-a", state); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = repo.UserAgentLessons("user-a", model.AgentLessonStatusPending, 10)
+	if err != nil || len(stored) != 1 || stored[0].LastVerifiedAt != nil || len(state.PendingLessonDrafts) != 0 {
+		t.Fatalf("successful completion should persist one unverified pending memory: %v (%v)", stored, err)
 	}
 }
 
@@ -584,32 +567,41 @@ func TestRememberLessonCapsWritesPerRun(t *testing.T) {
 	}
 }
 
-func TestAttachLessonsDoesNotAppendUserNudge(t *testing.T) {
+func TestAttachLessonsUsesRelevantDynamicMessage(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if sqlDB, err := db.DB(); err == nil {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
+	now := time.Now()
+	lesson := &model.AgentLesson{
+		ID: newID(), Topic: "canvas.asset-reference", Category: "canvas",
+		Situation: "把图片资产接到指定镜头", Lesson: "先确认素材就绪，再连接到镜头行",
+		Status: model.AgentLessonStatusApproved, AuthorUserID: "user-a", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.repo.Create(lesson); err != nil {
+		t.Fatal(err)
+	}
 	canonical := canonicalAgentRequest{
 		SystemPrompt: "system",
-		Messages:     []map[string]any{{"role": "user", "content": "帮我做分镜"}},
+		Messages:     []map[string]any{{"role": "user", "content": "把图片资产接到指定镜头"}},
 	}
-	s.attachCloudAgentLessons(&canonical, "user-a", "帮我做分镜")
-	if len(canonical.Messages) != 1 || stringField(canonical.Messages[0], "role") != "user" {
-		t.Fatalf("经验库不得再塞一条假用户催办：%+v", canonical.Messages)
+	s.attachCloudAgentLessons(&canonical, "user-a", "把图片资产接到指定镜头")
+	if canonical.SystemPrompt != "system" {
+		t.Fatalf("动态记忆不得改变稳定 system 前缀：%s", canonical.SystemPrompt)
 	}
-	if !strings.Contains(canonical.SystemPrompt, cloudAgentLessonBlockMarker) {
-		t.Fatalf("记忆入口应只出现在系统提示：%s", canonical.SystemPrompt)
+	if len(canonical.Messages) != 2 || stringField(canonical.Messages[0], cloudAgentContextSourceKey) != "agent_memory" || stringField(canonical.Messages[1], "content") != "把图片资产接到指定镜头" {
+		t.Fatalf("相关经验应作为独立动态消息注入：%+v", canonical.Messages)
 	}
-	if strings.Contains(canonical.SystemPrompt, "；做法：") {
-		t.Fatalf("系统提示不得带记忆全文：%s", canonical.SystemPrompt)
+	if !strings.Contains(stringField(canonical.Messages[0], "content"), "先确认素材就绪") {
+		t.Fatalf("命中的经验应包含完整做法：%+v", canonical.Messages[0])
 	}
-	if stripped := stripCloudAgentLessonBlock(canonical.SystemPrompt); stripped != "system" {
-		t.Fatalf("剥离后应回到原系统提示，got %q", stripped)
+	stored, err := s.repo.AgentLessonForUser("user-a", lesson.ID)
+	if err != nil || stored.Injected != 0 {
+		t.Fatalf("上下文预览不得提前递增注入计数：%+v (%v)", stored, err)
 	}
-	frozen := canonical.SystemPrompt
-	s.attachCloudAgentLessons(&canonical, "user-a", "完全不同的后续任务 canvas_apply_ops")
-	if canonical.SystemPrompt != frozen {
-		t.Fatalf("同轮不得重算记忆块，否则会打爆前缀缓存：%s", canonical.SystemPrompt)
+	s.attachCloudAgentLessons(&canonical, "user-a", "分析天气")
+	if canonical.SystemPrompt != "system" || len(canonical.Messages) != 1 {
+		t.Fatalf("无相关经验时不应注入，且应移除上一步的动态块：%+v", canonical.Messages)
 	}
 }
 
@@ -779,7 +771,7 @@ func TestPendingAgentLessonsExpireWithoutTouchingApproved(t *testing.T) {
 		t.Fatalf("应只过期一条旧 pending：changed=%d err=%v", changed, err)
 	}
 	for _, want := range []struct{ id, status string }{
-		{entries[0].ID, model.AgentLessonStatusRejected},
+		{entries[0].ID, model.AgentLessonStatusExpired},
 		{entries[1].ID, model.AgentLessonStatusPending},
 		{entries[2].ID, model.AgentLessonStatusApproved},
 	} {
@@ -810,11 +802,18 @@ func TestRememberLessonExpiresOldPendingBeforeApplyingLimit(t *testing.T) {
 	}
 	call := rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`)
 	if _, err := cloudAgentRememberLesson(repo, "user-a", state, call); err != nil {
-		t.Fatalf("过期一条后应可新建待审记忆：%v", err)
+		t.Fatalf("过期一条后应可暂存新待审记忆：%v", err)
 	}
 	pending, err := repo.CountAgentLessonsByAuthor("user-a", model.AgentLessonStatusPending)
+	if err != nil || pending != cloudAgentRememberLessonPendingPerUser-1 {
+		t.Fatalf("run 成功前候选不得落库：%d (%v)", pending, err)
+	}
+	if err := cloudAgentCommitLessonDrafts(repo, "user-a", "run-a", state); err != nil {
+		t.Fatal(err)
+	}
+	pending, err = repo.CountAgentLessonsByAuthor("user-a", model.AgentLessonStatusPending)
 	if err != nil || pending != cloudAgentRememberLessonPendingPerUser {
-		t.Fatalf("新写入后待审数应回到上限：%d (%v)", pending, err)
+		t.Fatalf("成功收尾后待审数应回到上限：%d (%v)", pending, err)
 	}
 }
 
@@ -839,7 +838,7 @@ func TestLessonIndexRanksTaskRelevanceBeforeHitsAndMatchesTwoHanRunes(t *testing
 	unrelated := model.AgentLesson{ID: "unrelated", Topic: "video.duration", Situation: "竖屏视频生成时长", Hits: 9000, UpdatedAt: now}
 	relevant := model.AgentLesson{ID: "relevant", Topic: "对象绑定", Situation: "预演对象绑定角色时", Hits: 0, UpdatedAt: now.Add(-time.Hour)}
 	index, matched := cloudAgentPickLessonIndex([]model.AgentLesson{unrelated, relevant}, "请处理对象绑定", 20)
-	if matched != 1 || len(index) != 2 || index[0].ID != "relevant" {
+	if matched != 1 || len(index) != 1 || index[0].ID != "relevant" {
 		t.Fatalf("任务相关记忆应先于高频无关记忆，且两字短语应命中：matched=%d index=%+v", matched, index)
 	}
 }

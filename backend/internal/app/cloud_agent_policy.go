@@ -117,8 +117,6 @@ func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skills [
 	var b strings.Builder
 	b.WriteString(system.Text)
 	b.WriteString("\n\n")
-	b.WriteString(media.Text)
-	b.WriteString("\n\n")
 	b.WriteString(cloudAgentCapabilityGuide())
 	// Behavior belongs to versioned policies; the compiler only projects facts.
 	context := map[string]any{

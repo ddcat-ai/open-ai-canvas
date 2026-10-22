@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { App, Button, Dropdown, Input, Popover, Tag, Typography } from "antd";
+import { App, Button, Input, Popover, Tag, Typography } from "antd";
+import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Callout } from "@/components/ui/product/callout";
 import { Bubble, Sender, type BubbleItemType } from "@ant-design/x";
 import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, LoaderCircle, Music2, Sparkles, UserRound, Video, X } from "lucide-react";
@@ -748,6 +749,8 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
 
     return (
         <Popover
+            // 此面板可独立拖动，fixed 定位必须保持在视口坐标系。
+            getPopupContainer={() => document.body}
             open={open}
             onOpenChange={(nextOpen) => {
                 if (!nextOpen) onClose();

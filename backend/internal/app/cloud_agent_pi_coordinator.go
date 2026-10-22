@@ -321,7 +321,6 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		UserID:       userID,
 		RunID:        runID,
 		CanvasID:     state.Request.CanvasID,
-		FocusNodeIDs: state.Request.FocusNodeIDs,
 		Prompt:       state.Request.Prompt,
 		SystemPrompt: canonical.SystemPrompt,
 		ModelID:      modelID,
@@ -467,9 +466,9 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 			return fmt.Errorf("no assistant response, refusing to mark as completed")
 		}
 
-		// 原子更新状态
+		// 原子更新状态与成功记忆候选。
 		resumed := false
-		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, txRepo *repository.Repository) error {
 			if cloudAgentRunTerminal(current.Status) || current.Status == "waiting_approval" || current.Status == "waiting_user" {
 				return nil
 			}
@@ -490,6 +489,9 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 				cloudAgentDropInterjections(runID, "本轮已达到模型调用上限", &state)
 			}
 
+			if err := cloudAgentCommitLessonDrafts(txRepo, userID, runID, &state); err != nil {
+				return err
+			}
 			current.Status = "completed"
 			state.event(runID, "run_completed", map[string]any{
 				"text":      "Agent 已完成",

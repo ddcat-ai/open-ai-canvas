@@ -3,6 +3,7 @@ import { Input, Popover } from "antd";
 import { LayoutTemplate, Search, WandSparkles } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { CANVAS_BUILTIN_PRESETS, type CanvasPromptPreset } from "@/lib/prompts";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasGenerationMode } from "@/types/canvas";
@@ -33,6 +34,7 @@ export function CanvasPresetPicker({
     const [internalOpen, setInternalOpen] = useState(false);
     const [query, setQuery] = useState("");
     const actualOpen = open ?? internalOpen;
+    const popoverRef = usePopoverAnchorAlign(actualOpen);
     const setOpen = (next: boolean) => {
         if (!next) setQuery("");
         setInternalOpen(next);
@@ -108,6 +110,7 @@ export function CanvasPresetPicker({
 
     return (
         <Popover
+            ref={popoverRef}
             open={actualOpen}
             onOpenChange={setOpen}
             trigger="click"

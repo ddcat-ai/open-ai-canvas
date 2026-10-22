@@ -3,6 +3,7 @@ package app
 import (
 	"time"
 
+	agenttool "yingce/backend/internal/agent/tool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -27,6 +28,23 @@ func cloudAgentMutationRecorderForRun(runID string) cloudAgentMutationRecorder {
 		input.RunID = runID
 		return recordCloudAgentCanvasMutation(repo, input)
 	}
+}
+
+type cloudAgentCanvasUndoReceipt struct {
+	RunID                string `json:"runId"`
+	CanvasID             string `json:"canvasId"`
+	StepID               string `json:"stepId"`
+	ExpectedSnapshotHash string `json:"expectedSnapshotHash"`
+}
+
+func cloudAgentUndoReceipt(runID string, input cloudAgentMutationInput) *cloudAgentCanvasUndoReceipt {
+	policy, known := agenttool.Get(input.Operation)
+	if !known || !policy.Write() || policy.Media() || input.HasSubmittedTask ||
+		input.BeforeJSON == "" || len(input.BeforeJSON) > cloudAgentMutationSnapshotLimit ||
+		input.BeforeSnapshotHash == input.AfterSnapshotHash {
+		return nil
+	}
+	return &cloudAgentCanvasUndoReceipt{RunID: runID, CanvasID: input.CanvasID, StepID: input.StepID, ExpectedSnapshotHash: input.AfterSnapshotHash}
 }
 
 type cloudAgentMutationRecorder func(*repository.Repository, cloudAgentMutationInput) error

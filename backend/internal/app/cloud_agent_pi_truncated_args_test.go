@@ -70,7 +70,13 @@ func TestCloudAgentPiModelRetriesTruncatedToolArguments(t *testing.T) {
 				t.Fatal(decodeErr)
 			}
 			if state.ActiveTaskID != "" && state.ActiveTaskID != skip {
-				return state.ActiveTaskID
+				task, taskErr := s.repo.TaskForUser("user", state.ActiveTaskID)
+				if taskErr != nil {
+					t.Fatal(taskErr)
+				}
+				if task.Operation == cloudAgentStepOperation {
+					return state.ActiveTaskID
+				}
 			}
 			select {
 			case got := <-done:

@@ -1,10 +1,14 @@
 import { Popover } from "antd";
+import { useState } from "react";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Layers3, RefreshCw } from "lucide-react";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import type { CanvasNodeData } from "@/types/canvas";
 
 export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
     const { updateNode, extractLayerMaterials } = useCanvasNodeActions();
+    const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     const group = node.metadata?.imageLayerGroup;
     if (!group) return null;
     const change = (nodeId: string, direction?: number) =>
@@ -86,7 +90,7 @@ export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
         </div>
     );
     return (
-        <Popover trigger="click" content={panel} placement="leftTop">
+        <Popover ref={popoverRef} open={open} onOpenChange={setOpen} trigger="click" content={panel} placement="leftTop">
             <button
                 type="button"
                 title="管理图层"

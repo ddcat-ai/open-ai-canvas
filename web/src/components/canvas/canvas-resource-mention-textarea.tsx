@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
+import { observeMovablePopupAnchor } from "@/lib/movable-popup-anchor";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -176,10 +177,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         const observer = new ResizeObserver(updatePosition);
         observer.observe(anchor);
         observer.observe(suggestion);
+        const stopMovingAnchor = observeMovablePopupAnchor(anchor, updatePosition);
         window.addEventListener("resize", updatePosition);
         window.addEventListener("scroll", updatePosition, true);
         return () => {
             observer.disconnect();
+            stopMovingAnchor();
             window.removeEventListener("resize", updatePosition);
             window.removeEventListener("scroll", updatePosition, true);
         };

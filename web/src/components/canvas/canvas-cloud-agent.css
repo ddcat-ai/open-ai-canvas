@@ -1,4 +1,5 @@
-.canvas-agent-panel {
+.canvas-agent-panel,
+.agent-context-popover {
     /* Canvas theme -> material tokens. Only the floating shell blurs the canvas. */
     --agent-material-solid: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-surface-base));
     --agent-material-glass: color-mix(in srgb, var(--agent-material-solid) 68%, transparent);
@@ -11,6 +12,9 @@
     --agent-radius-surface: calc(var(--radius) * 2.5);
     --agent-material-shadow: 0 24px 80px var(--agent-shadow-color);
     --agent-focus-ring: color-mix(in srgb, var(--agent-accent) 65%, var(--agent-ink));
+}
+
+.canvas-agent-panel {
     container-type: inline-size;
     overscroll-behavior: contain;
     isolation: isolate;
@@ -179,19 +183,22 @@
 
 .agent-context-popover.ant-popover,
 .agent-context-popover .ant-popover-content,
-.agent-context-popover .ant-popover-inner {
+.agent-context-popover .ant-popover-container {
     box-shadow: none;
 }
 
-.agent-context-popover .ant-popover-inner {
-    overflow: hidden;
+.agent-context-popover .ant-popover-container {
+    max-height: calc(100dvh - 32px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 0;
     border: 1px solid color-mix(in srgb, var(--agent-ink) 12%, transparent);
     border-radius: 16px;
     background: var(--agent-surface-raised, var(--background));
 }
 
-.agent-context-popover .ant-popover-inner-content {
+.agent-context-popover .ant-popover-content {
     padding: 0;
 }
 

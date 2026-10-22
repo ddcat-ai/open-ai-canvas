@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Dropdown } from "antd";
+import { Button } from "antd";
+import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import localforage from "localforage";
 import type { CanvasAssistantMessage } from "@/types/canvas";
 import type { AiConfig } from "@/stores/use-config-store";

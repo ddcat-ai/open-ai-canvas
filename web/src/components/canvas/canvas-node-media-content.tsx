@@ -105,9 +105,15 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
     const [videoReady, setVideoReady] = useState(false);
+    // 播放器身份是节点上的媒体（storageKey），不是当前签名地址：续签只换 src，不重建播放器、不退回静态预览。
+    const playerKey = node.metadata?.storageKey || node.id;
 
     useEffect(() => {
         setVideoReady(false);
+    }, [playerKey]);
+
+    useEffect(() => {
+        if (!url) setVideoReady(false);
     }, [url]);
 
     useEffect(() => {
@@ -160,7 +166,7 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
             {url ? (
                 <div className={`relative z-[1] transition-opacity duration-150 ${videoReady ? "opacity-100" : "opacity-0"}`} style={{ width: fitWidth, height: Math.round(fitHeight) }}>
                     <VideoPlayer
-                        key={url}
+                        key={playerKey}
                         src={url}
                         mimeType={node.metadata?.mimeType}
                         title={node.title || "视频"}

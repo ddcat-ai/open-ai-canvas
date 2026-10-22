@@ -7,11 +7,12 @@ import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight 
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
 import { batchCellAnchor, parseBatchCellHandle, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
+import { useCanvasVisualNode } from "./canvas-node-resize-motion";
 
 export const ConnectionPath = React.memo(function ConnectionPath({
     connection,
-    from,
-    to,
+    from: sourceFrom,
+    to: sourceTo,
     fromScrollTop = 0,
     toScrollTop = 0,
     fromBatchScroll,
@@ -36,6 +37,8 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
     const theme = canvasThemes[useActiveTheme()];
+    const from = useCanvasVisualNode(sourceFrom);
+    const to = useCanvasVisualNode(sourceTo);
     const [hovered, setHovered] = useState(false);
     const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop, fromBatchScroll, toBatchScroll);
     const targetCell = batchCellAnchor(to, connection.toHandleId, toBatchScroll);

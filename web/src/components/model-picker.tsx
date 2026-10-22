@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Check, ChevronDown, Coins } from "lucide-react";
 import { Popover } from "antd";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 
 import { imageQualityLabel } from "@/lib/image-quality";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -58,6 +59,7 @@ export function ModelPicker({
     const rawTheme = useActiveTheme();
     const theme = (canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark) as CanvasTheme;
     const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     const [availableHeight, setAvailableHeight] = useState(0);
     const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -271,6 +273,7 @@ export function ModelPicker({
     return (
         <div className={cn(fullWidth ? "w-full min-w-0" : "w-fit max-w-full")} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
             <Popover
+                ref={popoverRef}
                 open={open}
                 onOpenChange={setPickerOpen}
                 trigger="click"
@@ -604,6 +607,8 @@ export function ModelRecentHealthTrack({ availability, inPopover = false }: { av
 }
 
 function ModelAvailabilityBadge({ availability, available, showAvailability }: { availability?: PublicChannelModelAvailability; available: boolean; showAvailability: boolean }) {
+    const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     if (!showAvailability) return null;
     const recentResults = availability?.recentResults ?? [];
     const successCount = recentResults.filter(Boolean).length;
@@ -652,7 +657,7 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
         </div>
     ) : null;
     return (
-        <Popover content={content} trigger={["hover", "focus"]} placement="topRight" arrow={false}>
+        <Popover ref={popoverRef} open={open} onOpenChange={setOpen} content={content} trigger={["hover", "focus"]} placement="topRight" arrow={false}>
             <span
                 className={`model-picker-availability is-${availability?.dataState || "unavailable"}`}
                 role="img"

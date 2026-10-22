@@ -4,6 +4,7 @@ import { Link2 } from "lucide-react";
 import { activeConnectionPath, canvasConnectionPath, ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
+import { useCanvasVisualNode } from "@/components/canvas/canvas-node-resize-motion";
 import type { CanvasConnectionApproach } from "@/lib/canvas/canvas-connection-tilt";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { batchCellAnchor, BATCH_COLUMN_HEADER_HEIGHT, BATCH_TABLE_HEADER_HEIGHT, parseBatchCellHandle, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
@@ -255,21 +256,24 @@ const BatchConnectionTails = memo(function BatchConnectionTails(props: CanvasPro
             ? activeConnectionPath(props.nodeById.get(connecting.nodeId), connecting, props.mouseWorld, node, props.scriptScrollTopById[connecting.nodeId] || 0, props.connectionTargetHandleId, props.batchScrollById?.[connecting.nodeId], scroll)
             : "";
         return <svg key={tableId} data-batch-cell-connections={tableId} className="pointer-events-none absolute overflow-hidden" viewBox={`${node.position.x} ${top} ${node.width} ${height}`} style={{ left: node.position.x, top, width: node.width, height, zIndex: "var(--z-node-active)" }}>
-            {items.map(({ connection, from, to }) => {
-                const cell = batchCellAnchor(to, connection.toHandleId, scroll);
-                if (!cell) return null;
-                const active = props.selectedConnectionId === connection.id;
-                const path = canvasConnectionPath(connection, from, to, props.scriptScrollTopById[from.id] || 0, 0, props.batchScrollById?.[from.id], scroll);
-                return <g key={connection.id}>
-                    <path d={path.pathD} fill="none" stroke={active ? "var(--workspace-accent)" : "var(--muted-foreground)"} strokeWidth={active ? 1.5 : 1} strokeOpacity={active ? 0.9 : 0.5} vectorEffect="non-scaling-stroke" />
-                    <circle cx={cell.x} cy={cell.y} r={3} fill="var(--workspace-accent)" fillOpacity={active ? 1 : 0.65} />
-                    {active && cell.clipped ? <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>{cell.label} · 滚动查看</text> : null}
-                </g>;
-            })}
+            {items.map((item) => <BatchConnectionTail key={item.connection.id} item={item} top={top} scroll={scroll} fromScrollTop={props.scriptScrollTopById[item.from.id] || 0} fromBatchScroll={props.batchScrollById?.[item.from.id]} active={props.selectedConnectionId === item.connection.id} />)}
             {draft ? <path d={draft} fill="none" stroke="var(--workspace-accent)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" /> : null}
         </svg>;
     })}</>;
 });
+
+function BatchConnectionTail({ item, top, scroll, fromScrollTop, fromBatchScroll, active }: { item: CanvasDisplayConnection; top: number; scroll?: BatchScroll; fromScrollTop: number; fromBatchScroll?: BatchScroll; active: boolean }) {
+    const from = useCanvasVisualNode(item.from);
+    const to = useCanvasVisualNode(item.to);
+    const cell = batchCellAnchor(to, item.connection.toHandleId, scroll);
+    if (!cell) return null;
+    const path = canvasConnectionPath(item.connection, from, to, fromScrollTop, 0, fromBatchScroll, scroll);
+    return <g>
+        <path d={path.pathD} fill="none" stroke={active ? "var(--workspace-accent)" : "var(--muted-foreground)"} strokeWidth={active ? 1.5 : 1} strokeOpacity={active ? 0.9 : 0.5} vectorEffect="non-scaling-stroke" />
+        <circle cx={cell.x} cy={cell.y} r={3} fill="var(--workspace-accent)" fillOpacity={active ? 1 : 0.65} />
+        {active && cell.clipped ? <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>{cell.label} · 滚动查看</text> : null}
+    </g>;
+}
 
 function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale: number; count: number; active: boolean; onPointerDown: (event: ReactPointerEvent) => void }) {
     const inverseScale = 1 / Math.max(scale, 0.05);

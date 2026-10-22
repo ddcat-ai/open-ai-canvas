@@ -90,7 +90,15 @@ func TestCloudAgentMediaToolsDeclareExclusiveModelSelection(t *testing.T) {
 		if !strings.Contains(function["description"].(string), cloudAgentModelSelectionDescription) || parameters["additionalProperties"] != false {
 			t.Fatalf("incomplete model selection schema: %#v", parameters)
 		}
-		oneOf, ok := parameters["oneOf"].([]map[string]any)
+		oneOfValues, ok := parameters["oneOf"].([]any)
+		oneOf := make([]map[string]any, 0, len(oneOfValues))
+		for _, value := range oneOfValues {
+			branch, isObject := value.(map[string]any)
+			if !isObject {
+				t.Fatalf("model selection branch is not an object: %#v", value)
+			}
+			oneOf = append(oneOf, branch)
+		}
 		wantBranches := 2
 		if function["name"] == "generate_media" {
 			wantBranches = 3 // omission is resolved only from a draft or a unique catalog result

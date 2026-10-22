@@ -1,6 +1,6 @@
 import { useUserStore } from "@/stores/use-user-store";
 import { useEffect, useRef, useState } from "react";
-import { Dropdown } from "antd";
+import { CanvasToolPopover } from "./canvas-tool-popover";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Camera, LoaderCircle, Wrench, X } from "lucide-react";
 
@@ -69,13 +69,13 @@ export function CanvasChooseMotionPicker({
     };
 
     return (
-        <Dropdown
+        <CanvasToolPopover
+            label="选择运镜"
             open={actualOpen}
             onOpenChange={setOpen}
             trigger={["click"]}
             autoAdjustOverflow
-            menu={{ items: [] }}
-            popupRender={() => (
+            content={
                 <div
                     className="canvas-node-toolbar-menu canvas-node-toolbar-menu-style"
                     data-canvas-no-zoom
@@ -130,7 +130,7 @@ export function CanvasChooseMotionPicker({
                         )}
                     </div>
                 </div>
-            )}
+            }
         >
             <div
                 role="button"
@@ -138,7 +138,7 @@ export function CanvasChooseMotionPicker({
                 className="canvas-node-composer-header-action canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
                 title={resolvedLabel ? `运镜：${resolvedLabel}` : "选择运镜"}
                 aria-expanded={actualOpen}
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 onClick={() => setOpen(true)}
                 onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -163,7 +163,7 @@ export function CanvasChooseMotionPicker({
                     </button>
                 ) : null}
             </div>
-        </Dropdown>
+        </CanvasToolPopover>
     );
 }
 

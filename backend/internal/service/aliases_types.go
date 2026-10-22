@@ -29,6 +29,10 @@ type (
 	AgentMemorySettingRequest              = app.AgentMemorySettingRequest
 	AgentMemoryCompactView                 = app.AgentMemoryCompactView
 	AgentMemoryCompactSummary              = app.AgentMemoryCompactSummary
+	AgentMemoryProposalDecision            = app.AgentMemoryProposalDecision
+	AgentMemoryRevisionRestore             = app.AgentMemoryRevisionRestore
+	AgentMemoryProposalView                = app.AgentMemoryProposalView
+	AgentMemoryRevisionView                = app.AgentMemoryRevisionView
 	APICallLogPage                         = app.APICallLogPage
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
