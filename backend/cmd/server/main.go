@@ -140,6 +140,7 @@ func run(ctx context.Context) error {
 	// 启动后回填存量视频的播放副本转码（幂等，无待处理项即退出）。
 	go svc.BackfillPlaybackTranscodes()
 	startThumbnailBackfill(ctx, svc)
+	startColdBackupBackfill(ctx, svc)
 	status.markStarted()
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpServer.Serve(listener) }()
@@ -208,6 +209,35 @@ func startThumbnailBackfill(ctx context.Context, svc *service.Service) {
 		case <-timer.C:
 		}
 		svc.BackfillResourceThumbnails(ctx)
+	}()
+}
+
+// startColdBackupBackfill 在后台为存量媒体补本地冷备。
+// 默认关闭：只有 CANVAS_COLD_BACKFILL=1 时才跑；延迟 CANVAS_COLD_BACKFILL_DELAY
+// 控制（默认 60 秒）。与缩略图回填分开开关，便于只跑其中一个。
+func startColdBackupBackfill(ctx context.Context, svc *service.Service) {
+	enabled, err := envBool("CANVAS_COLD_BACKFILL", false)
+	if err != nil {
+		slog.Warn("冷备回填开关无效，跳过", "error", err)
+		return
+	}
+	if !enabled {
+		return
+	}
+	delay, err := envDuration("CANVAS_COLD_BACKFILL_DELAY", 60*time.Second)
+	if err != nil {
+		slog.Warn("冷备回填延迟无效，跳过", "error", err)
+		return
+	}
+	go func() {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		svc.BackfillColdBackups(ctx)
 	}()
 }
 

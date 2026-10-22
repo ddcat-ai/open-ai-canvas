@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r5
+
+- 新增冷备存量补齐任务：BackfillColdBackups 分批（每批 50 条、游标分页）为历史媒体资源补建本地冷备副本，限并发 3（视频对象较大，带宽优先线上），单条失败不中断，支持 context 取消。默认关闭，需设置 CANVAS_COLD_BACKFILL=1 开启，CANVAS_COLD_BACKFILL_DELAY 控制启动延迟（默认 60s）。与缩略图回填分开开关，互不影响。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。
+
 ## v1.6.8.13-topapis-r4
 
 - 修复生成图/任务媒体资源不生成缩略图与冷备的问题：此前只有浏览器直传路径（CompleteDirectUpload）挂了缩略图与冷备钩子，模型生成图（图生图、文生图结果）、任务媒体落盘、URL 导入等经由 storeResource 的路径全部漏挂，导致这些资源在画布/素材列表仍加载原图。现统一在 storeResourceWithWriter 就绪后触发，覆盖所有资源来源。

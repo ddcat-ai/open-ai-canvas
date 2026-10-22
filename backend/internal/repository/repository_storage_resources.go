@@ -265,6 +265,27 @@ func (r *Repository) ThumbnailBackfillCandidates(afterCreatedAt time.Time, after
 	return resources, err
 }
 
+// ColdBackupBackfillCandidates 按游标返回待补本地冷备的存量媒体资源。
+// 条件：kind ∈ {image,video,audio}、已就绪、provider=s3（冷备只服务跨网络对象），
+// 且冷备状态为空/none/failed（ready 无需重复同步，processing 视为正在处理）。
+// 游标语义与 ThumbnailBackfillCandidates 相同：单调前进、必然收敛。
+func (r *Repository) ColdBackupBackfillCandidates(afterCreatedAt time.Time, afterID string, limit int) ([]model.Resource, error) {
+	var resources []model.Resource
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	query := r.db.Where(
+		"kind IN ? AND status = ? AND provider = ? AND (cold_backup_status IS NULL OR cold_backup_status IN ?)",
+		[]string{"image", "video", "audio"}, model.ResourceStatusReady, "s3",
+		[]string{"", model.ColdBackupStatusNone, model.ColdBackupStatusFailed},
+	)
+	if !afterCreatedAt.IsZero() || afterID != "" {
+		query = query.Where("(created_at > ? OR (created_at = ? AND id > ?))", afterCreatedAt, afterCreatedAt, afterID)
+	}
+	err := query.Order("created_at asc, id asc").Limit(limit).Find(&resources).Error
+	return resources, err
+}
+
 // ClaimPlaybackTranscode 原子地把待判定（空/none）视频置为 processing，返回是否抢占成功。
 // 多实例或多 goroutine 并发转同一资源时仅一个能成功置位，其余返回 false 直接放弃，
 // 避免重复转码同一份文件。
