@@ -164,6 +164,8 @@ func (s *Service) CompleteDirectUpload(userID string, resourceID string) (*model
 	s.maybeStartPlaybackTranscode(resource)
 	// 缩略图异步生成：列表/画布一次要加载几十张图，缩略图能把首屏字节量降一个数量级。
 	s.maybeStartThumbnail(resource)
+	// 本地冷备异步同步：CDN 404/403 时由应用服务器兜底返回字节。
+	s.maybeStartColdBackup(resource)
 	return resource, nil
 }
 

@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r3
+
+- 新增 L2 本地冷备（cold backup）：对象存储资源（s3）在上传确认后异步同步一份到服务器本地数据目录 `{DATA_DIR}/resources/{objectKey}`，与缩略图生成并行执行。写入采用 `.tmp` + `rename` 原子方式，本地已存在等长文件则跳过（幂等），超过 512MB 的对象不备份。这样即使 R2 侧因生命周期策略删除对象，素材仍有本地副本。
+- 新增 L3 CDN 兜底读取：资源分发在 Delivery 为 `cdn`/`origin` 且请求头携带 `X-Canvas-Cold-Fallback: 1` 时，先以 5 秒超时 HEAD 探测 CDN 地址；返回 404/403 或探测失败则改为直接读取本地冷备字节返回（响应头 `X-Canvas-Delivery: cold-backup`），本地也没有副本时仍按原逻辑 302 重定向。正常展示路径不带该请求头，零额外延迟。
+- 新增缩略图存量补齐任务：`BackfillResourceThumbnails` 分批（每批 50 条、游标分页）为历史图片补生成缩略图，限并发 4，单条失败不中断，支持 context 取消。默认关闭，需设置 `CANVAS_THUMBNAIL_BACKFILL=1` 开启，`CANVAS_THUMBNAIL_BACKFILL_DELAY` 控制启动延迟（默认 30s）。
+- `resources` 表新增 `cold_backup_status` 字段（none/ready/failed），Schema 升至 v58。
+- 冷备状态更新改用单列更新（`UpdateResourceColdBackup`）而非整行保存，避免与并行的缩略图任务互相覆盖字段。
+- 升级注意：Schema v58 会自动迁移，仅新增一列。存量图片的缩略图需手动开启 `CANVAS_THUMBNAIL_BACKFILL=1` 跑一次；冷备只对升级后新上传的资源自动同步，历史素材需要时另行批量补同步。
+
 ## v1.6.8.13-topapis-r2
 
 - 新增画布展示缩略图（thumbnail variant）：图片资源在上传确认后异步生成 512px JPEG 缩略图并写入对象存储，`variant=thumbnail` 请求真正返回缩略图而非回落原图。此前前端画布/素材列表请求缩略图但后端恒定回落原图，打开含上百张图的画布需下载数百 MB 原图。实测 20 张 8–23MB 原图生成缩略图后合计仅 1.06MB（平均 54KB/张），字节量降至 0.45%。

@@ -20,6 +20,14 @@ const (
 	ThumbnailStatusFailed     = "failed"
 )
 
+// 资源本地冷备状态。ready 表示本地已有与对象存储等长的完整副本，
+// CDN 返回 404/403 时可回落本地读取；none 表示尚未同步（或主动跳过）。
+const (
+	ColdBackupStatusNone   = "none"
+	ColdBackupStatusReady  = "ready"
+	ColdBackupStatusFailed = "failed"
+)
+
 func ProjectUnitWordCount(sourceText string) int {
 	plainText := projectUnitHTMLTagPattern.ReplaceAllString(sourceText, "")
 	return utf8.RuneCountInString(strings.TrimSpace(html.UnescapeString(plainText)))
@@ -65,6 +73,9 @@ type Resource struct {
 	ThumbnailSize     int64  `json:"thumbnailSize"`
 	ThumbnailWidth    int    `json:"thumbnailWidth"`
 	ThumbnailHeight   int    `json:"thumbnailHeight"`
+	// 本地冷备状态：none|ready|failed。仅用于排查 CDN 异常时的回落情况，
+	// 不参与分发决策（分发只看本地文件是否真实存在）。
+	ColdBackupStatus string `json:"coldBackupStatus" gorm:"size:24"`
 	// UploadKey 是客户端逻辑上传身份的摘要；NULL 表示不参与幂等约束。
 	UploadKey *string   `json:"-" gorm:"size:64;uniqueIndex:idx_resources_user_upload_key,priority:2"`
 	Error     string    `json:"error"`

@@ -162,6 +162,16 @@ func (r *Repository) UpdateResourceThumbnail(userID string, id string, values ma
 	return result.RowsAffected == 1, result.Error
 }
 
+// UpdateResourceColdBackup 只更新冷备状态列。
+// 冷备与缩略图是并行异步任务，各自持有启动时的资源快照；用整行 Save 回写会
+// 把对方刚写好的字段覆盖成旧值，所以这里限定列更新，且同样只作用于就绪行。
+func (r *Repository) UpdateResourceColdBackup(userID string, id string, status string) (bool, error) {
+	result := r.db.Model(&model.Resource{}).
+		Where("id = ? AND user_id = ? AND status = ?", id, userID, model.ResourceStatusReady).
+		Updates(map[string]any{"cold_backup_status": status, "updated_at": time.Now()})
+	return result.RowsAffected == 1, result.Error
+}
+
 func (r *Repository) ResourceByUploadKey(userID string, uploadKey string) (*model.Resource, error) {
 	var resource model.Resource
 	if err := r.db.First(&resource, "user_id = ? AND upload_key = ?", userID, uploadKey).Error; err != nil {
@@ -229,6 +239,29 @@ func (r *Repository) PlaybackNoneVideos(limit int) ([]model.Resource, error) {
 	err := r.db.Where("kind = ? AND status = ? AND provider = ? AND playback_status = ?",
 		"video", model.ResourceStatusReady, "local", model.PlaybackStatusNone).
 		Order("created_at asc").Limit(limit).Find(&resources).Error
+	return resources, err
+}
+
+// ThumbnailBackfillCandidates 按游标返回待补缩略图的存量图片资源。
+// 条件：kind=image、已就绪、非本地存储（本地资源不生成缩略图），
+// 且缩略图状态为空/none/failed（ready 无需重复生成，processing 视为正在处理）。
+//
+// 用 (created_at, id) 游标而不是 offset：回填过程会把失败行原地标 failed，
+// offset 分页会因结果集不变而重复捞同一批行，游标则单调前进、必然收敛。
+func (r *Repository) ThumbnailBackfillCandidates(afterCreatedAt time.Time, afterID string, limit int) ([]model.Resource, error) {
+	var resources []model.Resource
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	query := r.db.Where(
+		"kind = ? AND status = ? AND provider <> ? AND (thumbnail_status IS NULL OR thumbnail_status IN ?)",
+		"image", model.ResourceStatusReady, "local",
+		[]string{"", model.ThumbnailStatusNone, model.ThumbnailStatusFailed},
+	)
+	if !afterCreatedAt.IsZero() || afterID != "" {
+		query = query.Where("(created_at > ? OR (created_at = ? AND id > ?))", afterCreatedAt, afterCreatedAt, afterID)
+	}
+	err := query.Order("created_at asc, id asc").Limit(limit).Find(&resources).Error
 	return resources, err
 }
 

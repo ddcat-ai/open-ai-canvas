@@ -104,6 +104,11 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 		return nil, err
 	}
 	delivery := &ResourceDelivery{Resource: resource, Access: access}
+	// 注入冷备读取能力：CDN/Origin 分发时 handler 需要它做 404 兜底。
+	// 这里只绑定回调，不读文件，正常重定向路径没有额外开销。
+	delivery.ColdFallback = func(rangeHeader string) (*ResourceStream, error) {
+		return s.OpenColdBackupRange(resource, rangeHeader)
+	}
 	if options.DescribeOnly || access.Delivery == assets.DeliveryCDN || access.Delivery == assets.DeliveryOrigin {
 		return delivery, nil
 	}
