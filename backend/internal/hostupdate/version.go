@@ -60,24 +60,70 @@ func compareParsedVersions(a, b versionPart) int {
 		if index >= len(b.pre) {
 			return 1
 		}
-		an, aerr := strconv.Atoi(a.pre[index])
-		bn, berr := strconv.Atoi(b.pre[index])
-		switch {
-		case aerr == nil && berr == nil && an < bn:
-			return -1
-		case aerr == nil && berr == nil && an > bn:
-			return 1
-		case aerr == nil && berr != nil:
-			return -1
-		case aerr != nil && berr == nil:
-			return 1
-		case a.pre[index] < b.pre[index]:
-			return -1
-		case a.pre[index] > b.pre[index]:
-			return 1
+		if compared := comparePreIdentifier(a.pre[index], b.pre[index]); compared != 0 {
+			return compared
 		}
 	}
 	return 0
+}
+
+// comparePreIdentifier 比较单个预发布标识符。
+// 纯数字按数值比较；形如 r10 / r9 的「字母前缀 + 数字后缀」先比前缀再比数值，
+// 否则字典序会把 r10 判成小于 r9，导致 r10 这类版本被更新页面当作旧版本而无法升级。
+func comparePreIdentifier(left, right string) int {
+	leftNumber, leftErr := strconv.Atoi(left)
+	rightNumber, rightErr := strconv.Atoi(right)
+	switch {
+	case leftErr == nil && rightErr == nil:
+		return compareInts(leftNumber, rightNumber)
+	case leftErr == nil && rightErr != nil:
+		return -1
+	case leftErr != nil && rightErr == nil:
+		return 1
+	}
+	leftPrefix, leftDigits := splitTrailingDigits(left)
+	rightPrefix, rightDigits := splitTrailingDigits(right)
+	if compared := strings.Compare(leftPrefix, rightPrefix); compared != 0 {
+		return compared
+	}
+	switch {
+	case leftDigits == "" && rightDigits == "":
+		return strings.Compare(left, right)
+	case leftDigits == "":
+		return -1
+	case rightDigits == "":
+		return 1
+	}
+	leftValue, leftOK := strconv.Atoi(leftDigits)
+	rightValue, rightOK := strconv.Atoi(rightDigits)
+	if leftOK == nil && rightOK == nil {
+		return compareInts(leftValue, rightValue)
+	}
+	return strings.Compare(leftDigits, rightDigits)
+}
+
+// splitTrailingDigits 把 "r10" 拆成 ("r", "10")；没有数字后缀时返回 ("r10", "")。
+func splitTrailingDigits(value string) (string, string) {
+	index := len(value)
+	for index > 0 {
+		character := value[index-1]
+		if character < '0' || character > '9' {
+			break
+		}
+		index--
+	}
+	return value[:index], value[index:]
+}
+
+func compareInts(left, right int) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func parseVersion(raw string) (versionPart, bool) {
