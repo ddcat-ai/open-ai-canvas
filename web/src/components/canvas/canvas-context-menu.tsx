@@ -1,5 +1,5 @@
 import { AnimatePresence } from "motion/react";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft, AtSign, Check, ChevronRight, Clipboard, CloudUpload, Copy, FolderOpen, FolderPlus, Image as ImageIcon, Layers3, LayoutTemplate, Link2, Maximize2, PanelTop, Pencil, Plus, Redo2, Tags, Trash2, Undo2, Upload, UserRound } from "lucide-react";
 
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
@@ -8,6 +8,7 @@ import { aceternityMotion } from "@/lib/aceternity-motion";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
+import { canvasMenuPosition } from "@/lib/canvas/canvas-menu-position";
 import { isCanvasFolderNode } from "@/lib/canvas/canvas-frame";
 import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "@/lib/canvas/tool-registry";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -146,20 +147,22 @@ export function CanvasNodeContextMenu({
     const canCopyMediaUrl = Boolean(isMedia && hasNodeContent);
     const assetCategory = node ? canvasNodeAssetCategory(node) : "other";
     const hasMultiSelection = selectedCount >= 2;
-    const position = getContextMenuPosition(menu, hasMultiSelection);
+    const { surfaceRef, position } = useViewportMenuPosition(menu.x, menu.y);
 
     return (
         <>
             <SpotlightSurface
+                ref={surfaceRef}
                 spotlightColor={theme.toolbar.itemHover}
                 data-canvas-context-menu
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-                className="aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[224px] max-h-[calc(100vh-56px)] origin-top-left flex-col overflow-hidden rounded-xl border p-1.5 backdrop-blur-2xl"
+                className="aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[224px] max-w-[calc(100vw-24px)] max-h-[calc(100dvh-24px)] origin-top-left flex-col overflow-hidden rounded-xl border p-1.5 backdrop-blur-2xl"
                 style={{ left: position.left, top: position.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
                 onContextMenu={(event) => event.preventDefault()}
                 onPointerDown={(event) => event.stopPropagation()}
+                onWheel={(event) => event.stopPropagation()}
             >
                 <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.toolbar.border}, transparent)` }} />
                 <div className="thin-scrollbar min-h-0 overflow-y-auto">
@@ -288,7 +291,7 @@ function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, on
     const theme = canvasThemes[useActiveTheme()];
     const installations = usePluginStore((state) => state.installations);
     const pluginStates = usePluginStore((state) => state.pluginStates);
-    const left = getSubmenuLeft(parentPosition.left);
+    const { surfaceRef, position } = useViewportMenuPosition(getSubmenuLeft(parentPosition.left), parentPosition.top);
     const createContext: AddNodeMenuContext = {
         workspaceMode,
         isProjectLinked,
@@ -322,17 +325,21 @@ function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, on
 
     return (
         <SpotlightSurface
+            ref={surfaceRef}
             spotlightColor={theme.toolbar.itemHover}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-            className="aceternity-floating-panel fixed z-[var(--z-popover)] w-[360px] origin-top overflow-hidden rounded-[var(--dock-radius)] border p-2 backdrop-blur-2xl"
-            style={{ left, top: parentPosition.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
+            className="aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[360px] max-w-[calc(100vw-24px)] max-h-[calc(100dvh-24px)] origin-top flex-col overflow-hidden rounded-[var(--dock-radius)] border p-2 backdrop-blur-2xl"
+            style={{ left: position.left, top: position.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
             onContextMenu={(event) => event.preventDefault()}
             onPointerDown={(event) => event.stopPropagation()}
+            onWheel={(event) => event.stopPropagation()}
         >
-            <CanvasCreateMenu commands={commands} />
+            <div className="thin-scrollbar min-h-0 overflow-y-auto">
+                <CanvasCreateMenu commands={commands} />
+            </div>
         </SpotlightSurface>
     );
 }
@@ -375,23 +382,29 @@ function MenuDivider() {
     return <div className="mx-1.5 my-1 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.toolbar.border}, transparent)` }} />;
 }
 
-function getContextMenuPosition(menu: ContextMenuState, hasMultiSelection = false) {
-    if (typeof window === "undefined") return { left: menu.x, top: menu.y };
-    const width = 224;
-    const estimatedHeight = menu.type === "node" ? Math.min(hasMultiSelection ? 240 : 360, window.innerHeight - 72) : menu.type === "canvas" ? (hasMultiSelection ? 300 : 250) : 84;
-    return {
-        left: clamp(menu.x, 12, Math.max(12, window.innerWidth - width - 12)),
-        top: clamp(menu.y, 68, Math.max(68, window.innerHeight - estimatedHeight - 12)),
-    };
+function useViewportMenuPosition(x: number, y: number) {
+    const surfaceRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState({ left: x, top: y });
+    useLayoutEffect(() => {
+        const surface = surfaceRef.current;
+        if (!surface) return;
+        const update = () => {
+            const { width, height } = surface.getBoundingClientRect();
+            const next = canvasMenuPosition({ x, y, width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight });
+            setPosition(current => current.left === next.left && current.top === next.top ? current : next);
+        };
+        update();
+        const observer = new ResizeObserver(update);
+        observer.observe(surface);
+        window.addEventListener("resize", update);
+        return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+    }, [x, y]);
+    return { surfaceRef, position };
 }
 
 function getSubmenuLeft(parentLeft: number) {
     if (typeof window === "undefined") return parentLeft + 192;
     return parentLeft + 224 + 8 + 360 <= window.innerWidth - 12 ? parentLeft + 232 : Math.max(12, parentLeft - 368);
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max);
 }
 
 function nodeTypeLabel(node?: CanvasNodeData | null) {
