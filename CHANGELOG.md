@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r6
+
+- 修复缩略图与冷备状态互相覆盖的竞态：缩略图任务完成/失败时改用单列更新（UpdateResourceThumbnail）而非整行 SaveResource。此前缩略图异步任务持有启动时的资源快照，整行回写会把冷备任务刚写好的 cold_backup_status=ready 覆盖回空值——生产实测：冷备文件已完整落盘（114MB），但数据库状态字段被清空，导致 L3 兜底判定失灵。冷备侧此前已用单列更新，本次补齐缩略图侧，双向不再踩踏。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。被覆盖的历史状态可由冷备/缩略图回填任务自动修复（本地文件等长即标 ready，幂等）。
+
 ## v1.6.8.13-topapis-r5
 
 - 新增冷备存量补齐任务：BackfillColdBackups 分批（每批 50 条、游标分页）为历史媒体资源补建本地冷备副本，限并发 3（视频对象较大，带宽优先线上），单条失败不中断，支持 context 取消。默认关闭，需设置 CANVAS_COLD_BACKFILL=1 开启，CANVAS_COLD_BACKFILL_DELAY 控制启动延迟（默认 60s）。与缩略图回填分开开关，互不影响。

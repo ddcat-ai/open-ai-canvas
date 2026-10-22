@@ -187,11 +187,16 @@ func (s *Service) generateResourceThumbnail(resource *model.Resource) {
 	}
 	if thumb == nil {
 		// 原图本身够小，不生成副本；置 none 让 variant 回落原图。
+		// 单列更新：与冷备任务并行运行，整行回写会覆盖对方刚写好的状态。
 		resource.ThumbnailStatus = model.ThumbnailStatusNone
 		resource.ThumbnailWidth = width
 		resource.ThumbnailHeight = height
-		resource.UpdatedAt = time.Now()
-		_ = s.repo.SaveResource(resource)
+		_, _ = s.repo.UpdateResourceThumbnail(resource.UserID, resource.ID, map[string]any{
+			"thumbnail_status": resource.ThumbnailStatus,
+			"thumbnail_width":  resource.ThumbnailWidth,
+			"thumbnail_height": resource.ThumbnailHeight,
+			"updated_at":       time.Now(),
+		})
 		return
 	}
 	if _, err := storage.PutS3Object(setting, objectKey, "image/jpeg", int64(len(thumb)), bytes.NewReader(thumb)); err != nil {
@@ -203,8 +208,17 @@ func (s *Service) generateResourceThumbnail(resource *model.Resource) {
 	resource.ThumbnailSize = int64(len(thumb))
 	resource.ThumbnailWidth = width
 	resource.ThumbnailHeight = height
-	resource.UpdatedAt = time.Now()
-	_ = s.repo.SaveResource(resource)
+	// 单列更新而非整行 SaveResource：缩略图与冷备是并行异步任务，各自持有
+	// 启动时的快照；整行回写会把冷备刚写好的 cold_backup_status=ready 覆盖
+	// 回空值（生产已实际发生）。只更新缩略图相关列，互不踩踏。
+	_, _ = s.repo.UpdateResourceThumbnail(resource.UserID, resource.ID, map[string]any{
+		"thumbnail_status":    resource.ThumbnailStatus,
+		"thumbnail_mime_type": resource.ThumbnailMimeType,
+		"thumbnail_size":      resource.ThumbnailSize,
+		"thumbnail_width":     resource.ThumbnailWidth,
+		"thumbnail_height":    resource.ThumbnailHeight,
+		"updated_at":          time.Now(),
+	})
 }
 
 // readResourceContent 读出资源完整字节，供缩略图处理使用。
@@ -224,6 +238,9 @@ func (s *Service) markThumbnailFailed(resource *model.Resource) {
 		return
 	}
 	resource.ThumbnailStatus = model.ThumbnailStatusFailed
-	resource.UpdatedAt = time.Now()
-	_ = s.repo.SaveResource(resource)
+	// 单列更新：理由同上，避免覆盖并行冷备任务的状态字段。
+	_, _ = s.repo.UpdateResourceThumbnail(resource.UserID, resource.ID, map[string]any{
+		"thumbnail_status": model.ThumbnailStatusFailed,
+		"updated_at":       time.Now(),
+	})
 }
