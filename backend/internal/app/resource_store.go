@@ -369,6 +369,10 @@ func (s *Service) storeResourceWithWriter(userID string, kind string, fileName s
 	}
 	s.recordActivity(userID, "resource", 1)
 	s.maybeStartPlaybackTranscode(&resource)
+	// 缩略图与冷备覆盖所有资源来源（multipart、生成图、任务媒体、导入），
+	// 直传路径（CompleteDirectUpload）单独挂钩子。
+	s.maybeStartThumbnail(&resource)
+	s.maybeStartColdBackup(&resource)
 	return &resource, true, nil
 }
 

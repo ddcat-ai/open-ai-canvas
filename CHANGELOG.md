@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r4
+
+- 修复生成图/任务媒体资源不生成缩略图与冷备的问题：此前只有浏览器直传路径（CompleteDirectUpload）挂了缩略图与冷备钩子，模型生成图（图生图、文生图结果）、任务媒体落盘、URL 导入等经由 storeResource 的路径全部漏挂，导致这些资源在画布/素材列表仍加载原图。现统一在 storeResourceWithWriter 就绪后触发，覆盖所有资源来源。
+- 升级注意：无数据库结构迁移，Schema 保持 v58。
+
 ## v1.6.8.13-topapis-r3
 
 - 新增 L2 本地冷备（cold backup）：对象存储资源（s3）在上传确认后异步同步一份到服务器本地数据目录 `{DATA_DIR}/resources/{objectKey}`，与缩略图生成并行执行。写入采用 `.tmp` + `rename` 原子方式，本地已存在等长文件则跳过（幂等），超过 512MB 的对象不备份。这样即使 R2 侧因生命周期策略删除对象，素材仍有本地副本。
