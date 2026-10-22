@@ -1,6 +1,7 @@
 import { getActiveUserScope } from "@/lib/user-scope";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
-import { http, apiBaseURL, apiClient, ApiError } from "@/services/api/request";
+import axios from "axios";
+import { http, apiBaseURL, ApiError } from "@/services/api/request";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 
 export type RemoteResource = {
@@ -256,6 +257,10 @@ const CHUNK_UPLOAD_RETRIES = 2;
 // 直传上限与后端 directUploadMaxFileSize 对齐（512MB）。
 const DIRECT_UPLOAD_MAX = 512 << 20;
 
+// 对象存储直传专用实例：与 apiClient 隔离，绝不能继承它面向本站的 Cookie 与 Accept 默认值。
+// 预签名 URL 自带授权，withCredentials 必须为 false；Accept 固定 `*/*` 以免触发多余预检。
+const directUploadClient = axios.create({ withCredentials: false });
+
 type DirectUploadSession = {
     resource: RemoteResource;
     uploadUrl: string;
@@ -282,16 +287,26 @@ async function uploadResourceFileDirect(file: Blob, name: string, kind: "image" 
         uploadRequestConfig(meta?.idempotencyKey),
     );
     const session = init.session;
-    // 直传目标是对象存储的绝对 URL（非本站 /api），响应也不是业务信封，
-    // 必须用原生 axios 而不是 http.* 封装。
-    await apiClient.put(session.uploadUrl, file, {
-        headers: session.headers,
-        onUploadProgress: onProgress
-            ? ({ loaded, total }) => {
-                  if (total && total > 0) onProgress(Math.min(file.size, (file.size * loaded) / total), file.size);
-              }
-            : undefined,
-    });
+    // 直传目标是对象存储的绝对 URL（非本站 /api），响应也不是业务信封，必须用原生 axios。
+    // 关键：预签名 URL 本身已含全部授权信息，绝不能带本站 Cookie —— 对象存储的 CORS 通常
+    // 不返回 Access-Control-Allow-Credentials，带凭据会被浏览器直接判为跨域失败；
+    // 且 Accept 归一为 `*/*`，避免其进入 Access-Control-Request-Headers 触发额外预检失败。
+    try {
+        await directUploadClient.put(session.uploadUrl, file, {
+            headers: { ...session.headers, Accept: "*/*" },
+            onUploadProgress: onProgress
+                ? ({ loaded, total }) => {
+                      if (total && total > 0) onProgress(Math.min(file.size, (file.size * loaded) / total), file.size);
+                  }
+                : undefined,
+        });
+    } catch (error) {
+        // 字节没进对象存储时必须显式放弃这条 pending 记录：否则它既不 ready 也不 failed，
+        // 同幂等键的后续上传会一直撞「相同素材正在上传」409，直到 1 小时清理窗口。
+        // abort 失败不应掩盖原始上传错误，故只做尽力而为。
+        void http.post(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/abort`).catch(() => undefined);
+        throw error;
+    }
     const data = await http.post<{ resource: RemoteResource }>(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/complete`, {}, uploadRequestConfig(meta?.idempotencyKey));
     return data.resource;
 }
@@ -307,6 +322,9 @@ export async function uploadResourceFile(file: Blob, kind: "image" | "video" | "
             return resource;
         } catch (error) {
             console.warn("[resources] direct upload failed, falling back", error);
+            // 不回退同一个幂等键：直传已用该键落过一条 pending 资源，
+            // 复用会让回退路径命中同一条 pending 而恒定 409（曾经的上传死锁）。
+            meta = { ...meta, idempotencyKey: undefined };
         }
     }
     // 分片与 multipart 两条路径的失败都要归一成 ResourceUploadError，

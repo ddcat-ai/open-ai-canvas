@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r1
+
+- 修复对象存储直传在浏览器端被 CORS 拦截导致上传失败：直传 PUT 改用独立 axios 实例（`withCredentials: false`），不再携带站点 Cookie，并统一 `Accept: */*`，避免 `Accept` 进入预检请求头触发失败。此前直传必然失败并回退 multipart，大文件上传耗时数十秒。
+- 直传失败时主动调用 `abort` 释放 pending 记录，并让回退链路换用新幂等键，修复「直传残留 pending → 回退 multipart 命中同一 pending → 持续 409」的上传死锁。
+- 升级注意：无数据库结构迁移，Schema 保持 v57；对象存储 CORS 需允许 `accept` 请求头。
+
 ## v1.6.8.12-topapis-r3
 
 - 新增对象存储预签名直传（direct upload）：浏览器先向后端申请签名 PUT URL，再直传 S3 兼容存储（含 Cloudflare R2），最后回执确认落库。文件字节全程不经过应用服务器，绕开反向代理的体积与超时限制，修复大素材上传时客户端 15 秒软超时（`CanvasSyncPendingError`）与素材元数据未落库导致的 `GET /api/assets/:id` 404 循环重试。
