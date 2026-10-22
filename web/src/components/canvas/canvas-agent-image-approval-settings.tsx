@@ -1,17 +1,23 @@
-import { useMemo } from "react";
+import { useMemo, type Dispatch, type SetStateAction } from "react";
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { agentApprovalModel, agentApprovalModelSelection, agentMediaSettings, type AgentImageApproval } from "@/lib/canvas/agent-media-approval";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
+import { parseImageParameters } from "@/lib/image-parameters";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { PUBLIC_MODEL_CATALOG_ID, resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
 
+// 可编辑规格只使用顶层字段，扩展 JSON 保留其他已授权参数。
+function approvalImageParameters(value?: string) {
+    return value === undefined ? undefined : JSON.stringify(Object.fromEntries(Object.entries(parseImageParameters(value)).filter(([name]) => !["size", "imageResolution", "quality"].includes(name))));
+}
+
 export function CanvasAgentImageApprovalSettings({ initial, value, onChange, theme, disabled }: {
     initial: AgentImageApproval;
     value?: AgentMediaSettings;
-    onChange: (value: AgentMediaSettings) => void;
+    onChange: Dispatch<SetStateAction<AgentMediaSettings | undefined>>;
     theme: CanvasTheme;
     disabled: boolean;
 }) {
@@ -30,15 +36,20 @@ export function CanvasAgentImageApprovalSettings({ initial, value, onChange, the
         const profile = modelCapabilityConfigFor(config, next).image;
         if (!profile) return;
         const normalized = normalizeImageValue(profile, settings, resolveModelRequestConfig(config, next).interfaceType);
-        onChange({ ...agentApprovalModelSelection(config, next), size: normalized.size, imageResolution: normalized.imageResolution, imageParameters: normalized.imageParameters, quality: profile.quality.supported ? normalized.quality : "" });
+        onChange({ ...agentApprovalModelSelection(config, next), size: normalized.size, imageResolution: normalized.imageResolution, imageParameters: approvalImageParameters(normalized.imageParameters), quality: profile.quality.supported ? normalized.quality : "" });
     };
     const changeOption = (key: "quality" | "imageResolution" | "imageParameters" | "size" | "transparentBackground" | "count", next: string) => {
         if (disabled || (key !== "size" && key !== "quality" && key !== "imageResolution" && key !== "imageParameters")) return;
-        if (key === "imageParameters") { onChange({ ...settings, imageParameters: next }); return; }
-        const options = { size: settings.size, imageResolution: settings.imageResolution, quality: settings.quality, [key]: next };
-        const selected = resolveCompatibleModel(config, model, { ...requirements, imageSize: options.size, options: { ...options, count: 1 } });
-        if (!selected) return;
-        onChange({ ...agentApprovalModelSelection(config, selected), ...options });
+        // 尺寸选择器在同一事件中同时更新尺寸和分辨率，必须累积上一项更新。
+        onChange((previous) => {
+            const current = agentMediaSettings(previous || initial);
+            const imageParameters = approvalImageParameters(key === "imageParameters" ? next : current.imageParameters);
+            if (key === "imageParameters") return { ...current, imageParameters };
+            const options = { size: current.size, imageResolution: current.imageResolution, quality: current.quality, [key]: next };
+            const selected = resolveCompatibleModel(config, agentApprovalModel(config, current), { ...requirements, imageSize: options.size, options: { ...options, count: 1 } });
+            if (!selected) return previous;
+            return { ...agentApprovalModelSelection(config, selected), ...options, imageParameters };
+        });
     };
     return <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="图片生成设置">
         <div className="space-y-1.5">
