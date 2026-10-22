@@ -2,6 +2,7 @@ package assets
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"yingce/backend/internal/kernel"
@@ -54,6 +55,22 @@ type ResourceAccess struct {
 	RefreshAt        time.Time       `json:"refreshAt"`
 	Revision         string          `json:"revision"`
 	FallbackReason   string          `json:"fallbackReason,omitempty"`
+	// 缩略图实际像素尺寸，供前端预留占位避免布局抖动。
+	ThumbnailWidth  int `json:"thumbnailWidth,omitempty"`
+	ThumbnailHeight int `json:"thumbnailHeight,omitempty"`
+}
+
+// ThumbnailObjectKeyFor 由原对象键派生缩略图对象键。
+// 约定与原对象同目录、加 .thumb.jpg 后缀，删除资源目录时一并清理。
+func ThumbnailObjectKeyFor(objectKey string) string {
+	objectKey = strings.TrimSpace(objectKey)
+	if objectKey == "" {
+		return ""
+	}
+	if dot := strings.LastIndex(objectKey, "."); dot > strings.LastIndex(objectKey, "/") {
+		objectKey = objectKey[:dot]
+	}
+	return objectKey + ".thumb.jpg"
 }
 
 func AccessError(status int, reason, message string) *kernel.AppError {
@@ -126,8 +143,11 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	if !expires.After(now) {
 		return nil, kernel.Forbidden("资源授权已过期")
 	}
+	// 默认按原件分发；缩略图就绪时改用缩略图对象键。
+	objectKey := resource.ObjectKey
+	thumbnailReady := resource.ThumbnailStatus == model.ThumbnailStatusReady
 	access := &ResourceAccess{ResourceID: resource.ID, RequestedVariant: options.Variant, ActualVariant: VariantOriginal,
-		IssuedAt: now, ExpiresAt: &expires, RefreshAt: now.Add(expires.Sub(now) * 4 / 5), Revision: resource.ETag + ":" + resource.PlaybackStatus + ":" + storage.DeliveryRevision(setting)}
+		IssuedAt: now, ExpiresAt: &expires, RefreshAt: now.Add(expires.Sub(now) * 4 / 5), Revision: resource.ETag + ":" + resource.PlaybackStatus + ":" + resource.ThumbnailStatus + ":" + storage.DeliveryRevision(setting)}
 	if options.Variant == VariantPlayback {
 		if resource.Provider == "local" && resource.PlaybackStatus == model.PlaybackStatusReady && resource.PlaybackObjectKey != "" {
 			access.ActualVariant = VariantPlayback
@@ -135,8 +155,21 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 			access.FallbackReason = "playback_not_ready"
 		}
 	}
+	// 缩略图就绪时改用缩略图对象键；未就绪则回落原件并标注原因，
+	// 让前端能区分「本来就没有」和「还没生成好」。
 	if options.Variant == VariantThumbnail {
-		access.FallbackReason = "thumbnail_not_ready"
+		if thumbnailReady {
+			if key := ThumbnailObjectKeyFor(resource.ObjectKey); key != "" {
+				access.ActualVariant = VariantThumbnail
+				objectKey = key
+				access.ThumbnailWidth = resource.ThumbnailWidth
+				access.ThumbnailHeight = resource.ThumbnailHeight
+			} else {
+				access.FallbackReason = "thumbnail_not_ready"
+			}
+		} else {
+			access.FallbackReason = "thumbnail_not_ready"
+		}
 	}
 	if resource.Provider == "local" {
 		access.Delivery = DeliveryLocal
@@ -148,7 +181,7 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		// Public COS/OSS CDN deployments can forward this response override to
 		// their origin. Keeping it on the download-only URL lets images and
 		// videos continue to use their normal inline CDN URL for display.
-		access.URL, err = storage.PublicCDNObjectDownloadURL(setting, resource.ObjectKey, options.DownloadName)
+		access.URL, err = storage.PublicCDNObjectDownloadURL(setting, objectKey, options.DownloadName)
 		access.Delivery = DeliveryCDN
 		access.ExpiresAt = nil
 	} else if options.Purpose == PurposeDownload {
@@ -159,10 +192,10 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		if !storage.PublicOrigin(setting) {
 			return nil, AccessError(503, "resource_origin_private", "对象存储源站不可由浏览器直连，无法在不占用服务器带宽的前提下下载")
 		}
-		access.URL, err = storage.SignedOriginObjectDownloadURL(setting, resource.ObjectKey, expires, options.DownloadName)
+		access.URL, err = storage.SignedOriginObjectDownloadURL(setting, objectKey, expires, options.DownloadName)
 		access.Delivery = DeliveryOrigin
 	} else if storage.CDNEnabled(setting) {
-		access.URL, err = storage.SignCDNURL(setting, resource.ObjectKey, expires)
+		access.URL, err = storage.SignCDNURL(setting, objectKey, expires)
 		access.Delivery = DeliveryCDN
 		if setting.Delivery.CDNAuthMode == "public" {
 			access.ExpiresAt = nil
@@ -171,9 +204,9 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		return nil, AccessError(503, "resource_cdn_unconfigured", "CDN 访问鉴权未配置，请检查存储分发设置")
 	} else if storage.PublicOrigin(setting) {
 		if signedAt.IsZero() {
-			access.URL, err = storage.SignedOriginObjectURL(setting, resource.ObjectKey, expires)
+			access.URL, err = storage.SignedOriginObjectURL(setting, objectKey, expires)
 		} else {
-			access.URL, err = storage.SignedOriginObjectDisplayURL(setting, resource.ObjectKey, signedAt, expires)
+			access.URL, err = storage.SignedOriginObjectDisplayURL(setting, objectKey, signedAt, expires)
 		}
 		access.Delivery = DeliveryOrigin
 		if setting.CDNBaseURL != "" {

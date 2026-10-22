@@ -12,6 +12,14 @@ var projectUnitHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 const ProjectUnitTitleMaxRunes = 240
 
+// 资源缩略图状态。ready 表示缩略图对象已就绪，可替代原图用于列表/画布展示。
+const (
+	ThumbnailStatusNone       = "none"
+	ThumbnailStatusProcessing = "processing"
+	ThumbnailStatusReady      = "ready"
+	ThumbnailStatusFailed     = "failed"
+)
+
 func ProjectUnitWordCount(sourceText string) int {
 	plainText := projectUnitHTMLTagPattern.ReplaceAllString(sourceText, "")
 	return utf8.RuneCountInString(strings.TrimSpace(html.UnescapeString(plainText)))

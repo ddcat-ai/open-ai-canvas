@@ -162,7 +162,24 @@ func (s *Service) CompleteDirectUpload(userID string, resourceID string) (*model
 	s.commitUserUploadQuota(userID, resource.Size)
 	s.recordActivity(userID, "resource", 1)
 	s.maybeStartPlaybackTranscode(resource)
+	// 缩略图异步生成：列表/画布一次要加载几十张图，缩略图能把首屏字节量降一个数量级。
+	s.maybeStartThumbnail(resource)
 	return resource, nil
+}
+
+// maybeStartThumbnail 在资源就绪后异步生成缩略图，不阻塞上传确认响应。
+func (s *Service) maybeStartThumbnail(resource *model.Resource) {
+	if resource == nil || resource.Kind != "image" || resource.Provider == "local" {
+		return
+	}
+	if resource.ThumbnailStatus == model.ThumbnailStatusReady || resource.ThumbnailStatus == model.ThumbnailStatusProcessing {
+		return
+	}
+	snapshot := *resource
+	go func() {
+		defer func() { _ = recover() }()
+		s.generateResourceThumbnail(&snapshot)
+	}()
 }
 
 // AbortDirectUpload 清理未完成的直传：标记 failed、释放配额并尽力删除远端对象。

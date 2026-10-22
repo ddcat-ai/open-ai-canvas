@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.6.8.13-topapis-r2
+
+- 新增画布展示缩略图（thumbnail variant）：图片资源在上传确认后异步生成 512px JPEG 缩略图并写入对象存储，`variant=thumbnail` 请求真正返回缩略图而非回落原图。此前前端画布/素材列表请求缩略图但后端恒定回落原图，打开含上百张图的画布需下载数百 MB 原图。实测 20 张 8–23MB 原图生成缩略图后合计仅 1.06MB（平均 54KB/张），字节量降至 0.45%。
+- 缩略图对象键由原 ObjectKey 派生（同目录 `.thumb.jpg` 后缀），不新增数据库字段之外的路径状态，删除资源目录时自动一并清理；生成失败只标记 `failed` 并回落原图，不影响上传与展示主流程。
+- 资源访问合同新增 `thumbnailWidth`/`thumbnailHeight` 字段，供前端预留占位避免布局抖动。
+- 分发层 `ResolveAccess` 的 `Revision` 纳入 `thumbnailStatus`，缩略图从无到有时会刷新前端缓存的访问地址。
+- 升级注意：无数据库结构迁移（`resources` 表已有 thumbnail* 字段，Schema 保持 v57）。缩略图只对升级后新上传的图片生效；存量图片需重传或另行批量补齐。
+
 ## v1.6.8.13-topapis-r1
 
 - 修复对象存储直传在浏览器端被 CORS 拦截导致上传失败：直传 PUT 改用独立 axios 实例（`withCredentials: false`），不再携带站点 Cookie，并统一 `Accept: */*`，避免 `Accept` 进入预检请求头触发失败。此前直传必然失败并回退 multipart，大文件上传耗时数十秒。
