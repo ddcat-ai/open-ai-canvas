@@ -117,7 +117,7 @@ func TestCloudAgentBatchTableToolsAreScopedAndStructured(t *testing.T) {
 	if properties["globalPrompt"] == nil {
 		t.Fatal("batch table edit schema missing globalPrompt")
 	}
-	actionEnum, _ := properties["action"].(map[string]any)["enum"].([]string)
+	actionEnum, _ := properties["action"].(map[string]any)["enum"].([]any)
 	foundGlobalPrompt := false
 	for _, action := range actionEnum {
 		if action == "set_global_prompt" {

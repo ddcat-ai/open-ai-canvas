@@ -1,5 +1,7 @@
 import { Popover } from "antd";
 import { SlidersHorizontal } from "lucide-react";
+import { useState } from "react";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import {
@@ -17,6 +19,8 @@ type CanvasPortraitTexturePopoverProps = {
 };
 
 export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onChange }: CanvasPortraitTexturePopoverProps) {
+    const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     const theme = canvasThemes[useActiveTheme()];
     const settings = normalizePortraitTextureSettings(value);
 
@@ -65,6 +69,9 @@ export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onC
 
     return (
         <Popover
+            ref={popoverRef}
+            open={open}
+            onOpenChange={setOpen}
             trigger="click"
             placement={placement}
             arrow={false}

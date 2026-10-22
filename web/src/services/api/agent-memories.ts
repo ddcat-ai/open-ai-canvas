@@ -2,7 +2,7 @@ import { http, compactApiParams } from "./request";
 
 export type AgentMemoryStep = { tool: string; action: string; note?: string };
 
-export type AgentMemoryStatus = "pending" | "approved" | "rejected" | string;
+export type AgentMemoryStatus = "pending" | "approved" | "rejected" | "expired" | string;
 
 export type AgentMemory = {
     id: string;
@@ -12,6 +12,8 @@ export type AgentMemory = {
     lesson?: string;
     steps?: AgentMemoryStep[];
     source?: string;
+    originRunId?: string;
+    evidence?: Array<{ sequence: number; callId?: string; tool: string }>;
     status: AgentMemoryStatus;
     injected: number;
     hits: number;
@@ -52,7 +54,7 @@ export type AgentMemoryImportResult = {
 
 export type AgentMemoryCompactInterval = "off" | "daily" | "weekly" | "monthly" | string;
 
-export type AgentMemoryCompactStatus = "idle" | "queued" | "running" | "succeeded" | "failed" | string;
+export type AgentMemoryCompactStatus = "idle" | "queued" | "running" | "awaiting_review" | "applied" | "rejected" | "restored" | "succeeded" | "failed" | string;
 
 export type AgentMemoryCompactSummary = {
     rewritten: number;
@@ -71,6 +73,7 @@ export type AgentMemoryCompactView = {
     lastStatus: AgentMemoryCompactStatus;
     lastError?: string;
     taskId?: string;
+    proposalId?: string;
     summary?: AgentMemoryCompactSummary;
 };
 
@@ -142,4 +145,47 @@ export function updateAgentMemorySettings(input: AgentMemorySettingRequest) {
 
 export function compactAgentMemories(input: AgentMemoryCompactRequest = {}) {
     return http.post<AgentMemoryCompactView>("/agent/memories/compact", input, { timeout: 30_000 });
+}
+
+export type AgentMemoryChange = {
+    kind: "rewrite" | "merge";
+    before: AgentMemory[];
+    after: AgentMemory;
+};
+
+export type AgentMemoryProposal = {
+    id: string;
+    status: "generating" | "pending" | "approved" | "rejected" | "no_changes" | "failed";
+    version: number;
+    taskId?: string;
+    summary: AgentMemoryCompactSummary;
+    changes: AgentMemoryChange[];
+    createdAt: string;
+    decidedAt?: string;
+};
+
+export type AgentMemoryRevision = {
+    id: string;
+    proposalId: string;
+    version: number;
+    before: AgentMemory[];
+    after: AgentMemory[];
+    createdAt: string;
+    restoredAt?: string;
+};
+
+export function listAgentMemoryProposals(signal?: AbortSignal) {
+    return http.get<{ proposals: AgentMemoryProposal[] }>("/agent/memories/proposals", { signal, timeout: 15_000 });
+}
+
+export function decideAgentMemoryProposal(id: string, decision: "approve" | "reject", version: number) {
+    return http.post<AgentMemoryProposal>(`/agent/memories/proposals/${encodeURIComponent(id)}/decide`, { decision, version }, { timeout: 15_000 });
+}
+
+export function listAgentMemoryRevisions(signal?: AbortSignal) {
+    return http.get<{ revisions: AgentMemoryRevision[] }>("/agent/memories/revisions", { signal, timeout: 15_000 });
+}
+
+export function restoreAgentMemoryRevision(id: string, version: number) {
+    return http.post<AgentMemoryRevision>(`/agent/memories/revisions/${encodeURIComponent(id)}/restore`, { version }, { timeout: 15_000 });
 }

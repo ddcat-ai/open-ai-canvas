@@ -289,20 +289,6 @@ async function run() {
     };
   }
 
-  if (request.memory?.enabled) {
-    sessionConfig.memory = {
-      enabled: true,
-      storePath: request.memory.storePath,
-      userId: request.userId,
-      canvasId: request.canvasId,
-      maxEntries: request.memory.maxEntries || 1000,
-    };
-  }
-
-  if (request.canvas) {
-    sessionConfig.canvas = request.canvas;
-  }
-
   if (request.features) {
     sessionConfig.features = {
       planning: request.features.planningEnabled ?? true,

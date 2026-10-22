@@ -1,7 +1,8 @@
-import { forwardRef, useState, type ReactElement, type ReactNode, type RefAttributes } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, type ReactElement, type ReactNode, type RefAttributes } from "react";
 import AntSelect, { type BaseOptionType, type DefaultOptionType, type RefSelectProps, type SelectProps as AntSelectProps } from "antd/es/select";
 
 import { cn } from "@/lib/utils";
+import { useDismissPopupOnAnchorMove } from "@/hooks/use-dismiss-popup-on-anchor-move";
 
 /**
  * 影策唯一下拉选择组件。
@@ -35,13 +36,24 @@ const sizeMap: Record<SelectSize, "small" | "middle"> = {
     md: "middle",
 };
 
-export const Select = forwardRef<RefSelectProps, SelectProps>(function Select({ size, ariaLabel, appearance = "pill", className, variant, onMouseDown, onKeyDown, onFocus, onBlur, ...props }, ref) {
+export const Select = forwardRef<RefSelectProps, SelectProps>(function Select({ size, ariaLabel, appearance = "pill", className, variant, onMouseDown, onKeyDown, onFocus, onBlur, open, defaultOpen, onOpenChange, ...props }, ref) {
     const [inputModality, setInputModality] = useState<"unknown" | "pointer" | "keyboard">("unknown");
+    const selectRef = useRef<RefSelectProps>(null);
+    useImperativeHandle(ref, () => selectRef.current!);
+    const [internalOpen, setInternalOpen] = useState(defaultOpen ?? false);
+    const actualOpen = open ?? internalOpen;
+    const changeOpen = (next: boolean) => {
+        setInternalOpen(next);
+        onOpenChange?.(next);
+    };
+    useDismissPopupOnAnchorMove(actualOpen, selectRef, () => changeOpen(false));
     const normalizedSize = size && size in sizeMap ? sizeMap[size as SelectSize] : size;
     return (
         <AntSelect
-            ref={ref}
+            ref={selectRef}
             {...props}
+            open={actualOpen}
+            onOpenChange={changeOpen}
             variant={variant ?? "filled"}
             size={normalizedSize as AntSelectProps["size"]}
             aria-label={ariaLabel}

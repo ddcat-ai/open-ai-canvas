@@ -568,8 +568,6 @@ func (s *Service) cloudAgentPiEvent(ctx context.Context, userID, runID string, p
 			return nil, err
 		}
 		return map[string]any{"ok": true}, nil
-	case "tool_call", "tool_call_start", "tool_call_end":
-		return s.handleToolCall(userID, runID, data)
 	case "error":
 		return s.handleError(userID, runID, data)
 	default:

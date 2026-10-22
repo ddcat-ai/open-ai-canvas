@@ -9,6 +9,7 @@ import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, 
 import { CanvasNodeType } from "@/types/canvas";
 import { primeVideoPreviewFrame } from "./canvas-mention-chips";
 import { pointForOffset } from "./canvas-mention-editable";
+import { observeMovablePopupAnchor } from "@/lib/movable-popup-anchor";
 
 export function MentionMenu({
     anchor,
@@ -49,11 +50,13 @@ export function MentionMenu({
         updatePosition();
         const observer = new ResizeObserver(updatePosition);
         observer.observe(anchor);
+        const stopMovingAnchor = observeMovablePopupAnchor(anchor, updatePosition);
         window.addEventListener("resize", updatePosition);
         window.addEventListener("scroll", updatePosition, true);
         return () => {
             cancelAnimationFrame(frame);
             observer.disconnect();
+            stopMovingAnchor();
             window.removeEventListener("resize", updatePosition);
             window.removeEventListener("scroll", updatePosition, true);
         };

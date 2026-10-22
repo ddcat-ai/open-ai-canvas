@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Dropdown, type MenuProps } from "antd";
+import type { MenuProps } from "antd";
+import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Grid3x3 } from "lucide-react";
 
 import { TOOL_ICON_MAP } from "./canvas-resource-mention-textarea";

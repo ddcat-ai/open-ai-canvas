@@ -294,7 +294,7 @@ function WorkflowNode({ id, title, icon, position, onMove, wide = false, childre
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
     return (
-        <section className={`workflow-test-node${wide ? " is-wide" : ""}`} style={{ transform: `translate(${position.x}px, ${position.y}px)` }} data-node-id={id}>
+        <section className={`workflow-test-node${wide ? " is-wide" : ""}`} style={{ transform: `translate(${position.x}px, ${position.y}px)` }} data-node-id={id} data-popover-anchor-container>
             <div className="workflow-test-node-header" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
                 <span>{icon}</span>
                 <strong title={title}>{title}</strong>

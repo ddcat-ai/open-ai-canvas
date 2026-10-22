@@ -27,6 +27,8 @@ func Models() []any {
 		&model.AgentProfile{},
 		&model.AgentLesson{},
 		&model.AgentMemorySetting{},
+		&model.AgentMemoryProposal{},
+		&model.AgentMemoryRevision{},
 		&model.User{},
 		&model.UserAvatar{},
 		&model.AuthSession{},

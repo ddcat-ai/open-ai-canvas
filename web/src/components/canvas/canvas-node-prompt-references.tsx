@@ -4,6 +4,7 @@ import { Image as AntImage, Popover } from "antd";
 import { AtSign, FileText, GripVertical, ImageIcon, Link2, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, X } from "lucide-react";
 import { type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { useState } from "react";
+import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { CanvasNodeType } from "@/types/canvas";
 import type { CanvasTheme } from "./canvas-node-prompt-panel";
 
@@ -22,8 +23,13 @@ export function ReferenceToolsPopover({
     accent: string;
     compact: boolean;
 }) {
+    const [open, setOpen] = useState(false);
+    const popoverRef = usePopoverAnchorAlign(open);
     return (
         <Popover
+            ref={popoverRef}
+            open={open}
+            onOpenChange={setOpen}
             trigger="click"
             placement="topRight"
             rootClassName="canvas-reference-tools-popover"

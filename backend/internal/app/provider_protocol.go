@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,11 +36,24 @@ func declarativeProtocolPollPolicy(mode string) videoPollPolicy {
 		return defaultVideoPollPolicy()
 	}
 	return videoPollPolicy{
-		Interval:          2500 * time.Millisecond,
-		MaxNotFoundMisses: 1,
-		MaxDownloadTries:  3,
-		Sleep:             sleepContext,
+		Interval:            2500 * time.Millisecond,
+		MaxNotFoundMisses:   1,
+		MaxDownloadTries:    3,
+		TransientRetryLimit: asyncPollTransientRetries(),
+		Sleep:               sleepContext,
 	}
+}
+
+// asyncPollTransientRetriesEnv 是可选设置：非视频声明式异步任务（图片、音频）轮询遇到暂时性错误时，
+// 允许连续重试的次数，退避从轮询间隔起倍增、封顶 4 倍。默认 0，保持现有 fail-fast 行为。
+const asyncPollTransientRetriesEnv = "CANVAS_ASYNC_POLL_TRANSIENT_RETRIES"
+
+func asyncPollTransientRetries() int {
+	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(asyncPollTransientRetriesEnv)))
+	if err != nil || value <= 0 {
+		return 0
+	}
+	return min(value, 10)
 }
 
 func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, policy videoPollPolicy) (map[string]interface{}, error) {

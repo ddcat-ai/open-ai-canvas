@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"strings"
@@ -24,19 +25,20 @@ const cloudAgentOperation = "cloud_agent"
 // turns reference the previous run, not a mutable in-memory conversation. This
 // reuses transactional billing, worker leases, cancellation and text replay.
 type CloudAgentRequest struct {
-	ReasoningMode   string   `json:"reasoningMode,omitempty"`
-	ProfileRevision string   `json:"profileRevision,omitempty"`
-	CanvasID        string   `json:"canvasId"`
-	Prompt          string   `json:"prompt"`
-	Model           string   `json:"model,omitempty"`
-	LogicalModelID  string   `json:"logicalModelId,omitempty"`
-	ChannelID       string   `json:"channelId,omitempty"`
-	ChannelModelKey string   `json:"channelModelKey,omitempty"`
-	PermissionMode  string   `json:"permissionMode"`
-	SkillIDs        []string `json:"skillIds,omitempty"`
-	ContextScope    []string `json:"contextScope"`
-	FocusNodeIDs    []string `json:"focusNodeIds,omitempty"`
-	Budget          struct {
+	ReasoningMode         string   `json:"reasoningMode,omitempty"`
+	ProfileRevision       string   `json:"profileRevision,omitempty"`
+	CanvasID              string   `json:"canvasId"`
+	Prompt                string   `json:"prompt"`
+	Model                 string   `json:"model,omitempty"`
+	LogicalModelID        string   `json:"logicalModelId,omitempty"`
+	ChannelID             string   `json:"channelId,omitempty"`
+	ChannelModelKey       string   `json:"channelModelKey,omitempty"`
+	PermissionMode        string   `json:"permissionMode"`
+	SkillIDs              []string `json:"skillIds,omitempty"`
+	ContextScope          []string `json:"contextScope"`
+	FocusNodeIDs          []string `json:"focusNodeIds,omitempty"`
+	FocusNodeOmittedCount int      `json:"focusNodeOmittedCount,omitempty"`
+	Budget                struct {
 		MaxCredits         float64 `json:"maxCredits"`
 		MaxGenerationTasks int     `json:"maxGenerationTasks,omitempty"`
 		MaxVideoSeconds    int     `json:"maxVideoSeconds,omitempty"`
@@ -168,6 +170,9 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 			return err
 		}
 	}
+	if req.FocusNodeOmittedCount < 0 || req.FocusNodeOmittedCount > 10000 {
+		return BadAuthRequest("画布焦点省略计数无效")
+	}
 	if len(req.FocusNodeIDs) > 8 {
 		return BadAuthRequest("画布焦点节点最多 8 个")
 	}
@@ -207,7 +212,7 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	if len(req.ContextScope) > 1 || (len(req.ContextScope) == 1 && req.ContextScope[0] != "canvas") {
 		return BadAuthRequest("当前仅支持已保存画布摘要，其他上下文尚未开放")
 	}
-	if req.CanvasID == "" && (len(req.ContextScope) > 0 || len(req.FocusNodeIDs) > 0) {
+	if req.CanvasID == "" && (len(req.ContextScope) > 0 || len(req.FocusNodeIDs) > 0 || req.FocusNodeOmittedCount > 0) {
 		return BadAuthRequest("未绑定画布的对话不能读取画布上下文或焦点节点")
 	}
 	if math.IsNaN(req.Budget.MaxCredits) || math.IsInf(req.Budget.MaxCredits, 0) || req.Budget.MaxCredits <= 0 || req.Budget.MaxCredits > 1000000 {
@@ -485,7 +490,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	req.VisionEnabled = s.cloudAgentVisionEnabled(req)
 	canvasSummary := ""
 	if len(req.ContextScope) != 0 {
-		canvasSummary, err = cloudAgentCanvasSummary(canvas, req.FocusNodeIDs...)
+		canvasSummary, err = cloudAgentCanvasSummaryWithOmitted(canvas, req.FocusNodeOmittedCount, req.FocusNodeIDs...)
 		if err != nil {
 			return nil, err
 		}
@@ -514,7 +519,6 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		last := canonical.Messages[len(canonical.Messages)-1]
 		canonical.Messages = append(append([]map[string]any{}, canonical.Messages[:len(canonical.Messages)-1]...), catalog, last)
 	}
-	s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
 	canonical.PromptCacheKey = cloudAgentPromptCacheKeyForRequest(req.CanvasID, cloudAgentPromptCacheIdentity(req, policy), canonical.SystemPrompt, canonical.Tools)
 	attachCloudAgentPlan(&canonical, inheritedPlan)
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
@@ -632,6 +636,10 @@ const (
 )
 
 func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string) (string, error) {
+	return cloudAgentCanvasSummaryWithOmitted(canvas, 0, focusNodeIDs...)
+}
+
+func cloudAgentCanvasSummaryWithOmitted(canvas *model.CanvasProject, omittedFocusCount int, focusNodeIDs ...string) (string, error) {
 	var payload struct {
 		Nodes []struct {
 			ID       string `json:"id"`
@@ -640,6 +648,10 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 			Metadata struct {
 				WorkflowKind     string `json:"workflowKind"`
 				CharacterAssetID string `json:"characterAssetId"`
+				Content          string `json:"content"`
+				Prompt           string `json:"prompt"`
+				Status           string `json:"status"`
+				TaskStatus       string `json:"taskStatus"`
 			} `json:"metadata"`
 		} `json:"nodes"`
 		Connections []struct {
@@ -691,6 +703,10 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 		Metadata struct {
 			WorkflowKind     string `json:"workflowKind"`
 			CharacterAssetID string `json:"characterAssetId"`
+			Content          string `json:"content"`
+			Prompt           string `json:"prompt"`
+			Status           string `json:"status"`
+			TaskStatus       string `json:"taskStatus"`
 		} `json:"metadata"`
 	}, 0, len(payload.Nodes))
 	if len(focus) > 0 {
@@ -718,6 +734,17 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 		if node.Type == "text" && node.Metadata.WorkflowKind == "character" {
 			item["kind"] = "character"
 		}
+		if selectedFocus[node.ID] {
+			if preview := firstNonEmpty(node.Metadata.Content, node.Metadata.Prompt); preview != "" {
+				item["preview"] = truncateRunes(preview, 240)
+			}
+			if node.Metadata.Status != "" {
+				item["status"] = truncateRunes(node.Metadata.Status, 32)
+			}
+			if node.Metadata.TaskStatus != "" {
+				item["taskStatus"] = truncateRunes(node.Metadata.TaskStatus, 32)
+			}
+		}
 		if _, known := canvasCapabilityRegistry.ResolveNode(node.Type, node.Metadata.WorkflowKind); !known {
 			item["agentSupported"] = false
 		}
@@ -744,7 +771,12 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 				neighborCount++
 			}
 		}
-		summary["selection"] = map[string]any{"focusNodeIds": selected, "includedNeighbors": neighborCount, "nextReadDepth": 1}
+		selection := map[string]any{"focusNodeIds": selected, "includedNeighbors": neighborCount, "nextReadDepth": 1}
+		if omittedFocusCount > 0 {
+			selection["omittedFocusCount"] = omittedFocusCount
+			selection["note"] = fmt.Sprintf("前端实际还选中 %d 个节点未附带；当前只包含 focusNodeIds 中的焦点。", omittedFocusCount)
+		}
+		summary["selection"] = selection
 	} else if omitted := len(payload.Nodes) - len(nodes); omitted > 0 {
 		summary["omittedNodes"] = omitted
 	}

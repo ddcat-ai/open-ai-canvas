@@ -9,6 +9,7 @@ import { canvasOverlayBounds, observeCanvasOverlayBounds, placeCanvasNodePanel, 
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ConnectionHandle, type Position, type ViewportTransform } from "@/types/canvas";
+import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
 
 export type PendingConnectionCreate = {
     connection: ConnectionHandle;
@@ -120,6 +121,7 @@ export function CanvasNodePanelOverlay({
     children: ReactNode;
 }) {
     const panelRef = useRef<HTMLDivElement>(null);
+    const resizeMotion = useCanvasNodeResizeMotion();
     const { bringToFront, zIndex } = useCanvasOverlayLayer(`node-panel:${node.id}`, "var(--z-modal-overlay)");
     const initialWidth = resolveNodePanelWidth(node, viewport, panelWidth);
     const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, initialWidth, panelHeight, dragOffset);
@@ -138,14 +140,15 @@ export function CanvasNodePanelOverlay({
         let measuredHeight = panel.scrollHeight || panelHeight;
         const update = (nextViewport: ViewportTransform) => {
             liveViewport = nextViewport;
-            const nextWidth = Math.min(resolveNodePanelWidth(node, nextViewport, panelWidth), Math.max(0, availableBounds.right - availableBounds.left));
+            const visualNode = resizeMotion?.resolveNode(node) || node;
+            const nextWidth = Math.min(resolveNodePanelWidth(visualNode, nextViewport, panelWidth), Math.max(0, availableBounds.right - availableBounds.left));
             const availableHeight = Math.max(0, availableBounds.bottom - availableBounds.top);
             panel.style.width = `${nextWidth}px`;
             panel.style.maxHeight = `${availableHeight}px`;
             panel.style.overflowY = measuredHeight > availableHeight || !allowOverflow ? "auto" : "visible";
             // 视口预览期间世界层刚写入 transform，读取节点布局会强制浏览器同步
             // layout。节点位置和拖拽偏移已经在这里可用，直接用世界坐标计算浮层位置。
-            const position = placeCanvasNodePanel(node, nextViewport, availableBounds, { width: nextWidth, height: measuredHeight }, liveDragOffset);
+            const position = placeCanvasNodePanel(visualNode, nextViewport, availableBounds, { width: nextWidth, height: measuredHeight }, liveDragOffset);
             panel.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
             updateCanvasNodePanelBounds(container, panel, { left: position.left, top: position.top, right: position.left + nextWidth, bottom: position.top + Math.min(measuredHeight, availableHeight) });
         };
@@ -161,6 +164,7 @@ export function CanvasNodePanelOverlay({
             update(liveViewport);
         });
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, update);
+        const unsubscribeResize = resizeMotion?.subscribeNode(node.id, () => update(liveViewport));
         const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             liveDragOffset = preview?.nodeIds.has(node.id) ? { x: preview.x, y: preview.y } : null;
             update(liveViewport);
@@ -169,16 +173,18 @@ export function CanvasNodePanelOverlay({
             resizeObserver.disconnect();
             stopBounds();
             unsubscribeViewport();
+            unsubscribeResize?.();
             unsubscribeDrag();
             updateCanvasNodePanelBounds(container, panel, null);
         };
-    }, [allowOverflow, containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, viewport]);
+    }, [allowOverflow, containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, resizeMotion, viewport]);
 
     return (
         <div
             ref={panelRef}
             data-canvas-no-zoom
             data-canvas-node-panel
+            data-popover-anchor-container
             data-canvas-wheel-scroll
             className={`thin-scrollbar absolute max-w-[calc(100%_-_24px)] ${allowOverflow ? "overflow-visible" : "overflow-y-auto"}`}
             style={{ left: 0, top: 0, transform: `translate3d(${initialPosition.left}px, ${initialPosition.top}px, 0)`, width: initialWidth, maxHeight: allowOverflow ? "none" : "calc(100% - 84px)", zIndex }}

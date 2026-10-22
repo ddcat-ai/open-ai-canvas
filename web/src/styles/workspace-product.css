@@ -702,15 +702,17 @@
 /* Floating surfaces and their enter/leave lifecycle belong to app-theme.ts.
    Do not animate portal positioning nodes here: that breaks dismissal/placement. */
 
-/* Icon actions use one compact interaction language across the user workspace. */
+/* Icon actions use one compact interaction language across the user workspace.
+   悬浮上移与按压缩放用独立的 translate/scale 属性，叠加在按钮自身的 transform 上；
+   不能覆盖 transform，否则靠 translateY(-50%) 等定位居中的图标按钮悬浮时会整体下坠。 */
 .app-product-workspace button:has(> svg):not(:has(> span)):not(.ant-btn-icon-only),
 .app-product-overlays button:has(> svg):not(:has(> span)):not(.ant-btn-icon-only) {
-    transition: color var(--product-state) var(--product-ease), background-color var(--product-state) var(--product-ease), border-color var(--product-state) var(--product-ease), transform var(--product-fast) var(--product-ease), box-shadow var(--product-state) var(--product-ease) !important;
+    transition: color var(--product-state) var(--product-ease), background-color var(--product-state) var(--product-ease), border-color var(--product-state) var(--product-ease), transform var(--product-fast) var(--product-ease), translate var(--product-fast) var(--product-ease), scale var(--product-fast) var(--product-ease), box-shadow var(--product-state) var(--product-ease) !important;
 }
 .app-product-workspace button:has(> svg):not(:has(> span)):not(:disabled):hover,
-.app-product-overlays button:has(> svg):not(:has(> span)):not(:disabled):hover { color: var(--user-accent) !important; background: color-mix(in srgb, var(--user-accent) 9%, var(--user-surface)) !important; box-shadow: 0 5px 16px color-mix(in srgb, var(--user-accent) 13%, transparent); transform: translateY(-1px); }
+.app-product-overlays button:has(> svg):not(:has(> span)):not(:disabled):hover { color: var(--user-accent) !important; background: color-mix(in srgb, var(--user-accent) 9%, var(--user-surface)) !important; box-shadow: 0 5px 16px color-mix(in srgb, var(--user-accent) 13%, transparent); translate: 0 -1px; }
 .app-product-workspace button:has(> svg):not(:has(> span)):not(:disabled):active,
-.app-product-overlays button:has(> svg):not(:has(> span)):not(:disabled):active { transform: scale(.92) translateY(0); }
+.app-product-overlays button:has(> svg):not(:has(> span)):not(:disabled):active { translate: 0 0; scale: .92; }
 .app-product-workspace button:has(> svg):not(:has(> span)):focus-visible,
 .app-product-overlays button:has(> svg):not(:has(> span)):focus-visible { outline: 2px solid var(--product-focus-ring); outline-offset: 2px; }
 
@@ -751,6 +753,8 @@
     background: var(--user-surface-hover) !important;
     box-shadow: none !important;
     transform: none !important;
+    translate: none !important;
+    scale: none !important;
 }
 
 @media (max-width: 620px) {

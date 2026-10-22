@@ -6,6 +6,7 @@ const (
 	AgentLessonStatusPending  = "pending"
 	AgentLessonStatusApproved = "approved"
 	AgentLessonStatusRejected = "rejected"
+	AgentLessonStatusExpired  = "expired"
 )
 
 // AgentLessonStep 是一条记忆路线里的一步。
@@ -24,6 +25,8 @@ type AgentLesson struct {
 	Lesson         string     `json:"lesson" gorm:"type:text"`
 	Source         string     `json:"source" gorm:"size:200"`
 	StepsJSON      string     `json:"-" gorm:"column:steps_json;type:text"`
+	OriginRunID    string     `json:"originRunId,omitempty" gorm:"size:80;index"`
+	EvidenceJSON   string     `json:"-" gorm:"type:text"`
 	Status         string     `json:"status" gorm:"size:16;index:idx_agent_lessons_author_status,priority:2;index"`
 	AuthorUserID   string     `json:"-" gorm:"size:36;index:idx_agent_lessons_author_status,priority:1;index"`
 	Hits           int64      `json:"hits"`

@@ -1,0 +1,18 @@
+version: "2"
+
+run:
+  go: "1.25"
+  timeout: 5m
+  tests: false
+  relative-path-mode: gomod
+
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - staticcheck
+
+# Agent dependency direction, exported protocol maps, size, and cyclomatic
+# complexity are enforced by internal/agent/architecture AST tests. They are
+# deliberately not expressed as ineffective text/forbidigo regexes here.

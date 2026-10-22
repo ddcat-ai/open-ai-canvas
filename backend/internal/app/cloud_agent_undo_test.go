@@ -65,7 +65,7 @@ func TestUndoCloudAgentCanvasRestoresLatestMutationAndIsIdempotent(t *testing.T)
 	if err != nil || cloudAgentCanvasHash(restoredDoc) != beforeHash {
 		t.Fatal("undo did not restore the semantic before snapshot")
 	}
-	result, err = s.UndoCloudAgentCanvas("user", run.ID, call.ID, beforeHash, "重复请求")
+	result, err = s.UndoCloudAgentCanvas("user", run.ID, call.ID, afterHash, "重复原请求")
 	if err != nil || result["accepted"] != true {
 		t.Fatalf("undo should be idempotent: result=%+v err=%v", result, err)
 	}
