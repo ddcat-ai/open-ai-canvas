@@ -36,9 +36,9 @@
     --pd-a-on: var(--pd-a-on-theme, #fff);
 
     /* Semantic */
-    --pd-green: oklch(0.75 0.14 155); /* success */
-    --pd-orange: oklch(0.78 0.12 60); /* warning */
-    --pd-red: oklch(0.65 0.18 22); /* danger */
+    --pd-green: color-mix(in srgb, var(--palette-status-success) 55%, var(--pd-t0));
+    --pd-orange: color-mix(in srgb, var(--palette-status-warning) 55%, var(--pd-t0));
+    --pd-red: color-mix(in srgb, var(--palette-status-error) 55%, var(--pd-t0));
 
     /* Type scale (base 12px) */
     --pd-ts-base: 12px;
@@ -82,6 +82,18 @@
     --pd-accent: var(--previs-accent, #4f8cff);
     --pd-accent-2: var(--pd-a1);
 
+    /* 时间轴与预演台共用当前画布主题，不能继承全局常暗表面。 */
+    --previs-sequencer-surface: var(--pd-s1);
+    --previs-sequencer-surface-raised: var(--pd-s2);
+    --previs-sequencer-border: var(--pd-b0);
+    --previs-sequencer-muted: color-mix(in srgb, var(--pd-t1) 85%, var(--pd-t0));
+    --previs-sequencer-grid: var(--pd-b0);
+    --previs-dock-surface: var(--pd-s5);
+    --previs-dock-fg: var(--pd-t1);
+    --previs-dock-fg-strong: var(--pd-t0);
+    --previs-dock-active-surface: var(--pd-a-bg);
+    --previs-control-hover: var(--pd-s3);
+
     background: var(--pd-s0) !important;
     color: var(--pd-t0) !important;
     font-size: var(--pd-ts-base);
@@ -108,7 +120,7 @@
 .previs-desk textarea {
     font: inherit;
 }
-.previs-desk button {
+:where(.previs-desk) button {
     color: inherit;
     cursor: pointer;
 }
@@ -1248,94 +1260,6 @@
     font-size: var(--pd-ts-sm);
 }
 
-/* ── Viewport navigation overlay ────────────────────────────────────────────── */
-.previs-viewport-navigation {
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    z-index: 5;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 3px;
-    border: 1px solid oklch(1 0 0 / 0.12);
-    border-radius: var(--pd-r-sm);
-    background: oklch(0.1 0.016 240 / 0.8);
-    backdrop-filter: blur(12px);
-    box-shadow: var(--pd-shadow-raised);
-}
-.previs-viewport-navigation button {
-    min-width: 28px;
-    height: 24px;
-    padding: 0 7px;
-    border: 0;
-    border-radius: calc(var(--pd-r-sm) - 1px);
-    color: oklch(1 0 0 / 0.7);
-    background: transparent;
-    font-size: var(--pd-ts-2xs);
-    transition:
-        background 120ms var(--pd-ease-snap),
-        color 120ms var(--pd-ease-snap);
-}
-.previs-viewport-navigation button:hover:not(:disabled),
-.previs-viewport-navigation button:focus-visible:not(:disabled) {
-    color: var(--pd-t0);
-    background: oklch(1 0 0 / 0.12);
-    outline: none;
-}
-.previs-viewport-navigation button:disabled {
-    opacity: 0.32;
-}
-.previs-viewport-navigation-divider {
-    width: 1px;
-    height: 14px;
-    background: oklch(1 0 0 / 0.14);
-}
-
-/* ── Dropdown overlay (add menus) ────────────────────────────────────────────── */
-.previs-add-menu-overlay {
-    min-width: 200px;
-}
-.previs-add-menu-overlay .ant-dropdown-menu {
-    background: var(--pd-s5);
-    border: 1px solid var(--pd-b1);
-    border-radius: var(--pd-r-lg);
-    padding: 4px;
-    box-shadow: var(--pd-shadow-floating);
-}
-.previs-add-menu-overlay .ant-dropdown-menu-item {
-    border-radius: var(--pd-r-sm);
-    color: var(--pd-t1);
-    font-size: var(--pd-ts-sm);
-    padding: 7px 12px;
-    gap: 8px;
-    transition:
-        background 100ms var(--pd-ease-snap),
-        color 100ms var(--pd-ease-snap);
-}
-.previs-add-menu-overlay .ant-dropdown-menu-item:hover,
-.previs-add-menu-overlay .ant-dropdown-menu-item-active {
-    background: var(--pd-s3);
-    color: var(--pd-t0);
-}
-.previs-add-menu-overlay .ant-dropdown-menu-item-divider {
-    background: var(--pd-b0);
-    margin: 3px 0;
-}
-.previs-add-menu-overlay .ant-dropdown-menu-submenu-title {
-    border-radius: var(--pd-r-sm);
-    color: var(--pd-t1);
-    font-size: var(--pd-ts-sm);
-    padding: 7px 12px;
-    transition: background 100ms;
-}
-.previs-add-menu-overlay .ant-dropdown-menu-submenu-title:hover {
-    background: var(--pd-s3);
-    color: var(--pd-t0);
-}
-.previs-add-menu-overlay .ant-dropdown-menu-submenu-arrow {
-    color: var(--pd-t2);
-}
 
 /* ── Responsive ──────────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
@@ -1565,11 +1489,11 @@
     align-items: center;
     gap: 3px;
     padding: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid var(--pd-b1);
     border-radius: 10px;
-    background: rgba(20, 25, 31, 0.78);
+    background: var(--pd-s5);
     backdrop-filter: blur(14px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--pd-shadow-floating);
 }
 .previs-viewport-navigation button {
     min-width: 30px;
@@ -1577,7 +1501,7 @@
     padding: 0 7px;
     border: 0;
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.76);
+    color: var(--pd-t1);
     background: transparent;
     font-size: 10px;
     transition:
@@ -1586,8 +1510,8 @@
 }
 .previs-viewport-navigation button:hover:not(:disabled),
 .previs-viewport-navigation button:focus-visible:not(:disabled) {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.12);
+    color: var(--pd-t0);
+    background: var(--pd-s3);
     outline: none;
 }
 .previs-viewport-navigation button:disabled {
@@ -1596,7 +1520,7 @@
 .previs-viewport-navigation-divider {
     width: 1px;
     height: 16px;
-    background: rgba(255, 255, 255, 0.16);
+    background: var(--pd-b1);
 }
 
 /* ── 添加角色 / 添加机位 dropdown overlay ─────────────────────────────────── */
@@ -1604,17 +1528,15 @@
     min-width: 200px;
 }
 .previs-add-menu-overlay .ant-dropdown-menu {
-    background: #1a1e26;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--pd-s5);
+    border: 1px solid var(--pd-b1);
     border-radius: 10px;
     padding: 4px;
-    box-shadow:
-        0 16px 40px rgba(0, 0, 0, 0.52),
-        0 2px 8px rgba(0, 0, 0, 0.28);
+    box-shadow: var(--pd-shadow-floating);
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item {
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.82);
+    color: var(--pd-t0);
     font-size: 12px;
     padding: 7px 12px;
     gap: 8px;
@@ -1624,26 +1546,26 @@
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item:hover,
 .previs-add-menu-overlay .ant-dropdown-menu-item-active {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    background: var(--pd-s3);
+    color: var(--pd-t0);
 }
 .previs-add-menu-overlay .ant-dropdown-menu-item-divider {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--pd-b0);
     margin: 3px 0;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-title {
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.82);
+    color: var(--pd-t0);
     font-size: 12px;
     padding: 7px 12px;
     transition: background 0.12s ease;
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-title:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    background: var(--pd-s3);
+    color: var(--pd-t0);
 }
 .previs-add-menu-overlay .ant-dropdown-menu-submenu-arrow {
-    color: rgba(255, 255, 255, 0.38);
+    color: var(--pd-t1);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1855,7 +1777,7 @@
     padding: 3px 8px;
     border-radius: 5px;
     border: 0;
-    background: rgba(155, 188, 255, 0.12);
+    background: var(--pd-a-bg);
     color: var(--pd-accent);
     font-size: 10px;
     font-weight: 600;
@@ -1865,8 +1787,8 @@
         color 0.12s;
 }
 .pv-entity-section__add-btn:hover {
-    background: rgba(155, 188, 255, 0.22);
-    color: #fff;
+    background: var(--pd-s3);
+    color: var(--pd-t0);
 }
 .pv-entity-section__count {
     color: var(--pd-muted);
@@ -1907,8 +1829,8 @@
     background: var(--pd-surface-2);
 }
 .pv-entity-row--active {
-    background: rgba(100, 130, 255, 0.1);
-    border-color: rgba(140, 165, 255, 0.35);
+    background: var(--pd-a-bg);
+    border-color: var(--pd-a-bd);
 }
 .pv-entity-row__main {
     display: flex;
@@ -1971,7 +1893,7 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     color: var(--pd-accent);
-    background: rgba(155, 188, 255, 0.14);
+    background: var(--pd-a-bg);
     border-radius: 4px;
     padding: 1px 5px;
     flex: 0 0 auto;
@@ -2002,7 +1924,7 @@
     opacity: 1;
 }
 .pv-entity-row__del:hover {
-    color: #ff8c8c;
+    color: var(--pd-red);
 }
 
 .previs-workbench-tooltip-anchor {
@@ -2049,7 +1971,7 @@
     padding: 4px 2px;
     border: 1px solid var(--pd-line);
     border-radius: 5px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--pd-s2);
     color: var(--pd-muted);
     font-size: 10px;
     cursor: pointer;
@@ -2064,7 +1986,7 @@
 }
 .pv-pose-chip--active {
     border-color: var(--pd-accent);
-    background: rgba(155, 188, 255, 0.12);
+    background: var(--pd-a-bg);
     color: var(--pd-accent);
 }
 
@@ -2089,8 +2011,8 @@
     transform: scale(1.15);
 }
 .pv-color-dot--active {
-    border-color: #fff;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+    border-color: var(--pd-t0);
+    box-shadow: 0 0 0 1px var(--pd-s1);
 }
 .pv-color-custom {
     display: inline-flex;
@@ -2100,7 +2022,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    border: 2px dashed rgba(255, 255, 255, 0.4);
+    border: 2px dashed var(--pd-t1);
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -2148,8 +2070,8 @@
     border-color: var(--pd-a1);
 }
 .pv-btn--danger:hover {
-    border-color: rgba(255, 120, 120, 0.5);
-    color: #ff8c8c;
+    border-color: var(--pd-red);
+    color: var(--pd-red);
 }
 
 /* ── Empty hint ─────────────────────────────────────────────────────────── */
@@ -2232,7 +2154,7 @@
     padding: 6px 4px 5px;
     border: 1px solid var(--pd-line);
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--pd-s2);
     cursor: pointer;
     transition:
         border-color 0.1s,
@@ -2297,7 +2219,7 @@
     padding: 4px 6px;
     border: 1px solid var(--pd-line);
     border-radius: 5px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--pd-s2);
     cursor: pointer;
     transition: border-color 0.1s;
 }
@@ -2310,7 +2232,7 @@
     object-fit: cover;
     border-radius: 3px;
     flex: 0 0 32px;
-    background: #222;
+    background: var(--pd-s0);
 }
 .pv-bg-row__name {
     font-size: 10px;
@@ -2348,8 +2270,8 @@
     color: var(--pd-accent);
 }
 .pv-bg-btn--danger:hover {
-    border-color: rgba(255, 120, 120, 0.5);
-    color: #ff8c8c;
+    border-color: var(--pd-red);
+    color: var(--pd-red);
 }
 .pv-panorama-badge {
     display: flex;
@@ -2358,19 +2280,19 @@
     margin: 4px 8px;
     padding: 5px 9px;
     border-radius: 5px;
-    background: rgba(240, 181, 106, 0.1);
+    background: color-mix(in srgb, var(--pd-orange) 10%, transparent);
     color: var(--pd-orange);
     font-size: 10px;
 }
 .pv-panorama-badge button {
     border: 0;
     background: transparent;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--pd-orange);
     cursor: pointer;
     font-size: 10px;
 }
 .pv-panorama-badge button:hover {
-    color: #fff;
+    color: var(--pd-t0);
 }
 
 /* ── Viewport area: single view ───────────────────────────────────────────── */
@@ -2423,7 +2345,7 @@
 .pv-prop-upload-full:hover {
     border-color: var(--pd-accent);
     color: var(--pd-accent);
-    background: rgba(var(--pd-accent-rgb, 100 140 255) / 0.06);
+    background: var(--pd-a-bg);
 }
 
 .pv-pane-label {
@@ -2436,9 +2358,9 @@
     gap: 5px;
     padding: 3px 9px;
     border-radius: 5px;
-    background: rgba(13, 15, 17, 0.72);
+    background: var(--pd-s5);
     backdrop-filter: blur(10px);
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--pd-t0);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.04em;
@@ -2448,7 +2370,7 @@
     color: var(--pd-accent);
 }
 .pv-pane-label__meta {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--pd-t1);
     font-weight: 400;
 }
 .pv-pane-hint {
@@ -2506,7 +2428,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--pd-t1);
     font-size: 11px;
 }
 
@@ -2574,9 +2496,9 @@
     background: var(--pd-s2);
 }
 .pv-move-chip--active {
-    border-color: oklch(0.75 0.14 155 / 0.4);
-    background: oklch(0.75 0.14 155 / 0.1);
-    color: var(--pd-green);
+    border-color: var(--pd-a-bd);
+    background: var(--pd-a-bg);
+    color: var(--pd-t0);
     font-weight: 500;
 }
 
@@ -2664,7 +2586,7 @@
     padding: 10px 10px 10px;
     border: 1px solid var(--pd-line);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--pd-s2);
 }
 .pv-output-block__header {
     display: flex;
@@ -2686,7 +2608,7 @@
     background: var(--pd-green);
 }
 .pv-output-dot--recording {
-    background: #f0b56a;
+    background: var(--pd-orange);
     animation: pv-pulse 1s ease-in-out infinite;
 }
 @keyframes pv-pulse {
@@ -2733,11 +2655,11 @@
     max-height: 72px;
     overflow-y: auto;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--pd-s2);
     padding: 6px 7px;
     font-size: 9px;
     line-height: 1.55;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--pd-t1);
 }
 
 /* ── Animation link ──────────────────────────────────────────────────────── */
@@ -2919,7 +2841,7 @@
 .pv-rot-chip--active {
     border-color: var(--previs-accent, #4f8cff);
     color: var(--previs-accent, #4f8cff);
-    background: rgba(79, 140, 255, 0.1);
+    background: var(--pd-a-bg);
 }
 
 /* ── Viewport dock: same FloatingDock as the canvas toolbar ────────────────── */
@@ -3548,18 +3470,19 @@
     outline-offset: 1px;
 }
 
-/* ── 添加弹窗（antd 门户渲染在 .previs-desk 之外，自带变量） ─────────────── */
+/* 添加弹窗通过 styles.root 接收当前画布变量，portal 不依赖 DOM 继承。 */
 .previs-add-dialog-root {
-    --ad-bg: oklch(0.14 0.018 236);
-    --ad-surface: oklch(0.17 0.02 234);
-    --ad-surface-2: oklch(0.21 0.022 232);
-    --ad-line: oklch(1 0 0 / 0.1);
-    --ad-line-strong: oklch(1 0 0 / 0.24);
-    --ad-text: oklch(0.97 0.008 240);
-    --ad-muted: oklch(0.7 0.016 240);
-    --ad-faint: oklch(0.5 0.016 240);
-    --ad-accent: var(--previs-accent, oklch(0.72 0.18 240));
-    --ad-accent-bg: oklch(0.72 0.18 240 / 0.14);
+    --ad-bg: var(--pd-s1);
+    --ad-surface: var(--pd-s2);
+    --ad-surface-2: var(--pd-s4);
+    --ad-line: var(--pd-b0);
+    --ad-line-strong: var(--pd-b1);
+    --ad-text: var(--pd-t0);
+    --ad-muted: var(--pd-t1);
+    --ad-faint: var(--pd-t2);
+    --ad-accent: var(--pd-a0);
+    --ad-accent-bg: var(--pd-a-bg);
+    --ad-on-accent: var(--pd-a-on);
 }
 /* antd v6 的外壳是 .ant-modal-container；标题栏透明，统一跟随外壳底色。 */
 .previs-add-dialog-root .ant-modal-container {
@@ -3778,7 +3701,7 @@
     z-index: 1;
     padding: 3px 8px;
     border-radius: 999px;
-    background: oklch(0.14 0.018 236 / 0.72);
+    background: var(--ad-bg);
     color: var(--ad-text);
     font-size: 10px;
     pointer-events: none;
@@ -3815,7 +3738,7 @@
 .previs-add-dialog__footer .pv-btn--accent {
     border-color: var(--ad-accent);
     background: var(--ad-accent);
-    color: #fff;
+    color: var(--ad-on-accent);
     font-weight: 600;
 }
 @media (max-width: 860px) {

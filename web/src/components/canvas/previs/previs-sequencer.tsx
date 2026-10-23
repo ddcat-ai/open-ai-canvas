@@ -78,7 +78,7 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
     };
 
     // 摄影机关键帧只在摄影机行提供删除入口；Camera Cut 是概览轨，保持只读。
-    const cameraKeys: TrackKey[] = camera?.keyframes.map((key) => ({ id: key.id, time: key.time, color: "#78a9ff", label: `${camera.name} 镜头`, easing: key.easing, target: { track: "camera", cameraId: camera.id, keyframeId: key.id } })) || [];
+    const cameraKeys: TrackKey[] = camera?.keyframes.map((key) => ({ id: key.id, time: key.time, color: "var(--previs-sequencer-camera)", label: `${camera.name} 镜头`, easing: key.easing, target: { track: "camera", cameraId: camera.id, keyframeId: key.id } })) || [];
 
     const selectTrackKey = (key: TrackKey) => {
         if (!key.target) return;
@@ -111,9 +111,9 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
             <div className="previs-sequencer-resizer" onPointerDown={startResize} role="separator" aria-label="调整时间轴高度" />
             <header className="flex h-10 shrink-0 items-center gap-2 border-b px-3" style={{ borderColor: "var(--previs-sequencer-border)" }}>
                 <button type="button" className="previs-sequencer-transport" onClick={onPlayToggle} aria-label={playing ? "暂停" : "播放"} title={playing ? "暂停" : "播放"}>{playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}</button>
-                <span className="w-14 text-right text-[var(--fs-caption)] font-medium tabular-nums text-white/75">{formatTime(playhead)}</span>
-                <span className="text-[var(--fs-micro)] text-white/35">/ {formatTime(duration)} · {fps}fps</span>
-                <span className="mx-1 h-4 w-px bg-white/10" />
+                <span className="w-14 text-right text-[var(--fs-caption)] font-medium tabular-nums text-[var(--previs-sequencer-fg)]">{formatTime(playhead)}</span>
+                <span className="text-[var(--fs-micro)] text-[var(--previs-sequencer-muted)]">/ {formatTime(duration)} · {fps}fps</span>
+                <span className="mx-1 h-4 w-px bg-[var(--previs-sequencer-border)]" />
                 <select className="previs-sequencer-shot-select" value={shot.id} aria-label="当前镜头" onChange={(event) => onSelectShot(event.target.value)}>
                     {scene.shots.map((item, index) => <option key={item.id} value={item.id}>{index + 1}. {item.name}</option>)}
                 </select>
@@ -157,21 +157,21 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                     </div>
 
                     <SequencerRow label="镜头总轨" icon="◈" selected={false} onClick={() => undefined}>
-                        <TrackBar duration={duration} color="#7da2ff" label={`${shot.name} · ${formatTime(duration)}`} />
+                        <TrackBar duration={duration} color="var(--previs-sequencer-camera)" label={`${shot.name} · ${formatTime(duration)}`} />
                     </SequencerRow>
                     <SequencerRow label="Camera Cut" icon="▣" selected={false} onClick={() => undefined}>
                         <TrackKeys duration={duration} keys={cameraKeys} />
                     </SequencerRow>
                     {camera ? <SequencerRow label={camera.name} icon="⌾" selected={!selectedObjectId} onClick={() => { onSelectObject(null); onSelectBone(null); }}>
-                        <TrackBar duration={duration} color="#78a9ff" label="Transform · 焦距 · 景深" />
+                        <TrackBar duration={duration} color="var(--previs-sequencer-camera)" label="Transform · 焦距 · 景深" />
                         <TrackKeys duration={duration} keys={cameraKeys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} />
                     </SequencerRow> : null}
                     {actorObjects.map((object) => {
                         const isExpanded = expanded[object.id] ?? object.id === selectedObjectId;
                         const activeClip = object.motionClips?.find((clip) => clip.id === object.activeMotionClipId);
                         // 骨骼帧 id 在不同轨道间可能重复，React key 用「骨骼-帧」组合；删除目标仍指向原始帧 id。
-                        const boneTrackKeys: TrackKey[] = object.boneTracks?.flatMap((track) => track.keyframes.map((key) => ({ id: `bone-${track.bone}-${key.id}`, time: key.time, color: "#f0b36a", label: `${object.name} ${previsBoneLabel(track.bone)}`, easing: key.easing, target: { track: "object-bone" as const, objectId: object.id, bone: track.bone, keyframeId: key.id } }))) || [];
-                        const transformKeys: TrackKey[] = object.keyframes.map((key) => ({ id: `transform-${key.id}`, time: key.time, color: "#61d2ad", label: `${object.name} Transform`, easing: key.easing, target: { track: "object-transform" as const, objectId: object.id, keyframeId: key.id } }));
+                        const boneTrackKeys: TrackKey[] = object.boneTracks?.flatMap((track) => track.keyframes.map((key) => ({ id: `bone-${track.bone}-${key.id}`, time: key.time, color: "var(--previs-sequencer-bone)", label: `${object.name} ${previsBoneLabel(track.bone)}`, easing: key.easing, target: { track: "object-bone" as const, objectId: object.id, bone: track.bone, keyframeId: key.id } }))) || [];
+                        const transformKeys: TrackKey[] = object.keyframes.map((key) => ({ id: `transform-${key.id}`, time: key.time, color: "var(--previs-sequencer-motion)", label: `${object.name} Transform`, easing: key.easing, target: { track: "object-transform" as const, objectId: object.id, keyframeId: key.id } }));
                         return <div key={object.id} className="contents">
                             <SequencerRow label={object.name} icon={isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />} selected={selectedObjectId === object.id && !selectedBone} onClick={() => { onSelectObject(object.id); onSelectBone(null); setExpanded((current) => ({ ...current, [object.id]: !isExpanded })); }}>
                                 {/* 折叠时这是唯一的关键帧入口，必须可删除。 */}
@@ -179,20 +179,20 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                             </SequencerRow>
                             {isExpanded && showDetails ? <>
                                 <SequencerRow label="动作片段" icon="▶" indent selected={selectedObjectId === object.id && !selectedBone} onClick={() => onSelectObject(object.id)}>
-                                    <TrackBar duration={duration} color="#61d2ad" label={activeClip ? `${activeClip.name}${activeClip.loop ? " · 循环" : ""}` : "姿势 / 动作"} start={activeClip?.start || 0} clipDuration={activeClip?.loop ? duration : activeClip?.duration || duration} />
+                                    <TrackBar duration={duration} color="var(--previs-sequencer-motion)" label={activeClip ? `${activeClip.name}${activeClip.loop ? " · 循环" : ""}` : "姿势 / 动作"} start={activeClip?.start || 0} clipDuration={activeClip?.loop ? duration : activeClip?.duration || duration} />
                                 </SequencerRow>
                                 <SequencerRow label="Transform" icon="◇" indent selected={selectedObjectId === object.id && !selectedBone} onClick={() => { onSelectObject(object.id); onSelectBone(null); }}>
                                     <TrackKeys duration={duration} keys={transformKeys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} />
                                 </SequencerRow>
                                 {object.boneTracks?.map((track) => {
-                                    const keys: TrackKey[] = track.keyframes.map((key) => ({ id: key.id, time: key.time, color: "#f0b36a", label: `${object.name} ${previsBoneLabel(track.bone)}`, easing: key.easing, target: { track: "object-bone", objectId: object.id, bone: track.bone, keyframeId: key.id } }));
+                                    const keys: TrackKey[] = track.keyframes.map((key) => ({ id: key.id, time: key.time, color: "var(--previs-sequencer-bone)", label: `${object.name} ${previsBoneLabel(track.bone)}`, easing: key.easing, target: { track: "object-bone", objectId: object.id, bone: track.bone, keyframeId: key.id } }));
                                     return <SequencerRow key={track.bone} label={previsBoneLabel(track.bone)} icon="◌" indent selected={selectedObjectId === object.id && selectedBone === track.bone} onClick={() => { onSelectObject(object.id); onSelectBone(track.bone); }}><TrackKeys duration={duration} keys={keys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} /></SequencerRow>;
                                 })}
                             </> : null}
                         </div>;
                     })}
                     {objects.filter((object) => !actorObjects.some((actor) => actor.id === object.id)).map((object) => {
-                        const keys: TrackKey[] = object.keyframes.map((key) => ({ id: key.id, time: key.time, color: "#b8c0ca", label: `${object.name} Transform`, easing: key.easing, target: { track: "object-transform", objectId: object.id, keyframeId: key.id } }));
+                        const keys: TrackKey[] = object.keyframes.map((key) => ({ id: key.id, time: key.time, color: "var(--previs-sequencer-secondary)", label: `${object.name} Transform`, easing: key.easing, target: { track: "object-transform", objectId: object.id, keyframeId: key.id } }));
                         return <SequencerRow key={object.id} label={object.name} icon="□" selected={selectedObjectId === object.id} onClick={() => { onSelectObject(object.id); onSelectBone(null); }}><TrackKeys duration={duration} keys={keys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} /></SequencerRow>;
                     })}
                 </div>
@@ -229,7 +229,7 @@ function TrackKeys({ duration, keys, selectedTarget, onSelectKey, onDeleteKey }:
                     return <span
                         key={key.id}
                         className="previs-sequencer-key"
-                        style={{ left: `${(key.time / duration) * 100}%`, background: key.color || "#d7dee8" }}
+                        style={{ left: `${(key.time / duration) * 100}%`, background: key.color || "var(--previs-sequencer-secondary)" }}
                         title={`${key.time.toFixed(2)}s`}
                     />;
                 }
@@ -237,7 +237,7 @@ function TrackKeys({ duration, keys, selectedTarget, onSelectKey, onDeleteKey }:
                     key={key.id}
                     type="button"
                     className={`previs-sequencer-key is-actionable ${selectedTarget && previsKeyframeTargetId(selectedTarget) === previsKeyframeTargetId(target) ? "is-selected" : ""}`}
-                    style={{ left: `${(key.time / duration) * 100}%`, background: key.color || "#d7dee8" }}
+                    style={{ left: `${(key.time / duration) * 100}%`, background: key.color || "var(--previs-sequencer-secondary)" }}
                     aria-label={`选择 ${key.label ?? "关键帧"} ${key.time.toFixed(2)}s 的关键帧`}
                     aria-pressed={Boolean(selectedTarget && previsKeyframeTargetId(selectedTarget) === previsKeyframeTargetId(target))}
                     title={`${key.time.toFixed(2)}s · 点击定位，按 Delete 删除`}
@@ -273,7 +273,7 @@ function previsKeyframeTargetId(target: PrevisKeyframeDeleteTarget) {
 }
 
 function TrackBar({ duration, color, label, start = 0, clipDuration }: { duration: number; color: string; label: string; start?: number; clipDuration?: number }) {
-    return <div className="previs-sequencer-track-content"><span className="previs-sequencer-clip" style={{ left: `${(start / duration) * 100}%`, width: `${((clipDuration ?? duration) / duration) * 100}%`, background: `${color}33`, borderColor: `${color}88`, color }}><span className="truncate">{label}</span></span></div>;
+    return <div className="previs-sequencer-track-content"><span className="previs-sequencer-clip" style={{ left: `${(start / duration) * 100}%`, width: `${((clipDuration ?? duration) / duration) * 100}%`, background: `color-mix(in srgb, ${color} 14%, var(--previs-sequencer-surface))`, borderColor: `color-mix(in srgb, ${color} 55%, transparent)`, color }}><span className="truncate">{label}</span></span></div>;
 }
 
 function formatTime(time: number) {

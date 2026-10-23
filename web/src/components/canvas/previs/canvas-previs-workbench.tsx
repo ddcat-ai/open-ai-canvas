@@ -1303,7 +1303,8 @@ export function CanvasPrevisWorkbench({
         "--pd-a-bg": theme.accent.primarySoft,
         "--pd-a-bd": theme.node.activeStroke,
         "--pd-a-on": theme.accent.onPrimary,
-        "--pd-accent-rgb": theme.accent.primary === "#171717" || theme.accent.primary === "#f5f5f5" ? "255 255 255" : "79 140 255",
+        "--pd-shadow-raised": theme.node.shadow,
+        "--pd-shadow-floating": theme.node.hoverShadow,
         "--previs-accent": theme.accent.primary,
         "--pd-a-on-theme": theme.accent.onPrimary,
         "--pd-a-bg-theme": theme.accent.primarySoft,
@@ -1383,6 +1384,7 @@ export function CanvasPrevisWorkbench({
                         trigger={["click"]}
                         placement="bottomRight"
                         classNames={{ root: "previs-add-menu-overlay" }}
+                        styles={{ root: workbenchThemeStyle }}
                         menu={{
                             items: [
                                 { key: "shot", label: "录制镜头画面（镜头摄影机，按镜头时长）", onClick: () => void recordShotToFile() },
@@ -1919,6 +1921,7 @@ export function CanvasPrevisWorkbench({
             />
             <PrevisAddDialog
                 open={addDialog.open}
+                themeStyle={workbenchThemeStyle}
                 initialKind={addDialog.kind}
                 counts={addCounts}
                 readCurrentView={() => viewportRef.current?.readCameraTransform() ?? null}

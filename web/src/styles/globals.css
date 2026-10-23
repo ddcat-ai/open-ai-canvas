@@ -10992,8 +10992,15 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 /* 创作入口与空间导航在同一块画布上，避免视觉断层。 */
 
 .previs-sequencer {
+    --previs-sequencer-fg: var(--pd-t0, var(--previs-dock-fg-strong));
+    --previs-sequencer-secondary: color-mix(in srgb, var(--pd-t1, var(--previs-dock-fg)) 85%, var(--previs-sequencer-fg));
+    --previs-sequencer-hover: var(--pd-s3, var(--previs-control-hover));
+    --previs-sequencer-active: var(--pd-a-bg, var(--previs-dock-active-surface));
+    --previs-sequencer-camera: color-mix(in srgb, var(--palette-status-loading) 55%, var(--previs-sequencer-fg));
+    --previs-sequencer-motion: color-mix(in srgb, var(--palette-status-success) 55%, var(--previs-sequencer-fg));
+    --previs-sequencer-bone: color-mix(in srgb, var(--palette-status-warning) 55%, var(--previs-sequencer-fg));
     position: relative;
-    color: rgba(255, 255, 255, 0.86);
+    color: var(--previs-sequencer-fg);
     font-size: var(--fs-caption);
 }
 
@@ -11299,7 +11306,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     width: 44px;
     height: 2px;
     border-radius: var(--r-full);
-    background: rgba(255, 255, 255, 0.28);
+    background: var(--previs-sequencer-muted);
     transform: translateX(-50%);
     opacity: 0;
     transition: opacity var(--motion-dur-fast) var(--motion-ease-out);
@@ -11338,7 +11345,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     top: 0;
     bottom: 0;
     width: 1px;
-    background: #f0b36a;
+    background: var(--previs-sequencer-bone);
 }
 
 .previs-sequencer-label,
@@ -11358,7 +11365,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     gap: var(--space-2);
     width: var(--previs-sequencer-label-width);
     padding: 0 var(--space-3);
-    color: rgba(255, 255, 255, 0.64);
+    color: var(--previs-sequencer-secondary);
     text-align: left;
     white-space: nowrap;
     transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
@@ -11366,13 +11373,13 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 
 .previs-sequencer-label:hover,
 .previs-sequencer-row.is-selected > .previs-sequencer-label {
-    background: rgba(255, 255, 255, 0.075);
-    color: rgba(255, 255, 255, 0.96);
+    background: var(--previs-sequencer-active);
+    color: var(--previs-sequencer-fg);
 }
 
 .previs-sequencer-label.is-indent {
     padding-left: var(--space-6);
-    color: rgba(255, 255, 255, 0.46);
+    color: var(--previs-sequencer-secondary);
 }
 
 .previs-sequencer-ruler-label,
@@ -11384,7 +11391,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 
 .previs-sequencer-ruler-label {
     padding-left: var(--space-3);
-    color: rgba(255, 255, 255, 0.42);
+    color: var(--previs-sequencer-muted);
     font-size: var(--fs-micro);
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -11399,7 +11406,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 .previs-sequencer-tick {
     position: absolute;
     top: var(--space-2);
-    color: rgba(255, 255, 255, 0.38);
+    color: var(--previs-sequencer-muted);
     font-size: var(--fs-micro);
     transform: translateX(-50%);
 }
@@ -11409,7 +11416,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     top: 0;
     bottom: 0;
     width: 1px;
-    background: #f0b36a;
+    background: var(--previs-sequencer-bone);
     pointer-events: none;
 }
 
@@ -11430,7 +11437,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     width: 8px;
     height: 8px;
     border-radius: var(--r-xs);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.38);
+    box-shadow: 0 0 0 1px var(--previs-sequencer-border);
     transform: translate(-50%, -50%) rotate(45deg);
 }
 
@@ -11486,7 +11493,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     justify-content: center;
     height: var(--space-8);
     border-radius: var(--r-sm);
-    color: rgba(255, 255, 255, 0.62);
+    color: var(--previs-sequencer-secondary);
     transition: background var(--motion-dur-fast) var(--motion-ease-out), color var(--motion-dur-fast) var(--motion-ease-out);
 }
 
@@ -11509,7 +11516,7 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
     border: 1px solid var(--previs-sequencer-border);
     border-radius: var(--r-sm);
     background: var(--previs-sequencer-surface-raised);
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--previs-sequencer-fg);
     font-size: var(--fs-micro);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -11517,11 +11524,24 @@ html:not(.dark) .creation-duration-menu strong { color: #20242a; }
 
 .previs-sequencer-transport:hover,
 .previs-sequencer-icon:hover,
-.previs-sequencer-tool:hover,
+.previs-sequencer-tool:hover {
+    background: var(--previs-sequencer-hover);
+    color: var(--previs-sequencer-fg);
+}
+
 .previs-sequencer-icon.is-active,
 .previs-sequencer-tool.is-active {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    background: var(--previs-sequencer-active);
+    color: var(--previs-sequencer-fg);
+}
+
+.previs-sequencer-transport:focus-visible,
+.previs-sequencer-icon:focus-visible,
+.previs-sequencer-tool:focus-visible,
+.previs-sequencer-label:focus-visible,
+.previs-sequencer-shot-select:focus-visible {
+    outline: var(--stroke-2) solid var(--previs-sequencer-fg);
+    outline-offset: calc(-1 * var(--stroke-2));
 }
 .app-workspace-shell.is-creation-workspace,
 .app-workspace-shell.is-creation-workspace .app-workspace-stage {
