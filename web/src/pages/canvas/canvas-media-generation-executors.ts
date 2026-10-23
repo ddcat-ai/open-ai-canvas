@@ -137,6 +137,7 @@ export async function executeVideoGeneration({
 export async function executeAudioGeneration({
     nodeId,
     sourceNode,
+    canvasConnections,
     prompt,
     effectivePrompt,
     generationConfig,
@@ -155,24 +156,64 @@ export async function executeAudioGeneration({
     retryContext,
 }: CanvasGenerationExecution) {
     const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
-    const isEmptyAudioNode = sourceNode?.type === CanvasNodeType.Audio && !sourceNode.metadata?.content;
-    const isExistingAudioNode = sourceNode?.type === CanvasNodeType.Audio && Boolean(sourceNode.metadata?.content);
-    const audioId = isEmptyAudioNode ? nodeId : nanoid();
+    const reuseSourceNode = canGenerateMediaInPlace(sourceNode, CanvasNodeType.Audio);
+    const isExistingAudioNode = sourceNode?.type === CanvasNodeType.Audio && Boolean(sourceNode.metadata?.content) && !reuseSourceNode;
+    const audioId = reuseSourceNode ? nodeId : nanoid();
+    const versionRootId = isExistingAudioNode && sourceNode ? sourceNode.metadata?.versionOfNodeId || sourceNode.id : undefined;
     const parent = sourceNode?.position || { x: 0, y: 0 };
     const audioNode: CanvasNodeData = {
         id: audioId,
         type: CanvasNodeType.Audio,
         title: effectivePrompt.slice(0, 32) || "Generated Audio",
-        position: isEmptyAudioNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y + ((sourceNode?.height || spec.height) - spec.height) / 2 },
-        width: isEmptyAudioNode ? sourceNode.width : spec.width,
-        height: isEmptyAudioNode ? sourceNode.height : spec.height,
-        metadata: { ...canvasGenerationPromptMetadata(prompt, effectivePrompt), status: NODE_STATUS_LOADING, ...buildAudioGenerationMetadata(generationConfig), ...skillMetadata },
+        position: reuseSourceNode ? sourceNode!.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y + ((sourceNode?.height || spec.height) - spec.height) / 2 },
+        width: reuseSourceNode ? sourceNode!.width : spec.width,
+        height: reuseSourceNode ? sourceNode!.height : spec.height,
+        metadata: {
+            ...(reuseSourceNode ? sourceNode?.metadata || {} : {}),
+            ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
+            status: NODE_STATUS_LOADING,
+            errorDetails: undefined,
+            generationErrorCode: undefined,
+            resourceReloadAvailable: undefined,
+            failedPromptFingerprint: undefined,
+            content: reuseSourceNode ? "" : undefined,
+            storageKey: undefined,
+            assetId: undefined,
+            ...buildAudioGenerationMetadata(generationConfig),
+            ...skillMetadata,
+        },
     };
     registerPendingNodeIds([audioId]);
-    setNodes((current) =>
-        isEmptyAudioNode ? current.map((node) => (node.id === nodeId ? { ...node, ...audioNode } : node)) : [...current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), audioNode],
-    );
-    if (!isEmptyAudioNode && !isExistingAudioNode) setConnections((current) => [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: audioId }]);
+    setNodes((current) => {
+        if (reuseSourceNode) return current.map((node) => (node.id === nodeId ? { ...node, ...audioNode } : node));
+        if (!isExistingAudioNode || !sourceNode) return [...current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), audioNode];
+        const rootId = versionRootId!;
+        const nextLabel = nextCanvasVersionLabel(rootId, current);
+        const hasPrimaryVersion = current.some((node) => (node.metadata?.versionOfNodeId || node.id) === rootId && node.metadata?.versionPrimary);
+        return [
+            ...current.map((node) => {
+                if ((node.metadata?.versionOfNodeId || node.id) !== rootId) return node;
+                return {
+                    ...node,
+                    metadata: {
+                        ...node.metadata,
+                        versionOfNodeId: rootId,
+                        versionLabel: node.metadata?.versionLabel || "A",
+                        versionPrimary: node.metadata?.versionPrimary || (!hasPrimaryVersion && node.id === sourceNode.id),
+                        status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status,
+                    },
+                };
+            }),
+            { ...audioNode, metadata: { ...audioNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: false } },
+        ];
+    });
+    // 重新生成已有音频时，新节点继承源音频的上游连接，与源音频保持并行关系，而不是作为其下游子节点。
+    if (!reuseSourceNode) {
+        setConnections((current) => {
+            if (!isExistingAudioNode) return [...current, { id: nanoid(), fromNodeId: nodeId, toNodeId: audioId }];
+            return [...current, ...canvasConnections.filter((connection) => connection.toNodeId === nodeId).map((connection) => ({ ...connection, id: nanoid(), toNodeId: audioId }))];
+        });
+    }
 
     startGenerationRequest(audioId, nodeId, nodeId, controller);
     try {

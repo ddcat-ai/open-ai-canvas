@@ -1843,7 +1843,7 @@ function CanvasViewportPage() {
                 if (!mediaURL) throw new Error("当前媒体只有本地内容，没有可复制的地址");
                 if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(mediaURL);
                 else if (!(await copyToClipboard(mediaURL))) throw new Error("当前浏览器不支持写入剪贴板");
-                message.success(node?.type === CanvasNodeType.Video ? "视频地址已复制" : "图片地址已复制");
+                message.success(node?.type === CanvasNodeType.Video ? "视频地址已复制" : node?.type === CanvasNodeType.Audio ? "音频地址已复制" : "图片地址已复制");
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "媒体地址复制失败");
             }

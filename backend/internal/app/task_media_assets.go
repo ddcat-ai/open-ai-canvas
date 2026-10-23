@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"gorm.io/gorm"
@@ -56,6 +57,14 @@ func (s *Service) AudioOutputDurationMs(task model.Task) (int64, error) {
 		return 0, err
 	}
 	if resource.DurationMs <= 0 {
+		if resource.Provider == "local" {
+			filePath := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
+			if duration := probeMediaDurationMs(filePath); duration > 0 {
+				resource.DurationMs = duration
+				_ = s.repo.SaveResource(resource)
+				return duration, nil
+			}
+		}
 		return 0, errors.New("音频结果缺少有效时长")
 	}
 	return resource.DurationMs, nil

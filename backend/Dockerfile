@@ -67,7 +67,7 @@ RUN npm ci --omit=dev --ignore-scripts
 
 FROM node:22.19-alpine
 
-RUN apk add --no-cache ca-certificates tzdata wget \
+RUN apk add --no-cache ca-certificates tzdata wget ffmpeg \
     && addgroup -S app \
     && adduser -S app -G app
 

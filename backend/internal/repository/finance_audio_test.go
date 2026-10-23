@@ -36,7 +36,7 @@ func TestSettleAudioPerSecondOrderUsesMeasuredDuration(t *testing.T) {
 	}
 
 	repo := &Repository{db: db}
-	if err := repo.SettleBillingOrderWithAudioDuration("audio-order", "", 2_100); err != nil {
+	if err := repo.SettleBillingOrderWithAudioDuration("audio-order", "", 2_500); err != nil {
 		t.Fatalf("SettleBillingOrderWithAudioDuration() error = %v", err)
 	}
 	var order model.BillingOrder
@@ -52,6 +52,29 @@ func TestSettleAudioPerSecondOrderUsesMeasuredDuration(t *testing.T) {
 	}
 	if account.AvailableMicrocredits != 800 || account.ReservedMicrocredits != 0 {
 		t.Fatalf("settled audio account = %#v; want available=800 reserved=0", account)
+	}
+
+	// 验证四舍五入：2100ms 应四舍五入为 2 秒，扣费 200
+	if err := db.Model(&model.CreditAccount{}).Where("user_id = ?", "user-audio").Update("reserved_microcredits", 100).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.BillingOrder{
+		ID: "audio-order-round-down", UserID: "user-audio", IdempotencyKey: "audio-task-2", Capability: "audio", BillingMode: "per_second",
+		UnitPriceMicrocredits: 100, MultiplierBasisPoints: 10_000, Quantity: 1, AmountMicrocredits: 100,
+		BillingCostSnapshot:        model.BillingCostSnapshot{CostBillingMode: "per_second", CostQuantity: 1},
+		ReservedAmountMicrocredits: 100, Status: model.BillingStatusRunning,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SettleBillingOrderWithAudioDuration("audio-order-round-down", "", 2_100); err != nil {
+		t.Fatalf("SettleBillingOrderWithAudioDuration() error = %v", err)
+	}
+	var roundDownOrder model.BillingOrder
+	if err := db.First(&roundDownOrder, "id = ?", "audio-order-round-down").Error; err != nil {
+		t.Fatal(err)
+	}
+	if roundDownOrder.Quantity != 2 || roundDownOrder.ActualAmountMicrocredits != 200 {
+		t.Fatalf("round-down audio order = %#v; want quantity=2 actual=200", roundDownOrder)
 	}
 }
 

@@ -359,7 +359,11 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			if audioDurationMs == nil || *audioDurationMs <= 0 {
 				return errors.New(mediaLabel + "实际时长不可用，无法按秒结算")
 			}
-			quantity = (*audioDurationMs + 999) / 1000
+			// 音频时长四舍五入到整秒计费；不足 1 秒按 1 秒计费
+			quantity = (*audioDurationMs + 500) / 1000
+			if quantity < 1 {
+				quantity = 1
+			}
 			var err error
 			actual, err = audioBillingAmount(order.UnitPriceMicrocredits, quantity, order.MultiplierBasisPoints)
 			if err != nil {

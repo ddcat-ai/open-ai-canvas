@@ -135,13 +135,13 @@ export function CanvasNodeContextMenu({
     const isCharacterReference = Boolean(isText && node?.metadata?.workflowKind === "character" && node.metadata.characterAssetId);
     const isDrawing = node?.type === CanvasNodeType.Drawing;
     const isVideo = node?.type === CanvasNodeType.Video;
-    const isMedia = isImage || isVideo;
     const isAudio = node?.type === CanvasNodeType.Audio;
+    const isMedia = isImage || isVideo || isAudio;
     const isFrame = node?.type === CanvasNodeType.Frame;
     const isFolder = isCanvasFolderNode(node);
     const hasNodeContent = isText ? Boolean(nodeContent.trim()) : Boolean(nodeContent);
-    const canSaveAsset = Boolean(node && !isCharacterReference && (isText ? hasNodeContent : hasNodeContent && (isImage || isVideo || isAudio)));
-    const canOpenPreview = Boolean(isMedia && hasNodeContent);
+    const canSaveAsset = Boolean(node && !isCharacterReference && (isText ? hasNodeContent : hasNodeContent && isMedia));
+    const canOpenPreview = Boolean((isImage || isVideo) && hasNodeContent);
     const canGenerateFromText = Boolean(isText && !isCharacterReference && hasNodeContent);
     const canCopyMediaUrl = Boolean(isMedia && hasNodeContent);
     const assetCategory = node ? canvasNodeAssetCategory(node) : "other";
@@ -221,9 +221,12 @@ export function CanvasNodeContextMenu({
                                 </>
                             ) : isMedia ? (
                                 <>
-                                    <MenuHeader title={isImage ? "图片" : "视频"} description={node?.title || nodeTypeLabel(node)} />
+                                    <MenuHeader title={isImage ? "图片" : isVideo ? "视频" : "音频"} description={node?.title || nodeTypeLabel(node)} />
                                     <MenuSection label="查看与归档" />
-                                    <MenuButton icon={<Maximize2 />} label="进入全景预览" disabled={!canOpenPreview} onClick={() => runAction(onViewMedia)} />
+                                    {isImage || isVideo ? (
+                                        <MenuButton icon={<Maximize2 />} label="进入全景预览" disabled={!canOpenPreview} onClick={() => runAction(onViewMedia)} />
+                                    ) : null}
+                                    <MenuButton icon={<FolderPlus />} label="保存到我的素材" disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />
                                     <MenuButton icon={<Tags />} label="设置资产分类" chevron onClick={() => setCategoryOpen(true)} />
                                     {isImage ? <MenuButton icon={<CloudUpload />} label="上传到方舟素材库" onClick={() => runAction(onUploadToArkPrivateAsset)} /> : null}
                                     <MenuDivider />
@@ -231,7 +234,7 @@ export function CanvasNodeContextMenu({
                                     <MenuButton icon={<AtSign />} label="发送到 Agent" disabled={!onSendToAgent} onClick={() => onSendToAgent && runAction(onSendToAgent)} />
                                     <MenuButton icon={<Copy />} label="复制节点" shortcut="⌘C" onClick={() => runAction(onCopyNode)} />
                                     {isImage ? <MenuButton icon={<Clipboard />} label="复制图片" disabled={!hasNodeContent} onClick={() => runAction(onCopyContent)} /> : null}
-                                    <MenuButton icon={<Link2 />} label={isImage ? "复制图片地址" : "复制视频地址"} disabled={!canCopyMediaUrl} onClick={() => runAction(onCopyMediaUrl)} />
+                                    <MenuButton icon={<Link2 />} label={isImage ? "复制图片地址" : isVideo ? "复制视频地址" : "复制音频地址"} disabled={!canCopyMediaUrl} onClick={() => runAction(onCopyMediaUrl)} />
                                     <MenuButton icon={<Copy />} label="创建生成副本" onClick={() => runAction(onCreateGenerationCopy)} />
                                     <MenuButton icon={<Layers3 />} label="创建参数变体" shortcut="⌘D" onClick={() => runAction(onDuplicate)} />
                                     <MenuButton icon={<Trash2 />} label="删除节点" danger onClick={() => runAction(onDelete)} />
