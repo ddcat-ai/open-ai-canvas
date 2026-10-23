@@ -325,7 +325,19 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 const applied = await applyGenerationTaskResultToNodes(nodesRef.current, task, nodeId);
                 if (signal.aborted) throw new DOMException("The operation was aborted", "AbortError");
                 if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
-                setNodes((current) => commitCanvasGenerationResult(current, before, applied.node!, task.id, applied.additionalNodes));
+                let boundNode = applied.node;
+                if (
+                    task.status === "succeeded" &&
+                    (boundNode.type === CanvasNodeType.Image || boundNode.type === CanvasNodeType.Video || boundNode.type === CanvasNodeType.Audio) &&
+                    boundNode.metadata?.content
+                ) {
+                    const asset = await retryCanvasAssetSyncAfterRateLimit(
+                        () => ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: boundNode, source: "canvas-generation", taskId: task.id, signal }),
+                        { signal },
+                    );
+                    boundNode = { ...boundNode, metadata: { ...boundNode.metadata, assetId: asset.assetId } };
+                }
+                setNodes((current) => commitCanvasGenerationResult(current, before, boundNode, task.id, applied.additionalNodes));
             };
             if (!task.outputs?.length && task.type === "canvas_text") {
                 await applyStoredTaskResult();

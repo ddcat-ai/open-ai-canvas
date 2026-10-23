@@ -26,6 +26,17 @@ test("归一化或修补后的新资源可独立保存且拒绝沿用原任务�
     expect(findCanvasNodeAsset([asset], derived, "canvas")).toBeUndefined();
 });
 
+test("生成任务物化素材缺少 nodeId 时仍按任务和资源绑定到节点", () => {
+    const generated = {
+        ...canvasNodeToAsset(original, { canvasId: "canvas", source: "canvas-generation", taskId: "generation" }),
+        id: "materialized-asset",
+        createdAt: "",
+        updatedAt: "",
+        metadata: { source: "generation-task", taskId: "generation", resourceKey: "resource:original" },
+    } as Asset;
+    expect(findCanvasNodeAsset([generated], original, "canvas", "generation")?.id).toBe("materialized-asset");
+});
+
 test("本地图层合成和手工上传可登记各自资源", () => {
     const composite = { ...original, metadata: { ...original.metadata, storageKey: "resource:composite", imageLayerGroup: { width: 400, height: 300, layers: [], compositeStatus: "ready" as const } } };
     expect(requiresMaterializedCanvasAsset(composite)).toBe(false);

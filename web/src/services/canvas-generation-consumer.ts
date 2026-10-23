@@ -162,7 +162,25 @@ export async function applyCanvasGenerationTaskNodeEffect(input: {
     const applied = await applyMaterializedGenerationTaskResultToNodes(snapshot, input.task, input.output, input.effectKey, input.nodeId);
     if (!applied.updated || !applied.node) throw new Error("画布中找不到对应任务节点");
     throwIfAborted(input.signal);
-    const node = await prepareCanvasMediaNodeAsset(input.projectId, applied.node, input.signal);
+    const materializedAssetId = input.output.materializedAssetId;
+    if (!materializedAssetId) throw new Error("生成任务输出缺少素材绑定");
+    // 生成结果节点必须在第一次云端画布提交前拿到 assetId。此前由
+    // useCanvasGeneration 的后置 effect 补绑定，导致资源已就绪但画布提交先触发素材一致性校验。
+    const candidateNode = {
+        ...applied.node,
+        metadata: { ...applied.node.metadata, assetId: materializedAssetId },
+    };
+    const boundAsset = await ensureCanvasNodeAsset({
+        canvasId: input.projectId,
+        node: candidateNode,
+        source: "canvas-generation",
+        taskId: input.task.id,
+        signal: input.signal,
+    });
+    const node = {
+        ...candidateNode,
+        metadata: { ...candidateNode.metadata, assetId: boundAsset.assetId },
+    };
     const additionalNodes = await Promise.all(applied.additionalNodes.map((child) => prepareCanvasMediaNodeAsset(input.projectId, child, input.signal)));
     throwIfAborted(input.signal);
     const imageBatchRootId = generationTaskInput(input.task)?.metadata?.edit === "mask" ? before.metadata?.batchRootId : undefined;
