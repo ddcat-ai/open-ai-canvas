@@ -616,7 +616,7 @@ func TestCurrentUserCDNSettingAppliesToHistoricalResourcesInSameStorage(t *testi
 	}
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: server.URL, CDNBaseURL: server.URL, Bucket: "private-bucket",
-		AccessKeyID: "access-id", AccessKeySecret: "secret-value", CDNAuthMode: "public",
+		AccessKeyID: "access-id", AccessKeySecret: "secret-value", CDNAuthMode: "public", DeliveryProvided: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -647,7 +647,7 @@ func TestBoundHistoricalUserResourceDoesNotFollowCurrentProviderCDN(t *testing.T
 	actor := &model.User{ID: "user-1"}
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, CDNBaseURL: aliyunCDN.URL, Bucket: "aliyun-bucket",
-		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret", CDNAuthMode: "public",
+		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret", CDNAuthMode: "public", DeliveryProvided: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -657,7 +657,7 @@ func TestBoundHistoricalUserResourceDoesNotFollowCurrentProviderCDN(t *testing.T
 	}
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: qiniuKodoProvider, Endpoint: qiniuEndpoint.URL, CDNBaseURL: qiniuCDN.URL, Bucket: "qiniu-bucket",
-		AccessKeyID: "qiniu-access", AccessKeySecret: "qiniu-secret", CDNAuthMode: "public",
+		AccessKeyID: "qiniu-access", AccessKeySecret: "qiniu-secret", CDNAuthMode: "public", DeliveryProvided: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -696,13 +696,13 @@ func TestHistoricalUserResourceWithoutStorageSettingIDKeepsItsProviderCDN(t *tes
 	actor := &model.User{ID: "user-1"}
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, CDNBaseURL: aliyunCDN.URL, Bucket: "aliyun-bucket",
-		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret", CDNAuthMode: "public",
+		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret", CDNAuthMode: "public", DeliveryProvided: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: qiniuKodoProvider, Endpoint: qiniuEndpoint.URL, CDNBaseURL: qiniuCDN.URL, Bucket: "qiniu-bucket",
-		AccessKeyID: "qiniu-access", AccessKeySecret: "qiniu-secret", CDNAuthMode: "public",
+		AccessKeyID: "qiniu-access", AccessKeySecret: "qiniu-secret", CDNAuthMode: "public", DeliveryProvided: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
