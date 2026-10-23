@@ -582,7 +582,12 @@ export async function getResourceBlob(storageKey: string) {
     // session-bound, so a Blob read must include it even when the URL is
     // relative to the platform origin.
     const credentials = access.delivery === "platform-local" || access.delivery === "platform-proxy" ? "include" : "omit";
-    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", signal: AbortSignal.timeout(60_000) });
+    // Display images may already have populated Chrome's HTTP cache through a
+    // non-CORS <img> request. Reusing that opaque cache entry for fetch() can
+    // fail before a response is exposed, even though OSS serves valid CORS
+    // headers. A byte consumer must revalidate so it receives a CORS-readable
+    // response rather than inheriting the display cache entry.
+    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", cache: "no-cache", signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new Error(`资源读取失败（${response.status}）`);
     return response.blob();
 }

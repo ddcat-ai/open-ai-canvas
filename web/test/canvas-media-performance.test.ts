@@ -29,6 +29,10 @@ const canvasProjectSource = moduleGroupSource("pages/canvas/project.tsx");
 const globalStylesSource = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 const resourceBlobCacheSource = readFileSync(resolve(import.meta.dir, "../src/services/resource-blob-cache.ts"), "utf8");
 const resourceApiSource = readFileSync(resolve(import.meta.dir, "../src/services/api/resources.ts"), "utf8");
+const imageToolSource = readFileSync(resolve(import.meta.dir, "../src/hooks/use-image-tool-source.ts"), "utf8");
+const canvasMediaDialogsSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/canvas-project-media-dialogs.tsx"), "utf8");
+const cropDialogSource = readFileSync(resolve(import.meta.dir, "../src/components/image-crop-dialog.tsx"), "utf8");
+const maskEditDialogSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node-mask-edit-dialog.tsx"), "utf8");
 
 function node(id: string, type: CanvasNodeType): CanvasNodeData {
     return { id, type, title: id, position: { x: 0, y: 0 }, width: 320, height: 180, metadata: {} };
@@ -110,6 +114,19 @@ describe("large canvas media rendering", () => {
         expect(projectAssetsSource).toContain("downloadBrowserMedia({ storageKey: personal.data.storageKey");
         expect(workflowProductionSource).toContain("storageKey: resourceStorageKey(artifact.resourceId)");
         expect(workflowProductionSource).not.toContain("await response.blob()");
+    });
+
+    test("revalidates full Blob reads instead of reusing an opaque display cache entry", () => {
+        expect(resourceApiSource).toContain('mode: "cors", cache: "no-cache"');
+    });
+
+    test("loads crop and mask editor previews from the authenticated resource Blob", () => {
+        expect(canvasMediaDialogsSource).toContain("storageKey={cropNode.metadata.storageKey}");
+        expect(canvasMediaDialogsSource).toContain("storageKey={maskEditNode.metadata.storageKey}");
+        expect(imageToolSource).toContain("getImageBlob(storageKey)");
+        expect(imageToolSource).toContain("prepareRasterSource(source, storageKey ?");
+        expect(cropDialogSource).toContain('src={displaySource} alt="待裁剪图片"');
+        expect(maskEditDialogSource).toContain('src={displaySource} alt="局部重绘原图"');
     });
 
     test("merges concurrent full Blob consumers before starting the download", () => {

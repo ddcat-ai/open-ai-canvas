@@ -6,7 +6,7 @@ import { centeredAspectSelection, resizeSelection, selectAspect, translateSelect
 import { useImageToolSource } from "@/hooks/use-image-tool-source";
 
 export type { ImageCropRect } from "@/lib/canvas/image-operation-plan";
-export type ImageCropDialogProps = { dataUrl: string; open: boolean; onClose: () => void; onConfirm: (crop: ImageCropRect) => void; fixedAspect?: number; title?: string; confirmLoading?: boolean };
+export type ImageCropDialogProps = { dataUrl: string; storageKey?: string; open: boolean; onClose: () => void; onConfirm: (crop: ImageCropRect) => void; fixedAspect?: number; title?: string; confirmLoading?: boolean };
 const initialSelection: ImageCropRect = { x: 0.1, y: 0.1, width: 0.8, height: 0.8 };
 const grips: { name: string; vector: CropGrip }[] = [
     { name: "nw", vector: [-1, -1] },
@@ -24,8 +24,8 @@ export function ImageCropDialog(props: ImageCropDialogProps) {
     return props.open && props.dataUrl ? <CropEditor key={`${props.dataUrl}:${props.fixedAspect ?? "free"}`} {...props} /> : null;
 }
 
-function CropEditor({ dataUrl, onClose, onConfirm, fixedAspect, title = "裁剪图片", confirmLoading = false }: ImageCropDialogProps) {
-    const { size, error } = useImageToolSource(dataUrl);
+function CropEditor({ dataUrl, storageKey, onClose, onConfirm, fixedAspect, title = "裁剪图片", confirmLoading = false }: ImageCropDialogProps) {
+    const { displaySource, size, error } = useImageToolSource(dataUrl, storageKey);
     const [selected, setSelection] = useState<ImageCropRect | null>(null);
     const selection = selected ?? (size && fixedAspect !== undefined ? centeredAspectSelection(size, fixedAspect) : initialSelection);
     const [locked, setLocked] = useState(false);
@@ -98,7 +98,7 @@ function CropEditor({ dataUrl, onClose, onConfirm, fixedAspect, title = "裁剪�
                         onPointerCancel={finish}
                         onLostPointerCapture={finish}
                     >
-                        <img src={dataUrl} alt="待裁剪图片" draggable={false} className="block max-h-[60vh] max-w-full" />
+                        <img src={displaySource} alt="待裁剪图片" draggable={false} className="block max-h-[60vh] max-w-full" />
                         {size ? (
                             <div
                                 role="group"
