@@ -53,6 +53,9 @@ type OSSSettingRequest struct {
 	CDNAuthMode       string `json:"cdnAuthMode"`
 	RequireCDN        bool   `json:"requireCDN"`
 	AllowPrivateProxy bool   `json:"allowPrivateProxy"`
+	// DeliveryProvided 标记请求是否显式携带 delivery 字段。连接测试等轻量接口
+	// 不提交这三个字段，此时后端保留现库值而不是把鉴权方式覆盖为空。
+	DeliveryProvided bool `json:"-"`
 }
 
 type PublicOSSSetting struct {
@@ -594,7 +597,7 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		PathStyle:       req.PathStyle,
 		SessionToken:    strings.TrimSpace(req.SessionToken),
 		AllowUserS3:     req.AllowUserS3,
-		Delivery:        storage.DeliverySettings{CDNAuthMode: strings.ToLower(strings.TrimSpace(req.CDNAuthMode)), RequireCDN: req.RequireCDN, AllowPrivateProxy: req.AllowPrivateProxy},
+		// Delivery 的最终取值在下方按 DeliveryProvided 合并 current，这里先不填充。
 	})
 	if next.Delivery.CDNAuthMode != "" && next.Delivery.CDNAuthMode != "public" && next.Delivery.CDNAuthMode != "qiniu" {
 		return next, BadAuthRequest("CDN 鉴权方式无效，仅支持 public 或 qiniu")
@@ -616,6 +619,15 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 	}
 	if next.SessionToken == "" && next.Provider == current.Provider {
 		next.SessionToken = current.SessionToken
+	}
+	// 连接测试等轻量请求不携带 delivery 字段（前端 connectionInput 只提交连接参数）。
+	// 请求未显式给出 CDN 鉴权方式时保留现库值，避免测试落库把已保存的 public 覆盖为空。
+	// 显式传空串表示用户主动清除鉴权方式，此时不回填；布尔字段无法区分"未传"与"传 false"，
+	// 由调用方通过 DeliveryProvided 标记声明。
+	if req.DeliveryProvided {
+		next.Delivery = storage.DeliverySettings{CDNAuthMode: strings.ToLower(strings.TrimSpace(req.CDNAuthMode)), RequireCDN: req.RequireCDN, AllowPrivateProxy: req.AllowPrivateProxy}
+	} else {
+		next.Delivery = current.Delivery
 	}
 	if next.Enabled {
 		if next.Bucket == "" {

@@ -344,3 +344,31 @@ func proxyRequestVideoSeconds(contentType string, body []byte) int64 {
 	}
 	return 0
 }
+
+// requestHasDeliveryFields 判断请求体 JSON 是否显式携带 CDN 分发字段
+// （cdnAuthMode / requireCDN / allowPrivateProxy）。
+// 必须在 ShouldBindJSON 之前调用（它会把 body 读空），本函数读完后会把
+// 原始 body 放回 c.Request.Body 供后续绑定使用。
+// 连接测试等轻量接口的 payload 只含连接参数；这些字段缺席时，
+// 服务层落库应保留现库值而不是把已保存的 CDN 鉴权方式覆盖为空。
+func requestHasDeliveryFields(c *gin.Context) bool {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return false
+	}
+	// 回填 body，保证后续 ShouldBindJSON 仍可正常解析。
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+	if len(body) == 0 {
+		return false
+	}
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil {
+		return false
+	}
+	for _, key := range []string{"cdnAuthMode", "requireCDN", "allowPrivateProxy"} {
+		if _, exists := payload[key]; exists {
+			return true
+		}
+	}
+	return false
+}

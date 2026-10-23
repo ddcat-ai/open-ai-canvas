@@ -245,19 +245,27 @@ export function trimTrailingSlash(value: string) {
 }
 
 export function connectionInput(values: Partial<OSSFormValues>) {
-    return normalizeOSSConnectionTestInput({
-        provider: !values.mode || values.mode === "local" ? ("aliyun" as const) : values.mode,
-        s3Preset: values.s3Preset,
-        region: values.region,
-        endpoint: values.endpoint,
-        cdnBaseUrl: values.cdnBaseUrl,
-        bucket: values.bucket,
-        accessKeyId: values.accessKeyId,
-        accessKeySecret: values.accessKeySecret,
-        sessionToken: values.sessionToken,
-        pathPrefix: values.pathPrefix,
-        pathStyle: values.pathStyle === true,
-    });
+    return {
+        ...normalizeOSSConnectionTestInput({
+            provider: !values.mode || values.mode === "local" ? ("aliyun" as const) : values.mode,
+            s3Preset: values.s3Preset,
+            region: values.region,
+            endpoint: values.endpoint,
+            cdnBaseUrl: values.cdnBaseUrl,
+            bucket: values.bucket,
+            accessKeyId: values.accessKeyId,
+            accessKeySecret: values.accessKeySecret,
+            sessionToken: values.sessionToken,
+            pathPrefix: values.pathPrefix,
+            pathStyle: values.pathStyle === true,
+        }),
+        // 显式携带 CDN 分发字段：连接测试通过后会落库整份配置，
+        // 缺席这三个字段会被后端当作"未提供"而保留旧值；这里带上表单当前值，
+        // 保证「先改配置 → 直接点测试」时测试落库与保存语义一致。
+        cdnAuthMode: values.cdnAuthMode ?? "",
+        requireCDN: values.requireCDN === true,
+        allowPrivateProxy: values.allowPrivateProxy === true,
+    };
 }
 
 export function hasValidSettingTime(value?: string) {

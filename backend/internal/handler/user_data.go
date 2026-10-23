@@ -162,11 +162,15 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		// 必须在 ShouldBindJSON 之前判断（绑定会读空 body）。
+		deliveryProvided := requestHasDeliveryFields(c)
 		var req service.OSSSettingRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
+		// 与管理端一致：测试 payload 不含 delivery 字段时，落库保留现库值。
+		req.DeliveryProvided = deliveryProvided
 		result, err := svc.TestUserOSSSetting(user, req)
 		if err != nil {
 			failService(c, err)

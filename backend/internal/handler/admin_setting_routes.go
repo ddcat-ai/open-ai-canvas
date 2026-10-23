@@ -55,11 +55,17 @@ func registerAdminSettingRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		// 必须在 ShouldBindJSON 之前判断（绑定会读空 body）。
+		deliveryProvided := requestHasDeliveryFields(c)
 		var req service.OSSSettingRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
+		// 连接测试的 payload 不含 delivery 字段（前端 connectionInput 只提交连接参数），
+		// 但测试通过后会落库整份配置。标记 delivery 未提供，落库时保留现库值，
+		// 避免测试动作把已保存的 CDN 鉴权方式覆盖为空。
+		req.DeliveryProvided = deliveryProvided
 		result, err := svc.TestAdminOSSSetting(user, req)
 		if err != nil {
 			failService(c, err)

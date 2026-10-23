@@ -264,6 +264,11 @@ function connectionInput(values: OSSFormValues) {
         sessionToken: values.sessionToken?.trim() || "",
         pathPrefix: values.pathPrefix?.trim() || DEFAULT_OSS_PATH_PREFIX,
         pathStyle: values.pathStyle === true,
+        // 显式携带 CDN 分发字段：连接测试通过后会落库整份配置，
+        // 缺席这三个字段会被后端把已保存的鉴权方式覆盖为空。
+        cdnAuthMode: values.cdnAuthMode ?? "",
+        requireCDN: values.requireCDN === true,
+        allowPrivateProxy: values.allowPrivateProxy === true,
     };
 }
 
