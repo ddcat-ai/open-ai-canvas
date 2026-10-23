@@ -224,6 +224,24 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"setting": setting})
 	})
+	r.POST("/admin/settings/email/test", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.TestEmailRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.TestEmailSetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"result": result})
+	})
 
 	r.GET("/admin/channels/:id/models", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

@@ -155,21 +155,39 @@ export type RegistrationSetting = {
     updatedAt?: string;
 };
 
-export type EmailSetting = {
-    enabled: boolean;
+export type EmailSender = {
+    id: string;
+    name: string;
     host: string;
     port: number;
     username: string;
     password?: string;
+    hasPassword?: boolean;
     encryption: "starttls" | "tls" | "none";
     fromEmail: string;
     fromName: string;
-    fromNameInherited: boolean;
-    hasPassword: boolean;
+    fromNameInherited?: boolean;
+    enabled: boolean;
+};
+
+export type EmailSetting = {
+    enabled: boolean;
+    dispatchMode: "single" | "round_robin";
+    activeSenderId?: string;
+    senders: EmailSender[];
     registrationAllowedDomains: string[];
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    encryption?: "starttls" | "tls" | "none";
+    fromEmail?: string;
+    fromName?: string;
+    fromNameInherited?: boolean;
+    hasPassword?: boolean;
 };
 
 export type RedeemBatch = {
@@ -297,6 +315,22 @@ export function getAdminEmailSetting() {
 
 export function updateAdminEmailSetting(input: Partial<EmailSetting>) {
     return http.patch<{ setting: EmailSetting }>("/admin/settings/email", input);
+}
+
+export type TestEmailInput = {
+    recipient: string;
+    senderId?: string;
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    encryption?: "starttls" | "tls" | "none";
+    fromEmail?: string;
+    fromName?: string;
+};
+
+export function testAdminEmail(input: TestEmailInput) {
+    return http.post<{ result: { recipient: string; durationMs: number } }>("/admin/settings/email/test", input);
 }
 
 export function listAdminChannelModels(channelId: string) {

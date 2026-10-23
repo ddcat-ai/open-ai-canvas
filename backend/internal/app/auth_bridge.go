@@ -23,6 +23,10 @@ type (
 	PasswordResetRequest       = auth.PasswordResetRequest
 	EmailSettingRequest        = auth.EmailSettingRequest
 	PublicEmailSetting         = auth.PublicEmailSetting
+	EmailSenderRequest         = auth.EmailSenderRequest
+	PublicEmailSender          = auth.PublicEmailSender
+	TestEmailRequest           = auth.TestEmailRequest
+	TestEmailResult            = auth.TestEmailResult
 	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
 	PublicLinuxDOSetting       = auth.PublicLinuxDOSetting
 	LinuxDOCallbackResult      = auth.LinuxDOCallbackResult
@@ -177,6 +181,10 @@ func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, err
 
 func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest) (*PublicEmailSetting, error) {
 	return s.authDomain().UpdateEmailSetting(actor, req)
+}
+
+func (s *Service) TestEmailSetting(actor *model.User, req TestEmailRequest) (*TestEmailResult, error) {
+	return s.authDomain().TestEmail(actor, req)
 }
 
 func (s *Service) EmailEnabled() (bool, error) {
