@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 
 /** 原文件（相对 src）到拆分出的同组模块。新增拆分时在这里登记。 */
 export const SPLIT_MODULE_GROUPS: Record<string, readonly string[]> = {
-    "components/canvas/canvas-cloud-agent-panel.tsx": ["components/canvas/canvas-cloud-agent-panel-parts.tsx", "components/canvas/canvas-cloud-agent-events.ts"],
+    "components/canvas/canvas-cloud-agent-panel.tsx": ["components/canvas/canvas-cloud-agent-panel-parts.tsx", "components/canvas/canvas-cloud-agent-events.ts", "lib/canvas/cloud-agent-events.ts"],
     "components/canvas/canvas-cloud-agent-chat-ui.tsx": ["components/canvas/canvas-cloud-agent-composer.tsx", "components/canvas/canvas-cloud-agent-attachments.ts"],
     "components/canvas/art-critique/ai-art-critique-modal.tsx": ["components/canvas/art-critique/ai-art-critique-report.tsx"],
     "components/canvas/canvas-resource-mention-textarea.tsx": ["components/canvas/canvas-mention-chips.tsx", "components/canvas/canvas-mention-editable.ts", "components/canvas/canvas-mention-menu.tsx"],

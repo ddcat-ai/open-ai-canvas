@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 // 自研（2026-09-17）：Agent 运行中插话。
 //
@@ -7,7 +8,7 @@ import { expect, test } from "bun:test";
 // 所以这里的断言要盯住两件事：入口真的打开了，以及旧前提没有残留在代码里。
 test("运行中不再锁死输入框，发送走插话而不是新建轮次", async () => {
     // 面板拆分为主组件、展示组件与事件归约三个模块，源码约束覆盖整个模块组。
-    const panel = (await Promise.all(["canvas-cloud-agent-panel.tsx", "canvas-cloud-agent-panel-parts.tsx", "canvas-cloud-agent-events.ts"].map((file) => Bun.file(new URL(`../src/components/canvas/${file}`, import.meta.url)).text()))).join("\n");
+    const panel = moduleGroupSource("components/canvas/canvas-cloud-agent-panel.tsx");
 
     // 运行中走插话分支（不建轮次、不走那套扣费幂等记账）
     expect(panel).toContain("await interject(value)");
@@ -16,7 +17,7 @@ test("运行中不再锁死输入框，发送走插话而不是新建轮次", as
     expect(panel).toContain('interjection: "sent"');
 
     // 连接或记录未确认仅禁止发送，不冻结消息草稿输入。
-    expect(panel).toContain('submitDisabled={otherAgentRunning || Boolean(run && connectionStatus !== "connected")');
+    expect(panel).toContain("submitDisabled={otherAgentRunning && !pendingSubmission.current?.request");
     const composer = panel.match(/<AgentChatComposer[\s\S]*?submitDisabled=\{([^\n]+)\}/)?.[1];
     expect(composer).toBeDefined();
     expect(composer).not.toMatch(/\bbusy\b|\brunning\b/);

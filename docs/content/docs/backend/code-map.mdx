@@ -50,6 +50,10 @@ description: 从产品功能快速定位主要代码入口
 
 云端 Agent：`web/src/components/canvas/canvas-cloud-agent-panel.tsx` 协调对话、技能和审批，`canvas-cloud-agent-settings.tsx` 编辑偏好；`services/api/agent.ts` 消费持久化运行及 SSE。手工提示词与媒体草稿更新仍共用 `lib/canvas/canvas-node-prompt.ts`，不覆盖已提交输入或生成结果。
 
+多端接续沿用已有运行的 `conversationId`：后端 `app/cloud_agent_conversations.go`、`repository/cloud_agent_conversations.go` 提供按用户隔离的只读目录和分页轮次，并在任务预留事务内校验最新父轮；前端 `services/cloud-agent-history.ts`、`lib/canvas/cloud-agent-follow.ts` 和共享事件归约负责云端恢复、游标跟随与本机草稿保护。
+
+图片审批规格更新在 `canvas-agent-image-approval-settings.tsx` 累积同一次交互的多个参数变化，并移除扩展 JSON 中冲突的旧规格。
+
 ### 云端 Agent 重构后的责任边界
 
 | 职责 | 入口与边界 |

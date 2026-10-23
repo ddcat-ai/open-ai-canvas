@@ -1276,6 +1276,54 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /agent/conversations:
+    get:
+      tags: [agent]
+      summary: 读取当前用户在画布中参与的 Agent 对话
+      description: 只读目录，不创建运行或调用模型。按最新轮 createdAt、id 倒序；即使对话后来换绑画布，latestRunId、status、revision、cleanupPending 仍来自该对话全局最新一轮。仅返回当前登录用户的记录，画布必须属于当前用户。
+      parameters:
+        - in: query
+          name: canvasId
+          required: true
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        - in: query
+          name: before
+          description: 上一页返回的不透明 nextCursor
+          schema: { type: string, maxLength: 512 }
+      responses:
+        "200":
+          description: 信封 data 为 items（id、canvasId、title、latestRunId、status、revision、cleanupPending、createdAt、updatedAt）和可选 nextCursor；没有记录时 items 为空数组
+        "400":
+          description: 画布 ID、limit 或分页游标无效
+        "404":
+          description: 画布不存在或不属于当前用户
+  /agent/conversations/{id}/runs:
+    get:
+      tags: [agent]
+      summary: 按时间顺序恢复当前用户的完整 Agent 对话轮次
+      description: 仅返回当前用户、同一 conversationId 的不可变轮次，包含跨页面换绑画布后的轮次。按 createdAt、id 升序分页；每轮默认带尾部事件窗口，完整事件使用运行详情 fromStart 和 sinceSeq 分页读取。读取不恢复执行或重复调用工具。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        - in: query
+          name: after
+          description: 上一页返回的不透明 nextCursor
+          schema: { type: string, maxLength: 512 }
+      responses:
+        "200":
+          description: 信封 data 为 items（与 data.run 相同的运行视图，含 conversationId、userPrompt、idempotencyKey）和可选 nextCursor
+        "400":
+          description: 会话 ID、limit 或分页游标无效
+        "404":
+          description: 会话不存在或不属于当前用户
   /agent/runs:
     post:
       tags: [agent]
@@ -1289,7 +1337,7 @@ paths:
               $ref: "#/components/schemas/CloudAgentRequest"
       responses:
         "200":
-          description: 信封 data.run，包含新一轮 id、canvasId、status、permissionMode、model 及时间
+          description: 信封 data.run，包含新一轮 id、conversationId、userPrompt、idempotencyKey、canvasId、status、permissionMode、model 及时间
         "400":
           description: 参数、能力、模型或预算不符合要求，未创建任务
         "409":
@@ -1302,6 +1350,10 @@ paths:
       summary: 读取当前用户的 Agent 轮次
       description: data.run 只返回一页事件（默认最新 40 条）并带上 eventSeqBase、eventCount、latestSeq、eventsTruncated：eventSeqBase 是本次首条事件之前已入库的条数（不变量 events[i].seq == eventSeqBase + i + 1），latestSeq 可直接作为下次 sinceSeq，eventsTruncated 表示还有更早的记录未随本次返回。读取走 (run_id, sequence) 的 keyset 分页，不使用 offset；升级前把事件放在 state_json 里的轮次在事件表中没有行，读取回退到内存窗口。
       parameters:
+        - in: query
+          name: fromStart
+          description: true 时从 sinceSeq 之后的首条事件开始读取（sinceSeq=0 时从 seq=1 开始）；省略时 sinceSeq=0 仍返回默认尾部窗口。用于多端首次恢复完整历史，分页追平用 latestSeq 与 eventCount 判断。
+          schema: { type: boolean, default: false }
         - in: query
           name: sinceSeq
           required: false
@@ -1316,7 +1368,7 @@ paths:
         "200":
           description: 信封 data.run（含 events 与 eventSeqBase / eventCount / latestSeq / eventsTruncated）
         "400":
-          description: sinceSeq 或 eventLimit 不是整数或超出范围
+          description: fromStart 不是布尔值，或 sinceSeq、eventLimit 不是整数或超出范围
         "404":
           description: 轮次不存在或不属于当前用户
   /agent/runs/{id}/messages:
@@ -1335,7 +1387,7 @@ paths:
         "200":
           description: 信封 data.run（新的 ID）
         "409":
-          description: 父轮仍在执行、幂等键冲突，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；不自动重试。
+          description: 父轮仍在执行、幂等键冲突，或画布已有另一轮 Agent 占用。旧父轮已有后续轮次时 reason 为 agent_conversation_stale_parent，客户端应同步最新历史，不能自动重发。原请求幂等回放优先于旧父轮检查。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；不自动重试。
   /agent/runs/{id}/interjections:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"

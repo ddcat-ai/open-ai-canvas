@@ -50,6 +50,7 @@ func TestAgentRunViewOptionsRejectsInvalidPaginationQuery(t *testing.T) {
 		"?eventLimit=501",
 		"?eventLimit=-5",
 		"?eventLimit=abc",
+		"?fromStart=invalid",
 	} {
 		t.Run(query, func(t *testing.T) {
 			request := httptest.NewRequest("GET", "/api/agent/runs/run-1"+query, nil)
@@ -59,5 +60,29 @@ func TestAgentRunViewOptionsRejectsInvalidPaginationQuery(t *testing.T) {
 				t.Fatalf("%s 未被拒绝，解析为 %+v", query, options)
 			}
 		})
+	}
+}
+
+func TestAgentRunHistoryStartAndConversationLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest("GET", "/?fromStart=true&sinceSeq=0&eventLimit=500", nil)
+	view, err := agentRunViewOptions(context)
+	if err != nil || !view.FromStart || view.SinceSeq != 0 || view.EventLimit != 500 {
+		t.Fatalf("history prefix options: %+v %v", view, err)
+	}
+	for _, query := range []string{"", "?limit=1", "?limit=100"} {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder())
+		context.Request = httptest.NewRequest("GET", "/"+query, nil)
+		if _, err := agentConversationLimit(context); err != nil {
+			t.Fatalf("valid limit %s: %v", query, err)
+		}
+	}
+	for _, query := range []string{"?limit=0", "?limit=101", "?limit=-1", "?limit=abc"} {
+		context, _ := gin.CreateTestContext(httptest.NewRecorder())
+		context.Request = httptest.NewRequest("GET", "/"+query, nil)
+		if _, err := agentConversationLimit(context); err == nil {
+			t.Fatalf("invalid limit accepted: %s", query)
+		}
 	}
 }
