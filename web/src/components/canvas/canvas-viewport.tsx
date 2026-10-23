@@ -35,6 +35,7 @@ const CANVAS_POINTER_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-connection-c
 const CANVAS_INTERNAL_DRAG_SELECTOR = "[data-canvas-batch-table]";
 const WHEEL_ZOOM_DELTA = 72;
 const TRACKPAD_PINCH_ZOOM_DELTA = 24;
+const WHEEL_GESTURE_IDLE_MS = 120;
 
 type TouchPoint = { x: number; y: number };
 
@@ -91,6 +92,7 @@ export function CanvasViewport({
     const pinchStateRef = useRef<PinchState>({ active: false, pointerIds: [-1, -1], initialDistance: 1, worldX: 0, worldY: 0, initialScale: viewport.k });
     const spacePressedRef = useRef(false);
     const controlPressedRef = useRef(false);
+    const wheelPanGestureRef = useRef<{ owner: "canvas" | "content"; lastEventAt: number } | null>(null);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
 
@@ -103,6 +105,7 @@ export function CanvasViewport({
         panState.current.isPanning = false;
         pinchStateRef.current.active = false;
         touchPointsRef.current.clear();
+        wheelPanGestureRef.current = null;
         interactingRef.current = false;
         if (frameRef.current) cancelAnimationFrame(frameRef.current);
         if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
@@ -169,7 +172,7 @@ export function CanvasViewport({
                 delete containerRef.current?.dataset.canvasViewportInteracting;
                 syncViewport();
                 syncTimerRef.current = null;
-            }, 120);
+            }, WHEEL_GESTURE_IDLE_MS);
         },
         [containerRef, onViewportPreviewChange, syncViewport],
     );
@@ -193,6 +196,7 @@ export function CanvasViewport({
         };
 
         const handleBlur = () => {
+            wheelPanGestureRef.current = null;
             controlPressedRef.current = false;
             spacePressedRef.current = false;
             setIsSpacePressed(false);
@@ -216,13 +220,37 @@ export function CanvasViewport({
             const absX = Math.abs(deltaX);
             const absY = Math.abs(deltaY);
             const isPinchZoom = event.ctrlKey || event.metaKey;
+            const looksLikeMouseWheel = isDiscreteCanvasWheel(event.deltaY, event.deltaMode);
+            const looksLikeTrackpadPan = !isPinchZoom && (event.shiftKey || absX > 0 || (!looksLikeMouseWheel && absY > 0));
+            const now = performance.now();
+            const previousGesture = wheelPanGestureRef.current;
+            // 连续手势中的单帧增量可能恰好等于鼠标滚轮步长，不因此重新分类。
+            const continuingPan = !isPinchZoom && previousGesture !== null && now - previousGesture.lastEventAt < WHEEL_GESTURE_IDLE_MS;
+            const isTrackpadPan = continuingPan || looksLikeTrackpadPan;
+            const container = containerRef.current;
+            // 已开始的画布平移也接收 body Portal 上的事件；新手势只能从当前画布内开始。
+            if (!target || !container?.contains(target)) {
+                if (!continuingPan || previousGesture.owner !== "canvas") {
+                    wheelPanGestureRef.current = isTrackpadPan ? { owner: "content", lastEventAt: now } : null;
+                    return;
+                }
+            }
+            const ignoredTarget = Boolean(target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR));
+            if (isTrackpadPan) {
+                wheelPanGestureRef.current = {
+                    owner: continuingPan ? previousGesture.owner : ignoredTarget ? "content" : "canvas",
+                    lastEventAt: now,
+                };
+            } else {
+                wheelPanGestureRef.current = null;
+            }
             // Chromium also sets ctrlKey for touchpad pinch, but does not send a Control keydown.
             const editing = document.activeElement?.matches("input,textarea,select,[contenteditable]:not([contenteditable='false'])");
             if (event.ctrlKey && controlPressedRef.current && !event.metaKey && !event.shiftKey && !editing && !target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && onSelectedImageWheel?.(deltaY)) {
                 event.preventDefault();
                 return;
             }
-            if (target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !isPinchZoom) {
+            if (!isPinchZoom && (isTrackpadPan ? wheelPanGestureRef.current?.owner === "content" : ignoredTarget)) {
                 // 内部区域保留纵向滚动，但横向手势不能泄漏为 macOS 浏览器前进/后退。
                 if (event.shiftKey || absX > absY) event.preventDefault();
                 return;
@@ -232,10 +260,10 @@ export function CanvasViewport({
             event.preventDefault();
             interactingRef.current = true;
             const current = viewportRef.current;
-            const looksLikeMouseWheel = isDiscreteCanvasWheel(event.deltaY, event.deltaMode);
-            const looksLikeTrackpadPan = !isPinchZoom && (event.shiftKey || absX > 0 || (!looksLikeMouseWheel && absY > 0));
 
-            if (looksLikeTrackpadPan) {
+            if (isTrackpadPan) {
+                // 画布已接管平移，不能再让输入框等子元素的 onWheel 手工滚动内容。
+                event.stopPropagation();
                 const panX = event.shiftKey && absX < 1 ? deltaY : deltaX;
                 scheduleViewportChange(
                     {
@@ -450,11 +478,11 @@ export function CanvasViewport({
         const observer = new ResizeObserver(updateRect);
         observer.observe(container);
         window.addEventListener("resize", updateRect);
-        container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+        window.addEventListener("wheel", handleWheel, { passive: false, capture: true });
         return () => {
             observer.disconnect();
             window.removeEventListener("resize", updateRect);
-            container.removeEventListener("wheel", handleWheel, { capture: true });
+            window.removeEventListener("wheel", handleWheel, { capture: true });
         };
     }, [interactive, containerRef, handleWheel]);
 

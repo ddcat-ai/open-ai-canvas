@@ -40,7 +40,7 @@ export function CanvasSettingsPopover({ label, summary, children, placement = "t
             align={autoAdjustOverflow ? { offset: [0, 0], overflow: { shiftX: true, shiftY: true } } : undefined}
             arrow={false}
             destroyOnHidden
-            styles={{ root: { zIndex: "var(--z-dialog-popover)" }, container: { background: theme.canvas.background, color: theme.node.text, padding: 12 } }}
+            styles={{ root: { zIndex: "var(--z-dialog-popover)" }, container: { background: "var(--workspace-surface-strong)", color: theme.node.text, padding: 12 } }}
             content={
                 <section
                     id={id}

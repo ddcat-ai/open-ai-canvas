@@ -5,7 +5,7 @@ import { Clapperboard, Image as ImageIcon, List, Music2, Pencil, Table2, Video, 
 import { useCanvasOverlayLayer } from "@/components/canvas/canvas-overlay-layer";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasOverlayBounds, observeCanvasOverlayBounds, placeCanvasNodePanel, updateCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
+import { canvasOverlayBounds, observeCanvasOverlayBounds, placeCanvasNodePanel } from "@/lib/canvas/canvas-overlay-layout";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type ConnectionHandle, type Position, type ViewportTransform } from "@/types/canvas";
@@ -150,7 +150,6 @@ export function CanvasNodePanelOverlay({
             // layout。节点位置和拖拽偏移已经在这里可用，直接用世界坐标计算浮层位置。
             const position = placeCanvasNodePanel(visualNode, nextViewport, availableBounds, { width: nextWidth, height: measuredHeight }, liveDragOffset);
             panel.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
-            updateCanvasNodePanelBounds(container, panel, { left: position.left, top: position.top, right: position.left + nextWidth, bottom: position.top + Math.min(measuredHeight, availableHeight) });
         };
         update(viewport);
         const resizeObserver = new ResizeObserver(() => {
@@ -175,7 +174,6 @@ export function CanvasNodePanelOverlay({
             unsubscribeViewport();
             unsubscribeResize?.();
             unsubscribeDrag();
-            updateCanvasNodePanelBounds(container, panel, null);
         };
     }, [allowOverflow, containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, resizeMotion, viewport]);
 

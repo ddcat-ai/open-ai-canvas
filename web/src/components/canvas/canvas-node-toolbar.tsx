@@ -5,7 +5,7 @@ import type { MenuProps } from "antd";
 import { Camera, Check, ChevronDown, ChevronRight, Ellipsis, Grid3x3, Images, Plus, SlidersHorizontal, UserRound } from "lucide-react";
 
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
-import { avoidCanvasNodePanels, canvasNodePanelBounds, canvasOverlayBounds, canvasToolbarLayoutLevel, observeCanvasOverlayBounds, subscribeCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
+import { canvasOverlayBounds, canvasToolbarLayoutLevel, observeCanvasOverlayBounds, placeCanvasNodeToolbar } from "@/lib/canvas/canvas-overlay-layout";
 import { ASSET_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
@@ -184,27 +184,12 @@ export function CanvasNodeToolbar({
         let queued = false;
         let liveViewport = viewport;
         let liveDragOffset: Position | null = null;
-        let containerRect = container.getBoundingClientRect();
-        let availableBounds = canvasOverlayBounds(containerRect);
-        let toolbarWidth = toolbarRef.current?.offsetWidth || 0;
-        let toolbarHeight = toolbarRef.current?.offsetHeight || 44;
+        let availableBounds = canvasOverlayBounds(container.getBoundingClientRect());
         const update = () => {
             // 视口预览帧已经修改了世界层 transform；直接用节点世界坐标计算，
             // 避免随后读取 getBoundingClientRect() 强制同步布局。
-            const scale = Math.max(liveViewport.k, 0.05);
-            const offsetX = liveDragOffset?.x || 0;
-            const offsetY = liveDragOffset?.y || 0;
             const visualNode = resizeMotion?.resolveNode(node) || node;
-            const nodeLeft = liveViewport.x + (visualNode.position.x + offsetX) * scale;
-            const nodeTop = liveViewport.y + (visualNode.position.y + offsetY) * scale;
-            const nodeWidth = visualNode.width * scale;
-            const preferredLeft = nodeLeft + nodeWidth / 2;
-            const halfToolbar = toolbarWidth / 2;
-            const preferredAnchorLeft = Math.min(Math.max(preferredLeft, availableBounds.left + halfToolbar), Math.max(availableBounds.left + halfToolbar, availableBounds.right - halfToolbar));
-            const above = nodeTop - 30;
-            const preferredAnchorTop = Math.max(availableBounds.top + toolbarHeight, Math.min(above, availableBounds.bottom));
-            // 面板在定位时发布矩形；这里不读取 DOM，可在实时平移和尺寸收敛后继续避让。
-            const { left, top } = avoidCanvasNodePanels({ left: preferredAnchorLeft, top: preferredAnchorTop }, { width: toolbarWidth, height: toolbarHeight }, availableBounds, canvasNodePanelBounds(container));
+            const { left, top } = placeCanvasNodeToolbar(visualNode, liveViewport, liveDragOffset);
             if (toolbarRef.current) {
                 toolbarRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`;
                 return;
@@ -221,9 +206,6 @@ export function CanvasNodeToolbar({
             });
         };
         const measure = () => {
-            containerRect = container.getBoundingClientRect();
-            toolbarWidth = toolbarRef.current?.offsetWidth || 0;
-            toolbarHeight = toolbarRef.current?.offsetHeight || 44;
             const availableWidth = Math.max(0, availableBounds.right - availableBounds.left);
             const dock = toolbarRef.current?.firstElementChild as HTMLElement | null;
             if (dock) {
@@ -239,7 +221,6 @@ export function CanvasNodeToolbar({
         resizeObserver.observe(container);
         if (toolbarRef.current) resizeObserver.observe(toolbarRef.current);
         const stopBounds = observeCanvasOverlayBounds(container, (bounds) => { availableBounds = bounds; measure(); });
-        const unsubscribePanels = subscribeCanvasNodePanelBounds(container, () => scheduleUpdate());
         const unsubscribeViewport = subscribeCanvasGraphicsViewportPreview(container, scheduleUpdate);
         const unsubscribeResize = resizeMotion?.subscribeNode(node.id, () => scheduleUpdate());
         const unsubscribeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
@@ -251,7 +232,6 @@ export function CanvasNodeToolbar({
             disposed = true;
             resizeObserver.disconnect();
             stopBounds();
-            unsubscribePanels();
             unsubscribeViewport();
             unsubscribeResize?.();
             unsubscribeDrag();
