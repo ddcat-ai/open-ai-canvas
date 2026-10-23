@@ -83,3 +83,58 @@ func TestCloudAgentRuntimeToolResultIsNeverNull(t *testing.T) {
 		}
 	}
 }
+
+// 模型在后续步骤重用之前的 call ID（如 call_0）时，新的调用必须真正执行，
+// 不能回放上一步同 ID 的工具结果。
+func TestCloudAgentRuntimeToolExecutesCallIDReusedInLaterStep(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{"nodes":[]}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.CreateCloudAgentRun("user", agentTestRequest(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := func(name string) cloudAgentCall {
+		var call cloudAgentCall
+		call.ID, call.Function.Name, call.Function.Arguments = "call_0", name, `{}`
+		persisted, err := s.repo.CloudAgent("user", run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, err := cloudAgentDecode(persisted)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state.Calls, state.CallIndex = []cloudAgentCall{call}, 0
+		state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": "", "tool_calls": []cloudAgentCall{call}})
+		if err := s.repo.MutateCloudAgent("user", run.ID, persisted.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+			return cloudAgentSave(current, &state)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return call
+	}
+	first, err := s.executeCloudAgentRuntimeTool(context.Background(), "user", run.ID, step("canvas_list_node_types"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.executeCloudAgentRuntimeTool(context.Background(), "user", run.ID, step("canvas_get_state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(persisted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.CallIndex != 1 {
+		t.Fatalf("second step call was not executed: CallIndex = %d", state.CallIndex)
+	}
+	if fmt.Sprint(first.(map[string]any)["content"]) == fmt.Sprint(second.(map[string]any)["content"]) {
+		t.Fatalf("second step replayed the first step result: %v", second)
+	}
+}

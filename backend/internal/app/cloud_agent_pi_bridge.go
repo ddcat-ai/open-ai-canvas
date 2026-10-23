@@ -507,6 +507,10 @@ func (s *Service) settleCloudAgentMedia(userID, runID string) error {
 func cloudAgentToolMessage(state *cloudAgentRuntime, callID string) (string, bool) {
 	for index := len(state.Canonical.Messages) - 1; index >= 0; index-- {
 		message := state.Canonical.Messages[index]
+		// 只回放本步（最近一条 assistant 之后）已提交的结果；后续步骤重用旧 call ID 时必须真正执行。
+		if stringField(message, "role") == "assistant" {
+			break
+		}
 		if stringField(message, "role") == "tool" && stringField(message, "tool_call_id") == callID {
 			return stringField(message, "content"), true
 		}
