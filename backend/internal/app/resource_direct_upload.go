@@ -20,7 +20,30 @@ import (
 const (
 	directUploadURLTTL      = 30 * time.Minute
 	directUploadMaxFileSize = 512 << 20
+
+	// 分片直传：超过阈值的文件改走 S3 multipart，由浏览器并发上传多段。
+	// 动机：Cloudflare 隧道下单条 TCP 连接的吞吐被拥塞窗口卡死（实测单流 166KB/s），
+	// 而并发两条能到 0.42MB/s（约 2.5 倍）。多分片并发是当前架构下唯一不依赖
+	// 公网 IP / 证书 / 换存储就能拿到的提速路径。
+	directMultipartThreshold = 6 << 20 // 6MB 以下分片反而多几次往返，收益不抵开销
+	directMultipartPartSize  = 5 << 20 // S3 规定除最后一段外每段不得小于 5MB，取最小值换最多并发度
+	directMultipartMaxParts  = 10000   // S3 协议硬上限
 )
+
+// DirectUploadPart 一段的分片签名地址。Size 由后端算好，前端据此切 Blob，
+// 避免前端自己算偏移导致最后一段长度不一致（multipart 完成时会校验总大小）。
+type DirectUploadPart struct {
+	PartNumber int    `json:"partNumber"`
+	URL        string `json:"url"`
+	Size       int64  `json:"size"`
+}
+
+// DirectUploadMultipart 分片直传会话。UploadID 由 S3 分配，complete/abort 时需回传。
+type DirectUploadMultipart struct {
+	UploadID string             `json:"uploadId"`
+	PartSize int64              `json:"partSize"`
+	Parts    []DirectUploadPart `json:"parts"`
+}
 
 type DirectUploadSession struct {
 	Resource  *model.Resource   `json:"resource"`
@@ -28,10 +51,64 @@ type DirectUploadSession struct {
 	Method    string            `json:"method"`
 	Headers   map[string]string `json:"headers"`
 	ExpiresAt time.Time         `json:"expiresAt"`
+	// 非空表示走分片直传：此时 UploadURL 为空，浏览器按 Parts 并发 PUT。
+	Multipart *DirectUploadMultipart `json:"multipart,omitempty"`
+}
+
+// buildDirectUploadMultipart 创建 multipart upload 并为每一段签一个 UploadPart 预签名地址。
+// 任一环节失败都必须 Abort 掉已创建的 upload，否则对象存储会残留分片计费。
+func buildDirectUploadMultipart(client *awss3.S3, setting storage.Settings, objectKey string, mimeType string, size int64, ttl time.Duration) (*DirectUploadMultipart, error) {
+	partSize := int64(directMultipartPartSize)
+	for size/partSize >= directMultipartMaxParts {
+		partSize <<= 1
+	}
+	createInput := &awss3.CreateMultipartUploadInput{
+		Bucket: aws.String(setting.Bucket),
+		Key:    aws.String(objectKey),
+	}
+	// 对象的 Content-Type 只能在 CreateMultipartUpload 指定，分片 PUT 带不上。
+	if mimeType != "" {
+		createInput.ContentType = aws.String(mimeType)
+	}
+	create, err := client.CreateMultipartUpload(createInput)
+	if err != nil {
+		return nil, fmt.Errorf("创建分片上传失败：%w", err)
+	}
+	uploadID := aws.StringValue(create.UploadId)
+	if uploadID == "" {
+		return nil, errors.New("对象存储未返回分片上传标识")
+	}
+	count := int((size + partSize - 1) / partSize)
+	parts := make([]DirectUploadPart, 0, count)
+	for i := 0; i < count; i++ {
+		partLen := partSize
+		if remain := size - int64(i)*partSize; remain < partSize {
+			partLen = remain
+		}
+		partReq, _ := client.UploadPartRequest(&awss3.UploadPartInput{
+			Bucket:     aws.String(setting.Bucket),
+			Key:        aws.String(objectKey),
+			UploadId:   aws.String(uploadID),
+			PartNumber: aws.Int64(int64(i + 1)),
+		})
+		signedURL, signErr := partReq.Presign(ttl)
+		if signErr != nil {
+			_, _ = client.AbortMultipartUpload(&awss3.AbortMultipartUploadInput{
+				Bucket:   aws.String(setting.Bucket),
+				Key:      aws.String(objectKey),
+				UploadId: aws.String(uploadID),
+			})
+			return nil, fmt.Errorf("分片签名失败：%w", signErr)
+		}
+		parts = append(parts, DirectUploadPart{PartNumber: i + 1, URL: signedURL, Size: partLen})
+	}
+	return &DirectUploadMultipart{UploadID: uploadID, PartSize: partSize, Parts: parts}, nil
 }
 
 // CreateDirectUploadSession 校验配额与幂等，落一条 pending 资源并返回预签名 PUT URL。
-func (s *Service) CreateDirectUploadSession(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, uploadIdentity ...string) (*DirectUploadSession, error) {
+// allowMultipart 由客户端声明：只有确认自己能处理分片会话的前端才走 multipart。
+// 这样后端与前端可以任意顺序升级，也能单边回滚（旧前端仍拿到单流预签名地址）。
+func (s *Service) CreateDirectUploadSession(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, allowMultipart bool, uploadIdentity ...string) (*DirectUploadSession, error) {
 	if size <= 0 {
 		return nil, BadAuthRequest("文件大小无效")
 	}
@@ -93,6 +170,21 @@ func (s *Service) CreateDirectUploadSession(userID string, kind string, fileName
 		s.releaseUserUploadQuota(userID, day, size)
 		return nil, err
 	}
+
+	// 大文件优先走分片并发：浏览器对每一段独立建连，绕开单连接流控。
+	// 分片创建失败时静默回落单流预签名 —— 慢一点也要保证上传能成功。
+	if allowMultipart && size >= directMultipartThreshold {
+		if multipart, mpErr := buildDirectUploadMultipart(client, setting, objectKey, mimeType, size, directUploadURLTTL); mpErr == nil {
+			return &DirectUploadSession{
+				Resource:  &resource,
+				Method:    http.MethodPut,
+				Headers:   map[string]string{},
+				ExpiresAt: now.Add(directUploadURLTTL),
+				Multipart: multipart,
+			}, nil
+		}
+	}
+
 	putReq, _ := client.PutObjectRequest(&awss3.PutObjectInput{
 		Bucket:      aws.String(setting.Bucket),
 		Key:         aws.String(objectKey),
@@ -119,7 +211,8 @@ func (s *Service) CreateDirectUploadSession(userID string, kind string, fileName
 }
 
 // CompleteDirectUpload 校验对象已真实写入（HEAD 拿 ETag 与大小），把资源置为 ready。
-func (s *Service) CompleteDirectUpload(userID string, resourceID string) (*model.Resource, error) {
+// uploadID 非空表示分片直传，需要先 CompleteMultipartUpload 把分片合成对象。
+func (s *Service) CompleteDirectUpload(userID string, resourceID string, uploadID string) (*model.Resource, error) {
 	resource, err := s.repo.ResourceForUser(userID, resourceID)
 	if err != nil {
 		return nil, err
@@ -138,6 +231,11 @@ func (s *Service) CompleteDirectUpload(userID string, resourceID string) (*model
 	client, err := storage.NewS3Client(setting, time.Minute)
 	if err != nil {
 		return nil, err
+	}
+	if uploadID != "" {
+		if err := completeMultipartUpload(client, setting, resource.ObjectKey, uploadID); err != nil {
+			return nil, err
+		}
 	}
 	head, err := client.HeadObject(&awss3.HeadObjectInput{
 		Bucket: aws.String(resource.Bucket),
@@ -169,6 +267,38 @@ func (s *Service) CompleteDirectUpload(userID string, resourceID string) (*model
 	return resource, nil
 }
 
+// completeMultipartUpload 用 ListParts 自行取回各段 ETag 再合成，不要求浏览器回传。
+// 这一点很关键：MinIO 的 CORS 默认不暴露 ETag 响应头，浏览器读不到也就无法回传；
+// 由服务端 ListParts 兜住，前端只要保证每段 PUT 成功即可。
+func completeMultipartUpload(client *awss3.S3, setting storage.Settings, objectKey string, uploadID string) error {
+	listed, err := client.ListParts(&awss3.ListPartsInput{
+		Bucket:   aws.String(setting.Bucket),
+		Key:      aws.String(objectKey),
+		UploadId: aws.String(uploadID),
+	})
+	if err != nil {
+		return BadAuthRequest("分片信息读取失败，请重新上传")
+	}
+	if len(listed.Parts) == 0 {
+		return BadAuthRequest("尚未检测到任何已上传分片，请先完成直传再确认")
+	}
+	// S3 要求按 PartNumber 升序提交，缺段会被判为 InvalidPart。
+	completed := make([]*awss3.CompletedPart, 0, len(listed.Parts))
+	for _, part := range listed.Parts {
+		completed = append(completed, &awss3.CompletedPart{ETag: part.ETag, PartNumber: part.PartNumber})
+	}
+	_, err = client.CompleteMultipartUpload(&awss3.CompleteMultipartUploadInput{
+		Bucket:          aws.String(setting.Bucket),
+		Key:             aws.String(objectKey),
+		UploadId:        aws.String(uploadID),
+		MultipartUpload: &awss3.CompletedMultipartUpload{Parts: completed},
+	})
+	if err != nil {
+		return BadAuthRequest(fmt.Sprintf("分片合成失败：%v", err))
+	}
+	return nil
+}
+
 // maybeStartThumbnail 在资源就绪后异步生成缩略图，不阻塞上传确认响应。
 func (s *Service) maybeStartThumbnail(resource *model.Resource) {
 	if resource == nil || resource.Kind != "image" || resource.Provider == "local" {
@@ -185,7 +315,7 @@ func (s *Service) maybeStartThumbnail(resource *model.Resource) {
 }
 
 // AbortDirectUpload 清理未完成的直传：标记 failed、释放配额并尽力删除远端对象。
-func (s *Service) AbortDirectUpload(userID string, resourceID string) error {
+func (s *Service) AbortDirectUpload(userID string, resourceID string, uploadID ...string) error {
 	resource, err := s.repo.ResourceForUser(userID, resourceID)
 	if err != nil {
 		return err
@@ -196,6 +326,16 @@ func (s *Service) AbortDirectUpload(userID string, resourceID string) error {
 	s.failDirectUploadResource(resource, errors.New("用户取消直传"))
 	s.releaseUserUploadQuota(userID, resource.CreatedAt.UTC().Format("2006-01-02"), resource.Size)
 	if setting, err := s.ossSettingForResource(userID, resource); err == nil {
+		// 分片残留会在对象存储里持续计费，必须显式 Abort；失败不影响整体取消流程。
+		if len(uploadID) > 0 && uploadID[0] != "" {
+			if client, clientErr := storage.NewS3Client(setting, time.Minute); clientErr == nil {
+				_, _ = client.AbortMultipartUpload(&awss3.AbortMultipartUploadInput{
+					Bucket:   aws.String(setting.Bucket),
+					Key:      aws.String(resource.ObjectKey),
+					UploadId: aws.String(uploadID[0]),
+				})
+			}
+		}
 		_ = storage.DeleteS3Object(setting, resource.ObjectKey)
 	}
 	return nil

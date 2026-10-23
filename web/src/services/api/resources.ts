@@ -256,13 +256,86 @@ const CHUNK_UPLOAD_RETRIES = 2;
 // 直传上限与后端 directUploadMaxFileSize 对齐（512MB）。
 const DIRECT_UPLOAD_MAX = 512 << 20;
 
+type DirectUploadPart = {
+    partNumber: number;
+    url: string;
+    size: number;
+};
+
+type DirectUploadMultipart = {
+    uploadId: string;
+    partSize: number;
+    parts: DirectUploadPart[];
+};
+
 type DirectUploadSession = {
     resource: RemoteResource;
     uploadUrl: string;
     method: "PUT" | string;
     headers: Record<string, string>;
     expiresAt: string;
+    /** 非空表示后端已切到分片直传：uploadUrl 为空，需按 parts 并发 PUT。 */
+    multipart?: DirectUploadMultipart;
 };
+
+// 分片并发数。实测 Cloudflare 隧道下单条连接只有约 166KB/s（被拥塞窗口卡住），
+// 并发两条聚合约 0.42MB/s（2.5 倍）；4 条是提速与不挤占用户其他请求的折中。
+const DIRECT_UPLOAD_CONCURRENCY = 4;
+// 单段失败重试次数。隧道偶发 502/超时是常态，整份文件重传代价太高，必须按段重试。
+const DIRECT_UPLOAD_PART_RETRIES = 2;
+
+/**
+ * 分片并发直传。每段独立建连，是所有分片共享同一份进度基数，
+ * 上报的是「已确认完成的字节 + 各段当前进度」之和，避免进度条来回跳。
+ */
+async function uploadDirectParts(session: DirectUploadSession, file: Blob, onProgress?: (uploadedBytes: number, totalBytes: number) => void): Promise<void> {
+    const multipart = session.multipart;
+    if (!multipart || multipart.parts.length === 0) throw new Error("分片直传会话不完整");
+    const parts = multipart.parts;
+    const uploaded = new Array<number>(parts.length).fill(0);
+    const report = () => {
+        if (!onProgress) return;
+        let sum = 0;
+        for (const value of uploaded) sum += value;
+        onProgress(Math.min(file.size, sum), file.size);
+    };
+    let cursor = 0;
+    let failure: unknown = null;
+    const worker = async () => {
+        while (failure === null) {
+            const index = cursor;
+            cursor += 1;
+            if (index >= parts.length) return;
+            const part = parts[index];
+            const start = (part.partNumber - 1) * multipart.partSize;
+            const blob = file.slice(start, Math.min(file.size, start + part.size));
+            for (let attempt = 0; ; attempt += 1) {
+                try {
+                    await directUploadClient.put(part.url, blob, {
+                        headers: { Accept: "*/*" },
+                        onUploadProgress: ({ loaded, total }) => {
+                            uploaded[index] = total && total > 0 ? Math.min(part.size, (part.size * loaded) / total) : 0;
+                            report();
+                        },
+                    });
+                    uploaded[index] = part.size;
+                    report();
+                    break;
+                } catch (error) {
+                    uploaded[index] = 0;
+                    report();
+                    if (attempt >= DIRECT_UPLOAD_PART_RETRIES) {
+                        failure = error;
+                        return;
+                    }
+                }
+            }
+        }
+    };
+    const workers = Math.min(DIRECT_UPLOAD_CONCURRENCY, parts.length);
+    await Promise.all(Array.from({ length: workers }, () => worker()));
+    if (failure !== null) throw failure;
+}
 
 // 预签名直传：init 拿签名 URL → 浏览器 PUT 直传对象存储 → complete 校验落库。
 // 文件字节全程不经过应用服务器，绕开反向代理的体积/超时限制。
@@ -278,31 +351,41 @@ async function uploadResourceFileDirect(file: Blob, name: string, kind: "image" 
             width: meta?.width ? Math.round(meta.width) : 0,
             height: meta?.height ? Math.round(meta.height) : 0,
             durationMs: meta?.durationMs ? Math.round(meta.durationMs) : 0,
+            // 声明支持分片会话：后端据此决定是否返回 multipart，旧后端会忽略该字段。
+            multipart: true,
         },
         uploadRequestConfig(meta?.idempotencyKey),
     );
     const session = init.session;
+    // 分片直传与单流直传共用同一套 init/complete/abort，仅需把 uploadId 回传。
+    const uploadID = session.multipart?.uploadId || "";
+    const confirmBody = uploadID ? { uploadId: uploadID } : {};
     // 直传目标是对象存储的绝对 URL（非本站 /api），响应也不是业务信封，必须用原生 axios。
     // 关键：预签名 URL 本身已含全部授权信息，绝不能带本站 Cookie —— 对象存储的 CORS 通常
     // 不返回 Access-Control-Allow-Credentials，带凭据会被浏览器直接判为跨域失败；
     // 且 Accept 归一为 `*/*`，避免其进入 Access-Control-Request-Headers 触发额外预检失败。
     try {
-        await directUploadClient.put(session.uploadUrl, file, {
-            headers: { ...session.headers, Accept: "*/*" },
-            onUploadProgress: onProgress
-                ? ({ loaded, total }) => {
-                      if (total && total > 0) onProgress(Math.min(file.size, (file.size * loaded) / total), file.size);
-                  }
-                : undefined,
-        });
+        if (session.multipart) {
+            await uploadDirectParts(session, file, onProgress);
+        } else {
+            await directUploadClient.put(session.uploadUrl, file, {
+                headers: { ...session.headers, Accept: "*/*" },
+                onUploadProgress: onProgress
+                    ? ({ loaded, total }) => {
+                          if (total && total > 0) onProgress(Math.min(file.size, (file.size * loaded) / total), file.size);
+                      }
+                    : undefined,
+            });
+        }
     } catch (error) {
         // 字节没进对象存储时必须显式放弃这条 pending 记录：否则它既不 ready 也不 failed，
         // 同幂等键的后续上传会一直撞「相同素材正在上传」409，直到 1 小时清理窗口。
+        // 分片会话还必须带上 uploadId，否则对象存储里会残留已上传的分片并持续计费。
         // abort 失败不应掩盖原始上传错误，故只做尽力而为。
-        void http.post(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/abort`).catch(() => undefined);
+        void http.post(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/abort`, confirmBody).catch(() => undefined);
         throw error;
     }
-    const data = await http.post<{ resource: RemoteResource }>(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/complete`, {}, uploadRequestConfig(meta?.idempotencyKey));
+    const data = await http.post<{ resource: RemoteResource }>(`/resources/direct-upload/${encodeURIComponent(session.resource.id)}/complete`, confirmBody, uploadRequestConfig(meta?.idempotencyKey));
     return data.resource;
 }
 

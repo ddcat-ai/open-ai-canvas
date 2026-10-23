@@ -279,12 +279,14 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			Width      int    `json:"width"`
 			Height     int    `json:"height"`
 			DurationMs int64  `json:"durationMs"`
+			// 客户端声明自己能处理分片直传会话时才启用 multipart，保证前后端可独立升级。
+			Multipart bool `json:"multipart"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		session, err := svc.CreateDirectUploadSession(user.ID, req.Kind, req.FileName, req.MimeType, req.Size, req.Width, req.Height, req.DurationMs, c.GetHeader("X-Idempotency-Key"))
+		session, err := svc.CreateDirectUploadSession(user.ID, req.Kind, req.FileName, req.MimeType, req.Size, req.Width, req.Height, req.DurationMs, req.Multipart, c.GetHeader("X-Idempotency-Key"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -301,7 +303,12 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "resources-direct-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
 			return
 		}
-		resource, err := svc.CompleteDirectUpload(user.ID, c.Param("id"))
+		// 分片直传需要回传 uploadId 才能合成对象；单流直传没有该字段，允许空 body。
+		var completeReq struct {
+			UploadID string `json:"uploadId"`
+		}
+		_ = c.ShouldBindJSON(&completeReq)
+		resource, err := svc.CompleteDirectUpload(user.ID, c.Param("id"), completeReq.UploadID)
 		if err != nil {
 			failService(c, err)
 			return
@@ -314,7 +321,11 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.AbortDirectUpload(user.ID, c.Param("id")); err != nil {
+		var abortReq struct {
+			UploadID string `json:"uploadId"`
+		}
+		_ = c.ShouldBindJSON(&abortReq)
+		if err := svc.AbortDirectUpload(user.ID, c.Param("id"), abortReq.UploadID); err != nil {
 			failService(c, err)
 			return
 		}
