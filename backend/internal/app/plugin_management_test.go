@@ -134,3 +134,54 @@ func TestEditorShellReportsPlatformAvailableWithoutPlatformState(t *testing.T) {
 		t.Fatalf("editor shell reported as admin-disabled: %#v", state)
 	}
 }
+
+// 剪辑工作台的开关在后端生效前一直可用；未保存个人选择的用户保持启用，
+// 用户关闭或管理员停用后才拒绝。
+func TestEditorShellDefaultsEnabledUntilUserChooses(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.PluginPlatformState{}, &model.UserPluginState{}, &model.AdminAuditEvent{}); err != nil {
+		t.Fatal(err)
+	}
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db), pluginRuntime: center}
+	user := &model.User{ID: "user-1", Role: model.UserRoleUser}
+	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
+
+	states, err := svc.PluginStatesForUser(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state := states[PluginEditorShell]; !state.EffectiveEnabled || state.UserConfigured {
+		t.Fatalf("unconfigured editor shell state = %#v", state)
+	}
+	if err := svc.RequirePluginForUser(user.ID, PluginEditorShell); err != nil {
+		t.Fatalf("unconfigured editor shell rejected: %v", err)
+	}
+
+	disabled, err := svc.SetUserPluginEnabled(user, PluginEditorShell, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disabled.EffectiveEnabled || !disabled.UserConfigured {
+		t.Fatalf("user-disabled editor shell state = %#v", disabled)
+	}
+	if err := svc.RequirePluginForUser(user.ID, PluginEditorShell); err == nil {
+		t.Fatal("user-disabled editor shell was accepted")
+	}
+
+	if _, err := svc.SetUserPluginEnabled(user, PluginEditorShell, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetPluginPlatformAvailability(admin, PluginEditorShell, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequirePluginForUser(user.ID, PluginEditorShell); err == nil || err.Error() != "管理员已停用该插件" {
+		t.Fatalf("platform-disabled editor shell error = %v", err)
+	}
+}
