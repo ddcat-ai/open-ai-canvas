@@ -209,7 +209,13 @@ export function listSkillPresets() {
     return http.get<{ presets: SkillPreset[] }>("/skills/presets");
 }
 
-export function listAddedSkills() {
+export function listAddedSkills({ fresh = false }: { fresh?: boolean } = {}): Promise<{ skills: Skill[] }> {
+    // 提交前绕过短期缓存和旧的在途读取；不改变技能实体或用户的安装关系。
+    if (fresh) {
+        addedSkillsCacheVersion += 1;
+        addedSkillsCache = null;
+        addedSkillsRequest = null;
+    }
     const scope = getActiveUserScope();
     const version = addedSkillsCacheVersion;
     const now = Date.now();
@@ -217,6 +223,7 @@ export function listAddedSkills() {
     if (addedSkillsRequest?.scope === scope) return addedSkillsRequest.promise;
     const promise = readAddedSkillsWithRetry()
         .then((value) => {
+            if (scope === getActiveUserScope() && version !== addedSkillsCacheVersion) return listAddedSkills();
             if (version === addedSkillsCacheVersion) addedSkillsCache = { scope, value, expiresAt: Date.now() + 15_000 };
             return value;
         })

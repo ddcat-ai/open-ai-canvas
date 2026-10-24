@@ -52,6 +52,7 @@ import {
 import { loadCloudAgentConversation, mergeCloudAgentConversations, refreshCloudAgentConversations } from "@/services/cloud-agent-history";
 import { canvasCloudAgentConversation, cloudAgentFollowDecision } from "@/lib/canvas/cloud-agent-follow";
 import { resolveCloudAgentModel } from "@/lib/canvas/cloud-agent-model-restore";
+import { addAgentSkillSelection, classifyAgentSkillSelection } from "@/lib/canvas/agent-skill-selection";
 import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { selectImageInspectionModel } from "@/lib/canvas/image-to-previs-agent";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -128,6 +129,9 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const [profileError, setProfileError] = useState<string>();
     const profileRequestRef = useRef(0);
     const [skills, setSkills] = useState<Skill[]>([]);
+    const [skillCatalogStatus, setSkillCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
+    const confirmedSkillCatalog = useRef<{ scope: string; skills: Skill[] } | null>(null);
+    const skillCatalogRequest = useRef(0);
     const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
     const [marketSkills, setMarketSkills] = useState<Skill[]>([]);
     const [skillSearch, setSkillSearch] = useState("");
@@ -230,6 +234,28 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     }, [config, restoredModelResolution]);
     const installedSkills = useMemo(() => skills.filter((skill) => skill.isAdded), [skills]);
     const installedSkillIds = useMemo(() => new Set(installedSkills.map((skill) => skill.skillId)), [installedSkills]);
+    const skillSelection = classifyAgentSkillSelection(selectedSkillIds, skillCatalogStatus === "ready" && confirmedSkillCatalog.current?.scope === accountScope ? installedSkills : null);
+
+    const refreshSkills = useCallback(async () => {
+        const requestId = ++skillCatalogRequest.current;
+        setSkillCatalogStatus("loading");
+        try {
+            const result = await listAddedSkills({ fresh: true });
+            if (requestId === skillCatalogRequest.current && getActiveUserScope() === accountScope && useUserStore.getState().user?.id === userId) {
+                confirmedSkillCatalog.current = { scope: accountScope, skills: result.skills };
+                setSkills(result.skills);
+                setSkillCatalogStatus("ready");
+                setMessages((current) => current.filter((message) => message.id !== "skills-load-error"));
+            }
+            return result;
+        } catch (cause) {
+            if (requestId === skillCatalogRequest.current && getActiveUserScope() === accountScope && useUserStore.getState().user?.id === userId) {
+                setSkillCatalogStatus("error");
+                setMessages((current) => appendAgentError(current, "skills-load-error", cause, "技能库读取失败，选择尚未确认"));
+            }
+            throw cause;
+        }
+    }, [accountScope, userId]);
 
     const [createdSkills, setCreatedSkills] = useState<Skill[]>([]);
 
@@ -303,7 +329,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                     await addSkill(id);
                     if (!isCurrent()) return;
                 }
-                const refreshed = await listAddedSkills();
+                const refreshed = await refreshSkills();
                 if (!isCurrent()) return;
                 if (preset.skillIds.some((id) => !refreshed.skills.some((skill) => skill.skillId === id && skill.isAdded))) {
                     throw new Error("技能库未确认全部预设技能已安装，请刷新后重试");
@@ -326,7 +352,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 }
             }
         },
-        [busy, conversationScope, historyHydrated, installedSkillIds, pendingHydrated, running],
+        [busy, conversationScope, historyHydrated, installedSkillIds, pendingHydrated, running, refreshSkills],
     );
 
     // 单个技能（含用户自建）挂载到本会话；未装的先补装，已挂的不重复追加。
@@ -344,13 +370,13 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                     await addSkill(skill.skillId);
                     if (!isCurrent()) return;
                 }
-                const refreshed = await listAddedSkills();
+                const refreshed = await refreshSkills();
                 if (!isCurrent()) return;
                 if (!refreshed.skills.some((item) => item.skillId === skill.skillId && item.isAdded)) {
                     throw new Error("技能库未确认该技能已安装，请刷新后重试");
                 }
                 setSkills(refreshed.skills);
-                setSelectedSkillIds((current) => (current.includes(skill.skillId) ? current : [...current, skill.skillId]));
+                setSelectedSkillIds((current) => addAgentSkillSelection(current, skill.skillId, refreshed.skills));
                 setMessages((current) =>
                     appendUniqueMessage(current, {
                         id: `skill-${skill.skillId}-${Date.now()}`,
@@ -367,7 +393,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 }
             }
         },
-        [busy, conversationScope, historyHydrated, installedSkillIds, pendingHydrated, running],
+        [busy, conversationScope, historyHydrated, installedSkillIds, pendingHydrated, running, refreshSkills],
     );
     const status = run?.status || "idle";
     const statusLabel =
@@ -425,28 +451,22 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     }, [skillSearch]);
 
     useEffect(() => {
-        let active = true;
         setSkills([]);
-        const refresh = () => {
-            void listAddedSkills()
-                .then((result) => {
-                    if (!active) return;
-                    setSkills(result.skills);
-                    setMessages((current) => current.filter((message) => message.id !== "skills-load-error"));
-                })
-                .catch((cause) => {
-                    if (active) setMessages((current) => appendAgentError(current, "skills-load-error", cause, "技能库读取失败"));
-                });
-        };
+        confirmedSkillCatalog.current = null;
+        const refresh = () => { void refreshSkills().catch(() => undefined); };
         refresh();
         window.addEventListener("canvas-skills-changed", refresh);
         window.addEventListener("focus", refresh);
         return () => {
-            active = false;
+            skillCatalogRequest.current += 1;
             window.removeEventListener("canvas-skills-changed", refresh);
             window.removeEventListener("focus", refresh);
         };
-    }, [open, userId]);
+    }, [refreshSkills]);
+
+    useEffect(() => {
+        if (skillsOpen) void refreshSkills().catch(() => undefined);
+    }, [skillsOpen, refreshSkills]);
 
     useEffect(() => {
         if (view !== "settings" && !skillsOpen) return;
@@ -826,7 +846,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         const matchesPrefill = prefilled?.displayText === draft;
         const value = matchesPending ? pendingRequest.request!.prompt : matchesPrefill ? prefilled!.text : draft;
         options = matchesPending ? { ...options, displayText: pendingRequest.displayText, canvasReferenceNodeId: pendingRequest.canvasReferenceNodeId } : matchesPrefill ? prefilled! : options;
-        if (running && !pendingRequest?.request) {
+        if (running && !pendingRequest) {
             await interject(value);
             return;
         }
@@ -836,13 +856,27 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         setBusy(true);
         let accepted = false;
         let requestSent = false;
+        let createdUnsentSubmission = false;
+        let validatedSkillCatalogRequest = 0;
+        const validateSkills = async (ids: string[]) => {
+            const catalog = await refreshSkills();
+            if (!accountIsCurrent() || currentScope.current !== scope) return;
+            if (classifyAgentSkillSelection(ids, catalog.skills).invalidIds.length) {
+                if (pendingRequest) throw new Error("上一条请求结果待确认，且原请求包含已失效技能；请先在任务中心核对原运行。幂等身份和输入已保留。");
+                setSkillsOpen(true);
+                throw new Error("当前对话包含已失效技能，请在技能商店的已启用视图中移除后再发送。输入已保留。");
+            }
+            if (ids.length > 8) throw new Error("本轮最多启用 8 个 Skills，请减少选择或技能引用后再发送");
+            validatedSkillCatalogRequest = skillCatalogRequest.current;
+        };
         try {
             const effectiveModel = options?.requiresVision ? selectImageInspectionModel(config, selectedModel) : selectedModel;
             if (options?.requiresVision && !effectiveModel) throw new Error("当前没有配置支持图片输入的文本模型，请在模型能力设置中为一个文本模型开启图片输入后重试");
-            const pending = pendingSubmission.current;
+            const pending = pendingRequest;
             // An ambiguous previous POST owns its body/key until reconciled.
             // Editing model settings or prompt must not silently create a new charge.
             if (pending?.request && pending.request.prompt !== value) throw new Error("上一条请求结果待确认，请先原样重试上一条消息，再发送新要求");
+            if (pending && !pending.request && running) throw new Error("上一条请求结果待确认，请先在任务中心核对原运行；幂等身份和输入已保留，暂不作为插话或新请求发送。");
             if (!pending?.request) {
                 if (profileLoading) throw new Error("正在确认长期偏好快照，请稍后再发送");
                 if (!profileView || profileError) throw new Error("长期偏好快照尚未确认，请重新读取后再发送");
@@ -856,6 +890,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 const agentConfig = { ...config, model: effectiveModel };
                 const requestConfig = resolveModelRequestConfig(agentConfig, effectiveModel);
                 const logicalModelId = logicalModelIDForConfig(agentConfig);
+                const requestedSkillIds = [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])];
                 const input = {
                     canvasId,
                     prompt: value,
@@ -863,7 +898,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                     profileRevision: profileView.revision,
                     model: modelOptionName(effectiveModel) || undefined,
                     ...(logicalModelId ? { logicalModelId } : requestConfig.channelId ? { channelId: requestConfig.channelId, channelModelKey: modelOptionName(effectiveModel) || undefined } : {}),
-                    skillIds: [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])],
+                    skillIds: requestedSkillIds,
                     focusNodeIds: canvasId ? selectedNodeIds.slice(0, 8) : [],
                     focusNodeOmittedCount: canvasId ? Math.max(0, selectedNodeIds.length - 8) : 0,
                     permissionMode,
@@ -872,6 +907,10 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 };
                 const fingerprint = JSON.stringify({ scope, parent: run?.id, input });
                 if (pending && pending.fingerprint !== fingerprint) throw new Error("上一条请求尚未确认，请恢复原消息与设置后核对，不能覆盖原幂等记录");
+                if (requestedSkillIds.length) {
+                    await validateSkills(requestedSkillIds);
+                    if (!accountIsCurrent() || currentScope.current !== scope) return;
+                }
                 const key = pending?.key || createClientUUID();
                 const next = { fingerprint, key, request: { ...input, idempotencyKey: key }, parentRunId: run?.id, messageId: `user-${key}`, displayText: options?.displayText, canvasReferenceNodeId: options?.canvasReferenceNodeId };
                 // Persist before sending. A failed local save must not submit a request
@@ -879,6 +918,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 await waitForCanvasSync(saveCloudAgentPendingSubmission(activeConversationId, next, accountScope));
                 if (!accountIsCurrent() || currentScope.current !== scope) return;
                 pendingSubmission.current = next;
+                createdUnsentSubmission = !pending;
             }
             const submission = pendingSubmission.current!;
             const request = submission.request!;
@@ -910,6 +950,11 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 ...conversations.filter((item) => item.id !== activeConversationId),
             ], accountScope));
             if (!accountIsCurrent() || currentScope.current !== scope) return;
+            // 保存期间若收到技能变更，重新核验后才能 POST；未知 POST 的原身份仍原样重试。
+            if (!pendingRequest?.request && request.skillIds?.length && validatedSkillCatalogRequest !== skillCatalogRequest.current) {
+                await validateSkills(request.skillIds);
+                if (!accountIsCurrent() || currentScope.current !== scope) return;
+            }
             setPrompt("");
             prefilledSubmissionRef.current = null;
             setMessages(nextMessages);
@@ -929,11 +974,14 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
             if (cause instanceof CanvasSyncPendingError) return;
             if (canvasId) canvasEditLeases.agentRejected(canvasId, cause);
             if (!accepted) {
-                setPrompt(value);
+                setPrompt(options?.displayText || value);
                 const status = (cause as { status?: number }).status;
                 const reason = (cause as { reason?: string }).reason;
-                if (reason === "agent_conversation_stale_parent" || !pendingRequest?.request && (reason === "canvas_agent_busy" || (status && [400, 401, 403, 404, 422].includes(status)))) {
-                    // These admission responses explicitly rejected the write.
+                const staleParentRejected = requestSent && reason === "agent_conversation_stale_parent";
+                const newSubmissionRejected = !pendingRequest && requestSent && (reason === "canvas_agent_busy" || (status && [400, 401, 403, 404, 422].includes(status)));
+                // 缺少 request 不等于没有旧 POST。仅清理本次新建且未发出的记录，
+                // 已有身份必须保留，直到原请求按既有合同完成核对。
+                if (staleParentRejected || newSubmissionRejected || createdUnsentSubmission && !requestSent) {
                     // stale_parent is checked after same-key replay, so even an
                     // original retry has now been confirmed unaccepted. Other
                     // ambiguous retries retain their original body and key.
@@ -962,7 +1010,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                     }
                 }
             }
-            setMessages((current) => appendAgentError(current, `submit-error-${activeConversationId}`, cause, agentSubmissionErrorTitle(cause, accepted, requestSent)));
+            if (requestSent && !accepted && !pendingRequest?.request) void refreshSkills().catch(() => undefined);
+            setMessages((current) => appendAgentError(current, `submit-error-${activeConversationId}`, cause, pendingRequest && !requestSent ? "待确认请求未解除，幂等身份与输入已保留" : agentSubmissionErrorTitle(cause, accepted, requestSent)));
         } finally {
             submissionRequestRef.current = false;
             if (accountIsCurrent() && currentScope.current === scope) setBusy(false);
@@ -1093,9 +1142,12 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         if (skill.isAdded) return;
         try {
             const result = await addSkill(skill.skillId);
+            if (confirmedSkillCatalog.current?.scope === accountScope) {
+                confirmedSkillCatalog.current = { scope: accountScope, skills: [...confirmedSkillCatalog.current.skills.filter((item) => item.skillId !== skill.skillId), result.skill] };
+            }
             setSkills((current) => [...current.filter((item) => item.skillId !== skill.skillId), result.skill]);
             setMarketSkills((current) => current.map((item) => (item.skillId === skill.skillId ? result.skill : item)));
-            setSelectedSkillIds((current) => (current.includes(skill.skillId) ? current : [...current, skill.skillId]));
+            setSelectedSkillIds((current) => addAgentSkillSelection(current, skill.skillId, [...skills, result.skill]));
         } catch (cause) {
             setMessages((current) => appendAgentError(current, `skill-error-${Date.now()}`, cause, "添加 Skill 失败"));
         }
@@ -1118,7 +1170,8 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         else setRestoredModel(null);
         const id = nanoid();
         const now = new Date().toISOString();
-        const inheritedSkillIds = [...selectedSkillIds];
+        const catalog = confirmedSkillCatalog.current;
+        const inheritedSkillIds = catalog?.scope === accountScope ? classifyAgentSkillSelection(selectedSkillIds, catalog.skills).validIds : [...selectedSkillIds];
         currentScope.current = id;
         presetApplyingRef.current = null;
         setPresetApplyingId("");
@@ -1453,7 +1506,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                                 onPermissionChange={setPermissionMode}
                                                 skillsOpen={skillsOpen}
                                                 onSkillsOpenChange={setSkillsOpen}
-                                                selectedSkillCount={selectedSkillIds.length}
+                                                selectedSkillCount={skillSelection.validIds.length}
                                             />
                                         }
                                     />
@@ -1472,6 +1525,9 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 installedSkills={installedSkills}
                 marketSkills={marketSkills}
                 selectedSkillIds={selectedSkillIds}
+                selection={skillSelection}
+                catalogStatus={skillCatalogStatus}
+                onRetryCatalog={() => { void refreshSkills().catch(() => undefined); }}
                 categories={skillCategories}
                 libraryCategories={libraryCategories}
                 category={skillTag}
@@ -1484,7 +1540,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 onToggle={(id) =>
                     setSelectedSkillIds((current) => {
                         if (current.includes(id)) return current.filter((item) => item !== id);
-                        return [...current, id];
+                        return addAgentSkillSelection(current, id, skillCatalogStatus === "ready" ? installedSkills : null);
                     })
                 }
                 onInstall={installSkill}

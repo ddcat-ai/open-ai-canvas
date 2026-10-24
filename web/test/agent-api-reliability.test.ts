@@ -213,6 +213,13 @@ describe("Agent admission replay and durable pending records", () => {
         expect(await conversations.loadCloudAgentPendingSubmission("conversation")).toBeNull();
     });
 
+    it("restores a key and fingerprint without requiring or inventing a request body", async () => {
+        const pending = { fingerprint: "original-fingerprint", key: input.idempotencyKey };
+        await conversations.saveCloudAgentPendingSubmission("metadata-only", pending);
+        expect(await conversations.loadCloudAgentPendingSubmission("metadata-only")).toEqual(pending);
+        expect(await conversations.loadCloudAgentPendingSubmission("metadata-only")).toEqual(pending);
+    });
+
     it.each(["{broken", "null", "{}", JSON.stringify({ fingerprint: "f", key: input.idempotencyKey, request: { ...input, idempotencyKey: "wrong-key" } })])("fails closed on corrupt pending recovery data", async (raw) => {
         await conversations.saveCloudAgentPendingSubmission("conversation", { fingerprint: "f", key: input.idempotencyKey });
         const key = [...storage.data.keys()][0];
