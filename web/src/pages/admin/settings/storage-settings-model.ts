@@ -25,6 +25,7 @@ export type OSSFormValues = {
     s3Preset: S3Preset;
     pathStyle: boolean;
     allowUserS3: boolean;
+    videoStorageTarget: "local" | "oss";
 };
 
 export type StoragePayload = Pick<
@@ -46,6 +47,7 @@ export type StoragePayload = Pick<
     | "s3Preset"
     | "pathStyle"
     | "allowUserS3"
+    | "videoStorageTarget"
 >;
 
 export function formValues(setting: AdminOSSSetting): OSSFormValues {
@@ -66,6 +68,7 @@ export function formValues(setting: AdminOSSSetting): OSSFormValues {
         s3Preset: setting.s3Preset || "custom",
         pathStyle: setting.pathStyle === true,
         allowUserS3: setting.allowUserS3 === true,
+        videoStorageTarget: setting.videoStorageTarget === "oss" ? "oss" : "local",
     };
 }
 
@@ -128,6 +131,7 @@ export function normalizeStoragePayload(values: Partial<OSSFormValues>, setting:
         s3Preset: values.s3Preset || "custom",
         pathStyle: values.pathStyle === true,
         allowUserS3: values.allowUserS3 === true,
+        videoStorageTarget: values.videoStorageTarget === "oss" ? "oss" : "local",
     };
 }
 
@@ -168,7 +172,7 @@ export function validatePublicBaseURL(value: string) {
 
 export function storageResponseMatches(setting: AdminOSSSetting, expected: StoragePayload) {
     const actual = normalizeStoragePayload(formValues(setting), setting);
-    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "cdnAuthMode", "requireCDN", "allowPrivateProxy", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3"];
+    const fields: Array<keyof StoragePayload> = ["enabled", "provider", "region", "endpoint", "cdnBaseUrl", "cdnAuthMode", "requireCDN", "allowPrivateProxy", "bucket", "accessKeyId", "publicBaseUrl", "pathPrefix", "s3Preset", "pathStyle", "allowUserS3", "videoStorageTarget"];
     if (expected.accessKeySecret && !setting.hasAccessKeySecret) return false;
     if (expected.sessionToken && !setting.hasSessionToken) return false;
     return fields.every((key) => actual[key] === expected[key]);

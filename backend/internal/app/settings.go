@@ -53,6 +53,7 @@ type OSSSettingRequest struct {
 	CDNAuthMode       string `json:"cdnAuthMode"`
 	RequireCDN        bool   `json:"requireCDN"`
 	AllowPrivateProxy bool   `json:"allowPrivateProxy"`
+	VideoStorageTarget string `json:"videoStorageTarget"`
 }
 
 type PublicOSSSetting struct {
@@ -78,6 +79,7 @@ type PublicOSSSetting struct {
 	CDNAuthMode             string     `json:"cdnAuthMode"`
 	RequireCDN              bool       `json:"requireCDN"`
 	AllowPrivateProxy       bool       `json:"allowPrivateProxy"`
+	VideoStorageTarget      string     `json:"videoStorageTarget"`
 	UpdatedBy               string     `json:"updatedBy"`
 	CreatedAt               time.Time  `json:"createdAt"`
 	UpdatedAt               time.Time  `json:"updatedAt"`
@@ -592,9 +594,10 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		PathPrefix:      strings.Trim(strings.TrimSpace(req.PathPrefix), "/"),
 		S3Preset:        strings.TrimSpace(req.S3Preset),
 		PathStyle:       req.PathStyle,
-		SessionToken:    strings.TrimSpace(req.SessionToken),
-		AllowUserS3:     req.AllowUserS3,
-		Delivery:        storage.DeliverySettings{CDNAuthMode: strings.ToLower(strings.TrimSpace(req.CDNAuthMode)), RequireCDN: req.RequireCDN, AllowPrivateProxy: req.AllowPrivateProxy},
+		SessionToken:       strings.TrimSpace(req.SessionToken),
+		AllowUserS3:        req.AllowUserS3,
+		VideoStorageTarget: req.VideoStorageTarget,
+		Delivery:           storage.DeliverySettings{CDNAuthMode: strings.ToLower(strings.TrimSpace(req.CDNAuthMode)), RequireCDN: req.RequireCDN, AllowPrivateProxy: req.AllowPrivateProxy},
 	})
 	if next.Delivery.CDNAuthMode != "" && next.Delivery.CDNAuthMode != "public" && next.Delivery.CDNAuthMode != "qiniu" {
 		return next, BadAuthRequest("CDN 鉴权方式无效，仅支持 public 或 qiniu")

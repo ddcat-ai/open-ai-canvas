@@ -28,6 +28,21 @@ func RegisterAdminStorageRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, result)
 	})
 
+	r.POST("/admin/resources/:id/move-to-local", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		resourceID := c.Param("id")
+		resource, err := svc.MoveResourceToLocal(user, resourceID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": resource})
+	})
+
 	r.GET("/admin/storage/stats", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
