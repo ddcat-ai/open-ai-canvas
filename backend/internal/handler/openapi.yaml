@@ -2126,6 +2126,25 @@ paths:
           $ref: "#/components/responses/Envelope"
         "400":
           $ref: "#/components/responses/Error"
+  /tasks/{id}/source-image:
+    get:
+      tags: [tasks]
+      summary: 读取当前用户图片任务的临时或正式图片
+      description: 保存中重定向至上游地址或返回暂存文件；保存完成后重定向至正式资源。不返回任务恢复记录中的上游地址字段。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 暂存图片文件流
+        "307":
+          description: 图片地址临时重定向
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /tasks/{id}/recover-media:
     post:
       tags: [tasks]

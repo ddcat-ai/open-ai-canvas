@@ -120,6 +120,25 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, tasks)
 	})
+	r.GET("/tasks/:id/source-image", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		source, err := svc.TaskSourceImage(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		if source.URL != "" {
+			c.Redirect(http.StatusTemporaryRedirect, source.URL)
+			return
+		}
+		c.Header("Content-Type", source.MIMEType)
+		c.File(source.LocalPath)
+	})
 	r.GET("/tasks/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

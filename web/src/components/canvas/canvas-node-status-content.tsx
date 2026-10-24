@@ -25,6 +25,16 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const workflow = node.metadata?.imageLayerWorkflow;
     const stageLabel = workflow ? (workflow.stage === "planning" ? "拆解规划中" : `拆解中，共 ${workflow.total} 张图`) : node.metadata?.experimentalLayerPlan?.progress || (taskId ? generationTaskStageLabel(displayTask) : "正在创建任务");
     const elapsed = useTaskElapsed(workflow?.startedAt || node.metadata?.taskCreatedAt, taskTerminalStatus(node.metadata?.taskStatus) ? node.metadata?.taskCompletedAt : undefined);
+    if (taskId && node.metadata?.storageKey === `task-source:${taskId}` && node.metadata?.content) {
+        return (
+            <div className="relative size-full">
+                <img src={node.metadata.content} alt="生成的图片" className="size-full object-contain" draggable={false} />
+                <span className="absolute bottom-2 left-2 rounded-[var(--r-sm)] px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.toolbar.itemHover, color: theme.node.text }}>
+                    作品已生成，正在保存
+                </span>
+            </div>
+        );
+    }
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
             {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}

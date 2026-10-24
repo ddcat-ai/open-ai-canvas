@@ -57,6 +57,7 @@ type Task struct {
 	// MediaRecoveryJSON is an encrypted server-only checkpoint, never a public result.
 	MediaRecoveryJSON string     `json:"-" gorm:"type:text"`
 	MediaStage        string     `json:"mediaStage,omitempty" gorm:"size:24"`
+	PreviewURL        string     `json:"previewUrl,omitempty" gorm:"-"`
 	CanRecoverMedia   bool       `json:"canRecoverMedia,omitempty" gorm:"-"`
 	TextDraft         string     `json:"textDraft,omitempty" gorm:"type:text"`
 	Error             string     `json:"error"`

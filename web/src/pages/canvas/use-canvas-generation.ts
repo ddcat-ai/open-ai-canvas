@@ -271,6 +271,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                         metadata: {
                             ...node.metadata,
                             ...generationTaskMetadata(task),
+                            ...(task.type === "canvas_image" && task.previewUrl && task.mediaStage && task.mediaStage !== "completed" ? { content: task.previewUrl, storageKey: `task-source:${task.id}` } : {}),
                             status: canvasTaskBindingStatus(node, task),
                             ...(failure || (rejectedLayer ? {} : { errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined })),
                         },

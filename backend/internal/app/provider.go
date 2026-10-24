@@ -253,7 +253,11 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	}
 	switch input.Mode {
 	case "image":
-		return runImageTask(ctx, input)
+		result, err := runImageTask(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		return recoverImageTaskResult(ctx, input.Config, result)
 	case "text":
 		if input.AgentRequests != nil {
 			input, err = resolveAgentResourcePlaceholders(input, true)

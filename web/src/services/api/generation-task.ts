@@ -361,6 +361,7 @@ async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAud
 async function prepareBackendImageReference(image: ReferenceImage, preferArkAssetUrl = false) {
     if (preferArkAssetUrl && image.arkAssetId) return backendImageReference(image, { url: `asset://${image.arkAssetId}` });
     if (resourceIdFromStorageKey(image.storageKey)) return backendImageReference(image, { storageKey: image.storageKey });
+    if (image.storageKey?.startsWith("task-source:")) return backendImageReference(image, { storageKey: image.storageKey });
     const sourceUrl = image.url || image.dataUrl;
     if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
     const blob = image.storageKey ? await getImageBlob(image.storageKey) : sourceUrl ? await (await fetch(sourceUrl)).blob() : null;

@@ -104,6 +104,9 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		errorCode = contentModerationErrorCode
 	}
 	previewURL, previewKind, previewPosterURL := taskMediaPreviewWithPoster(task.ResultJSON, task.Type)
+	if previewURL == "" && task.Type == "canvas_image" && task.MediaRecoveryJSON != "" && task.MediaStage != "completed" {
+		previewURL, previewKind = taskSourceImageURL(task.ID), "image"
+	}
 	return TaskSummary{
 		ID:                        task.ID,
 		ProjectID:                 task.ProjectID,
@@ -291,6 +294,9 @@ func truncateRunes(value string, limit int) string {
 
 func taskForOutput(task model.Task) *model.Task {
 	task.CanRecoverMedia = task.MediaRecoveryJSON != "" && task.Status == model.TaskStatusFailed
+	if task.Type == "canvas_image" && task.MediaRecoveryJSON != "" && task.MediaStage != "completed" {
+		task.PreviewURL = taskSourceImageURL(task.ID)
+	}
 	task.Diagnostic = taskExecutionDiagnostic(&task)
 	task.InputJSON = publicTaskInputJSON(task.InputJSON)
 	// Task.Error 可能来自历史记录中的“前置原因；上游：原文”。

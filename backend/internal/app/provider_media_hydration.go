@@ -45,6 +45,9 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 }
 
 func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
+	if strings.HasPrefix(media.StorageKey, taskSourceImagePrefix) {
+		return s.hydrateTaskSourceImage(userID, media, policy)
+	}
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
 		if policy.requireURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
