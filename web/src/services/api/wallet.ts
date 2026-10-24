@@ -282,6 +282,33 @@ export function updateAdminLinuxDOSetting(input: Partial<LinuxDOSetting>) {
     return http.patch<{ setting: LinuxDOSetting }>("/admin/settings/linuxdo", input);
 }
 
+export type WechatAdminSetting = {
+    enabled: boolean;
+    appId: string;
+    hasSecret: boolean;
+    page: string;
+    envVersion: "trial" | "release" | "develop";
+    manual: boolean;
+    updatedAt: string;
+};
+
+export type WechatAdminSettingInput = {
+    enabled: boolean;
+    appId: string;
+    secret?: string;
+    page: string;
+    envVersion: string;
+    manual: boolean;
+};
+
+export function getAdminWechatSetting() {
+    return http.get<{ setting: WechatAdminSetting }>("/admin/settings/wechat");
+}
+
+export function updateAdminWechatSetting(setting: WechatAdminSettingInput) {
+    return http.patch<{ setting: WechatAdminSetting }>("/admin/settings/wechat", setting);
+}
+
 export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }

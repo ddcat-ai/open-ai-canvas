@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 60
+const CurrentSchemaVersion int64 = 61
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -22,6 +22,7 @@ const resourcePlaybackChecksum = "sha256:resource-playback-v6-20260902"
 const assetLibraryFoldersChecksum = "sha256:asset-library-folders-v6-20260902"
 const logicalModelActiveCodeChecksum = "sha256:logical-model-active-code-v8-20260905"
 const creationRuntimeChecksum = "sha256:creation-runtime-v10-20260909"
+const wechatQRTicketsChecksum = "sha256:wechat-qr-tickets-v61-20261024"
 const authNotificationsChecksum = "sha256:auth-notifications-v35-20260924"
 const cloudAgentGeminiCacheChecksum = "sha256:cloud-agent-gemini-cache-v36-20260924"
 const cloudAgentGeminiCacheIdentityChecksum = "sha256:cloud-agent-gemini-cache-identity-v37-20260925"
@@ -203,6 +204,9 @@ var schemaMigrations = []migration{
 	{version: 59, name: "channel_model_protocol_length", checksum: "sha256:channel-model-protocol-length-v59", apply: migrateChannelModelProtocolLength},
 	{version: 60, name: "user_feedbacks", checksum: "sha256:user-feedbacks-v60-20261020", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.UserFeedback{})
+	}},
+	{version: 61, name: "wechat_qr_tickets", checksum: wechatQRTicketsChecksum, apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.WechatQRTicket{})
 	}},
 }
 

@@ -18,6 +18,7 @@ type UserProfile struct {
 	HasPassword          bool       `json:"hasPassword"`
 	EmailEnabled         bool       `json:"emailEnabled"`
 	LinuxDOEnabled       bool       `json:"linuxdoEnabled"`
+	WechatBound          bool       `json:"wechatBound"`
 	ReauthenticatedUntil *time.Time `json:"reauthenticatedUntil,omitempty"`
 }
 type ProfilePasswordRequest struct {
@@ -108,6 +109,9 @@ func (s *Service) UserProfile(actor *model.User, cookie string) (*UserProfile, e
 		return nil, err
 	}
 	result := &UserProfile{User: public, HasPassword: user.PasswordHash != "", EmailEnabled: emailEnabled, LinuxDOEnabled: linuxdo.Enabled}
+	if ident, err := s.repo.UserIdentityForUser(user.ID, "wechat"); err == nil && ident != nil {
+		result.WechatBound = true
+	}
 	now := time.Now()
 	if session.ReauthenticatedAt != nil && !session.ReauthenticatedAt.After(now) {
 		until := session.ReauthenticatedAt.Add(repository.ProfileReauthenticationTTL)

@@ -5,6 +5,10 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 微信小程序扫码登录（Schema 61）
+
+Schema 61 新增 `wechat_qr_tickets` 表，记录微信小程序扫码登录票据（Ticket）、6位短码、绑定操作（login/bind）、关联用户 ID、微信 OpenID、UnionID、授权状态及过期时间。微信登录配置由 `system_settings` 中的 `wechat_login` 统一托管，支持后台热配置。
+
 ## 用户反馈收件箱（Schema 60）
 
 Schema 60 新增 `user_feedbacks`，保存用户 ID、用户名/邮箱快照、联系方式、类型、标题、正文、附件与环境 JSON 字符串、处理状态、管理员答复、归档标志及创建/更新时间；用户 ID、类型、状态、归档标志和创建时间有索引。附件文件通过既有 `resources` 服务保存，反馈表只保存附件元数据，不存媒体正文。新库初始化、正式迁移及 SQLite → PostgreSQL 搬迁均包含该表。

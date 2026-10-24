@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Avatar, Button, Form, Input, Skeleton } from "antd";
 import { BadgeCheck, Crop, ImagePlus, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { UserAvatar } from "@/components/layout/user-avatar";
@@ -14,7 +14,9 @@ import { cropProfileAvatar } from "@/services/profile-avatar";
 import { loadProfileSession } from "@/services/profile-session";
 import { applyUserSession } from "@/lib/user-session";
 import { invalidateAuthSessionCache, type LocalUser } from "@/services/api/auth";
-import { changeProfileEmail, changeProfilePassword, profileLinuxDOReauthURL, requestProfileEmailCode, selectDefaultProfileAvatar, uploadProfileAvatar, type UserProfile } from "@/services/api/profile";
+import { changeProfileEmail, changeProfilePassword, profileLinuxDOReauthURL, requestProfileEmailCode, selectDefaultProfileAvatar, unbindWechat, uploadProfileAvatar, type UserProfile } from "@/services/api/profile";
+import { WechatIcon } from "@/pages/auth/auth-scene";
+import { WechatBindDialog } from "./wechat-bind-dialog";
 import { ApiError } from "@/services/api/request";
 import { useUserStore } from "@/stores/use-user-store";
 import { profileAvatarError, profilePasswordError, profileReauthReady, profileSecondsRemaining } from "./profile-validation";
@@ -45,6 +47,8 @@ export function ProfilePane() {
     const [draftAvatar, setDraftAvatar] = useState<{ file: File; url: string; sourceFile: File } | null>(null);
     const [cropSource, setCropSource] = useState<{ file: File; url: string } | null>(null);
     const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+    const [wechatDialogOpen, setWechatDialogOpen] = useState(false);
+    const [unbindingWechat, setUnbindingWechat] = useState(false);
     const [avatarTab, setAvatarTab] = useState<AvatarTab>("upload");
     const [defaultAvatarDraft, setDefaultAvatarDraft] = useState("person");
     const cropGeneration = useRef(0);
@@ -274,6 +278,27 @@ export function ProfilePane() {
         }
     };
 
+    const handleUnbindWechat = async () => {
+        setUnbindingWechat(true);
+        try {
+            await unbindWechat();
+            message.success("已解除微信绑定");
+            await profileQuery.refetch();
+        } catch (error) {
+            message.error(errorMessage(error, "解除微信绑定失败"));
+        } finally {
+            setUnbindingWechat(false);
+        }
+    };
+
+    const handleCloseWechatDialog = useCallback(() => {
+        setWechatDialogOpen(false);
+    }, []);
+
+    const handleWechatBindSuccess = useCallback(() => {
+        void profileQuery.refetch();
+    }, [profileQuery]);
+
     return (
         <div className="profile-pane">
             <div className="settings-pane-header">
@@ -501,9 +526,56 @@ export function ProfilePane() {
                                 </Form>
                             )}
                         </section>
+
+                        <section className="profile-security-card" aria-labelledby="profile-wechat-title">
+                            <div className="profile-card-heading">
+                                <span className="profile-card-icon">
+                                    <WechatIcon className="size-5 text-emerald-500" />
+                                </span>
+                                <div>
+                                    <h4 id="profile-wechat-title">微信账号绑定</h4>
+                                    <p>绑定个人微信后，可直接在电脑端扫码快捷登录。</p>
+                                </div>
+                            </div>
+                            <div className="profile-current-email">
+                                <span>绑定状态</span>
+                                <strong>{profile.wechatBound ? "已绑定微信账号" : "尚未绑定微信"}</strong>
+                                {profile.wechatBound ? (
+                                    <span className="profile-email-status is-verified">
+                                        <BadgeCheck className="size-3.5" />
+                                        已绑定
+                                    </span>
+                                ) : (
+                                    <span className="profile-email-status">未绑定</span>
+                                )}
+                            </div>
+                            <div className="profile-actions">
+                                {profile.wechatBound ? (
+                                    <Button
+                                        danger
+                                        loading={unbindingWechat}
+                                        onClick={() => void handleUnbindWechat()}
+                                    >
+                                        解除微信绑定
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        type="primary"
+                                        onClick={() => setWechatDialogOpen(true)}
+                                    >
+                                        立即绑定微信
+                                    </Button>
+                                )}
+                            </div>
+                        </section>
                     </div>
                 </div>
             ) : null}
+            <WechatBindDialog
+                open={wechatDialogOpen}
+                onCancel={handleCloseWechatDialog}
+                onSuccess={handleWechatBindSuccess}
+            />
             {profile ? (
                 <AppModal
                     open={avatarDialogOpen}

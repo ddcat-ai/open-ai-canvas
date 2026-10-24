@@ -42,6 +42,11 @@ type (
 	TapNowImportIssue          = auth.TapNowImportIssue
 	TapNowImportMetadata       = auth.TapNowImportMetadata
 	TapNowImportWarning        = auth.TapNowImportWarning
+	WechatQRTicketResponse     = auth.WechatQRTicketResponse
+	WechatTicketStatusResult   = auth.WechatTicketStatusResult
+	WechatConfirmResult        = auth.WechatConfirmResult
+	PublicWechatSetting        = auth.PublicWechatSetting
+	WechatSettingRequest       = auth.WechatSettingRequest
 )
 
 type authHost struct {
@@ -265,4 +270,28 @@ func hashToken(token string) string {
 
 func randomToken() string {
 	return auth.RandomToken()
+}
+
+func (s *Service) CreateWechatQRTicket(action string, userID string) (*WechatQRTicketResponse, error) {
+	return s.authDomain().CreateWechatQRTicket(action, userID)
+}
+
+func (s *Service) GetWechatQRTicketStatus(ticketID string) (*WechatTicketStatusResult, error) {
+	return s.authDomain().GetWechatQRTicketStatus(ticketID)
+}
+
+func (s *Service) ConfirmWechatTicket(ticketID, manualCode, jsCode string) (*WechatConfirmResult, error) {
+	return s.authDomain().ConfirmWechatTicket(ticketID, manualCode, jsCode)
+}
+
+func (s *Service) UnbindWechat(user *model.User) error {
+	return s.authDomain().UnbindWechat(user)
+}
+
+func (s *Service) AdminWechatSetting(actor *model.User) (*PublicWechatSetting, error) {
+	return s.authDomain().AdminWechatSetting(actor)
+}
+
+func (s *Service) UpdateWechatSetting(actor *model.User, req WechatSettingRequest) (*PublicWechatSetting, error) {
+	return s.authDomain().UpdateWechatSetting(actor, req)
 }

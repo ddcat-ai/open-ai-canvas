@@ -56,6 +56,8 @@ type PublicAuthSettings struct {
 	LinuxDOEnabled        bool   `json:"linuxdoEnabled"`
 	EmailEnabled          bool   `json:"emailEnabled"`
 	EmailCodeRequired     bool   `json:"emailCodeRequired"`
+	WechatQrLoginEnabled  bool   `json:"wechatQrLoginEnabled"`
+	WechatQrManual        bool   `json:"wechatQrManual"`
 	AgreementTitle        string `json:"agreementTitle,omitempty"`
 	AgreementContent      string `json:"agreementContent,omitempty"`
 }
@@ -82,7 +84,15 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if count == 0 {
 		// 首个管理员同样要看到服务协议，不能因为跳过注册校验就丢失协议字段。
 		agreementTitle, agreementContent := s.RegistrationAgreement()
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent}, nil
+		return &PublicAuthSettings{
+			FirstUser:            true,
+			RegistrationEnabled:  true,
+			LinuxDOEnabled:       false,
+			WechatQrLoginEnabled: s.WechatLoginEnabled(),
+			WechatQrManual:       s.WechatManualMode(),
+			AgreementTitle:       agreementTitle,
+			AgreementContent:     agreementContent,
+		}, nil
 	}
 	registrationEnabled, err := s.RegistrationEnabled()
 	if err != nil {
@@ -123,6 +133,8 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		LinuxDOEnabled:        s.LinuxDOEnabled(),
 		EmailEnabled:          emailEnabled,
 		EmailCodeRequired:     p.EmailRegistration || p.SMSAndEmailRegistration,
+		WechatQrLoginEnabled:  s.WechatLoginEnabled(),
+		WechatQrManual:        s.WechatManualMode(),
 		AgreementTitle:        agreementTitle,
 		AgreementContent:      agreementContent,
 	}, nil
@@ -390,6 +402,9 @@ func (s *Service) createAuthSession(user *model.User, event *model.LoginLog) (*A
 		ExpiresAt: now.Add(sessionMaxAge),
 		CreatedAt: now,
 		UpdatedAt: now,
+	}
+	if event != nil && (event.Method == "wechat" || event.Source == "wechat_qr") {
+		session.ReauthenticatedAt = &now
 	}
 	event.SessionRef = HashToken(session.ID)
 	event.CreatedAt = now.UTC()

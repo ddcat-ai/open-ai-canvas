@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, login } from "@/services/api/auth";
 import { useUserStore } from "@/stores/use-user-store";
 import { LinuxDOIcon } from "./auth-scene";
+import { WechatQRLogin } from "./wechat-qr-login";
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { emptyVerification, loginVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 
@@ -17,6 +18,10 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [linuxdoEnabled, setLinuxdoEnabled] = useState(false);
+    const [wechatLoginEnabled, setWechatLoginEnabled] = useState(false);
+    const [loginMode, setLoginMode] = useState<"account" | "wechat">(() => {
+        return params.get("mode") === "wechat" ? "wechat" : "account";
+    });
     const [methods, setMethods] = useState<VerificationMethod[]>([]);
     const [method, setMethod] = useState<"password" | VerificationMethod>("password");
     const [verification, setVerification] = useState({ ...emptyVerification });
@@ -34,7 +39,11 @@ export default function LoginPage() {
 
     useEffect(() => {
         void getAuthSettings()
-            .then((settings) => { setLinuxdoEnabled(settings.linuxdoEnabled); setMethods(verificationMethods(settings, "login")); })
+            .then((settings) => {
+                setLinuxdoEnabled(settings.linuxdoEnabled);
+                setWechatLoginEnabled(Boolean(settings.wechatQrLoginEnabled));
+                setMethods(verificationMethods(settings, "login"));
+            })
             .catch((error) => {
                 // 这是登录页的展示配置读取：失败时明确隐藏第三方入口，
                 // 账号密码登录仍可用；不能无痕地把配置读取失败当成成功。
@@ -65,50 +74,69 @@ export default function LoginPage() {
     };
 
     return (
-        <form onSubmit={submit} className="space-y-5">
-            {methods.length > 0 && <Segmented block aria-label="登录方式" value={method} disabled={submitting} options={[{ value: "password", label: "密码登录" }, ...methods.map((value) => ({ value, label: methodLabels[value] }))]} onChange={(value) => { setMethod(value as typeof method); setVerification({ ...emptyVerification }); }} />}
-            {method !== "password" ? <VerificationFields key={method} purpose="login" method={method} value={verification} onChange={setVerification} disabled={submitting} /> : <>
-            <AuthField label="用户名 / 邮箱" htmlFor="login-account">
-                <Input id="login-account" size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
-            </AuthField>
-            <AuthField
-                label="密码"
-                htmlFor="login-password"
-                action={
-                    <Link
-                        to={forgotPasswordURL}
-                        className="auth-scene-link -my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium transition-colors"
-                    >
-                        忘记密码？
-                    </Link>
-                }
-            >
-                <Input.Password
-                    id="login-password"
-                    size="large"
-                    prefix={<LockKeyhole className="auth-scene-icon size-4" />}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="请输入密码"
-                    autoComplete="current-password"
-                    required
+        <div className="space-y-5">
+            {wechatLoginEnabled ? (
+                <Segmented
+                    block
+                    aria-label="登录模式"
+                    value={loginMode}
+                    options={[
+                        { value: "account", label: "账号登录" },
+                        { value: "wechat", label: "微信扫码登录" },
+                    ]}
+                    onChange={(value) => setLoginMode(value as "account" | "wechat")}
                 />
-            </AuthField>
-            </>}
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">
-                登录
-            </Button>
-            {linuxdoEnabled ? (
-                <>
-                    <Divider plain className="auth-scene-divider">
-                        或
-                    </Divider>
-                    <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
-                        使用 Linux.do 登录
-                    </Button>
-                </>
             ) : null}
-        </form>
+
+            {loginMode === "wechat" ? (
+                <WechatQRLogin next={next} />
+            ) : (
+                <form onSubmit={submit} className="space-y-5">
+                    {methods.length > 0 && <Segmented block aria-label="登录方式" value={method} disabled={submitting} options={[{ value: "password", label: "密码登录" }, ...methods.map((value) => ({ value, label: methodLabels[value] }))]} onChange={(value) => { setMethod(value as typeof method); setVerification({ ...emptyVerification }); }} />}
+                    {method !== "password" ? <VerificationFields key={method} purpose="login" method={method} value={verification} onChange={setVerification} disabled={submitting} /> : <>
+                    <AuthField label="用户名 / 邮箱" htmlFor="login-account">
+                        <Input id="login-account" size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
+                    </AuthField>
+                    <AuthField
+                        label="密码"
+                        htmlFor="login-password"
+                        action={
+                            <Link
+                                to={forgotPasswordURL}
+                                className="auth-scene-link -my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium transition-colors"
+                            >
+                                忘记密码？
+                            </Link>
+                        }
+                    >
+                        <Input.Password
+                            id="login-password"
+                            size="large"
+                            prefix={<LockKeyhole className="auth-scene-icon size-4" />}
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            placeholder="请输入密码"
+                            autoComplete="current-password"
+                            required
+                        />
+                    </AuthField>
+                    </>}
+                    <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                        登录
+                    </Button>
+                    {linuxdoEnabled ? (
+                        <>
+                            <Divider plain className="auth-scene-divider">
+                                或
+                            </Divider>
+                            <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
+                                使用 Linux.do 登录
+                            </Button>
+                        </>
+                    ) : null}
+                </form>
+            )}
+        </div>
     );
 }
 

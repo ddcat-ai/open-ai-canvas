@@ -31,6 +31,66 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, settings)
 	})
+	r.GET("/auth/wechat/qr", func(c *gin.Context) {
+		action := c.DefaultQuery("action", "login")
+		userID := ""
+		if action == "bind" {
+			user, err := currentUser(c, svc)
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			userID = user.ID
+		}
+		ticket, err := svc.CreateWechatQRTicket(action, userID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, ticket)
+	})
+	r.GET("/auth/wechat/status", func(c *gin.Context) {
+		ticketID := c.Query("ticket")
+		if ticketID == "" {
+			fail(c, http.StatusBadRequest, errors.New("缺少 ticket 参数"))
+			return
+		}
+		result, err := svc.GetWechatQRTicketStatus(ticketID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if result.Status == "confirmed" && result.Session != "" {
+			setSessionCookie(c, result.Session, result.MaxAgeSecs)
+		}
+		ok(c, result)
+	})
+	r.POST("/auth/wechat/confirm", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Ticket     string `json:"ticket"`
+			ManualCode string `json:"manualCode"`
+			Code       string `json:"code"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		res, err := svc.ConfirmWechatTicket(req.Ticket, req.ManualCode, req.Code)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"status":  200,
+			"success": true,
+			"msg":     "ok",
+			"message": res.Message,
+			"action":  res.Action,
+			"data":    res,
+		})
+	})
 	r.POST("/auth/register", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
 		var req service.RegisterRequest

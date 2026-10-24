@@ -34,6 +34,7 @@ func Models() []any {
 		&model.AuthSession{},
 		&model.LoginLog{},
 		&model.UserIdentity{},
+		&model.WechatQRTicket{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},
 		&model.AuthVerification{},

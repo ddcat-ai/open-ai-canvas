@@ -267,11 +267,16 @@ type (
 	PublicRegistrationSetting              = app.PublicRegistrationSetting
 	PublicRuntimeLimits                    = app.PublicRuntimeLimits
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
+	PublicWechatSetting                    = app.PublicWechatSetting
 	RedeemBatchPage                        = app.RedeemBatchPage
 	RegisterRequest                        = app.RegisterRequest
 	RegisterTaskOutputRequest              = app.RegisterTaskOutputRequest
 	RegistrationSettingRequest             = app.RegistrationSettingRequest
 	ReorderProjectUnitsRequest             = app.ReorderProjectUnitsRequest
+	WechatConfirmResult                    = app.WechatConfirmResult
+	WechatQRTicketResponse                 = app.WechatQRTicketResponse
+	WechatSettingRequest                   = app.WechatSettingRequest
+	WechatTicketStatusResult               = app.WechatTicketStatusResult
 	ReplaceCharacterRepresentationsRequest = app.ReplaceCharacterRepresentationsRequest
 	ReplaceProjectUnitShotInput            = app.ReplaceProjectUnitShotInput
 	ReplaceProjectUnitShotsRequest         = app.ReplaceProjectUnitShotsRequest

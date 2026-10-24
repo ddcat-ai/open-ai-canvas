@@ -203,7 +203,8 @@ test("task-first settings reveal dependent configuration only after the primary 
 
     expect(accessSource).toContain("{draftLinuxDOEnabled ? (");
     expect(accessSource).toContain('title="1. 是否允许创建新账号"');
-    expect(accessSource).toContain('title="2. 是否开放 Linux.do 登录"');
+    expect(accessSource).toContain('title="2. 微信小程序扫码登录 (官方直连)"');
+    expect(accessSource).toContain('title="3. 是否开放 Linux.do 登录"');
 
     expect(featureSource).toContain('title="1. 用户工作台入口"');
     expect(featureSource).toContain('title="2. 插件开放范围"');

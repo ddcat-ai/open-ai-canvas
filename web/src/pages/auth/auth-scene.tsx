@@ -46,6 +46,14 @@ export function LinuxDOIcon() {
     );
 }
 
+export function WechatIcon({ className = "size-4" }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+            <path d="M8.5 2C4.36 2 1 4.91 1 8.5c0 2.01 1.05 3.82 2.7 5.03l-.7 2.15c-.09.28.18.52.44.4l2.5-1.15c.81.3 1.67.47 2.56.47.2 0 .4 0 .6-.02-.3-.88-.47-1.83-.47-2.81 0-4.14 3.81-7.5 8.5-7.5.3 0 .59.02.88.05C16.82 4.14 13.01 2 8.5 2zm-2.25 4.5c.69 0 1.25.56 1.25 1.25S6.94 9 6.25 9 5 8.44 5 7.75s.56-1.25 1.25-1.25zm4.5 0c.69 0 1.25.56 1.25 1.25S11.44 9 10.75 9 9.5 8.44 9.5 7.75s.56-1.25 1.25-1.25zM15.5 10c-3.87 0-7 2.69-7 6s3.13 6 7 6c.74 0 1.45-.11 2.12-.32l1.97.9c.21.1.43-.09.36-.31l-.55-1.7c1.36-.96 2.1-2.39 2.1-3.57 0-3.31-3.13-6-7-6zm-2 3.5c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm4 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z" />
+        </svg>
+    );
+}
+
 export function AuthScene() {
     const appearance = useAppearanceStore((state) => state.appearance);
     const theme = useThemeStore((state) => state.theme);

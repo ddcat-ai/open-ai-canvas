@@ -404,8 +404,40 @@ export function getAuthSettings() {
             emailBindingAvailable: boolean;
             agreementTitle?: string;
             agreementContent?: string;
+            wechatQrLoginEnabled?: boolean;
+            wechatQrManual?: boolean;
         }
     >("/auth/settings");
+}
+
+export type WechatQRTicketData = {
+    ticket: string;
+    code?: string;
+    qrImage?: string;
+    manual: boolean;
+    action: "login" | "bind";
+    expiresAt: string;
+};
+
+export type WechatTicketStatusResult = {
+    status: "pending" | "scanned" | "confirmed" | "failed" | "expired";
+    action: "login" | "bind";
+    session?: string;
+    user?: LocalUser;
+    maxAgeSecs?: number;
+    error?: string;
+};
+
+export function getWechatQRTicket(action: "login" | "bind" = "login") {
+    return http.get<WechatQRTicketData>("/auth/wechat/qr", { params: { action } });
+}
+
+export function getWechatTicketStatus(ticket: string) {
+    return http.get<WechatTicketStatusResult>("/auth/wechat/status", { params: { ticket } });
+}
+
+export function confirmWechatTicket(input: { ticket?: string; manualCode?: string; code: string }) {
+    return http.post<{ success: boolean; action: string; message: string }>("/auth/wechat/confirm", input);
 }
 
 export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {

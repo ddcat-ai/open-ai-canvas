@@ -162,4 +162,11 @@ func registerAuthProfileRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		c.Redirect(http.StatusFound, target)
 	})
+	profile.POST("/wechat/unbind", func(c *gin.Context) {
+		if err := svc.UnbindWechat(actor(c)); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"ok": true})
+	})
 }
