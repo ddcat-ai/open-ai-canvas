@@ -846,7 +846,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         const matchesPrefill = prefilled?.displayText === draft;
         const value = matchesPending ? pendingRequest.request!.prompt : matchesPrefill ? prefilled!.text : draft;
         options = matchesPending ? { ...options, displayText: pendingRequest.displayText, canvasReferenceNodeId: pendingRequest.canvasReferenceNodeId } : matchesPrefill ? prefilled! : options;
-        if (running && !pendingRequest?.request) {
+        if (running && !pendingRequest) {
             await interject(value);
             return;
         }
@@ -856,11 +856,13 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         setBusy(true);
         let accepted = false;
         let requestSent = false;
+        let createdUnsentSubmission = false;
         let validatedSkillCatalogRequest = 0;
         const validateSkills = async (ids: string[]) => {
             const catalog = await refreshSkills();
             if (!accountIsCurrent() || currentScope.current !== scope) return;
             if (classifyAgentSkillSelection(ids, catalog.skills).invalidIds.length) {
+                if (pendingRequest) throw new Error("上一条请求结果待确认，且原请求包含已失效技能；请先在任务中心核对原运行。幂等身份和输入已保留。");
                 setSkillsOpen(true);
                 throw new Error("当前对话包含已失效技能，请在技能商店的已启用视图中移除后再发送。输入已保留。");
             }
@@ -870,10 +872,11 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         try {
             const effectiveModel = options?.requiresVision ? selectImageInspectionModel(config, selectedModel) : selectedModel;
             if (options?.requiresVision && !effectiveModel) throw new Error("当前没有配置支持图片输入的文本模型，请在模型能力设置中为一个文本模型开启图片输入后重试");
-            const pending = pendingSubmission.current;
+            const pending = pendingRequest;
             // An ambiguous previous POST owns its body/key until reconciled.
             // Editing model settings or prompt must not silently create a new charge.
             if (pending?.request && pending.request.prompt !== value) throw new Error("上一条请求结果待确认，请先原样重试上一条消息，再发送新要求");
+            if (pending && !pending.request && running) throw new Error("上一条请求结果待确认，请先在任务中心核对原运行；幂等身份和输入已保留，暂不作为插话或新请求发送。");
             if (!pending?.request) {
                 if (profileLoading) throw new Error("正在确认长期偏好快照，请稍后再发送");
                 if (!profileView || profileError) throw new Error("长期偏好快照尚未确认，请重新读取后再发送");
@@ -888,10 +891,6 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 const requestConfig = resolveModelRequestConfig(agentConfig, effectiveModel);
                 const logicalModelId = logicalModelIDForConfig(agentConfig);
                 const requestedSkillIds = [...new Set([...selectedSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])];
-                if (requestedSkillIds.length) {
-                    await validateSkills(requestedSkillIds);
-                    if (!accountIsCurrent() || currentScope.current !== scope) return;
-                }
                 const input = {
                     canvasId,
                     prompt: value,
@@ -908,6 +907,10 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 };
                 const fingerprint = JSON.stringify({ scope, parent: run?.id, input });
                 if (pending && pending.fingerprint !== fingerprint) throw new Error("上一条请求尚未确认，请恢复原消息与设置后核对，不能覆盖原幂等记录");
+                if (requestedSkillIds.length) {
+                    await validateSkills(requestedSkillIds);
+                    if (!accountIsCurrent() || currentScope.current !== scope) return;
+                }
                 const key = pending?.key || createClientUUID();
                 const next = { fingerprint, key, request: { ...input, idempotencyKey: key }, parentRunId: run?.id, messageId: `user-${key}`, displayText: options?.displayText, canvasReferenceNodeId: options?.canvasReferenceNodeId };
                 // Persist before sending. A failed local save must not submit a request
@@ -915,6 +918,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 await waitForCanvasSync(saveCloudAgentPendingSubmission(activeConversationId, next, accountScope));
                 if (!accountIsCurrent() || currentScope.current !== scope) return;
                 pendingSubmission.current = next;
+                createdUnsentSubmission = !pending;
             }
             const submission = pendingSubmission.current!;
             const request = submission.request!;
@@ -973,9 +977,11 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 setPrompt(options?.displayText || value);
                 const status = (cause as { status?: number }).status;
                 const reason = (cause as { reason?: string }).reason;
-                if (reason === "agent_conversation_stale_parent" || !pendingRequest?.request && (!requestSent || reason === "canvas_agent_busy" || (status && [400, 401, 403, 404, 422].includes(status)))) {
-                    // A local preflight failure never sent the write. These
-                    // admission responses explicitly rejected it as well.
+                const staleParentRejected = requestSent && reason === "agent_conversation_stale_parent";
+                const newSubmissionRejected = !pendingRequest && requestSent && (reason === "canvas_agent_busy" || (status && [400, 401, 403, 404, 422].includes(status)));
+                // 缺少 request 不等于没有旧 POST。仅清理本次新建且未发出的记录，
+                // 已有身份必须保留，直到原请求按既有合同完成核对。
+                if (staleParentRejected || newSubmissionRejected || createdUnsentSubmission && !requestSent) {
                     // stale_parent is checked after same-key replay, so even an
                     // original retry has now been confirmed unaccepted. Other
                     // ambiguous retries retain their original body and key.
@@ -1005,7 +1011,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 }
             }
             if (requestSent && !accepted && !pendingRequest?.request) void refreshSkills().catch(() => undefined);
-            setMessages((current) => appendAgentError(current, `submit-error-${activeConversationId}`, cause, agentSubmissionErrorTitle(cause, accepted, requestSent)));
+            setMessages((current) => appendAgentError(current, `submit-error-${activeConversationId}`, cause, pendingRequest && !requestSent ? "待确认请求未解除，幂等身份与输入已保留" : agentSubmissionErrorTitle(cause, accepted, requestSent)));
         } finally {
             submissionRequestRef.current = false;
             if (accountIsCurrent() && currentScope.current === scope) setBusy(false);
