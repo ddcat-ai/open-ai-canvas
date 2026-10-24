@@ -4,6 +4,7 @@ import { Check, LoaderCircle, Plus, Search, Sparkles, Users } from "lucide-react
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import type { CanvasTheme } from "@/lib/canvas-theme";
+import type { AgentSkillSelection } from "@/lib/canvas/agent-skill-selection";
 import type { Skill, SkillCategory, SkillLibraryCategory } from "@/services/api/skills";
 import { curationIcon, matchesCuration, effectiveCurationRoot, type useSkillCuration } from "@/components/skills/skill-curation-browser";
 
@@ -18,6 +19,9 @@ type CanvasAgentSkillLibraryModalProps = {
     installedSkills: Skill[];
     marketSkills: Skill[];
     selectedSkillIds: string[];
+    selection: AgentSkillSelection;
+    catalogStatus: "loading" | "ready" | "error";
+    onRetryCatalog: () => void;
     categories: SkillCategory[];
     libraryCategories: SkillLibraryCategory[];
     category: string;
@@ -39,6 +43,9 @@ export function CanvasAgentSkillLibraryModal({
     installedSkills,
     marketSkills,
     selectedSkillIds,
+    selection,
+    catalogStatus,
+    onRetryCatalog,
     categories,
     libraryCategories,
     category,
@@ -57,11 +64,11 @@ export function CanvasAgentSkillLibraryModal({
     const listRef = useRef<HTMLDivElement>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
     const wasOpenRef = useRef(false);
-    const selectedCount = selectedSkillIds.length;
+    const selectedCount = selection.validIds.length;
 
     useEffect(() => {
         if (open && !wasOpenRef.current) {
-            setTab("market");
+            setTab(selection.invalidIds.length ? "enabled" : "market");
             setLibraryCategoryId("all");
             onCategoryChange("all");
         }
@@ -81,8 +88,8 @@ export function CanvasAgentSkillLibraryModal({
     }, [curationState.curation, onPlatformCategoryChange, platformCategory]);
 
     const librarySource = useMemo(() => tab === "enabled"
-        ? installedSkills.filter((skill) => selectedSkillIds.includes(skill.skillId))
-        : installedSkills, [installedSkills, selectedSkillIds, tab]);
+        ? installedSkills.filter((skill) => selection.validIds.includes(skill.skillId))
+        : installedSkills, [installedSkills, selection.validIds, tab]);
 
     const libraryCategoryCounts = useMemo(() => {
         const counts = new Map<string, number>();
@@ -255,10 +262,28 @@ export function CanvasAgentSkillLibraryModal({
                         <h2>技能商店</h2>
                         <button type="button" className="canvas-agent-skill-library-count" onClick={() => changeTab("enabled")} aria-label={`查看本轮已启用的 ${selectedCount} 个技能，最多 8 个`}>
                             已启用 <strong>{selectedCount}</strong><span> / 8</span>
+                            {selection.invalidIds.length ? <span> · 已失效 {selection.invalidIds.length}</span> : null}
+                            {selection.unknownIds.length ? <span> · 待确认 {selection.unknownIds.length}</span> : null}
                         </button>
                     </header>
 
                     <div ref={listRef} className="canvas-agent-skill-library-list thin-scrollbar" aria-label="技能列表" aria-busy={loading}>
+                        {catalogStatus !== "ready" ? (
+                            <div className="col-span-full" role="status">
+                                <Alert type={catalogStatus === "error" ? "warning" : "info"} title={catalogStatus === "error" ? "技能目录读取失败，已选技能状态尚未确认。选择已保留。" : "正在确认已选技能…"} action={catalogStatus === "error" ? <Button onClick={onRetryCatalog}>重试</Button> : undefined} />
+                            </div>
+                        ) : null}
+                        {tab === "enabled" && selection.invalidIds.length ? (
+                            <section className="col-span-full flex flex-col gap-2" aria-label="已失效技能">
+                                <h3>已失效技能</h3>
+                                {selection.invalidIds.map((id) => (
+                                    <div key={id} className="flex items-center justify-between gap-3">
+                                        <span className="min-w-0 break-all">{id}<span className="block" style={{ color: theme.node.muted }}>已删除或当前不可用</span></span>
+                                        <Button size="small" onClick={() => onToggle(id)}>从当前对话移除</Button>
+                                    </div>
+                                ))}
+                            </section>
+                        ) : null}
                         {visibleSkills.map((skill) => (
                             <SkillLibraryCard
                                 key={skill.skillId}
@@ -267,7 +292,7 @@ export function CanvasAgentSkillLibraryModal({
                                 theme={theme}
                                 categories={categories}
                                 selected={selectedSkillIds.includes(skill.skillId)}
-                                canSelect={selectedCount < 8 || selectedSkillIds.includes(skill.skillId)}
+                                canSelect={catalogStatus === "ready" && (selectedCount < 8 || selectedSkillIds.includes(skill.skillId))}
                                 onToggle={() => onToggle(skill.skillId)}
                                 onInstall={() => onInstall(skill)}
                             />
@@ -278,7 +303,7 @@ export function CanvasAgentSkillLibraryModal({
                                 正在读取技能库…
                             </div>
                         ) : null}
-                        {!loading && visibleSkills.length === 0 ? (
+                        {!loading && visibleSkills.length === 0 && !(tab === "enabled" && (selection.invalidIds.length || selection.unknownIds.length)) ? (
                             <div className="canvas-agent-skill-library-state" style={{ color: theme.node.muted }}>
                                 <Sparkles className="size-6" aria-hidden="true" />
                                 <span>{emptyText}</span>
@@ -289,7 +314,7 @@ export function CanvasAgentSkillLibraryModal({
                     </div>
 
                     <footer className="canvas-agent-skill-library-footer" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}>
-                        <span>{tab === "enabled" ? `${visibleSkills.length} 个技能将在本轮生效` : tab === "installed" ? `${visibleSkills.length} 个已加入技能` : `已加载 ${marketSkills.length} 个公开技能`}</span>
+                        <span>{tab === "enabled" ? selection.unknownIds.length ? "已选技能状态待确认" : `${selectedCount} 个技能将在本轮生效` : tab === "installed" ? `${visibleSkills.length} 个已加入技能` : `已加载 ${marketSkills.length} 个公开技能`}</span>
                         {tab === "market" && hasMore ? (
                             <Button size="small" disabled={loading} loading={loading} onClick={() => void onLoadMore()}>{loading ? "加载中" : "加载更多"}</Button>
                         ) : <span>{tab === "market" ? "已加载全部" : "最多启用 8 个"}</span>}

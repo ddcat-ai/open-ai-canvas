@@ -29,6 +29,7 @@ const agent = await import("@/services/api/agent");
 const history = await import("@/services/cloud-agent-conversations");
 const awaitImportHistory = await import("@/services/cloud-agent-history");
 const skillsApi = await import("@/services/api/skills");
+type Skill = import("@/services/api/skills").Skill;
 const { setActiveUserScope } = await import("@/lib/user-scope");
 const { useUserStore } = await import("@/stores/use-user-store");
 const { useGlobalAgentStore } = await import("@/stores/use-global-agent-store");
@@ -46,6 +47,7 @@ const sendInputs: Array<Record<string, any>> = [];
 let sendFailure: Error | undefined;
 let capabilitiesOverride: (() => Promise<unknown>) | undefined;
 let sendOverride: (() => Promise<{ run: AgentRun }>) | undefined;
+let pendingSaveOverride: (() => Promise<void>) | undefined;
 const refreshRequests: Array<{ observedConversationIds?: string[]; canvasId?: string }> = [];
 let generated = 0;
 let composer: Record<string, any>;
@@ -53,6 +55,10 @@ let header: Record<string, any>;
 let conversationUI: Record<string, any>;
 let historyUI: Record<string, any>;
 let controls: Record<string, any>;
+let skillLibrary: Record<string, any>;
+let availableSkills: Skill[] = [];
+let skillsFailure: Error | undefined;
+const skillReads: Array<{ fresh?: boolean } | undefined> = [];
 const silent = () => {};
 mock.module("file-saver", () => ({ saveAs: silent }));
 const MotionBox = ({ children, className, style }: any) => (
@@ -110,6 +116,7 @@ mock.module("@/services/cloud-agent-conversations", () => ({
     saveCloudAgentPendingSubmission: async (_id: string, value: CloudAgentPendingSubmission, scope: string) => {
         if (scope !== "sync-user") throw new Error("不能向其他账号保存原请求");
         pending = value;
+        await pendingSaveOverride?.();
     },
     clearCloudAgentPendingSubmission: async (_id: string, scope: string) => {
         if (scope !== "sync-user") throw new Error("不能清除其他账号原请求");
@@ -129,7 +136,11 @@ mock.module("@/services/api/skills", () => ({
     ...skillsApi,
     listSkillPresets: async () => ({ presets: [] }),
     listSkills: async () => ({ skills: [] }),
-    listAddedSkills: async () => ({ skills: [] }),
+    listAddedSkills: async (options?: { fresh?: boolean }) => {
+        skillReads.push(options);
+        if (skillsFailure) throw skillsFailure;
+        return { skills: availableSkills };
+    },
     listSkillLibraryCategories: async () => ({ categories: [] }),
     addSkill: async () => {
         throw new Error("不应安装技能");
@@ -179,7 +190,12 @@ mock.module("@/components/canvas/canvas-cloud-agent-panel-parts", () => ({
         return <div>历史</div>;
     },
 }));
-mock.module("@/components/canvas/canvas-agent-skill-library-modal", () => ({ CanvasAgentSkillLibraryModal: () => null }));
+mock.module("@/components/canvas/canvas-agent-skill-library-modal", () => ({
+    CanvasAgentSkillLibraryModal: (props: any) => {
+        skillLibrary = props;
+        return null;
+    },
+}));
 mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null }));
 mock.module("@/components/canvas/canvas-cloud-agent-connectors", () => ({ AgentConnectorsBar: () => null }));
 mock.module("@/components/canvas/use-agent-panel-layout", () => ({ useAgentPanelLayout: () => ({ style: {}, pointerHandlers: {}, reset: silent, onResizeKeyDown: silent }) }));
@@ -216,7 +232,10 @@ const focus = async () => {
         await settle();
     });
 };
-async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversation[], initialPending: CloudAgentPendingSubmission | null = null) {
+async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversation[], initialPending: CloudAgentPendingSubmission | null = null, catalog: Skill[] = []) {
+    availableSkills = catalog;
+    skillsFailure = undefined;
+    skillReads.length = 0;
     local = [initial];
     activeId = initial.id;
     remote = cloud;
@@ -227,6 +246,7 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     sendFailure = undefined;
     capabilitiesOverride = undefined;
     sendOverride = undefined;
+    pendingSaveOverride = undefined;
     generated = 0;
     subscriptions.length = 0;
     refreshRequests.length = 0;
@@ -251,6 +271,173 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     };
 }
 afterAll(() => dom.happyDOM.abort());
+const testSkill = (skillId: string) => ({ skillId, skillName: skillId, isAdded: true, status: 1 }) as Skill;
+
+test("#888 恢复旧对话识别失效 ID，新建仅继承有效选择且不改写旧运行快照", async () => {
+    const initial = { ...chat("stale", makeRun("first")), skillIds: ["valid", "deleted"], draft: "保留草稿" };
+    initial.run!.skills = [{ id: "deleted", name: "历史技能快照", version: "mock-v1", hash: "mock-hash" }];
+    const snapshot = JSON.stringify(initial.run);
+    const mounted = await mount(initial, [], null, [testSkill("valid")]);
+    try {
+        expect(skillLibrary.selection).toEqual({ validIds: ["valid"], invalidIds: ["deleted"], unknownIds: [] });
+        await act(async () => {
+            header.onNew();
+            await settle();
+        });
+        expect(local.find((item) => item.id === activeId)?.skillIds).toEqual(["valid"]);
+        expect(local.find((item) => item.id === "stale")?.skillIds).toEqual(["valid", "deleted"]);
+        expect(JSON.stringify(local.find((item) => item.id === "stale")?.run)).toBe(snapshot);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 提交前强制刷新目录，失效选择阻止 POST 并保留输入", async () => {
+    const initial = { ...chat("stale-submit", makeRun("first")), skillIds: ["deleted"], draft: "不能丢失的输入" };
+    const mounted = await mount(initial, [], null, [testSkill("deleted")]);
+    try {
+        availableSkills = [];
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toHaveLength(0);
+        expect(generated).toBe(0);
+        expect(pending).toBeNull();
+        expect(composer.prompt).toBe("不能丢失的输入");
+        expect(skillReads.some((options) => options?.fresh)).toBe(true);
+        expect(skillLibrary.selection.invalidIds).toEqual(["deleted"]);
+        expect(conversationUI.messages.some((item: any) => item.text.includes("失效"))).toBe(true);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 目录请求失败不误删选择、不发送且保留输入", async () => {
+    const initial = { ...chat("failed-catalog", makeRun("first")), skillIds: ["valid"], draft: "重试时保留" };
+    const mounted = await mount(initial, [], null, [testSkill("valid")]);
+    try {
+        skillsFailure = new Error("技能目录暂时不可用");
+        await focus();
+        expect(skillLibrary.selection).toEqual({ validIds: [], invalidIds: [], unknownIds: ["valid"] });
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toHaveLength(0);
+        expect(pending).toBeNull();
+        expect(composer.prompt).toBe("重试时保留");
+        expect(local.find((item) => item.id === activeId)?.skillIds).toEqual(["valid"]);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 逐项移除只更新当前对话选择，重新挂载不会由内存写回失效 ID", async () => {
+    const initial = { ...chat("remove-stale", makeRun("first")), skillIds: ["valid", "deleted", "another-deleted"] };
+    initial.run!.skills = [{ id: "deleted", name: "历史技能快照", version: "mock-v1", hash: "mock-hash" }];
+    initial.messages[1].detail = { request: { skillIds: ["deleted"] }, skillSnapshot: initial.run!.skills };
+    let mounted = await mount(initial, [], null, [testSkill("valid")]);
+    try {
+        await act(async () => {
+            skillLibrary.onToggle("deleted");
+            await settle();
+        });
+        const saved = local.find((item) => item.id === activeId)!;
+        expect(saved.skillIds).toEqual(["valid", "another-deleted"]);
+        expect(saved.run).toEqual(initial.run);
+        expect(saved.messages).toEqual(initial.messages);
+        await mounted.close();
+        mounted = await mount(saved, [], null, [testSkill("valid")]);
+        expect(skillLibrary.selectedSkillIds).toEqual(["valid", "another-deleted"]);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 所有选择有效时保持原有续发流程", async () => {
+    const initial = { ...chat("valid-submit", makeRun("first")), skillIds: ["valid"], draft: "正常续发" };
+    const mounted = await mount(initial, [], null, [testSkill("valid")]);
+    try {
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toEqual(["first"]);
+        expect(sendInputs[0].skillIds).toEqual(["valid"]);
+        expect(composer.prompt).toBe("");
+        expect(pending).toBeNull();
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 删除事件及时刷新当前对话，目录失败后新建也不继承已确认失效 ID", async () => {
+    const initial = { ...chat("delete-event", makeRun("first")), skillIds: ["valid", "deleted"] };
+    const mounted = await mount(initial, [], null, [testSkill("valid"), testSkill("deleted")]);
+    try {
+        availableSkills = [testSkill("valid")];
+        await act(async () => {
+            window.dispatchEvent(new Event("canvas-skills-changed"));
+            await settle();
+        });
+        expect(skillLibrary.selection.invalidIds).toEqual(["deleted"]);
+        skillsFailure = new Error("断网");
+        await focus();
+        await act(async () => {
+            header.onNew();
+            await settle();
+        });
+        expect(local.find((item) => item.id === activeId)?.skillIds).toEqual(["valid"]);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 预检后保存期间删除技能，POST 前再次核验并清理尚未发送的幂等记录", async () => {
+    const initial = { ...chat("delete-during-save", makeRun("first")), skillIds: ["deleted"], draft: "保存期间也不能丢失" };
+    const mounted = await mount(initial, [], null, [testSkill("deleted")]);
+    try {
+        pendingSaveOverride = async () => {
+            availableSkills = [];
+            window.dispatchEvent(new Event("canvas-skills-changed"));
+            await settle();
+        };
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+            await settle();
+        });
+        expect(sent).toHaveLength(0);
+        expect(pending).toBeNull();
+        expect(composer.prompt).toBe("保存期间也不能丢失");
+        expect(skillLibrary.selection.invalidIds).toEqual(["deleted"]);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("#888 服务端拒绝预检之后的并发删除，保留草稿并刷新失效提示", async () => {
+    const initial = { ...chat("server-reject-delete", makeRun("first")), skillIds: ["deleted"], draft: "拒绝后可编辑" };
+    const mounted = await mount(initial, [], null, [testSkill("deleted")]);
+    try {
+        sendOverride = async () => {
+            availableSkills = [];
+            throw new ApiError("技能不存在或已删除", { status: 400 });
+        };
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toEqual(["first"]);
+        expect(pending).toBeNull();
+        expect(composer.prompt).toBe("拒绝后可编辑");
+        expect(skillLibrary.selection.invalidIds).toEqual(["deleted"]);
+        expect(local.find((item) => item.id === activeId)?.run).toEqual(initial.run);
+    } finally {
+        await mounted.close();
+    }
+});
 function configureModels(ambiguous: boolean) {
     const entry = (id: string, model: string, price: number) =>
         createModelChannel({ id, scope: "system", models: [model], modelCosts: [{ model, channelModelId: `${id}-${model}`, capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: price }] });
