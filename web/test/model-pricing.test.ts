@@ -5,6 +5,7 @@ import type { ModelRequirements } from "../src/lib/model-selection";
 import { createModelChannel, defaultConfig, normalizeConfigSnapshot, resolveModelChannel, type AiConfig } from "../src/stores/use-config-store";
 import { buildNodeConfig } from "../src/components/canvas/canvas-node-prompt-panel";
 import { buildGenerationConfig } from "../src/lib/canvas/canvas-project-generation";
+import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { modelRequestOptions } from "../src/lib/model-selection";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
@@ -246,6 +247,20 @@ describe("model request pricing", () => {
                 options: { vquality: "720", videoSeconds: 5 },
             },
         });
+    });
+
+    test("多图视频报价操作与所选模型的参考能力一致", () => {
+        const config = systemConfig({ tiers: [{ selector: {}, billingMode: "per_second", unitPriceMicrocredits: 25_000 }] });
+        const requirements: ModelRequirements = {
+            ...textVideoRequirements,
+            input: { ...textVideoRequirements.input!, imageCount: 3 },
+        };
+
+        expect(modelQuoteRequest(config, config.model, "video", requirements)?.intent.operation).toBe("image_to_video");
+
+        const cost = resolveModelChannel(config, config.model).modelCosts![0]!;
+        cost.capabilityConfig = defaultModelCapabilityConfig("minimax-video");
+        expect(modelQuoteRequest(config, config.model, "video", requirements)?.intent.operation).toBe("reference_to_video");
     });
 
     test("matches video audio, resolution and duration from actual request overrides", () => {

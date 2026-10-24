@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { canvasConnectionError } from "../src/lib/canvas/canvas-connection-policy";
-import { assertCanvasImageReferenceLimit, buildGenerationConfig, canvasImageReferenceLimitError, resolveCanvasGenerationModel } from "../src/lib/canvas/canvas-project-generation";
+import { assertCanvasImageReferenceLimit, buildGenerationConfig, buildVideoGenerationMetadata, canvasImageReferenceLimitError, resolveCanvasGenerationModel } from "../src/lib/canvas/canvas-project-generation";
 import { readNodeGenerationSpec, synchronizeGenerationSpec } from "../src/lib/canvas/generation-contract";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
-import { audioModelForConnectionInput, groupModelsByDisplayName, inferVideoOperation, modelCompatibilityError, modelGroupReferenceLimits, modelPromptLengthError, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoBooleanOptions } from "../src/lib/model-selection";
+import { audioModelForConnectionInput, groupModelsByDisplayName, inferVideoOperation, modelCompatibilityError, modelGroupReferenceLimits, modelPromptLengthError, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoBooleanOptions, resolveModelVideoOperation } from "../src/lib/model-selection";
 import { defaultConfig, normalizeModelOptionValue, type AiConfig, type ModelChannel } from "../src/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
@@ -365,6 +365,49 @@ describe("逻辑模型选择", () => {
         expect(inferVideoOperation({ textCount: 1, imageCount: 0, videoCount: 0, audioCount: 1, characterCount: 0 })).toBe("audio_to_video");
         expect(inferVideoOperation({ textCount: 1, imageCount: 1, videoCount: 0, audioCount: 1, characterCount: 0 })).toBe("image_to_video");
         expect(inferVideoOperation({ textCount: 1, imageCount: 0, videoCount: 1, audioCount: 1, characterCount: 0 })).toBe("reference_to_video");
+    });
+
+    test("多张纯图片根据模型能力路由，不误判为全模态参考", () => {
+        const config = policyConfig();
+        const imageModel = "relay::cinema-image";
+        const imageProfile = config.channels[0]?.modelCosts?.find((item) => item.model === "cinema-image")?.capabilityConfig?.video;
+        if (!imageProfile) throw new Error("缺少图生视频能力配置");
+        imageProfile.references.maxImages = 9;
+        const input = { textCount: 1, imageCount: 3, videoCount: 0, audioCount: 0, characterCount: 0 };
+        const requirements = { capability: "video" as const, input, videoSeconds: "6" };
+
+        expect(resolveModelVideoOperation(config, imageModel, input, "reference_to_video")).toBe("image_to_video");
+        expect(resolveModelVideoOperation(config, imageModel, { ...input, referenceImageCount: 2 })).toBe("image_to_video");
+        expect(modelCompatibilityError(config, imageModel, requirements)).toBe("");
+        expect(resolveCompatibleModel(config, "relay::cinema-text", requirements)).toBe(imageModel);
+
+        imageProfile.operations.push("reference_to_video");
+        expect(resolveModelVideoOperation(config, imageModel, input)).toBe("reference_to_video");
+        expect(modelCompatibilityError(config, imageModel, requirements)).toBe("");
+    });
+
+    test("画布节点的多图操作元数据匹配所选模型", () => {
+        const config = policyConfig();
+        config.model = "relay::cinema-image";
+        const profile = config.channels[0]?.modelCosts?.find((item) => item.model === "cinema-image")?.capabilityConfig?.video;
+        if (!profile) throw new Error("缺少图生视频能力配置");
+        profile.references.maxImages = 9;
+        const sourceNode = { ...node("video", CanvasNodeType.Video), metadata: { videoEditOperation: "reference_to_video" } };
+        const context = {
+            referenceImages: Array.from({ length: 3 }, (_, index) => ({ id: `image-${index + 1}`, name: `image-${index + 1}.png`, type: "image/png", dataUrl: "data:image/png;base64,YQ==" })),
+            referenceVideos: [],
+            referenceAudios: [],
+        };
+
+        expect(buildVideoGenerationMetadata(sourceNode, context, config).videoEditOperation).toBe("image_to_video");
+    });
+
+    test("参考视频仍要求支持 reference_to_video", () => {
+        const config = policyConfig();
+        const imageModel = "relay::cinema-image";
+        const input = { textCount: 1, imageCount: 1, videoCount: 1, audioCount: 0, characterCount: 0 };
+        expect(resolveModelVideoOperation(config, imageModel, input)).toBe("reference_to_video");
+        expect(modelCompatibilityError(config, imageModel, { capability: "video", input, videoSeconds: "6" })).toContain("参考视频");
     });
 
     test("图片加音频可匹配支持图生视频和参考音频的模型", () => {

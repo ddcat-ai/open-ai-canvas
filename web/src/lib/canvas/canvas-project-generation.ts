@@ -8,7 +8,7 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
-import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
+import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveModelVideoOperation, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
@@ -68,7 +68,20 @@ export async function runBackendCanvasGenerationTask(
             referenceAudios,
             mask,
             signal,
-            metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
+            metadata: {
+                nodeId,
+                ...metadata,
+                ...(mode === "video"
+                    ? {
+                          videoEditOperation: resolveModelVideoOperation(
+                              config,
+                              config.model,
+                              { textCount: 0, imageCount: referenceImages.length, videoCount: referenceVideos.length, audioCount: referenceAudios.length, characterCount: 0 },
+                              metadata?.videoEditOperation as string | undefined,
+                          ),
+                      }
+                    : {}),
+            },
             onTaskUpdate: onTaskCreated,
             clientOperationId,
             retryOf,
@@ -306,6 +319,7 @@ function resolveVideoEditOperation(
         referenceVideos: ReferenceVideo[];
         referenceAudios: ReferenceAudio[];
     },
+    config?: AiConfig,
 ): CanvasVideoEditOperation {
     const storedOperation = node?.metadata?.videoEditOperation;
     const input = {
@@ -315,7 +329,7 @@ function resolveVideoEditOperation(
         audioCount: context?.referenceAudios.length || 0,
         characterCount: 0,
     };
-    return resolveVideoOperation(input, storedOperation) as CanvasVideoEditOperation;
+    return (config ? resolveModelVideoOperation(config, config.model, input, storedOperation) : resolveVideoOperation(input, storedOperation)) as CanvasVideoEditOperation;
 }
 
 export function buildVideoGenerationMetadata(
@@ -336,7 +350,7 @@ export function buildVideoGenerationMetadata(
     const endFrame = workflowVideo ? undefined : requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds);
     return {
         ...(config ? generationWorkflowMetadata(config) : {}),
-        videoEditOperation: resolveVideoEditOperation(node, context),
+        videoEditOperation: resolveVideoEditOperation(node, context, config),
         videoCameraMoveId: metadata?.videoCameraMoveId,
         videoCameraMovePrompt: metadata?.videoCameraMovePrompt,
         videoStartFrameNodeId: startFrame,

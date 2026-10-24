@@ -1,4 +1,4 @@
-import { modelRequestOptions, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
+import { modelRequestOptions, resolveModelVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imagePriceSelector, normalizeImagePriceSelector } from "@/lib/image-pricing";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
@@ -99,7 +99,7 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
     const input = requirements?.input;
     const intent: ModelRequestIntent = {
         capability,
-        operation: capability === "image" ? imagePriceOperation(requirements) : capability === "video" && input ? resolveVideoOperation(input, requirements?.videoOperation) : requirements?.videoOperation,
+        operation: capability === "image" ? imagePriceOperation(requirements) : capability === "video" && input ? resolveModelVideoOperation(config, value, input, requirements?.videoOperation) : requirements?.videoOperation,
         inputs: {
             image: (input?.imageCount || 0) + (input?.characterCount || 0),
             video: input?.videoCount || 0,
@@ -126,7 +126,7 @@ function priceSelectorForRequest(capability: ModelCapability | undefined, config
         const input = requirements?.input;
         if (input) {
             const imageCount = (input.imageCount || 0) + (input.characterCount || 0);
-            requested.operation = input.videoCount > 0 ? "video_to_video" : imageCount > 0 ? "image_to_video" : resolveVideoOperation(input, requirements?.videoOperation);
+            requested.operation = input.videoCount > 0 ? "video_to_video" : resolveModelVideoOperation(config, config.model, input, requirements?.videoOperation);
             if (imageCount > 0) requested.imageCount = String(imageCount);
         } else if (requirements?.videoOperation) requested.operation = requirements.videoOperation;
         const options: Record<string, unknown> = { ...modelRequestOptions(config, "video"), ...requirements?.options, ...(requirements?.videoSeconds ? { videoSeconds: Number(requirements.videoSeconds) } : {}) };
