@@ -88,6 +88,29 @@ describe("canvas character reference delivery", () => {
         expect(images).not.toHaveBeenCalled();
     });
 
+    test("external image references reach backend preparation without browser downloads", async () => {
+        const { images } = mockResources([]);
+        images.mockRejectedValue(new TypeError("Failed to fetch"));
+        const url = "https://media.example.com/imported.png";
+        const context = contextFor([node("scene", CanvasNodeType.Image, { content: url })], "@图片1");
+
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "video", false, true, undefined, false);
+        const prepared = await prepareBackendGenerationTask({ mode: "video", config: videoConfig(), prompt: hydrated.prompt, referenceImages: hydrated.referenceImages });
+
+        expect(hydrated.referenceImages).toHaveLength(1);
+        expect((prepared.input as { referenceImages: unknown[] }).referenceImages).toEqual([expect.objectContaining({ url, dataUrl: "" })]);
+        expect(images).not.toHaveBeenCalled();
+    });
+
+    test("direct generation still materializes external image references", async () => {
+        const { images } = mockResources([]);
+        const context = contextFor([node("scene", CanvasNodeType.Image, { content: "https://media.example.com/imported.png" })], "@图片1");
+
+        await hydrateNodeGenerationContext(context, "canvas", undefined, "video");
+
+        expect(images).toHaveBeenCalledTimes(1);
+    });
+
     test("character resource references also skip browser materialization", async () => {
         const { images } = mockResources([detail("a")]);
         const context = contextFor([characterNode("a")], "@角色1");
