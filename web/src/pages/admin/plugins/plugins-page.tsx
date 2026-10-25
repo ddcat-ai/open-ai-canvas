@@ -3,9 +3,10 @@ import { Switch } from "@/pages/admin/ui/controls";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { ZHIFUFM_LOGO_SRC } from "@/components/payment-brand-icons";
 import type { ColumnsType } from "antd/es/table";
-import { CloudUpload, PlugZap, RefreshCw, Search, Trash2, UsersRound } from "lucide-react";
+import { CloudUpload, PlugZap, RefreshCw, Search, Settings2, Trash2, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { WalletLinksSettings } from "@/components/wallet-links-settings";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import "@/lib/plugins/builtin";
 import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
@@ -35,6 +36,8 @@ export default function AdminPluginsPage() {
     const [loading, setLoading] = useState(true);
     const [savingId, setSavingId] = useState("");
     const [uploadOpen, setUploadOpen] = useState(false);
+    const [configPlugin, setConfigPlugin] = useState<AdminPluginItem | null>(null);
+    const walletConfigPlugin = useMemo(() => (configPlugin ? { id: configPlugin.manifest.id, name: configPlugin.manifest.name, links: configPlugin.manifest.contributes.walletLinks || [] } : null), [configPlugin]);
     const [search, setSearch] = useState("");
     const [kind, setKind] = useState<"all" | "application" | "protocol" | "payment" | "uploaded">("all");
     const [availability, setAvailability] = useState<"all" | "available" | "unavailable">("all");
@@ -214,18 +217,22 @@ export default function AdminPluginsPage() {
             },
         },
         {
-            title: "卸载",
+            title: "操作",
             key: "actions",
-            width: 72,
+            width: 112,
             align: "center",
-            render: (_, item) =>
-                item.management.origin === "uploaded" ? (
-                    <Button danger type="text" size="small" aria-label={`卸载 ${item.manifest.name}`} icon={<Trash2 className="size-3.5" aria-hidden="true" />} onClick={() => remove(item)} />
-                ) : (
-                    <span title="内置插件不可卸载">
-                        <Button type="text" size="small" disabled aria-label={`${item.manifest.name}为内置插件，不可卸载`} icon={<Trash2 className="size-3.5" aria-hidden="true" />} />
-                    </span>
-                ),
+            render: (_, item) => (
+                <div className="flex items-center justify-center gap-1">
+                    {item.manifest.contributes.walletLinks?.length ? <Button type="text" size="small" title="设置购买入口" aria-label={`设置 ${item.manifest.name}`} icon={<Settings2 className="size-3.5" />} onClick={() => setConfigPlugin(item)} /> : null}
+                    {item.management.origin === "uploaded" ? (
+                        <Button danger type="text" size="small" aria-label={`卸载 ${item.manifest.name}`} icon={<Trash2 className="size-3.5" aria-hidden="true" />} onClick={() => remove(item)} />
+                    ) : (
+                        <span title="内置插件不可卸载">
+                            <Button type="text" size="small" disabled aria-label={`${item.manifest.name}为内置插件，不可卸载`} icon={<Trash2 className="size-3.5" aria-hidden="true" />} />
+                        </span>
+                    )}
+                </div>
+            ),
         },
     ];
 
@@ -324,6 +331,7 @@ export default function AdminPluginsPage() {
                 }
             />
             <UploadPluginModal open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={upload} />
+            <WalletLinksSettings plugin={walletConfigPlugin} onClose={() => setConfigPlugin(null)} />
         </AdminPageFrame>
     );
 }

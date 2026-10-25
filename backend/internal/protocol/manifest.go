@@ -252,6 +252,9 @@ func loadDeclarativeManifestProvider(manifest Manifest, index int) (Adapter, err
 }
 
 func ValidateManifest(manifest Manifest) error {
+	if err := ValidateWalletLinks(manifest.Contributes.WalletLinks); err != nil {
+		return err
+	}
 	seenSMS := map[string]bool{}
 	for _, provider := range manifest.Contributes.SMSProviders {
 		if !validManifestIdentifier(provider.ID) || strings.TrimSpace(provider.Label) == "" || seenSMS[provider.ID] {
@@ -440,6 +443,9 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 }
 
 func hasNonProviderContribution(contributes ManifestContributions) bool {
+	if len(contributes.WalletLinks) > 0 {
+		return true
+	}
 	if len(contributes.SMSProviders) > 0 {
 		return true
 	}

@@ -1,5 +1,5 @@
 import { http } from "@/services/api/request";
-import type { PluginManifest } from "@/lib/plugins/plugin-types";
+import type { PluginField, PluginManifest } from "@/lib/plugins/plugin-types";
 
 export type BackendPlugin = {
     manifest: PluginManifest;
@@ -34,6 +34,8 @@ export type PluginState = {
     blockedReason?: string;
 };
 
+export type AdminPluginConfiguration = { pluginId: string; fields: PluginField[]; values: Record<string, string> };
+
 export type AdminPluginState = PluginState & { enabledUserCount: number };
 
 export async function fetchPlugins() {
@@ -58,6 +60,16 @@ export async function setUserPluginEnabled(id: string, enabled: boolean) {
 
 export async function fetchAdminPlugins() {
     return http.get<{ plugins: BackendPlugin[]; states: Record<string, AdminPluginState> }>("/admin/plugins");
+}
+
+export async function fetchAdminPluginConfiguration(id: string) {
+    const result = await http.get<{ configuration: AdminPluginConfiguration }>(`/admin/plugins/${encodeURIComponent(id)}/config`);
+    return result.configuration;
+}
+
+export async function updateAdminPluginConfiguration(id: string, values: Record<string, string>) {
+    const result = await http.put<{ configuration: AdminPluginConfiguration }>(`/admin/plugins/${encodeURIComponent(id)}/config`, { values });
+    return result.configuration;
 }
 
 export async function setPluginPlatformAvailability(id: string, available: boolean) {

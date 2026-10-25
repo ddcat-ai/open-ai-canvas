@@ -19,6 +19,19 @@ const paymentNotificationMaxBytes = 1 << 20
 var paymentOrderIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/payments/wallet-links", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		links, err := svc.WalletLinks(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"links": links})
+	})
 	r.GET("/payments/providers", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

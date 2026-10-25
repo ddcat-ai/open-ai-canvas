@@ -12,6 +12,12 @@ export type PaymentProvider = {
     closeAfterMinutes: number;
 };
 
+export type WalletLink = { id: string; label: string; price?: string; description?: string; url: string };
+
+export function listWalletLinks() {
+    return http.get<{ links: WalletLink[] }>("/payments/wallet-links");
+}
+
 export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
 
 export type TopupProduct = {
