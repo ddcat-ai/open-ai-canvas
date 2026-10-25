@@ -1,5 +1,5 @@
 import type { ColumnsType } from "antd/es/table";
-import { Eye, Pencil, Power } from "lucide-react";
+import { Eye, Pencil, Power, Percent } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
@@ -23,12 +23,14 @@ export function createUserColumns({
     visibleColumns,
     onView,
     onEdit,
+    onGroupRates,
     onToggleStatus,
 }: {
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
+    onGroupRates: (user: AdminUser) => void;
     onToggleStatus: (user: AdminUser) => Promise<void>;
 }): ColumnsType<AdminUser> {
     const columns: Array<ColumnsType<AdminUser>[number] & { key: UserColumnKey }> = [
@@ -79,6 +81,7 @@ export function createUserColumns({
                             onClick: () => onToggleStatus(user),
                         },
                         { key: "edit", label: "编辑用户", icon: <Pencil className="size-3.5" />, onClick: () => onEdit(user) },
+                        { key: "group-rates", label: "额外优惠", icon: <Percent className="size-3.5" />, onClick: () => onGroupRates(user) },
                     ]}
                 />
             ),

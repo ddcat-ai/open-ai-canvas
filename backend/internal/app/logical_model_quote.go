@@ -9,12 +9,16 @@ import (
 // LogicalModelQuote 是创作端当前参数命中的实际供应线路报价。
 // Token 视频在上游返回真实 usage 前只能预估，创建任务仍以账务预留逻辑为准。
 type LogicalModelQuote struct {
-	LogicalModelID     string              `json:"logicalModelId"`
-	BillingMode        string              `json:"billingMode"`
-	Quantity           int64               `json:"quantity"`
-	AmountMicrocredits int64               `json:"amountMicrocredits"`
-	Estimated          bool                `json:"estimated"`
-	VideoTokenEstimate *VideoTokenEstimate `json:"videoTokenEstimate,omitempty"`
+	RegularAmountMicrocredits  *int64              `json:"regularAmountMicrocredits,omitempty"`
+	OriginalAmountMicrocredits *int64              `json:"originalAmountMicrocredits,omitempty"`
+	MultiplierBasisPoints      int64               `json:"multiplierBasisPoints"`
+	MultiplierSource           string              `json:"multiplierSource"`
+	LogicalModelID             string              `json:"logicalModelId"`
+	BillingMode                string              `json:"billingMode"`
+	Quantity                   int64               `json:"quantity"`
+	AmountMicrocredits         int64               `json:"amountMicrocredits"`
+	Estimated                  bool                `json:"estimated"`
+	VideoTokenEstimate         *VideoTokenEstimate `json:"videoTokenEstimate,omitempty"`
 }
 
 type ChannelModelQuoteRequest struct {
@@ -25,7 +29,7 @@ type ChannelModelQuoteRequest struct {
 
 // QuoteChannelModel uses the same admission/defaults/SKU selection as task
 // creation, without reserving credits or submitting a provider request.
-func (s *Service) QuoteChannelModel(req ChannelModelQuoteRequest) (*LogicalModelQuote, error) {
+func (s *Service) QuoteChannelModel(req ChannelModelQuoteRequest, userIDs ...string) (*LogicalModelQuote, error) {
 	if strings.TrimSpace(req.ChannelID) == "" || strings.TrimSpace(req.ModelKey) == "" {
 		return nil, InvalidModelSelection("报价必须指定系统渠道和模型")
 	}
@@ -42,7 +46,7 @@ func (s *Service) QuoteChannelModel(req ChannelModelQuoteRequest) (*LogicalModel
 	config = input["config"].(map[string]any)
 	estimate := estimateTaskBillingTokens(input, req.Intent.Capability)
 	intent := ModelRequestIntentFromTaskInput(input, "canvas_"+req.Intent.Capability, req.Intent.Operation)
-	order, err := s.newBillingOrderWithPriceTier("", "", "quote", req.ChannelID, req.ModelKey, req.Intent.Capability, "model_quote", requestedBillingQuantity(req.Intent.Capability, config), estimate, stringValue(config["priceTierId"]), intent)
+	order, err := s.newBillingOrderWithPriceTier(quoteUserID(userIDs), "", "quote", req.ChannelID, req.ModelKey, req.Intent.Capability, "model_quote", requestedBillingQuantity(req.Intent.Capability, config), estimate, stringValue(config["priceTierId"]), intent)
 	if err != nil {
 		return nil, err
 	}
@@ -63,13 +67,44 @@ func validateQuoteIntent(intent ModelRequestIntent) error {
 
 func quoteFromOrder(logicalModelID string, order *model.BillingOrder, estimate tokenBillingEstimate) *LogicalModelQuote {
 	quote := &LogicalModelQuote{LogicalModelID: logicalModelID, BillingMode: order.BillingMode, Quantity: order.Quantity, AmountMicrocredits: order.AmountMicrocredits, Estimated: order.BillingMode == "token"}
+	// Price the same usage at the sale and official prices; never reverse rounded charges.
+	var original int64
+	var err error
+	if order.BillingMode == "token" {
+		original, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: order.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: order.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: order.CachedTokenPriceMicrocredits}, estimate, 10_000)
+	} else {
+		original, err = creditAmount(order.UnitPriceMicrocredits, order.Quantity, 10_000)
+	}
+	if err == nil {
+		quote.RegularAmountMicrocredits = &original
+	}
+	if prices := order.OfficialPricing; prices.Configured {
+		var official int64
+		if order.BillingMode == "token" {
+			official, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: prices.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: prices.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: prices.CachedTokenPriceMicrocredits}, estimate, 10000)
+		} else {
+			official, err = creditAmount(prices.UnitPriceMicrocredits, order.Quantity, 10000)
+		}
+		if err == nil {
+			quote.OriginalAmountMicrocredits = &official
+		}
+	}
+	quote.MultiplierBasisPoints = order.MultiplierBasisPoints
+	quote.MultiplierSource = order.MultiplierSource
 	if order.BillingMode == "token" && order.Capability == "video" {
 		quote.VideoTokenEstimate = estimate.Video
 	}
 	return quote
 }
 
-func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIntent) (*LogicalModelQuote, error) {
+func quoteUserID(ids []string) string {
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
+func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIntent, userIDs ...string) (*LogicalModelQuote, error) {
 	if err := validateQuoteIntent(intent); err != nil {
 		return nil, err
 	}
@@ -101,7 +136,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		if routed.PriceTier != nil {
 			priceTierID = routed.PriceTier.ID
 		}
-		order, billingErr := s.newBillingOrderWithPriceTier("", "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID, resolvedIntent)
+		order, billingErr := s.newBillingOrderWithPricingKey(quoteUserID(userIDs), "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID, routed.LogicalModel.Code, resolvedIntent)
 		if billingErr != nil {
 			return nil, billingErr
 		}
@@ -144,12 +179,21 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 	if amount < 0 {
 		return nil, BadAuthRequest("当前模型尚未配置有效的用户价格")
 	}
+	originalAmount := amount
+	order := &model.BillingOrder{UserID: quoteUserID(userIDs), BillingMode: routed.LogicalModel.BillingMode, Quantity: quantity, MultiplierBasisPoints: 10_000, UnitPriceMicrocredits: routed.LogicalModel.UnitPriceMicrocredits, InputTokenPriceMicrocredits: routed.LogicalModel.InputPriceMicrocredits, OutputTokenPriceMicrocredits: routed.LogicalModel.OutputPriceMicrocredits, CachedTokenPriceMicrocredits: routed.LogicalModel.CachedPriceMicrocredits}
+	if err := s.applyModelGroupPricing(order, routed.LogicalModel.Code, "", tokenEstimate); err != nil {
+		return nil, err
+	}
+	amount = order.AmountMicrocredits
 	quote := &LogicalModelQuote{
-		LogicalModelID:     routed.LogicalModel.ID,
-		BillingMode:        routed.LogicalModel.BillingMode,
-		Quantity:           quantity,
-		AmountMicrocredits: amount,
-		Estimated:          routed.LogicalModel.BillingMode == "token",
+		RegularAmountMicrocredits: &originalAmount,
+		MultiplierBasisPoints:     order.MultiplierBasisPoints,
+		MultiplierSource:          order.MultiplierSource,
+		LogicalModelID:            routed.LogicalModel.ID,
+		BillingMode:               routed.LogicalModel.BillingMode,
+		Quantity:                  quantity,
+		AmountMicrocredits:        amount,
+		Estimated:                 routed.LogicalModel.BillingMode == "token",
 	}
 	if quote.Estimated && capability == "video" {
 		quote.VideoTokenEstimate = tokenEstimate.Video

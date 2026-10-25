@@ -13,6 +13,10 @@ export function normalizeUpstreamModelKey(value: unknown): string {
 }
 
 export type PriceTierFormValues = {
+    officialUnitPrice?: number | null;
+    officialInputTokenPrice?: number | null;
+    officialOutputTokenPrice?: number | null;
+    officialCachedTokenPrice?: number | null;
     imageSelector?: Record<string, string>;
     matchMode: PriceTierMatchMode;
     operation: string;
@@ -96,6 +100,10 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         providerModelKey: tier.providerModelKey || "",
         billingMode: tier.billingMode,
         unitPrice: tier.unitPriceMicrocredits / 1_000_000,
+        officialUnitPrice: tier.officialPricing?.configured ? tier.officialPricing.unitPriceMicrocredits / 1_000_000 : undefined,
+        officialInputTokenPrice: tier.officialPricing?.configured ? tier.officialPricing.inputTokenPriceMicrocredits / 1_000_000 : undefined,
+        officialOutputTokenPrice: tier.officialPricing?.configured ? tier.officialPricing.outputTokenPriceMicrocredits / 1_000_000 : undefined,
+        officialCachedTokenPrice: tier.officialPricing?.configured ? tier.officialPricing.cachedTokenPriceMicrocredits / 1_000_000 : undefined,
         inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
         cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
@@ -167,6 +175,13 @@ export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice,
 export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string, capabilityConfig?: ModelCapabilityConfig) {
     const videoTokens = capability === "video" && tier.billingMode === "token";
     return {
+        officialPricing: {
+            configured: tier.billingMode === "token" ? (videoTokens ? tier.officialOutputTokenPrice != null : [tier.officialInputTokenPrice, tier.officialOutputTokenPrice, tier.officialCachedTokenPrice].some(value => value != null)) : tier.officialUnitPrice != null,
+            unitPriceMicrocredits: tier.billingMode === "token" ? 0 : Math.round((tier.officialUnitPrice ?? 0) * 1_000_000),
+            inputTokenPriceMicrocredits: tier.billingMode !== "token" || videoTokens ? 0 : Math.round((tier.officialInputTokenPrice ?? 0) * 1_000_000),
+            outputTokenPriceMicrocredits: tier.billingMode !== "token" ? 0 : Math.round((tier.officialOutputTokenPrice ?? 0) * 1_000_000),
+            cachedTokenPriceMicrocredits: tier.billingMode !== "token" || videoTokens ? 0 : Math.round((tier.officialCachedTokenPrice ?? 0) * 1_000_000),
+        },
         selector: skuSelectorFromForm(capability, tier, capabilityConfig),
         resolution: priceTierResolutionFromForm(capability, tier),
         videoSeconds: priceTierVideoSecondsFromForm(capability, tier),

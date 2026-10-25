@@ -387,3 +387,6 @@ func CloudAgentCapabilitySetInfo() CloudAgentCapabilitySet {
 func CloudAgentSupportedToolNames() []string {
 	return app.CloudAgentSupportedToolNames()
 }
+
+type ModelDisplayGroupsRequest = app.ModelDisplayGroupsRequest
+type UserGroupRatesRequest = app.UserGroupRatesRequest

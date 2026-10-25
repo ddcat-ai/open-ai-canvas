@@ -208,6 +208,7 @@ export function PriceTierFields({
                                 <span>估算：宽 × 高 × 24 帧/秒 ×（输出时长 + 参考视频时长）÷ 1024；优先按上游有效用量结算，无用量时使用公式，授权预留 10% 会在结算后补扣或退回。</span>
                             </div>
                         ) : null}
+                        <OfficialPriceFields index={index} form={form} billingMode={billingMode} isVideo={isVideo} />
                         <CreditCostFields index={index} form={form} billingMode={billingMode} isVideo={isVideo} />
                     </section>
                 </div>
@@ -234,6 +235,27 @@ export function PriceTierFields({
             </div>
         </article>
     );
+}
+
+function OfficialPriceFields({ index, form, billingMode, isVideo }: { index: number; form: FormInstance<FormValues>; billingMode: string; isVideo: boolean }) {
+    const tier = Form.useWatch(["priceTiers", index], form);
+    const fields: [keyof FormValues["priceTiers"][number], keyof FormValues["priceTiers"][number], string][] = billingMode === "token"
+        ? (isVideo ? [["officialOutputTokenPrice", "outputTokenPrice", "官方原价 / 百万视频 Token"]] : [["officialInputTokenPrice", "inputTokenPrice", "官方输入原价 / 百万 Token"], ["officialOutputTokenPrice", "outputTokenPrice", "官方输出原价 / 百万 Token"], ["officialCachedTokenPrice", "cachedTokenPrice", "官方缓存原价 / 百万 Token"]])
+        : [["officialUnitPrice", "unitPrice", billingMode === "per_second" ? "官方原价 / 秒" : "官方原价 / 次"]];
+    return <div className="grid gap-3 mt-4 sm:grid-cols-2">
+        {fields.map(([key, saleKey, label]) => {
+            const original = Number(tier?.[key as keyof typeof tier]);
+            const sale = Number(tier?.[saleKey as keyof typeof tier]);
+            const discount = original > 0 && sale < original ? `${(sale / original * 10).toLocaleString("zh-CN", { maximumFractionDigits: 3 })} 折` : undefined;
+            return <Form.Item key={key} name={[index, key]} label={label} className="mb-0" rules={[{ validator: (_, value) => {
+                const currentTier = form.getFieldValue(["priceTiers", index]);
+                const hasOriginal = fields.some(([name]) => currentTier?.[name] != null);
+                return hasOriginal && value == null ? Promise.reject(new Error("请补全同一档位的官方原价，无费用请填 0")) : Promise.resolve();
+            } }]} extra={discount ? `常规售价 ${sale} 积分 · ${discount}` : undefined}>
+                <InputNumber style={{ width: "100%" }} min={0} max={1_000_000} precision={6} step={0.1} placeholder="选填" />
+            </Form.Item>;
+        })}
+    </div>;
 }
 
 function ImagePriceParameterInput({ field, value, onChange }: { field: import("@/lib/image-parameters").ImageParameter; value?: string; onChange?: (value?: string) => void }) {

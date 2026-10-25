@@ -124,6 +124,10 @@ export type RouteSimulationResult = {
 };
 
 export type LogicalModelQuote = {
+    regularAmountMicrocredits?: number;
+    originalAmountMicrocredits?: number;
+    multiplierBasisPoints?: number;
+    multiplierSource?: string;
     logicalModelId: string;
     billingMode: PublicLogicalModel["billingMode"];
     quantity: number;
@@ -160,7 +164,13 @@ export type PublicChannelCatalog = {
     models: PublicChannelModel[];
 };
 
+export type PublicModelDisplayGroup = { id: string; name: string; order: number; memberOrder: number; collection?: { id: string; name: string; resolution: string } };
+
+
 export type PublicChannelModel = {
+	  multiplierBasisPoints?: number;
+	  multiplierSource?: string;
+    displayGroup?: PublicModelDisplayGroup;
     id: string;
     modelKey: string;
     displayName: string;
@@ -198,6 +208,7 @@ export type PublicChannelModelAvailabilityDay = {
 };
 
 export type PublicChannelModelPriceTier = {
+    officialPricing?: import("./wallet").OfficialPricing;
     id: string;
     selector?: Record<string, string>;
     resolution: string;

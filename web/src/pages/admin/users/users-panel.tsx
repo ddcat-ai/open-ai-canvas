@@ -14,6 +14,7 @@ import { createUserColumns, userColumnOptions, type UserColumnKey } from "./user
 import { AdminUserCreateDrawer, AdminUserEditDrawer } from "./users-drawer";
 import { Select } from "@/components/ui/base/select";
 import { AdminSearchInput } from "../components/admin-search-input";
+import { UserGroupRatesDrawer } from "./user-group-rates-drawer";
 
 const columnStorageKey = "admin-users-visible-columns";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
@@ -30,6 +31,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     const [retry, setRetry] = useState(0);
     const [detailUserId, setDetailUserId] = useState<string | null>(null);
     const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+    const [ratesUser, setRatesUser] = useState<AdminUser | null>(null);
     const [createUserOpen, setCreateUserOpen] = useState(false);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [bulkDisabling, setBulkDisabling] = useState(false);
@@ -117,6 +119,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         visibleColumns,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
+        onGroupRates: setRatesUser,
         onToggleStatus: toggleStatus,
     }), [actor?.id, toggleStatus, visibleColumns]);
 
@@ -239,6 +242,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
             <AdminUserDetailDrawer userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
             <AdminUserCreateDrawer open={createUserOpen} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
             <AdminUserEditDrawer user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            {ratesUser && <UserGroupRatesDrawer key={ratesUser.id} user={ratesUser} onClose={() => setRatesUser(null)} />}
         </>
     );
 }

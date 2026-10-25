@@ -359,3 +359,18 @@ Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`�
 迁移 46 新增 skill_curation_settings、skill_curation_categories、skill_curation_assignments；默认关闭，不导入技能内容。表结构与事务规则见 [平台技能策展](./skill-curation)。
 
 迁移 47 依赖 46，新增 skill_curation_roots 与 skill_curation_root_assignments；保留原五个根 ID，根停用时使用派生默认桶，根表为空回落固定五类。
+
+# 分组优惠的数据结构
+
+迁移 61（`model_group_discounts`）在既有表上追加字段，不重写历史订单与模型售价。
+
+| 表或配置 | 数据 |
+| --- | --- |
+| `system_settings` 的 `model_display_groups_v1` | 展示分组、成员顺序、可选模型集合与版本；读取不会自动创建配置 |
+| `user_group_rates` | `user_id` 主键、`rates_json`（分组 ID 到额外折扣万分比）、乐观锁 `version` |
+| `channel_model_price_tiers` | `official_configured` 与 `official_{unit,input_token,output_token,cached_token}_price_microcredits` |
+| `billing_orders` | 同样的官方原价快照，以及 `billing_group_id/name/version`、`billing_member_version`、`multiplier_source` |
+
+分组与用户优惠保存均在事务内写入管理员审计；版本冲突返回 409，审计失败则回滚。分组保存还校验模型目录快照，避免覆盖其他管理员的修改。用户折扣仅允许 1 至 10000，移除覆盖值后恢复常规售价。
+
+数据库模型注册表和 SQLite 到 PostgreSQL 迁移工具均包含 `user_group_rates`。官方原价只用于展示，成本字段仍是内部成本；预留订单冻结售价、折扣和原价，后续改价不追溯既有订单。

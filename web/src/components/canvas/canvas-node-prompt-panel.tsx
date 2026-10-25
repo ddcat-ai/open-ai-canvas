@@ -1,3 +1,4 @@
+import { QuotePriceDetails } from "@/components/discount-price";
 import { Button, InputNumber, Modal } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
@@ -7,7 +8,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { modelOptionName, resolveModelChannel, useEffectiveConfig } from "@/stores/use-config-store";
 import { canonicalGenerationMetadata, nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { PROMPT_EDITOR_VIEWPORT_MARGIN } from "@/lib/canvas/canvas-prompt-editor-size";
-import { CreditSymbol, requestCreditCost } from "@/constant/credits";
+import { requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
 import { modelRequestOptions, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
@@ -395,9 +396,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
         const actionLabel = isRunning ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，生成` : "生成";
         return (
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            {showCost ? routeQuote ? <QuotePriceDetails quote={routeQuote} showPlain /> : <span className="text-xs tabular-nums">{formattedCredits} 积分</span> : null}
             <Button
                 type="text"
-                className={`canvas-node-composer-submit canvas-node-composer-submit-canvas ${showCost ? "has-cost" : ""}`}
+                className="canvas-node-composer-submit canvas-node-composer-submit-canvas"
                 disabled={isRunning || isSubmitDisabled}
                 style={
                     {
@@ -410,16 +413,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                 aria-label={actionLabel}
                 title={routeQuote ? modelQuoteDescription(routeQuote) : actionLabel}
             >
-                {showCost ? (
-                    <span className="canvas-node-composer-submit-cost">
-                        <CreditSymbol />
-                        <span>{routeQuote?.estimated ? `预估:${formattedCredits}` : formattedCredits}</span>
-                    </span>
-                ) : null}
                 <span className="canvas-node-composer-submit-action" aria-hidden>
                     {isRunning ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : <ArrowUp className="size-3.5" strokeWidth={2.4} />}
                 </span>
             </Button>
+            </div>
         );
     };
 

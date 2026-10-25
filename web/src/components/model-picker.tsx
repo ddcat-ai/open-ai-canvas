@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { modelDisplayName, modelIcon, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { DiscountPrice, QuotePrice } from "@/components/discount-price";
 import { ModelLogo } from "@/components/model-logo";
 import { ModelTags } from "@/components/model-tags";
 import { videoReferenceCapabilityTag } from "@/lib/model-tags";
@@ -486,7 +487,7 @@ function formatDurationSummary(profile: NonNullable<ReturnType<typeof modelCapab
     return `${profile.duration.min || values[0]}-${profile.duration.max || values[values.length - 1]}s`;
 }
 
-type ModelMenuPrice = { kind: "tiers"; label: string; compactLabel: string; title: string } | { kind: "estimate"; label?: string; title?: string } | { kind: "fixed"; value: number; unit: "次" | "秒" };
+type ModelMenuPrice = ({ kind: "tiers"; label: string; compactLabel: string; title: string } | { kind: "estimate"; label?: string; title?: string } | { kind: "fixed"; value: number; unit: "次" | "秒" }) & { originalLabel?: string; basisPoints?: number; source?: string };
 
 function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapability, summary = false, requirements?: ModelRequirements): ModelMenuPrice | null | undefined {
     if (!model) return undefined;
@@ -498,7 +499,11 @@ function modelMenuPrice(config: AiConfig, model: string, capability?: ModelCapab
         if (!tiers.length) return null;
         const matched = summary ? tiers : priceTiersForCurrentSelection(tiers, capability, config, requirements);
         if (!summary && !matched.length) return { kind: "tiers", label: "当前规格无报价", compactLabel: "当前规格无报价", title: "请调整参数，或选择支持当前规格的渠道" };
-        return channelTierPriceSummary(matched.length ? matched : tiers, tiers, capability);
+        const originals = cost.originalPriceTiers || [];
+        const matchedOriginals = summary ? originals : priceTiersForCurrentSelection(originals, capability, config, requirements);
+        return { ...channelTierPriceSummary(matched.length ? matched : tiers, tiers, capability),
+            originalLabel: matchedOriginals.length === matched.length ? priceTierSummaryLabel(matchedOriginals, capability) : undefined,
+            basisPoints: tierDiscount(matched, matchedOriginals), source: cost.multiplierSource };
     }
     if (cost.billingMode === "token") {
         const rate = cost.outputTokenPriceMicrocredits;
@@ -562,12 +567,11 @@ function tierSpecificationLabel(tier: NonNullable<NonNullable<AiConfig["channels
 
 function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice | null | undefined; quote?: LogicalModelQuote; compact?: boolean }) {
     if (quote) {
-        const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-        const label = quote.estimated ? `预估:${amount}` : `${amount}`;
+
         return (
             <span className="model-picker-price inline-flex shrink-0 items-center gap-1 text-[var(--fs-tiny)] font-bold tabular-nums" aria-label={modelQuoteDescription(quote)}>
                 <Coins className="model-picker-price-icon" aria-hidden="true" />
-                {compact ? label : `${label} 积分`}
+                <QuotePrice quote={quote} />
             </span>
         );
     }
@@ -577,7 +581,7 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
         return (
             <span className="model-picker-price inline-flex shrink-0 items-center gap-1 text-[var(--fs-tiny)] font-bold tabular-nums">
                 <Coins className="model-picker-price-icon" aria-hidden="true" />
-                {compact ? price.compactLabel : price.label}
+                <DiscountPrice price={compact ? price.compactLabel : price.label} original={price.originalLabel} basisPoints={price.basisPoints} source={price.source} />
             </span>
         );
     }
@@ -728,4 +732,18 @@ function modelMenuMeta(model: string, capability?: ModelCapability): { descripti
 
 export function ModelIcon({ config, model, icon }: { config?: AiConfig; model?: string; icon?: string }) {
     return <ModelLogo icon={icon || (config && model ? modelIcon(config, model) : "")} size={14} />;
+}
+function tierDiscount(tiers: Array<{ billingMode: string; unitPriceMicrocredits: number; inputTokenPriceMicrocredits: number; outputTokenPriceMicrocredits: number; cachedTokenPriceMicrocredits: number }>, originals: typeof tiers) {
+    if (!tiers.length || tiers.length !== originals.length) return undefined;
+    const ratios: number[] = [];
+    for (let i = 0; i < tiers.length; i++) {
+        const keys = tiers[i].billingMode === "token" ? ["inputTokenPriceMicrocredits", "outputTokenPriceMicrocredits", "cachedTokenPriceMicrocredits"] as const : ["unitPriceMicrocredits"] as const;
+        for (const key of keys) {
+            const base = originals[i][key], final = tiers[i][key];
+            if (base === 0 && final === 0) continue;
+            if (base <= 0 || final >= base) return undefined;
+            ratios.push(Math.round(final / base * 10000));
+        }
+    }
+    return ratios.length && ratios.every(value => value === ratios[0]) ? ratios[0] : undefined;
 }

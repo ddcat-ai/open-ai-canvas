@@ -443,3 +443,5 @@
         padding: 12px;
     }
 }
+.admin-model-view-switch { margin-bottom: 16px; }
+.admin-channel-workspace[hidden], .admin-model-group-view[hidden] { display: none; }

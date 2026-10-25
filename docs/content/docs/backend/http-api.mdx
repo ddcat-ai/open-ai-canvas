@@ -568,3 +568,18 @@ CSV 使用中文表头、UTF-8 BOM、CRLF；金额按整数分精确转换为两
 | POST | `/admin/provider-catalog/:id/install` | `{ name, apiKey, markupPercent, models: [{ modelKey, markupPercent? }], enabled }`，一次事务创建渠道、模型和规格档，返回 `{ channel }` |
 
 install 的 Base URL、协议、能力和成本全部从服务端快照读取，不信任请求体。售价 = 成本 × (1 + 加价率)，向上取整到微积分；加价率 0–1000%，最多两位小数。推广期已过返回 404。API Key 只加密存入渠道，不写日志。
+
+## 模型分组与用户优惠
+
+以下管理接口由 service 校验管理员权限，使用登录 Cookie 与统一业务信封：
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /api/admin/model-display-groups` | 返回 `groups/models/snapshot/initialized`，不自动创建分组 |
+| `PUT /api/admin/model-display-groups` | `{groups, expectedSnapshot, memberLabels?}`；目录或配置变化返回 409；配置与展示名修改和审计原子提交 |
+| `GET /api/admin/users/:id/group-rates` | 返回已有分组的常规折扣、用户覆盖值和 `version` |
+| `PUT /api/admin/users/:id/group-rates` | `{rates: {[groupId]: basisPoints}, version}`；1–10000 为售价基础上的额外折扣，空映射移除覆盖；过期版本返回 409 |
+
+模型保存可附带 `displayGroupId` 与 `displayGroupSnapshot`，和模型修改在同一事务提交。每个价格档的 `officialPricing` 与 `costPricing` 独立。
+
+当前登录用户的模型目录和报价按本人优惠计算。报价返回最终 `amountMicrocredits`、常规售价 `regularAmountMicrocredits`、可选官方原价 `originalAmountMicrocredits`、`multiplierBasisPoints` 和 `multiplierSource`。前端不得对最终金额再次应用倍率；目录价格档仍提供原始售价与倍率，供规格预览使用。真实扣费由任务预留和结算校验，不信任前端价格。
