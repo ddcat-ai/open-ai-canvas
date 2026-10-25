@@ -201,7 +201,11 @@ export function useCanvasGenerationRetry({
                     });
                     await applyGenerationTaskResult(node.id, completed);
                 } catch (error) {
-                    if (!controller.signal.aborted) message.error(error instanceof Error ? error.message : "恢复作品保存失败");
+                    if (!controller.signal.aborted) {
+                        const details = error instanceof Error ? error.message : "恢复作品保存失败";
+                        message.error(details);
+                        setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.taskId === sourceTask.id ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details } } : item));
+                    }
                 } finally {
                     finishGenerationRequest(node.id, controller);
                 }

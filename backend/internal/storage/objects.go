@@ -78,12 +78,12 @@ func PutAliyunOSSObject(setting Settings, objectKey string, mimeType string, siz
 	}
 	resp, err := outbound.OutboundHTTPClient(transferTimeout(setting)).Do(req)
 	if err != nil {
-		return "", err
+		return "", newObjectTransferError("OSS", "上传", 0, "", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
-		return "", fmt.Errorf("OSS 上传失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
+		return "", newObjectTransferError("OSS", "上传", resp.StatusCode, strings.TrimSpace(string(detail)), nil)
 	}
 	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
 }
@@ -349,7 +349,11 @@ func PutCOSObject(setting Settings, objectKey string, mimeType string, size int6
 	options := &cos.ObjectPutOptions{ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{ContentType: mimeType, ContentLength: size}}
 	resp, err := client.Object.Put(context.Background(), objectKey, body, options)
 	if err != nil {
-		return "", fmt.Errorf("COS 上传失败：%w", err)
+		statusCode := 0
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
+		return "", newObjectTransferError("COS", "上传", statusCode, "", err)
 	}
 	return strings.Trim(resp.Header.Get("ETag"), `"`), nil
 }
@@ -374,7 +378,7 @@ func PutQiniuObject(setting Settings, objectKey string, mimeType string, size in
 		size = 0
 	}
 	if err := uploader.Put(context.Background(), &ret, token, strings.TrimLeft(objectKey, "/"), body, size, extra); err != nil {
-		return "", fmt.Errorf("七牛云 Kodo 上传失败：%w", err)
+		return "", newObjectTransferError("七牛云 Kodo", "上传", 0, "", err)
 	}
 	return ret.Hash, nil
 }

@@ -43,11 +43,26 @@ type mediaRecoveryError struct {
 type mediaExecutionTaskKey struct{}
 
 func (e *mediaRecoveryError) Error() string {
+	var appErr *AppError
+	if errors.As(e.cause, &appErr) && appErr.Reason == ReasonQuotaExceeded {
+		return "作品已生成，但保存未完成：" + appErr.Message
+	}
+	if errors.Is(e.cause, errMediaStagingBusy) || errors.Is(e.cause, errMediaStagingGlobalBusy) {
+		return "作品已生成，但保存未完成：" + e.cause.Error()
+	}
+	var upstream providerHTTPError
+	if errors.As(e.cause, &upstream) && (upstream.StatusCode == 404 || upstream.StatusCode == 410) {
+		return "作品已生成，但上游作品地址已失效，无法重新下载；请联系管理员核对渠道结果"
+	}
 	return "作品已生成，但保存未完成：" + mediaStageLabel(e.stage)
 }
 func (e *mediaRecoveryError) Unwrap() error { return e.cause }
 
-var mediaRecoverySlots = make(chan struct{}, 2)
+const mediaDownloadConcurrency = 20
+const mediaUploadConcurrency = 20
+
+var mediaDownloadSlots = make(chan struct{}, mediaEnvLimit("CANVAS_MEDIA_DOWNLOAD_TOTAL", mediaDownloadConcurrency, 200))
+var mediaRecoverySlots = make(chan struct{}, mediaEnvLimit("CANVAS_MEDIA_UPLOAD_TOTAL", mediaUploadConcurrency, 200))
 var mediaRecoveryDelays = []time.Duration{15 * time.Second, time.Minute, 3 * time.Minute, 10 * time.Minute}
 
 func mediaStageLabel(stage string) string {
@@ -134,9 +149,9 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 			if int64(len(data)) > min(megabytes(policy.Resource.GeneratedFileMB), mediaStagingBudget) || !strings.HasPrefix(mimeType, mode+"/") {
 				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: errors.New("生成文件类型或大小不符合限制")}
 			}
-			item.TempName, err = s.stageInlineMedia(data)
+			item.TempName, err = s.stageInlineMedia(task.UserID, data)
 			if err != nil {
-				return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: err}
+				return nil, true, &mediaRecoveryError{stage: "checkpoint", retryable: retryableMediaRecovery(err), cause: err}
 			}
 			item.MIMEType = mimeType
 			item.Reference.DataURL = ""
@@ -173,21 +188,32 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			err = &mediaRecoveryError{stage: task.MediaStage, cause: err}
 		}
 	}()
-	// Do not occupy a worker waiting for a download slot.
-	select {
-	case mediaRecoverySlots <- struct{}{}:
-		defer func() { <-mediaRecoverySlots }()
-	default:
-		return nil, &mediaRecoveryError{stage: task.MediaStage, retryable: true, cause: errMediaRecoveryBusy}
+	// Stage remote provider results before waiting for an OSS write slot. Provider
+	// URLs are often short-lived, so upload backpressure must not postpone the
+	// first download.
+	releaseDownload, acquired := s.mediaDownloads.acquire(task.UserID, mediaDownloadSlots,
+		mediaEnvLimit("CANVAS_MEDIA_DOWNLOAD_PER_USER", 10, 20), 20)
+	if !acquired {
+		return nil, &mediaRecoveryError{stage: "download", retryable: true, cause: errMediaRecoveryBusy}
 	}
-	// Queue time must not consume the retry window for actual transfer failures.
+	defer releaseDownload()
 	if checkpoint.WaitingForSlot {
 		checkpoint.StartedAt = time.Now()
 		checkpoint.WaitingForSlot = false
-		if err := s.saveMediaCheckpoint(task, checkpoint, task.MediaStage); err != nil {
+		if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
 			return nil, &mediaRecoveryError{stage: "checkpoint", retryable: true, cause: err}
 		}
 	}
+	if err := s.stageTaskMediaDownloads(ctx, task, config, checkpoint); err != nil {
+		return nil, err
+	}
+	releaseDownload()
+	releaseUpload, acquired := s.mediaUploads.acquire(task.UserID, mediaRecoverySlots,
+		mediaEnvLimit("CANVAS_MEDIA_UPLOAD_PER_USER", 5, 10), 10)
+	if !acquired {
+		return nil, &mediaRecoveryError{stage: "upload", retryable: true, cause: errMediaRecoveryBusy}
+	}
+	defer releaseUpload()
 	if _, err := s.mediaTaskProject(task); err != nil {
 		return nil, &mediaRecoveryError{stage: "register", cause: err}
 	}
@@ -204,25 +230,8 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 		if resource == nil || resource.Status != model.ResourceStatusReady {
 			path := s.mediaTempPath(item.TempName)
 			info, statErr := os.Lstat(path)
-			if path == "" || statErr != nil || !info.Mode().IsRegular() {
-				if item.Reference.URL == "" {
-					return nil, &mediaRecoveryError{stage: "download", cause: errors.New("暂存结果已过期且上游没有可重新下载的地址")}
-				}
-				if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
-					return nil, err
-				}
-				config, err = s.resolveProviderConfig(config)
-				if err != nil {
-					return nil, &mediaRecoveryError{stage: "download", cause: err}
-				}
-				item.TempName, item.MIMEType, err = s.downloadTaskMedia(ctx, config, item.Reference.URL, checkpoint.Mode)
-				if err != nil {
-					return nil, &mediaRecoveryError{stage: "download", retryable: retryableMediaRecovery(err), cause: err}
-				}
-				path = s.mediaTempPath(item.TempName)
-				if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
-					return nil, err
-				}
+			if path == "" || statErr != nil || info == nil || !info.Mode().IsRegular() {
+				return nil, &mediaRecoveryError{stage: "download", retryable: true, cause: errors.New("暂存结果在上传前不可用")}
 			}
 			stage := "local_save"
 			_, _, oss, settingErr := s.activeResourceOSSSetting(task.UserID)
@@ -262,9 +271,59 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 	return result, nil
 }
 
+func (s *Service) stageTaskMediaDownloads(ctx context.Context, task *model.Task, config providerConfig, checkpoint *mediaCheckpoint) error {
+	for index := range checkpoint.Items {
+		item := &checkpoint.Items[index]
+		if err := ctx.Err(); err != nil {
+			return &mediaRecoveryError{stage: "download", retryable: true, cause: err}
+		}
+		resource, err := s.resourceForUploadKey(task.UserID, mediaUploadKey(task.ID, index))
+		if err != nil {
+			return &mediaRecoveryError{stage: "register", retryable: true, cause: err}
+		}
+		if resource != nil && resource.Status == model.ResourceStatusReady {
+			continue
+		}
+		path := s.mediaTempPath(item.TempName)
+		info, statErr := os.Lstat(path)
+		if path != "" && statErr == nil && info != nil && info.Mode().IsRegular() {
+			continue
+		}
+		if item.Reference.URL == "" {
+			return &mediaRecoveryError{stage: "download", cause: errors.New("暂存结果已过期且上游没有可重新下载的地址")}
+		}
+		if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
+			return err
+		}
+		config, err = s.resolveProviderConfig(config)
+		if err != nil {
+			return &mediaRecoveryError{stage: "download", cause: err}
+		}
+		item.TempName, item.MIMEType, err = s.downloadTaskMedia(ctx, task.UserID, config, item.Reference.URL, checkpoint.Mode)
+		if err != nil {
+			return &mediaRecoveryError{stage: "download", retryable: retryableMediaRecovery(err), cause: err}
+		}
+		if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 var errMediaRecoveryBusy = errors.New("作品保存并发已满")
 
+type retryableMediaTransfer interface {
+	Retryable() bool
+}
+
 func retryableMediaRecovery(err error) bool {
+	if errors.Is(err, errMediaStagingBusy) || errors.Is(err, errMediaStagingGlobalBusy) {
+		return true
+	}
+	var transfer retryableMediaTransfer
+	if errors.As(err, &transfer) && transfer.Retryable() {
+		return true
+	}
 	if retryableProtocolMediaDownload(err) || errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
@@ -365,16 +424,18 @@ func (s *Service) RecoverTaskMedia(userID, id string) (*model.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	if checkpoint.ManualAttempts >= 3 {
-		return nil, BadAuthRequest("已达到重试保存上限，请联系管理员核对渠道结果")
-	}
 	if time.Since(checkpoint.LastManualAt) < time.Minute {
 		return nil, BadAuthRequest("请稍后再试，重试保存间隔至少一分钟")
 	}
+	if err := s.checkMediaRecoveryCapacity(task, checkpoint); err != nil {
+		return nil, err
+	}
 	checkpoint.ManualAttempts++
 	checkpoint.LastManualAt = time.Now()
-	// Manual recovery is one attempt, not another full automatic retry budget.
-	checkpoint.Attempts = len(mediaRecoveryDelays)
+	// A repaired storage/quota incident must not permanently lock old tasks out.
+	// Each explicit retry has a fresh bounded budget and a one-minute cooldown.
+	checkpoint.Attempts = 0
+	checkpoint.StartedAt = time.Now()
 	data, err := json.Marshal(checkpoint)
 	if err != nil {
 		return nil, err
@@ -405,6 +466,10 @@ func (s *Service) logMediaStage(task model.Task, stage string, started time.Time
 		status = model.ApiCallStatusFailed
 		code = "media_" + stage + "_failed"
 		message = mediaStageLabel(stage)
+		var appErr *AppError
+		if errors.As(err, &appErr) && appErr.Reason == ReasonQuotaExceeded {
+			code, message = string(appErr.Reason), appErr.Message
+		}
 	}
 	if logErr := s.LogAPICall(model.ApiCallLog{UserID: task.UserID, TaskID: task.ID, BillingOrderID: task.BillingOrderID, ProviderRequestID: task.ProviderRequestID, Source: "backend-task", Capability: capabilityFromTaskType(task.Type), Model: task.Model, RequestKind: stage, Method: "INTERNAL", Path: "task/media/" + stage, Status: status, ErrorCode: code, Error: message, DurationMs: time.Since(started).Milliseconds()}); logErr != nil {
 		_ = s.log(task.UserID, task.ID, "error", "记录作品保存阶段失败", logErr.Error())
@@ -412,10 +477,19 @@ func (s *Service) logMediaStage(task model.Task, stage string, started time.Time
 }
 
 func (s *Service) mediaTempPath(name string) string {
-	if !strings.HasPrefix(name, "result-") || filepath.Base(name) != name || strings.ContainsAny(name, `/\\`) {
+	parts := strings.Split(name, "/")
+	if len(parts) == 2 {
+		if len(parts[0]) != 64 || strings.Trim(parts[0], "0123456789abcdef") != "" {
+			return ""
+		}
+	} else if len(parts) != 1 {
 		return ""
 	}
-	return filepath.Join(s.dataDir, "media-staging", name)
+	base := parts[len(parts)-1]
+	if !strings.HasPrefix(base, "result-") || filepath.Base(base) != base || strings.ContainsAny(base, `/\\`) {
+		return ""
+	}
+	return filepath.Join(s.dataDir, "media-staging", filepath.FromSlash(name))
 }
 
 func (c *taskTerminalCoordinator) handleResultPersistenceFailureError(task *model.Task, err error) error {

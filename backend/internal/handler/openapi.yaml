@@ -1637,6 +1637,39 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /admin/users/{id}/tasks/{taskId}/media-staging:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: string}}
+      - {in: path, name: taskId, required: true, schema: {type: string}}
+    get:
+      tags: [admin]
+      summary: 检查客户任务的暂存文件与恢复条件
+      description: 仅管理员可读。返回暂存数量与字节数、已保存资源数、仅有上游地址数、缺失数和容量提示；不请求上游，不返回签名地址或恢复密文。
+      responses:
+        "200": {$ref: "#/components/responses/Envelope"}
+        "403": {$ref: "#/components/responses/Error"}
+    delete:
+      tags: [admin]
+      summary: 管理员手动清理失败任务的暂存文件
+      description: 仅失败且无有效执行租约的任务允许清理。清理使用维护租约与审计，保留正式资源和上游地址；无有效源地址的图片清理后无法恢复。不执行定时清理。
+      responses:
+        "200": {$ref: "#/components/responses/Envelope"}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/users/{id}/tasks/{taskId}/recover-media:
+    post:
+      tags: [admin]
+      summary: 管理员重试客户作品保存
+      description: 复用原任务，不重新生成、不新建订单。校验管理员权限、任务归属、项目、账单、剩余容量和一分钟冷却。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: taskId, required: true, schema: {type: string}}
+      responses:
+        "200": {$ref: "#/components/responses/Envelope"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /admin/agent-lessons:
     get:
       tags: [admin]

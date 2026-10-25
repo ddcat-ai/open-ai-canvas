@@ -44,7 +44,10 @@ export function isGenerationTaskSubmissionUncertain(task: GenerationTaskDisplayT
 
 export function generationTaskStatusLabel(task: GenerationTaskDisplayTarget) {
     if (task.mediaStage && task.status === "failed") return "作品保存未完成";
-    if (task.mediaStage && (task.status === "queued" || task.status === "running")) return "作品已生成，正在保存";
+    if (task.mediaStage && (task.status === "queued" || task.status === "running")) {
+        if (task.status === "queued" || task.stage?.includes("等待")) return task.mediaStage === "download" ? "作品已生成，等待下载" : "作品已生成，等待保存";
+        return task.mediaStage === "download" ? "作品已生成，正在下载" : "作品已生成，正在保存";
+    }
     if (isGenerationTaskSubmissionUncertain(task)) return "提交结果待确认";
     return statusLabel[task.status];
 }

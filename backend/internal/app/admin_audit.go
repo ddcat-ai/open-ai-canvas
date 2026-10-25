@@ -26,6 +26,15 @@ type AdminTaskPage struct {
 	Limit int          `json:"pageSize"`
 }
 
+type AdminTaskRecoveryView struct {
+	ID              string           `json:"id"`
+	Status          model.TaskStatus `json:"status"`
+	Stage           string           `json:"stage"`
+	Progress        int              `json:"progress"`
+	MediaStage      string           `json:"mediaStage,omitempty"`
+	CanRecoverMedia bool             `json:"canRecoverMedia,omitempty"`
+}
+
 type AdminAuditPage struct {
 	Events []model.AdminAuditEvent `json:"events"`
 	Total  int64                   `json:"total"`
@@ -130,7 +139,54 @@ func (s *Service) AdminUserTasks(actor *model.User, userID string, page int, lim
 	}
 	page, limit = normalizeAdminPage(page, limit)
 	tasks, total, err := s.repo.AdminUserTasks(userID, limit, (page-1)*limit)
-	return &AdminTaskPage{Tasks: tasks, Total: total, Page: page, Limit: limit}, err
+	if err != nil {
+		return nil, err
+	}
+	for index := range tasks {
+		tasks[index].CanRecoverMedia = tasks[index].Status == model.TaskStatusFailed && tasks[index].MediaRecoveryJSON != ""
+	}
+	return &AdminTaskPage{Tasks: tasks, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (s *Service) AdminRecoverTaskMedia(actor *model.User, userID string, taskID string) (*AdminTaskRecoveryView, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	userID = strings.TrimSpace(userID)
+	taskID = strings.TrimSpace(taskID)
+	if userID == "" || taskID == "" {
+		return nil, BadAuthRequest("恢复任务缺少有效用户或任务 ID")
+	}
+	if _, err := s.repo.User(userID); err != nil {
+		return nil, err
+	}
+	task, err := s.RecoverTaskMedia(userID, taskID)
+	if err != nil {
+		return nil, err
+	}
+	view := adminTaskRecoveryView(task)
+	if err := s.appendAdminAudit(actor, "task.media_recover", "task", task.ID, "管理员重试作品保存", map[string]any{
+		"userId":     userID,
+		"status":     view.Status,
+		"mediaStage": view.MediaStage,
+	}); err != nil {
+		return nil, err
+	}
+	return view, nil
+}
+
+func adminTaskRecoveryView(task *model.Task) *AdminTaskRecoveryView {
+	if task == nil {
+		return nil
+	}
+	return &AdminTaskRecoveryView{
+		ID:              task.ID,
+		Status:          task.Status,
+		Stage:           task.Stage,
+		Progress:        task.Progress,
+		MediaStage:      task.MediaStage,
+		CanRecoverMedia: task.CanRecoverMedia,
+	}
 }
 
 func (s *Service) AdminUserAuditEvents(actor *model.User, userID string, page int, limit int) (*AdminAuditPage, error) {

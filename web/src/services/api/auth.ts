@@ -150,9 +150,30 @@ export type AdminUserTask = {
     stage: string;
     progress: number;
     model?: string;
-    providerRequestId?: string;
     createdAt: string;
+    mediaStage?: GenerationTask["mediaStage"];
+    canRecoverMedia?: boolean;
 };
+
+export type AdminTaskMediaRecoveryResult = Pick<AdminUserTask, "id" | "status" | "stage" | "progress" | "mediaStage" | "canRecoverMedia">;
+
+export type AdminTaskMediaInspection = {
+    taskId: string;
+    stagedFiles: number;
+    stagedBytes: number;
+    readyItems: number;
+    remoteItems: number;
+    missingItems: number;
+    capacityError?: string;
+};
+
+export function inspectAdminTaskMedia(userId: string, taskId: string) {
+    return http.get<AdminTaskMediaInspection>(`/admin/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}/media-staging`);
+}
+
+export function discardAdminTaskMedia(userId: string, taskId: string) {
+    return http.delete<AdminTaskMediaInspection>(`/admin/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}/media-staging`);
+}
 
 export type AnalyticsFilters = {
     from?: string;
@@ -504,6 +525,11 @@ export function listAdminUserLedger(id: string, params: { page?: number; pageSiz
 export function listAdminUserTasks(id: string, params: { page?: number; pageSize?: number } = {}) {
     return http.get<{ tasks: AdminUserTask[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/tasks`, { params });
 }
+
+export function recoverAdminUserTaskMedia(userId: string, taskId: string) {
+    return http.post<AdminTaskMediaRecoveryResult>(`/admin/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}/recover-media`);
+}
+
 
 export function listAdminUserAuditEvents(id: string, params: { page?: number; pageSize?: number } = {}) {
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });

@@ -3,6 +3,11 @@ import { canCancelGenerationTask, generationTaskShowsProgress, generationTaskSta
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 
 describe("作品保存阶段", () => {
+    test("保存队列与下载阶段分别展示", () => {
+        expect(generationTaskStatusLabel({ status: "running", stage: "作品已生成，等待保存", mediaStage: "download" })).toBe("作品已生成，等待下载");
+        expect(generationTaskStatusLabel({ status: "running", mediaStage: "download" })).toBe("作品已生成，正在下载");
+        expect(generationTaskStatusLabel({ status: "queued", mediaStage: "upload" })).toBe("作品已生成，等待保存");
+    });
     test("分别表达生成、下载、上传和登记，不把保存失败当成生成失败", () => {
         expect(mediaDeliverySummary("failed", "download")).toBe("生成成功 · 下载失败");
         expect(mediaDeliverySummary("failed", "upload")).toBe("生成成功 · 下载成功 · 上传 OSS失败");

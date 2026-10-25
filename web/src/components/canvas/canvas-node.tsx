@@ -302,7 +302,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 >
                     {/* 节点状态徽章（对应 #97 决策2：左上角 loading/success/error，近距离确认信号）*/}
                     {showChrome && data.metadata?.status && data.metadata.status !== "idle" && data.type !== CanvasNodeType.Frame ? (
-                        <NodeStatusBadge status={data.metadata.status} />
+                        <NodeStatusBadge status={data.metadata.status} saving={Boolean(data.metadata.taskMediaStage && data.metadata.taskMediaStage !== "completed")} />
                     ) : null}
                     <CanvasNodeContent
                         node={data}
@@ -643,16 +643,16 @@ function nodeTypeIcon(node: CanvasNodeData) {
 }
 
 // 节点状态徽章（对应 #97 决策2：左上角状态指示，loading/success/error）
-function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }) {
+function NodeStatusBadge({ status, saving }: { status: "loading" | "success" | "error"; saving?: boolean }) {
     if (status === "loading") {
         return (
             <div
                 className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm"
                 style={{ background: "color-mix(in oklch, var(--status-loading) 20%, transparent)", color: "var(--status-loading)" }}
-                aria-label="生成中"
+                aria-label={saving ? "保存中" : "生成中"}
             >
                 <span className="size-1.5 animate-pulse rounded-full" style={{ background: "var(--status-loading)" }} />
-                <span className="text-[var(--fs-micro)] font-medium leading-none">生成中</span>
+                <span className="text-[var(--fs-micro)] font-medium leading-none">{saving ? "保存中" : "生成中"}</span>
             </div>
         );
     }
@@ -661,7 +661,7 @@ function NodeStatusBadge({ status }: { status: "loading" | "success" | "error" }
             <div
                 className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 backdrop-blur-sm"
                 style={{ background: "color-mix(in oklch, var(--status-error) 20%, transparent)", color: "var(--status-error)" }}
-                aria-label="生成失败"
+                aria-label={saving ? "保存失败" : "生成失败"}
             >
                 <AlertCircle className="size-3" strokeWidth={2} />
                 <span className="text-[var(--fs-micro)] font-medium leading-none">失败</span>

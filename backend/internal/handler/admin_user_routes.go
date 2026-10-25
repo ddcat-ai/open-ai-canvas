@@ -130,6 +130,47 @@ func registerAdminUserRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, result)
+
+	})
+	r.POST("/admin/users/:id/tasks/:taskId/recover-media", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.AdminRecoverTaskMedia(user, c.Param("id"), c.Param("taskId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+
+	})
+	r.GET("/admin/users/:id/tasks/:taskId/media-staging", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.AdminInspectTaskMedia(user, c.Param("id"), c.Param("taskId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	r.DELETE("/admin/users/:id/tasks/:taskId/media-staging", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.AdminDiscardTaskMedia(user, c.Param("id"), c.Param("taskId"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
 	})
 	r.GET("/admin/users/:id/audit-events", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

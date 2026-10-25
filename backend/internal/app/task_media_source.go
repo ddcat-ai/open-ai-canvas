@@ -59,7 +59,19 @@ func (s *Service) taskSourceImage(task *model.Task) (*TaskSourceImageResult, err
 	}
 	item := checkpoint.Items[0]
 	if item.ResourceID != "" {
-		return &TaskSourceImageResult{URL: resourceFileURL(item.ResourceID), ResourceID: item.ResourceID}, nil
+		resource, err := s.repo.ResourceForUser(task.UserID, item.ResourceID)
+		if err == nil && resource.Status == model.ResourceStatusReady {
+			return &TaskSourceImageResult{URL: resourceFileURL(item.ResourceID), ResourceID: item.ResourceID}, nil
+		}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	path := s.mediaTempPath(item.TempName)
+	if path != "" {
+		if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() {
+			return &TaskSourceImageResult{LocalPath: path, MIMEType: item.MIMEType}, nil
+		}
 	}
 	if item.Reference.URL != "" {
 		if _, err := ValidateOutboundURL(item.Reference.URL); err != nil {
@@ -67,15 +79,7 @@ func (s *Service) taskSourceImage(task *model.Task) (*TaskSourceImageResult, err
 		}
 		return &TaskSourceImageResult{URL: item.Reference.URL}, nil
 	}
-	path := s.mediaTempPath(item.TempName)
-	if path == "" {
-		return nil, BadAuthRequest("生成图片暂存文件不可用")
-	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return nil, BadAuthRequest("生成图片暂存文件不可用")
-	}
-	return &TaskSourceImageResult{LocalPath: path, MIMEType: item.MIMEType}, nil
+	return nil, BadAuthRequest("生成图片暂存文件不可用，且没有可重新下载的地址")
 }
 
 func (s *Service) hydrateTaskSourceImage(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
@@ -102,7 +106,22 @@ func (s *Service) hydrateTaskSourceImage(userID string, media *providerMedia, po
 		return nil
 	}
 	if policy.requireURL {
-		return errors.New("当前模型要求公网参考图地址，但生成图片只有暂存文件")
+		checkpointTask, err := s.repo.TaskForUser(userID, taskID)
+		if err != nil {
+			return err
+		}
+		checkpoint, err := s.decodeMediaCheckpoint(checkpointTask)
+		if err != nil {
+			return err
+		}
+		if sourceURL := checkpoint.Items[0].Reference.URL; sourceURL != "" {
+			if _, err := ValidateOutboundURL(sourceURL); err != nil {
+				return err
+			}
+			media.URL, media.DataURL = sourceURL, ""
+			return nil
+		}
+		return errors.New("当前模型要求公网参考图地址，请等待图片保存完成后重试")
 	}
 	file, err := os.Open(source.LocalPath)
 	if err != nil {

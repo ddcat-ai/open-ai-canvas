@@ -109,7 +109,12 @@ func PutS3Object(setting Settings, objectKey string, mimeType string, size int64
 	}
 	output, err := client.PutObjectWithContext(context.Background(), input)
 	if err != nil {
-		return "", fmt.Errorf("S3 上传失败：%w", err)
+		statusCode := 0
+		var requestFailure awserr.RequestFailure
+		if errors.As(err, &requestFailure) {
+			statusCode = requestFailure.StatusCode()
+		}
+		return "", newObjectTransferError("S3", "上传", statusCode, "", err)
 	}
 	return strings.Trim(aws.StringValue(output.ETag), `"`), nil
 }

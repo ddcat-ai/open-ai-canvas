@@ -28,6 +28,8 @@ func TestTaskMediaRecoveryHTTPAuthenticationAndOwnership(t *testing.T) {
 	for _, item := range []any{
 		&model.User{ID: "media-user", Username: "media-user", Email: "media@example.invalid", Role: model.UserRoleUser, Status: model.UserStatusActive},
 		&model.AuthSession{ID: "media-session", UserID: "media-user", TokenHash: auth.HashToken("test-token"), ExpiresAt: time.Now().Add(time.Hour)},
+		&model.User{ID: "media-admin", Username: "media-admin", Email: "admin@example.invalid", Role: model.UserRoleAdmin, Status: model.UserStatusActive},
+		&model.AuthSession{ID: "admin-session", UserID: "media-admin", TokenHash: auth.HashToken("admin-token"), ExpiresAt: time.Now().Add(time.Hour)},
 		&model.Task{ID: "legacy-task", UserID: "media-user", Status: model.TaskStatusFailed},
 		&model.Task{ID: "foreign-task", UserID: "other-user", Status: model.TaskStatusFailed},
 	} {
@@ -41,6 +43,7 @@ func TestTaskMediaRecoveryHTTPAuthenticationAndOwnership(t *testing.T) {
 	ConfigureRuntime(svc)
 	t.Cleanup(func() { ConfigureRuntime(previous) })
 	RegisterTaskRoutes(router.Group("/api"), svc)
+	registerAdminUserRoutes(router.Group("/api"), svc)
 	for _, tc := range []struct {
 		id   string
 		auth bool
@@ -59,6 +62,28 @@ func TestTaskMediaRecoveryHTTPAuthenticationAndOwnership(t *testing.T) {
 		router.ServeHTTP(w, r)
 		if w.Code != tc.want {
 			t.Fatalf("%s auth=%v: %d %s", tc.id, tc.auth, w.Code, w.Body.String())
+		}
+	}
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		for _, tc := range []struct {
+			cookie string
+			taskID string
+			want   int
+		}{
+			{"", "legacy-task", http.StatusUnauthorized},
+			{"media-session.test-token", "legacy-task", http.StatusForbidden},
+			{"admin-session.admin-token", "foreign-task", http.StatusNotFound},
+			{"admin-session.admin-token", "legacy-task", http.StatusBadRequest},
+		} {
+			r := httptest.NewRequest(method, "/api/admin/users/media-user/tasks/"+tc.taskID+"/media-staging", nil)
+			if tc.cookie != "" {
+				r.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: tc.cookie})
+			}
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+			if w.Code != tc.want {
+				t.Fatalf("staging %s expected %d, got %d: %s", method, tc.want, w.Code, w.Body.String())
+			}
 		}
 	}
 }

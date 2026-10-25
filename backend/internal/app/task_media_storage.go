@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
@@ -22,42 +23,61 @@ import (
 )
 
 const mediaStagingBudget int64 = 512 << 20
-const mediaStagingTTL = 24 * time.Hour
+
+var errMediaStagingBusy = errors.New("当前账号的作品暂存额度不足，请先恢复保存或联系管理员处理失败作品")
+var errMediaStagingGlobalBusy = errors.New("服务器作品暂存空间不足，请联系管理员处理")
 
 var mediaStagingMu sync.Mutex
 
 // Reserve the maximum response size before opening a file. Temporary files are
 // sparse reservations, so concurrent downloads cannot oversubscribe this budget.
-func (s *Service) newMediaTemp(limit int64) (*os.File, error) {
+func (s *Service) newMediaTemp(userID string, limit int64) (*os.File, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, errors.New("作品暂存缺少账号")
+	}
 	mediaStagingMu.Lock()
 	defer mediaStagingMu.Unlock()
-	dir := filepath.Join(s.dataDir, "media-staging")
+	sum := sha256.Sum256([]byte(userID))
+	account := hex.EncodeToString(sum[:])
+	root := filepath.Join(s.dataDir, "media-staging")
+	dir := filepath.Join(root, account)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(dir)
+	var used, total int64
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if os.IsNotExist(walkErr) {
+			return nil
+		}
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !entry.Type().IsRegular() || !strings.HasPrefix(entry.Name(), "result-") {
+			return nil
+		}
+		info, err := entry.Info()
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		total += info.Size()
+		if filepath.Dir(path) == dir {
+			used += info.Size()
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	var used int64
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "result-") || !entry.Type().IsRegular() {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return nil, err
-		}
-		if time.Since(info.ModTime()) > mediaStagingTTL {
-			if err := os.Remove(filepath.Join(dir, entry.Name())); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		used += info.Size()
+	userBudget := int64(mediaEnvLimit("CANVAS_MEDIA_STAGING_USER_MB", 1024, 102400)) << 20
+	totalBudget := int64(mediaEnvLimit("CANVAS_MEDIA_STAGING_TOTAL_MB", 4096, 1048576)) << 20
+	if limit <= 0 || limit > mediaStagingBudget || used > userBudget-limit {
+		return nil, errMediaStagingBusy
 	}
-	if limit <= 0 || limit > mediaStagingBudget || used > mediaStagingBudget-limit {
-		return nil, errors.New("作品暂存空间不足，请稍后重试保存")
+	if total > totalBudget-limit {
+		return nil, errMediaStagingGlobalBusy
 	}
 	file, err := os.CreateTemp(dir, "result-*")
 	if err != nil {
@@ -71,11 +91,11 @@ func (s *Service) newMediaTemp(limit int64) (*os.File, error) {
 	return file, nil
 }
 
-func (s *Service) stageInlineMedia(data []byte) (string, error) {
+func (s *Service) stageInlineMedia(userID string, data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", errors.New("上游返回空作品")
 	}
-	file, err := s.newMediaTemp(int64(len(data)))
+	file, err := s.newMediaTemp(userID, int64(len(data)))
 	if err != nil {
 		return "", err
 	}
@@ -91,10 +111,11 @@ func (s *Service) stageInlineMedia(data []byte) (string, error) {
 		os.Remove(file.Name())
 		return "", err
 	}
-	return filepath.Base(file.Name()), nil
+	name, err := filepath.Rel(filepath.Join(s.dataDir, "media-staging"), file.Name())
+	return filepath.ToSlash(name), err
 }
 
-func (s *Service) downloadTaskMedia(ctx context.Context, config providerConfig, url, mode string) (name, mimeType string, err error) {
+func (s *Service) downloadTaskMedia(ctx context.Context, userID string, config providerConfig, url, mode string) (name, mimeType string, err error) {
 	policy, err := s.RuntimePolicy()
 	if err != nil {
 		return "", "", err
@@ -156,7 +177,7 @@ func (s *Service) downloadTaskMedia(ctx context.Context, config providerConfig, 
 	if response.ContentLength > 0 {
 		limit = response.ContentLength
 	}
-	file, err := s.newMediaTemp(limit)
+	file, err := s.newMediaTemp(userID, limit)
 	if err != nil {
 		return "", "", err
 	}
@@ -199,7 +220,8 @@ func (s *Service) downloadTaskMedia(ctx context.Context, config providerConfig, 
 	if err = file.Close(); err != nil {
 		return "", "", err
 	}
-	return filepath.Base(file.Name()), mimeType, nil
+	name, err = filepath.Rel(filepath.Join(s.dataDir, "media-staging"), file.Name())
+	return filepath.ToSlash(name), mimeType, err
 }
 
 func mediaUploadKey(taskID string, index int) *string {

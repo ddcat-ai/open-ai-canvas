@@ -3,7 +3,7 @@
 import { type GenerationTask } from "@/services/api/task-center";
 import { generationTaskShowsProgress, generationTaskStageLabel, generationTaskStatusLabel, isGenerationTaskSubmissionUncertain } from "@/lib/generation-task-display";
 import { AlertCircle, Clock3, Download, FileText, RefreshCw } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { formatTaskElapsed, idleTaskTickerSubscribe, subscribeTaskTicker, taskTickerSnapshot } from "@/lib/canvas/task-ticker";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
@@ -24,19 +24,19 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const statusLabel = taskId ? generationTaskStatusLabel(displayTask) : "等待任务状态";
     const workflow = node.metadata?.imageLayerWorkflow;
     const stageLabel = workflow ? (workflow.stage === "planning" ? "拆解规划中" : `拆解中，共 ${workflow.total} 张图`) : node.metadata?.experimentalLayerPlan?.progress || (taskId ? generationTaskStageLabel(displayTask) : "正在创建任务");
-    const elapsed = useTaskElapsed(workflow?.startedAt || node.metadata?.taskCreatedAt, taskTerminalStatus(node.metadata?.taskStatus) ? node.metadata?.taskCompletedAt : undefined);
+    const elapsed = useTaskElapsed(workflow?.startedAt || (displayTask.mediaStage ? undefined : node.metadata?.taskCreatedAt), taskTerminalStatus(node.metadata?.taskStatus) ? node.metadata?.taskCompletedAt : undefined);
     if (taskId && node.metadata?.storageKey === `task-source:${taskId}` && node.metadata?.content) {
         return (
             <div className="relative size-full">
-                <img src={node.metadata.content} alt="生成的图片" className="size-full object-contain" draggable={false} />
+                <TaskSourcePreview node={node} theme={theme} />
                 <span className="absolute bottom-2 left-2 rounded-[var(--r-sm)] px-2 py-1 text-[var(--fs-tiny)]" style={{ background: theme.toolbar.itemHover, color: theme.node.text }}>
-                    作品已生成，正在保存
+                    {statusLabel}
                 </span>
             </div>
         );
     }
     return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
+        <div className="relative flex h-full w-full flex-col items-center justify-center gap-2.5 px-5 text-center" style={{ color: theme.node.activeStroke }}>
             {submissionUncertain ? <AlertCircle className="size-10" /> : <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />}
             <span className="text-[var(--fs-tiny)] font-semibold">{stageLabel}</span>
             {workflow ? (
@@ -58,7 +58,7 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
                     ) : null}
                     <div className="max-w-full truncate text-[var(--fs-tiny)] tabular-nums" style={{ color: theme.node.muted }}>
                         <Clock3 className="mr-1 inline size-3" />
-                        {workflow ? shortTaskId(taskId) : `${elapsed} · ${shortTaskId(taskId)}`}
+                        {workflow || displayTask.mediaStage ? shortTaskId(taskId) : `${elapsed} · ${shortTaskId(taskId)}`}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5">
                         <button
@@ -110,6 +110,7 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
     const submissionUncertain = isGenerationTaskSubmissionUncertain(errorDisplayTask);
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
+            {node.metadata?.taskCanRecoverMedia && node.metadata?.content ? <div className="h-36 w-full"><TaskSourcePreview node={node} theme={theme} /></div> : null}
             <div className="text-xs leading-5" style={{ color: submissionUncertain ? theme.node.text : theme.accent.danger }}>
                 {submissionUncertain ? generationTaskStatusLabel(errorDisplayTask) : generationErrorMessage(node.metadata?.errorDetails)}
             </div>
@@ -167,6 +168,13 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
             )}
         </div>
     );
+}
+
+function TaskSourcePreview({ node, theme }: Pick<CanvasNodeContentProps, "node" | "theme">) {
+    const src = node.metadata?.content;
+    const [failedSrc, setFailedSrc] = useState<string>();
+    if (!src || src === failedSrc) return <div className="flex size-full items-center justify-center px-4 text-center text-xs" style={{ color: theme.node.muted }}>图片预览暂不可用，请查看任务详情</div>;
+    return <img src={src} alt="生成的图片" className="size-full object-contain" draggable={false} onError={() => setFailedSrc(src)} />;
 }
 
 export function UnknownNodeContent({ theme }: Pick<CanvasNodeContentProps, "theme">) {

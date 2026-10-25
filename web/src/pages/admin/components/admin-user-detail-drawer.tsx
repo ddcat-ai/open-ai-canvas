@@ -1,16 +1,40 @@
 import { useEffect, useState } from "react";
 import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
+import { formatBytes } from "@/lib/image-utils";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
+import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, recoverAdminUserTaskMedia, inspectAdminTaskMedia, discardAdminTaskMedia, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
+    const inspectMedia = async (task: AdminUserTask) => {
+        if (!userId) return;
+        const targetUserId = userId;
+        try {
+            const view = await inspectAdminTaskMedia(targetUserId, task.id);
+            modal.confirm({
+                title: "作品恢复检查",
+                content: <div className="space-y-2"><p>可用资源 {view.readyItems} 项，暂存 {view.stagedFiles} 项（{formatBytes(view.stagedBytes)}），仅有上游地址 {view.remoteItems} 项，文件与地址均缺失 {view.missingItems} 项。</p><p>上游地址尚未验证，可能已经失效。</p>{view.capacityError ? <p>{view.capacityError}</p> : null}<p>清理会永久删除本任务暂存图片。没有有效上游地址的图片将无法恢复；不会删除已经保存的正式资源。</p></div>,
+                okText: "清理本任务暂存",
+                cancelText: "关闭",
+                okButtonProps: { danger: true, disabled: task.status !== "failed" || view.stagedFiles === 0 },
+                onOk: async () => {
+                    try {
+                        await discardAdminTaskMedia(targetUserId,task.id);
+                        message.success("暂存文件已清理");
+                    } catch (error) {
+                        message.error(error instanceof Error ? error.message : "清理失败");
+                        throw error;
+                    }
+                },
+            });
+        } catch (error) { message.error(error instanceof Error ? error.message : "检查恢复文件失败"); }
+    };
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
     const [tasks, setTasks] = useState<AdminUserTask[]>([]);
@@ -22,6 +46,8 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
     const [taskTotal, setTaskTotal] = useState(0);
     const [auditPage, setAuditPage] = useState(1);
     const [auditTotal, setAuditTotal] = useState(0);
+
+    const [recoveringTaskId, setRecoveringTaskId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!userId) return;
@@ -87,6 +113,20 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
             active = false;
         };
     }, [auditPage, message, userId]);
+
+    const recoverTask = async (task: AdminUserTask) => {
+        if (!userId || !task.canRecoverMedia) return;
+        setRecoveringTaskId(task.id);
+        try {
+            const next = await recoverAdminUserTaskMedia(userId, task.id);
+            setTasks((current) => current.map((item) => item.id === task.id ? { ...item, ...next } : item));
+            message.success("已重新排队保存，不会重新生成");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "作品保存恢复失败");
+        } finally {
+            setRecoveringTaskId(null);
+        }
+    };
 
     return (
         <AdminDrawer
@@ -193,8 +233,24 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         { title: "模型", dataIndex: "model", width: 180, ellipsis: true },
                                         { title: "状态", dataIndex: "status", width: 100, render: (value) => <AdminStatusBadge label={value || "未知"} tone={taskStatusTone(value)} /> },
                                         { title: "阶段", dataIndex: "stage", ellipsis: true },
+                                        {
+                                            title: "操作",
+                                            key: "actions",
+                                            width: 220,
+                                            render: (_value: unknown, record: AdminUserTask) => record.canRecoverMedia ? (
+                                                <div className="flex items-center"><Button type="link" size="small" onClick={() => void inspectMedia(record)}>检查 / 清理暂存</Button><Button
+                                                    type="link"
+                                                    size="small"
+                                                    icon={<RefreshCw className="size-3.5" />}
+                                                    loading={recoveringTaskId === record.id}
+                                                    onClick={() => void recoverTask(record)}
+                                                >
+                                                    重试保存
+                                                </Button></div>
+                                            ) : null,
+                                        }
                                         ],
-                                        scroll: { x: 820 },
+                                        scroll: { x: 940 }
                                     }}
                                     empty={<AdminTableEmpty />}
                                     footer={<PaginationBar alwaysShow current={taskPage} pageSize={20} total={taskTotal} onChange={(page) => setTaskPage(page)} pageSizeOptions={[20]} />}

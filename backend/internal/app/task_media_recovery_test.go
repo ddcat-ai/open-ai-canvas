@@ -134,7 +134,7 @@ func TestMediaRecoveryDownloadFailureResumesSameTaskAfterRestart(t *testing.T) {
 	if count != 0 {
 		t.Fatal("recovery created a billing order")
 	}
-	files, err := os.ReadDir(filepath.Join(s.dataDir, "media-staging"))
+	files, err := filepath.Glob(filepath.Join(s.dataDir, "media-staging", "*", "result-*"))
 	if err != nil || len(files) != 0 {
 		t.Fatalf("staging not cleaned: %v %v", files, err)
 	}
@@ -145,7 +145,7 @@ func TestMediaRecoveryUploadFailureReusesStagedFileAndResource(t *testing.T) {
 	s, db := newMediaRecoveryTestService(t)
 	seedOSSEnabled(t, db, "media-user", "http://127.0.0.1:1")
 	task := seedMediaTask(t, db, providerConfig{})
-	temp, err := s.stageInlineMedia(mediaTestPNG(t))
+	temp, err := s.stageInlineMedia(task.UserID, mediaTestPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestMediaRecoveryUploadFailureReusesStagedFileAndResource(t *testing.T) {
 func TestMediaRecoveryRegistrationRollbackAndRetryWithoutDownload(t *testing.T) {
 	s, db := newMediaRecoveryTestService(t)
 	task := seedMediaTask(t, db, providerConfig{})
-	temp, err := s.stageInlineMedia(mediaTestPNG(t))
+	temp, err := s.stageInlineMedia(task.UserID, mediaTestPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestMediaRecoveryDoesNotFailOverGenerationRoute(t *testing.T) {
 func TestMediaRecoveryWaitsForSaveSlotAfterRetryWindow(t *testing.T) {
 	s, db := newMediaRecoveryTestService(t)
 	task := seedMediaTask(t, db, providerConfig{})
-	temp, err := s.stageInlineMedia(mediaTestPNG(t))
+	temp, err := s.stageInlineMedia(task.UserID, mediaTestPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestMediaRecoveryWaitsForSaveSlotAfterRetryWindow(t *testing.T) {
 		Mode:      "image",
 		StartedAt: time.Now().Add(-time.Hour),
 		Attempts:  len(mediaRecoveryDelays),
-		Items:    []mediaCheckpointItem{{TempName: temp, MIMEType: "image/png"}},
+		Items:     []mediaCheckpointItem{{TempName: temp, MIMEType: "image/png"}},
 	}
 	if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
 		t.Fatal(err)
@@ -357,9 +357,15 @@ func TestMediaRecoveryQueueTimeDoesNotExhaustNetworkRetryWindow(t *testing.T) {
 	for range cap(mediaRecoverySlots) {
 		mediaRecoverySlots <- struct{}{}
 	}
+	for range cap(mediaDownloadSlots) {
+		mediaDownloadSlots <- struct{}{}
+	}
 	defer func() {
 		for len(mediaRecoverySlots) > 0 {
 			<-mediaRecoverySlots
+		}
+		for len(mediaDownloadSlots) > 0 {
+			<-mediaDownloadSlots
 		}
 	}()
 	_, failure := s.materializeTaskMedia(context.Background(), task, providerConfig{}, checkpoint)
@@ -371,6 +377,9 @@ func TestMediaRecoveryQueueTimeDoesNotExhaustNetworkRetryWindow(t *testing.T) {
 	}
 	for len(mediaRecoverySlots) > 0 {
 		<-mediaRecoverySlots
+	}
+	for len(mediaDownloadSlots) > 0 {
+		<-mediaDownloadSlots
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", task.ID).Update("next_poll_at", time.Now().Add(-time.Second)).Error; err != nil {
 		t.Fatal(err)
@@ -391,6 +400,7 @@ func TestMediaRecoveryQueueTimeDoesNotExhaustNetworkRetryWindow(t *testing.T) {
 	if err := s.handleMediaRecoveryFailure(claimed, failure); err != nil {
 		t.Fatal(err)
 	}
+
 	saved, err := s.repo.Task(task.ID)
 	if err != nil || saved.Status != model.TaskStatusRunning || saved.NextPollAt == nil {
 		t.Fatalf("network error was not retried: %+v %v", saved, err)
@@ -398,6 +408,64 @@ func TestMediaRecoveryQueueTimeDoesNotExhaustNetworkRetryWindow(t *testing.T) {
 	checkpoint, err = s.decodeMediaCheckpoint(saved)
 	if err != nil || checkpoint.Attempts != 1 || checkpoint.WaitingForSlot || time.Since(checkpoint.StartedAt) > time.Minute {
 		t.Fatalf("retry window included queue time: %+v %v", checkpoint, err)
+	}
+}
+
+func TestMediaRecoveryStagesRemoteResultBeforeUploadSlot(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	s, db := newMediaRecoveryTestService(t)
+	picture := mediaTestPNG(t)
+	var downloads atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		downloads.Add(1)
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(picture)
+	}))
+	defer server.Close()
+
+	task := seedMediaTask(t, db, providerConfig{BaseURL: server.URL})
+	checkpoint := &mediaCheckpoint{
+		Mode:      "image",
+		StartedAt: time.Now(),
+		Items:     []mediaCheckpointItem{{Reference: protocol.MediaReference{URL: server.URL + "/result"}}},
+	}
+	if err := s.saveMediaCheckpoint(task, checkpoint, "download"); err != nil {
+		t.Fatal(err)
+	}
+	for range cap(mediaRecoverySlots) {
+		mediaRecoverySlots <- struct{}{}
+	}
+	defer func() {
+		for len(mediaRecoverySlots) > 0 {
+			<-mediaRecoverySlots
+		}
+	}()
+
+	_, failure := s.materializeTaskMedia(context.Background(), task, providerConfig{BaseURL: server.URL}, checkpoint)
+	if !errors.Is(failure, errMediaRecoveryBusy) {
+		t.Fatalf("expected occupied upload slot, got %v", failure)
+	}
+	if downloads.Load() != 1 || checkpoint.Items[0].TempName == "" {
+		t.Fatalf("remote result was not staged before upload queue: downloads=%d checkpoint=%+v", downloads.Load(), checkpoint.Items[0])
+	}
+	if _, err := os.Stat(s.mediaTempPath(checkpoint.Items[0].TempName)); err != nil {
+		t.Fatalf("staged result missing: %v", err)
+	}
+
+	for len(mediaRecoverySlots) > 0 {
+		<-mediaRecoverySlots
+	}
+	result, err := s.materializeTaskMedia(context.Background(), task, providerConfig{BaseURL: server.URL}, checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	images, ok := result["images"].([]interface{})
+	if !ok || len(images) != 1 {
+		t.Fatalf("result=%#v", result)
+	}
+	resource, err := s.resourceForUploadKey(task.UserID, mediaUploadKey(task.ID, 0))
+	if err != nil || resource == nil || resource.Status != model.ResourceStatusReady {
+		t.Fatalf("resource=%+v err=%v", resource, err)
 	}
 }
 
@@ -447,7 +515,7 @@ func TestMediaRecoveryTerminalStagesLimitsAndPublicList(t *testing.T) {
 }
 
 func TestMediaRecoveryManualGuardsDoNotChangeBilling(t *testing.T) {
-	for _, name := range []string{"refunded", "wrong-owner", "limit", "cooldown", "deleted-project"} {
+	for _, name := range []string{"refunded", "wrong-owner", "cooldown", "deleted-project"} {
 		t.Run(name, func(t *testing.T) {
 			s, db := newMediaRecoveryTestService(t)
 			task := seedMediaTask(t, db, providerConfig{})
@@ -458,8 +526,6 @@ func TestMediaRecoveryManualGuardsDoNotChangeBilling(t *testing.T) {
 				order.Status = model.BillingStatusRefunded
 			case "wrong-owner":
 				order.UserID = "another-user"
-			case "limit":
-				checkpoint.ManualAttempts = 3
 			case "cooldown":
 				checkpoint.LastManualAt = time.Now()
 			case "deleted-project":
@@ -524,15 +590,16 @@ func TestMediaRecoveryExpiredLeaseAndStagingLimits(t *testing.T) {
 			t.Fatalf("unsafe staging name %s", name)
 		}
 	}
-	if _, err := s.newMediaTemp(mediaStagingBudget + 1); err == nil {
+	t.Setenv("CANVAS_MEDIA_STAGING_USER_MB", "512")
+	if _, err := s.newMediaTemp(task.UserID, mediaStagingBudget+1); err == nil {
 		t.Fatal("oversized reservation accepted")
 	}
-	file, err := s.newMediaTemp(mediaStagingBudget)
+	file, err := s.newMediaTemp(task.UserID, mediaStagingBudget)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	if _, err := s.newMediaTemp(1); err == nil {
+	if _, err := s.newMediaTemp(task.UserID, 1); err == nil {
 		t.Fatal("staging budget exceeded")
 	}
 }
@@ -568,5 +635,46 @@ func TestMediaRecoveryAudioKeepsAllReturnedResults(t *testing.T) {
 	}
 	if _, ok := result["audio"]; !ok {
 		t.Fatal("legacy singular audio result missing")
+	}
+}
+
+func TestAdminMediaRecoveryRequeuesOriginalTaskAndAudits(t *testing.T) {
+	s, db := newMediaRecoveryTestService(t)
+	admin := &model.User{ID: "media-admin", Username: "media-admin", Email: "media-admin@example.invalid", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	owner := &model.User{ID: "media-user", Username: "media-user", Email: "media@example.invalid", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	for _, user := range []*model.User{admin, owner} {
+		if err := db.Create(user).Error; err != nil {
+			t.Fatalf("create user %s: %v", user.ID, err)
+		}
+	}
+	task := seedMediaTask(t, db, providerConfig{})
+	checkpoint := &mediaCheckpoint{
+		Mode:      "image",
+		StartedAt: time.Now(),
+		Items:     []mediaCheckpointItem{{Reference: protocol.MediaReference{URL: "https://example.test/result"}}},
+	}
+	if err := s.saveMediaCheckpoint(task, checkpoint, "upload"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(task).Updates(map[string]any{"status": model.TaskStatusFailed, "lease_owner": "", "lease_expires_at": nil}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, err := s.AdminRecoverTaskMedia(admin, owner.ID, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recovered.ID != task.ID || recovered.Status != model.TaskStatusQueued || recovered.CanRecoverMedia {
+		t.Fatalf("unexpected recovery result: %+v", recovered)
+	}
+	var audit model.AdminAuditEvent
+	if err := db.Where("action = ? AND target_type = ? AND target_id = ?", "task.media_recover", "task", task.ID).First(&audit).Error; err != nil {
+		t.Fatal(err)
+	}
+	if audit.ActorUserID != admin.ID {
+		t.Fatalf("audit actor=%q, want %q", audit.ActorUserID, admin.ID)
+	}
+	if _, err := s.AdminRecoverTaskMedia(owner, owner.ID, task.ID); err == nil {
+		t.Fatal("non-admin recovered customer task")
 	}
 }
