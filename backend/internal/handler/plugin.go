@@ -67,6 +67,44 @@ func RegisterPluginRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"state": state})
 	})
+	adminRoutes.GET("/:id/config", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		config, err := svc.AdminPluginConfiguration(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"configuration": config})
+	})
+	adminRoutes.PUT("/:id/config", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(user); err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256*1024)
+		var request struct {
+			Values map[string]string `json:"values"`
+		}
+		if err := c.ShouldBindJSON(&request); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		config, err := svc.UpdateAdminPluginConfiguration(user, c.Param("id"), request.Values)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"configuration": config})
+	})
 	pluginRoutes := r.Group("/plugins")
 	pluginRoutes.Use(requirePluginCenterAccess(svc))
 	// The frontend plugin center is the single management surface. Protocol

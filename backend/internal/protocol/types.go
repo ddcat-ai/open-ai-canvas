@@ -305,6 +305,7 @@ type ManifestContributions struct {
 	SMSProviders     []ManifestSMSProvider     `json:"smsProviders,omitempty"`
 	Providers        []ManifestProvider        `json:"providers,omitempty"`
 	PaymentProviders []ManifestPaymentProvider `json:"paymentProviders,omitempty"`
+	WalletLinks      []ManifestWalletLink      `json:"walletLinks,omitempty"`
 	Workflows        []ManifestWorkflow        `json:"workflows,omitempty"`
 	CanvasNodes      []ManifestCanvasNode      `json:"canvasNodes,omitempty"`
 	Transforms       []ManifestTransform       `json:"transforms,omitempty"`
@@ -314,6 +315,14 @@ type ManifestContributions struct {
 	AICapabilities   []string                  `json:"aiCapabilities,omitempty"`
 	Agents           []string                  `json:"agents,omitempty"`
 	ImportExport     []string                  `json:"importExport,omitempty"`
+}
+
+type ManifestWalletLink struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Price       string `json:"price,omitempty"`
+	Description string `json:"description,omitempty"`
+	URL         string `json:"url"`
 }
 
 type ManifestSMSProvider struct {

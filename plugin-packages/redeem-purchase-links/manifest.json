@@ -1,0 +1,38 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "redeem-purchase-links",
+  "name": "购买兑换码",
+  "version": "1.2.0",
+  "author": "Community",
+  "description": "在积分中心提供可配置的兑换码购买入口，无需支付回调。",
+  "enabled": false,
+  "installable": true,
+  "surfaces": [
+    "wallet"
+  ],
+  "permissions": [
+    "external.open"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "links",
+        "type": "json",
+        "label": "购买入口",
+        "required": true,
+        "description": "购买套餐数组，每项包含 id、label、url，可选 price、description。"
+      }
+    ]
+  },
+  "contributes": {
+    "walletLinks": [
+      {
+        "id": "redeem-code",
+        "label": "兑换码套餐",
+        "description": "示例入口，请管理员先配置实际购买链接。",
+        "url": "https://example.com/redeem-codes"
+      }
+    ]
+  },
+  "documentation": "# 购买兑换码\n\n在积分中心增加独立的“购买兑换码”选项，支持没有在线支付渠道或支付回调的站点。\n\n1. 此版本已自带插件，可直接在后台找到。已支持购买入口接口但未自带该插件的宿主，可上传本目录对应的 `.yingce-plugin` 包；不要覆盖同 ID 的内置插件。\n2. 在后台插件管理的设置按钮中配置套餐名称、价格、介绍和购买链接。\n3. 保存配置并启用插件，用户即可在积分中心打开外部售码平台。\n4. 用户在外部平台付款取得兑换码后，返回积分中心兑换到账。\n\n随版本自带的插件默认关闭。独立上传沿用宿主自动启用策略，请先关闭入口，配置实际购买地址后再启用。示例地址不是有效商店。外部平台应发放由本站生成的有效兑换码；插件不负责外部库存或发码。\n\n购买链接使用新标签页，不创建宿主支付订单、不接收支付回调、不自动增加余额。实际到账只通过现有兑换码接口完成。\n\n---\n\n# 接口与配置\n\n`contributes.walletLinks` 声明购买入口。配置字段 `links` 是 JSON 数组，设置后整体替换清单默认入口；`[]` 隐藏全部入口。\n\n每项字段：唯一 `id`、显示名称 `label`、HTTP(S) `url`，可选 `price` 和 `description`。最多 100 项，地址不可携带账号密码。价格只是外部商品的展示文本，不参与本地扣款。\n\n- `GET /api/payments/wallet-links`：登录且积分功能可用时，响应 `{code:0,data:{links:[...]},msg:\"...\"}`，仅返回当前用户可用的已启用插件入口。\n- `GET /api/admin/plugins/:id/config`：管理员读取配置，响应 data.configuration。\n- `PUT /api/admin/plugins/:id/config`：管理员提交 `{\"values\":{\"links\":\"[...]\"}}`，响应保存后的 configuration，并记录审计日志。\n\n浏览器打开链接不会创建支付订单。外部支付结果不作为到账依据；兑换码只能通过本站原有兑换流程校验并入账。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"redeem-purchase-links\",\n  \"name\": \"购买兑换码\",\n  \"version\": \"1.2.0\",\n  \"author\": \"Community\",\n  \"description\": \"在积分中心提供可配置的兑换码购买入口，无需支付回调。\",\n  \"enabled\": false,\n  \"installable\": true,\n  \"surfaces\": [\n    \"wallet\"\n  ],\n  \"permissions\": [\n    \"external.open\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"links\",\n        \"type\": \"json\",\n        \"label\": \"购买入口\",\n        \"required\": true,\n        \"description\": \"购买套餐数组，每项包含 id、label、url，可选 price、description。\"\n      }\n    ]\n  },\n  \"contributes\": {\n    \"walletLinks\": [\n      {\n        \"id\": \"redeem-code\",\n        \"label\": \"兑换码套餐\",\n        \"description\": \"示例入口，请管理员先配置实际购买链接。\",\n        \"url\": \"https://example.com/redeem-codes\"\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

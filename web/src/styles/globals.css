@@ -17193,6 +17193,17 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     background: var(--user-accent-soft);
 }
 
+.workspace-wallet-external-product {
+    text-decoration: none;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.workspace-wallet-external-product:is(:hover, :focus-visible, .is-selected) {
+    border-color: var(--user-accent);
+    background: color-mix(in srgb, var(--user-accent-soft) 80%, var(--user-accent) 20%);
+}
+
 .workspace-wallet-product span,
 .workspace-wallet-product small {
     overflow: hidden;

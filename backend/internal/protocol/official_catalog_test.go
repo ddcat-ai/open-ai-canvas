@@ -34,6 +34,13 @@ func TestOfficialProtocolPackagesAreSelfContainedDeclarativePlugins(t *testing.T
 		if err != nil {
 			t.Fatalf("parse %s: %v", filepath.Base(path), err)
 		}
+		if len(pkg.Manifest.Contributes.WalletLinks) > 0 {
+			// Wallet links are application contributions, not AI providers.
+			if err := ValidateManifest(pkg.Manifest); err != nil {
+				t.Fatalf("validate %s: %v", filepath.Base(path), err)
+			}
+			continue
+		}
 		if len(pkg.Manifest.Contributes.PaymentProviders) > 0 {
 			// Payment packages use the yingce.payment/v1 executable ABI rather than
 			// the declarative AI provider contract covered by this catalog test.

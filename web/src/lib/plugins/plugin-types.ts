@@ -96,6 +96,13 @@ export type PluginPaymentProviderContribution = {
     checkoutMode: "qr_code" | "redirect";
     expiryPolicy: { defaultMinutes: number; minMinutes: number; maxMinutes: number };
 };
+export type PluginWalletLinkContribution = {
+    id: string;
+    label: string;
+    price?: string;
+    description?: string;
+    url: string;
+};
 export type PluginCanvasNodeContribution = {
     id: string;
     label: string;
@@ -119,6 +126,7 @@ export type PluginTransformContribution = {
 export type PluginContributions = {
     providers?: PluginProviderContribution[];
     paymentProviders?: PluginPaymentProviderContribution[];
+    walletLinks?: PluginWalletLinkContribution[];
     workflows?: PluginWorkflowContribution[];
     canvasNodes?: PluginCanvasNodeContribution[];
     transforms?: PluginTransformContribution[];

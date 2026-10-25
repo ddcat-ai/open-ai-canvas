@@ -1,5 +1,5 @@
 import { createClientUUID } from "@/lib/client-id";
-import { App, Button, Input, Skeleton } from "antd";
+import { App, Button, Input, Segmented, Skeleton } from "antd";
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
@@ -8,7 +8,20 @@ import { PaymentCheckoutCode } from "@/components/payment-checkout-code";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
+import {
+    closePaymentOrder,
+    createPaymentOrder,
+    getPaymentOrder,
+    listPaymentProviders,
+    listTopupProducts,
+    listWalletLinks,
+    queryPaymentOrder,
+    refreshPaymentCheckout,
+    type PaymentOrder,
+    type PaymentProvider,
+    type TopupProduct,
+    type WalletLink,
+} from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { cn } from "@/lib/utils";
 import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
@@ -69,12 +82,15 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
     const { message } = App.useApp();
     const redeemPurchaseUrl = useAppearanceStore((state) => state.appearance.redeemPurchaseUrl);
     const [tab, setTab] = useState<WalletModalTab>("topup");
+    const [topupMethod, setTopupMethod] = useState<"online" | "code">("online");
     const [wallet, setWallet] = useState<WalletSummary | null>(null);
     const [walletLoading, setWalletLoading] = useState(false);
     const [walletError, setWalletError] = useState("");
     const [page, setPage] = useState(1);
     const [products, setProducts] = useState<TopupProduct[]>([]);
     const [providers, setProviders] = useState<PaymentProvider[]>([]);
+    const [walletLinks, setWalletLinks] = useState<WalletLink[]>([]);
+    const [walletLinksLoading, setWalletLinksLoading] = useState(false);
     const [paymentsLoading, setPaymentsLoading] = useState(false);
     const [selectedProductId, setSelectedProductId] = useState("");
     const [selectedProviderId, setSelectedProviderId] = useState("");
@@ -121,6 +137,26 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
             .catch((error) => message.error(error instanceof Error ? error.message : "读取充值配置失败"))
             .finally(() => setPaymentsLoading(false));
     }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        setWalletLinks([]);
+        setWalletLinksLoading(true);
+        listWalletLinks()
+            .then((result) => {
+                if (!cancelled) setWalletLinks(result.links);
+            })
+            .catch((error) => {
+                if (!cancelled) message.error(error instanceof Error ? error.message : "读取兑换码套餐失败");
+            })
+            .finally(() => {
+                if (!cancelled) setWalletLinksLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [message, open]);
 
     useEffect(() => {
         if (!open || !paymentInvalid) return;
@@ -260,6 +296,9 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
 
     const available = wallet?.account.availableMicrocredits ?? 0;
     const totalPages = Math.max(1, Math.ceil((wallet?.total || 0) / 20));
+    const hasOnlineTopup = products.length > 0 && providers.length > 0;
+    const hasCodePurchase = walletLinks.length > 0 || Boolean(redeemPurchaseUrl);
+    const activeTopupMethod = hasOnlineTopup && hasCodePurchase ? topupMethod : hasCodePurchase ? "code" : "online";
 
     return (
         <>
@@ -299,19 +338,53 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
                     {tab === "topup" ? (
                         <div className="workspace-wallet-content is-topup">
                             <section className="workspace-wallet-section">
+                                {!paymentsLoading && !walletLinksLoading && hasOnlineTopup && hasCodePurchase ? (
+                                    <Segmented
+                                        block
+                                        className="mb-4"
+                                        aria-label="充值方式"
+                                        value={activeTopupMethod}
+                                        onChange={setTopupMethod}
+                                        options={[
+                                            { value: "online", label: "在线支付", icon: <CreditCard className="inline size-4" /> },
+                                            { value: "code", label: "购买兑换码", icon: <TicketCheck className="inline size-4" /> },
+                                        ]}
+                                    />
+                                ) : null}
                                 <div className="workspace-wallet-section-heading">
                                     <div>
-                                        <h3>在线充值</h3>
-                                        <p>选择积分套餐和支付方式。</p>
+                                        <h3>{activeTopupMethod === "code" ? "购买兑换码" : "在线支付"}</h3>
                                     </div>
-                                    <CreditCard />
+                                    {activeTopupMethod === "code" ? <TicketCheck /> : <CreditCard />}
                                 </div>
-                                {paymentsLoading ? (
+                                {paymentsLoading || walletLinksLoading ? (
                                     <Skeleton active paragraph={{ rows: 4 }} />
-                                ) : products.length && providers.length ? (
+                                ) : activeTopupMethod === "code" ? (
                                     <>
                                         <div className="workspace-wallet-products">
-                                            {products.map((product) => {
+                                            {walletLinks.map((link) => (
+                                                <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="workspace-wallet-product workspace-wallet-external-product">
+                                                    <span>{link.label}</span>
+                                                    {link.price ? <strong>{/^\d+(\.\d+)?$/.test(link.price) ? `¥ ${link.price}` : link.price}</strong> : null}
+                                                    {link.description ? <small>{link.description}</small> : null}
+                                                </a>
+                                            ))}
+                                            {redeemPurchaseUrl && !walletLinks.some((link) => link.url === redeemPurchaseUrl) ? (
+                                                <a href={redeemPurchaseUrl} target="_blank" rel="noopener noreferrer" className="workspace-wallet-product workspace-wallet-external-product">
+                                                    <span>购买兑换码</span>
+                                                </a>
+                                            ) : null}
+                                        </div>
+                                        <div className="mt-4 flex justify-end">
+                                            <Button icon={<TicketCheck className="size-4" />} onClick={() => setTab("redeem")}>
+                                                已有兑换码，去兑换
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : hasOnlineTopup ? (
+                                    <>
+                                        <div className="workspace-wallet-products">
+                                            {(providers.length ? products : []).map((product) => {
                                                 const unavailableLabel =
                                                     product.saleStatus === "upcoming"
                                                         ? `发售时间：${product.saleStartAt ? new Date(product.saleStartAt).toLocaleString("zh-CN", { hour12: false }) : "待定"}`
@@ -344,26 +417,28 @@ export function WorkspaceWalletModal({ open, onClose, pendingPaymentOrderId, pay
                                                 );
                                             })}
                                         </div>
-                                        <div className="workspace-wallet-provider-row">
-                                            <div className="workspace-wallet-providers" role="radiogroup" aria-label="支付方式">
-                                                {providers.map((provider) => (
-                                                    <button
-                                                        key={provider.id}
-                                                        type="button"
-                                                        role="radio"
-                                                        aria-checked={selectedProviderId === provider.id}
-                                                        className={selectedProviderId === provider.id ? "is-selected" : ""}
-                                                        onClick={() => setSelectedProviderId(provider.id)}
-                                                    >
-                                                        <CreditCard />
-                                                        {provider.name}
-                                                    </button>
-                                                ))}
+                                        {products.length && providers.length ? (
+                                            <div className="workspace-wallet-provider-row">
+                                                <div className="workspace-wallet-providers" role="radiogroup" aria-label="支付方式">
+                                                    {providers.map((provider) => (
+                                                        <button
+                                                            key={provider.id}
+                                                            type="button"
+                                                            role="radio"
+                                                            aria-checked={selectedProviderId === provider.id}
+                                                            className={selectedProviderId === provider.id ? "is-selected" : ""}
+                                                            onClick={() => setSelectedProviderId(provider.id)}
+                                                        >
+                                                            <CreditCard />
+                                                            {provider.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <Button type="primary" size="large" loading={paymentCreating} disabled={!selectedProduct || !selectedProvider} onClick={() => void startPayment()}>
+                                                    立即充值
+                                                </Button>
                                             </div>
-                                            <Button type="primary" size="large" loading={paymentCreating} disabled={!selectedProduct || !selectedProvider} onClick={() => void startPayment()}>
-                                                立即充值
-                                            </Button>
-                                        </div>
+                                        ) : null}
                                     </>
                                 ) : (
                                     <div className="workspace-wallet-inline-state">

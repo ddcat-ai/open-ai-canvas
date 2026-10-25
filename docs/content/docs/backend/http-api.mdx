@@ -5,6 +5,14 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 兑换码购买入口
+
+- `GET /api/payments/wallet-links`：登录用户读取已启用且对当前用户可用的购买入口，积分功能须启用。成功返回 `data={links:[{id,label,price?,description?,url}]}`；入口 ID 带插件前缀。
+- `GET /api/admin/plugins/:id/config`：管理员读取支持购买入口的插件配置，返回 `data.configuration={pluginId,fields,values}`。
+- `PUT /api/admin/plugins/:id/config`：管理员提交 `{values:{links:"JSON 数组"}}`，整体替换套餐配置，校验通过后保存并记审计。最多 100 个入口，URL 限无内嵌凭据的 HTTP(S)，重复 ID 或无效字段拒绝保存。`links:"[]"` 清空入口。
+
+配置复用现有 system_settings 表的 `plugin_config:<pluginId>` 键，不新增表。购买链接不创建宿主支付订单、不处理支付回调；外部平台发放本站兑换码，用户通过原兑换接口到账。插件源文件和可上传包位于 `plugin-packages/redeem-purchase-links`。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。
