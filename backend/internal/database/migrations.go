@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 60
+const CurrentSchemaVersion int64 = 61
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -204,6 +204,7 @@ var schemaMigrations = []migration{
 	{version: 60, name: "user_feedbacks", checksum: "sha256:user-feedbacks-v60-20261020", apply: func(tx *gorm.DB) error {
 		return tx.AutoMigrate(&model.UserFeedback{})
 	}},
+	{version: 61, name: "model_group_discounts", checksum: "sha256:model-group-discounts-v61", apply: migrateModelGroupDiscounts},
 }
 
 func migrateChannelModelProtocolLength(tx *gorm.DB) error {

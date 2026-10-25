@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
-import { Alert, App, AutoComplete, Button, Form, Input, Segmented, Switch, Tabs } from "antd";
-import { useAdminContext } from "../admin-context";
+import { useEffect, useRef, useState } from "react";
+import { Alert, App, Button, Form, Input, Select, Segmented, Switch, Tabs } from "antd";
+import { getModelDisplayGroups, type ModelDisplayGroupsView } from "@/services/api/model-display-groups";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { FlaskConical, Plus } from "lucide-react";
 import { ModelIconPicker } from "@/components/model-logo";
@@ -49,9 +49,19 @@ export function ChannelModelEditor({
     onSaved: () => Promise<void>;
 }) {
     const { message, modal } = App.useApp();
-    const { references } = useAdminContext();
-    const displayNameOptions = [...new Set(["未分类", ...references.channels.flatMap((item) => item.modelDisplayNames ?? [])])].sort((a, b) => a.localeCompare(b, "zh-CN")).map((value) => ({ value }));
-    const [groupSearch, setGroupSearch] = useState("");
+    const [groupView, setGroupView] = useState<ModelDisplayGroupsView>();
+    const [groupError, setGroupError] = useState("");
+    useEffect(() => {
+        let active = true;
+        getModelDisplayGroups().then((view) => {
+            if (!active) return;
+            setGroupView(view);
+            form.setFieldValue("displayGroupId", editing ? view.groups.find((group) => group.modelIds.includes(editing.id))?.id || "" : "");
+        }).catch((error: unknown) => {
+            if (active) setGroupError(error instanceof Error ? error.message : "读取分组失败");
+        });
+        return () => { active = false; };
+    }, [editing?.id]);
     const [form] = Form.useForm<FormValues>();
     const [initialValues] = useState(() => draftValues ?? initialChannelModelValues(editing, protocols));
     const previousUpstream = useRef(normalizeUpstreamModelKey(initialValues.providerModelKey || initialValues.modelKey));
@@ -146,6 +156,10 @@ export function ChannelModelEditor({
                 priceTiers: values.priceTiers.map((tier) => priceTierPayloadFromForm(values.capability, tier, upstreamModel, capabilityConfig)),
                 enabled: values.enabled !== false,
                 capabilityConfig,
+                ...(groupView && values.displayGroupId !== (editing ? groupView.groups.find((group) => group.modelIds.includes(editing.id))?.id || "" : "") ? {
+                    displayGroupId: values.displayGroupId || "",
+                    displayGroupSnapshot: groupView.snapshot,
+                } : {}),
             };
             if (editing) await updateAdminChannelModel(channel.id, editing.id, payload);
             else await createAdminChannelModel(channel.id, payload);
@@ -285,22 +299,21 @@ export function ChannelModelEditor({
                                             <Form.Item name="providerModelKey" label="上游模型 ID" tooltip="实际发送给供应商；留空时使用产品模型标识。价格档可配置独立上游 ID，命中时优先于此处。">
                                                 <Input placeholder="留空则使用产品模型标识" />
                                             </Form.Item>
-                                            <Form.Item name="displayName" label="模型展示名（一级目录）" tooltip="跨所有系统渠道按此名称分组；新模型默认未分类。同名模型归入同一组，不改变调用 ID。">
-                                                <AutoComplete
-                                                    options={displayNameOptions}
-                                                    filterOption={(_, option) => Boolean(option?.value.toLowerCase().includes(groupSearch.trim().toLowerCase()))}
-                                                    onSearch={setGroupSearch}
-                                                    onFocus={() => setGroupSearch("")}
-                                                    onOpenChange={(open) => {
-                                                        if (open) setGroupSearch("");
-                                                    }}
-                                                    placeholder="选择已有分组或输入新名称，默认为未分类"
-                                                    allowClear
+                                            <Form.Item name="displayName" label="模型展示名">
+                                                <Input placeholder="模型展示名" />
+                                            </Form.Item>
+                                            <Form.Item name="displayGroupId" label="模型分组" validateStatus={groupError ? "warning" : undefined} help={groupError}>
+                                                <Select
+                                                    disabled={!groupView}
+                                                    loading={!groupView && !groupError}
+                                                    options={[{ value: "", label: "未分组" }, ...(groupView?.groups || []).map((group) => ({ value: group.id, label: group.name }))]}
+                                                    showSearch
+                                                    optionFilterProp="label"
                                                 />
                                             </Form.Item>
                                             <Form.Item
                                                 name="channelLabel"
-                                                label="渠道展示名（二级目录）"
+                                                label="渠道展示名"
                                                 tooltip="默认跟随上游模型 ID；手动名称最多 80 字。"
                                                 rules={[
                                                     {

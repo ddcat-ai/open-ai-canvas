@@ -65,47 +65,97 @@ type PublicChannelCatalog struct {
 
 // PublicChannelModel 公开的渠道模型信息（脱敏）
 type PublicChannelModel struct {
-	ID               string                        `json:"id"`
-	ModelKey         string                        `json:"modelKey"`
-	ChannelLabel     string                        `json:"channelLabel"`
-	Tags             []model.ChannelModelTag       `json:"tags"`
-	Description      string                        `json:"description"`
-	DisplayName      string                        `json:"displayName"`
-	SortOrder        int                           `json:"sortOrder"`
-	Icon             string                        `json:"icon"`
-	Capability       string                        `json:"capability"`
-	Protocol         model.ChannelInterfaceType    `json:"protocol"`
-	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
-	DefaultOptions   map[string]any                `json:"defaultOptions,omitempty"`
-	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
-	PricingMode      string                        `json:"pricingMode"`
-	DisplayPrice     *int64                        `json:"displayPrice,omitempty"`
-	PriceLabel       string                        `json:"priceLabel"`
-	Available        bool                          `json:"available"`
-	Availability     *PublicModelAvailability      `json:"availability,omitempty"`
+	MultiplierBasisPoints int64                         `json:"multiplierBasisPoints"`
+	MultiplierSource      string                        `json:"multiplierSource"`
+	DisplayGroup          *PublicModelDisplayGroup      `json:"displayGroup,omitempty"`
+	ID                    string                        `json:"id"`
+	ModelKey              string                        `json:"modelKey"`
+	ChannelLabel          string                        `json:"channelLabel"`
+	Tags                  []model.ChannelModelTag       `json:"tags"`
+	Description           string                        `json:"description"`
+	DisplayName           string                        `json:"displayName"`
+	SortOrder             int                           `json:"sortOrder"`
+	Icon                  string                        `json:"icon"`
+	Capability            string                        `json:"capability"`
+	Protocol              model.ChannelInterfaceType    `json:"protocol"`
+	CapabilityConfig      map[string]any                `json:"capabilityConfig,omitempty"`
+	DefaultOptions        map[string]any                `json:"defaultOptions,omitempty"`
+	PriceTiers            []PublicChannelModelPriceTier `json:"priceTiers"`
+	PricingMode           string                        `json:"pricingMode"`
+	DisplayPrice          *int64                        `json:"displayPrice,omitempty"`
+	PriceLabel            string                        `json:"priceLabel"`
+	Available             bool                          `json:"available"`
+	Availability          *PublicModelAvailability      `json:"availability,omitempty"`
 }
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
 type PublicChannelModelPriceTier struct {
-	ID                           string            `json:"id"`
-	Selector                     map[string]string `json:"selector,omitempty"`
-	Resolution                   string            `json:"resolution"`
-	VideoSeconds                 int               `json:"videoSeconds"`
-	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
+	OfficialPricing              model.OfficialPricing `json:"officialPricing"`
+	ID                           string                `json:"id"`
+	Selector                     map[string]string     `json:"selector,omitempty"`
+	Resolution                   string                `json:"resolution"`
+	VideoSeconds                 int                   `json:"videoSeconds"`
+	BillingMode                  string                `json:"billingMode"`
+	UnitPriceMicrocredits        int64                 `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                 `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                 `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                 `json:"cachedTokenPriceMicrocredits"`
 }
 
 // ModelCatalog 的创作端目录始终来自系统渠道模型，不反查逻辑模型或路由。
 // 系统渠道目录只负责安全发布可解释的读模型；任务创建仍会用持久化能力与价格档再次强校验。
-func (s *Service) ModelCatalog(intent *ModelRequestIntent) (*ModelCatalogResponse, error) {
+func (s *Service) ModelCatalog(intent *ModelRequestIntent, userIDs ...string) (*ModelCatalogResponse, error) {
 	// 两个集合都初始化成非 nil 空切片：空目录要发 []，不能因为“没有模型”而丢掉字段。
 	response := &ModelCatalogResponse{Models: []PublicLogicalModel{}, Channels: []PublicChannelCatalog{}}
 	channels, err := s.publicSystemChannelCatalog(intent)
 	if err != nil {
 		return nil, err
+	}
+	policy, err := s.creditPolicy()
+	if err != nil {
+		return nil, err
+	}
+	rules, err := s.billingPricingRules(quoteUserID(userIDs))
+	if err != nil {
+		return nil, err
+	}
+	groups, _, err := s.readModelDisplayGroups()
+	if err != nil {
+		return nil, err
+	}
+	assignments := map[string]*PublicModelDisplayGroup{}
+	if groups != nil {
+		assignments = groups.publicAssignments()
+	}
+	for ci := range channels {
+		for mi := range channels[ci].Models {
+			item := &channels[ci].Models[mi]
+			legacy := policy.DefaultMultiplierBPS
+			if configured := policy.ModelMultiplierBPS[item.ModelKey]; configured > 0 {
+				legacy = configured
+			}
+			multiplier, snapshot, pricingErr := rules.resolveModel(item.ID, item.ModelKey, legacy)
+			if pricingErr != nil {
+				return nil, pricingErr
+			}
+			item.MultiplierBasisPoints = multiplier
+			item.MultiplierSource = snapshot.MultiplierSource
+			item.DisplayGroup = assignments[item.ID]
+			if groups != nil && item.DisplayGroup == nil {
+				item.DisplayGroup = &PublicModelDisplayGroup{Name: "未分组", Order: len(groups.Groups)}
+			}
+			displayTiers := append([]PublicChannelModelPriceTier(nil), item.PriceTiers...)
+			for i := range displayTiers {
+				tier := &displayTiers[i]
+				for _, price := range []*int64{&tier.UnitPriceMicrocredits, &tier.InputTokenPriceMicrocredits, &tier.OutputTokenPriceMicrocredits, &tier.CachedTokenPriceMicrocredits} {
+					*price, err = creditAmount(*price, 1, multiplier)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+			item.PricingMode, item.DisplayPrice, item.PriceLabel = computeChannelModelPriceDisplay(&model.ChannelModel{Capability: item.Capability}, displayTiers)
+		}
 	}
 	response.Source = ModelCatalogSourceSystem
 	response.Channels = append(response.Channels, channels...)
@@ -215,6 +265,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			VideoSeconds:                 tier.VideoSeconds,
 			BillingMode:                  tier.BillingMode,
 			UnitPriceMicrocredits:        tier.UnitPriceMicrocredits,
+			OfficialPricing:              tier.OfficialPricing,
 			InputTokenPriceMicrocredits:  tier.InputTokenPriceMicrocredits,
 			OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,

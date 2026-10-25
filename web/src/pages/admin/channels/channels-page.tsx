@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, InputNumber, Modal, Spin, Switch } from "antd";
+import { App, Button, Form, Input, InputNumber, Modal, Segmented, Spin, Switch } from "antd";
 import { ChevronRight, Copy, Download, Pencil, Plus, Power, Search, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -13,6 +13,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { ChannelModelManager } from "../components/channel-model-manager";
 import { ChannelOrderDialog } from "../components/channel-order-dialog";
+import { ModelDisplayGroupsWorkspace } from "../components/model-display-groups-workspace";
 import { selectChannelWorkspace } from "./channel-workspace-state";
 import { ProviderCatalogWizard } from "./provider-catalog-wizard";
 import "./channels-page.css";
@@ -52,6 +53,9 @@ export default function ChannelsPage() {
     const status = normalizeStatus(searchParams.get("status"));
     const selectedChannelId = searchParams.get("channel");
     const [channels, setChannels] = useState<ModelChannel[]>([]);
+    const [workspaceMode, setWorkspaceMode] = useState(searchParams.get("view") === "groups" ? "groups" : "models");
+    const [groupsMounted, setGroupsMounted] = useState(searchParams.get("view") === "groups");
+    const [modelsRevision, setModelsRevision] = useState(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -66,6 +70,7 @@ export default function ChannelsPage() {
     const useGlobalConcurrency = Form.useWatch("useGlobalConcurrency", form) !== false;
     const hasFilters = Boolean(keyword || status !== "all");
     const { visibleChannels, selectedChannel } = selectChannelWorkspace(channels, keyword, status, selectedChannelId);
+
 
     const updateUrl = (patch: Record<string, string | number>, replace = false) => {
         setSearchParams(
@@ -325,8 +330,33 @@ export default function ChannelsPage() {
     );
 
     return (
-        <AdminPageFrame title="系统模型" description="左侧选择渠道，右侧直接管理模型、协议与售价。">
-            <div className="admin-channel-workspace">
+        <AdminPageFrame title="系统模型">
+            <div className="admin-model-view-switch">
+                <Segmented
+                    aria-label="模型管理视图"
+                    value={workspaceMode}
+                    options={[
+                        { value: "models", label: "渠道与模型" },
+                        { value: "groups", label: "模型分组" },
+                    ]}
+                    onChange={(value) => {
+                        setWorkspaceMode(value);
+                        if (value === "groups") setGroupsMounted(true);
+                    }}
+                />
+            </div>
+            {groupsMounted && (
+                <div className="admin-model-group-view" hidden={workspaceMode !== "groups"}>
+                    <ModelDisplayGroupsWorkspace
+                        active={workspaceMode === "groups"}
+                        onSaved={async () => {
+                            await syncChannels();
+                            setModelsRevision((value) => value + 1);
+                        }}
+                    />
+                </div>
+            )}
+            <div className="admin-channel-workspace" hidden={workspaceMode !== "models"}>
                 <aside className="admin-channel-sidebar" aria-label="系统渠道">
                     <div className="admin-channel-sidebar-header">
                         <div className="flex items-center justify-between gap-2">
@@ -429,9 +459,7 @@ export default function ChannelsPage() {
                                         <h2 className="admin-channel-detail-title">{selectedChannel.name}</h2>
                                         <AdminStatusBadge label={selectedChannel.enabled !== false ? "已启用" : "已停用"} tone={selectedChannel.enabled !== false ? "success" : "neutral"} />
                                     </div>
-                                    <p className="admin-channel-detail-url" title={selectedChannel.baseUrl}>
-                                        {selectedChannel.baseUrl}
-                                    </p>
+                                    <p className="admin-channel-detail-url" title={selectedChannel.baseUrl}>{selectedChannel.baseUrl}</p>
                                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/50">
                                         <span>{selectedChannel.hasApiKey ? (selectedChannel.hasSecretKey ? "AK/SK 已配置" : "API Key 已配置") : "凭证未配置"}</span>
                                         <span>最大并发：{selectedChannel.concurrencyLimit || "跟随系统"}</span>
@@ -441,7 +469,7 @@ export default function ChannelsPage() {
                                 {channelActions(selectedChannel)}
                             </header>
                             <ChannelModelManager
-                                key={selectedChannel.id}
+                                key={`${selectedChannel.id}:${modelsRevision}`}
                                 channel={selectedChannel}
                                 onChanged={async () => {
                                     await syncChannels();

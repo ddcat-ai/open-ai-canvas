@@ -30,6 +30,7 @@ func Models() []any {
 		&model.AgentMemoryProposal{},
 		&model.AgentMemoryRevision{},
 		&model.User{},
+		&model.UserGroupRates{},
 		&model.UserAvatar{},
 		&model.AuthSession{},
 		&model.LoginLog{},

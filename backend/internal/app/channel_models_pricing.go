@@ -144,6 +144,7 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
+			OfficialPricing:              input.OfficialPricing,
 			CostPricing:                  input.CostPricing,
 			ID:                           id,
 			SelectorKey:                  key,
@@ -307,6 +308,11 @@ func normalizeChannelModelTierSelector(capability string, input ChannelModelPric
 }
 
 func validateChannelModelTierPricing(capability string, protocol model.ChannelInterfaceType, billingMode string, input ChannelModelPriceTierRequest) error {
+	for _, value := range []int64{input.OfficialPricing.UnitPriceMicrocredits, input.OfficialPricing.InputTokenPriceMicrocredits, input.OfficialPricing.OutputTokenPriceMicrocredits, input.OfficialPricing.CachedTokenPriceMicrocredits} {
+		if value < 0 || value > 1_000_000_000_000 {
+			return BadAuthRequest("官方原价必须为 0 到 1000000 积分")
+		}
+	}
 	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
 		return err
 	}

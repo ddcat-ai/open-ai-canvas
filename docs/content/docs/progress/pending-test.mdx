@@ -3582,3 +3582,12 @@ SQLite 与 HTTP recorder 已验证；PostgreSQL 16／17、前端构建及浏览�
 - 已验证：`go test ./... -count=1 -timeout=20m`、`go vet ./...`、`go build ./...`、前端 2716 项测试、`bun run lint`、`bun run build` 通过；数据库与API迁移测试包含SQLite。四篇修改后的MDX逐篇编译及OpenAPI引用解析通过。
 - 环境阻塞：文档站 `bun run types:check` 在 MDX 扫描前失败，当前忽略的 `docs/node_modules/fdir/dist/index.mjs` 调用了 `Dirent.isPrevisy()`（Node Dirent 无此方法）；为避免改依赖，本轮未继续修补 node_modules。
 - [ ] 真实模型/收费生成与多次运行pass^k、provider缓存命中率、PostgreSQL 58迁移、浏览器记忆提案与历史撤销尚未人工验收。
+
+## 分组优惠验收
+
+专项自动化覆盖分组权限与过期快照、保存回滚、用户隔离与版本冲突、报价与预留一致、实际扣费与成本独立、官方原价快照、前端折扣展示和表单往返。
+
+- [ ] PostgreSQL 实例迁移 61、并发保存与审计回滚。
+- [ ] 明暗主题、窄屏下模型选择器、费用明细与分组编辑。
+- [ ] 真实供应商流式文本、图片任务和实际 Token 结算。
+- [ ] 既有非 1 倍计费政策安装中，确认未分组和显式分组后的售价。
