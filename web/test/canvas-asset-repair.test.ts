@@ -8,7 +8,18 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import type { TimelineClip } from "@/types/timeline";
 
 test("场景换图后的旧画布保留资产历史图片引用，不创建重复素材", () => {
-    const image: Asset = { id: "scene", kind: "image", category: "environment", title: "阁楼", coverUrl: "", tags: [], createdAt: "", updatedAt: "", metadata: { projectAssetImageHistory: ["resource:old-image"] }, data: { dataUrl: "/api/resources/new-image/file", storageKey: "resource:new-image", width: 800, height: 600, bytes: 100, mimeType: "image/png" } };
+    const image: Asset = {
+        id: "scene",
+        kind: "image",
+        category: "environment",
+        title: "阁楼",
+        coverUrl: "",
+        tags: [],
+        createdAt: "",
+        updatedAt: "",
+        metadata: { projectAssetImageHistory: ["resource:old-image"] },
+        data: { dataUrl: "/api/resources/new-image/file", storageKey: "resource:new-image", width: 800, height: 600, bytes: 100, mimeType: "image/png" },
+    };
     useAssetStore.setState({ assets: [image] });
     const node = { ...videoNode("scene-node", "scene", "resource:old-image"), type: CanvasNodeType.Image };
     useCanvasStore.setState({ projects: [project("canvas", [node])] });
@@ -67,6 +78,33 @@ beforeEach(() => {
 });
 
 describe("repairMissingCanvasAssets 增量会话", () => {
+    test("先回显及保存失败的图片在同步时不另建 Canvas 素材，完成后复用正式素材", () => {
+        const preview: CanvasNodeData = {
+            ...videoNode("image-node", undefined, "task-source:image-task"),
+            type: CanvasNodeType.Image,
+            metadata: { taskId: "image-task", storageKey: "task-source:image-task", content: "/api/tasks/image-task/source-image" },
+        };
+        useCanvasStore.setState({ projects: [project("canvas-1", [preview])] });
+
+        // 自动同步和重试同步都不能把临时预览登记成第二份素材。
+        for (const partialAssets of [true, false, true]) {
+            expect(repairMissingCanvasAssets(new Set(["canvas-1"]), partialAssets).createdAssets).toBe(0);
+            expect(useAssetStore.getState().assets).toHaveLength(0);
+            expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.storageKey).toBe("task-source:image-task");
+        }
+
+        const saved: Asset = {
+            ...videoAsset("generation-image-task", "resource:saved-image"),
+            kind: "image",
+            data: { dataUrl: "/api/resources/saved-image/file", storageKey: "resource:saved-image", width: 1, height: 1, bytes: 1, mimeType: "image/png" },
+            metadata: { taskId: "image-task", generationEffectKey: "materialize:image-task:0" },
+        };
+        useAssetStore.setState({ assets: [saved] });
+        useCanvasStore.setState({ projects: [project("canvas-1", [{ ...preview, metadata: { ...preview.metadata, assetId: saved.id, storageKey: "resource:saved-image", content: "/api/resources/saved-image/file" } }])] });
+        expect(repairMissingCanvasAssets(new Set(["canvas-1"]), true).createdAssets).toBe(0);
+        expect(useAssetStore.getState().assets.map((asset) => asset.id)).toEqual([saved.id]);
+    });
+
     test("节点声明不能掩盖素材库的真实绑定，错误配对会被重绑", () => {
         useAssetStore.setState({ assets: [videoAsset("asset-a", "resource:R1"), videoAsset("asset-c", "resource:R2")] });
         useCanvasStore.setState({ projects: [project("canvas-1", [videoNode("node-1", "asset-a", "resource:R2")])] });
@@ -154,10 +192,16 @@ describe("repairMissingCanvasVideoPreviews", () => {
         const node = { ...videoNode("node-1", "asset-1", "resource:video-1"), metadata: { ...videoNode("node-1", "asset-1", "resource:video-1").metadata, videoPreview: { storageKey: "resource:poster-1" } } };
         useCanvasStore.setState({ projects: [project("canvas-1", [node])] });
 
-        await expect(repairMissingCanvasVideoPreviews(undefined, async () => { throw new Error("offline"); })).rejects.toThrow("offline");
+        await expect(
+            repairMissingCanvasVideoPreviews(undefined, async () => {
+                throw new Error("offline");
+            }),
+        ).rejects.toThrow("offline");
         expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.videoPreview).toBeDefined();
 
-        const result = await repairMissingCanvasVideoPreviews(undefined, async () => { throw new ApiError("missing", { status: 404 }); });
+        const result = await repairMissingCanvasVideoPreviews(undefined, async () => {
+            throw new ApiError("missing", { status: 404 });
+        });
         expect(result).toEqual({ clearedPreviews: 1, updatedProjects: 1 });
         expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.videoPreview).toBeUndefined();
     });
@@ -166,7 +210,13 @@ describe("repairMissingCanvasVideoPreviews", () => {
         const node = { ...videoNode("node-1", "asset-1", "resource:video-1"), metadata: { ...videoNode("node-1", "asset-1", "resource:video-1").metadata, videoPreview: { storageKey: "resource:poster-1" } } };
         useCanvasStore.setState({ projects: [project("canvas-1", [node])] });
         let rejectLookup!: (error: unknown) => void;
-        const repair = repairMissingCanvasVideoPreviews(undefined, () => new Promise((_, reject) => { rejectLookup = reject; }));
+        const repair = repairMissingCanvasVideoPreviews(
+            undefined,
+            () =>
+                new Promise((_, reject) => {
+                    rejectLookup = reject;
+                }),
+        );
         useCanvasStore.getState().updateProject("canvas-1", { title: "user edit" });
         rejectLookup(new ApiError("missing", { status: 404 }));
         await repair;

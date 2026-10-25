@@ -15,6 +15,8 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
     const content = node.metadata?.content?.trim() || "";
     const storageKey = node.metadata?.storageKey?.trim() || undefined;
     const isMedia = node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio;
+    // 临时任务预览尚未物化；正式素材由任务完成流程登记，不能在自动同步时另建一份。
+    if (storageKey?.startsWith("task-source:")) return null;
 
     // 文本素材必须直接携带正文；媒体则允许只有持久 storageKey。后者常见于页面重载后：
     // blob/object URL 已失效，但资源定位符仍可从后端重新换取可访问地址，不能因此丢掉素材记录。
@@ -92,6 +94,7 @@ export function canvasNodeToAsset(node: CanvasNodeData, options: CanvasNodeAsset
 
 export function requiresMaterializedCanvasAsset(node: CanvasNodeData, taskId?: string) {
     const metadata = node.metadata;
+    if (metadata?.storageKey?.startsWith("task-source:")) return true;
     if (!(taskId || metadata?.taskId) || !metadata?.storageKey?.startsWith("resource:")) return false;
     // 图层组合成与情绪局部融合保存的是浏览器加工后的文件，不是模型原始输出。
     if (metadata.imageLayerGroup || metadata.emotionEdit?.editRegion) return false;

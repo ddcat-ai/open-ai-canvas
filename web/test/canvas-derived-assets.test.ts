@@ -18,6 +18,12 @@ test("原生生成图层仍须复用服务端素材，不能因缓存缺失重�
     expect(requiresMaterializedCanvasAsset({ ...original, metadata: { ...original.metadata, layerExtraction: { ...original.metadata!.layerExtraction!, sourceResultStorageKey: "resource:original" } } })).toBe(true);
 });
 
+test("任务临时图片只可预览，手动保存也不能创建随机素材", () => {
+    const preview = { ...original, metadata: { content: "/api/tasks/generation/source-image", storageKey: "task-source:generation", taskId: "generation" } };
+    expect(requiresMaterializedCanvasAsset(preview)).toBe(true);
+    expect(canvasNodeToAsset(preview, { canvasId: "canvas", source: "canvas-manual" })).toBeNull();
+});
+
 test("归一化或修补后的新资源可独立保存且拒绝沿用原任务素材", () => {
     const derived = { ...original, metadata: { ...original.metadata, storageKey: "resource:normalized", layerExtraction: { ...original.metadata!.layerExtraction!, sourceResultStorageKey: "resource:original" } } };
     const asset = { ...canvasNodeToAsset(original, { canvasId: "canvas", source: "canvas-generation" }), id: "original-asset", createdAt: "", updatedAt: "" } as Asset;
