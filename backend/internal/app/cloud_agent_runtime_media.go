@@ -457,6 +457,11 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 		}
 		s.storageMu.Lock()
 		err = s.repo.MutateCloudAgent(userID, id, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+			if decision == "approve" {
+				if err := validateCloudAgentCanvasApproval(repo, userID, state.Request.CanvasID, state.Approval); err != nil {
+					return err
+				}
+			}
 			if settings != nil {
 				if err := s.updateCloudAgentMediaApproval(repo, run, &state, *settings); err != nil {
 					return err
