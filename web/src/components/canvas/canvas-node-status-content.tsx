@@ -110,7 +110,11 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
     const submissionUncertain = isGenerationTaskSubmissionUncertain(errorDisplayTask);
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
-            {node.metadata?.taskCanRecoverMedia && node.metadata?.content ? <div className="h-36 w-full"><TaskSourcePreview node={node} theme={theme} /></div> : null}
+            {node.metadata?.taskCanRecoverMedia && node.metadata?.content ? (
+                <div className="h-36 w-full">
+                    <TaskSourcePreview node={node} theme={theme} />
+                </div>
+            ) : null}
             <div className="text-xs leading-5" style={{ color: submissionUncertain ? theme.node.text : theme.accent.danger }}>
                 {submissionUncertain ? generationTaskStatusLabel(errorDisplayTask) : generationErrorMessage(node.metadata?.errorDetails)}
             </div>
@@ -173,7 +177,12 @@ export function ErrorContent({ node, theme, onRetry, onReloadResource }: Pick<Ca
 function TaskSourcePreview({ node, theme }: Pick<CanvasNodeContentProps, "node" | "theme">) {
     const src = node.metadata?.content;
     const [failedSrc, setFailedSrc] = useState<string>();
-    if (!src || src === failedSrc) return <div className="flex size-full items-center justify-center px-4 text-center text-xs" style={{ color: theme.node.muted }}>图片预览暂不可用，请查看任务详情</div>;
+    if (!src || src === failedSrc)
+        return (
+            <div className="flex size-full items-center justify-center px-4 text-center text-xs" style={{ color: theme.node.muted }}>
+                图片预览暂不可用，请查看任务详情
+            </div>
+        );
     return <img src={src} alt="生成的图片" className="size-full object-contain" draggable={false} onError={() => setFailedSrc(src)} />;
 }
 

@@ -5,7 +5,11 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 const node: CanvasNodeData = {
-    id: "saving", type: CanvasNodeType.Image, position: { x: 0, y: 0 }, width: 200, height: 200,
+    id: "saving",
+    type: CanvasNodeType.Image,
+    position: { x: 0, y: 0 },
+    width: 200,
+    height: 200,
     metadata: { status: "loading", taskId: "task", taskStatus: "running", taskMediaStage: "upload", taskCreatedAt: "2020-01-01T00:00:00Z", storageKey: "task-source:task", content: "/api/tasks/task/source-image" },
 };
 

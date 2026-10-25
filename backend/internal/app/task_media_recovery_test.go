@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"image"
@@ -29,7 +30,16 @@ func newMediaRecoveryTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := database.MigrateSchema(db); err != nil {
 		t.Fatal(err)
 	}
-	return &Service{repo: repository.New(db), dataDir: t.TempDir(), activeCancels: make(map[string]context.CancelFunc)}, db
+	dataDir := t.TempDir()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+	// These tests exercise recovery with the deployment's existing encryption key.
+	if err := os.WriteFile(filepath.Join(dataDir, ".settings-key"), key, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return &Service{repo: repository.New(db), dataDir: dataDir, activeCancels: make(map[string]context.CancelFunc)}, db
 }
 
 func mediaTestPNG(t *testing.T) []byte {
