@@ -6,7 +6,7 @@
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { agentAvatarClipForState, agentAvatarStateForRunStatus, agentCopy, DEFAULT_CANVAS_APPEARANCE, isAgentAvatarBundleManifest, type AgentAvatarBundleManifest } from "@/lib/canvas/agent-appearance";
-import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { useAgentLauncherPosition } from "./use-agent-launcher-position";
 import { motion } from "motion/react";
@@ -46,6 +46,7 @@ export function AgentLauncher({
     reducedMotion,
     status,
     hidden = false,
+    attentionContent,
     onOpen,
 }: {
     theme: CanvasTheme;
@@ -54,6 +55,7 @@ export function AgentLauncher({
     reducedMotion: boolean;
     status: string;
     hidden?: boolean;
+    attentionContent?: ReactNode;
     onOpen: () => void;
 }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
@@ -117,60 +119,75 @@ export function AgentLauncher({
     const width = collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? Math.round(height * aspectRatio) : 76;
     const { position, dragging, handlers } = useAgentLauncherPosition(onOpen, width, height);
     const showToggle = !hidden && (largeAvatar || collapsed);
+    const attentionOpen = !hidden && Boolean(attentionContent);
+    const attentionPopoverRef = usePopoverAnchorAlign(attentionOpen);
     return (
         <>
-            <motion.button
-                type="button"
-                aria-label={`打开${appearance.agentName}`}
-                title={live && live2DError ? live2DError : `${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
-                className={cn(
-                    "canvas-agent-launcher fixed z-[calc(var(--z-toast)+1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35",
-                    dragging && "is-dragging",
-                    collapsed && "is-collapsed",
-                    keepsAvatarSize && live && "canvas-agent-launcher-live2d",
-                    keepsAvatarSize && media && "canvas-agent-launcher-media",
-                )}
-                style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow, ...(hidden ? { display: "none" } : null) } as CSSProperties}
-                aria-hidden={hidden || undefined}
-                tabIndex={hidden ? -1 : undefined}
-                data-canvas-no-zoom
-                onDragStart={(event) => event.preventDefault()}
-                {...handlers}
-                whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
-                whileTap={reducedMotion || dragging ? undefined : { scale: 0.96 }}
-                transition={{ duration: reducedMotion ? 0 : 0.18 }}
+            <Popover
+                ref={attentionPopoverRef}
+                open={attentionOpen}
+                trigger={[]}
+                placement="topRight"
+                autoAdjustOverflow
+                arrow={false}
+                classNames={{ root: "canvas-agent-attention-popover" }}
+                getPopupContainer={() => document.body}
+                styles={{ root: { "--agent-surface-base": theme.node.panel, "--agent-ink": theme.node.text, "--agent-accent": theme.accent.primary, "--agent-shadow-color": theme.spatial.shadow } as CSSProperties }}
+                content={attentionContent}
             >
-                {collapsed ? (
-                    <FluidOrb size={30} color="#7164f6" />
-                ) : live ? (
-                    <Live2DAvatar
-                        url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)}
-                        width={width}
-                        height={height}
-                        reducedMotion={reducedMotion}
-                        fallback={<FluidOrb size={60} color="#7164f6" />}
-                        onReady={() => setLive2DError("")}
-                        onError={setLive2DError}
-                    />
-                ) : mediaURL && !mediaError ? (
-                    <AgentAvatarVideo src={mediaURL} loop={!["completed", "failed", "cancelled", "rejected"].includes(avatarState)} onError={() => setMediaError(true)} />
-                ) : bundleManifestLoading || !appearanceResolved ? (
-                    <span role="status" aria-busy="true">
-                        <LoaderCircle className={reducedMotion ? "size-6" : "size-6 motion-safe:animate-spin"} aria-hidden="true" />
-                        <span className="sr-only">正在加载助手形象</span>
-                    </span>
-                ) : (
-                    <FluidOrb size={60} color="#7164f6" />
-                )}
-                {appearance.launcherLabel && !collapsed ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
-                {live && live2DError ? (
-                    <span className="sr-only" role="status">
-                        {live2DError}
-                    </span>
-                ) : null}
-                <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
-                {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}
-            </motion.button>
+                <motion.button
+                    type="button"
+                    aria-label={`打开${appearance.agentName}`}
+                    title={live && live2DError ? live2DError : `${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
+                    className={cn(
+                        "canvas-agent-launcher fixed z-[calc(var(--z-toast)+1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35",
+                        dragging && "is-dragging",
+                        collapsed && "is-collapsed",
+                        keepsAvatarSize && live && "canvas-agent-launcher-live2d",
+                        keepsAvatarSize && media && "canvas-agent-launcher-media",
+                    )}
+                    style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow, ...(hidden ? { display: "none" } : null) } as CSSProperties}
+                    aria-hidden={hidden || undefined}
+                    tabIndex={hidden ? -1 : undefined}
+                    data-canvas-no-zoom
+                    onDragStart={(event) => event.preventDefault()}
+                    {...handlers}
+                    whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
+                    whileTap={reducedMotion || dragging ? undefined : { scale: 0.96 }}
+                    transition={{ duration: reducedMotion ? 0 : 0.18 }}
+                >
+                    {collapsed ? (
+                        <FluidOrb size={30} color="#7164f6" />
+                    ) : live ? (
+                        <Live2DAvatar
+                            url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)}
+                            width={width}
+                            height={height}
+                            reducedMotion={reducedMotion}
+                            fallback={<FluidOrb size={60} color="#7164f6" />}
+                            onReady={() => setLive2DError("")}
+                            onError={setLive2DError}
+                        />
+                    ) : mediaURL && !mediaError ? (
+                        <AgentAvatarVideo src={mediaURL} loop={!["completed", "failed", "cancelled", "rejected"].includes(avatarState)} onError={() => setMediaError(true)} />
+                    ) : bundleManifestLoading || !appearanceResolved ? (
+                        <span role="status" aria-busy="true">
+                            <LoaderCircle className={reducedMotion ? "size-6" : "size-6 motion-safe:animate-spin"} aria-hidden="true" />
+                            <span className="sr-only">正在加载助手形象</span>
+                        </span>
+                    ) : (
+                        <FluidOrb size={60} color="#7164f6" />
+                    )}
+                    {appearance.launcherLabel && !collapsed ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
+                    {live && live2DError ? (
+                        <span className="sr-only" role="status">
+                            {live2DError}
+                        </span>
+                    ) : null}
+                    <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
+                    {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}
+                </motion.button>
+            </Popover>
             {showToggle ? (
                 <button
                     type="button"
@@ -693,6 +710,7 @@ export function ApprovalCard({
     approval,
     theme,
     submitting,
+    summaryOnly = false,
     targetGenerating,
     onFocusNode,
     onReasonChange,
@@ -702,6 +720,7 @@ export function ApprovalCard({
     approval: ApprovalState;
     theme: CanvasTheme;
     submitting: boolean;
+    summaryOnly?: boolean;
     /** 目标节点已在画布上直接生成：禁用“同意执行”，等待后端关闭本次审批。 */
     targetGenerating?: CanvasNodeData;
     onFocusNode?: (nodeId: string) => void;
@@ -714,6 +733,7 @@ export function ApprovalCard({
     const imageApproval = agentImageApproval(approval.detail);
     const videoApproval = agentVideoApproval(approval.detail);
     const action = agentApprovalPresentation(approval.detail);
+    const visibleItems = summaryOnly ? action.items.slice(0, 2) : action.items;
     return (
         <section className="canvas-agent-approval-card" aria-label={action.title}>
             <div className="canvas-agent-approval-header">
@@ -723,34 +743,39 @@ export function ApprovalCard({
                 <h3>{action.title}</h3>
                 <span className="canvas-agent-approval-badge">{targetGenerating ? "已在节点中生成" : "等待你的确认"}</span>
             </div>
-            <p className="canvas-agent-approval-description" style={{ color: theme.node.muted }}>
-                {action.description}
-            </p>
+            {!summaryOnly ? (
+                <p className="canvas-agent-approval-description" style={{ color: theme.node.muted }}>
+                    {action.description}
+                </p>
+            ) : null}
             {action.items.length ? (
                 <div className="canvas-agent-approval-items" aria-label="涉及节点">
-                    {action.items.map((item, index) => (
+                    {visibleItems.map((item, index) => (
                         <ApprovalPreviewItemView
                             key={`${item.operation}-${item.nodeId || item.nodeTitle || index}-${index}`}
-                            item={imageApproval || videoApproval ? { ...item, details: item.details?.filter((detail) => !/^(模型|画幅|质量|时长|音频)[：:]/.test(detail)) } : item}
+                            item={!summaryOnly && (imageApproval || videoApproval) ? { ...item, details: item.details?.filter((detail) => !/^(模型|画幅|质量|时长|音频)[：:]/.test(detail)) } : item}
                             theme={theme}
                             onFocusNode={onFocusNode}
                         />
                     ))}
+                    {summaryOnly && action.items.length > visibleItems.length ? <div className="canvas-agent-approval-summary">另有 {action.items.length - visibleItems.length} 项，展开 Agent 查看完整清单。</div> : null}
                 </div>
             ) : (
                 <div className="canvas-agent-approval-empty" style={{ color: theme.node.muted }}>
                     无法确认具体目标，继续前请重新读取画布。
                 </div>
             )}
-            {imageApproval ? (
+            {!summaryOnly && imageApproval ? (
                 <CanvasAgentImageApprovalSettings initial={imageApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
-            ) : videoApproval ? (
+            ) : !summaryOnly && videoApproval ? (
                 <CanvasAgentVideoApprovalSettings initial={videoApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
             ) : null}
-            <button type="button" className="canvas-agent-approval-reason-toggle" aria-expanded={showReason} onClick={() => setShowReason((value) => !value)} disabled={submitting}>
-                {showReason ? "收起拒绝理由" : "填写拒绝理由（可选）"}
-            </button>
-            {showReason ? (
+            {!summaryOnly ? (
+                <button type="button" className="canvas-agent-approval-reason-toggle" aria-expanded={showReason} onClick={() => setShowReason((value) => !value)} disabled={submitting}>
+                    {showReason ? "收起拒绝理由" : "填写拒绝理由（可选）"}
+                </button>
+            ) : null}
+            {!summaryOnly && showReason ? (
                 <Input.TextArea
                     className="canvas-agent-approval-reason"
                     value={approval.reason}
@@ -770,7 +795,7 @@ export function ApprovalCard({
                 <button type="button" className="canvas-agent-approval-reject" disabled={submitting} onClick={onReject}>
                     暂不执行
                 </button>
-                <button type="button" className="canvas-agent-approval-approve" disabled={submitting || Boolean(targetGenerating)} onClick={() => onApprove(mediaSettings)}>
+                <button type="button" className="canvas-agent-approval-approve" disabled={submitting || Boolean(targetGenerating)} onClick={() => onApprove(summaryOnly ? undefined : mediaSettings)}>
                     {submitting ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
                     {submitting ? "正在提交" : targetGenerating ? "已在节点中生成" : "同意执行"}
                 </button>

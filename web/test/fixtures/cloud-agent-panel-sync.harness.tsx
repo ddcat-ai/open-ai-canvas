@@ -48,6 +48,7 @@ let capabilitiesOverride: (() => Promise<unknown>) | undefined;
 let sendOverride: (() => Promise<{ run: AgentRun }>) | undefined;
 const refreshRequests: Array<{ observedConversationIds?: string[]; canvasId?: string }> = [];
 let generated = 0;
+let launcher: Record<string, any>;
 let composer: Record<string, any>;
 let header: Record<string, any>;
 let conversationUI: Record<string, any>;
@@ -154,7 +155,11 @@ mock.module("@/components/canvas/canvas-cloud-agent-chat-ui", () => ({
     AgentSceneCapsules: () => null,
 }));
 mock.module("@/components/canvas/canvas-cloud-agent-panel-parts", () => ({
-    AgentLauncher: () => null,
+    AgentLauncher: (props: any) => {
+        launcher = props;
+        return null;
+    },
+    ApprovalCard: () => null,
     AgentContextRing: () => null,
     ComposerControls: (props: any) => {
         controls = props;
@@ -228,6 +233,7 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     capabilitiesOverride = undefined;
     sendOverride = undefined;
     generated = 0;
+    launcher = {};
     subscriptions.length = 0;
     refreshRequests.length = 0;
     setActiveUserScope("sync-user");
@@ -607,6 +613,25 @@ test("旧账号 POST 的迟到响应不覆盖新账号面板，清理也只使�
         expect(generated).toBe(0);
     } finally {
         release?.({ run: makeRun("original-late-child") });
+        await mounted.close();
+    }
+});
+
+test("账号切换恢复期间收起态入口不暴露旧账号的待处理事项", async () => {
+    const waiting = makeRun("private-approval", "waiting_approval");
+    waiting.approval = { approvalId: "private-approval-1", call: { id: "private-call", function: { name: "generate_media", arguments: "{}" } } };
+    const mounted = await mount(chat("private", waiting), [chat("private", waiting)]);
+    try {
+        expect(launcher.attentionContent).toBeDefined();
+        await act(async () => {
+            setActiveUserScope("other-user");
+            useUserStore.setState({ user: { id: "other-user", username: "other", displayName: "other", role: "user", status: "active" } });
+            await Promise.resolve();
+            expect(launcher.attentionContent).toBeUndefined();
+            await settle();
+        });
+        expect(launcher.attentionContent).toBeUndefined();
+    } finally {
         await mounted.close();
     }
 });

@@ -1,5 +1,6 @@
 .canvas-agent-panel,
-.agent-context-popover {
+.agent-context-popover,
+.canvas-agent-attention-popover {
     /* Canvas theme -> material tokens. Only the floating shell blurs the canvas. */
     --agent-material-solid: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-surface-base));
     --agent-material-glass: color-mix(in srgb, var(--agent-material-solid) 68%, transparent);
@@ -1729,6 +1730,113 @@
     touch-action: none;
     user-select: none;
     isolation: isolate;
+}
+
+.canvas-agent-attention-popover .ant-popover-container {
+    width: min(360px, calc(100vw - var(--space-4)));
+    max-height: min(600px, calc(100dvh - var(--space-8)));
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 10%, transparent);
+    border-radius: var(--agent-radius-surface);
+    background: var(--agent-material-solid);
+    padding: 0;
+    box-shadow: var(--agent-material-shadow);
+}
+
+.canvas-agent-attention-popover .ant-popover-content {
+    max-height: min(600px, calc(100dvh - var(--space-8)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.canvas-agent-attention-card {
+    width: 100%;
+    min-width: 0;
+    color: var(--agent-ink);
+    background: var(--agent-surface-base);
+}
+
+.canvas-agent-attention-card > .canvas-agent-approval-card {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.canvas-agent-attention-card > .agent-question-bar {
+    margin: 0;
+    border-radius: 0;
+}
+
+.canvas-agent-notification-guide {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--agent-ink) 8%, transparent);
+    background: var(--agent-surface-soft);
+    padding: var(--space-3);
+    color: var(--agent-ink);
+}
+
+.canvas-agent-notification-guide-icon {
+    display: grid;
+    width: var(--space-8);
+    height: var(--space-8);
+    place-items: center;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+    color: var(--agent-accent);
+}
+
+.canvas-agent-notification-guide-copy {
+    min-width: 0;
+}
+
+.canvas-agent-notification-guide-copy strong {
+    display: block;
+    font-size: var(--fs-body);
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.canvas-agent-notification-guide-copy p {
+    margin: var(--space-1) 0 0;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1.5;
+}
+
+.canvas-agent-notification-guide-action {
+    min-height: var(--space-8);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--agent-accent);
+    padding: 0 var(--space-3);
+    color: var(--agent-surface-base);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.canvas-agent-notification-guide-action:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.canvas-agent-notification-guide-action:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+@media (max-width: 520px) {
+    .canvas-agent-notification-guide {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .canvas-agent-notification-guide-action {
+        grid-column: 2;
+        justify-self: start;
+    }
 }
 
 .canvas-agent-launcher.is-dragging {

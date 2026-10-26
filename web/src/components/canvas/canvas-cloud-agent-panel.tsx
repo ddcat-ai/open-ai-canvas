@@ -65,9 +65,11 @@ import { canvasEditLeases } from "@/services/canvas-edit-leases";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
 import { AGENT_SCENE_DEFS, AgentChatComposer, parseCloudAgentFormAnswer, AgentPlanBar, AgentQuestionBar, AgentSceneCapsules, type AgentSceneBucket, type CloudAgentChatMessage } from "./canvas-cloud-agent-chat-ui";
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
+import { AgentCollapsedAttentionCard, AgentNotificationPermissionGuide } from "./canvas-agent-attention";
 import { useSkillCuration, curationQuery } from "@/components/skills/skill-curation-browser";
 import { CanvasCloudAgentSettings, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { useAgentPanelLayout } from "./use-agent-panel-layout";
+import { agentAttentionFromPending, useAgentAttentionNotifications } from "./use-agent-attention-notifications";
 import "./canvas-cloud-agent.css";
 import { appendAgentError, appendUniqueMessage, applyAgentEvent, positiveNumber, type ApprovalState } from "./canvas-cloud-agent-events";
 import { AgentContextRing, AgentConversation, AgentHeader, AgentHistory, AgentLauncher, ComposerControls } from "./canvas-cloud-agent-panel-parts";
@@ -181,6 +183,13 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const planTerminal = useMemo(() => latestAgentPlanTerminal(messages), [messages]);
     const planVisible = agentPlanVisible(planItems);
     const pendingQuestion = useMemo(() => pendingAgentQuestion(messages), [messages]);
+    const attention = useMemo(() => agentAttentionFromPending({ approval, question: pendingQuestion, conversationId: activeConversationId }), [activeConversationId, approval, pendingQuestion]);
+    const accountReady = historyHydrated && pendingHydrated && hydratedAccount.current === `${userId}:${accountScope}`;
+    const openAttention = useCallback(() => {
+        setView("chat");
+        onOpen();
+    }, [onOpen]);
+    const attentionNotifications = useAgentAttentionNotifications({ attention, enabled: accountReady, panelOpen: open, onOpen: openAttention });
     const [scenePresets, setScenePresets] = useState<SkillPreset[]>([]);
     const [presetApplyingId, setPresetApplyingId] = useState("");
     const presetApplyingRef = useRef<string | null>(null);
@@ -1271,9 +1280,30 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         void saveCloudAgentConversations(id === activeConversationId ? null : activeConversationId, next, accountScope).catch((cause) => { if (accountIsCurrent()) setCloudHistoryError(String(cause)); });
     };
 
+    const approvalTargetGenerating = approval ? agentApprovalTargetGenerating(approval.detail, canvasNodes, runningNodeId) : undefined;
+    const attentionGuide = attentionNotifications.showGuide ? (
+        <AgentNotificationPermissionGuide permission={attentionNotifications.permission} requesting={attentionNotifications.requesting} onRequest={() => void attentionNotifications.requestPermission()} />
+    ) : null;
+    const attentionContent = accountReady && attention ? (
+        <AgentCollapsedAttentionCard
+            theme={theme}
+            approval={approval}
+            question={approval ? null : pendingQuestion}
+            guide={attentionGuide}
+            approvalSubmitting={otherAgentRunning || approvalSubmitting || connectionStatus !== "connected"}
+            approvalTargetGenerating={approvalTargetGenerating}
+            questionDisabled={otherAgentRunning || approvalSubmitting || connectionStatus !== "connected"}
+            onFocusNode={onFocusNode}
+            onApprovalReasonChange={(reason) => setApproval((current) => (current ? { ...current, reason } : current))}
+            onApprove={(settings) => void submitApproval("approve", settings)}
+            onReject={() => void submitApproval("reject")}
+            onAnswer={(answer) => void submit(answer)}
+        />
+    ) : undefined;
+
     return (
         <>
-            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} status={status} hidden={open} onOpen={onOpen} />
+            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} status={status} hidden={open} attentionContent={attentionContent} onOpen={onOpen} />
             <AnimatePresence>
                 {open ? (
                     <motion.aside
@@ -1386,6 +1416,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         onResetLayout={panelLayout.reset}
                                         onCollapse={onCollapse}
                                     />
+                                    {attentionGuide}
                                     {cloudHistoryError || canvasId && !cloudHistoryReady ? (
                                         <div role="status" className="flex items-center justify-between gap-2 px-5 py-2 text-xs" style={{ color: theme.node.muted }}>
                                             <span>{cloudHistoryError ? "云端对话暂时未同步，本机草稿已保留。" : "正在同步此画布的云端对话…"}</span>
@@ -1412,7 +1443,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         references={[...references, ...buildSkillMentionReferences(installedSkills)]}
                                         busy={busy || running}
                                         approval={approval}
-                                        approvalTargetGenerating={approval ? agentApprovalTargetGenerating(approval.detail, canvasNodes, runningNodeId) : undefined}
+                                        approvalTargetGenerating={approvalTargetGenerating}
                                         nodeCount={canvasId ? nodeCount : null}
                                         approvalSubmitting={otherAgentRunning || approvalSubmitting || connectionStatus !== "connected"}
                                         onChooseSkill={() => setSkillsOpen(true)}

@@ -1080,7 +1080,19 @@ export function AgentPlanBar({
 
 const EMPTY_QUESTION_FIELDS: CloudAgentFormField[] = [];
 
-export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }: { question: CloudAgentUserQuestion; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onAnswer: (answer: string) => void; disabled?: boolean }) {
+export function AgentQuestionBar({
+    question,
+    theme,
+    onAnswer,
+    disabled = false,
+    compact = false,
+}: {
+    question: CloudAgentUserQuestion;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onAnswer: (answer: string) => void;
+    disabled?: boolean;
+    compact?: boolean;
+}) {
     const fields = question.fields || EMPTY_QUESTION_FIELDS;
     const isForm = question.kind === "form" || fields.length > 0;
     const fieldDefaultValue = (field: CloudAgentFormField): string | string[] => {
@@ -1166,7 +1178,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 text-[var(--fs-label)] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需求确认"}</div>
                         <div className="text-xs font-semibold leading-5">{question.question}</div>
-                        <div className="mt-0.5 text-[var(--fs-label)] opacity-50">已填入推荐值，可按需修改；不重要的字段可以留空。</div>
+                        {!compact ? <div className="mt-0.5 text-[var(--fs-label)] opacity-50">已填入推荐值，可按需修改；不重要的字段可以留空。</div> : null}
                     </div>
                 </div>
                 <div className="agent-question-fields px-3 py-2">
@@ -1217,7 +1229,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                                                         aria-pressed={selected}
                                                         className={`agent-question-chip${selected ? " is-selected" : ""}`}
                                                         style={selected ? { background: theme.accent.primary, color: theme.accent.onPrimary } : { background: theme.toolbar.itemHover }}
-                                                        title={option.detail || option.label}
+                                                        title={compact ? option.label : option.detail || option.label}
                                                         onMouseDown={stop}
                                                         onPointerDown={stop}
                                                         onClick={(event) => {
@@ -1247,22 +1259,24 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         );
                     })}
                 </div>
-                <div className="agent-question-field px-3 pb-2">
-                    <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">
-                        补充说明
-                    </label>
-                    <textarea
-                        id="agent-question-additional-notes"
-                        rows={2}
-                        value={additionalNotes}
-                        placeholder="还有需要特别说明的场景、人物、节奏或限制吗？"
-                        disabled={disabled}
-                        className="agent-question-input agent-question-textarea"
-                        onChange={(event) => setAdditionalNotes(event.target.value)}
-                        onMouseDown={stop}
-                        onPointerDown={stop}
-                    />
-                </div>
+                {!compact ? (
+                    <div className="agent-question-field px-3 pb-2">
+                        <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">
+                            补充说明
+                        </label>
+                        <textarea
+                            id="agent-question-additional-notes"
+                            rows={2}
+                            value={additionalNotes}
+                            placeholder="还有需要特别说明的场景、人物、节奏或限制吗？"
+                            disabled={disabled}
+                            className="agent-question-input agent-question-textarea"
+                            onChange={(event) => setAdditionalNotes(event.target.value)}
+                            onMouseDown={stop}
+                            onPointerDown={stop}
+                        />
+                    </div>
+                ) : null}
                 {validation ? <div className="agent-question-validation px-3 pb-1 text-[var(--fs-label)]">{validation}</div> : null}
                 <div className="agent-question-actions px-3 pb-2">
                     <button
@@ -1312,7 +1326,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         key={option.label}
                         type="button"
                         disabled={disabled}
-                        title={option.detail || option.label}
+                        title={compact ? option.label : option.detail || option.label}
                         className="agent-question-choice max-w-full rounded-md border-0 px-3 py-2 text-left text-xs transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{ background: theme.toolbar.itemHover }}
                         onMouseDown={stop}
@@ -1323,7 +1337,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         }}
                     >
                         <span className="block break-words font-medium">{option.label}</span>
-                        {option.detail ? <span className="mt-0.5 block break-words text-[var(--fs-label)] leading-4 opacity-60">{option.detail}</span> : null}
+                        {!compact && option.detail ? <span className="mt-0.5 block break-words text-[var(--fs-label)] leading-4 opacity-60">{option.detail}</span> : null}
                     </button>
                 ))}
                 <button
@@ -1342,7 +1356,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                     按默认方案开始
                 </button>
             </div>
-            <div className="px-3 pb-2 text-[var(--fs-label)] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "也可以在下方输入框里补充说明。"}</div>
+            {!compact ? <div className="px-3 pb-2 text-[var(--fs-label)] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "也可以在下方输入框里补充说明。"}</div> : null}
         </div>
     );
 }
