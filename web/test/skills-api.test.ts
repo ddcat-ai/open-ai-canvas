@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { apiClient } from "@/services/api/request";
-import { addSkill, listAddedSkills } from "@/services/api/skills";
+import { addSkill, deleteSkill, listAddedSkills } from "@/services/api/skills";
 
 test("added Skills retries a transient backend proxy failure", async () => {
     const original = apiClient.request;
@@ -26,6 +26,34 @@ test("added Skills retries a transient backend proxy failure", async () => {
     }
 });
 
+test("#888 a fresh catalog bypasses cached and pending reads after deletion", async () => {
+    const original = apiClient.request;
+    const envelope = (skills: unknown[]) => ({ data: { code: 0, data: { skills }, msg: "ok" }, status: 200, headers: {} });
+    let reads = 0;
+    let release: ((value: unknown) => void) | undefined;
+    apiClient.request = (async (config) => {
+        if (config.method !== "get") return envelope([]);
+        reads++;
+        if (reads === 1) return envelope([{ skillId: "deleted", isAdded: true }]);
+        if (reads === 3) return new Promise((resolve) => { release = resolve; });
+        return envelope([]);
+    }) as typeof apiClient.request;
+    try {
+        await addSkill("deleted");
+        await listAddedSkills();
+        expect((await listAddedSkills({ fresh: true })).skills).toEqual([]);
+        await deleteSkill("deleted");
+        const pending = listAddedSkills();
+        expect((await listAddedSkills({ fresh: true })).skills).toEqual([]);
+        release?.(envelope([{ skillId: "deleted", isAdded: true }]));
+        expect((await pending).skills).toEqual([]);
+        expect((await listAddedSkills()).skills).toEqual([]);
+    } finally {
+        release?.(envelope([]));
+        apiClient.request = original;
+    }
+});
+
 test("a pending skills response cannot replace the cache after installation", async () => {
     const original = apiClient.request;
     let resolveStale: ((value: unknown) => void) | undefined;
@@ -44,7 +72,7 @@ test("a pending skills response cannot replace the cache after installation", as
         await addSkill("preset");
         const fresh = await listAddedSkills();
         resolveStale?.(envelope([]));
-        await pending;
+        expect((await pending).skills).toEqual(fresh.skills);
         expect(fresh.skills).toEqual([{ skillId: "preset", isAdded: true }]);
         expect((await listAddedSkills()).skills).toEqual(fresh.skills);
         expect(reads).toBe(2);
