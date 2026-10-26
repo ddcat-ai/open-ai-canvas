@@ -1,7 +1,9 @@
+import { isBrowserGenerationTask, listBrowserGenerations, readBrowserGeneration, removeBrowserGeneration } from "@/services/browser-generation-store";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { browserGenerationScope, assertBrowserGenerationScope } from "@/lib/browser-generation-session";
 import { getActiveUserScope } from "@/lib/user-scope";
 
 export type { BackendEnvelope } from "@/services/api/request";
@@ -20,6 +22,7 @@ export type GenerationTaskOutput = {
 
 export type GenerationTask = {
     id: string;
+    executionSource?: "browser" | "server";
     clientOperationId?: string;
     retryOf?: string;
     attemptGroupId?: string;
@@ -181,9 +184,16 @@ export async function listGenerationTasks(limit = 30, options?: { projectId?: st
                     pageSignal,
                 )) ?? [],
         }));
-    const backendTasks = await collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal);
-    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    return backendTasks
+    const scope = browserGenerationScope();
+    const localTasks = await listBrowserGenerations(scope).catch(() => []);
+    if (localTasks.some((task) => task.status === "running" || task.status === "queued")) {
+        const { queryBrowserGeneration } = await import("@/services/browser-generation-runner");
+        await Promise.all(localTasks.map(async (task, index) => { if (task.status === "running" || task.status === "queued") localTasks[index] = await queryBrowserGeneration(task.id, { signal }); }));
+    }
+    assertBrowserGenerationScope(scope, signal);
+    const backendTasks = await collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal).catch((error: unknown) => { if (!localTasks.length) throw error; return []; });
+    assertBrowserGenerationScope(scope, signal);
+    return [...backendTasks, ...localTasks]
         .filter((task) => !options?.projectId || task.projectId === options.projectId)
         .filter((task) => !options?.activeOnly || task.status === "queued" || task.status === "running")
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
@@ -207,6 +217,7 @@ async function collectGenerationTaskPages<T>(readPage: (request: GenerationTaskP
 }
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
+    if (isBrowserGenerationTask(id)) return import("@/services/browser-generation-runner").then((module) => module.queryBrowserGeneration(id, options));
     return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
 }
 
@@ -314,26 +325,32 @@ export function subscribeGenerationTasks(ids: readonly string[], listener: (task
 }
 
 export function appendTaskTextDelta(id: string, content: string) {
+    if (isBrowserGenerationTask(id)) throw new Error("本机文本任务不向服务器写入流事件");
     return http.post<TaskTextDelta>(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content });
 }
 
 export function completeTextReplayTask(id: string, text: string) {
+    if (isBrowserGenerationTask(id)) throw new Error("本机文本任务不向服务器写入回放");
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/text-replay-complete`, { text });
 }
 
 export function queryTaskTextReplay(id: string, after = 0) {
+    if (isBrowserGenerationTask(id)) return readBrowserGeneration(id).then(({ task }): TaskTextReplay => ({ deltas: [], finalText: task.resultJson ? (JSON.parse(task.resultJson) as { text?: string }).text : undefined, complete: task.status === "succeeded", status: task.status, stage: task.stage, progress: task.progress || 0, error: task.error }));
     return http.get<TaskTextReplay>(`/tasks/${encodeURIComponent(id)}/text-deltas`, { params: { after } });
 }
 
 export function retryGenerationTask(id: string) {
+    if (isBrowserGenerationTask(id)) return Promise.reject<GenerationTask>(new Error("本机任务不可自动重提；请先核对上游记录，再明确发起新的生成"));
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`);
 }
 
 export function recoverGenerationTaskMedia(id: string) {
+    if (isBrowserGenerationTask(id)) return queryGenerationTask(id);
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/recover-media`);
 }
 
 export function cancelGenerationTask(id: string) {
+    if (isBrowserGenerationTask(id)) return Promise.reject<GenerationTask>(new Error("标准 OpenAI 直连未提供可靠的上游取消；关闭监听不会停止上游生成"));
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/cancel`).then((task) => {
         window.dispatchEvent(new CustomEvent("canvas:task-cancelled", { detail: { task } }));
         window.dispatchEvent(new CustomEvent("wallet:updated"));
@@ -342,18 +359,22 @@ export function cancelGenerationTask(id: string) {
 }
 
 export function queryFailedVideoProviderTask(id: string) {
+    if (isBrowserGenerationTask(id)) return queryGenerationTask(id).then((task) => ({ task, providerStatus: task.stage || task.status, recovered: task.status === "succeeded", billingSettled: false }));
     return http.post<ProviderTaskQueryResult>(`/tasks/${encodeURIComponent(id)}/query-provider`);
 }
 
 export function refreshGenerationTaskStatus(id: string, options?: { signal?: AbortSignal }) {
+    if (isBrowserGenerationTask(id)) return queryGenerationTask(id, options);
     return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal });
 }
 
 export function deleteGenerationTask(id: string) {
+    if (isBrowserGenerationTask(id)) return readBrowserGeneration(id).then(({ task }) => { if (task.status !== "succeeded") throw new Error("请保留未确认任务的原始记录，防止重复生成"); return removeBrowserGeneration(id); });
     return http.delete<void>(`/tasks/${encodeURIComponent(id)}`);
 }
 
 export async function listTaskLogs(id: string) {
+    if (isBrowserGenerationTask(id)) { const { task } = await readBrowserGeneration(id); return [{ id: `${id}:state`, taskId: id, level: "info" as const, stage: task.stage || task.status, provenance: "task_state" as const, createdAt: task.updatedAt }]; }
     const raw = await http.get<Array<{ level?: unknown; message?: unknown; payload?: unknown; createdAt?: unknown }>>(`/tasks/${encodeURIComponent(id)}/logs`);
     return raw.map((log, index) => projectBackendSafeTaskLog(id, log, index));
 }
@@ -407,7 +428,7 @@ export type WaitForGenerationTaskOptions = {
 };
 
 export async function waitForGenerationTask(id: string, options?: WaitForGenerationTaskOptions) {
-    if (options?.onTextDelta || options?.useTextEvents) return waitForGenerationTaskTextEvents(id, options);
+    if (!isBrowserGenerationTask(id) && (options?.onTextDelta || options?.useTextEvents)) return waitForGenerationTaskTextEvents(id, options);
     const startedAt = Date.now();
     const intervalMs = options?.intervalMs || 2000;
     let lastTask = options?.initialTask;

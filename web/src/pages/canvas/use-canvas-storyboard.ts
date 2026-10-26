@@ -160,6 +160,7 @@ export function useCanvasStoryboard({
         const requestedShotCount = shotCount === "auto" ? 0 : Number(shotCount);
         const expandedPrompt = expandStoryboardTextMentions(cleanedPrompt, buildNodeMentionReferences(scriptNode, nodesRef.current, connectionsRef.current));
         const generationConfig = buildGenerationConfig(effectiveConfig, scriptNode, "text");
+        if (resolveModelRequestConfig(generationConfig, generationConfig.model).channelScope === "user") { message.warning("专业拆镜依赖服务端分镜流程，请选择系统渠道；个人渠道可用于普通文本生成"); return; }
         if (!isAiConfigReady(generationConfig, generationConfig.model)) {
             navigateToSettings({ continueCreation: true });
             return;

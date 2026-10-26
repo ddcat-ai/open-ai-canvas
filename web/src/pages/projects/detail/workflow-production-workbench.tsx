@@ -20,6 +20,7 @@ import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
 import { customShotTitle, formatShotOrdinal, normalizeDefaultShotTitle } from "@/lib/shot-label";
 import { modelCompatibilityError, resolveCompatibleModel, resolveModelVideoBooleanOptions, type ModelRequirements } from "@/lib/model-selection";
 import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
+import { isPersonalGeneration } from "@/services/browser-generation-runner";
 import { submitBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
 import { type GenerationTask } from "@/services/api/task-center";
@@ -323,6 +324,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
         setSubmittingShotIds((current) => new Set(current).add(submittingShot.id));
         try {
             const values = await form.validateFields();
+            if (isPersonalGeneration({ config: generationConfig })) throw new Error("镜头生产依赖服务端自动回填，请选择系统渠道；个人渠道可在画布或创作页生成");
             let productionStep = workflowStep;
             if (!productionStep) {
                 const initialized = await createUnitWorkflow(projectId, unitId);

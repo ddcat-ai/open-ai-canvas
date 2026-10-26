@@ -50,6 +50,29 @@ test("分片上传累加片内真实进度，传输 100% 后仍须等待合并�
     }
 });
 
+test("合并响应丢失后重传保持 JSON 上传身份，不能重复创建资源", async () => {
+    const adapter = apiClient.defaults.adapter;
+    let sessions = 0;
+    let completes = 0;
+    try {
+        apiClient.defaults.adapter = async (config) => {
+            let data: unknown;
+            if (config.url === "/resources/uploads") {
+                expect(JSON.parse(config.data).idempotencyKey).toBe("generated:browser:stable:video:0");
+                data = { uploadId: `session-${++sessions}`, chunkSize: 64 * 1024 * 1024, chunkCount: 1 };
+            } else if (config.url?.endsWith("/complete")) {
+                if (++completes === 1) throw new TypeError("response lost after successful merge");
+                data = { resource: { id: "same-resource" } };
+            } else data = { index: 0 };
+            return { config, status: 200, statusText: "OK", headers: {}, data: { code: 0, data } };
+        };
+        const result = await uploadResourceFile(new Blob([new Uint8Array(51 * 1024 * 1024)]), "video", { idempotencyKey: "generated:browser:stable:video:0" });
+        expect(result.id).toBe("same-resource");
+        expect(sessions).toBe(2);
+        expect(completes).toBe(2);
+    } finally { apiClient.defaults.adapter = adapter; }
+});
+
 test("传输结束不吞掉服务端保存错误", async () => {
     const adapter = apiClient.defaults.adapter;
     try {

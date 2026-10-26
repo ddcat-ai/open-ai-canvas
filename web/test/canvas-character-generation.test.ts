@@ -66,6 +66,7 @@ function contextFor(sources: CanvasNodeData[], prompt: string, assets: Asset[] =
 function videoConfig() {
     const channel = createModelChannel({
         id: "video-test",
+        scope: "system",
         name: "Video",
         baseUrl: "https://example.com",
         apiKey: "test-key",

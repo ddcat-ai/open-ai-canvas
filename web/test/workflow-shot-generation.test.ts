@@ -9,6 +9,7 @@ import { buildShotAssetReferenceContext, resolveShotAssetMentionPrompt } from ".
 function videoTaskConfig() {
     const channel = createModelChannel({
         id: "minimax",
+        scope: "system",
         name: "MiniMax",
         baseUrl: "https://api.minimaxi.com",
         apiKey: "test-key",

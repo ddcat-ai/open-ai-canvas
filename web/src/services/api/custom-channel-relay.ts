@@ -1,7 +1,8 @@
+import { assertPersonalOpenAIConfig, requirePersonalChannelUrl, validatePersonalChannelHeaders } from "@/lib/personal-channel";
 import { apiBaseURL } from "@/services/api/request";
 import { isSystemProxyBaseUrl, type AiConfig, type ChannelHeader } from "@/stores/use-config-store";
 
-type RelayConfig = Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat"> & { headers?: ChannelHeader[] };
+type RelayConfig = Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat" | "channelScope" | "interfaceType"> & { headers?: ChannelHeader[] };
 
 export type ChannelRequest = {
     url: string;
@@ -9,9 +10,24 @@ export type ChannelRequest = {
     credentials: RequestCredentials;
 };
 
-/** 自定义渠道统一经登录态后端中转，避免依赖第三方服务的浏览器 CORS。 */
+/** Scope decides execution location; URLs never grant personal or system identity. */
 export function channelRequest(config: RelayConfig, upstreamUrl: string, headers: HeadersInit = {}): ChannelRequest {
     const normalizedHeaders = new Headers(headers);
+    if (config.channelScope === "user") {
+        assertPersonalOpenAIConfig(config);
+        const invalid = validatePersonalChannelHeaders(config.headers);
+        if (invalid) throw new Error(invalid);
+        const base = new URL(requirePersonalChannelUrl(config.baseUrl));
+        const target = new URL(requirePersonalChannelUrl(upstreamUrl));
+        if (base.origin !== target.origin || !(target.pathname === base.pathname.replace(/\/$/u, "") || target.pathname.startsWith(base.pathname.replace(/\/$/u, "") + "/"))) throw new Error("请求地址超出所选个人渠道范围");
+        for (const name of [...normalizedHeaders.keys()]) {
+            if (/^(?:x-canvas|x-forward|proxy-|cookie|host$)/iu.test(name)) normalizedHeaders.delete(name);
+        }
+        normalizedHeaders.delete("Authorization");
+        if (config.apiKey) normalizedHeaders.set("Authorization", `Bearer ${config.apiKey}`);
+        for (const header of config.headers || []) if (header.name.trim()) normalizedHeaders.set(header.name.trim(), header.value.trim());
+        return { url: target.toString(), headers: Object.fromEntries(normalizedHeaders.entries()), credentials: "omit" };
+    }
     if (isSystemProxyBaseUrl(config.baseUrl)) {
         return { url: upstreamUrl, headers: Object.fromEntries(normalizedHeaders.entries()), credentials: "include" };
     }

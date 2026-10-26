@@ -1,5 +1,5 @@
 import { doubaoAudioVoiceOptions, doubaoDefaultAudioVoice } from "@/lib/doubao-audio-voices";
-import { resolveModelRequestConfig } from "@/stores/use-config-store";
+import { modelOptionName, resolveModelChannel } from "@/stores/use-config-store";
 import type { AiConfig } from "@/stores/use-config-store";
 
 export { doubaoAudioVoiceOptions, doubaoDefaultAudioVoice };
@@ -84,7 +84,9 @@ export const doubaoAudioFormatOptions = [
 ];
 
 export function isDoubaoAudioConfig(config: AiConfig) {
-    return resolveModelRequestConfig(config, config.model || config.audioModel).interfaceType === "doubao-streaming-tts";
+    const model = config.model || config.audioModel;
+    const channel = resolveModelChannel(config, model);
+    return (channel.modelCosts?.find((item) => item.model === modelOptionName(model))?.protocol || channel.interfaceType) === "doubao-streaming-tts";
 }
 
 export function audioVoiceOptionsForConfig(config: AiConfig) {

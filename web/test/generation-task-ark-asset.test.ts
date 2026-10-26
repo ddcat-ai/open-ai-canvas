@@ -6,6 +6,7 @@ import { createModelChannel, defaultConfig, encodeChannelModel } from "../src/st
 function agentPlanImageConfig() {
     const channel = createModelChannel({
         id: "ark-plan-image",
+        scope: "system",
         name: "Ark Plan Seedream",
         baseUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
         apiKey: "test-key",
@@ -26,6 +27,7 @@ function agentPlanImageConfig() {
 function agentPlanVideoConfig() {
     const channel = createModelChannel({
         id: "ark-plan-video",
+        scope: "system",
         name: "Ark Plan Seedance",
         baseUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
         apiKey: "test-key",

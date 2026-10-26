@@ -131,7 +131,7 @@ describe("public channel model catalog", () => {
                 },
             },
         })) as typeof apiClient.request;
-        const channel = createModelChannel({ baseUrl: "https://flow.example", apiKey: "synthetic-test-key", models: [] });
+        const channel = createModelChannel({ scope: "system", baseUrl: "https://flow.example", apiKey: "synthetic-test-key", models: [] });
 
         const result = await fetchChannelModels(channel, true);
 

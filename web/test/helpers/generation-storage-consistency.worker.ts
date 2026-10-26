@@ -16,13 +16,15 @@ type Scenario =
     | "canvas-mask-batch"
     | "canvas-asset-preparation"
     | "canvas-reentry-observation"
-    | "canvas-video-reentry";
+    | "canvas-video-reentry"
+    | "canvas-local-media-backfill";
 
 function installStorageHarness() {
     const originalCreateInstance = localforage.createInstance.bind(localforage);
     const originalGetItem = localforage.getItem.bind(localforage);
     const originalSetItem = localforage.setItem.bind(localforage);
     const originalRemoveItem = localforage.removeItem.bind(localforage);
+    const originalIterate = localforage.iterate.bind(localforage);
     const originalWindow = (globalThis as { window?: unknown }).window;
     const originalNavigator = (globalThis as { navigator?: unknown }).navigator;
     const originalDocument = (globalThis as { document?: unknown }).document;
@@ -53,6 +55,14 @@ function installStorageHarness() {
     localforage.removeItem = (async (key: string) => {
         defaultValues.delete(key);
     }) as typeof localforage.removeItem;
+    localforage.iterate = (async (iterator: (value: unknown, key: string, iterationNumber: number) => unknown) => {
+        let index = 1;
+        for (const [key, value] of defaultValues) {
+            const result = iterator(value, key, index++);
+            if (result !== undefined) return result;
+        }
+        return undefined;
+    }) as typeof localforage.iterate;
     localforage.createInstance = ((options: { storeName?: string }) => {
         const storeName = options.storeName || "default";
         const values = storeValues(storeName);
@@ -139,6 +149,7 @@ function installStorageHarness() {
             localforage.getItem = originalGetItem;
             localforage.setItem = originalSetItem;
             localforage.removeItem = originalRemoveItem;
+            localforage.iterate = originalIterate;
             if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
             else Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: originalWindow });
             if (originalNavigator === undefined) delete (globalThis as { navigator?: unknown }).navigator;
@@ -474,16 +485,18 @@ async function runCanvasBatchCommitRace(multiOutput = false, mask = false, reent
         useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
         await flushCanvasStorePersistence();
         if (reentry) {
-            useCanvasStore.getState().updateProject(projectId, { nodes: ref.current.map((node) => node.id === "node-0" ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: "previous apply failed", resourceReloadAvailable: true } } : node) });
+            useCanvasStore
+                .getState()
+                .updateProject(projectId, { nodes: ref.current.map((node) => (node.id === "node-0" ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: "previous apply failed", resourceReloadAvailable: true } } : node)) });
             await flushCanvasStorePersistence();
-            setNodes((current) => current.map((node) => node.id === "node-0" ? { ...node, metadata: { ...node.metadata, status: "loading", taskStage: "正在重新加载资源" } } : node));
+            setNodes((current) => current.map((node) => (node.id === "node-0" ? { ...node, metadata: { ...node.metadata, status: "loading", taskStage: "正在重新加载资源" } } : node)));
         }
         // 模拟任务状态已到编辑器、自动保存尚未跟上的真实生成完成窗口。
         setNodes((current) => current.map((node) => ({ ...node, metadata: { ...node.metadata, taskStage: "正在应用结果" } })));
         useAssetStore.setState({
             assets: (multiOutput ? [0, 1, 2, 3] : [0, 1]).map((index) => ({
                 id: `asset-${index}`,
-                kind: video ? "video" as const : "image" as const,
+                kind: video ? ("video" as const) : ("image" as const),
                 title: "generated",
                 coverUrl: "/image.png",
                 tags: [],
@@ -607,7 +620,7 @@ async function runCanvasCopyGeneration() {
         await flushCanvasStorePersistence();
         // Force a real same-field race: the generation snapshot also changed the
         // title while the latest ordinary save already persisted a user rename.
-        useCanvasStore.getState().updateProject(projectId, { nodes: pendingNodes.map((node) => node.id === "copy" ? { ...node, title: "Latest user title", position: { x: 700, y: 500 } } : node) });
+        useCanvasStore.getState().updateProject(projectId, { nodes: pendingNodes.map((node) => (node.id === "copy" ? { ...node, title: "Latest user title", position: { x: 700, y: 500 } } : node)) });
         await flushCanvasStorePersistence();
         const copyEffect = "attach-node:new-task:copy:0";
         await persistCanvasGenerationEffect({
@@ -694,8 +707,218 @@ async function runCanvasAssetPreparation() {
     }
 }
 
+/**
+ * 本机生成的媒体（视频/图片/音频）经 materialize 回到画布时必须保留本地 storageKey 并绑定
+ * 稳定 assetId：远端 resource: 引用只是发给服务端的同步 payload（见 user-data-sync-media），
+ * 不能在节点回填时把本地 key 送进只认 resource: 的远程 Blob 校验。这里走真实消费入口
+ * （applyCanvasGenerationTaskNodeEffect）和真实 IndexedDB 持久化，不 mock resource-blob-cache /
+ * file-storage，因此 getCachedResourceBlob 对本地 key 仍然返回 null——不会被过宽的 mock 掩盖。
+ */
+async function runCanvasLocalMediaBackfill() {
+    const harness = installStorageHarness();
+    const previousScope = getActiveUserScope();
+    const { apiClient } = await import("../../src/services/api/request");
+    const originalAdapter = apiClient.defaults.adapter;
+    let adapterCalls = 0;
+    apiClient.defaults.adapter = async (config) => {
+        adapterCalls += 1;
+        throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+    };
+    let unregister: (() => void) | undefined;
+    try {
+        setActiveUserScope("canvas-local-media-backfill");
+        const scope = getActiveUserScope();
+        const { useCanvasStore, flushCanvasStorePersistence, CANVAS_STORE_KEY } = await import("../../src/stores/canvas/use-canvas-store");
+        const { useAssetStore } = await import("../../src/stores/use-asset-store");
+        const { applyCanvasGenerationTaskNodeEffect, registerCanvasGenerationLiveProject } = await import("../../src/services/canvas-generation-consumer");
+        const { createCanvasStateWriter } = await import("../../src/lib/canvas/canvas-editor-state");
+        const { setMediaBlob } = await import("../../src/services/file-storage");
+        const { localForageStorageForScope } = await import("../../src/lib/localforage-storage");
+        const { parseCanvasStorageDocument } = await import("../../src/lib/canvas/canvas-storage-revision");
+        const { CanvasNodeType } = await import("../../src/types/canvas");
+
+        const videoKey = `video:${scope}:browser:local-task:0`;
+        const missingVideoKey = `video:${scope}:browser:missing-task:0`;
+        const emptyVideoKey = `video:${scope}:browser:empty-task:0`;
+        const imageKey = `image:${scope}:browser:local-task-image:0`;
+        const audioKey = `audio:${scope}:browser:local-task-audio:0`;
+        // 只有真正读到本机 Blob 才能拿到 4096 字节；asset/resultJson 都把 bytes 留空。
+        await setMediaBlob(videoKey, new Blob([new Uint8Array(4096)], { type: "video/mp4" }));
+        await setMediaBlob(emptyVideoKey, new Blob([], { type: "video/mp4" }));
+
+        const projectId = useCanvasStore.getState().createProject("local media backfill");
+        const ref: { current: import("../../src/types/canvas").CanvasNodeData[] } = {
+            current: [
+                { id: "video-node", type: CanvasNodeType.Video, title: "生成视频", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { taskId: "task-video", status: "loading" as const } },
+                { id: "image-node", type: CanvasNodeType.Image, title: "生成图片", position: { x: 400, y: 0 }, width: 320, height: 240, metadata: { taskId: "task-image", status: "loading" as const } },
+                { id: "audio-node", type: CanvasNodeType.Audio, title: "生成音频", position: { x: 800, y: 0 }, width: 320, height: 120, metadata: { taskId: "task-audio", status: "loading" as const } },
+                { id: "remote-video-node", type: CanvasNodeType.Video, title: "远端视频", position: { x: 1200, y: 0 }, width: 320, height: 180, metadata: { taskId: "task-remote", status: "loading" as const } },
+                { id: "missing-video-node", type: CanvasNodeType.Video, title: "缺失视频", position: { x: 1600, y: 0 }, width: 320, height: 180, metadata: { taskId: "task-missing", status: "loading" as const } },
+                { id: "empty-video-node", type: CanvasNodeType.Video, title: "空视频", position: { x: 2000, y: 0 }, width: 320, height: 180, metadata: { taskId: "task-empty", status: "loading" as const } },
+            ],
+        };
+        const setNodes = createCanvasStateWriter(ref, () => {});
+        useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
+        await flushCanvasStorePersistence();
+        useAssetStore.setState({
+            assets: [
+                {
+                    id: "asset-video",
+                    kind: "video" as const,
+                    title: "生成视频",
+                    coverUrl: "/cover.png",
+                    tags: [],
+                    createdAt: "2026-09-21T00:00:00Z",
+                    updatedAt: "2026-09-21T00:00:00Z",
+                    data: { url: `blob:${scope}/video`, storageKey: videoKey, width: 854, height: 480, bytes: 0, mimeType: "video/mp4" },
+                },
+                {
+                    id: "asset-image",
+                    kind: "image" as const,
+                    title: "生成图片",
+                    coverUrl: "/cover.png",
+                    tags: [],
+                    createdAt: "2026-09-21T00:00:00Z",
+                    updatedAt: "2026-09-21T00:00:00Z",
+                    data: { dataUrl: `blob:${scope}/image`, storageKey: imageKey, width: 640, height: 480, bytes: 128, mimeType: "image/png" },
+                },
+                {
+                    id: "asset-audio",
+                    kind: "audio" as const,
+                    title: "生成音频",
+                    coverUrl: "/cover.png",
+                    tags: [],
+                    createdAt: "2026-09-21T00:00:00Z",
+                    updatedAt: "2026-09-21T00:00:00Z",
+                    data: { url: `blob:${scope}/audio`, storageKey: audioKey, bytes: 256, mimeType: "audio/mpeg" },
+                },
+                {
+                    id: "asset-remote-video",
+                    kind: "video" as const,
+                    title: "远端视频",
+                    coverUrl: "/cover.png",
+                    tags: [],
+                    createdAt: "2026-09-21T00:00:00Z",
+                    updatedAt: "2026-09-21T00:00:00Z",
+                    data: { url: `blob:${scope}/remote-video`, storageKey: "resource:local-media-backfill-remote", width: 854, height: 480, bytes: 4096, mimeType: "video/mp4" },
+                },
+            ],
+        });
+        useAssetStore.setState(({ assets }) => ({
+            assets: [
+                ...assets,
+                {
+                    id: "asset-missing-video",
+                    kind: "video" as const,
+                    title: "缺失视频",
+                    coverUrl: "",
+                    tags: [],
+                    createdAt: "2026-09-21T00:00:00Z",
+                    updatedAt: "2026-09-21T00:00:00Z",
+                    data: { url: "blob:obsolete/missing", storageKey: missingVideoKey, width: 854, height: 480, bytes: 4096, mimeType: "video/mp4" },
+                },
+                {
+                    id: "asset-empty-video",
+                    kind: "video" as const,
+                    title: "空视频",
+                    coverUrl: "",
+                    tags: [],
+                    createdAt: "2026-09-21T00:00:00Z",
+                    updatedAt: "2026-09-21T00:00:00Z",
+                    data: { url: "blob:obsolete/empty", storageKey: emptyVideoKey, width: 854, height: 480, bytes: 4096, mimeType: "video/mp4" },
+                },
+            ],
+        }));
+        unregister = registerCanvasGenerationLiveProject({ scope, projectId, adapter: { read: () => ({ nodes: ref.current, connections: [], chatSessions: [], activeChatId: null }), write: (state) => setNodes(state.nodes) } });
+
+        const applyEffect = async (nodeId: string, taskId: string, type: string, mediaType: string, resultJson: string, materializedAssetId: string) => {
+            try {
+                await applyCanvasGenerationTaskNodeEffect({
+                    projectId,
+                    nodeId,
+                    nodesRef: ref,
+                    setNodes,
+                    task: { id: taskId, projectId, type, status: "succeeded", prompt: "test", attempts: 1, createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:01Z", resultJson },
+                    output: { outputIndex: 0, mediaType, materializedAssetId },
+                    effectKey: `attach:${taskId}:0`,
+                });
+                return "";
+            } catch (error) {
+                return error instanceof Error ? error.message : String(error);
+            }
+        };
+
+        // 正向：本地 key 必须走本地媒体解析；负向：远端 resource: 无可用 Blob 仍须失败。
+        const videoError = await applyEffect("video-node", "task-video", "canvas_video", "video", JSON.stringify({ mode: "video", video: { storageKey: videoKey, mimeType: "video/mp4" } }), "asset-video");
+        const imageError = await applyEffect(
+            "image-node",
+            "task-image",
+            "canvas_image",
+            "image",
+            JSON.stringify({ mode: "image", images: [{ dataUrl: `blob:${scope}/image`, storageKey: imageKey, width: 640, height: 480, bytes: 128, mimeType: "image/png" }] }),
+            "asset-image",
+        );
+        const audioError = await applyEffect("audio-node", "task-audio", "canvas_audio", "audio", JSON.stringify({ mode: "audio", audio: { dataUrl: `blob:${scope}/audio`, storageKey: audioKey, bytes: 256, mimeType: "audio/mpeg" } }), "asset-audio");
+        const remoteVideoError = await applyEffect(
+            "remote-video-node",
+            "task-remote",
+            "canvas_video",
+            "video",
+            JSON.stringify({ mode: "video", video: { storageKey: "resource:local-media-backfill-remote", bytes: 4096, mimeType: "video/mp4" } }),
+            "asset-remote-video",
+        );
+        const missingVideoError = await applyEffect(
+            "missing-video-node",
+            "task-missing",
+            "canvas_video",
+            "video",
+            JSON.stringify({ mode: "video", video: { storageKey: missingVideoKey, dataUrl: "blob:obsolete/missing", bytes: 4096, mimeType: "video/mp4" } }),
+            "asset-missing-video",
+        );
+        const emptyVideoError = await applyEffect(
+            "empty-video-node",
+            "task-empty",
+            "canvas_video",
+            "video",
+            JSON.stringify({ mode: "video", video: { storageKey: emptyVideoKey, dataUrl: "blob:obsolete/empty", bytes: 4096, mimeType: "video/mp4" } }),
+            "asset-empty-video",
+        );
+
+        useCanvasStore.getState().updateProject(projectId, { nodes: ref.current });
+        await flushCanvasStorePersistence();
+        const stored = parseCanvasStorageDocument(await localForageStorageForScope(scope).getItem(CANVAS_STORE_KEY), []);
+        const restoredNodes = stored.state.projects.find((project) => project.id === projectId)?.nodes ?? [];
+        const metadataOf = (nodes: import("../../src/types/canvas").CanvasNodeData[], id: string) => nodes.find((node) => node.id === id)?.metadata;
+        return {
+            videoError,
+            imageError,
+            audioError,
+            remoteVideoError,
+            missingVideoError,
+            emptyVideoError,
+            missingVideo: metadataOf(restoredNodes, "missing-video-node"),
+            emptyVideo: metadataOf(restoredNodes, "empty-video-node"),
+            adapterCalls,
+            liveVideo: metadataOf(ref.current, "video-node"),
+            restoredVideo: metadataOf(restoredNodes, "video-node"),
+            restoredImage: metadataOf(restoredNodes, "image-node"),
+            restoredAudio: metadataOf(restoredNodes, "audio-node"),
+            remoteVideo: metadataOf(ref.current, "remote-video-node"),
+        };
+    } finally {
+        unregister?.();
+        apiClient.defaults.adapter = originalAdapter;
+        setActiveUserScope(previousScope);
+        harness.restore();
+    }
+}
+
 self.onmessage = async (event: MessageEvent<Scenario>) => {
     try {
+        if (event.data === "canvas-local-media-backfill") {
+            self.postMessage({ ok: true, result: await runCanvasLocalMediaBackfill() });
+            return;
+        }
         if (event.data === "canvas-video-reentry") {
             self.postMessage({ ok: true, result: await runCanvasBatchCommitRace(false, false, true, true) });
             return;

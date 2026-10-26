@@ -1,3 +1,5 @@
+import { assertPersonalOpenAIConfig } from "@/lib/personal-channel";
+import { submitBrowserGeneration } from "@/services/browser-generation-runner";
 import { requestAudioGeneration } from "@/services/api/audio";
 import { requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { createVideoGenerationTask } from "@/services/api/video";
@@ -5,6 +7,7 @@ import { defaultConfig, encodeChannelModel, type ModelCapability, type ModelChan
 import type { ModelProtocol } from "@/lib/model-protocols";
 
 export async function testChannelModelConnection(channel: ModelChannel, model: string, capability: ModelCapability, protocol: ModelProtocol) {
+    if (channel.scope !== "system") assertPersonalOpenAIConfig({ apiFormat: channel.apiFormat, interfaceType: protocol });
     if (!channel.baseUrl.trim()) throw new Error("请先填写 Base URL");
     if (!channel.apiKey.trim()) throw new Error("请先填写 API Key");
     const selectedModel = encodeChannelModel(channel.id, model);
@@ -61,7 +64,9 @@ export async function testChannelModelConnection(channel: ModelChannel, model: s
             await requestAudioGeneration(config, "Model test.");
             return "音频生成正常";
         case "video": {
-            const task = await createVideoGenerationTask(config, "A static gray circle on a white background.");
+            const task = channel.scope !== "system"
+                ? await submitBrowserGeneration({ config, mode: "video", prompt: "A static gray circle on a white background." })
+                : await createVideoGenerationTask(config, "A static gray circle on a white background.");
             return `视频任务已创建（${task.id}）`;
         }
     }

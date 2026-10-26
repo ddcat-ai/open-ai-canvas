@@ -18,6 +18,7 @@ function configForAgnes(model = "agnes-video-2.5", input: Partial<AiConfig> = {}
     const capabilityConfig = defaultModelCapabilityConfig("agnes-video", model);
     const channel = createModelChannel({
         id: "agnes",
+        scope: "system",
         name: "Agnes",
         baseUrl: "https://apihub.agnes-ai.com/v1",
         apiKey: "synthetic-test-key",

@@ -18,6 +18,11 @@ export function isTaskFailed(task: GenerationTask) {
     return task.status === "failed" || task.status === "cancelled";
 }
 
+export function canRetryTask(task: GenerationTask) {
+    return isTaskFailed(task) && (task.executionSource !== "browser" || Boolean(task.canRecoverMedia))
+        && task.errorCode !== CONTENT_MODERATION_ERROR_CODE && !isContentModerationError(task.error);
+}
+
 export function taskAttentionReason(task: GenerationTask) {
     if (task.status === "cancelled") return providerCancelStatusLabel(task);
     if (task.mediaStage) return mediaDeliverySummary(task.status, task.mediaStage);

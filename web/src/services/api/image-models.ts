@@ -16,7 +16,7 @@ const defaultGeminiConfig: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat" | "
 type GeminiModelPayload = { models?: Array<{ name?: string }> };
 type OpenAIModelPayload = { data?: Array<{ id?: string }>; error?: { message?: string } };
 
-export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat">) {
+export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat" | "channelScope" | "headers" | "interfaceType">) {
     try {
         if (config.apiFormat === "gemini") {
             const requestConfig = { ...defaultGeminiConfig, ...config };
@@ -40,8 +40,8 @@ export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKe
 export type ChannelModelFetchResult = { models: string[]; catalog: ChannelModelCatalogItem[] };
 
 export async function fetchChannelModels(channel: ModelChannel, viaBackend = false): Promise<ChannelModelFetchResult> {
-    if (!viaBackend) {
-        const models = await fetchImageModels({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, apiFormat: channel.apiFormat });
+    if (!viaBackend || channel.scope !== "system") {
+        const models = await fetchImageModels({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, apiFormat: channel.apiFormat, headers: channel.headers, interfaceType: channel.interfaceType, channelScope: channel.scope === "system" ? "system" : "user" });
         return { models, catalog: models.map((id) => ({ id })) };
     }
     try {

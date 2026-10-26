@@ -10,7 +10,7 @@ import type { VideoProviderDeps } from "./video-provider-deps";
 
 export async function createOpenAIVideoTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], options?: RequestOptions): Promise<VideoGenerationTask> {
     const modelName = modelOptionName(model);
-    if (config.interfaceType === "xai-video" || modelName.toLowerCase().includes("grok")) {
+    if (config.channelScope !== "user" && (config.interfaceType === "xai-video" || modelName.toLowerCase().includes("grok"))) {
         const images = await Promise.all(references.slice(0, 7).map((image) => imageToDataUrl(image)));
         const seconds = normalizeVideoSeconds(config.videoSeconds);
         const referenceMode = options?.videoEditOperation === "reference_to_video";
@@ -48,7 +48,7 @@ export async function createOpenAIVideoTask(deps: VideoProviderDeps, config: Res
     if (resolution) body.append("resolution_name", resolution);
     body.append("preset", "normal");
     const files = await Promise.all(references.slice(0, 7).map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
-    files.forEach((file) => body.append("input_reference[]", file));
+    files.forEach((file) => body.append(config.channelScope === "user" ? "input_reference" : "input_reference[]", file));
     try {
         const created = deps.response.unwrapVideoResponse(await deps.transport.postForm<ApiVideoResponse>(deps.transport.apiUrl("/videos"), body, options));
         if (!created.id) throw new Error("视频接口没有返回任务 ID");

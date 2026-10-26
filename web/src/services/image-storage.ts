@@ -5,6 +5,8 @@ import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { getResourceAccess, importResourceFromUrl, isResourceUrl, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
 import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { readBrowserGenerationMediaStorageKeys } from "@/services/browser-generation-store";
+import { withGenerationArtifactCommitLock } from "@/services/generation-asset-repository";
 
 export type UploadedImage = {
     url: string;
@@ -131,8 +133,14 @@ export async function deleteStoredImages(keys: Iterable<string>) {
     );
 }
 
-export async function cleanupUnusedImages(usedData: unknown, scope = getActiveUserScope()) {
+export function cleanupUnusedImages(usedData: unknown, scope = getActiveUserScope()) {
+    return withGenerationArtifactCommitLock(scope, () => cleanupUnusedImagesLocked(usedData, scope), { requireCrossRealmLock: true });
+}
+
+/** Caller must hold the artifact commit lock; it is not reentrant. */
+export async function cleanupUnusedImagesLocked(usedData: unknown, scope: string) {
     const usedKeys = collectImageStorageKeys(usedData);
+    for (const key of await readBrowserGenerationMediaStorageKeys(scope)) usedKeys.add(key);
     const currentPrefixes = [`image:${scope}:`, `generation-image:${scope}:`];
     const unused: string[] = [];
     await store.iterate((_value, key) => {

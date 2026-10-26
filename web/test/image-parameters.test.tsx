@@ -24,6 +24,7 @@ function fixture(fields = parameters) {
     const spec = capabilitySpecFromChannelModel({ capability: "image", capabilityConfig: { version: 1, image } } as ChannelModel)!;
     const channel = createModelChannel({
         id: "test",
+        scope: "system",
         models: ["opaque-model"],
         modelCosts: [{ model: "opaque-model", capability: "image", protocol: "opaque-plugin", logicalModelId: "logical", logicalCapabilitySpec: spec, capabilityConfig: { version: 1, image }, billingMode: "fixed_request", unitPriceMicrocredits: 1 }],
     });

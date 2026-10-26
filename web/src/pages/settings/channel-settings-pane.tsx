@@ -1,3 +1,4 @@
+import { assertPersonalOpenAIConfig } from "@/lib/personal-channel";
 import { App, Button, Form, Input, Popconfirm, Segmented, Tooltip } from "antd";
 import { Pencil, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -19,7 +20,7 @@ import {
 import { ChannelModelSettings } from "./channel-video-pricing";
 import { Select } from "@/components/ui/base/select";
 
-type UserChannelConnection = "openai" | "gemini";
+type UserChannelConnection = "openai";
 type ChannelSettingsPaneProps = {
     onOpenModels: () => void;
     onOpenRunningHub?: () => void;
@@ -230,7 +231,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                                         subtitle={channel.name}
                                         onClose={closeChannelEditor}
                                         footer={<div className="model-editor-footer">
-                                            <span className="text-xs text-foreground/50">更改实时保存到云端渠道配置</span>
+                                            <span className="text-xs text-foreground/50">更改仅保存到当前浏览器；个人请求由浏览器直连</span>
                                             <div className="model-editor-footer-actions">
                                                 <Button loading={loadingChannelIds.includes(channel.id)} onClick={() => void refreshChannelModels(channel)}>拉取模型</Button>
                                                 <Button type="primary" onClick={closeChannelEditor}>完成</Button>
@@ -245,8 +246,8 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                                                 </div>
                                                 <div className="model-editor-connection-fields grid gap-3 sm:grid-cols-2">
                                                     <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-name`} value={channel.name} placeholder="例如：我的 NewAPI" onChange={(event) => updateChannel(channel.id, { name: event.target.value })} onBlur={(event) => updateChannel(channel.id, { name: event.target.value.trim() || "未命名渠道" })} /></Form.Item>
-                                                    <Form.Item label="目录连接类型" className="mb-0 sm:col-span-1" extra="仅影响模型目录拉取。"><Segmented<UserChannelConnection> block value={channelConnectionMode(channel)} options={[{ label: "OpenAI", value: "openai" }, { label: "Gemini", value: "gemini" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
-                                                    <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-base-url`} inputMode="url" value={channel.baseUrl} placeholder="填写云端渠道 Base URL" onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/u, "") })} /></Form.Item>
+                                                    <Form.Item label="调用协议" className="mb-0 sm:col-span-1" extra={channel.apiFormat !== "openai" ? "此旧渠道暂不支持直连，请明确改为 OpenAI 兼容后使用。" : "浏览器直连；渠道需允许当前网站跨域访问。"}><Segmented<UserChannelConnection> block value={channel.apiFormat === "openai" ? "openai" : undefined} options={[{ label: "OpenAI 兼容", value: "openai" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
+                                                    <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-base-url`} inputMode="url" value={channel.baseUrl} placeholder="服务地址，或 http://127.0.0.1:8124/v1" onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/u, "") })} /></Form.Item>
                                                     <Form.Item label="API Key" htmlFor={`channel-${channel.id}-api-key`} className="mb-0 sm:col-span-1"><Input.Password id={`channel-${channel.id}-api-key`} autoComplete="new-password" value={channel.apiKey} placeholder={channel.apiFormat === "gemini" ? "填写 Gemini API Key" : "填写当前渠道 API Key"} onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { apiKey: event.target.value.trim() })} /></Form.Item>
                                                     <Form.Item label="Secret Key（可选）" htmlFor={`channel-${channel.id}-secret-key`} className="mb-0 sm:col-span-1" extra="即梦等 AK/SK 协议需要；其他协议留空。"><Input.Password id={`channel-${channel.id}-secret-key`} autoComplete="new-password" value={channel.secretKey || ""} placeholder="填写 Secret Key" onChange={(event) => updateChannel(channel.id, { secretKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { secretKey: event.target.value.trim() })} /></Form.Item>
                                                     <div className="sm:col-span-2"><ChannelHeadersEditor value={channel.headers} onChange={(headers) => updateChannel(channel.id, { headers })} /></div>
@@ -289,6 +290,7 @@ function WorkflowChannelEntry({ icon, title, description, status, ready, onOpen 
 }
 
 export function channelValidationError(channel: ModelChannel) {
+    if (channel.scope !== "system") { try { assertPersonalOpenAIConfig(channel); } catch (error) { return error instanceof Error ? error.message : "个人渠道协议不支持"; } }
     return channelConnectionError(channel) || validateChannelHeaders(channel.headers) || (!channel.models.length ? "请添加至少一个模型" : "");
 }
 
@@ -339,15 +341,12 @@ function channelModelFetchErrorMessage(error: unknown) {
     return `${detail}；也可以直接在模型列表中手动输入模型名`;
 }
 
-function channelConnectionMode(channel: ModelChannel): UserChannelConnection {
-    return channel.apiFormat === "gemini" ? "gemini" : "openai";
-}
-
 function channelConnectionError(channel: ModelChannel) {
     const baseUrl = channel.baseUrl.trim();
     if (!baseUrl) return "请填写 Base URL";
     try {
         const parsed = new URL(baseUrl);
+        if (parsed.username || parsed.password) return "Base URL 不支持用户名或密码";
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "Base URL 只支持 HTTP 或 HTTPS";
     } catch {
         return "Base URL 格式不正确";
@@ -362,7 +361,7 @@ function channelConnectionSignature(channel: ModelChannel) {
 }
 
 function channelProtocolLabel(channel: ModelChannel) {
-    return channelConnectionMode(channel) === "gemini" ? "Gemini 原生" : "OpenAI 兼容";
+    return channel.apiFormat === "gemini" ? "Gemini 原生（不支持直连）" : "OpenAI 兼容";
 }
 
 function isKnownDefaultBaseUrl(value: string) {

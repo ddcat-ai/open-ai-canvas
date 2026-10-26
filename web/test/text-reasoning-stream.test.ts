@@ -16,6 +16,7 @@ afterEach(() => {
 function reasoningConfig(protocol: ModelProtocol | undefined, apiFormat: "openai" | "gemini" = "openai"): AiConfig {
     const channel = createModelChannel({
         id: "reasoning",
+        scope: apiFormat === "gemini" ? "system" : "user",
         name: "Reasoning",
         baseUrl: "https://reasoning.example/v1",
         apiKey: "synthetic-test-key",

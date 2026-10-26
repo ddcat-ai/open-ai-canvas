@@ -9,7 +9,8 @@ import { storeGeneratedAudio } from "@/services/api/audio";
 import { storeGeneratedVideo } from "@/services/api/video";
 import { parseBackendGenerationResult } from "@/services/api/generation-task";
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
-import { resolveMediaUrl, resolveVideoMediaUrl, type UploadedFile } from "@/services/file-storage";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
+import { getMediaBlob, resolveMediaUrl, resolveVideoMediaUrl, type UploadedFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getCachedResourceBlob } from "@/services/resource-blob-cache";
 import { CanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
@@ -235,7 +236,12 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
 
     if (mode === "video") {
         if (!result.video?.storageKey && !result.video?.dataUrl) throw new Error("后端任务没有返回视频");
-        const video = result.video.storageKey ? await cacheGeneratedRemoteVideo({ ...result.video, storageKey: result.video.storageKey }) : await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
+        const storageKey = result.video.storageKey;
+        const video = storageKey
+            ? resourceIdFromStorageKey(storageKey)
+                ? await cacheGeneratedRemoteVideo({ ...result.video, storageKey })
+                : await resolveGeneratedLocalVideo({ ...result.video, storageKey })
+            : await storeGeneratedVideo({ url: result.video.dataUrl, mimeType: result.video.mimeType || "video/mp4" });
         const videoSize = fitNodeSize(video.width || node.width || VIDEO_NODE_MAX_SIZE.width, video.height || node.height || VIDEO_NODE_MAX_SIZE.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
         const geometry = node.metadata?.locked
             ? {}
@@ -288,6 +294,28 @@ type GeneratedVideoResult = {
     bytes?: number;
     mimeType?: string;
 };
+
+/**
+ * 本机生成的视频以本地 Blob 为唯一可播放来源：保留本地 storageKey，节点才能继续
+ * 绑定 materialize 出的稳定 assetId。远端 resource: 引用只属于发送给服务端的同步
+ * payload，由 user-data-sync 改写，不能在节点回填时改成另一种 key，也不能把本地 key
+ * 送进只认 resource: 的远程缓存校验（详见 project-asset-sync 的同一分支约定）。
+ */
+async function resolveGeneratedLocalVideo(result: GeneratedVideoResult & { storageKey: string }): Promise<UploadedFile> {
+    const blob = await getMediaBlob(result.storageKey);
+    if (!blob?.size) throw new Error("生成视频文件尚未可靠保存，请恢复文件下载，不要重新生成");
+    const url = await resolveVideoMediaUrl(result.storageKey, "");
+    if (!url) throw new Error("生成视频资源地址为空，未标记为成功");
+    return {
+        url,
+        storageKey: result.storageKey,
+        width: result.width,
+        height: result.height,
+        durationMs: result.durationMs,
+        bytes: result.bytes || blob.size,
+        mimeType: result.mimeType || blob.type || "video/mp4",
+    };
+}
 
 /**
  * 生成任务的远程视频只有在浏览器已拿到可复用的 Blob 后才进入成功态。

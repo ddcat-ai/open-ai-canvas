@@ -2,6 +2,7 @@ import { canvasNodeToAsset, declaredCanvasNodeAssetCategory, findCanvasNodeAsset
 import { canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { readImageMeta } from "@/lib/image-utils";
 import { parseBackendGenerationResult, type BackendGenerationResult } from "@/services/api/generation-task";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { ApiError } from "@/services/api/request";
 import { linkProjectAsset, moveProjectAsset, updateProjectAssetCategory } from "@/services/api/projects";
 import type { GenerationTask, GenerationTaskOutput } from "@/services/api/task-center";
@@ -515,9 +516,11 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
     if (input.output.mediaType === "video") {
         const video = result.video;
         if (!video) throw new Error("生成任务缺少视频输出");
-        const stored = video.storageKey
+        const stored = video.storageKey && resourceIdFromStorageKey(video.storageKey)
             ? await cachedRemoteGenerationVideo(video, input.signal)
-            : await storedGenerationMedia(
+            : video.storageKey
+              ? { url: await resolveMediaUrl(video.storageKey, video.dataUrl), storageKey: video.storageKey, width: video.width, height: video.height, durationMs: video.durationMs, bytes: video.bytes || (await getMediaBlob(video.storageKey))?.size || 0, mimeType: video.mimeType || "video/mp4" }
+              : await storedGenerationMedia(
                   video.dataUrl,
                   input.effectKey,
                   "video",

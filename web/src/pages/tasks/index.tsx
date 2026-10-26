@@ -9,12 +9,14 @@ import { useNavigate, useSearchParams } from "react-router";
 import { MediaPreview } from "@/components/media-preview";
 import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
+import { generationErrorMessage } from "@/lib/generation-error";
 import { formatTaskKind, generationTaskStatusLabel, mediaDeliverySummary, operationOptions, statusLabel } from "@/lib/generation-task-display";
 import { buildVideoOperationPrompt } from "@/lib/prompts";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
 import { createGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, recoverGenerationTaskMedia, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import { resolveImageUrl } from "@/services/image-storage";
+import { resolveMediaUrl } from "@/services/file-storage";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -23,7 +25,7 @@ import { listProjects, type ProjectSummary } from "@/services/api/projects";
 import { TaskGridCard } from "./task-grid-card";
 import { TaskGroupHeader, type TaskGroup } from "./task-group-header";
 import { TaskListRow } from "./task-list-row";
-import { formatModelName, getTaskCanvasContext, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
+import { formatModelName, getTaskCanvasContext, isTaskFailed, canRetryTask, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
 import { TaskStatusFilterBar, type TaskStatusFilter } from "./task-status-filter";
 import { Select } from "@/components/ui/base/select";
 
@@ -151,7 +153,7 @@ export default function TasksPage() {
     };
 
     const retryGroupTasks = async (key: string, items: GenerationTask[]) => {
-        const retryable = items.filter((task) => isTaskFailed(task) && task.errorCode !== CONTENT_MODERATION_ERROR_CODE && !isContentModerationError(task.error));
+        const retryable = items.filter(canRetryTask);
         if (!retryable.length) return;
         setRetryingGroup(key);
         try {
@@ -303,15 +305,17 @@ export default function TasksPage() {
         setActingId(id);
         try {
             const currentTask = await queryGenerationTask(id);
-            const savingMedia = Boolean(currentTask.mediaStage);
+            const savingMedia = Boolean(currentTask.canRecoverMedia || currentTask.mediaStage);
             const next = currentTask.status === "queued" || currentTask.status === "running" || currentTask.status === "succeeded"
                 ? currentTask
                 : savingMedia ? await recoverGenerationTaskMedia(id) : await retryGenerationTask(id);
             setTasks((items) => items.map((item) => (item.id === id ? next : item)));
             setDetailTask((current) => (current?.id === id ? { ...current, ...next } : current));
-            setStatusFilter("active");
+            setStatusFilter(next.status === "succeeded" ? "succeeded" : isTaskFailed(next) ? "failed" : "active");
             setPage(1);
-            message.success(next.status === "succeeded" ? "任务已完成" : savingMedia ? "正在恢复作品保存，不会重新生成" : "任务已在队列中");
+            if (next.status === "succeeded") { await syncGenerationTaskToCanvasStore(next); message.success("任务已完成"); }
+            else if (isTaskFailed(next)) message.warning(next.error || "原结果暂未恢复，请稍后继续查询");
+            else message.success(savingMedia ? "正在恢复作品保存，不会重新生成" : "任务已在队列中");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "操作失败");
         } finally {
@@ -334,7 +338,8 @@ export default function TasksPage() {
             await syncGenerationTaskToCanvasStore(result.task);
             window.dispatchEvent(new CustomEvent("wallet:updated"));
             void loadTasks(false);
-            if (result.billingSettled) message.success("已获取上游视频，任务已恢复并完成结算");
+            if (task.executionSource === "browser") message.success("已恢复原视频结果");
+            else if (result.billingSettled) message.success("已获取上游视频，任务已恢复并完成结算");
             else message.warning("已获取上游视频，任务已恢复，计费状态待管理员核对");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "查询上游任务失败");
@@ -502,7 +507,7 @@ export default function TasksPage() {
                         <div className="flex flex-wrap justify-end gap-2">
                             {detailTask.canRecoverMedia ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id)}>重试保存</Button> : null}
                             {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button> : null}
-                            {isTaskFailed(detailTask) ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>导出诊断包</Button> : null}
+                            {isTaskFailed(detailTask) && detailTask.executionSource !== "browser" ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>导出诊断包</Button> : null}
                         </div>
                         {detailTask.error ? <pre className="task-detail-error max-h-28 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{generationErrorMessage(detailTask.error)}</pre> : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
@@ -561,13 +566,32 @@ function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[
 }
 
 function TaskResultMedia({ value, taskType }: { value?: string; taskType: string }) {
-    const urls = resultMediaUrls(value);
+    const [urls, setUrls] = useState<string[]>(() => resultMediaUrls(value));
+    useEffect(() => {
+        let stopped = false;
+        setUrls(resultMediaUrls(value));
+        const keys: string[] = [];
+        const visit = (item: unknown) => {
+            if (Array.isArray(item)) item.forEach(visit);
+            else if (item && typeof item === "object") {
+                const record = item as Record<string, unknown>;
+                if (typeof record.storageKey === "string") keys.push(record.storageKey);
+                Object.values(record).forEach(visit);
+            }
+        };
+        try { visit(JSON.parse(value || "null")); } catch { /* Plain text has no local media references. */ }
+        void Promise.all(keys.slice(0, 12).map((key) => key.startsWith("image:") ? resolveImageUrl(key) : resolveMediaUrl(key)))
+            .then((localUrls) => { if (!stopped) setUrls([...new Set([...resultMediaUrls(value), ...localUrls.filter(Boolean)])]); })
+            .catch((error) => { if (!stopped) console.warn("读取本机生成文件失败", error); });
+        return () => { stopped = true; };
+    }, [value]);
     if (!urls.length) return null;
     return (
         <div>
             <Typography.Text strong>生成结果</Typography.Text>
             <div className="mt-2 grid max-h-[360px] grid-cols-2 gap-2 overflow-auto rounded-lg bg-stone-950 p-2 md:grid-cols-3">
                 {urls.map((url, index) => {
+                    if (taskType.includes("audio")) return <audio key={url} src={url} controls preload="metadata" className="w-full" />;
                     const isVideo = isVideoResult(url, taskType);
                     return (
                         <MediaPreview

@@ -99,7 +99,7 @@ cd web && bun run dev
 ### 模型渠道和流式请求
 
 - 自定义渠道 URL/Header 仍由 `custom-channel-relay.ts` 的 `channelRequest` 解析；实际发出走 `channel-transport.ts` 的 `createChannelTransport`。image / video / audio 只组协议 payload，不再各自 `axios + channelRequest`。
-- 自定义渠道必须由登录态后端 `/api/ai/custom` 中转；重建 headers 时清除 `x-goog-api-key` 和旧的 `X-Canvas-Upstream-Headers`，不得把第三方密钥放入浏览器 URL。
+- 按选中渠道 scope 分流：系统渠道保留登录态后端 `/api/ai/custom` 与任务流程；个人渠道仅 OpenAI 兼容协议由浏览器直连，不支持的协议明确拒绝。个人请求与密钥不经影策后端，不携带影策 Cookie 或转发头，不将第三方密钥放入 URL；系统转发仍清除 `x-goog-api-key` 和旧的 `X-Canvas-Upstream-Headers`。
 - Provider 特有 payload、响应解包和状态机留在对应 `image.ts`、`video.ts`、`audio.ts`；不要塞进通用 `request.ts`。
 - 原始 `fetch` 仅用于媒体 blob/data URL、资源、Worker 或 SSE；必须检查 `response.ok`，传递正确的 `credentials` 和 `signal`。
 - 文本任务 SSE 是 `GET /api/tasks/:id/text-events`，游标是递增事件 `id`；断线使用 `Last-Event-ID` 或 `?after=`，不能把任务 ID 当游标。
@@ -118,7 +118,7 @@ cd web && bun run dev
 - Gin 接口统一返回 `{ code, data, msg, reason }`；失败时 HTTP status 和业务 `code` 都应表达真实失败，不把所有错误包装成 200。机器可读原因放在 `reason`，见 `docs/content/docs/backend/http-api.mdx`。
 - 所有对象读取、更新、删除都在 service 校验当前用户和资源归属；管理员权限在 service 校验，不依赖前端隐藏按钮。
 - 默认拒绝本机、私网和链路本地上游。可信开发主机只能通过 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS` 精确放行；不要设置“允许全部私网”来绕过 SSRF 防护。
-- 用户 API Key 保存在浏览器本地，任务创建时可能提交给自部署后端；只在可信部署和 HTTPS 下使用真实密钥。日志、错误上报、URL、localStorage 和持久任务正文不得写入敏感 URL、Cookie 或 API Key。
+- 个人渠道 API Key 仅用于浏览器直连上游，不提交给影策后端或配置同步；只在可信部署和 HTTPS 下使用真实密钥。日志、错误上报、URL 和持久任务正文不得写入 Cookie 或 API Key；异步续查只保存渠道身份与上游句柄，凭据从当前用户配置读取。
 - 生产必须配置明确的 `CANVAS_CORS_ORIGINS`，保持 HTTPS，限制数据库、备份、数据目录和 `.settings-key` 权限；默认关闭公开注册。
 - 数据库字段或表变化时同步更新 `docs/content/docs/backend/backend-database.mdx`，不能只改 GORM model。
 

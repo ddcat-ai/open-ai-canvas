@@ -6,6 +6,8 @@ import { captureVideoPoster, detectVideoAudioTrackFromBlob } from "@/lib/video-p
 import { getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile, type ResourceAccessVariant } from "@/services/api/resources";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
 import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { readBrowserGenerationMediaStorageKeys } from "@/services/browser-generation-store";
+import { withGenerationArtifactCommitLock } from "@/services/generation-asset-repository";
 
 export type UploadedFile = {
     url: string;
@@ -167,15 +169,21 @@ export async function deleteStoredMedia(keys: Iterable<string>) {
     );
 }
 
-export async function cleanupUnusedMedia(usedData: unknown, scope = getActiveUserScope()) {
+export function cleanupUnusedMedia(usedData: unknown, scope = getActiveUserScope()) {
+    return withGenerationArtifactCommitLock(scope, () => cleanupUnusedMediaLocked(usedData, scope), { requireCrossRealmLock: true });
+}
+
+/** Caller must hold the artifact commit lock; it is not reentrant. */
+export async function cleanupUnusedMediaLocked(usedData: unknown, scope: string) {
     const usedKeys = collectMediaStorageKeys(usedData);
+    for (const key of await readBrowserGenerationMediaStorageKeys(scope)) usedKeys.add(key);
     const currentScope = scope;
     const unused: string[] = [];
     await store.iterate((_value, key) => {
         const parts = key.split(":");
         if (parts.length >= 3 && parts[1] === currentScope && !usedKeys.has(key)) unused.push(key);
     });
-    await Promise.all(unused.map((key) => store.removeItem(key)));
+    await deleteStoredMedia(unused);
 }
 
 export function collectMediaStorageKeys(value: unknown, keys = new Set<string>()) {

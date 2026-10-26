@@ -1,3 +1,4 @@
+import { isPersonalGeneration } from "@/services/browser-generation-runner";
 import { runBackendCanvasGenerationTask } from "@/lib/canvas/canvas-project-generation";
 import { PromptTemplateOperation, promptTemplateTaskPlaceholder } from "@/lib/prompts";
 import { storyboardRowsFromTask, withStoryboardOutputContract } from "@/lib/canvas/canvas-project-domain";
@@ -55,6 +56,7 @@ export function chapterStoryboardFromGenerationTask(task: GenerationTask) {
 }
 
 export async function extractChapterAssets(input: ChapterAnalysisInput, options?: ChapterTaskOptions): Promise<ChapterAssetBreakdown> {
+    if (isPersonalGeneration({ config: { ...input.config, model: input.config.textModel || input.config.model } })) throw new Error("章节资产提取依赖服务端模板，请选择系统渠道");
     const result = await runProjectTextTask(input, "chapter_character_breakdown", {
         项目名称: input.projectName,
         章节名称: input.chapterTitle,
@@ -78,6 +80,7 @@ type ChapterStoryboardGenerationInput = {
 };
 
 export async function generateChapterStoryboard(input: ChapterStoryboardGenerationInput, options?: ChapterTaskOptions) {
+    if (isPersonalGeneration({ config: { ...input.config, model: input.config.textModel || input.config.model } })) throw new Error("章节分镜依赖服务端回填，请选择系统渠道");
     const model = input.config.textModel || input.config.model;
     const config = { ...input.config, model };
     const skillExecution = await skillRuntime.prepare({

@@ -302,7 +302,7 @@ async function uploadFileInChunks(file: Blob, name: string, kind: "image" | "vid
 async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video" | "audio" | "file", meta: ResourceUploadMeta | undefined, onProgress?: (uploadedBytes: number, totalBytes: number) => void) {
     const session = await http.post<{ uploadId: string; chunkSize: number; chunkCount: number }>(
         "/resources/uploads",
-        { fileName: name, kind, size: file.size, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs },
+        { fileName: name, kind, size: file.size, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs, idempotencyKey: meta?.idempotencyKey?.trim() || undefined },
         uploadRequestConfig(meta?.idempotencyKey),
     );
     for (let index = 0; index < session.chunkCount; index++) {
@@ -582,7 +582,12 @@ export async function getResourceBlob(storageKey: string) {
     // session-bound, so a Blob read must include it even when the URL is
     // relative to the platform origin.
     const credentials = access.delivery === "platform-local" || access.delivery === "platform-proxy" ? "include" : "omit";
-    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", signal: AbortSignal.timeout(60_000) });
+    // Display images may already have populated Chrome's HTTP cache through a
+    // non-CORS <img> request. Reusing that opaque cache entry for fetch() can
+    // fail before a response is exposed, even though OSS serves valid CORS
+    // headers. A byte consumer must revalidate so it receives a CORS-readable
+    // response rather than inheriting the display cache entry.
+    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", cache: "no-cache", signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new Error(`资源读取失败（${response.status}）`);
     return response.blob();
 }

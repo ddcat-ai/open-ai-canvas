@@ -297,7 +297,7 @@ export async function requestToolResponse(config: AiConfig, messages: ResponseIn
             try {
                 return await requestStreamingChatCompletion(requestConfig, chatPayload, onDelta, options);
             } catch (error) {
-                if (!isToolChoiceCompatibilityError(error)) throw error;
+                if (requestConfig.channelScope === "user" || !isToolChoiceCompatibilityError(error)) throw error;
 
                 // 部分 OpenAI 兼容上游仅支持 auto，思考模式则可能要求完全省略该字段。
                 if (toolChoice !== "auto") {

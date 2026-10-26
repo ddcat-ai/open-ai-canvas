@@ -1,3 +1,6 @@
+import { submitBrowserGeneration, isPersonalGeneration } from "@/services/browser-generation-runner";
+import { requestToolResponse } from "@/services/api/image";
+import { assertPersonalOpenAIConfig } from "@/lib/personal-channel";
 import { createClientUUID } from "@/lib/client-id";
 import { normalizeAudioFormatForConfig, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
 import { imageParameterRequest } from "@/lib/image-parameters";
@@ -32,7 +35,7 @@ export type BackendGenerationResult = {
     reasoning?: string;
 };
 
-type BackendGenerationTaskOptions = {
+export type BackendGenerationTaskOptions = {
     projectId?: string;
     mode: BackendGenerationMode;
     prompt: string;
@@ -98,6 +101,12 @@ export async function runBackendGenerationTask(
     dependencies: GenerationTaskDependencies = defaultDependencies,
 ) {
     throwIfAborted(signal);
+    const browserOptions = { projectId, mode, prompt, config, referenceImages, referenceVideos, referenceAudios, textHistory, mask, signal, metadata, onTaskUpdate, onTextDelta, streamText, enableThinking, clientOperationId, retryOf, attemptGroupId };
+    if (isPersonalGeneration(browserOptions)) {
+        const task = await submitBrowserGeneration(browserOptions);
+        onTaskUpdate?.(task);
+        return parseBackendGenerationResult(await waitForGenerationTask(task.id, { signal, initialTask: task, onTaskUpdate }));
+    }
     assertClientPromptLimit(mode, prompt, config, metadata);
     assertBackendRuntimeConfigured(config, mode);
     const prepared = await prepareGenerationReferences({ config, mode, referenceImages, referenceVideos, referenceAudios, mask });
@@ -112,6 +121,7 @@ export async function submitBackendGenerationTask(
     dependencies: GenerationTaskDependencies = defaultDependencies,
 ): Promise<GenerationTask> {
     throwIfAborted(options.signal);
+    if (isPersonalGeneration(options)) return submitBrowserGeneration(options);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     assertBackendRuntimeConfigured(options.config, options.mode);
     const prepared = await prepareGenerationReferences(options);
@@ -134,6 +144,7 @@ type BackendToolGenerationOptions = {
 // 报价和执行复用完全相同的任务协议，准备阶段不提交模型任务。
 export function prepareBackendToolGenerationTask(options: BackendToolGenerationOptions): CreateTaskInput {
     throwIfAborted(options.signal);
+    if (resolveModelRequestConfig(options.config, options.config.model).channelScope === "user") throw new Error("个人渠道无法创建服务端报价任务，请使用浏览器直接执行入口");
     const logicalModelId = logicalModelIDForConfig(options.config);
     const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
     const capability = modelCapabilityConfigFor(options.config, requestConfig.model).text;
@@ -172,6 +183,11 @@ export function prepareBackendToolGenerationTask(options: BackendToolGenerationO
 }
 
 export async function runBackendToolGenerationTask(options: BackendToolGenerationOptions): Promise<ToolResponseResult> {
+    const directConfig = resolveModelRequestConfig(options.config, options.config.model);
+    if (directConfig.channelScope === "user") {
+        assertPersonalOpenAIConfig(directConfig);
+        return requestToolResponse(directConfig, options.messages, options.tools, options.toolChoice, options.onDelta, { signal: options.signal });
+    }
     const task = await createGenerationTask(prepareBackendToolGenerationTask(options));
     options.onTaskCreated?.(task);
     const completed = await waitForGenerationTask(task.id, { signal: options.signal, initialTask: task, onTextDelta: options.onDelta });
@@ -186,6 +202,7 @@ export async function runBackendToolGenerationTask(options: BackendToolGeneratio
 export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }, dependencies: GenerationTaskDependencies = defaultDependencies) {
     const count = Math.max(1, Math.min(15, Math.floor(Number(options.count)) || 1));
     throwIfAborted(options.signal);
+    if (isPersonalGeneration(options)) return Promise.allSettled(Array.from({ length: count }, (_, batchIndex) => runBackendGenerationTask({ ...options, clientOperationId: `${options.clientOperationId || createClientUUID()}:${batchIndex}`, metadata: { ...options.metadata, batchIndex, batchCount: count } })));
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
     const prepared = await prepareGenerationReferences(options);
@@ -278,6 +295,7 @@ async function createBackendGenerationTask(options: BackendGenerationTaskOptions
 
 export async function prepareBackendGenerationTask(options: BackendGenerationTaskOptions): Promise<CreateTaskInput> {
     throwIfAborted(options.signal);
+    if (isPersonalGeneration(options)) throw new Error("个人渠道必须由浏览器执行，不能创建服务端生成请求");
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     assertBackendRuntimeConfigured(options.config, options.mode);
     const prepared = await prepareGenerationReferences(options);
@@ -409,6 +427,7 @@ function backendMediaReference<T extends ReferenceVideo | ReferenceAudio>(media:
 export function backendProviderConfig(config: AiConfig, mode: BackendGenerationMode = "image") {
     const requestConfig = resolveModelRequestConfig(config, config.model);
     const workflow = resolveGenerationWorkflowExecution(config, mode);
+    if (!workflow && requestConfig.channelScope === "user") throw new Error("个人渠道密钥不得写入服务端任务");
     if (workflow) return workflowProviderConfig(config, requestConfig, workflow);
     const generationOptions = {
         ...(mode === "image" ? { imageParameters: imageParameterRequest(modelCapabilityConfigFor(config, config.model).image!, config, true) } : {}),

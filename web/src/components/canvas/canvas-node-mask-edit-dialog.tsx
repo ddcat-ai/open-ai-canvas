@@ -15,14 +15,14 @@ export type CanvasImageMaskEditPayload = {
     prompt: string;
     generationConfig?: Partial<Pick<AiConfig, "model" | "imageModel" | "size" | "quality" | "count" | "transparentBackground">>;
 };
-type MaskEditorProps = { dataUrl: string; open: boolean; config: AiConfig; onClose: () => void; onConfirm: (payload: CanvasImageMaskEditPayload) => void };
+type MaskEditorProps = { dataUrl: string; storageKey?: string; open: boolean; config: AiConfig; onClose: () => void; onConfirm: (payload: CanvasImageMaskEditPayload) => void };
 
 export function CanvasNodeMaskEditDialog(props: MaskEditorProps) {
     return props.open && props.dataUrl ? <MaskEditor key={props.dataUrl} {...props} /> : null;
 }
 
-function MaskEditor({ dataUrl, config, onClose, onConfirm }: MaskEditorProps) {
-    const { size, error: loadError } = useImageToolSource(dataUrl);
+function MaskEditor({ dataUrl, storageKey, config, onClose, onConfirm }: MaskEditorProps) {
+    const { displaySource, size, error: loadError } = useImageToolSource(dataUrl, storageKey);
     const surface = useRef<HTMLCanvasElement>(null);
     const strokes = useRef<MaskStroke[]>([]);
     const activePointer = useRef<number | null>(null);
@@ -72,7 +72,7 @@ function MaskEditor({ dataUrl, config, onClose, onConfirm }: MaskEditorProps) {
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <section className="flex min-w-0 flex-col items-center justify-center gap-3 rounded-lg bg-surface-active p-3">
                     <div className="relative max-w-full select-none overflow-hidden rounded-lg">
-                        <img src={dataUrl} alt="局部重绘原图" draggable={false} className="block max-h-[62vh] max-w-full" />
+                        <img src={displaySource} alt="局部重绘原图" draggable={false} className="block max-h-[62vh] max-w-full" />
                         {size ? <canvas ref={surface} width={size.width} height={size.height} aria-label="涂抹需要修改的图片区域" className="absolute inset-0 h-full w-full touch-none cursor-crosshair opacity-40"
                             onPointerDown={(event) => {
                                 if (event.button !== 0 || activePointer.current !== null) return;

@@ -1,3 +1,4 @@
+import { stopBrowserGenerationListeners } from "@/services/browser-generation-runner";
 import { getFeatureAvailability, type AuthSessionPayload } from "@/services/api/auth";
 import { projectImageParameters, imageParametersForSpec } from "./image-parameters";
 import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
@@ -21,6 +22,7 @@ import { withGenerationConsumersPaused } from "@/services/generation-consumer-li
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 
 export async function switchUserStorageScope(userId?: string | null) {
+    stopBrowserGenerationListeners();
     await withGenerationConsumersPaused(async () => {
         await withRemoteUserDataSyncExclusive(async () => {
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);

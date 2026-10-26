@@ -32,7 +32,7 @@ export function createChannelTransport(config: ChannelTransportConfig, scene?: C
     const sceneHeaders = (contentType?: string, extra?: Record<string, string>) => ({
         ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
         ...(contentType ? { "Content-Type": contentType } : {}),
-        ...(scene && config.baseUrl && isSystemProxyBaseUrl(config.baseUrl)
+        ...(config.channelScope !== "user" && scene && config.baseUrl && isSystemProxyBaseUrl(config.baseUrl)
             ? { "X-Canvas-Scene": scene, "X-Idempotency-Key": createClientId() }
             : {}),
         ...extra,

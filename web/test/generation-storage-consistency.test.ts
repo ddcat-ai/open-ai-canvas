@@ -12,7 +12,8 @@ type Scenario =
     | "canvas-mask-batch"
     | "canvas-asset-preparation"
     | "canvas-reentry-observation"
-    | "canvas-video-reentry";
+    | "canvas-video-reentry"
+    | "canvas-local-media-backfill";
 
 test("视频退出后重进可恢复已完成结果，并保留保存期间的新节点和编辑", async () => {
     type Node = import("../src/types/canvas").CanvasNodeData;
@@ -126,6 +127,56 @@ test("并发生成结果经真实持久化消费链路及重新读取后保留�
         expect(nodes.find((node) => node.id === "node-0")).toMatchObject({ title: "用户改名", position: { x: 700, y: 500 }, metadata: { assetId: "asset-0" } });
         expect(nodes.find((node) => node.id === "node-1")?.metadata?.assetId).toBe("asset-1");
     }
+});
+
+test("本机生成的视频经 materialize 回填时保留本地存储键并绑定素材，远端缓存缺失不得判成功", async () => {
+    type Node = import("../src/types/canvas").CanvasNodeData;
+    const result = await runScenario<{
+        videoError: string;
+        imageError: string;
+        audioError: string;
+        remoteVideoError: string;
+        missingVideoError: string;
+        emptyVideoError: string;
+        missingVideo: Node["metadata"];
+        emptyVideo: Node["metadata"];
+        adapterCalls: number;
+        liveVideo: Node["metadata"];
+        restoredVideo: Node["metadata"];
+        restoredImage: Node["metadata"];
+        restoredAudio: Node["metadata"];
+        remoteVideo: Node["metadata"];
+    }>("canvas-local-media-backfill");
+    // 本地 storageKey 不能被送进只认 resource: 的远程 Blob 校验（真实 getCachedResourceBlob）。
+    expect(result.videoError).toBe("");
+    expect(result.imageError).toBe("");
+    expect(result.audioError).toBe("");
+    expect(result.remoteVideoError).not.toBe("");
+    for (const nodes of [result.liveVideo, result.restoredVideo]) {
+        expect(nodes).toMatchObject({ status: "success", taskStatus: "succeeded", assetId: "asset-video", mimeType: "video/mp4" });
+        expect(nodes?.storageKey?.startsWith("video:")).toBe(true);
+        expect(nodes?.content).toBeTruthy();
+        // 只有真实读到本机 Blob 才能得到这 4096 字节（asset/resultJson 的 bytes 都留空）。
+        expect(nodes?.bytes).toBe(4096);
+    }
+    expect(result.restoredVideo?.storageKey).toBe(result.liveVideo?.storageKey);
+    expect(result.restoredImage).toMatchObject({ status: "success", assetId: "asset-image", naturalWidth: 640, naturalHeight: 480 });
+    expect(result.restoredImage?.storageKey?.startsWith("image:")).toBe(true);
+    expect(result.restoredAudio).toMatchObject({ status: "success", assetId: "asset-audio" });
+    expect(result.restoredAudio?.storageKey?.startsWith("audio:")).toBe(true);
+    // 负向对照：已物化的远端 resource: 视频在浏览器没有可用 Blob 时必须失败，不能硬判成功。
+    expect(result.remoteVideo?.status).not.toBe("success");
+    expect(result.remoteVideo?.assetId).toBeUndefined();
+    for (const [error, node] of [
+        [result.missingVideoError, result.missingVideo],
+        [result.emptyVideoError, result.emptyVideo],
+    ] as const) {
+        expect(error).toContain("生成视频文件尚未可靠保存");
+        expect(node?.status).not.toBe("success");
+        expect(node?.assetId).toBeUndefined();
+        expect(node?.generationEffectKeys?.length || 0).toBe(0);
+    }
+    expect(result.adapterCalls).toBeGreaterThan(0);
 });
 
 function runScenario<T>(scenario: Scenario): Promise<T> {

@@ -118,6 +118,13 @@ export type ModelChannel = {
 };
 
 export type AiConfig = {
+    /** Per-request identity, never a personal backend channel ID. */
+    requestChannelId?: string;
+    channelScope?: "system" | "user";
+    channelId?: string;
+    interfaceType?: ChannelInterfaceType;
+    secretKey?: string;
+    headers?: ChannelHeader[];
     channelMode: "remote";
     baseUrl: string;
     apiKey: string;
@@ -529,6 +536,23 @@ export function resolveModelChannel(config: AiConfig, value: string) {
     return matched || config.channels[0] || createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName) });
 }
 
+// Display helpers may tolerate a stale selection; network requests must preserve channel identity.
+function resolveRequestChannel(config: AiConfig, value: string) {
+    const decoded = decodeChannelModel(value);
+    const model = decoded?.model || value;
+    const requestId = decoded?.channelId || config.requestChannelId || config.channelId;
+    if (requestId) {
+        const exact = config.channels.find((channel) => channel.id === requestId);
+        if (!exact || exact.enabled === false || !exact.models.includes(model)) throw new Error("原模型渠道已删除、禁用或不再提供该模型，请重新选择渠道");
+        return exact;
+    }
+    const matches = config.channels.filter((channel) => channel.enabled !== false && channel.models.includes(model));
+    if (matches.length > 1) throw new Error("多个渠道提供同名模型，请明确选择渠道");
+    if (matches[0]) return matches[0];
+    if (config.channels.length) throw new Error("当前模型没有可用渠道，请重新选择");
+    return createModelChannel({ id: "default", name: "默认渠道", baseUrl: config.baseUrl, apiKey: config.apiKey, apiFormat: config.apiFormat, models: config.models.map(modelOptionName), scope: config.channelScope || "user" });
+}
+
 export function logicalModelIDForConfig(config: AiConfig) {
     const channel = resolveModelChannel(config, config.model);
     return channel.modelCosts?.find((item) => item.model === modelOptionName(config.model))?.logicalModelId || "";
@@ -539,7 +563,7 @@ export function channelConnectionSignature(channel: ModelChannel) {
 }
 
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
-    const channel = resolveModelChannel(config, value);
+    const channel = resolveRequestChannel(config, value);
     const model = modelOptionName(value || config.model);
     const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
@@ -552,6 +576,8 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         headers: channel.headers,
         apiFormat: interfaceType ? (interfaceType === "gemini-veo" || interfaceType === "gemini-image" ? ("gemini" as const) : interfaceType === "claude-api" ? ("claude" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
+        requestChannelId: channel.id,
+        channelScope: channel.scope === "system" ? "system" as const : "user" as const,
         channelId: channel.scope === "system" ? channel.id : "",
     };
 }

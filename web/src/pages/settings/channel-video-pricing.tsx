@@ -1,3 +1,4 @@
+import { PERSONAL_OPENAI_PROTOCOLS } from "@/lib/personal-channel";
 import { useEffect, useState } from "react";
 import { App, Button, Segmented, Tag } from "antd";
 import { ChevronRight, FlaskConical, Settings2 } from "lucide-react";
@@ -25,7 +26,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
 
     useEffect(() => {
         let active = true;
-        void fetchPluginProviderCatalog("user.custom-channel").then((items) => { if (active) setAvailableProtocols(items); })
+        void fetchPluginProviderCatalog("user.custom-channel").then((items) => { if (active) setAvailableProtocols(items.filter((item) => PERSONAL_OPENAI_PROTOCOLS.has(item.value))); })
             .catch((error) => { if (active) setProtocolError(error instanceof Error ? error.message : "协议目录读取失败"); })
             .finally(() => { if (active) setProtocolLoading(false); });
         return () => { active = false; };
@@ -70,7 +71,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                     <div className="text-xs font-medium">模型能力与请求协议</div>
-                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用</div>
+                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">个人渠道仅支持 OpenAI 兼容协议；测试会发起真实请求并可能产生供应商费用</div>
                 </div>
                 <span className="text-[var(--fs-tiny)] text-foreground/35">{channel.models.length} 个模型</span>
             </div>
@@ -116,7 +117,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                 onClose={() => setActiveModel(null)}
                 footer={
                     <div className="model-editor-footer">
-                        <span className="text-xs text-foreground/50">更改实时保存到云端渠道配置</span>
+                        <span className="text-xs text-foreground/50">更改仅保存到当前浏览器</span>
                         <div className="model-editor-footer-actions">
                             <Button
                                 icon={<FlaskConical className="size-4" />}
