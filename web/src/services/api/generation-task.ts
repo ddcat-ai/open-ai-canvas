@@ -9,7 +9,7 @@ import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
 import { isArkPlanBaseUrl } from "@/lib/seedance-video";
-import { resolveVideoOperation } from "@/lib/model-selection";
+import { resolveModelVideoOperation } from "@/lib/model-selection";
 import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -206,7 +206,7 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
 
 function generationOperation(options: BackendGenerationTaskOptions) {
     if (options.mode !== "video") return options.mode;
-    return resolveVideoOperation({
+    return resolveModelVideoOperation(options.config, options.config.model, {
         textCount: 0,
         imageCount: options.referenceImages?.length ?? 0,
         videoCount: options.referenceVideos?.length ?? 0,
@@ -312,6 +312,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
             mask: prepared.mask,
             metadata: generationMetadata(config, {
                 ...metadata,
+                ...(mode === "video" ? { videoEditOperation: videoOperation } : {}),
                 ...(options.clientOperationId ? { clientOperationId: options.clientOperationId } : {}),
                 ...(options.retryOf ? { retryOf: options.retryOf } : {}),
                 ...(options.attemptGroupId ? { attemptGroupId: options.attemptGroupId } : {}),

@@ -145,7 +145,7 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
         if (visualInputCount > profile.references.maxImages) return `最多支持 ${profile.references.maxImages} 张参考图`;
         if (input.videoCount > profile.references.maxVideos) return `最多支持 ${profile.references.maxVideos} 个参考视频`;
         if (input.audioCount > profile.references.maxAudios) return `最多支持 ${profile.references.maxAudios} 个参考音频`;
-        const operation = resolveVideoOperation(input, requirements.videoOperation);
+        const operation = resolveVideoOperation(input, requirements.videoOperation, profile.operations);
         if (operation !== "concat" && !profile.operations.includes(operation)) return `不支持${videoOperationLabel(operation)}`;
         return "";
     }
@@ -218,7 +218,7 @@ function logicalModelCompatibilityError(spec: NonNullable<NonNullable<AiConfig["
         if (!constraint && count > 0) return `不支持${kind}输入`;
         if (constraint && (count < constraint.min || count > constraint.max)) return `${kind}输入需为 ${constraint.min}-${constraint.max} 个`;
     }
-    const operation = requirements.capability === "video" && input ? resolveVideoOperation(input, requirements.videoOperation) : requirements.videoOperation;
+    const operation = requirements.capability === "video" && input ? resolveVideoOperation(input, requirements.videoOperation, spec.operations) : requirements.videoOperation;
     if (operation && spec.operations?.length && !spec.operations.includes(operation)) return "不支持当前生成模式";
     // 图片创作状态也会携带全局默认视频时长；这个字段只对视频模型有意义，
     // 不能把它拼进图片逻辑模型的能力匹配，否则图片模型会被误判为“不支持当前时长”。
@@ -435,20 +435,59 @@ export function modelGroupReferenceLimits(config: AiConfig, selected: string, ca
     );
 }
 
-export function inferVideoOperation(input: ModelInputSummary) {
+export function inferVideoOperation(input: ModelInputSummary, supportedOperations?: readonly string[]) {
     const visualInputCount = input.imageCount + input.characterCount;
-    // 显式普通参考图使用参考模式；未提供角色统计的入口沿用原有数量语义。
-    // 首尾帧图片或角色决定图生视频主模式，音频只作为附加参考，不应把组合请求
-    // 提升为全模态参考；纯音频输入才使用独立的 audio_to_video 能力。
-    if (input.videoCount > 0 || (input.referenceImageCount ?? 0) > 0 || visualInputCount > 2) return "reference_to_video";
-    if (visualInputCount > 0) return "image_to_video";
+    // 视频参考必须走参考视频模式；图片参考是否升级到全模态参考由当前模型能力决定。
+    // 这样允许只声明 image_to_video 的渠道继续用多张图片图生视频。
+    const supportsReferenceToVideo = supportedOperations === undefined || supportedOperations.includes("reference_to_video");
+    if (input.videoCount > 0 || ((input.referenceImageCount ?? 0) > 0 && supportsReferenceToVideo) || (visualInputCount > 2 && supportsReferenceToVideo)) return "reference_to_video";
+    if (visualInputCount > 0) {
+        if (supportedOperations?.length && !supportedOperations.includes("image_to_video") && supportedOperations.includes("reference_to_video")) return "reference_to_video";
+        return "image_to_video";
+    }
     if (input.audioCount > 0) return "audio_to_video";
     return "text_to_video";
 }
 
-export function resolveVideoOperation(input: ModelInputSummary, storedOperation?: string) {
+export function resolveVideoOperation(input: ModelInputSummary, storedOperation?: string, supportedOperations?: readonly string[]) {
     if (storedOperation && !["text_to_video", "image_to_video", "audio_to_video", "extend", "reference_to_video"].includes(storedOperation)) return storedOperation;
-    return inferVideoOperation(input);
+    return inferVideoOperation(input, supportedOperations);
+}
+
+/** Resolve using the selected model profile so picker, quote, metadata, and submit agree. */
+export function resolveModelVideoOperation(config: AiConfig, model: string, input: ModelInputSummary, storedOperation?: string) {
+    const channel = resolveModelChannel(config, model);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    const logicalSpecs = cost?.logicalCapabilityProfiles?.length ? cost.logicalCapabilityProfiles : cost?.logicalCapabilitySpec ? [cost.logicalCapabilitySpec] : [];
+    if (logicalSpecs.length) {
+        for (const spec of logicalSpecs) {
+            const operation = resolveVideoOperation(input, storedOperation, spec.operations);
+            if (logicalVideoInputCompatible(spec, input, operation)) return operation;
+        }
+        const logicalOperations = Array.from(new Set(logicalSpecs.flatMap((spec) => spec.operations || [])));
+        if (logicalOperations.length) return resolveVideoOperation(input, storedOperation, logicalOperations);
+    }
+    return resolveVideoOperation(input, storedOperation, modelCapabilityConfigFor(config, model).video?.operations);
+}
+
+function logicalVideoInputCompatible(
+    spec: NonNullable<NonNullable<AiConfig["channels"][number]["modelCosts"]>[number]["logicalCapabilitySpec"]>,
+    input: ModelInputSummary,
+    operation: string,
+) {
+    if (spec.capability !== "video") return false;
+    const counts: Record<string, number> = {
+        text: 0,
+        image: input.imageCount + input.characterCount,
+        video: input.videoCount,
+        audio: input.audioCount,
+    };
+    for (const [kind, count] of Object.entries(counts)) {
+        const constraint = spec.inputs?.[kind];
+        if (!constraint && count > 0) return false;
+        if (constraint && (count < constraint.min || count > constraint.max)) return false;
+    }
+    return !spec.operations?.length || spec.operations.includes(operation);
 }
 
 function videoOperationLabel(operation: string) {
