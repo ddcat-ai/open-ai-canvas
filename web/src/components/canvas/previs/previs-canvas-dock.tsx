@@ -1,10 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, Focus, Keyboard, Minus, MousePointer2, Move3d, PanelLeft, Plus, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, WandSparkles } from "lucide-react";
+import { Camera, Check, ChevronUp, Focus, MousePointer2, Move3d, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, WandSparkles, type LucideIcon } from "lucide-react";
 
-import { FloatingDock, type FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
-import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { PREVIS_VIEW_MODES, type PrevisViewMode } from "@/lib/canvas/previs/previs-view-modes";
 import type { PrevisCamera } from "@/types/previs";
@@ -37,16 +34,27 @@ export type PrevisCanvasDockProps = {
     onToggleShortcutHelp: () => void;
 };
 
+const TOOLS: Array<{ mode: TransformMode; label: string; icon: LucideIcon }> = [
+    { mode: "select", label: "选择", icon: MousePointer2 },
+    { mode: "translate", label: "移动", icon: Move3d },
+    { mode: "rotate", label: "旋转", icon: Rotate3d },
+    { mode: "scale", label: "缩放", icon: Scale3d },
+];
+
+/** 常用取景直接摆在工具条上，其余正交视图收进「更多」。 */
+const QUICK_VIEWS: Array<{ mode: PrevisViewMode; label: string }> = [
+    { mode: "free", label: "3D" },
+    { mode: "camera", label: "机位" },
+    { mode: "top", label: "俯视" },
+];
+
 /**
- * 预演台视口工具条：与画布主工具条共用 FloatingDock 组件、dock token 与提示/动效。
- * 一条 dock 承载「改内容」(变换、画轨迹) 与「怎么看」(取景、导航)，取景细项收进弹层，
- * 避免视口四角各挂一组浮层遮挡画面。
+ * 预演台底部工具条：浅色、图标带文字，当前工具实心高亮，一眼看清在用什么。
+ * 左到右：编辑工具 → 画路径 → 取景 → 导航 → 面板。场景列表与快捷键在左侧工具条。
  */
 export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
-    const { theme } = props;
     const rootRef = useRef<HTMLDivElement>(null);
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
-
     useEffect(() => {
         if (!viewMenuOpen) return;
         const close = (event: PointerEvent) => {
@@ -62,67 +70,19 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
             document.removeEventListener("keydown", closeOnEscape);
         };
     }, [viewMenuOpen]);
-
-    const currentView = PREVIS_VIEW_MODES.find((item) => item.mode === props.viewMode) ?? PREVIS_VIEW_MODES[0];
-    const trajectoryLabel = props.trajectoryDrawing ? "结束绘制轨迹" : props.trajectoryKind === "camera" ? "画运镜路径" : "画走位";
-
-    const items: FloatingDockEntry[] = [
-        { id: "previs-scene-panel", label: props.scenePanelOpen ? "收起场景面板" : "打开场景面板", icon: <PanelLeft />, active: props.scenePanelOpen, expands: true, onClick: props.onToggleScenePanel },
-        { kind: "separator", id: "previs-sep-scene" },
-        {
-            kind: "switch",
-            id: "previs-transform",
-            label: "变换模式",
-            value: props.transformMode,
-            onChange: (value) => props.onTransformModeChange(value as TransformMode),
-            options: [
-                { id: "previs-select", value: "select", label: PREVIS_TOOL_LABELS.select, icon: <MousePointer2 /> },
-                { id: "previs-translate", value: "translate", label: PREVIS_TOOL_LABELS.translate, icon: <Move3d /> },
-                { id: "previs-rotate", value: "rotate", label: PREVIS_TOOL_LABELS.rotate, icon: <Rotate3d /> },
-                { id: "previs-scale", value: "scale", label: PREVIS_TOOL_LABELS.scale, icon: <Scale3d /> },
-            ],
-        },
-        { id: "previs-trajectory", label: trajectoryLabel, icon: <Route />, active: props.trajectoryDrawing, onClick: props.onToggleTrajectory },
-        { kind: "separator", id: "previs-sep-view" },
-        {
-            id: "previs-view-mode",
-            label: `取景：${currentView.label}（C 切换 3D / 机位）`,
-            wide: true,
-            quiet: true,
-            expands: true,
-            active: viewMenuOpen,
-            icon: <span className="inline-flex h-full items-center justify-center whitespace-nowrap text-[var(--fs-caption)] font-semibold leading-none tracking-wide">{currentView.label}</span>,
-            onClick: () => setViewMenuOpen((value) => !value),
-        },
-        { id: "previs-focus", label: "聚焦选中对象 (F)", icon: <Focus />, onClick: props.onFocusSelected },
-        { id: "previs-frame", label: "适配全部对象 (A)", icon: <Scan />, onClick: props.onFrameScene },
-        { id: "previs-zoom-out", label: "拉远视角", icon: <Minus />, onClick: () => props.onZoom(1.38) },
-        { id: "previs-zoom-in", label: "拉近视角", icon: <Plus />, onClick: () => props.onZoom(0.72) },
-        { kind: "separator", id: "previs-sep-panels" },
-        { id: "previs-timeline", label: "动画时间轴", icon: <WandSparkles />, active: props.timelineOpen, onClick: props.onOpenTimeline },
-        { id: "previs-inspector", label: props.inspectorOpen ? "收起属性面板" : "打开属性面板", icon: <SlidersHorizontal />, active: props.inspectorOpen, expands: true, onClick: props.onToggleInspector },
-        { id: "previs-shortcuts", label: "快捷键 (?)", icon: <Keyboard />, active: props.shortcutHelpOpen, onClick: props.onToggleShortcutHelp },
-    ];
-
+    const trajectoryLabel = props.trajectoryDrawing ? "结束绘制" : props.trajectoryKind === "camera" ? "画运镜" : "画走位";
+    const quickActive = QUICK_VIEWS.some((item) => item.mode === props.viewMode);
+    const moreLabel = quickActive ? "更多" : (PREVIS_VIEW_MODES.find((item) => item.mode === props.viewMode)?.label ?? "更多");
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="pv-canvas-dock" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="pv-canvas-dock pv-dock" role="toolbar" aria-label="预演台视口工具" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {viewMenuOpen ? (
-                    <motion.div
-                        role="dialog"
-                        aria-label="取景模式"
-                        initial={{ opacity: 0, y: 14, scale: 0.92 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 9, scale: 0.96 }}
-                        transition={aceternityMotion.spring.panel}
-                        className="pv-canvas-dock__menu aceternity-floating-panel"
-                        style={{ background: theme.spatial.elevated, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
-                    >
-                        <div className="pv-canvas-dock__menu-title">
+                    <motion.div role="dialog" aria-label="取景模式" initial={{ opacity: 0, y: 10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.98 }} transition={{ duration: 0.16 }} className="pv-dock__menu">
+                        <div className="pv-dock__menu-title">
                             <span>取景</span>
-                            <small style={{ color: theme.node.muted }}>只改变观察方式，不写入场景</small>
+                            <small>只改变观察方式，不写入场景</small>
                         </div>
-                        <div className="pv-canvas-dock__view-grid" role="radiogroup" aria-label="取景模式">
+                        <div className="pv-dock__view-grid" role="radiogroup" aria-label="取景模式">
                             {PREVIS_VIEW_MODES.map((item) => {
                                 const checked = item.mode === props.viewMode;
                                 return (
@@ -131,7 +91,6 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                                         type="button"
                                         role="radio"
                                         aria-checked={checked}
-                                        aria-label={`${item.label} ${item.hint}`}
                                         title={item.hint}
                                         className={checked ? "is-active" : undefined}
                                         onClick={() => {
@@ -146,10 +105,10 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                         </div>
                         {props.cameras.length ? (
                             <>
-                                <div className="pv-canvas-dock__menu-title is-sub">
+                                <div className="pv-dock__menu-title is-sub">
                                     <span>机位</span>
                                 </div>
-                                <div className="pv-canvas-dock__camera-list">
+                                <div className="pv-dock__camera-list">
                                     {props.cameras.map((camera) => {
                                         const current = props.viewMode === "camera" && camera.id === props.viewedCameraId;
                                         return (
@@ -176,7 +135,56 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                     </motion.div>
                 ) : null}
             </AnimatePresence>
-            <FloatingDock items={items} className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel="预演台视口工具" />
+
+            <div className="pv-dock__group" role="radiogroup" aria-label="编辑工具">
+                {TOOLS.map((tool) => {
+                    const active = props.transformMode === tool.mode;
+                    return (
+                        <button key={tool.mode} type="button" role="radio" aria-checked={active} title={PREVIS_TOOL_LABELS[tool.mode]} className={`pv-dock__tool ${active ? "is-active" : ""}`} onClick={() => props.onTransformModeChange(tool.mode)}>
+                            <tool.icon aria-hidden />
+                            <span>{tool.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            <span className="pv-dock__divider" />
+            <button type="button" aria-pressed={props.trajectoryDrawing} title={props.trajectoryKind === "camera" ? "为选中的摄影机画运镜路径" : "为选中的演员画走位；右键地面可直接打点、生成 A→B 移动"} className={`pv-dock__tool ${props.trajectoryDrawing ? "is-active is-accent" : ""}`} onClick={props.onToggleTrajectory}>
+                <Route aria-hidden />
+                <span>{trajectoryLabel}</span>
+            </button>
+            <span className="pv-dock__divider" />
+            <div className="pv-dock__views" role="radiogroup" aria-label="取景">
+                {QUICK_VIEWS.map((item) => {
+                    const active = props.viewMode === item.mode;
+                    return (
+                        <button key={item.mode} type="button" role="radio" aria-checked={active} title={PREVIS_VIEW_MODES.find((mode) => mode.mode === item.mode)?.hint} className={active ? "is-active" : ""} onClick={() => props.onViewModeChange(item.mode)}>
+                            {item.label}
+                        </button>
+                    );
+                })}
+                <button type="button" aria-expanded={viewMenuOpen} title="更多取景与机位（C 切换 3D / 机位）" className={!quickActive ? "is-active" : ""} onClick={() => setViewMenuOpen((value) => !value)}>
+                    {moreLabel}
+                    <ChevronUp className={`size-3 transition-transform ${viewMenuOpen ? "" : "rotate-180"}`} aria-hidden />
+                </button>
+            </div>
+            <span className="pv-dock__divider" />
+            <button type="button" title="聚焦选中对象 (F)" className="pv-dock__tool" onClick={props.onFocusSelected}>
+                <Focus aria-hidden />
+                <span>聚焦</span>
+            </button>
+            <button type="button" title="适配全部对象 (A)" className="pv-dock__tool" onClick={props.onFrameScene}>
+                <Scan aria-hidden />
+                <span>全景</span>
+            </button>
+            <span className="pv-dock__divider" />
+            <button type="button" aria-pressed={props.timelineOpen} title="动画时间轴" className={`pv-dock__tool ${props.timelineOpen ? "is-active" : ""}`} onClick={props.onOpenTimeline}>
+                <WandSparkles aria-hidden />
+                <span>时间轴</span>
+            </button>
+            <button type="button" aria-pressed={props.inspectorOpen} title={props.inspectorOpen ? "收起属性面板" : "打开属性面板"} className={`pv-dock__tool ${props.inspectorOpen ? "is-active is-soft" : ""}`} onClick={props.onToggleInspector}>
+                <SlidersHorizontal aria-hidden />
+                <span>属性</span>
+            </button>
         </div>
     );
 }

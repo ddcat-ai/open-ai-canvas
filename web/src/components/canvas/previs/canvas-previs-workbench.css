@@ -3675,7 +3675,51 @@
 .previs-add-dialog__card-thumb {
     align-self: center;
     width: 100%;
-    height: 40px;
+    height: 64px;
+}
+/* 道具库缩略图：一次性渲染的真实 3D 截图，等比放入卡片。 */
+.previs-add-dialog__thumb-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+}
+.previs-add-dialog__thumb-placeholder {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: var(--pd-r-sm);
+    background: linear-gradient(90deg, var(--pd-s2), var(--pd-s3), var(--pd-s2));
+    background-size: 200% 100%;
+    animation: previs-thumb-shimmer 1.2s linear infinite;
+}
+@keyframes previs-thumb-shimmer {
+    to {
+        background-position: -200% 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .previs-add-dialog__thumb-placeholder {
+        animation: none;
+    }
+}
+.previs-add-dialog__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.previs-add-dialog__row .pv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.previs-add-dialog__preview-note.previs-add-dialog__preview-note--inline {
+    position: static;
+    padding: 0;
+    background: none;
+    color: var(--pd-t2);
 }
 .previs-add-dialog__card-thumb .pv-prop-thumb {
     width: 100%;

@@ -52,10 +52,21 @@ import {
     Layers,
     MonitorUp,
     Keyboard,
+    Globe2,
+    Sun,
+    CloudSun,
+    Cloud,
+    CloudRain,
+    CloudFog,
+    Snowflake,
 } from "lucide-react";
 import { PrevisCanvasDock } from "./previs-canvas-dock";
 import { PrevisAddDialog, type PrevisAddKind, type PrevisAddResult } from "./previs-add-dialog";
-import { Dropdown } from "antd";
+import { ConfigProvider, Dropdown } from "antd";
+import { getAntThemeConfig } from "@/lib/app-theme";
+import { formatPrevisTimeOfDay } from "@/lib/canvas/previs/previs-world";
+import { PrevisWorldToolbar } from "./previs-world-toolbar";
+import type { PrevisPropCategoryId } from "@/lib/canvas/previs/previs-prop-catalog";
 
 /** 场景面板顶部的四个添加入口，都打开同一个带预览的弹窗。 */
 const PREVIS_ADD_BUTTONS: Array<{ kind: PrevisAddKind; label: string; icon: typeof UserRound }> = [
@@ -88,12 +99,19 @@ import { isPrevisPreviewRequestForWorkbench, previsPreviewRequestKey, type Previ
 import { describePrevisSaveStatus, shouldBlockPrevisUnload, resolvePrevisCloseOutcome } from "@/lib/canvas/previs/previs-save-wiring";
 import { usePrevisSaveCoordinator } from "@/components/canvas/previs/use-previs-save-coordinator";
 import "./canvas-previs-workbench.css";
+import "./previs-floating.css";
+import { PrevisWorldPanel } from "./previs-world-panel";
+import { resolvePrevisCatalogProp } from "@/lib/canvas/previs/previs-prop-catalog";
+import { defaultPrevisPropColor } from "@/lib/canvas/previs/previs-prop-geometry";
+import { createPrevisCatalogProp } from "@/lib/canvas/previs/previs-scene";
+import { resolvePrevisLayoutInstanceWorld } from "./previs-prop-view";
+import { nextPrevisMarkerLabel, PrevisPointMenu } from "./previs-point-menu";
+import { applyPrevisActorTravel, resolvePrevisTravelStyle } from "@/lib/canvas/previs/previs-travel";
 import { useAssetStore, type ModelAsset } from "@/stores/use-asset-store";
 import { usePrevisWorkbenchStore } from "@/stores/canvas/use-previs-workbench-store";
 import { PREVIS_MODES, previsModeCapabilities } from "@/lib/canvas/previs/previs-modes";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
-import type { PrevisCameraMove, PrevisRenderMode, PrevisScene, PrevisSceneOutput, PrevisTransform, PrevisVec3 } from "@/types/previs";
+import type { PrevisCameraMove, PrevisRenderMode, PrevisScene, PrevisSceneOutput, PrevisTransform, PrevisTravelStyle, PrevisVec3, PrevisWeather } from "@/types/previs";
 export { cameraMoveOptions, poseOptions, shotSizeOptions } from "./previs-inspectors";
 
 export function CanvasPrevisWorkbench({
@@ -120,7 +138,8 @@ export function CanvasPrevisWorkbench({
     onFlush?: () => void | Promise<void>;
 }) {
     const { message, modal } = App.useApp();
-    const theme = canvasThemes[useActiveTheme()];
+    // 预演台固定浅色：视口工具条等沿用画布组件的部件也用浅色画布主题，不跟随应用暗色模式。
+    const theme = canvasThemes.light;
     const effectiveCanvasId = useMemo(() => {
         const explicit = canvasId?.trim();
         if (explicit) return explicit;
@@ -147,7 +166,8 @@ export function CanvasPrevisWorkbench({
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [scenePanelOpen, setScenePanelOpen] = useState(false);
     // 桌面端侧栏常驻，可收起换取沉浸视口；窄屏下改为 scenePanelOpen/inspectorOpen 控制的浮层。
-    const [sceneDocked, setSceneDocked] = useState(true);
+    // 世界视口全屏：对象列表默认收起，从左侧工具条「列表」打开。
+    const [sceneDocked, setSceneDocked] = useState(false);
     const [inspectorDocked, setInspectorDocked] = useState(true);
     const [compactLayout, setCompactLayout] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 860px)").matches);
     useEffect(() => {
@@ -654,11 +674,46 @@ export function CanvasPrevisWorkbench({
     };
 
     /** 统一的「添加到场景」弹窗：选项 + 实时预览，确认后才写入场景。 */
-    const [addDialog, setAddDialog] = useState<{ open: boolean; kind: PrevisAddKind }>({ open: false, kind: "actor" });
-    const openAddDialog = (kind: PrevisAddKind) => setAddDialog({ open: true, kind });
+    const [addDialog, setAddDialog] = useState<{ open: boolean; kind: PrevisAddKind; category?: PrevisPropCategoryId }>({ open: false, kind: "actor" });
+    /** 未选中对象时右侧面板显示「世界」还是「镜头」。 */
+    const [sceneTab, setSceneTab] = useState<"world" | "shot">("world");
+    /** 打开右侧「世界」页：取消选择，展开属性面板。 */
+    const openWorldSettings = () => {
+        setSelectedObjectId(null);
+        setSelectedLightId(null);
+        setSceneTab("world");
+        setInspectorOpen(true);
+        setInspectorDocked(true);
+    };
+    const openShotSettings = () => {
+        setSelectedObjectId(null);
+        setSelectedLightId(null);
+        setSceneTab("shot");
+        setInspectorOpen(true);
+        setInspectorDocked(true);
+    };
+    const openAddDialog = (kind: PrevisAddKind, category?: PrevisPropCategoryId) => setAddDialog({ open: true, kind, category });
     const closeAddDialog = () => setAddDialog((current) => ({ ...current, open: false }));
     const confirmAddDialog = (result: PrevisAddResult) => {
         closeAddDialog();
+        if (result.kind === "layout") {
+            // 布景铺满地面，固定在世界原点，不走碰撞避让；演员和道具之后可以直接放进街道。
+            const [layout] = result.objects;
+            if (!layout) return;
+            commit((current) => ({ ...current, objects: [...current.objects, layout] }));
+            setSelectedObjectId(layout.id);
+            message.success(`已搭建「${layout.name}」，可在右侧调整范围、密度或换一版`);
+            return;
+        }
+        if (result.kind === "prop" && result.arranged) {
+            // 批量排布：整组平移到放置锚点，保持排布的相对位置，不逐个避让打散。
+            const anchor = resolvePrevisPlacementAnchor({ intent: viewportRef.current?.readPlacementIntent() ?? null, fallback: [0, 0, 0] });
+            const placed = result.objects.map((object) => ({ ...object, transform: { ...object.transform, position: [object.transform.position[0] + anchor[0], object.transform.position[1], object.transform.position[2] + anchor[2]] as PrevisVec3 } }));
+            commit((current) => ({ ...current, objects: [...current.objects, ...placed] }));
+            setSelectedObjectId(placed[0]?.id ?? null);
+            message.success(`已加入 ${placed.length} 个「${result.objects[0]?.name.replace(/ \d+$/, "")}」`);
+            return;
+        }
         if (result.kind === "actor" || result.kind === "prop") {
             // 逐个经过 addObject：统一走放置锚点、碰撞避让与落地规则。
             result.objects.forEach((object) => addObject(object));
@@ -1161,6 +1216,56 @@ export function CanvasPrevisWorkbench({
     const visibleCameras = draft?.cameras.filter((camera) => matchesSceneQuery(camera.name, `${camera.focalLength}mm`)) || [];
     const visibleLights = draft?.lights.filter((light) => matchesSceneQuery(light.name, light.type)) || [];
     const selectedActor = sceneActors.find((item) => item.id === selectedObjectId) ?? null;
+    /**
+     * 点击布景里的单栋建筑 / 单棵树：从布景中移除这个实例，换成同位置、同造型的独立道具并选中，
+     * 之后就能像其他道具一样直接拖动、旋转、换造型或删除。一次提交，一步撤销。
+     */
+    const extractLayoutInstance = useCallback(
+        (layoutId: string, index: number) => {
+            const layoutObject = draft?.objects.find((item) => item.id === layoutId);
+            if (!layoutObject?.layout) return;
+            const world = resolvePrevisLayoutInstanceWorld(layoutObject, index);
+            if (!world) return;
+            const catalog = resolvePrevisCatalogProp(world.instance.propId);
+            const extracted = createPrevisCatalogProp({ propId: world.instance.propId, name: catalog?.name ?? "道具", color: world.instance.color || defaultPrevisPropColor(world.instance.propId), variant: world.instance.variant });
+            const placed = { ...extracted, transform: { position: world.position, rotation: world.rotation, scale: world.scale } };
+            commit((current) => ({
+                ...current,
+                objects: [
+                    ...current.objects.map((item) => (item.id === layoutId && item.layout ? { ...item, layout: { ...item.layout, removed: [...(item.layout.removed ?? []), index] } } : item)),
+                    placed,
+                ],
+            }));
+            setSelectedObjectId(placed.id);
+            setSelectedLightId(null);
+            setInspectorOpen(true);
+            setInspectorDocked(true);
+            message.success(`已从布景拆出「${placed.name}」，可以直接拖动、换造型或删除`);
+        },
+        [commit, draft?.objects, message],
+    );
+
+    /** 右键取点菜单：屏幕位置 + 地面坐标。 */
+    const [pointMenu, setPointMenu] = useState<{ point: PrevisGroundPoint; screen: { x: number; y: number } } | null>(null);
+    const closePointMenu = useCallback(() => setPointMenu(null), []);
+    const handleGroundContextMenu = useCallback((point: PrevisGroundPoint, screen: { x: number; y: number }) => setPointMenu({ point, screen }), []);
+    const addMarkerAt = (point: PrevisGroundPoint) => {
+        const label = nextPrevisMarkerLabel(draft?.markers ?? []);
+        commit((current) => ({ ...current, markers: [...(current.markers ?? []), { id: nanoid(), label, position: [Number(point.x.toFixed(2)), 0, Number(point.z.toFixed(2))] }] }));
+        message.success(`已标记点 ${label}（${point.x.toFixed(1)}, ${point.z.toFixed(1)}），在 Agent 里可以说「从 A 到 ${label}」`);
+    };
+    const travelSelectedActorTo = (point: PrevisGroundPoint, style: PrevisTravelStyle, duration: number) => {
+        if (!selectedActor || !activeShot) return;
+        const start = Math.min(snappedPlayhead, Math.max(0, activeShot.duration - 0.1));
+        const length = Math.min(duration, activeShot.duration - start);
+        commit((current) => ({ ...current, objects: current.objects.map((object) => (object.id === selectedActor.id ? applyPrevisActorTravel(object, { to: [point.x, 0, point.z], start, duration: length, style }) : object)) }));
+        setMode("animate");
+        setSequencerVisible(true);
+        setPlayhead(start);
+        setPlaying(true);
+        message.success(`「${selectedActor.name}」将在 ${start.toFixed(1)}–${(start + length).toFixed(1)}s ${resolvePrevisTravelStyle(style).verb}这里，正在播放预览`);
+    };
+
     const handleGroundClick = useCallback(
         (point: PrevisGroundPoint) => {
             if (!selectedActor || !selectedObjectId) {
@@ -1283,45 +1388,17 @@ export function CanvasPrevisWorkbench({
     if (!open || !draft || !activeShot) return null;
 
     const saveStatusClass = saveIndicator.tone === "danger" ? "is-danger" : saveIndicator.busy ? "is-busy" : "";
-    // 位于 early return 之后，不能使用 Hook；每次渲染直接派生主题变量。
-    const workbenchThemeStyle = {
-        "--pd-s0": theme.canvas.background,
-        "--pd-s1": theme.toolbar.panel,
-        "--pd-s2": theme.toolbar.activeBg,
-        "--pd-s3": theme.toolbar.itemHover,
-        "--pd-s4": theme.toolbar.activeBg,
-        "--pd-s5": theme.spatial.elevated,
-        "--pd-b0": theme.toolbar.border,
-        "--pd-b1": theme.node.stroke,
-        "--pd-b2": theme.node.activeStroke,
-        "--pd-t0": theme.node.text,
-        "--pd-t1": theme.node.muted,
-        "--pd-t2": theme.node.muted,
-        "--pd-t3": theme.node.faint,
-        "--pd-a0": theme.accent.primary,
-        "--pd-a1": theme.accent.primary,
-        "--pd-a-bg": theme.accent.primarySoft,
-        "--pd-a-bd": theme.node.activeStroke,
-        "--pd-a-on": theme.accent.onPrimary,
-        "--pd-accent-rgb": theme.accent.primary === "#171717" || theme.accent.primary === "#f5f5f5" ? "255 255 255" : "79 140 255",
-        "--previs-accent": theme.accent.primary,
-        "--pd-a-on-theme": theme.accent.onPrimary,
-        "--pd-a-bg-theme": theme.accent.primarySoft,
-        "--pd-a-bd-theme": theme.node.activeStroke,
-    } as CSSProperties;
+    // 预演台固定浅色：白色磨砂面板悬浮在世界视口上，不跟随应用暗色模式。
+    const workbenchThemeStyle = PREVIS_LIGHT_TOKENS;
 
     return (
-        <div data-canvas-previs-workbench data-canvas-no-zoom className="previs-desk fixed inset-0 z-[var(--z-toast)] flex min-h-0 min-w-0 flex-col overflow-hidden" style={workbenchThemeStyle}>
-            <header className="previs-desk-header thin-scrollbar overflow-x-auto overflow-y-hidden">
+        <ConfigProvider theme={PREVIS_LIGHT_ANT_THEME}>
+        <div data-canvas-previs-workbench data-canvas-no-zoom className="previs-desk is-floating fixed inset-0 z-[var(--z-toast)] flex min-h-0 min-w-0 flex-col overflow-hidden" style={workbenchThemeStyle}>
+            <header className="previs-desk-header">
+                <div className="pv-float-group pv-float-group--left">
                 <button type="button" className="previs-desk-icon-button" aria-label="关闭预演台" title="关闭预演台" onClick={closeWorkbench}>
                     <X className="size-4" />
                 </button>
-                <div className="previs-desk-brand">
-                    <span className="previs-desk-logo">影策</span>
-                    <span className="previs-desk-brand-title">预演台</span>
-                    <span className="previs-desk-brand-sub">AI 短剧预演</span>
-                </div>
-                <span className="previs-desk-divider" />
                 <input className="previs-desk-scene-title" aria-label="场景标题" value={draft.title} onChange={(event) => replaceWithoutHistory((current) => ({ ...current, title: event.target.value }))} />
                 <div className="previs-desk-history">
                     <button type="button" aria-label="撤销" title="撤销 Ctrl+Z" disabled={!history.length} onClick={undo}>
@@ -1331,6 +1408,22 @@ export function CanvasPrevisWorkbench({
                         <Redo2 className="size-4" />
                     </button>
                 </div>
+                <span className={`previs-desk-save ${saveStatusClass}`} aria-live="polite">
+                    {saveIndicator.label}
+                </span>
+                {saveController.progress.status === "error" ? (
+                    <button type="button" className="previs-desk-header-action" onClick={() => void saveController.retrySave()}>
+                        <Save className="size-3.5" />
+                        重试保存
+                    </button>
+                ) : null}
+                </div>
+                <div className="pv-float-group pv-float-group--center">
+                <button type="button" className="pv-world-status" title="世界：光照、天气、远景" aria-label="打开世界设置" onClick={openWorldSettings}>
+                    {draft.world ? <WorldStatusIcon weather={draft.world.weather} /> : <Globe2 className="size-3.5" />}
+                    <span>{draft.world ? formatPrevisTimeOfDay(draft.world.timeOfDay) : "世界未开启"}</span>
+                </button>
+                <span className="pv-float-divider" />
                 <div className="previs-desk-context-summary" aria-label="当前工作上下文">
                     <span className="previs-desk-context-dot" />
                     <span>{selectedActor ? `角色 · ${selectedActor.name}` : selectedLight ? `灯光 · ${selectedLight.name}` : selectedCameraId ? `机位 · ${selectedCamera?.name || activeCamera?.name || "摄影机"}` : `镜头 · ${activeShot.name}`}</span>
@@ -1353,16 +1446,9 @@ export function CanvasPrevisWorkbench({
                         </button>
                     ))}
                 </nav>
-                <div className="previs-desk-header-spacer" />
-                <span className={`previs-desk-save ${saveStatusClass}`} aria-live="polite">
-                    {saveIndicator.label}
-                </span>
-                {saveController.progress.status === "error" ? (
-                    <button type="button" className="previs-desk-header-action" onClick={() => void saveController.retrySave()}>
-                        <Save className="size-3.5" />
-                        重试保存
-                    </button>
-                ) : null}
+                </div>
+                {/* 窄屏下右侧输出组横向滚动，避免回写按钮被裁掉。 */}
+                <div className="pv-float-group pv-float-group--right thin-scrollbar overflow-x-auto overflow-y-hidden">
                 {onboardingScope ? (
                     <button type="button" className="previs-desk-icon-button" aria-label="重新开始引导" title="重新开始引导" onClick={() => setOnboardingRestartSignal((value) => value + 1)}>
                         <Lightbulb className="size-4" />
@@ -1412,9 +1498,35 @@ export function CanvasPrevisWorkbench({
                     <Save className="size-3.5" />
                     回写构图
                 </button>
+                </div>
             </header>
 
             <div className={`pv-layout ${sceneDocked ? "" : "is-scene-collapsed"} ${inspectorDocked ? "" : "is-inspector-collapsed"}`}>
+                <PrevisWorldToolbar
+                    busy={recording || depthExporting}
+                    active={{
+                        world: !selectedObject && !selectedLight && sceneTab === "world" && inspectorDocked,
+                        shot: !selectedObject && !selectedLight && sceneTab === "shot" && inspectorDocked,
+                        animate: mode === "animate",
+                        list: compactLayout ? scenePanelOpen : sceneDocked,
+                        shortcuts: shortcutHelpOpen,
+                    }}
+                    onAction={(action) => {
+                        if (action === "world") openWorldSettings();
+                        else if (action === "shot") openShotSettings();
+                        else if (action === "layout") openAddDialog("layout");
+                        else if (action === "building") openAddDialog("prop", "base");
+                        else if (action === "nature") openAddDialog("prop", "plant");
+                        else if (action === "base") openAddDialog("prop", "base");
+                        else if (action === "actor") openAddDialog("actor");
+                        else if (action === "camera") openAddDialog("camera");
+                        else if (action === "animate") (mode === "animate" ? setMode("layout") : enterAnimationMode());
+                        else if (action === "clay") void exportClayVideo();
+                        else if (action === "depth") void exportDepthPass();
+                        else if (action === "list") (compactLayout ? setScenePanelOpen((value) => !value) : setSceneDocked((value) => !value));
+                        else if (action === "shortcuts") setShortcutHelpOpen((value) => !value);
+                    }}
+                />
                 {/* LEFT: Scene Entity List */}
                 <aside className={`pv-panel pv-panel--left thin-scrollbar ${scenePanelOpen ? "is-open" : ""}`}>
                     <div className="pv-panel-header">
@@ -1544,8 +1656,11 @@ export function CanvasPrevisWorkbench({
                                         <span className="pv-entity-row__info">
                                             <span className="pv-entity-row__name">{obj.name}</span>
                                             <span className="pv-entity-row__meta">
-                                                {obj.kind === "billboard" ? "背板" : obj.kind === "model" ? "模型" : obj.primitive === "plane" ? "平面" : obj.primitive === "sphere" ? "球体" : obj.primitive === "cylinder" ? "圆柱" : "几何体"} ·{" "}
-                                                {obj.transform.scale.map((v) => v.toFixed(1)).join("×")}m
+                                                {obj.kind === "layout" && obj.layout
+                                                    ? `布景 · ${Math.round(obj.layout.size)}m`
+                                                    : obj.kind === "prop"
+                                                      ? (resolvePrevisCatalogProp(obj.propId)?.name ?? "道具")
+                                                      : `${obj.kind === "billboard" ? "背板" : obj.kind === "model" ? "模型" : obj.primitive === "plane" ? "平面" : obj.primitive === "sphere" ? "球体" : obj.primitive === "cylinder" ? "圆柱" : "几何体"} · ${obj.transform.scale.map((v) => v.toFixed(1)).join("×")}m`}
                                             </span>
                                         </span>
                                     </button>
@@ -1671,6 +1786,8 @@ export function CanvasPrevisWorkbench({
                         onSelectCamera={selectSceneCamera}
                         onCameraTransform={handleCameraTransform}
                         onMovePathWaypoint={handleMovePathWaypoint}
+                        onPickLayoutInstance={extractLayoutInstance}
+                        onGroundContextMenu={handleGroundContextMenu}
                         showModelLoadNotice
                         showNavigation={false}
                     />
@@ -1757,10 +1874,12 @@ export function CanvasPrevisWorkbench({
                 </main>
 
                 {/* RIGHT: 属性面板。选中对象/灯光看对象，什么都没选看镜头；底部固定镜头列表与提示词。 */}
-                <aside className={`pv-panel pv-panel--right thin-scrollbar ${inspectorOpen ? "is-open" : ""}`}>
+                <aside className={`pv-panel pv-panel--right thin-scrollbar ${inspectorOpen ? "is-open" : ""} ${!selectedObject && !selectedLight ? "is-scene-settings" : ""}`}>
                     <div className="pv-panel-header">
                         <div className="pv-panel-header__title">
-                            <span className="pv-panel-header__sub">{selectedObject ? (selectedObject.kind === "actor" || selectedObject.primitive === "character" ? "角色" : "道具") : selectedLight ? "灯光" : "镜头"}</span>
+                            <span className="pv-panel-header__sub">
+                                {selectedObject ? (selectedObject.kind === "actor" || selectedObject.primitive === "character" ? "角色" : selectedObject.kind === "layout" ? "布景" : "道具") : selectedLight ? "灯光" : sceneTab === "world" ? "世界" : "镜头"}
+                            </span>
                         </div>
                         <div className="pv-panel-header__actions">
                             {selectedObject || selectedLight ? (
@@ -1786,6 +1905,8 @@ export function CanvasPrevisWorkbench({
                         {selectedObject ? (
                             <ObjectInspector
                                 object={selectedObject}
+                                markers={draft.markers ?? []}
+                                shotDuration={activeShot.duration}
                                 rendered={selectedObjectRendered || selectedObject.transform}
                                 playhead={snappedPlayhead}
                                 selectedBone={selectedBone}
@@ -1807,6 +1928,22 @@ export function CanvasPrevisWorkbench({
                         ) : selectedLight ? (
                             <LightInspector light={selectedLight} onUpdate={(patch) => updateLight(selectedLight.id, patch)} onDelete={() => removeLight(selectedLight.id)} />
                         ) : (
+                            <>
+                                <div className="pv-inspector-tabs" role="tablist" aria-label="场景设置">
+                                    {(
+                                        [
+                                            ["world", "世界"],
+                                            ["shot", "镜头"],
+                                        ] as const
+                                    ).map(([id, label]) => (
+                                        <button key={id} type="button" role="tab" aria-selected={sceneTab === id} className={sceneTab === id ? "is-active" : ""} onClick={() => setSceneTab(id)}>
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                {sceneTab === "world" ? (
+                                    <PrevisWorldPanel world={draft.world} onChange={(world) => commit((current) => ({ ...current, world }))} />
+                                ) : (
                             <ShotInspector
                                 shot={activeShot}
                                 camera={inspectorCamera}
@@ -1824,6 +1961,8 @@ export function CanvasPrevisWorkbench({
                                     setTrajectoryDrawing((active) => !active);
                                 }}
                             />
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -1917,9 +2056,47 @@ export function CanvasPrevisWorkbench({
                     void uploadModel(file).catch((error) => message.error(error instanceof Error ? error.message : "模型上传失败"));
                 }}
             />
+            {pointMenu ? (
+                <PrevisPointMenu
+                    point={pointMenu.point}
+                    screen={pointMenu.screen}
+                    nextLabel={nextPrevisMarkerLabel(draft.markers ?? [])}
+                    markers={draft.markers ?? []}
+                    actorName={selectedActor?.name}
+                    cameraName={selectedCamera?.name}
+                    playhead={snappedPlayhead}
+                    shotDuration={activeShot.duration}
+                    onAddMarker={() => {
+                        addMarkerAt(pointMenu.point);
+                        closePointMenu();
+                    }}
+                    onCopy={() => {
+                        void navigator.clipboard?.writeText(`(${pointMenu.point.x.toFixed(2)}, 0, ${pointMenu.point.z.toFixed(2)})`).then(
+                            () => message.success("坐标已复制"),
+                            () => message.warning("浏览器不允许自动复制"),
+                        );
+                        closePointMenu();
+                    }}
+                    onPlaceSelected={() => {
+                        if (selectedActor) handleObjectTransform(selectedActor.id, selectedActor.transform, { ...selectedActor.transform, position: [pointMenu.point.x, selectedActor.transform.position[1], pointMenu.point.z] });
+                        else if (selectedCamera) handleCameraTransform(selectedCamera.id, selectedCamera.transform, { ...selectedCamera.transform, position: [pointMenu.point.x, selectedCamera.transform.position[1], pointMenu.point.z] });
+                        closePointMenu();
+                    }}
+                    onTravel={(style, duration) => {
+                        travelSelectedActorTo(pointMenu.point, style, duration);
+                        closePointMenu();
+                    }}
+                    onClearMarkers={() => {
+                        commit((current) => ({ ...current, markers: [] }));
+                        closePointMenu();
+                    }}
+                    onClose={closePointMenu}
+                />
+            ) : null}
             <PrevisAddDialog
                 open={addDialog.open}
                 initialKind={addDialog.kind}
+                initialPropCategory={addDialog.category}
                 counts={addCounts}
                 readCurrentView={() => viewportRef.current?.readCameraTransform() ?? null}
                 onClose={closeAddDialog}
@@ -1930,8 +2107,47 @@ export function CanvasPrevisWorkbench({
                 }}
             />
         </div>
+        </ConfigProvider>
     );
 }
+
+/** 顶部世界状态胶囊里的天气图标。 */
+function WorldStatusIcon({ weather }: { weather: PrevisWeather }) {
+    const Icon = weather === "clear" ? Sun : weather === "cloudy" ? CloudSun : weather === "overcast" ? Cloud : weather === "snow" ? Snowflake : weather === "fog" ? CloudFog : CloudRain;
+    return <Icon className="size-3.5" aria-hidden />;
+}
+
+/** 浅色 token：覆盖 canvas-previs-workbench.css 的深色默认值，面板为半透明白底配背景模糊。 */
+const PREVIS_LIGHT_TOKENS = {
+    "--pd-s0": "#eef0f3",
+    "--pd-s1": "rgba(255, 255, 255, 0.86)",
+    "--pd-s2": "#f3f4f6",
+    "--pd-s3": "#eaecef",
+    "--pd-s4": "#e2e5e9",
+    "--pd-s5": "#ffffff",
+    "--pd-b0": "rgba(17, 24, 39, 0.07)",
+    "--pd-b1": "rgba(17, 24, 39, 0.13)",
+    "--pd-b2": "rgba(17, 24, 39, 0.24)",
+    "--pd-t0": "#1d2026",
+    "--pd-t1": "#5a616c",
+    "--pd-t2": "#8b919b",
+    "--pd-t3": "#b5bac2",
+    "--pd-a0": "#1d2026",
+    "--pd-a1": "#1d2026",
+    "--pd-a-bg": "rgba(29, 32, 38, 0.06)",
+    "--pd-a-bd": "rgba(29, 32, 38, 0.55)",
+    "--pd-a-on": "#ffffff",
+    "--pd-accent-rgb": "29 32 38",
+    "--previs-accent": "#1d2026",
+    "--pd-a-on-theme": "#ffffff",
+    "--pd-a-bg-theme": "rgba(29, 32, 38, 0.06)",
+    "--pd-a-bd-theme": "rgba(29, 32, 38, 0.55)",
+    "--pd-shadow-raised": "0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 3px rgba(17, 24, 39, 0.08)",
+    "--pd-shadow-floating": "0 12px 32px rgba(17, 24, 39, 0.12), 0 2px 6px rgba(17, 24, 39, 0.06)",
+} as CSSProperties;
+
+/** 预演台固定使用浅色主题：白色悬浮面板压在世界视口上，不跟随应用暗色模式。 */
+const PREVIS_LIGHT_ANT_THEME = getAntThemeConfig(false);
 
 /** 渲染视图全集。实际可选项由当前模式的 capabilities.renderModes 过滤。 */
 const PREVIS_RENDER_MODE_LABELS: Array<{ label: string; value: PrevisRenderMode }> = [

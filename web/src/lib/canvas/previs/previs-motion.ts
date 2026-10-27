@@ -1,6 +1,7 @@
 import { Euler, Quaternion } from "three";
 
 import { interpolatePrevisBoneRotation, interpolatePrevisTransform, resolvePrevisKeyframeProgress } from "@/lib/canvas/previs/previs-scene";
+import { evaluatePrevisTravel, previsTravelGaitRun, previsTravelPose, previsTravelSuppressesGait } from "@/lib/canvas/previs/previs-travel";
 import type { PrevisActorMotion, PrevisHumanoidBone, PrevisKeyframe, PrevisMotionId, PrevisObject, PrevisPose, PrevisQuat } from "@/types/previs";
 
 /**
@@ -379,16 +380,18 @@ function eulerToQuat(value: PrevisEuler, scale = 1): Quaternion {
  * 3. 动作片段（upper 只覆盖上半身，可叠在走路上）；4. 骨骼静态覆盖；5. 骨骼关键帧。
  * 截图、录制、第二屏与视口共用这一个函数，保证所见即所得。
  */
-export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "keyframes" | "motions" | "boneOverrides" | "boneTracks">, time: number): PrevisEvaluatedPose {
+export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "keyframes" | "motions" | "boneOverrides" | "boneTracks"> & Partial<Pick<PrevisObject, "travels" | "transform">>, time: number): PrevisEvaluatedPose {
     const base = PREVIS_MANNEQUIN_POSES[object.pose || "stand"] ?? PREVIS_MANNEQUIN_POSES.stand;
     const current = new Map<PrevisMannequinBone, Quaternion>();
     for (const bone of PREVIS_MANNEQUIN_BONES) current.set(bone, base[bone] ? eulerToQuat(base[bone]!) : new Quaternion());
 
+    // 位移段（飞行、御剑、悬浮、跳跃、闪现）：飞行类不迈步，走/跑/冲刺强制对应步态。
+    const travel = object.travels?.length ? evaluatePrevisTravel({ travels: object.travels, keyframes: object.keyframes || [], transform: object.transform ?? { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }, time) : null;
     const speed = previsHorizontalSpeed(object.keyframes || [], time);
-    const moveWeight = smoothstep(0.08, 0.45, speed);
+    const moveWeight = previsTravelSuppressesGait(travel) ? 0 : smoothstep(0.08, 0.45, speed);
     let locomotion: PrevisEvaluatedPose["locomotion"] = "still";
     if (moveWeight > 0) {
-        const run = smoothstep(2, 2.8, speed);
+        const run = previsTravelGaitRun(travel) ?? smoothstep(2, 2.8, speed);
         locomotion = run > 0.5 ? "run" : "walk";
         // 步幅：走约 1.35m/周期，跑约 2.3m/周期。
         const stride = 1.35 + 0.95 * run;
@@ -400,6 +403,16 @@ export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "key
     }
 
     let lift = 0;
+    if (travel) {
+        const travelPose = previsTravelPose(travel);
+        if (travelPose && travel.weight > 0) {
+            for (const bone of PREVIS_MANNEQUIN_BONES) {
+                const target = travelPose[bone];
+                if (target) current.get(bone)!.slerp(eulerToQuat(target), travel.weight);
+            }
+        }
+        lift = Math.max(lift, travel.lift);
+    }
     for (const motion of object.motions || []) {
         const definition = PREVIS_MOTIONS[motion.motion];
         const weight = definition ? previsMotionWeight(motion, time) : 0;

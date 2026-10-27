@@ -62,7 +62,6 @@ import { CanvasNodeLightingPanel } from "@/components/canvas/canvas-node-lightin
 import { CanvasTextEditorModal } from "@/components/canvas/canvas-text-editor-modal";
 import { CanvasNodeSearchModal } from "@/components/canvas/canvas-node-search-modal";
 import { CanvasStylePickerModal } from "@/components/canvas/canvas-style-picker-modal";
-import { CanvasPrevisTemplateModal } from "@/components/canvas/previs/canvas-previs-template-modal";
 import { CanvasFileDropOverlay } from "@/components/canvas/canvas-file-drop-overlay";
 import { CanvasUploadModal } from "@/components/canvas/canvas-upload-modal";
 import { CanvasPanoramaConfigModal } from "@/components/canvas/canvas-panorama-config-modal";
@@ -289,8 +288,6 @@ function CanvasViewportPage() {
     const [characterLibraryPosition, setCharacterLibraryPosition] = useState<Position | undefined>();
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
     const [stylePickerOpen, setStylePickerOpen] = useState(false);
-    // 新建预演台镜头必须先选模板：null 表示未在选择中，undefined position 表示用画布中心。
-    const [previsTemplateRequest, setPrevisTemplateRequest] = useState<{ position?: Position } | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [subtitleNodeId, setSubtitleNodeId] = useState<string | null>(null);
     const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
@@ -2571,7 +2568,7 @@ function CanvasViewportPage() {
             onAddWorkflow: () => createNode(CanvasNodeType.Config),
             onAddExtensionNode: (type) => createNode(type),
             onChooseStyle: () => setStylePickerOpen(true),
-            onOpenPrevis: () => setPrevisTemplateRequest({}),
+            onOpenPrevis: () => createPrevisShot("empty"),
             onUpload: () => handleUploadRequest(),
             onOpenMyAssets: () => openCanvasAssetLibrary(),
             onOpenProjectCharacters: () => openCharacterLibrary(),
@@ -2819,7 +2816,6 @@ function CanvasViewportPage() {
 
                             <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} applying={styleApplying} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
 
-                            <CanvasPrevisTemplateModal open={Boolean(previsTemplateRequest)} onClose={() => setPrevisTemplateRequest(null)} onSelect={(templateId) => createPrevisShot(templateId, previsTemplateRequest?.position)} />
 
                             <div className="relative flex min-h-0 min-w-0 flex-1">
                                 <div className="relative min-w-0 flex-1 overflow-clip">
@@ -2974,7 +2970,7 @@ function CanvasViewportPage() {
                                             onAddDrawing={() => createNode(CanvasNodeType.Drawing)}
                                             onAddExtensionNode={(type) => createNode(type)}
                                             onAddWorkflow={() => createNode(CanvasNodeType.Config)}
-                                            onOpenPrevis={() => setPrevisTemplateRequest({})}
+                                            onOpenPrevis={() => createPrevisShot("empty")}
                                             onUndo={undoCanvas}
                                             onRedo={redoCanvas}
                                             onUpload={() => handleUploadRequest()}
@@ -3228,7 +3224,7 @@ function CanvasViewportPage() {
                                 onAddNode={(type, position) => createNode(type, position)}
                                 onAddFolder={createFolder}
                                 onChooseStyle={() => setStylePickerOpen(true)}
-                                onOpenPrevis={(position) => setPrevisTemplateRequest({ position })}
+                                onOpenPrevis={(position) => createPrevisShot("empty", position)}
                                 onUpload={(nodeId, position) => handleUploadRequest(nodeId, position)}
                                 onOpenAssets={openCanvasAssetLibrary}
                                 onOpenProjectCharacters={(position) => openCharacterLibrary(position)}

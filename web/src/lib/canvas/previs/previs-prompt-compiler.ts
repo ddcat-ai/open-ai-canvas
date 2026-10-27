@@ -1,5 +1,8 @@
-import type { PrevisCamera, PrevisEnvironment, PrevisObject, PrevisScene, PrevisShot } from "@/types/previs";
+import type { PrevisCamera, PrevisEnvironment, PrevisObject, PrevisScene, PrevisShot, PrevisWorld } from "@/types/previs";
 import { previsActorArchetypeLabel, previsColorLabel, previsPoseLabel } from "@/lib/canvas/previs/previs-scene";
+import { resolvePrevisCatalogProp, resolvePrevisLayoutTemplate } from "@/lib/canvas/previs/previs-prop-catalog";
+import { formatPrevisTimeOfDay, PREVIS_GROUND_OPTIONS, PREVIS_WEATHER_OPTIONS } from "@/lib/canvas/previs/previs-world";
+import { previsActorPositionAt, resolvePrevisTravelStyle } from "@/lib/canvas/previs/previs-travel";
 
 const shotSizeLabels: Record<PrevisShot["shotSize"], string> = {
     extreme_wide: "大远景",
@@ -31,11 +34,13 @@ export function compilePrevisPrompt(scene: PrevisScene, shot: PrevisShot) {
         shot.prompt.trim(),
         `镜头设计：${shotSizeLabels[shot.shotSize]}，${cameraMoveLabels[shot.cameraMove]}，时长 ${formatNumber(shot.duration)} 秒。`,
         camera ? cameraPrompt(camera) : "",
-        environmentPrompt(scene.environment),
+        scene.world ? worldPrompt(scene.world) : environmentPrompt(scene.environment),
+        layoutPrompt(visibleObjects),
+        travelPrompt(actors),
         actors.length ? `角色原型与颜色映射：${actors.map((actor) => `${previsActorArchetypeLabel(actor.archetype)}${actor.name}（${actor.color}）`).join("；")}。生成视频时保持每个角色的体型、轮廓和身份稳定。` : "",
-        visibleObjects.length ? `空间调度：${visibleObjects.map(objectPrompt).join("；")}。` : "",
+        visibleObjects.some((item) => item.kind !== "layout") ? `空间调度：${visibleObjects.filter((item) => item.kind !== "layout").map(objectPrompt).join("；")}。` : "",
         assetReferencePrompt(scene),
-        `灯光：${scene.lights.map((light) => `${light.name}${formatNumber(light.intensity)}强度${light.color}`).join("，")}。`,
+        scene.world ? "" : `灯光：${scene.lights.map((light) => `${light.name}${formatNumber(light.intensity)}强度${light.color}`).join("，")}。`,
         "保持角色、道具、空间方向、光线方向和镜头轴线连续，遵循真实摄影机透视与物理遮挡。",
     ]
         .filter(Boolean)
@@ -45,6 +50,46 @@ export function compilePrevisPrompt(scene: PrevisScene, shot: PrevisShot) {
 function environmentPrompt(environment?: PrevisEnvironment) {
     if (!environment || environment.mode !== "panorama" || !environment.url) return "背景环境：使用工作台灰色预览背景。";
     return `背景环境：使用已绑定的 360° 全景图作为空间背景，保持全景图的水平朝向与镜头旋转连续；白膜角色只参考站位、比例、动作和遮挡，不把全景图拉伸成普通平面。`;
+}
+
+function timeOfDayLabel(hours: number) {
+    if (hours < 5 || hours >= 20) return "夜晚";
+    if (hours < 8) return "清晨";
+    if (hours < 11) return "上午";
+    if (hours < 14) return "正午";
+    if (hours < 17) return "午后";
+    return "黄昏";
+}
+
+function worldPrompt(world: PrevisWorld) {
+    const weather = PREVIS_WEATHER_OPTIONS.find((item) => item.value === world.weather)?.label ?? "晴";
+    const ground = PREVIS_GROUND_OPTIONS.find((item) => item.value === world.ground)?.label ?? "草地";
+    return `环境与光线：${timeOfDayLabel(world.timeOfDay)}（${formatPrevisTimeOfDay(world.timeOfDay)}），天气${weather}，远景为${ground}${world.horizon ? "与连绵远山" : ""}；光线方向、色温与阴影长度符合该时刻的太阳位置。`;
+}
+
+function layoutPrompt(objects: PrevisObject[]) {
+    const layouts = objects.filter((item) => item.kind === "layout" && item.layout);
+    if (!layouts.length) return "";
+    return `场景布景：${layouts
+        .map((item) => {
+            const info = resolvePrevisLayoutTemplate(item.layout?.template);
+            return `${item.name}（${info?.name ?? "布景"}，约 ${Math.round(item.layout?.size ?? 0)} 米见方${info ? `，${info.hint}` : ""}${item.layout?.crowd ? "，街上有往来行人" : ""}）`;
+        })
+        .join("；")}。白膜只表达建筑体量、街道走向与空间层次，生成时补全真实材质与细节。`;
+}
+
+function travelPrompt(actors: PrevisObject[]) {
+    const lines = actors.flatMap((actor) =>
+        (actor.travels ?? []).map((travel) => {
+            const style = resolvePrevisTravelStyle(travel.style);
+            const from = previsActorPositionAt(actor, travel.start);
+            const to = previsActorPositionAt(actor, travel.start + travel.duration);
+            const height = travel.height && travel.height > 0 ? `，离地约 ${formatNumber(travel.height)} 米` : "";
+            const flash = travel.style === "teleport" ? "，原地残影消失、终点瞬间出现" : "";
+            return `${actor.name} 在 ${formatNumber(travel.start)}–${formatNumber(travel.start + travel.duration)} 秒从 (${formatNumber(from[0])}, ${formatNumber(from[2])}) ${style.verb} (${formatNumber(to[0])}, ${formatNumber(to[2])})${height}${flash}`;
+        }),
+    );
+    return lines.length ? `人物位移：${lines.join("；")}。移动方向、速度与时长与预演一致。` : "";
 }
 
 function assetReferencePrompt(scene: PrevisScene) {
@@ -67,7 +112,9 @@ function objectPrompt(object: PrevisObject) {
     const pose = object.pose ? `，姿势${previsPoseLabel(object.pose)}` : "";
     const archetype = object.kind === "actor" || object.primitive === "character" ? `，角色原型${previsActorArchetypeLabel(object.archetype)}` : "";
     const color = object.kind === "actor" || object.primitive === "character" ? `，${previsColorLabel(object.color)}参考色` : "";
-    return `${object.name}${archetype}${color}位于 (${formatNumber(x)}, ${formatNumber(y)}, ${formatNumber(z)})${pose}`;
+    const catalog = object.kind === "prop" ? resolvePrevisCatalogProp(object.propId) : undefined;
+    const kindLabel = catalog && catalog.name !== object.name ? `（${catalog.name}）` : "";
+    return `${object.name}${kindLabel}${archetype}${color}位于 (${formatNumber(x)}, ${formatNumber(y)}, ${formatNumber(z)})${pose}`;
 }
 
 function formatNumber(value: number) {

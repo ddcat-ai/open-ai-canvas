@@ -29,11 +29,13 @@ import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-short
 import { isPrevisStandardActor, PREVIS_MANNEQUIN_HEIGHT } from "@/lib/canvas/previs/previs-mannequin";
 import { previsPrimitiveHalfHeight } from "@/lib/canvas/previs/previs-prop-library";
 import { dropPrevisObjectToGround } from "@/lib/canvas/previs/previs-grounding";
+import { PrevisLayoutInspectorGroup, PrevisPropVariantGroup } from "./previs-world-panel";
+import { PrevisTravelSection } from "./previs-travel-section";
 
 /** 演员色板：一行 8 个高区分度颜色，其余颜色用取色器/十六进制输入，避免两行杂乱色块。 */
 const PREVIS_ACTOR_SWATCHES: readonly string[] = ["#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#f97316", "#06b6d4", "#8a93a0"];
 import { PREVIS_MOTION_IDS, PREVIS_MOTIONS, previsMotionLabel, previsMotionsOverlap } from "@/lib/canvas/previs/previs-motion";
-import type { PrevisActorMotion, PrevisMotionId } from "@/types/previs";
+import type { PrevisActorMotion, PrevisMarker, PrevisMotionId } from "@/types/previs";
 
 /**
  * 标准人偶的动作库：点击动作即在当前播放头插入片段；移动步态由走位自动推导，不需要手动添加。
@@ -196,8 +198,13 @@ export function ObjectInspector({
     onClearPath,
     onDuplicate,
     onDelete,
+    markers = [],
+    shotDuration = 5,
 }: {
     object: PrevisObject;
+    /** 右键标记的坐标点，供「A → B」位移选择。 */
+    markers?: PrevisMarker[];
+    shotDuration?: number;
     rendered: PrevisTransform;
     playhead: number;
     selectedBone: string | null;
@@ -276,12 +283,15 @@ export function ObjectInspector({
                                     ) : null}
                                 </div>
                             </GuideStep>
+                            <GuideStep index={2} title="A 点 → B 点" done={Boolean(object.travels?.length)} hint="走、跑、冲刺、跳跃、飞行、御剑、悬浮、闪现：选起点终点和用时，从播放头开始。">
+                                <PrevisTravelSection object={object} markers={markers} playhead={playhead} shotDuration={shotDuration} onUpdate={onUpdate} />
+                            </GuideStep>
                             {isPrevisStandardActor(object) ? (
-                                <GuideStep index={2} title="动作" done={motionCount > 0} hint={`先把时间轴上的播放头拖到动作开始的时间（现在是 ${playhead.toFixed(1)}s），再点下面的动作。招手、说话等上半身动作可以边走边做。`}>
+                                <GuideStep index={3} title="动作" done={motionCount > 0} hint={`先把时间轴上的播放头拖到动作开始的时间（现在是 ${playhead.toFixed(1)}s），再点下面的动作。招手、说话等上半身动作可以边走边做。`}>
                                     <ActorMotionSection object={object} playhead={playhead} onUpdate={onUpdate} />
                                 </GuideStep>
                             ) : null}
-                            <GuideStep index={isPrevisStandardActor(object) ? 3 : 2} title="预览" hint="播放整段镜头，看走位和动作是否自然；满意后在顶栏导出白膜视频。">
+                            <GuideStep index={isPrevisStandardActor(object) ? 4 : 3} title="预览" hint="播放整段镜头，看走位和动作是否自然；满意后在顶栏导出白膜视频。">
                                 <Button size="small" block icon={playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />} onClick={onTogglePlay}>
                                     {playing ? "暂停" : "播放预览"}
                                 </Button>
@@ -391,8 +401,10 @@ export function ObjectInspector({
                             <ProfileSlider label="头部" min={0.7} max={1.5} value={profile.headRatio} onChange={(headRatio) => updateProfile({ headRatio })} />
                         </InspectorGroup>
                     ) : null}
+                    {object.kind === "layout" ? <PrevisLayoutInspectorGroup object={object} onUpdate={onUpdate} /> : null}
+                    {object.kind === "prop" ? <PrevisPropVariantGroup object={object} onUpdate={onUpdate} /> : null}
                     <InspectorGroup title="外观">
-                        <ColorRow value={object.color} swatches={isActor ? PREVIS_ACTOR_SWATCHES : undefined} label={isActor ? "角色十六进制颜色" : "十六进制颜色"} onChange={(color) => onUpdate({ color })} />
+                        {object.kind === "layout" ? null : <ColorRow value={object.color} swatches={isActor ? PREVIS_ACTOR_SWATCHES : undefined} label={isActor ? "角色十六进制颜色" : "十六进制颜色"} onChange={(color) => onUpdate({ color })} />}
                         <div className="previs-inspector-toggles">
                             <label className="previs-inspector-toggle">
                                 <span>可见</span>

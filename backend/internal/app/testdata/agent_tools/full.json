@@ -354,7 +354,7 @@
   },
   {
     "function": {
-      "description": "审批后应用语义补丁，最多32项；先读 snapshotHash。支持场景、镜头、对象、相机、灯光、动画；角色绑定须匹配画布角色卡，动画时间不超镜头时长。object_motion_path_set/clear 替换/清空对象全部 transform 关键帧。禁止原始 JSON、URL、storage key。",
+      "description": "审批后应用语义补丁，最多32项；先读 snapshotHash。支持场景、镜头、对象、相机、灯光、动画；角色绑定须匹配画布角色卡，动画时间不超镜头时长。object_motion_path_set/clear 替换/清空对象全部 transform 关键帧。实物用 kind=prop+propId(+params)，N 个同类用 object_array_add，演员 A→B 走跑飞闪现用 actor_travel，街区城镇用 kind=layout，时间天气用 world_update；目录与参数见 previs_scene_read.catalog。禁止原始 JSON、URL、storage key。",
       "name": "previs_apply_patch",
       "parameters": {
         "additionalProperties": false,
@@ -429,6 +429,24 @@
                   "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
                   "type": "string"
                 },
+                "columns": {
+                  "maximum": 30,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "count": {
+                  "maximum": 30,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "crowd": {
+                  "type": "boolean"
+                },
+                "density": {
+                  "maximum": 1,
+                  "minimum": 0.2,
+                  "type": "number"
+                },
                 "duration": {
                   "maximum": 60,
                   "minimum": 0.1,
@@ -447,6 +465,14 @@
                   "minimum": 0,
                   "type": "number"
                 },
+                "facing": {
+                  "enum": [
+                    "same",
+                    "center",
+                    "outward"
+                  ],
+                  "type": "string"
+                },
                 "focalLength": {
                   "maximum": 300,
                   "minimum": 1,
@@ -457,7 +483,42 @@
                   "minimum": 1,
                   "type": "integer"
                 },
+                "fromMarker": {
+                  "maxLength": 8,
+                  "type": "string"
+                },
                 "gridVisible": {
+                  "type": "boolean"
+                },
+                "ground": {
+                  "enum": [
+                    "grass",
+                    "forest",
+                    "sand",
+                    "redsoil",
+                    "snow",
+                    "water",
+                    "city",
+                    "warm",
+                    "white",
+                    "gray"
+                  ],
+                  "type": "string"
+                },
+                "groundSize": {
+                  "enum": [
+                    1000,
+                    2000,
+                    4000
+                  ],
+                  "type": "integer"
+                },
+                "height": {
+                  "maximum": 50,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "horizon": {
                   "type": "boolean"
                 },
                 "id": {
@@ -476,8 +537,22 @@
                 },
                 "kind": {
                   "enum": [
-                    "primitive",
-                    "actor"
+                    "prop",
+                    "layout",
+                    "actor",
+                    "primitive"
+                  ],
+                  "type": "string"
+                },
+                "layoutTemplate": {
+                  "enum": [
+                    "ancient_city",
+                    "ancient_street",
+                    "modern_city",
+                    "modern_street",
+                    "village",
+                    "garden",
+                    "forest"
                   ],
                   "type": "string"
                 },
@@ -524,6 +599,9 @@
                 "orientToPath": {
                   "type": "boolean"
                 },
+                "params": {
+                  "type": "object"
+                },
                 "parentId": {
                   "maxLength": 80,
                   "type": "string"
@@ -546,6 +624,15 @@
                     "slow",
                     "walk",
                     "run"
+                  ],
+                  "type": "string"
+                },
+                "pattern": {
+                  "enum": [
+                    "line",
+                    "grid",
+                    "ring",
+                    "scatter"
                   ],
                   "type": "string"
                 },
@@ -603,6 +690,10 @@
                   "maxLength": 2000,
                   "type": "string"
                 },
+                "propId": {
+                  "maxLength": 40,
+                  "type": "string"
+                },
                 "referenceNodeId": {
                   "maxLength": 120,
                   "type": "string"
@@ -623,6 +714,11 @@
                   "minItems": 3,
                   "type": "array"
                 },
+                "seed": {
+                  "maximum": 999999999,
+                  "minimum": 0,
+                  "type": "integer"
+                },
                 "shotSize": {
                   "enum": [
                     "extreme_wide",
@@ -633,6 +729,16 @@
                     "extreme_close_up"
                   ],
                   "type": "string"
+                },
+                "size": {
+                  "maximum": 1200,
+                  "minimum": 50,
+                  "type": "number"
+                },
+                "spacing": {
+                  "maximum": 500,
+                  "minimum": 0.2,
+                  "type": "number"
                 },
                 "startDelay": {
                   "maximum": 60,
@@ -652,13 +758,38 @@
                   "minimum": 0,
                   "type": "number"
                 },
+                "timeOfDay": {
+                  "maximum": 24,
+                  "minimum": 0,
+                  "type": "number"
+                },
                 "title": {
                   "maxLength": 160,
+                  "type": "string"
+                },
+                "toMarker": {
+                  "maxLength": 8,
+                  "type": "string"
+                },
+                "travelStyle": {
+                  "enum": [
+                    "walk",
+                    "run",
+                    "dash",
+                    "jump",
+                    "fly",
+                    "sword_fly",
+                    "float",
+                    "teleport"
+                  ],
                   "type": "string"
                 },
                 "type": {
                   "enum": [
                     "scene_update",
+                    "world_update",
+                    "object_array_add",
+                    "actor_travel",
                     "shot_add",
                     "shot_update",
                     "shot_remove",
@@ -682,7 +813,32 @@
                   ],
                   "type": "string"
                 },
+                "variant": {
+                  "maximum": 7,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "vary": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
                 "visible": {
+                  "type": "boolean"
+                },
+                "weather": {
+                  "enum": [
+                    "clear",
+                    "cloudy",
+                    "overcast",
+                    "rain",
+                    "storm",
+                    "snow",
+                    "fog"
+                  ],
+                  "type": "string"
+                },
+                "worldEnabled": {
                   "type": "boolean"
                 }
               },

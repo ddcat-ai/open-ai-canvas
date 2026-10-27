@@ -1,6 +1,8 @@
 import { nanoid } from "nanoid";
 import { Color, Euler, Quaternion } from "three";
 
+import { resolvePrevisCatalogProp, resolvePrevisPropParams } from "@/lib/canvas/previs/previs-prop-catalog";
+
 import type {
     PrevisActorArchetype,
     PrevisActorProfile,
@@ -12,9 +14,11 @@ import type {
     PrevisKeyframe,
     PrevisKeyframeDeleteTarget,
     PrevisKeyframeEasing,
+    PrevisLayout,
     PrevisLight,
     PrevisObject,
     PrevisPose,
+    PrevisPropParams,
     PrevisQuat,
     PrevisScene,
     PrevisTransform,
@@ -123,6 +127,17 @@ export function createPrevisModel(input: Pick<PrevisObject, "name" | "storageKey
 
 export function createPrevisBillboard(name: string, url: string, storageKey?: string, sourceNodeId?: string): PrevisObject {
     return { ...createPrevisObject("plane", name, [0, 1.1, 0], "#ffffff"), kind: "billboard", url, storageKey, sourceNodeId, transform: { position: [0, 1.1, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } };
+}
+
+/** 目录道具：原点在底面中心，y=0 即贴地。color 驱动道具的强调部位（车身、花色、外墙）。 */
+export function createPrevisCatalogProp(input: { propId: string; name: string; color: string; variant?: number; params?: PrevisPropParams }): PrevisObject {
+    const params = resolvePrevisCatalogProp(input.propId)?.params ? resolvePrevisPropParams(input.propId, input.params) : undefined;
+    return { ...createPrevisObject("box", input.name, [0, 0, 0], input.color), kind: "prop", primitive: undefined, propId: input.propId, variant: input.variant ?? 0, params };
+}
+
+/** 程序化布景：一个对象代表整片街区，移动 / 旋转 / 删除都整体进行。 */
+export function createPrevisLayoutObject(input: { name: string; layout: PrevisLayout }): PrevisObject {
+    return { ...createPrevisObject("box", input.name, [0, 0, 0], "#8795a5"), kind: "layout", primitive: undefined, layout: input.layout };
 }
 
 export function createPrevisCamera(name = "主摄影机"): PrevisCamera {

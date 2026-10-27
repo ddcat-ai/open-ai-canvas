@@ -12,7 +12,6 @@ const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/pre
 const viewport = moduleGroupSource("components/canvas/previs/previs-viewport.tsx");
 const hook = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-previs.ts"), "utf8");
 const project = moduleGroupSource("pages/canvas/project.tsx");
-const modal = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-template-modal.tsx"), "utf8");
 const store = readFileSync(resolve(import.meta.dir, "../src/stores/canvas/use-previs-workbench-store.ts"), "utf8");
 const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
@@ -24,7 +23,7 @@ function slice(source: string, from: string, to: string) {
     return source.slice(start, end);
 }
 
-describe("新建场景必须显式选模板", () => {
+describe("新建场景的模板参数显式传入", () => {
     test("createPrevisShot 第一个参数是 templateId，没有默认值", () => {
         // 归一化空白：Prettier 会把长 useCallback 拆行，断言只关心签名本身。
         expect(hook.replace(/\s+/g, " ")).toContain("const createPrevisShot = useCallback( (templateId: PrevisTemplateId, position?: Position) => {");
@@ -37,23 +36,17 @@ describe("新建场景必须显式选模板", () => {
         expect(hook).not.toContain("createPrevisScene(");
     });
 
-    test("两个新建入口都先开模板选择，而不是直接建场景", () => {
-        expect(project).toContain("onOpenPrevis={() => setPrevisTemplateRequest({})}");
-        expect(project).toContain("onOpenPrevis={(position) => setPrevisTemplateRequest({ position })}");
-        expect(project).not.toContain("onOpenPrevis={() => createPrevisShot()}");
+    test("画布新建入口直接建空白场景，不弹模板选择、不塞默认演员", () => {
+        expect(project).toContain('onOpenPrevis: () => createPrevisShot("empty")');
+        expect(project).toContain('onOpenPrevis={() => createPrevisShot("empty")}');
+        expect(project).toContain('onOpenPrevis={(position) => createPrevisShot("empty", position)}');
+        expect(project).not.toContain("setPrevisTemplateRequest");
+        expect(project).not.toContain("CanvasPrevisTemplateModal");
         expect(project).not.toContain("onOpenPrevis={createPrevisShot}");
     });
 
-    test("选中模板后带着 position 建场景", () => {
-        const element = slice(project, "<CanvasPrevisTemplateModal", "/>");
-        expect(element).toContain("open={Boolean(previsTemplateRequest)}");
-        expect(element).toContain("onSelect={(templateId) => createPrevisShot(templateId, previsTemplateRequest?.position)}");
-    });
-
-    test("模板弹窗把 5 个模板全列出来，没有「默认」快捷项", () => {
-        expect(modal).toContain("PREVIS_TEMPLATES.map");
-        expect(modal).toContain("onSelect(template.id)");
-        expect(modal).not.toContain("默认模板");
+    test("新建的空白场景默认开启世界环境", () => {
+        expect(hook).toContain("world: { ...PREVIS_DEFAULT_WORLD }");
     });
 });
 
@@ -162,7 +155,8 @@ describe("模式接线", () => {
 
     test("小屏通过 dock 开合属性检查器，姿态与骨骼入口仍可达", () => {
         const workbenchCss = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-workbench.css"), "utf8");
-        expect(workbench).toContain('className={`pv-panel pv-panel--right thin-scrollbar ${inspectorOpen ? "is-open" : ""}`}');
+        // 右侧面板仍由 inspectorOpen 切换 is-open；允许追加其他状态类（如 is-scene-settings）。
+        expect(workbench).toMatch(/className=\{`pv-panel pv-panel--right thin-scrollbar \$\{inspectorOpen \? "is-open" : ""\}[^`]*`\}/);
         expect(workbench).toMatch(/onToggleInspector=\{\(\) =>\s*\(?\s*compactLayout\s*\?\s*setInspectorOpen\(\(value\) => !value\)\s*:\s*setInspectorDocked\(\(value\) => !value\)\s*\)?\s*\}/);
         expect(workbenchCss).toMatch(/\.pv-panel--right\.is-open\s*\{\s*transform:\s*translateX\(0\);\s*\}/);
         expect(workbench).not.toContain("border-l max-lg:hidden");

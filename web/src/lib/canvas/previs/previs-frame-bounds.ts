@@ -1,6 +1,7 @@
 import { Vector3 } from "three";
 
 import { previsMannequinExtents, resolvePrevisMannequinProfile } from "@/lib/canvas/previs/previs-mannequin";
+import { resolvePrevisPropSize } from "@/lib/canvas/previs/previs-prop-catalog";
 import type { PrevisObject } from "@/types/previs";
 
 export type PrevisFrameBounds = {
@@ -29,6 +30,14 @@ export function resolvePrevisObjectBox(object: PrevisObject): { min: Vector3; ma
         const halfDepth = Math.max(extents.halfDepth, 0.3 * profile.height) * Math.max(0.1, Math.abs(sz));
         return { min: new Vector3(x - halfWidth, y, z - halfDepth), max: new Vector3(x + halfWidth, y + height, z + halfDepth) };
     }
+    // 目录道具与布景的原点在底面中心，按目录尺寸 / 布景边长求包围盒。
+    const catalogSize = object.kind === "prop" ? resolvePrevisPropSize(object.propId, object.params) : object.kind === "layout" && object.layout ? ([object.layout.size, 18, object.layout.size] as const) : undefined;
+    if (catalogSize) {
+        const halfX = (catalogSize[0] / 2) * Math.max(0.1, Math.abs(sx));
+        const halfZ = (catalogSize[2] / 2) * Math.max(0.1, Math.abs(sz));
+        // 布景按地面范围取景，高度只取较矮的参考值，避免整城取景距离被高楼拉得过远。
+        return { min: new Vector3(x - halfX, y, z - halfZ), max: new Vector3(x + halfX, y + catalogSize[1] * Math.max(0.1, Math.abs(sy)), z + halfZ) };
+    }
     const primitiveBounds: [number, number, number] = object.primitive === "sphere" ? [0.6, 0.6, 0.6] : object.primitive === "cylinder" ? [0.55, 0.8, 0.55] : object.primitive === "plane" ? [1.2, 0.05, 1.2] : [0.6, 0.6, 0.6];
     const half = new Vector3(primitiveBounds[0] * Math.max(0.1, Math.abs(sx)), primitiveBounds[1] * Math.max(0.1, Math.abs(sy)), primitiveBounds[2] * Math.max(0.1, Math.abs(sz)));
     return { min: new Vector3(x, y, z).sub(half), max: new Vector3(x, y, z).add(half) };
@@ -42,7 +51,8 @@ export function resolvePrevisZoomMinDistance(objects: PrevisObject[], target: Ve
     let minDistance = PREVIS_MIN_ORBIT_DISTANCE;
     const margin = 0.15;
     objects.forEach((object) => {
-        if (!object.visible || object.primitive === "plane") return;
+        // 布景是一整片地面区域，相机本来就要进到里面去拍。
+        if (!object.visible || object.primitive === "plane" || object.kind === "layout") return;
         const box = resolvePrevisObjectBox(object);
         const contains = target.x >= box.min.x - margin && target.x <= box.max.x + margin && target.y >= box.min.y - margin && target.y <= box.max.y + margin && target.z >= box.min.z - margin && target.z <= box.max.z + margin;
         if (!contains) return;

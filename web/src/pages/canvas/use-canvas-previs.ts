@@ -7,6 +7,7 @@ import { fitImageNodeSize, preserveImageNodeSize } from "@/lib/canvas/canvas-nod
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createPrevisSceneFromTemplate, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
 import { mergePrevisOutputPreview, upsertPrevisSceneById } from "@/lib/canvas/previs/previs-session";
+import { PREVIS_DEFAULT_WORLD } from "@/lib/canvas/previs/previs-world";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
@@ -76,8 +77,8 @@ export function useCanvasPrevis({
     }, [projectId]);
 
     /**
-     * 新建镜头。templateId 由调用方（模板选择弹窗）显式给出 —— 这里不设默认模板，
-     * 否则又会回到「无条件塞一个默认演员」的老问题。
+     * 新建镜头。画布入口一律传 "empty"：直接得到空白场景，不弹模板选择，也不塞默认演员。
+     * 新场景默认开启世界环境（天空、太阳、地面），打开即是可拍的外景空地。
      */
     const createPrevisShot = useCallback(
         (templateId: PrevisTemplateId, position?: Position) => {
@@ -85,7 +86,7 @@ export function useCanvasPrevis({
             const shotIndex = Math.max(0, ...shots.map((node) => node.metadata?.shotIndex || 0)) + 1;
             let scene = createPrevisSceneFromTemplate(templateId, `镜头 ${shotIndex}`);
             const shot = scene.shots[0];
-            scene = { ...scene, shots: [{ ...shot, name: `镜头 ${shotIndex}` }] };
+            scene = { ...scene, world: { ...PREVIS_DEFAULT_WORLD }, shots: [{ ...shot, name: `镜头 ${shotIndex}` }] };
             const node = createCanvasNode(CanvasNodeType.Video, position || getCanvasCenter(), {
                 workflowKind: "shot",
                 workflowTitle: `镜头 ${shotIndex}`,
