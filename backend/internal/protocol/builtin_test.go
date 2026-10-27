@@ -514,7 +514,7 @@ func TestImageResponseKeepsBase64AsDataURL(t *testing.T) {
 	}
 }
 
-func TestOpenAIImagesEditUsesJSONImageReferences(t *testing.T) {
+func TestOpenAIImagesEditUsesMultipartFiles(t *testing.T) {
 	adapter := officialPackageAdapter(t, "openai-images.yingce-plugin", "openai-image")
 	if adapter.Metadata().RequiresPublicMediaURLs {
 		t.Fatal("OpenAI Images must accept inline image data without a public storage URL")
@@ -531,29 +531,45 @@ func TestOpenAIImagesEditUsesJSONImageReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Path != "/v1/images/edits" || spec.ContentType != "application/json" || len(spec.Files) != 0 {
-		t.Fatalf("edit request = path:%q contentType:%q files:%#v", spec.Path, spec.ContentType, spec.Files)
+	if spec.Path != "/v1/images/edits" || spec.ContentType != "multipart/form-data" {
+		t.Fatalf("edit request = path:%q contentType:%q", spec.Path, spec.ContentType)
+	}
+	var images, masks int
+	for _, file := range spec.Files {
+		switch file.Name {
+		case "image[]":
+			images++
+		case "mask":
+			masks++
+		default:
+			t.Fatalf("unexpected multipart file %q", file.Name)
+		}
+	}
+	if images != 2 || masks != 1 {
+		t.Fatalf("files = %#v, want 2 image[] and 1 mask", spec.Files)
 	}
 	body, ok := spec.Body.(map[string]any)
 	if !ok {
 		t.Fatalf("body = %#v", spec.Body)
 	}
-	images, ok := body["images"].([]any)
-	if !ok || len(images) != 2 {
-		t.Fatalf("images = %#v", body["images"])
-	}
-	for index, want := range []string{"data:image/png;base64,aW1hZ2U=", "https://cdn.example/reference-2.png"} {
-		image, ok := images[index].(map[string]any)
-		if !ok || image["image_url"] != want {
-			t.Fatalf("images[%d] = %#v, want image_url %q", index, images[index], want)
+	for _, key := range []string{"images", "mask", "image", "response_format"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("multipart body must not carry %q: %#v", key, body[key])
 		}
 	}
-	mask, ok := body["mask"].(map[string]any)
-	if !ok || mask["image_url"] != "https://cdn.example/mask.png" {
-		t.Fatalf("mask = %#v", body["mask"])
+	if body["model"] != "gpt-image-2.5" || body["prompt"] != "combine both references" {
+		t.Fatalf("body = %#v", body)
 	}
-	if _, exists := body["response_format"]; exists {
-		t.Fatalf("response_format should not be sent by default: %#v", body["response_format"])
+}
+
+func TestOpenAIImagesGenerationStaysJSONWithoutReferences(t *testing.T) {
+	adapter := officialPackageAdapter(t, "openai-images.yingce-plugin", "openai-image")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: "gpt-image-2.5", Prompt: "a red apple"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Path != "/v1/images/generations" || spec.ContentType != "application/json" || len(spec.Files) != 0 {
+		t.Fatalf("generation request = path:%q contentType:%q files:%#v", spec.Path, spec.ContentType, spec.Files)
 	}
 }
 

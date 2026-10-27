@@ -12,6 +12,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 浏览器验收：全民模式下普通用户账户菜单出现「推广中心」，复制链接后用无痕窗口注册，邀请记录出现脱敏名称；指定推广人模式下非推广人看不到入口，直接访问 `/referral` 被带回首页。
 - [ ] 支付联调：被邀请用户完成一笔积分充值，推广人余额增加对应比例积分，钱包流水显示「推广返佣」；重复支付通知不重复返佣。
 - [ ] PostgreSQL：升级到 Schema 72 后既有用户 `is_promoter` 为 `false`，推广统计与列表查询正常。
+## OpenAI Images 图生图改用 multipart
+
+- 已实现：`openai-images` 协议插件升到 2.2.0。无参考图仍发 JSON `POST /v1/images/generations`；有参考图或蒙版改发 `multipart/form-data` 的 `POST /v1/images/edits`，参考图为 `image[]` 文件部件、蒙版为 `mask`，其余参数作为表单字段，不再发送 JSON `images[].image_url`。改动只在 `plugin-packages/openai-images/` 与重新生成的 `openai-images.yingce-plugin`，未改 Go 运行时。
+- 原因：某 OpenAI 兼容中转站（`/v1/images/edits`）对 JSON 编辑请求在约 110–170 秒后直接断开连接（`unexpected EOF`，任务显示“网络异常”），小图与大图表现相同；同一渠道文生图与 multipart 编辑均可出图。
+- 已收到专项结果：`go test ./internal/protocol/` 全部通过；`internal/app` 中插件/图片/协议相关测试通过。用本地渠道真实实测，新协议适配器生成的 multipart 编辑请求返回 HTTP 200，约 42 秒出图，响应可被适配器解析为 1 张图。未重跑 `internal/app` 全量，该包在 Windows 上有与本改动无关的既有失败（如 `Access is denied`），未与改动前逐项对比。
+- [ ] 用户验收：画布内用该渠道做单张参考图、多张参考图、带蒙版的图生图，确认出图成功并能保存；文生图不受影响。
+- [ ] 已安装的旧版 `openai-images` 在升级后是否被刷新为 2.2.0，渠道无需重新配置。
+- [ ] 其他 OpenAI 兼容渠道若只接受 JSON 编辑格式，需要确认没有回归；`image[]` 与 `image` 字段名在本渠道均可用，多图时使用 `image[]`。
 ## 短剧：段视频后处理失败可重新处理
 - 已实现：段视频已生成入库、但抽尾帧等后处理失败时，段卡片显示「视频后处理失败」，封面用视频开头画面，弹窗可直接播放该视频；新增「重新处理」按钮，调用 `POST /dramas/:id/episodes/:episodeId/segments/:index/reprocess`，只重放最近一次成功任务的结果，不重新生成、不扣费。「重新生成」按钮在已有视频时改为默认样式并提示会产生新费用。
 - 已修复：抽尾帧改用与渲染相同的 ffmpeg 路径解析（支持环境变量指定），失败时带上 ffmpeg 实际输出；未安装 ffmpeg 的提示改为「后端未安装 ffmpeg」。

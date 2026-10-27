@@ -37,9 +37,8 @@ func TestOpenAIImageLocalReferencesWithoutPublicURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	images := creationMaps(request.Body.(map[string]any)["images"])
-	if request.Path != "/v1/images/edits" || len(images) != 1 || images[0]["image_url"] != want {
-		t.Fatal("image edit request did not retain inline image bytes")
+	if request.Path != "/v1/images/edits" || request.ContentType != "multipart/form-data" || len(request.Files) != 1 || request.Files[0].Name != "image[]" || request.Files[0].Reference.DataURL != want {
+		t.Fatal("image edit request did not retain inline image bytes as a multipart file")
 	}
 	foreign := canvasGenerationInput{ReferenceImages: []providerMedia{{StorageKey: "resource:ref-one"}}}
 	if err := service.hydrateGenerationMedia("other-user", &foreign, policy); err == nil {
