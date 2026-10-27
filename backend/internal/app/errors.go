@@ -77,6 +77,16 @@ func (e *ModelError) Error() string {
 	return string(e.ErrorCode)
 }
 
+// Unwrap 暴露内嵌的 AppError。嵌入字段对 errors.As 不可见：此前提升的
+// Unwrap 返回的是 AppError.Cause（通常为 nil），链在这里断掉，安全文案、
+// 状态与 reason 都取不到，调用方只能把可展示的中文原因脱敏成兜底句。
+func (e *ModelError) Unwrap() error {
+	if e == nil || e.AppError == nil {
+		return nil
+	}
+	return e.AppError
+}
+
 // NewModelError 创建模型错误
 func NewModelError(code ModelErrorCode, message string) *ModelError {
 	err := NewAppError(400, message)
