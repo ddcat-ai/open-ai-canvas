@@ -109,6 +109,17 @@ export function resolveSkillMentions(prompt: string, skills: Skill[], selectedSk
     return activeSkills.filter((skill) => mentionedIds.has(skill.skillId) || containsNaturalSkillMention(prompt, skill.skillName));
 }
 
+// 已删除或已取消安装的技能不能再进入请求；ready=false 表示目录没读到，此时保留原选择。
+export function reconcileSkillSelection(selectedSkillIds: string[], skills: Skill[], ready = true): { skillIds: string[]; removedSkillIds: string[] } {
+    const unique = Array.from(new Set(selectedSkillIds.map((id) => id.trim()).filter(Boolean)));
+    if (!ready) return { skillIds: unique, removedSkillIds: [] };
+    const available = new Set(skills.filter((skill) => skill.isAdded).map((skill) => skill.skillId));
+    return {
+        skillIds: unique.filter((id) => available.has(id)),
+        removedSkillIds: unique.filter((id) => !available.has(id)),
+    };
+}
+
 export function buildSkillMentionReferences(skills: Skill[]): CanvasResourceReference[] {
     return skills
         .filter((skill) => skill.isAdded)
