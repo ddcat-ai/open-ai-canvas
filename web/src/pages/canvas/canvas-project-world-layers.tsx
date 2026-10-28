@@ -180,6 +180,8 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         isSelected={props.selectedNodeIds.has(node.id)}
                         mediaActive={activeMediaNodeId === node.id}
                         onMediaPlayRequest={setActiveMediaNodeId}
+                        onMediaPlaybackEnded={() => setActiveMediaNodeId(null)}
+                        onMediaPlaybackUnavailable={() => setActiveMediaNodeId(null)}
                         isRelated={props.relatedNodeIds.has(node.id)}
                         isFocusRelated={props.activeNodeId === node.id}
                         isConnectionTarget={props.connectionTargetNodeId === node.id || props.batchConnectionPreview?.targetNodeId === node.id}

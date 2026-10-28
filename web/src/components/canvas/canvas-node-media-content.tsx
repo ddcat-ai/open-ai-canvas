@@ -22,7 +22,7 @@ import { fitImageMaterialNodeSize, fitImageNodeSize } from "@/lib/canvas/canvas-
 import { getActiveUserScope } from "@/lib/user-scope";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
 import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
-import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL } from "@/services/api/resources";
+import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL, resourceFileUrl } from "@/services/api/resources";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
 import { ErrorContent, LoadingContent } from "./canvas-node-status-content";
 
@@ -96,7 +96,7 @@ export function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchP
     return content;
 }
 
-export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest }: CanvasNodeContentProps) {
+export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest, onMediaPlaybackEnded, onMediaPlaybackUnavailable }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
     const { updateMediaNode } = useCanvasNodeActions();
     const { url, loading, onError } = useVideoPlaybackUrl(node, mediaActive);
@@ -106,6 +106,8 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     const [currentTimeMs, setCurrentTimeMs] = useState(0);
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
     const [videoReady, setVideoReady] = useState(false);
+    // 激活分支没有 InactiveVideoPreview 的 ▶：暂停时挂一个居中覆盖按钮，点击原地续播不丢进度。
+    const [videoPaused, setVideoPaused] = useState(false);
     // 播放器身份是节点上的媒体（storageKey），不是当前签名地址：续签只换 src，不重建播放器、不退回静态预览。
     const playerKey = node.metadata?.storageKey || node.id;
 
@@ -196,8 +198,31 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                         dataCanvasNoZoom
                         compactControls
                         onCanPlay={() => setVideoReady(true)}
+                        onPause={() => setVideoPaused(true)}
+                        onPlay={() => setVideoPaused(false)}
+                        onEnded={() => {
+                            setVideoPaused(false);
+                            // 播完必须释放授权：激活分支没有播放入口，不释放节点会停在无按钮的死态。
+                            onMediaPlaybackEnded?.();
+                        }}
                         onError={onError}
                     />
+                    {videoPaused && videoReady ? (
+                        <button
+                            type="button"
+                            aria-label={`继续播放 ${node.title || "视频"}`}
+                            title="继续播放"
+                            className="absolute z-[2] grid size-12 place-items-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-transform duration-150 hover:scale-105"
+                            style={{ left: "50%", top: "50%", translate: "-50% -50%" }}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                playerBoxRef.current?.querySelector("video")?.play();
+                            }}
+                        >
+                            <Play className="size-5 translate-x-[1px]" aria-hidden />
+                        </button>
+                    ) : null}
                     {activeEntry && activeEntry.text.trim() ? <CanvasSubtitleOverlay text={activeEntry.text} highlight={activeHighlight} style={subtitleStyle} /> : null}
                 </div>
             ) : null}
@@ -356,7 +381,7 @@ function waitForVideoPlaybackRecovery(signal: AbortSignal) {
     });
 }
 
-export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
+export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean, onPlaybackUnavailable?: () => void) {
     const rawContent = node.metadata?.content || "";
     const fallback = node.metadata?.importSource?.provider === "libtv" ? buildLibTVVideoSourceUrl(rawContent) : rawContent;
     const storageKey = node.metadata?.storageKey || "";
@@ -365,6 +390,10 @@ export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
     const recoveryRef = useRef<AbortController | null>(null);
     const recoveryAttemptedRef = useRef(false);
     const sourceGenerationRef = useRef(0);
+    const onPlaybackUnavailableRef = useRef(onPlaybackUnavailable);
+    useEffect(() => {
+        onPlaybackUnavailableRef.current = onPlaybackUnavailable;
+    }, [onPlaybackUnavailable]);
 
     useEffect(() => {
         sourceGenerationRef.current += 1;
@@ -385,7 +414,9 @@ export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
                 if (!cancelled) setUrl(resolved);
             })
             .catch(() => {
-                if (!cancelled) setUrl(fallback);
+                if (cancelled) return;
+                setUrl(fallback);
+                if (!fallback) onPlaybackUnavailableRef.current?.();
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
@@ -400,6 +431,8 @@ export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
         const resourceId = resourceIdFromStorageKey(storageKey);
         if (!active || !resourceId || recoveryAttemptedRef.current) {
             if (!resourceId) setUrl("");
+            // 兜底代理也加载失败：回到预览态让用户可以重试，而不是停在黑块死态。
+            if (recoveryAttemptedRef.current) onPlaybackUnavailableRef.current?.();
             return;
         }
         recoveryAttemptedRef.current = true;
@@ -444,8 +477,17 @@ export function useVideoPlaybackUrl(node: CanvasNodeData, active: boolean) {
                 }
             }
             if (!controller.signal.aborted && generation === sourceGenerationRef.current) {
+                if (resourceId) {
+                    // 签名直链穷尽后退回同源代理：后端流式转发无 CORS，直传原片（无播放副本）也走这条。
+                    setUrl(resourceFileUrl(resourceId));
+                    setLoading(false);
+                    return;
+                }
                 setUrl("");
                 setLoading(false);
+                // 签名续签穷尽仍不可播：激活态下没有播放器也没有播完事件，授权会永久卡死
+                //（黑块、无按钮、点其他节点才恢复）。通知外层释放授权，退回可重试的预览态。
+                onPlaybackUnavailableRef.current?.();
             }
         };
 
