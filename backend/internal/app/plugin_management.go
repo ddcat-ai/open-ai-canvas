@@ -115,6 +115,9 @@ func pluginManagement(pluginID string, source string) PluginManagementView {
 	if policy, ok := officialApplicationPolicies[strings.TrimSpace(pluginID)]; ok {
 		return policy
 	}
+	if policy, ok := supdanceSystemApplicationPolicies[strings.TrimSpace(pluginID)]; ok {
+		return policy
+	}
 	if policy, ok := systemPaymentPolicies[strings.TrimSpace(pluginID)]; ok {
 		return policy
 	}
@@ -146,6 +149,13 @@ func knownPluginIDs(items []PluginView) []string {
 	seen := make(map[string]struct{}, len(items)+len(officialApplicationPolicies)+len(systemPaymentPolicies))
 	ids := make([]string, 0, len(items)+len(officialApplicationPolicies)+len(systemPaymentPolicies))
 	for id := range officialApplicationPolicies {
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	for id := range supdanceSystemApplicationPolicies {
+		if _, exists := seen[id]; exists {
+			continue
+		}
 		seen[id] = struct{}{}
 		ids = append(ids, id)
 	}
@@ -322,7 +332,7 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 	policy := pluginManagement(pluginID, source)
 	previousRuntimeEnabled := false
 	runtimeChanged := false
-	if policy.ActivationScope == PluginScopeSystem {
+	if policy.ActivationScope == PluginScopeSystem && !isSupDanceSystemApplicationPluginID(pluginID) {
 		if !hasRuntime {
 			return AdminPluginStateView{}, fmt.Errorf("插件 %q 缺少运行时", pluginID)
 		}
@@ -351,7 +361,7 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 }
 
 func isKnownRuntimeOptionalPlugin(pluginID string) bool {
-	if isSystemSMSPluginID(pluginID) {
+	if isSystemSMSPluginID(pluginID) || isSupDanceSystemApplicationPluginID(pluginID) {
 		return true
 	}
 	if _, known := officialApplicationPolicies[pluginID]; known {

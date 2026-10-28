@@ -1,0 +1,25 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "supdance-social-auth",
+  "name": "第三方社交统一登录 (Social Auth)",
+  "version": "1.0.0",
+  "minHostVersion": "1.7.1",
+  "author": "SupDance",
+  "description": "SupDance 统一第三方社交登录插件：根据访问者 IP 智能分区动态展示中国大陆（QQ、微信、抖音、B站）与海外（Google、X、Instagram、TikTok）登录渠道，提供后台配置中心、凭证安全掩码存储、回调地址一键复制与沙盒联调测试能力。",
+  "surfaces": ["auth", "settings"],
+  "permissions": ["account.read", "account.write"],
+  "trusted": true,
+  "runtime": {
+    "backend": "declarative",
+    "web": "declarative"
+  },
+  "contributes": {
+    "usageObservers": ["supdance-social-auth"],
+    "commands": [
+      {
+        "id": "supdance-social-auth.admin-config",
+        "label": "管理社交登录渠道配置"
+      }
+    ]
+  }
+}

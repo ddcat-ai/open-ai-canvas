@@ -8,8 +8,11 @@ import { useUserStore } from "@/stores/use-user-store";
 import { LinuxDOIcon } from "./auth-scene";
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { emptyVerification, loginVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
+import { useI18n } from "@/supdance/plugins/i18n";
+import { SocialLoginButtons } from "@/supdance/plugins/social-auth";
 
 export default function LoginPage() {
+    const { t } = useI18n();
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const { message } = App.useApp();
@@ -50,15 +53,15 @@ export default function LoginPage() {
         try {
             if (method === "password") await login({ username, password });
             else {
-                if (!verification.ticket) throw new Error("请先获取本次登录验证码");
+                if (!verification.ticket) throw new Error(t("auth.get_code_first"));
                 await loginVerification(verification);
             }
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
-            message.success("登录成功");
+            message.success(t("auth.login_success"));
             navigate(next, { replace: true });
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "登录失败");
+            message.error(error instanceof Error ? error.message : t("auth.login_failed"));
         } finally {
             setSubmitting(false);
         }
@@ -66,20 +69,20 @@ export default function LoginPage() {
 
     return (
         <form onSubmit={submit} className="space-y-5">
-            {methods.length > 0 && <Segmented block aria-label="登录方式" value={method} disabled={submitting} options={[{ value: "password", label: "密码登录" }, ...methods.map((value) => ({ value, label: methodLabels[value] }))]} onChange={(value) => { setMethod(value as typeof method); setVerification({ ...emptyVerification }); }} />}
+            {methods.length > 0 && <Segmented block aria-label={t("auth.login_method")} value={method} disabled={submitting} options={[{ value: "password", label: t("auth.password_login") }, ...methods.map((value) => ({ value, label: methodLabels[value] }))]} onChange={(value) => { setMethod(value as typeof method); setVerification({ ...emptyVerification }); }} />}
             {method !== "password" ? <VerificationFields key={method} purpose="login" method={method} value={verification} onChange={setVerification} disabled={submitting} /> : <>
-            <AuthField label="用户名 / 邮箱" htmlFor="login-account">
-                <Input id="login-account" size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名或邮箱" autoComplete="username" required />
+            <AuthField label={t("auth.username_or_email")} htmlFor="login-account">
+                <Input id="login-account" size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={t("auth.username_placeholder")} autoComplete="username" required />
             </AuthField>
             <AuthField
-                label="密码"
+                label={t("auth.password")}
                 htmlFor="login-password"
                 action={
                     <Link
                         to={forgotPasswordURL}
                         className="auth-scene-link -my-2 inline-flex min-h-8 items-center rounded-sm text-xs font-medium transition-colors"
                     >
-                        忘记密码？
+                        {t("auth.forgot_password")}
                     </Link>
                 }
             >
@@ -89,24 +92,25 @@ export default function LoginPage() {
                     prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="请输入密码"
+                    placeholder={t("auth.password_placeholder")}
                     autoComplete="current-password"
                     required
                 />
             </AuthField>
             </>}
             <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">
-                登录
+                {t("auth.login")}
             </Button>
+            <Divider plain className="auth-scene-divider">
+                {t("auth.social_login_divider")}
+            </Divider>
+            <SocialLoginButtons variant="light-card" next={next} />
             {linuxdoEnabled ? (
-                <>
-                    <Divider plain className="auth-scene-divider">
-                        或
-                    </Divider>
+                <div className="pt-2">
                     <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next)}>
-                        使用 Linux.do 登录
+                        {t("auth.login_with_linuxdo")}
                     </Button>
-                </>
+                </div>
             ) : null}
         </form>
     );

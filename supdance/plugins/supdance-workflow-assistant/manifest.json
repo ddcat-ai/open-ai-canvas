@@ -1,0 +1,19 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "supdance-workflow-assistant",
+  "name": "SupDance 创作工作流助手",
+  "version": "0.1.0",
+  "minHostVersion": "1.7.1",
+  "author": "SupDance",
+  "description": "SupDance 自定义插件模板：基于宿主 ai.text 与 canvas.read 权限提供工作流辅助能力。",
+  "surfaces": ["node"],
+  "permissions": ["canvas.read", "ai.text"],
+  "trusted": false,
+  "runtime": {
+    "backend": "declarative",
+    "web": "declarative"
+  },
+  "contributes": {
+    "aiCapabilities": ["supdance-workflow-assistant"]
+  }
+}

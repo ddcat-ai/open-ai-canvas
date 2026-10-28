@@ -50,6 +50,10 @@ func NewLoginLog(method, source string, context LoginContext) *model.LoginLog {
 	return &model.LoginLog{ID: kernel.NewID(), Event: "login", Method: method, Source: source, Result: "success", IP: loginLogText(context.IP, 64), UserAgent: loginLogText(context.UserAgent, 512), CreatedAt: time.Now().UTC()}
 }
 
+func LoginLogUser(event *model.LoginLog, user *model.User) {
+	loginLogUser(event, user)
+}
+
 func loginLogUser(event *model.LoginLog, user *model.User) {
 	event.UserID = &user.ID
 	event.Username, event.DisplayName, event.Account = user.Username, user.DisplayName, user.Username
@@ -66,6 +70,10 @@ func setLoginFailure(event *model.LoginLog, original error) {
 		event.Reason = string(appErr.Reason)
 		event.Message = loginLogText(appErr.Message, 500)
 	}
+}
+
+func (s *Service) RecordLoginFailure(event *model.LoginLog, original error) error {
+	return s.recordLoginFailure(event, original)
 }
 
 func (s *Service) recordLoginFailure(event *model.LoginLog, original error) error {

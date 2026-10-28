@@ -1,0 +1,25 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "supdance-i18n",
+  "name": "站点多语言 (i18n)",
+  "version": "1.0.0",
+  "minHostVersion": "1.7.1",
+  "author": "SupDance",
+  "description": "站点级多语言国际化插件：内置简中、英语、繁中、日文、韩语、西班牙语六大语种，提供右上角语言切换器、后台语言管理与动态词条即时修改能力。",
+  "surfaces": ["hybrid", "settings"],
+  "permissions": ["canvas.read"],
+  "trusted": true,
+  "runtime": {
+    "backend": "declarative",
+    "web": "declarative"
+  },
+  "contributes": {
+    "usageObservers": ["supdance-i18n"],
+    "commands": [
+      {
+        "id": "supdance-i18n.switch-language",
+        "label": "切换站点界面语言"
+      }
+    ]
+  }
+}

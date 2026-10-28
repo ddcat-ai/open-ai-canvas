@@ -1,7 +1,7 @@
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { App, Button, Input, Modal, Typography } from "antd";
 import { Switch } from "@/components/ui/base/switch";
-import { AudioLines, CalendarDays, CheckCircle2, Clock3, CreditCard, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { AudioLines, CalendarDays, CheckCircle2, Clock3, CreditCard, ExternalLink, Film, FolderOpen, Image as ImageIcon, MessageSquareText, PlugZap, RefreshCw, Search, Settings2, Share2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -13,6 +13,8 @@ import { EAGLE_PLUGIN_ID } from "@/lib/plugins/builtin/eagle";
 import { PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import { isOfficialApplicationPluginId } from "@/lib/plugins/official-applications";
+import { SUPDANCE_I18N_PLUGIN_ID } from "@/supdance/plugins/i18n/types";
+import { SUPDANCE_SOCIAL_AUTH_PLUGIN_ID } from "@/supdance/plugins/social-auth/types";
 import type { PluginManifest, PluginManifestV2, RegisteredPlugin } from "@/lib/plugins/plugin-types";
 import { getEagleLibrary, type EagleFolder } from "@/services/api/eagle";
 import { fetchPlugins, setUserPluginEnabled, type BackendPlugin, type PluginState } from "@/services/api/plugins";
@@ -367,7 +369,11 @@ export default function PluginsPage() {
                                                                 >
                                                                     <div className="plugin-card-heading">
                                                                         <span className={`plugin-icon-tile${trusted ? " is-trusted" : ""}`} aria-hidden="true">
-                                                                            <SectionIcon className="size-5" />
+                                                                            {plugin.manifest.id === SUPDANCE_SOCIAL_AUTH_PLUGIN_ID ? (
+                                                                                <Share2 className="size-5 text-pink-500" />
+                                                                            ) : (
+                                                                                <SectionIcon className="size-5" />
+                                                                            )}
                                                                         </span>
                                                                         <div className="min-w-0 flex-1">
                                                                             <div className="plugin-card-title-row">
@@ -438,6 +444,24 @@ export default function PluginsPage() {
                                                                             onClick={() => setSettingsPluginId(plugin.manifest.id)}
                                                                         >
                                                                             设置
+                                                                        </Button>
+                                                                    ) : null}
+                                                                    {plugin.manifest.id === SUPDANCE_SOCIAL_AUTH_PLUGIN_ID ? (
+                                                                        <Button
+                                                                            className="plugin-settings-button"
+                                                                            icon={<Settings2 className="size-4" />}
+                                                                            onClick={() => navigate("/admin/settings/social-auth")}
+                                                                        >
+                                                                            配置中心
+                                                                        </Button>
+                                                                    ) : null}
+                                                                    {plugin.manifest.id === SUPDANCE_I18N_PLUGIN_ID ? (
+                                                                        <Button
+                                                                            className="plugin-settings-button"
+                                                                            icon={<Settings2 className="size-4" />}
+                                                                            onClick={() => navigate("/admin/i18n/settings")}
+                                                                        >
+                                                                            多语言设置
                                                                         </Button>
                                                                     ) : null}
                                                                 </div>
@@ -617,6 +641,7 @@ function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
 
 function pluginSourceLabel(plugin: RegisteredPlugin, state?: PluginState) {
     if (plugin.source === "uploaded") return "自定义插件";
+    if (plugin.manifest.id === SUPDANCE_SOCIAL_AUTH_PLUGIN_ID || plugin.manifest.id === SUPDANCE_I18N_PLUGIN_ID) return "官方系统插件";
     if (plugin.source === "system") return "系统插件";
     if (state?.canToggle || isOfficialApplicationPluginId(plugin.manifest.id)) return "官方插件";
     return "系统插件";

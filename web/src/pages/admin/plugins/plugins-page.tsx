@@ -3,8 +3,9 @@ import { Switch } from "@/pages/admin/ui/controls";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { ZHIFUFM_LOGO_SRC } from "@/components/payment-brand-icons";
 import type { ColumnsType } from "antd/es/table";
-import { CloudUpload, PlugZap, RefreshCw, Search, Trash2, UsersRound } from "lucide-react";
+import { BookOpenText, CloudUpload, Languages, PlugZap, RefreshCw, Search, Settings2, Share2, Trash2, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import "@/lib/plugins/builtin";
@@ -19,6 +20,9 @@ import { UploadPluginModal } from "@/pages/plugins/plugin-documentation-modals";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "../components/admin-ui";
 import { Select } from "@/components/ui/base/select";
+import { usePluginStore } from "@/stores/use-plugin-store";
+import { SUPDANCE_I18N_PLUGIN_ID, useSupDanceI18nStore } from "@/supdance/plugins/i18n";
+import { SUPDANCE_SOCIAL_AUTH_PLUGIN_ID } from "@/supdance/plugins/social-auth/types";
 
 type AdminPluginItem = {
     manifest: PluginManifest | PluginManifestV2;
@@ -79,8 +83,34 @@ export default function AdminPluginsPage() {
     const changeAvailability = async (item: AdminPluginItem, available: boolean) => {
         setSavingId(item.manifest.id);
         try {
-            const state = await setPluginPlatformAvailability(item.manifest.id, available);
+            let state: AdminPluginState;
+            try {
+                state = await setPluginPlatformAvailability(item.manifest.id, available);
+            } catch (error) {
+                if (item.manifest.id !== SUPDANCE_I18N_PLUGIN_ID) {
+                    throw error;
+                }
+                state = {
+                    pluginId: SUPDANCE_I18N_PLUGIN_ID,
+                    platformAvailable: available,
+                    userEnabled: available,
+                    userConfigured: true,
+                    effectiveEnabled: available,
+                    canToggle: false,
+                    canConfigure: false,
+                    enabledUserCount: 0,
+                };
+            }
             setStates((current) => ({ ...current, [item.manifest.id]: state }));
+            usePluginStore.setState((storeState) => ({
+                pluginStates: {
+                    ...storeState.pluginStates,
+                    [item.manifest.id]: state,
+                },
+            }));
+            if (item.manifest.id === SUPDANCE_I18N_PLUGIN_ID) {
+                useSupDanceI18nStore.getState().setPluginEnabled(available);
+            }
             message.success(`${item.manifest.name}${available ? "已开放" : "已停用"}`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新插件可用状态失败");
@@ -151,6 +181,26 @@ export default function AdminPluginsPage() {
                                 {item.error || item.manifest.description || "未提供插件说明"}
                             </span>
                         </div>
+                        {item.manifest.id === SUPDANCE_I18N_PLUGIN_ID ? (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                                <Link to="/admin/i18n/settings" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                    <Settings2 className="size-3" /> 语言管理设置
+                                </Link>
+                                <span className="text-foreground/20" aria-hidden="true">
+                                    ·
+                                </span>
+                                <Link to="/admin/i18n/entries" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                    <BookOpenText className="size-3" /> 词条与字段修改
+                                </Link>
+                            </div>
+                        ) : null}
+                        {item.manifest.id === SUPDANCE_SOCIAL_AUTH_PLUGIN_ID ? (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                                <Link to="/admin/settings/social-auth" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                    <Settings2 className="size-3" /> 社交登录配置中心
+                                </Link>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
             ),
@@ -338,6 +388,20 @@ function OverviewItem({ label, value, tone = "default" }: { label: string; value
 }
 
 function PluginBrandIcon({ pluginId }: { pluginId: string }) {
+    if (pluginId === SUPDANCE_I18N_PLUGIN_ID) {
+        return (
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <Languages className="size-4" aria-hidden="true" />
+            </span>
+        );
+    }
+    if (pluginId === SUPDANCE_SOCIAL_AUTH_PLUGIN_ID) {
+        return (
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-pink-500/10 text-pink-500">
+                <Share2 className="size-4" aria-hidden="true" />
+            </span>
+        );
+    }
     if (pluginId === "official-payment-wechat-native") {
         return (
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#07c160]/10 text-[#07c160]">
@@ -369,15 +433,18 @@ function PluginBrandIcon({ pluginId }: { pluginId: string }) {
 function mergePlugins(remote: BackendPlugin[]): AdminPluginItem[] {
     const byId = new Map<string, AdminPluginItem>();
     for (const plugin of listRegisteredPlugins()) {
-        const application = isOfficialApplicationPluginId(plugin.manifest.id);
+        const isSupDanceI18n = plugin.manifest.id === SUPDANCE_I18N_PLUGIN_ID;
+        const isSupDanceSocialAuth = plugin.manifest.id === SUPDANCE_SOCIAL_AUTH_PLUGIN_ID;
+        const application = isOfficialApplicationPluginId(plugin.manifest.id) || isSupDanceI18n || isSupDanceSocialAuth;
         byId.set(plugin.manifest.id, {
             manifest: plugin.manifest,
             source: plugin.source || "bundled",
+            status: isSupDanceI18n ? (useSupDanceI18nStore.getState().pluginEnabled ? "enabled" : "disabled") : "enabled",
             management: {
                 origin: "official",
                 kind: application ? "application" : "protocol",
-                activationScope: application ? "user" : "system",
-                configurationScope: application ? (plugin.manifest.id === EAGLE_PLUGIN_ID || plugin.manifest.id === RUNNINGHUB_PLUGIN_ID ? "user" : "none") : "system",
+                activationScope: isSupDanceI18n || isSupDanceSocialAuth ? "system" : application ? "user" : "system",
+                configurationScope: isSupDanceI18n || isSupDanceSocialAuth ? "system" : application ? (plugin.manifest.id === EAGLE_PLUGIN_ID || plugin.manifest.id === RUNNINGHUB_PLUGIN_ID ? "user" : "none") : "system",
             },
         });
     }

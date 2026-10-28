@@ -379,6 +379,10 @@ func (s *Service) PublicAuthUser(user *model.User) (AuthUser, error) {
 	return result, nil
 }
 
+func (s *Service) CreateAuthSession(user *model.User, event *model.LoginLog) (*AuthSessionResult, error) {
+	return s.createAuthSession(user, event)
+}
+
 func (s *Service) createAuthSession(user *model.User, event *model.LoginLog) (*AuthSessionResult, error) {
 	loginLogUser(event, user)
 	publicUser, err := s.PublicAuthUser(user)
