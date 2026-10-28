@@ -481,6 +481,39 @@ export default function CreatePage() {
         return assetIds;
     };
 
+    // 输入框 Ctrl+V 粘贴或拖入系统剪贴板/文件管理器中的图片/视频：与素材库上传同一口径（按模式过滤、存素材库、受参考内容上限约束）。
+    const addExternalMediaFiles = async (files: File[]) => {
+        // 生成中参考内容与任务绑定，产品语义不允许中途变更；拖入与粘贴共用该防护。
+        if (busy) {
+            toast.warning("生成中暂不能添加参考内容");
+            return;
+        }
+        const accepted = files.filter((file) => creationFileAccepted(mode, file));
+        if (!accepted.length) {
+            toast.warning(`当前「${mode === "video" ? "视频" : mode === "text" ? "文本" : "图片"}」模式不支持粘贴的文件类型`);
+            return;
+        }
+        const settled = await Promise.allSettled(accepted.map(async (file) => {
+            const { asset, attachment } = await uploadCreationAsset(file);
+            if (asset) addAsset(asset);
+            return attachment;
+        }));
+        const succeeded = settled.flatMap((entry) => (entry.status === "fulfilled" ? [entry.value] : []));
+        const failed = settled.length - succeeded.length;
+        if (succeeded.length) {
+            setAttachments((current) => {
+                const candidates = [...current.filter((item) => !succeeded.some((candidate) => candidate.id === item.id)), ...succeeded];
+                const reconciled = mode === "video" && videoReferenceLimits
+                    ? reconcileCreationAttachmentLimits(candidates, [], videoReferenceLimits)
+                    : reconcileCreationAttachmentLimit(candidates, [], maxReferences);
+                if (reconciled.attachments.length < candidates.length) toast.warning("部分素材超出当前模型的参考内容上限，未添加到创作中");
+                return reconciled.attachments;
+            });
+            toast.success(`${succeeded.length} 个粘贴内容已加入参考内容`);
+        }
+        if (failed) toast.error(`${failed} 个粘贴内容上传失败，请重试`);
+    };
+
     const handleLibrarySelect = async (selectedIds: string[], pickedItems = libraryItems) => {
         const next = creationLibrarySelectionToAttachments(selectedIds, pickedItems, mode, videoReferenceLimits);
         if (!next.length) return;
@@ -1022,6 +1055,7 @@ export default function CreatePage() {
         onReorderAttachments: reorderAttachments,
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
+        onPasteFiles: addExternalMediaFiles,
         onOpenLibrary: () => setLibraryOpen(true),
         onModeChange: selectMode,
         model: selectedModel,
