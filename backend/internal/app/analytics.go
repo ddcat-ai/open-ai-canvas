@@ -176,11 +176,6 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 	}
 	result := buildAnalyticsOverview(filter, tasks, rollingTasks, rollingLogs, logs, activities, users)
 	result.KPI.TotalBalanceMicrocredits = totalBalance
-	for _, log := range logs {
-		if log.BillingAmount > 0 {
-			result.KPI.TotalConsumedMicrocredits += log.BillingAmount
-		}
-	}
 	records, err := s.analyticsFinancialRecords(logs)
 	if err != nil {
 		return nil, err

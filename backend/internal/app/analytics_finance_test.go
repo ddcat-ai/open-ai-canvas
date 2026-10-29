@@ -213,3 +213,63 @@ func TestAdminReferencesIncludeExistingDisplayNameGroups(t *testing.T) {
 		t.Fatalf("groups = %#v", groups)
 	}
 }
+
+func TestAdminAnalyticsConsumptionUsesSettledOrders(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+newID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.BillingOrder{}, &model.ApiCallLog{}, &model.Task{}, &model.UserDailyActivity{}, &model.User{}, &model.CreditAccount{}); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db)}
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	day1 := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	day2 := day1.AddDate(0, 0, 1)
+	orders := []model.BillingOrder{
+		{ID: "settled-a", Status: model.BillingStatusSettled, ReservedAmountMicrocredits: 1_200_000, ActualAmountMicrocredits: 900_000, RefundedAmountMicrocredits: 300_000},
+		{ID: "settled-b", Status: model.BillingStatusSettled, ActualAmountMicrocredits: 400_000},
+		{ID: "reserved", Status: model.BillingStatusReserved, ReservedAmountMicrocredits: 1_000_000},
+		{ID: "uncertain", Status: model.BillingStatusUncertain, ReservedAmountMicrocredits: 500_000},
+		{ID: "refunded", Status: model.BillingStatusRefunded, ReservedAmountMicrocredits: 800_000, RefundedAmountMicrocredits: 800_000},
+	}
+	logs := make([]model.ApiCallLog, 0)
+	for index := range orders {
+		order := &orders[index]
+		order.UserID, order.ChannelID, order.IdempotencyKey = "user", "channel", order.ID
+		createdAt := day1
+		if order.ID == "settled-b" {
+			createdAt = day2
+		}
+		logs = append(logs, model.ApiCallLog{ID: order.ID, BillingOrderID: order.ID, UserID: "user", ChannelID: "channel", Model: "m", Capability: "image", Billable: true, RequestKind: "create", Status: model.ApiCallStatusSucceeded, CreatedAt: createdAt})
+	}
+	// 同一订单的重试与轮询不能重复计入消耗。
+	for _, kind := range []string{"create", "poll"} {
+		item := logs[0]
+		item.ID, item.RequestKind, item.CreatedAt = "settled-a-"+kind, kind, day1.Add(time.Minute)
+		logs = append(logs, item)
+	}
+	if err := db.Create(&orders).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+	from := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	result, err := svc.AdminAnalytics(admin, AnalyticsQuery{From: from.Format(time.RFC3339), To: from.AddDate(0, 0, 2).Format(time.RFC3339)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.KPI.TotalConsumedMicrocredits != 1_300_000 {
+		t.Fatalf("total consumed = %d, want 1300000", result.KPI.TotalConsumedMicrocredits)
+	}
+	want := map[string]int64{"2026-10-08": 900_000, "2026-10-09": 400_000}
+	for _, point := range result.Trend {
+		if point.ConsumedMicrocredits != want[point.Day] {
+			t.Fatalf("trend %s consumed = %d, want %d", point.Day, point.ConsumedMicrocredits, want[point.Day])
+		}
+	}
+	if len(result.Trend) != 2 {
+		t.Fatalf("trend days = %d, want 2", len(result.Trend))
+	}
+}
