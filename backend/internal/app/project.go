@@ -660,7 +660,8 @@ func (s *Service) ensureTaskProjectActive(userID string, canvasOrProjectID strin
 		if project.Status == model.ProjectStatusArchived {
 			return BadAuthRequest("项目已归档，无法创建生成任务")
 		}
-		return nil
+		// 关联短剧的精修画布：生成花费计入作品预算，预算用完后画布上也不能再提交。
+		return s.ensureDramaCanvasBudget(project.ID)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}

@@ -139,7 +139,7 @@ describe("canvas resource mention editor", () => {
 
         expect(component).toContain('const isDecorated = reference.kind === "skill" || reference.kind === "tool"');
         expect(component).toContain('chip.className = `canvas-resource-inline-mention ${isDecorated ? `is-${reference.kind}` : ""}`');
-        expect(component).toMatch(/if \(reference.kind === "skill"\)\s*\{\s*prefix.innerHTML = inlineIconSvg\(Sparkles\)/);
+        expect(component).toMatch(/if \(reference.kind === "skill"\)\s*\{\s*prefix.innerHTML = inlineIconSvg\(Blocks\)/);
         expect(component).toContain('prefix.textContent = "@"');
         expect(component).toContain("if (!isDecorated) chip.appendChild(createInlinePreview(reference));");
         expect(component).toContain('chip.style.setProperty("--canvas-skill-mention-color", skillMentionColor(reference))');

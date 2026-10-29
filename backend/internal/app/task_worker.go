@@ -51,7 +51,6 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s.startTextReplayCleanup(ctx)
 	s.startProviderCancellationReconciliation(ctx)
 	s.startBillingReviewAudit(ctx)
-	s.startAgentMemoryCompactScheduler()
 	s.runWorkerLoop(func(ctx context.Context) {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
@@ -169,7 +168,10 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		}
 	}()
 	defer close(leaseDone)
-	_ = s.log(task.UserID, task.ID, "info", "后端任务开始处理", "")
+	// 回查已提交的上游任务（分离式回查每 15 秒领取一次）不再重复记“开始处理”，避免淹没任务日志。
+	if task.ProviderRequestID == "" || task.PollStage != "poll" {
+		_ = s.log(task.UserID, task.ID, "info", "后端任务开始处理", "")
+	}
 	s.registerActiveTask(task.ID, cancel)
 	defer s.unregisterActiveTask(task.ID)
 	// 取消请求可能在任务领取和注册 worker context 之间到达；再次读取终态
@@ -220,6 +222,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	}
 
 	s.markAgentMemoryCompactRunning(*task)
+	// 回查已提交的上游任务：领取时保留了上一轮的上游阶段与进度，这里不重置为“作品创作中”。
+	resumedStage, resumedProgress := "", task.Progress
+	if task.ProviderRequestID != "" {
+		resumedStage = strings.TrimSpace(task.Stage)
+	}
 	task.Stage = "调用生成模型"
 	task.Progress = 35
 	if taskUsesUpstreamReportedProgress(task.Type) {
@@ -227,6 +234,9 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		// 不能再用统一的 35% 冒充真实生成进度。
 		task.Stage = "作品创作中"
 		task.Progress = 0
+	}
+	if resumedStage != "" {
+		task.Stage, task.Progress = resumedStage, resumedProgress
 	}
 	if err := s.repo.UpdateTaskProgressForLease(task.ID, task.LeaseOwner, task.Stage, task.Progress); err != nil {
 		return fmt.Errorf("更新任务进度失败，任务暂未调用上游：%w", err)
@@ -287,18 +297,32 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 				stage = "后台仍在生成图片"
 				message = "前台等待结束，上游图片仍在生成，将继续回查原任务"
 			}
+			delay := detachedProviderPollDelay
 			var pendingErr providerStatePendingError
 			if errors.As(err, &pendingErr) {
 				stage = "等待上游任务同步"
 				message = "上游任务状态暂未同步，将继续回查原任务"
+				if pendingErr.Detached {
+					stage = firstNonEmpty(pendingErr.Stage, "上游排队中")
+					message = ""
+					if pendingErr.PollDelay > 0 {
+						delay = pendingErr.PollDelay
+					}
+				}
 			}
-			if deferErr := s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, stage, 15*time.Second); deferErr != nil {
+			if deferErr := s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, stage, delay); deferErr != nil {
 				return deferErr
 			}
-			_ = s.log(task.UserID, task.ID, "info", message, task.PollStage)
+			// 分离式回查每 15 秒一轮，逐轮写日志会淹没任务日志；只记录首次进入排队。
+			if message != "" || task.PollStage == "accepted" {
+				_ = s.log(task.UserID, task.ID, "info", firstNonEmpty(message, "上游已收单，排队期间释放执行位，按间隔回查原任务"), stage)
+			}
 			return nil
 		}
-		if isVideoTaskType(task.Type) && newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
+		var detachedErr providerStatePendingError
+		if errors.As(err, &detachedErr) && detachedErr.Detached {
+			err = fmt.Errorf("上游任务等待超过 %d 小时仍未完成，已停止自动查询，请在渠道侧确认任务 %s 的状态。", int(detachedProviderTaskMaxAge.Hours()), detachedErr.TaskID)
+		} else if isVideoTaskType(task.Type) && newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
 			err = errors.New("上游任务长时间未同步，已停止自动查询，请确认渠道任务状态后重试。")
 		}
 		if errors.Is(err, context.DeadlineExceeded) || deadlineExpired {
@@ -409,9 +433,11 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 	}
 	deferSignal := errors.Is(err, context.DeadlineExceeded)
 	var pendingErr providerStatePendingError
+	detachedPending := false
 	if errors.As(err, &pendingErr) {
 		deferSignal = strings.TrimSpace(pendingErr.TaskID) == providerRequestID
-		if deferSignal && isVideoTaskType(task.Type) {
+		detachedPending = pendingErr.Detached
+		if deferSignal && isVideoTaskType(task.Type) && !detachedPending {
 			deferSignal = !newAPIChannel2TaskSyncExpired(task, err, time.Now())
 		}
 	}
@@ -426,6 +452,13 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 	if resolveErr != nil {
 		return false
 	}
+	if s.protocolDetachedPolling(resolved.InterfaceType) {
+		// 分离式回查只看总等待时长：上游候车/出片中按间隔回查，超过上限才交给失败处理。
+		return task.StartedAt == nil || time.Since(*task.StartedAt) < detachedProviderTaskMaxAge
+	}
+	if detachedPending {
+		return false
+	}
 	if isVideoTaskType(task.Type) || input.Mode == "video" {
 		return resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
 	}
@@ -433,6 +466,11 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 		return false
 	}
 	return s.imageProviderSupportsTaskResume(resolved.InterfaceType)
+}
+
+func (s *Service) protocolDetachedPolling(interfaceType string) bool {
+	metadata, ok := s.protocolMetadata(strings.TrimSpace(interfaceType))
+	return ok && metadata.DetachedPolling
 }
 
 func isVideoTaskType(taskType string) bool {

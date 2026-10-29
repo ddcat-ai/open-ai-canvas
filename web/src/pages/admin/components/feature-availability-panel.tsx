@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Boxes, ImageIcon, Quote } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
@@ -60,13 +60,13 @@ const workspaceFeatureRows: FeatureRow[] = [
         key: "inspirationSourcesVisible",
         title: "素材来源署名",
         description: "显示创作首页的素材来源说明；关闭后隐藏该面板。",
-        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        icon: <Quote className="size-4" aria-hidden="true" />,
     },
     {
         key: "imageWorkbenchEnabled",
         title: "图片生成",
         description: "开放生图入口并允许创建新的工作台图片任务；关闭不删除结果和历史。",
-        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        icon: <ImageIcon className="size-4" aria-hidden="true" />,
     },
     {
         key: "videoWorkbenchEnabled",
@@ -97,7 +97,7 @@ const modelFeatureRows: FeatureRow[] = [
         key: "frontendModelsEnabled",
         title: "前台模型目录",
         description: "选择前台模型目录，或直接使用系统渠道中的模型。",
-        icon: <Sparkles className="size-4" aria-hidden="true" />,
+        icon: <Boxes className="size-4" aria-hidden="true" />,
     },
 ];
 
@@ -295,7 +295,7 @@ export default function FeatureAvailabilityPanel() {
                 <FeatureDomainPanel
                     title="3. 用户模型来源"
                     description="决定用户选模型时读取前台目录还是系统渠道"
-                    icon={<Sparkles className="size-4" aria-hidden="true" />}
+                    icon={<Boxes className="size-4" aria-hidden="true" />}
                     status={<AdminStatusBadge label={draftFeatures.frontendModelsEnabled ? "前台模型目录" : "系统渠道"} tone="info" />}
                 >
                     <FeatureSourceRow row={modelFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />

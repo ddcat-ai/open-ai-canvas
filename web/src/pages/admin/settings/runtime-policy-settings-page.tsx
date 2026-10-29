@@ -1,5 +1,5 @@
 import { App, Button, Form, InputNumber, Skeleton } from "antd";
-import { AlertTriangle, Bot, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset } from "lucide-react";
+import { AlertTriangle, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset, Orbit } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -135,7 +135,7 @@ const policySections: PolicySectionDefinition[] = [
     { id: "policy-timeout", icon: <TimerReset className="size-4" aria-hidden="true" />, title: "任务超时", shortTitle: "任务超时", description: "不同生成类型的最长执行时间。", fields: timeoutFields },
     {
         id: "policy-agent",
-        icon: <Bot className="size-4" aria-hidden="true" />,
+        icon: <Orbit className="size-4" aria-hidden="true" />,
         title: "画布 Agent 单步",
         shortTitle: "Agent 单步",
         description: "画布 Agent 每一步模型调用的输出上限与等待时限；两者一起决定单步最坏耗时。",

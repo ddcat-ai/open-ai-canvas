@@ -11,14 +11,21 @@ import (
 	"yingce/backend/internal/model"
 )
 
-func (s *Service) PublicLogicalModels(intent *ModelRequestIntent) ([]PublicLogicalModel, error) {
+// PublicLogicalModels 只发布当前分组可用渠道上的线路；价格按分组换算为实际扣费的微积分。
+func (s *Service) PublicLogicalModels(access *userGroupAccess, intent *ModelRequestIntent) ([]PublicLogicalModel, error) {
+	if access == nil {
+		return nil, Unauthorized("请先登录")
+	}
 	snapshot, err := s.routeCatalogSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	result := make([]PublicLogicalModel, 0, len(snapshot.Ordered))
 	for _, id := range snapshot.Ordered {
-		cached := snapshot.Models[id]
+		cached, visible, groupErr := s.groupLogicalModel(access, snapshot.Models[id])
+		if groupErr != nil || !visible {
+			continue
+		}
 		structuralSpecs := availableCachedRouteSpecs(cached.Routes)
 		coverageValid := logicalModelCapabilityCovered(cached.ProductSpec, structuralSpecs)
 		available := coverageValid && hasHealthyCachedRoute(s, cached.Routes)
@@ -43,6 +50,57 @@ func (s *Service) PublicLogicalModels(intent *ModelRequestIntent) ([]PublicLogic
 		result = append(result, publicLogicalModel(cached, available))
 	}
 	return result, nil
+}
+
+// groupLogicalModel 返回按分组过滤线路并换算价格后的副本，不修改共享路由快照。
+// 没有任何可见线路时 visible=false；分组缺少货币兑换比例的线路被跳过。
+func (s *Service) groupLogicalModel(access *userGroupAccess, cached cachedLogicalModel) (cachedLogicalModel, bool, error) {
+	routes := make([]cachedLogicalRoute, 0, len(cached.Routes))
+	for _, route := range cached.Routes {
+		if !access.allowsChannel(route.ChannelModel.ChannelID) {
+			continue
+		}
+		if cached.Model.PricePolicy == "channel" {
+			channelModel := route.ChannelModel
+			tiers := make([]model.ChannelModelPriceTier, len(channelModel.PriceTiers))
+			copy(tiers, channelModel.PriceTiers)
+			skip := false
+			for index := range tiers {
+				pricing, prices, err := s.groupTierPrices(access, &channelModel, &tiers[index], channelModel.ModelKey)
+				if err != nil {
+					skip = true
+					break
+				}
+				tiers[index].UnitPriceMicrocredits = effectiveCatalogPrice(prices.Unit, pricing.MultiplierBPS)
+				tiers[index].InputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Input, pricing.MultiplierBPS)
+				tiers[index].OutputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Output, pricing.MultiplierBPS)
+				tiers[index].CachedTokenPriceMicrocredits = effectiveCatalogPrice(prices.Cached, pricing.MultiplierBPS)
+			}
+			if skip {
+				continue
+			}
+			channelModel.PriceTiers = tiers
+			route.ChannelModel = channelModel
+		}
+		routes = append(routes, route)
+	}
+	if len(routes) == 0 && len(cached.Routes) > 0 {
+		return cached, false, nil
+	}
+	cached.Routes = routes
+	if cached.Model.PricePolicy != "channel" {
+		pricing, err := access.pricing(model.PriceCurrencyCredits, cached.Model.Code)
+		if err != nil {
+			return cached, false, err
+		}
+		item := cached.Model
+		item.UnitPriceMicrocredits = effectiveCatalogPrice(item.UnitPriceMicrocredits, pricing.MultiplierBPS)
+		item.InputPriceMicrocredits = effectiveCatalogPrice(item.InputPriceMicrocredits, pricing.MultiplierBPS)
+		item.OutputPriceMicrocredits = effectiveCatalogPrice(item.OutputPriceMicrocredits, pricing.MultiplierBPS)
+		item.CachedPriceMicrocredits = effectiveCatalogPrice(item.CachedPriceMicrocredits, pricing.MultiplierBPS)
+		cached.Model = item
+	}
+	return cached, true, nil
 }
 
 func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogicalModel {

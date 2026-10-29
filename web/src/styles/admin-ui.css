@@ -2238,17 +2238,17 @@
     color: var(--admin-text-primary);
 }
 
+/* 行内主操作只比普通行操作多一级文字与边缘对比，不再染信息蓝：颜色角色留给状态，不给按钮。 */
 .admin-row-action-primary.ant-btn {
-    border-color: color-mix(in srgb, var(--admin-status-info) 30%, var(--admin-card-border));
-    background: color-mix(in srgb, var(--admin-status-info) 8%, var(--admin-layer-1)) !important;
-    color: color-mix(in srgb, var(--admin-status-info) 68%, var(--admin-text-primary));
-    font-weight: 600;
+    border-color: var(--admin-control-border);
+    background: var(--admin-layer-1) !important;
+    color: var(--admin-text-primary);
 }
 
 .admin-row-action-primary.ant-btn:hover:not(:disabled),
 .admin-row-action-primary.ant-btn:focus:not(:disabled) {
-    border-color: color-mix(in srgb, var(--admin-status-info) 52%, var(--admin-card-border));
-    background: color-mix(in srgb, var(--admin-status-info) 13%, var(--admin-layer-1)) !important;
+    border-color: color-mix(in srgb, var(--admin-text-primary) 32%, transparent);
+    background: var(--admin-layer-2) !important;
     color: var(--admin-text-primary);
 }
 

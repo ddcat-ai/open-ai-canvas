@@ -1,6 +1,6 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, BadgeCheck, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, RefreshCw, RotateCcw, Save, ShieldCheck, Sparkles, UserPlus, UsersRound } from "lucide-react";
+import { AlertTriangle, BadgeCheck, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -544,7 +544,7 @@ export default function AccessSettingsPanel() {
                         </Form.Item>
                         <div className="admin-access-agreement-toolbar">
                             <div className="admin-access-agreement-template-note">
-                                <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+                                <FileText className="size-3.5 shrink-0" aria-hidden="true" />
                                 <span>没有准备条款时，可先填入通用模板再按需修改。</span>
                             </div>
                             <div className="admin-access-agreement-template-actions">

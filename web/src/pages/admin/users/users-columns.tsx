@@ -5,14 +5,17 @@ import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
 import type { AdminUser } from "@/services/api/auth";
+import { UserGroupBadge } from "@/components/layout/user-group-badge";
+import { userGroupCode, type UserGroup } from "@/services/api/user-groups";
 
-export type UserColumnKey = "user" | "email" | "credits" | "role" | "status" | "createdAt" | "actions";
+export type UserColumnKey = "user" | "email" | "credits" | "role" | "group" | "status" | "createdAt" | "actions";
 
 export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locked?: boolean }> = [
     { key: "user", label: "用户", locked: true },
     { key: "email", label: "邮箱" },
     { key: "credits", label: "当前积分" },
     { key: "role", label: "角色" },
+    { key: "group", label: "分组" },
     { key: "status", label: "状态" },
     { key: "createdAt", label: "注册时间" },
     { key: "actions", label: "操作", locked: true },
@@ -21,12 +24,14 @@ export const userColumnOptions: Array<{ key: UserColumnKey; label: string; locke
 export function createUserColumns({
     actorId,
     visibleColumns,
+    groups,
     onView,
     onEdit,
     onToggleStatus,
 }: {
     actorId?: string;
     visibleColumns: Set<UserColumnKey>;
+    groups: UserGroup[];
     onView: (user: AdminUser) => void;
     onEdit: (user: AdminUser) => void;
     onToggleStatus: (user: AdminUser) => Promise<void>;
@@ -64,6 +69,23 @@ export function createUserColumns({
                     {user.isPromoter ? <AdminStatusBadge label="推广人" tone="success" /> : null}
                 </span>
             ),
+        },
+        {
+            key: "group",
+            title: "分组",
+            dataIndex: "userGroup",
+            width: 140,
+            align: "center",
+            render: (_, user) => {
+                const code = userGroupCode(user.userGroup);
+                const group = groups.find((item) => item.code === code);
+                return (
+                    <span className="inline-flex items-center justify-center gap-1">
+                        <span className="text-xs">{group?.name || code}</span>
+                        {group ? <UserGroupBadge group={group} compact /> : null}
+                    </span>
+                );
+            },
         },
         { key: "status", title: "状态", dataIndex: "status", width: 110, align: "center", render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },
         { key: "createdAt", title: "注册时间", dataIndex: "createdAt", width: 112, align: "center", render: (value) => <span className="tabular-nums" title={formatTime(value)}>{formatCompactTime(value)}</span> },

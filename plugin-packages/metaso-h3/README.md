@@ -16,7 +16,7 @@
 
 - 模型：`MiniMax-H3`（支持 768P / 2K，4-30 秒，文生图/图生视频/多模态参考），`MiniMax-H3-Max`（480P / 768P，5-15 秒）。
 - 文生视频：仅文本提示词，ratio 必填（21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16）。
-- 图生视频：图片 role 为 first_frame / last_frame（首尾帧）。
+- 图生视频：图片 role 为 first_frame / last_frame（首尾帧），可与 reference_image 参考图同时提交，比例自动为 adaptive。
 - 多模态参考：图片 reference_image / 视频 reference_video / 音频 reference_audio。
 - 异步任务：创建后返回 task_id，轮询查询接口直到 status=succeeded，成片 URL 在 task.content.url。
 - 鉴权：`Authorization: Bearer mk-xxx`。

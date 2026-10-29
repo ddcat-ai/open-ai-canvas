@@ -1,31 +1,38 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Checkbox, Input, InputNumber, Select, Switch } from "antd";
-import { AlertCircle, ArrowRight, CheckCheck, Clapperboard, Film, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Sparkles, UserRound, UsersRound, Wand2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Brush, CheckCheck, Clapperboard, Film, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Upload, UserRound, UsersRound, Cpu, PackageCheck, Play } from "lucide-react";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { dramaChoiceKey } from "@/lib/drama/model-choice";
+import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import {
     getDramaCastImpact,
     regenerateDramaCast,
     regenerateDramaCasts,
+    setDramaCastImage,
     updateDramaCast,
     updateDramaSettings,
     type DramaCapability,
     type DramaCast,
     type DramaCastKind,
+    type DramaEpisodeMode,
+    type DramaSettings,
     type DramaInboxItem,
     type DramaMediaMode,
     type DramaReviewMode,
     type DramaSummary,
+    type DramaVideoContinuity,
 } from "@/services/api/drama";
 
-import { aspectRatioValue, CAST_KIND_LABEL, formatCredits, MEDIA_MODE_LABEL, mediaBusy, MediaThumb, parseList } from "../drama-shared";
+import { aspectRatioValue, CAST_KIND_LABEL, EpisodeGroupField, formatCredits, MEDIA_MODE_LABEL, mediaBusy, MediaThumb, parseList, VIDEO_CONTINUITY_LABEL } from "../drama-shared";
 import { AssetSchemePicker } from "../asset-scheme";
 import { DramaModelPicker, useDramaModelCatalog } from "../drama-model-picker";
 import { PromptSkillField } from "../prompt-skill";
 import { StoryboardRules } from "../storyboard-rules";
 import { progressFillStyle } from "@/lib/progress-fill";
+import { uploadResourceFile } from "@/services/api/resources";
+import { DramaTakeList } from "./take-list";
 
 // 制作台的三个整页视图：设定（角色 / 道具 / 场景）、待处理、制作设置。都在主区域内展示，不使用抽屉遮挡。
 
@@ -68,6 +75,8 @@ export function CastPanel({
     onRetry,
     onChanged,
     onReleaseAssets,
+    onOpenCanvas,
+    canvasOpening,
 }: {
     projectId: string;
     cast: DramaCast[];
@@ -80,6 +89,10 @@ export function CastPanel({
     onRetry: () => void;
     onChanged: () => void;
     onReleaseAssets: () => void;
+    /** 把设定投送到精修画布（已投送则定位）。 */
+    onOpenCanvas: (castId: string) => void;
+    /** 正在打开画布的设定 ID。 */
+    canvasOpening?: string;
 }) {
     const [kind, setKind] = useState<DramaCastKind>("character");
     const [filter, setFilter] = useState<CastFilter>("all");
@@ -133,12 +146,12 @@ export function CastPanel({
                 <div className="drama-view-scroll thin-scrollbar">
                     {assetsPending && cast.some((item) => item.imageStatus === "") ? (
                         <div className="drama-banner is-ready is-flush">
-                            <Sparkles className="size-5 shrink-0 text-[var(--workspace-accent)]" />
+                            <Clapperboard className="size-5 shrink-0 text-[var(--workspace-accent)]" />
                             <div className="drama-banner-text">
                                 <strong>参考图还没有生成</strong>
                                 <span>先核对角色、道具与场景的名称和外观描述，满意后再生成参考图；也可以在右侧单独生成某一个。参考图会随剧情段视频请求一起发送，保持人物和道具一致。</span>
                             </div>
-                            <Button type="primary" icon={<Sparkles className="size-4" />} loading={releasing} onClick={onReleaseAssets}>
+                            <Button type="primary" icon={<Play className="size-4" />} loading={releasing} onClick={onReleaseAssets}>
                                 生成全部参考图
                             </Button>
                         </div>
@@ -187,7 +200,7 @@ export function CastPanel({
             </section>
             <aside className="drama-view-side thin-scrollbar">
                 {active ? (
-                    <CastEditor key={active.id} projectId={projectId} cast={active} ratios={ratios} onChanged={onChanged} />
+                    <CastEditor key={active.id} projectId={projectId} cast={active} ratios={ratios} onChanged={onChanged} onOpenCanvas={() => onOpenCanvas(active.id)} canvasOpening={canvasOpening === active.id} />
                 ) : (
                     <div className="drama-empty is-compact">
                         <span>选择一个设定查看详情</span>
@@ -198,7 +211,7 @@ export function CastPanel({
     );
 }
 
-function CastEditor({ projectId, cast, ratios, onChanged }: { projectId: string; cast: DramaCast; ratios: CastRatios; onChanged: () => void }) {
+function CastEditor({ projectId, cast, ratios, onChanged, onOpenCanvas, canvasOpening }: { projectId: string; cast: DramaCast; ratios: CastRatios; onChanged: () => void; onOpenCanvas: () => void; canvasOpening: boolean }) {
     const { message } = App.useApp();
     const [previewing, setPreviewing] = useState(false);
     const [name, setName] = useState(cast.name);
@@ -206,7 +219,7 @@ function CastEditor({ projectId, cast, ratios, onChanged }: { projectId: string;
     const [appearance, setAppearance] = useState(cast.appearance);
     const [voiceInstructions, setVoiceInstructions] = useState(cast.voiceInstructions);
     const [restyle, setRestyle] = useState(true);
-    const impactQuery = useQuery({ queryKey: ["drama", projectId, "cast-impact", cast.id], queryFn: ({ signal }) => getDramaCastImpact(projectId, cast.id, signal) });
+    const impactQuery = useQuery({ queryKey: dramaKeys.castImpact(projectId, cast.id), queryFn: ({ signal }) => getDramaCastImpact(projectId, cast.id, signal) });
     const dirty = name !== cast.name || appearance !== cast.appearance || voiceInstructions !== cast.voiceInstructions || aliases.join("|") !== parseList(cast.aliasesJson).join("|");
     const fields = { name, aliases, appearance, voiceInstructions };
     const save = useMutation({
@@ -228,6 +241,19 @@ function CastEditor({ projectId, cast, ratios, onChanged }: { projectId: string;
             onChanged();
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "操作失败"),
+    });
+    // 上传的形象图直接成为参考图并锁定：不会被重新生成覆盖，剧情段视频按这张图生成。
+    const fileRef = useRef<HTMLInputElement>(null);
+    const upload = useMutation({
+        mutationFn: async (file: File) => {
+            const resource = await uploadResourceFile(file, "image", { fileName: file.name });
+            return setDramaCastImage(projectId, cast.id, resource.id, restyle);
+        },
+        onSuccess: (result) => {
+            message.success(result.affectedSegments ? `已替换并锁定形象；${result.affectedSegments} 个剧情段的视频需重新生成` : "已替换并锁定形象，之后的剧情段视频按这张图生成");
+            onChanged();
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "上传失败"),
     });
     const impact = impactQuery.data;
     const isCharacter = cast.kind === "character";
@@ -253,7 +279,7 @@ function CastEditor({ projectId, cast, ratios, onChanged }: { projectId: string;
                         ) : mediaBusy(cast.imageStatus) ? (
                             "参考图生成中…"
                         ) : (
-                            "尚未生成参考图，确认描述后点下方生成"
+                            "尚未生成参考图：确认描述后点下方生成，或上传已有的形象图"
                         )}
                     </div>
                 ) : null}
@@ -296,11 +322,39 @@ function CastEditor({ projectId, cast, ratios, onChanged }: { projectId: string;
                 <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
                     保存设定
                 </Button>
-                <Button type="primary" icon={<RefreshCw className="size-4" />} disabled={cast.locked || mediaBusy(cast.imageStatus)} loading={regenerate.isPending} onClick={() => regenerate.mutate()}>
+                <Button icon={<Upload className="size-4" />} loading={upload.isPending} onClick={() => fileRef.current?.click()}>
+                    上传形象图
+                </Button>
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    aria-label={`上传${cast.name}的形象图`}
+                    onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (!file) return;
+                        if (!file.type.startsWith("image/")) {
+                            message.warning("请选择 PNG、JPG 或 WebP 图片");
+                            return;
+                        }
+                        if (file.size > 20 * 1024 * 1024) {
+                            message.warning("图片不超过 20MB");
+                            return;
+                        }
+                        upload.mutate(file);
+                    }}
+                />
+                <Button type="primary" className="drama-editor-wide" icon={<RefreshCw className="size-4" />} disabled={cast.locked || mediaBusy(cast.imageStatus)} loading={regenerate.isPending} onClick={() => regenerate.mutate()}>
                     {cast.imageResourceId ? (dirty ? "保存并重新生成" : "重新生成") : dirty ? "保存并生成参考图" : "生成参考图"}
                 </Button>
+                <Button className="drama-editor-wide" icon={<Brush className="size-4" />} loading={canvasOpening} onClick={onOpenCanvas}>
+                    在画布中精修
+                </Button>
             </div>
-            <p className="drama-editor-note">旧版本保留在版本记录中；锁定后参考图不会被重新生成。</p>
+            <p className="drama-editor-note">旧版本保留在版本记录中；锁定后参考图不会被重新生成。上传或从画布采用的形象图会自动锁定，生成剧情段视频时随请求发送，并要求外貌、发型与服装以它为准。</p>
+            <DramaTakeList projectId={projectId} ownerId={cast.id} kind="cast" />
             {previewing && cast.imageResourceId ? <CanvasImagePreview storageKey={`resource:${cast.imageResourceId}`} alt={`${cast.name} · ${kindLabel}参考图`} onClose={() => setPreviewing(false)} /> : null}
         </div>
     );
@@ -359,7 +413,7 @@ function groupInbox(items: DramaInboxItem[]): InboxGroup[] {
 
 const GROUP_ICON: Record<DramaInboxItem["kind"], ReactNode> = {
     paused: <PauseCircle className="size-[18px]" />,
-    media_ready: <Sparkles className="size-[18px]" />,
+    media_ready: <PackageCheck className="size-[18px]" />,
     review: <CheckCheck className="size-[18px]" />,
     episode_error: <ScrollText className="size-[18px]" />,
     cast_failed: <UserRound className="size-[18px]" />,
@@ -453,7 +507,7 @@ export function InboxPanel({
                                                     </Button>
                                                 ) : null}
                                                 {group.kind === "media_ready" ? (
-                                                    <Button size="small" type="primary" icon={<Sparkles className="size-3.5" />} loading={releasing} onClick={onReleaseAll}>
+                                                    <Button size="small" type="primary" icon={<Play className="size-3.5" />} loading={releasing} onClick={onReleaseAll}>
                                                         全部开始生成
                                                     </Button>
                                                 ) : null}
@@ -576,6 +630,8 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
     });
     const catalogQuery = useDramaModelCatalog();
     const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.video));
+    const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.image));
+    const continuity: DramaVideoContinuity = settings.videoContinuity || "tail_frame";
     const sampleCharacter = cast.find((item) => item.kind === "character" && item.appearance);
     const sampleScene = cast.find((item) => item.kind === "scene" && item.appearance);
     const countOf = (kind: DramaCastKind) => cast.filter((item) => item.kind === kind).length;
@@ -606,6 +662,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                 <div className="drama-view-scroll thin-scrollbar">
                     <div className="drama-cfg">
                         <div className="drama-cfg-main">
+                            <EpisodeModeCard summary={summary} settings={settings} onChange={(patch) => setSettings({ ...settings, ...patch })} />
                             <section className="drama-cfg-card">
                                 <SettingsTitle title="分镜规则" detail="对之后改编的集生效；已改编的集可在剧本页“重新改编”" icon={<Clapperboard className="size-4" />} />
                                 <StoryboardRules
@@ -628,6 +685,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                     value={settings.assets}
                                     onChange={(assets) => setSettings({ ...settings, assets })}
                                     sample={{ style: settings.stylePrompt, characterName: sampleCharacter?.name, characterAppearance: sampleCharacter?.appearance, sceneName: sampleScene?.name, sceneAppearance: sampleScene?.appearance }}
+                                    imageModel={imageOption}
                                 />
                                 <div className="drama-settings-regen">
                                     <div>
@@ -661,7 +719,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 </div>
                             </section>
                             <section className="drama-cfg-card">
-                                <SettingsTitle title="制作模型" detail="只列出平台可无人值守执行的模型" icon={<Wand2 className="size-4" />} />
+                                <SettingsTitle title="制作模型" detail="只列出平台可无人值守执行的模型" icon={<Cpu className="size-4" />} />
                                 <div className="drama-cfg-models">
                                     {(Object.keys(CAPABILITY_META) as DramaCapability[]).map((capability) => (
                                         <div key={capability} className="drama-cfg-model">
@@ -718,6 +776,17 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 {settings.mediaMode !== current.mediaMode && settings.mediaMode === "manual" ? <p className="drama-cfg-note">改为手动后，未放行的集停在当前阶段，已提交的任务会做完。</p> : null}
                             </section>
                             <section className="drama-cfg-card">
+                                <SettingsTitle title="段落衔接" detail="决定同一集的剧情段能否同时生成" />
+                                <CompactRadios
+                                    label="段落衔接"
+                                    value={continuity}
+                                    options={(Object.keys(VIDEO_CONTINUITY_LABEL) as DramaVideoContinuity[]).map((mode) => ({ value: mode, ...VIDEO_CONTINUITY_LABEL[mode] }))}
+                                    onChange={(videoContinuity) => setSettings({ ...settings, videoContinuity })}
+                                />
+                                {continuity === "tail_frame" && videoOption && videoOption.tailFrameChain === false ? <p className="drama-cfg-note">当前视频模型不支持图生视频，无法尾帧续接，请改用并行出片或换模型。</p> : null}
+                                {continuity !== (current.videoContinuity || "tail_frame") ? <p className="drama-cfg-note">已写好的段视频提示词按原方式撰写，切换后可在剧情段里重新撰写；已提交的视频会做完。</p> : null}
+                            </section>
+                            <section className="drama-cfg-card">
                                 <SettingsTitle title="同时生成数" detail="受账号并发上限约束" />
                                 <div className="drama-tabs drama-cfg-seg" role="radiogroup" aria-label="同时生成数">
                                     {CONCURRENCY.map((value) => (
@@ -728,7 +797,12 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 </div>
                             </section>
                             <section className="drama-cfg-card">
-                                <SettingsTitle title="预算上限" detail="0 表示不限，达到后自动暂停" />
+                                <SettingsTitle title="每段最多参考图" detail="自动取参考图时的上限，人物优先；0 为按视频模型上限" />
+                                <InputNumber className="!w-full" min={0} max={20} precision={0} value={settings.referenceLimit || 0} onChange={(value) => setSettings({ ...settings, referenceLimit: value || 0 })} suffix="张" aria-label="每段最多参考图" />
+                                <p className="drama-cfg-note">超出的设定按文字描述生成，不附图。个别段需要更多参考图时，在剧情段弹窗里手动指定，只受模型上限约束。</p>
+                            </section>
+                            <section className="drama-cfg-card">
+                                <SettingsTitle title="预算上限" detail="0 表示不限，含精修画布花费；达到后暂停，画布上也不能再生成" />
                                 <InputNumber className="!w-full" min={0} precision={0} value={budget} onChange={(value) => setBudget(value || 0)} suffix="积分" aria-label="预算上限" />
                                 <div className="drama-budget-meter">
                                     <div className="drama-budget-track">
@@ -739,12 +813,55 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                         {budgetMicro ? ` / ${formatCredits(budgetMicro)}` : " · 不限预算"}
                                     </span>
                                 </div>
+                                {summary.production.canvasSpentMicrocredits > 0 ? (
+                                    <p className="drama-cfg-note">
+                                        其中流水线 {formatCredits(Math.max(0, spent - summary.production.canvasSpentMicrocredits))}，精修画布 {formatCredits(summary.production.canvasSpentMicrocredits)}。
+                                    </p>
+                                ) : null}
                             </section>
                         </aside>
                     </div>
                 </div>
             </section>
         </div>
+    );
+}
+
+const EPISODE_MODE_OPTIONS: Array<{ value: DramaEpisodeMode; title: string; detail: string }> = [
+    { value: "chapter", title: "按章分集", detail: "按章节顺序固定分集，每 N 章一集" },
+    { value: "auto", title: "模型自动分集", detail: "按剧情把章节规划成集，可合并或拆分章节" },
+];
+
+/**
+ * 分集方式：只影响还没分集的章节。分集完成后已有的集可能写好了剧本，不再重新分组，
+ * 之后用“逐集追加”继续；剧本与分镜作品总是每章一集。
+ */
+function EpisodeModeCard({ summary, settings, onChange }: { summary: DramaSummary; settings: DramaSettings; onChange: (patch: Pick<DramaSettings, "episodeMode" | "chaptersPerEpisode">) => void }) {
+    const { production, episodes } = summary;
+    const novel = (summary.project.sourceType || "novel") === "novel";
+    const editable = novel && !production.planDone;
+    const mode = settings.episodeMode || (production.planDone ? undefined : "auto");
+    const perEpisode = settings.chaptersPerEpisode || 1;
+    const current = !novel ? "每章一集（剧本与分镜按标题分集）" : settings.episodeMode === "chapter" ? (perEpisode > 1 ? `按章分集 · 每 ${perEpisode} 章一集` : "按章分集 · 每章一集") : settings.episodeMode === "auto" ? "模型自动分集" : "已分集";
+    return (
+        <section className="drama-cfg-card">
+            <SettingsTitle title="分集方式" detail={editable ? "只影响还没分集的章节，保存后下一轮调度生效" : "分集已完成，不能再调整；之后可在制作台逐集追加新的一集"} icon={<Film className="size-4" />} />
+            {editable ? (
+                <div className="grid gap-3">
+                    <CompactRadios label="分集方式" value={mode || "auto"} options={EPISODE_MODE_OPTIONS} onChange={(value) => onChange({ episodeMode: value, chaptersPerEpisode: value === "chapter" ? perEpisode : undefined })} />
+                    {mode === "chapter" ? <EpisodeGroupField value={perEpisode} onChange={(value) => onChange({ episodeMode: "chapter", chaptersPerEpisode: value })} chapterCount={Math.max(0, production.chapterCount - production.planCursor)} /> : null}
+                    {production.planCursor > 0 ? (
+                        <p className="drama-cfg-note">
+                            前 {production.planCursor} 章已分成 {episodes.length} 集，保持不变。
+                        </p>
+                    ) : null}
+                </div>
+            ) : (
+                <p className="drama-cfg-note">
+                    {current} · 共 {production.chapterCount} 章 {episodes.length} 集
+                </p>
+            )}
+        </section>
     );
 }
 

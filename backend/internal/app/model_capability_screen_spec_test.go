@@ -81,16 +81,40 @@ func TestAutoDLScreenSpecSelectedValuesSurviveJSONReload(t *testing.T) {
 	}
 }
 
-func TestAutoDLScreenSpecRejectsInvalidSelectionsAndUnknownWorkflow(t *testing.T) {
-	for _, values := range [][]string{nil, {"480p横"}, {"480p横", "768p(1:1)", "1080p横"}} {
+func TestAutoDLScreenSpecRejectsInvalidSelections(t *testing.T) {
+	for _, values := range [][]string{nil, {"480p横"}, {"480p横", strings.Repeat("长", 41)}} {
 		profile := autoDLProfile(t, true)
 		profile.Video.Resolutions = values
 		if _, err := NormalizeModelCapabilityConfigForModel("video", "autodl-comfyui", "minimax_h3_zm_u24", profile); err == nil {
 			t.Fatal("invalid selection or default was accepted")
 		}
 	}
-	if _, err := NormalizeModelCapabilityConfigForModel("video", "autodl-comfyui", "unknown", autoDLProfile(t, false)); err == nil {
-		t.Fatal("unknown workflow invented preset values")
+	if _, err := NormalizeModelCapabilityConfigForModel("video", "autodl-comfyui", " ", autoDLProfile(t, false)); err == nil {
+		t.Fatal("empty workflow ID was accepted")
+	}
+}
+
+func TestAutoDLScreenSpecAcceptsCustomLabels(t *testing.T) {
+	profile := autoDLProfile(t, true)
+	profile.Video.Resolutions = []string{"480P横", "1088p竖(1088*1920)"}
+	profile.Video.DefaultResolution = "1088p竖(1088*1920)"
+	result := normalizeAutoDLProfile(t, profile, "minimax_h3_zm_u24")
+	if !reflect.DeepEqual(result.Video.Resolutions, []string{"480p横", "1088p竖(1088*1920)"}) || result.Video.DefaultResolution != "1088p竖(1088*1920)" || len(result.Video.FixedScreenSpec.Resolutions) != 6 {
+		t.Fatalf("custom spec = %#v", result.Video)
+	}
+}
+
+func TestAutoDLScreenSpecPassesThroughUndeclaredWorkflow(t *testing.T) {
+	presets := []string{"480p竖", "768p竖", "960p竖", "480p横", "768p横", "960p横"}
+	profile := autoDLProfile(t, false)
+	profile.Video.Resolutions = []string{"960P竖", "768p横"}
+	profile.Video.DefaultResolution = "960p竖"
+	result := normalizeAutoDLProfile(t, profile, "minimax_h3_zm_nono")
+	if !reflect.DeepEqual(result.Video.FixedScreenSpec.Resolutions, presets) || result.Video.FixedScreenSpec.DefaultResolution != "768p竖" {
+		t.Fatalf("generic presets = %#v", result.Video.FixedScreenSpec)
+	}
+	if !reflect.DeepEqual(result.Video.Resolutions, []string{"960p竖", "768p横"}) || result.Video.DefaultResolution != "960p竖" {
+		t.Fatalf("selected spec = %#v", result.Video)
 	}
 }
 
@@ -200,7 +224,7 @@ func TestAutoDLScreenSpecSystemSaveCatalogAndExecutionIgnoreClientOverride(t *te
 				continue
 			}
 			priceInput := map[string]any{"mode": "video", "prompt": "test", "config": map[string]any{"channelId": channel.ID, "channelModelKey": saved.ModelKey, "model": saved.ModelKey, "vquality": tier.Resolution, "videoSeconds": "6"}}
-			priced, err := svc.resolveSystemChannelModelSelection(priceInput, "canvas_video", "text_to_video")
+			priced, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), priceInput, "canvas_video", "text_to_video")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -215,7 +239,7 @@ func TestAutoDLScreenSpecSystemSaveCatalogAndExecutionIgnoreClientOverride(t *te
 			t.Fatalf("catalog = %s, err = %v", data, err)
 		}
 		input := map[string]any{"mode": "video", "prompt": "test", "config": map[string]any{"channelId": channel.ID, "channelModelKey": saved.ModelKey, "model": saved.ModelKey, "interfaceType": "autodl-comfyui", "vquality": "auto", "size": "16:9", "videoSeconds": "6", "capabilityConfig": autoDLProfile(t, !subset)}}
-		resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_video", "text_to_video")
+		resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_video", "text_to_video")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -235,7 +259,7 @@ func TestAutoDLScreenSpecSystemSaveCatalogAndExecutionIgnoreClientOverride(t *te
 		}
 		if subset {
 			rejected := map[string]any{"mode": "video", "prompt": "test", "config": map[string]any{"channelId": channel.ID, "model": saved.ModelKey, "vquality": "768p竖", "videoSeconds": "6"}}
-			resolved, err = svc.resolveSystemChannelModelSelection(rejected, "canvas_video", "text_to_video")
+			resolved, err = svc.resolveSystemChannelModelSelection(testGroupAccess(svc), rejected, "canvas_video", "text_to_video")
 			if err == nil && svc.ValidateTaskCapability(resolved) == nil {
 				t.Fatal("unselected preset bypassed saved capability restrictions")
 			}

@@ -38,7 +38,7 @@ func TestVideoTokenChannelQuoteAgreesWithTaskBilling(t *testing.T) {
 			if test.audio != nil {
 				intent.Options["videoGenerateAudio"] = test.audio
 			}
-			quote, err := svc.QuoteChannelModel(ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: intent})
+			quote, err := svc.QuoteChannelModel(testGroupUserID(svc), ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: intent})
 			if err != nil {
 				t.Fatalf("QuoteChannelModel() error = %v", err)
 			}
@@ -47,7 +47,7 @@ func TestVideoTokenChannelQuoteAgreesWithTaskBilling(t *testing.T) {
 
 			input := quoteInput(intent, channelModel.ModelKey)
 			input["config"].(map[string]any)["channelId"] = channel.ID
-			resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_video", "")
+			resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_video", "")
 			if err != nil {
 				t.Fatalf("resolveSystemChannelModelSelection() error = %v", err)
 			}
@@ -96,7 +96,7 @@ func TestVideoTokenLogicalQuoteAgreesWithSystemChannel(t *testing.T) {
 				}
 			}
 			intent := ModelRequestIntent{Capability: "video"}
-			logicalQuote, err := svc.QuoteLogicalModel(logical.ID, intent)
+			logicalQuote, err := svc.QuoteLogicalModel(testGroupUserID(svc), logical.ID, intent)
 			if err != nil {
 				t.Fatalf("QuoteLogicalModel() error = %v", err)
 			}
@@ -104,7 +104,7 @@ func TestVideoTokenLogicalQuoteAgreesWithSystemChannel(t *testing.T) {
 			if logicalQuote.LogicalModelID != logical.ID {
 				t.Fatalf("logicalModelId = %q, want %q", logicalQuote.LogicalModelID, logical.ID)
 			}
-			channelQuote, err := svc.QuoteChannelModel(ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: intent})
+			channelQuote, err := svc.QuoteChannelModel(testGroupUserID(svc), ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: intent})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -135,7 +135,7 @@ func TestVideoTokenChannelQuoteRejectsUnavailableChannel(t *testing.T) {
 			if err := db.Model(row).Where("id = ?", id).Update(test.field, test.value).Error; err != nil {
 				t.Fatal(err)
 			}
-			quote, err := svc.QuoteChannelModel(ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: ModelRequestIntent{Capability: "video"}})
+			quote, err := svc.QuoteChannelModel(testGroupUserID(svc), ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: ModelRequestIntent{Capability: "video"}})
 			if err == nil || quote != nil {
 				t.Fatalf("unavailable channel/model must be rejected: quote=%#v error=%v", quote, err)
 			}
@@ -151,10 +151,10 @@ func TestVideoTokenQuoteRejectsInvalidReferenceCounts(t *testing.T) {
 				intent := ModelRequestIntent{Capability: "video", Inputs: map[string]int{kind: count}}
 				// A nil repository verifies counts fail before allocation, lookup, or routing.
 				svc := &Service{}
-				if quote, err := svc.QuoteChannelModel(ChannelModelQuoteRequest{ChannelID: "system-video", ModelKey: "video", Intent: intent}); err == nil || quote != nil {
+				if quote, err := svc.QuoteChannelModel(testGroupUserID(svc), ChannelModelQuoteRequest{ChannelID: "system-video", ModelKey: "video", Intent: intent}); err == nil || quote != nil {
 					t.Fatalf("channel quote must reject invalid count: quote=%#v error=%v", quote, err)
 				}
-				if quote, err := svc.QuoteLogicalModel("logical-video", intent); err == nil || quote != nil {
+				if quote, err := svc.QuoteLogicalModel(testGroupUserID(svc), "logical-video", intent); err == nil || quote != nil {
 					t.Fatalf("logical quote must reject invalid count: quote=%#v error=%v", quote, err)
 				}
 			})
@@ -176,7 +176,10 @@ func newVideoTokenQuoteFixture(t *testing.T) (*Service, *gorm.DB, model.ModelCha
 	if err := db.Model(&model.ChannelModel{}).Where("id = ?", channelModel.ID).Update("provider_model_key", providerModel).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.BillingOrder{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.BillingOrder{}, &model.User{}, &model.UserGroup{}, &model.UserGroupChannel{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.User{ID: "quote-user", Username: "quote-user", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
 		t.Fatal(err)
 	}
 	account := model.CreditAccount{UserID: "quote-user", AvailableMicrocredits: 10_000_000, ReservedMicrocredits: 250_000, Version: 7}

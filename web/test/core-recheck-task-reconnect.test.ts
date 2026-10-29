@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { apiClient } from "../src/services/api/request";
-import { createGenerationTaskSubscriptionService, waitForGenerationTask, type GenerationTask } from "../src/services/api/task-center";
+import { createGenerationTaskSubscriptionService, isGenerationTaskTerminalError, waitForGenerationTask, type GenerationTask } from "../src/services/api/task-center";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
@@ -112,6 +112,22 @@ test("polling stops after five network failures but can resume the original task
         ).status,
     ).toBe("succeeded");
     expect(queries).toBe(6);
+});
+
+test("only a backend failure is a terminal task error; polling interruptions are not", async () => {
+    let failed = false;
+    apiClient.defaults.adapter = async (config) => {
+        if (!failed) throw new Error("Network Error");
+        return { config, status: 200, statusText: "", headers: {}, data: { code: 0, data: { ...running, status: "failed", error: "上游拒绝本次请求" }, msg: "ok" } };
+    };
+    const interrupted = await waitForGenerationTask(running.id, { initialTask: running, intervalMs: 1, timeoutMs: 1000 }).catch((error: unknown) => error);
+    expect(interrupted).toBeInstanceOf(Error);
+    expect(isGenerationTaskTerminalError(interrupted)).toBe(false);
+
+    failed = true;
+    const terminal = await waitForGenerationTask(running.id, { initialTask: running, intervalMs: 1, timeoutMs: 1000 }).catch((error: unknown) => error);
+    expect(isGenerationTaskTerminalError(terminal)).toBe(true);
+    if (isGenerationTaskTerminalError(terminal)) expect(terminal.task).toMatchObject({ id: running.id, status: "failed" });
 });
 
 test("a failed observer restarts for an existing subscriber when network returns", async () => {

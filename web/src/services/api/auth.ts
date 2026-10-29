@@ -7,6 +7,7 @@ import { http, apiBaseURL } from "@/services/api/request";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
 import type { VerificationPolicy } from "./verification";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
+import type { PublicUserGroup } from "@/services/api/user-groups";
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
 let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
@@ -32,6 +33,8 @@ export type LocalUser = {
     role: "admin" | "user";
     status: "active" | "disabled";
     isPromoter?: boolean;
+    /** 分组编码；空串属于 default 分组。 */
+    userGroup?: string;
     lastLoginAt?: string;
     createdAt: string;
     updatedAt: string;
@@ -49,6 +52,8 @@ export type AuthSessionPayload = {
     features?: FeatureAvailability;
     /** 当前账号能否进入推广中心；由后台推广设置和推广人标记共同决定。 */
     referralAvailable?: boolean;
+    /** 当前账号所属分组的展示信息；分组配置缺失时为空。 */
+    userGroup?: PublicUserGroup | null;
 };
 
 export type RuntimeLimits = {
@@ -485,13 +490,13 @@ export async function logout() {
     return result;
 }
 
-export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+export type AdminListParams = { keyword?: string; status?: string; role?: string; group?: string; page?: number; pageSize?: number };
 
 export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });
 }
 
-export function createAdminUser(input: { username: string; displayName: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"] }) {
+export function createAdminUser(input: { username: string; displayName: string; email?: string; password: string; role: LocalUser["role"]; status: LocalUser["status"]; userGroup?: string }) {
     return http.post<{ user: AdminUser }>("/admin/users", input);
 }
 
@@ -515,7 +520,7 @@ export function listAdminUserAuditEvents(id: string, params: { page?: number; pa
     return http.get<{ events: AdminAuditEvent[]; total: number; page: number; pageSize: number }>(`/admin/users/${encodeURIComponent(id)}/audit-events`, { params });
 }
 
-export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "displayName" | "email" | "role" | "status" | "isPromoter">> & { password?: string }) {
+export function updateAdminUser(id: string, input: Partial<Pick<LocalUser, "displayName" | "email" | "role" | "status" | "isPromoter" | "userGroup">> & { password?: string }) {
     return http.patch<{ user: LocalUser }>(`/admin/users/${encodeURIComponent(id)}`, input);
 }
 

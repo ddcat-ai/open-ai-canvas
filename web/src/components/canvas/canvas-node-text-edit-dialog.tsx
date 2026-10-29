@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Input, Modal, Spin } from "antd";
-import { FileText, RefreshCw, WandSparkles, X } from "lucide-react";
+import { FileText, RefreshCw, X, Check } from "lucide-react";
 
 export type CanvasImageTextLine = { original: string; text: string; location: string };
 export type CanvasImageTextEditPayload = { lines: CanvasImageTextLine[] };
@@ -65,7 +65,7 @@ export function CanvasNodeTextEditDialog({
                         <Button size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => void detect()} disabled={loading}>重新识别</Button>
                     </div>
                     {loading ? <div className="flex flex-1 items-center justify-center gap-2 text-sm opacity-65"><Spin size="small" />正在识别图片文字…</div> : error ? <div className="space-y-3"><Alert type="error" showIcon message={error} /><Button onClick={() => void detect()}>重试</Button></div> : lines.length ? <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">{lines.map((line, index) => <div key={`${line.original}-${index}`} className="rounded-xl border p-3"><div className="mb-2 flex items-center gap-2 text-xs opacity-60"><FileText className="size-3.5" /><span>第 {index + 1} 行 · {line.location}</span></div><Input value={line.text} placeholder={line.original} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item))} /></div>)}</div> : <div className="flex flex-1 items-center justify-center text-sm opacity-55">没有识别到可编辑文字</div>}
-                    <div className="mt-auto flex justify-end gap-2 border-t pt-3"><Button icon={<X className="size-4" />} onClick={onClose}>取消</Button><Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!changed || loading} onClick={() => onConfirm({ lines })}>生成修改结果</Button></div>
+                    <div className="mt-auto flex justify-end gap-2 border-t pt-3"><Button icon={<X className="size-4" />} onClick={onClose}>取消</Button><Button type="primary" icon={<Check className="size-4" />} disabled={!changed || loading} onClick={() => onConfirm({ lines })}>生成修改结果</Button></div>
                 </div>
             </div>
         </Modal>

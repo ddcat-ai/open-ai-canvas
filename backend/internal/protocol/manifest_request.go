@@ -13,8 +13,19 @@ import (
 )
 
 func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, request GenerationRequest, taskID string) (RequestSpec, error) {
+	return buildManifestOperationWithEnv(operation, auth, request, taskID, nil)
+}
+
+// buildManifestOperationWithEnv 允许宿主为单次请求追加只读变量（如上传步骤的当前 media）；
+// request 与 taskId 始终由宿主提供，追加变量不能覆盖它们。
+func buildManifestOperationWithEnv(operation ManifestOperation, auth ManifestAuth, request GenerationRequest, taskID string, extra map[string]any) (RequestSpec, error) {
 	requestValues := manifestRequestValues(request)
 	env := map[string]any{"request": requestValues, "taskId": taskID}
+	for key, value := range extra {
+		if _, reserved := env[key]; !reserved {
+			env[key] = value
+		}
+	}
 	var body any
 	if operation.Body != nil {
 		value, err := evaluateManifestValue(operation.Body, env)
@@ -348,7 +359,12 @@ func manifestMediaValues(values []MediaReference) []any {
 			order = index
 		}
 		resolved := defaultValue(value.URL, value.DataURL)
+		uploadID := ""
+		if value.Metadata != nil {
+			uploadID = manifestString(value.Metadata[MediaUploadIDKey])
+		}
 		result = append(result, map[string]any{
+			"uploadId": uploadID,
 			"id":       value.ID,
 			"url":      value.URL,
 			"dataUrl":  value.DataURL,
@@ -370,6 +386,10 @@ func manifestMediaValues(values []MediaReference) []any {
 	}
 	return result
 }
+
+// MediaUploadIDKey 是宿主执行上传步骤后写入 MediaReference.Metadata 的上游素材 ID 键，
+// 清单模板通过 media.uploadId 读取。
+const MediaUploadIDKey = "uploadId"
 
 func manifestMediaSourceType(value MediaReference) string {
 	if value.DataURL != "" {

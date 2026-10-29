@@ -1,5 +1,5 @@
 import { isValidElement, type ReactNode } from "react";
-import { Brush, Camera, Clapperboard, Contrast, Copy, FastForward, FileText, Globe2, Grid2x2, Grid3x3, Layers3, Lock, LockOpen, Maximize2, Package, PencilLine, PersonStanding, Crop, Rewind, ScanFace, SlidersHorizontal, Smile, SquareDashed, Sun, Upload, Scaling, WandSparkles } from "lucide-react";
+import { Brush, Camera, Clapperboard, Contrast, Copy, FastForward, FileText, Globe2, Grid2x2, Grid3x3, Layers3, Lock, LockOpen, Maximize2, Package, PencilLine, PersonStanding, Crop, Rewind, ScanFace, SlidersHorizontal, Smile, SquareDashed, Sun, Upload, Scaling, Eraser } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 import type { NodeToolbarGroup } from "@/lib/canvas/tool-registry";
@@ -125,7 +125,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         label: "去除背景",
         section: "主体与图层",
         description: "保留主体并生成透明背景图片",
-        icon: () => <WandSparkles className="size-3.5" />,
+        icon: () => <Eraser className="size-3.5" />,
         group: "adjust",
         order: 50,
         run: (node, handlers) => handlers.onRemoveBackground(node),

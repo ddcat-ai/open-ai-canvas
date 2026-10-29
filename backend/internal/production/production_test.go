@@ -16,6 +16,16 @@ func TestExtractJSONObjectToleratesFences(t *testing.T) {
 	}
 }
 
+func TestReferenceTokensNormalizeAndFlagUnknownNumbers(t *testing.T) {
+	text := CleanWrittenPrompt("林逸（@参考图1）站在石碑（参考图 3）旁，王镇山（参考图5）冷笑。")
+	if text != "林逸（参考图1）站在石碑（参考图3）旁，王镇山（参考图5）冷笑。" {
+		t.Fatalf("tokens must be normalized: %q", text)
+	}
+	if unknown := UnknownReferenceTokens(text, 4); len(unknown) != 1 || unknown[0] != "参考图5" {
+		t.Fatalf("only out-of-range references are unknown: %v", unknown)
+	}
+}
+
 func TestParsePlanCoversEveryChapterInBatch(t *testing.T) {
 	batch := []Chapter{{Index: 1, Title: "一", Text: "甲"}, {Index: 2, Title: "二", Text: "乙"}, {Index: 3, Title: "三", Text: "丙"}}
 	raw := `{"episodes":[{"title":"开端","chapters":[1,"2",9],"synopsis":"开端剧情"}]}`
@@ -98,7 +108,7 @@ func TestStoryboardRules(t *testing.T) {
 		t.Fatalf("range is ordered and capped by the model max: %+v", got)
 	}
 	rules := fast.PromptRules(300, fast.SegmentLimits(15))
-	for _, want := range []string{"每 10 秒一个剧情段", "3–6 个镜头", "每 3 秒至少一句", "全集至少 100 句"} {
+	for _, want := range []string{"每 10 秒一个剧情段", "3–6 个镜头", "每 3 秒有一句", "参考全集 100 句", "逐字取自原文"} {
 		if !strings.Contains(rules, want) {
 			t.Fatalf("prompt rules missing %q:\n%s", want, rules)
 		}

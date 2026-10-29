@@ -24,6 +24,7 @@ const REASON_MESSAGES: Record<string, string> = {
     quota_exceeded: "积分或额度不足，请充值后再试。",
     storage_capacity_exceeded: "账号存储空间不足，请清理素材或购买存储空间后再试。",
     storage_read_only: "账号已超出存储容量且宽限期已结束，当前为只读状态。请删除素材或购买存储空间。",
+    drama_budget_exhausted: "这部短剧已达到预算上限（含画布精修花费），请在短剧设置里提高预算后再生成。",
     rate_limited: "请求过于频繁，请稍后再试。",
     timeout: "模型服务响应超时，请稍后再试。",
     bad_gateway: "模型服务暂时不可用，请稍后再试。",

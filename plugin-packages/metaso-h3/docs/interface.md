@@ -14,20 +14,24 @@ POST `https://metaso.cn/api/minimax/v2/video_generation`
 {
   "model": "MiniMax-H3",
   "content": [
-    { "type": "text", "text": "视频描述" },
-    { "type": "image_url", "image_url": { "url": "https://..." }, "role": "first_frame" },
-    { "type": "video_url", "video_url": { "url": "https://..." }, "role": "reference_video" },
-    { "type": "audio_url", "audio_url": { "url": "https://..." }, "role": "reference_audio" }
+    { "type": "text", "text": "从首帧平滑过渡到尾帧，保持参考图中角色的外观与服装一致。" },
+    { "type": "image_url", "image_url": { "url": "https://your-cdn.example.com/first-frame.jpg" }, "role": "first_frame" },
+    { "type": "image_url", "image_url": { "url": "https://your-cdn.example.com/last-frame.jpg" }, "role": "last_frame" },
+    { "type": "image_url", "image_url": { "url": "https://your-cdn.example.com/reference.jpg" }, "role": "reference_image" }
   ],
-  "resolution": "768P",
+  "resolution": "2K",
   "duration": 5,
-  "ratio": "16:9"
+  "ratio": "adaptive",
+  "fast_mode": false
 }
 ```
 
+文生视频只发 text 项并指定 `ratio`；参考视频、参考音频使用 `video_url` / `audio_url` 与 `reference_video` / `reference_audio`。
+
 - `MiniMax-H3` 的 duration 支持 4–30 秒整数；`MiniMax-H3-Max` 仍按秘塔账户开放能力选择 5–15 秒。
 - content 必须包含一个非空 text 项。
-- 首尾帧（first_frame/last_frame）与多模态参考（reference_*）互斥。
+- 首尾帧（first_frame/last_frame）可以与参考图（reference_image）同时提交；带首帧或尾帧时 `ratio` 固定为 `adaptive`。
+- 没有 role 的图片按 `reference_image` 发送；首帧、尾帧各最多 1 张，尾帧必须配首帧。
 - 图片 ≤ 9 张、视频 ≤ 3 段、音频 ≤ 3 段；请求体总大小 ≤ 64 MB。
 
 响应：
@@ -71,7 +75,7 @@ status 取值：queued / running / succeeded / failed / cancelled。
   "apiVersion": "yingce.plugin/v2",
   "id": "metaso-h3",
   "name": "METASO MiniMax H3",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "METASO",
   "description": "秘塔 METASO MiniMax H3 文生视频/图生视频协议插件（异步任务）。",
   "permissions": [
@@ -240,9 +244,12 @@ status 取值：queued / running / succeeded / failed / cancelled。
                         }
                       },
                       "role": {
-                        "$omitEmpty": {
-                          "$ref": "media.role"
-                        }
+                        "$coalesce": [
+                          {
+                            "$ref": "media.role"
+                          },
+                          "reference_image"
+                        ]
                       }
                     }
                   }
@@ -332,16 +339,47 @@ status 取值：queued / running / succeeded / failed / cancelled。
               }
             },
             "ratio": {
-              "$omitEmpty": {
-                "$coalesce": [
-                  {
-                    "$ref": "request.aspectRatio"
-                  },
-                  {
-                    "$ref": "request.providerOptions.metaso-h3.ratio"
-                  },
-                  "16:9"
-                ]
+              "$if": {
+                "condition": {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.images"
+                          },
+                          "as": "image",
+                          "where": {
+                            "$in": [
+                              {
+                                "$ref": "image.role"
+                              },
+                              [
+                                "first_frame",
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                "then": "adaptive",
+                "else": {
+                  "$omitEmpty": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.aspectRatio"
+                      },
+                      {
+                        "$ref": "request.providerOptions.metaso-h3.ratio"
+                      },
+                      "16:9"
+                    ]
+                  }
+                }
               }
             },
             "aigc_watermark": {
@@ -428,7 +466,161 @@ status 取值：queued / running / succeeded / failed / cancelled。
             "task.error.message",
             "error.message"
           ]
-        }
+        },
+        "validations": [
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.images"
+                  }
+                },
+                9
+              ]
+            },
+            "message": "METASO MiniMax H3 最多支持 9 张图片"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.videos"
+                  }
+                },
+                3
+              ]
+            },
+            "message": "METASO MiniMax H3 最多支持 3 个参考视频"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$ref": "request.audios"
+                  }
+                },
+                3
+              ]
+            },
+            "message": "METASO MiniMax H3 最多支持 3 个参考音频"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "image",
+                      "where": {
+                        "$in": [
+                          {
+                            "$ref": "image.role"
+                          },
+                          [
+                            "first_frame"
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                },
+                1
+              ]
+            },
+            "message": "METASO MiniMax H3 最多只能有一个首帧"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.images"
+                      },
+                      "as": "image",
+                      "where": {
+                        "$in": [
+                          {
+                            "$ref": "image.role"
+                          },
+                          [
+                            "last_frame"
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                },
+                1
+              ]
+            },
+            "message": "METASO MiniMax H3 最多只能有一个尾帧"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.images"
+                          },
+                          "as": "image",
+                          "where": {
+                            "$in": [
+                              {
+                                "$ref": "image.role"
+                              },
+                              [
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.images"
+                          },
+                          "as": "image",
+                          "where": {
+                            "$in": [
+                              {
+                                "$ref": "image.role"
+                              },
+                              [
+                                "first_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    1
+                  ]
+                }
+              ]
+            },
+            "message": "METASO MiniMax H3 使用尾帧时必须同时提供首帧"
+          }
+        ]
       }
     ]
   },

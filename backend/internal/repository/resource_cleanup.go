@@ -72,6 +72,12 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 			{&model.AssetRepresentation{}, "resource_id IN ?"},
 			{&model.VoiceProfile{}, "sample_resource_id IN ?"},
 			{&model.ShotArtifact{}, "resource_id IN ?"},
+			// 短剧表直接持有参考图、段视频、尾帧、成片与历史版本，不出现在任何 JSON 文档里。
+			{&model.DramaCast{}, "image_resource_id IN ?"},
+			{&model.DramaSegment{}, "video_resource_id IN ?"},
+			{&model.DramaSegment{}, "tail_frame_resource_id IN ?"},
+			{&model.DramaEpisode{}, "final_resource_id IN ?"},
+			{&model.DramaTake{}, "resource_id IN ?"},
 		} {
 			var count int64
 			if err := tx.Model(check.model).Where(check.query, resourceIDs).Count(&count).Error; err != nil {

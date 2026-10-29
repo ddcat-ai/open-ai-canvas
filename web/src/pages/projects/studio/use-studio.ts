@@ -1,14 +1,13 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { App } from "antd";
+import { useNavigate } from "react-router";
 
+import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { getDrama, getDramaEpisode, listDramaCast, type DramaCast, type DramaEpisodeDetail, type DramaSummary } from "@/services/api/drama";
+import { encodeDramaCanvasFocus, openDramaCanvasPath, type DramaCanvasFocus } from "@/services/drama-canvas";
 
-export const dramaKeys = {
-    summary: (projectId: string) => ["drama", projectId] as const,
-    episode: (projectId: string, episodeId: string) => ["drama", projectId, "episode", episodeId] as const,
-    cast: (projectId: string) => ["drama", projectId, "cast"] as const,
-    jobs: (projectId: string) => ["drama", projectId, "jobs"] as const,
-};
+export { dramaKeys };
 
 function summaryActive(summary?: DramaSummary) {
     if (!summary) return false;
@@ -57,8 +56,39 @@ export function useDramaInvalidate(projectId: string) {
         void queryClient.invalidateQueries({ queryKey: dramaKeys.summary(projectId), exact: true });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.cast(projectId) });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.jobs(projectId) });
+        void queryClient.invalidateQueries({ queryKey: ["drama", projectId, "takes"] });
         if (episodeId) void queryClient.invalidateQueries({ queryKey: dramaKeys.episode(projectId, episodeId) });
     };
+}
+
+/**
+ * 打开作品的精修画布（没有时新建并关联），可带上要投送或定位的对象。
+ * opening 是正在打开的对象键（无对象时为 canvas），用于按钮的加载态。
+ */
+export function useOpenDramaCanvas(summary: DramaSummary | undefined) {
+    const navigate = useNavigate();
+    const { message } = App.useApp();
+    const [opening, setOpening] = useState<string | null>(null);
+    const openingRef = useRef(false);
+    const id = summary?.project.id || "";
+    const name = summary?.project.name || "";
+    const open = useCallback(
+        async (focus?: DramaCanvasFocus) => {
+            if (!id || openingRef.current) return;
+            openingRef.current = true;
+            setOpening(focus ? encodeDramaCanvasFocus(focus) : "canvas");
+            try {
+                navigate(await openDramaCanvasPath({ id, name }, focus));
+            } catch (error) {
+                message.error(error instanceof Error && error.message ? error.message : "打开精修画布失败");
+            } finally {
+                openingRef.current = false;
+                setOpening(null);
+            }
+        },
+        [id, message, name, navigate],
+    );
+    return { open, opening };
 }
 
 export type StudioContext = {

@@ -5,7 +5,7 @@ import { normalizePublicAppearance } from "../src/stores/use-appearance-store";
 import { moduleGroupSource } from "./helpers/module-group-source";
 
 describe("site appearance and editable skin library", () => {
-    test("classic preserves foundation tokens and applies only primary button fills", () => {
+    test("classic keeps every token in globals.css and writes no inline variables", () => {
         expect(DEFAULT_CLASSIC_SKIN.locked).toBe(true);
         expect(getSkinAntOverrides(DEFAULT_CLASSIC_SKIN, "light")).toEqual({});
         expect(getSkinAntOverrides(DEFAULT_CLASSIC_SKIN, "dark")).toEqual({});
@@ -23,9 +23,8 @@ describe("site appearance and editable skin library", () => {
         } as unknown as Document;
         applySkinTheme(DEFAULT_CLASSIC_SKIN, "light", target);
         expect(removed.length).toBeGreaterThan(60);
-        expect(assigned.size).toBe(4);
-        expect(assigned.get("--button-primary-bg")).toBe("linear-gradient(115deg, #6554df, #386fbc)");
-        expect(assigned.has("--background")).toBe(false);
+        expect(removed).toContain("--button-primary-bg");
+        expect(assigned.size).toBe(0);
         expect(target.documentElement.dataset.skin).toBe("classic");
     });
 

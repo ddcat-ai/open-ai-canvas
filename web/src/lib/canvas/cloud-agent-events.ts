@@ -288,6 +288,33 @@ export function applyAgentEvent(
         setApproval((current) => ({ approvalId, detail: payload, reason: current?.approvalId === approvalId ? current.reason : "" }));
         return;
     }
+    if (event.type === "memory_updated") {
+        const revisionId = String(payload.revisionId || "");
+        const changes = Array.isArray(payload.changes)
+            ? (payload.changes as Array<Record<string, unknown>>).map((change) => ({
+                  kind: (["add", "replace", "remove"].includes(String(change.kind)) ? String(change.kind) : "add") as "add" | "replace" | "remove",
+                  section: String(change.section || ""),
+                  before: change.before === undefined ? undefined : String(change.before),
+                  after: change.after === undefined ? undefined : String(change.after),
+              }))
+            : [];
+        const memoryUpdate = { revisionId, status: payload.status === "pending_review" ? ("pending" as const) : ("applied" as const), summary: String(payload.summary || ""), changes };
+        setMessages((current) => appendUniqueMessage(current, { id: `memory-${revisionId || event.eventId}`, role: "system", text: text || "长期记忆已更新", memoryUpdate }));
+        return;
+    }
+    if (event.type === "skill_install_suggested") {
+        const skills = Array.isArray(payload.skills)
+            ? (payload.skills as Array<Record<string, unknown>>)
+                  .map((skill) => ({ skillId: String(skill.skillId || ""), name: String(skill.name || ""), summary: skill.summary === undefined ? undefined : String(skill.summary), tag: skill.tag === undefined ? undefined : String(skill.tag) }))
+                  .filter((skill) => skill.skillId && skill.name)
+            : [];
+        if (!skills.length) return;
+        const reason = String(payload.reason || "");
+        setMessages((current) => appendUniqueMessage(current, { id: `skill-suggestion-${event.runId}`, role: "system", text: reason || "Agent 推荐安装技能", skillSuggestion: { reason, skills } }));
+        return;
+    }
+    // 这两个工具成功时已有专门的记忆卡片和安装卡片，不再重复渲染通用工具行；失败仍按工具行展示。
+    if (event.type === "tool_completed" && (payload.toolName === "memory_update" || payload.toolName === "skill_recommend")) return;
     if (event.type === "canvas_undone") {
         setMessages((current) =>
             current.map((item) => {

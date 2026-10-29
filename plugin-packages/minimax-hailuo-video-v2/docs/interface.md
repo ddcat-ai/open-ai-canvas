@@ -34,7 +34,7 @@
 
 - 图片最多 9 张、视频最多 3 个、音频最多 3 个。
 - 首帧和尾帧各最多 1 张；尾帧不能脱离首帧。
-- 首尾帧模式不能混入 `reference_image/subject_reference/style_reference`。
+- 首帧、尾帧可以与 `reference_image/subject_reference/style_reference` 同时提交（H3 按 role 区分，秘塔等中转同样支持）；带首帧或尾帧时 `ratio` 固定为 `adaptive`。
 - duration 超出 4-30 秒直接失败，不静默裁剪。
 
 ## 中转兼容边界
@@ -62,7 +62,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "minimax-hailuo-video-v2",
   "name": "MiniMax Hailuo Video V2 / H3",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "author": "MiniMax / 影策",
   "description": "MiniMax / Hailuo V2 视频生成协议，保留首帧、尾帧、参考图、视频和音频角色语义。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -374,68 +374,6 @@
               ]
             },
             "message": "MiniMax H3 使用尾帧时必须同时提供首帧"
-          },
-          {
-            "assert": {
-              "$not": {
-                "$and": [
-                  {
-                    "$gt": [
-                      {
-                        "$len": {
-                          "$filter": {
-                            "from": {
-                              "$ref": "request.images"
-                            },
-                            "as": "image",
-                            "where": {
-                              "$in": [
-                                {
-                                  "$ref": "image.role"
-                                },
-                                [
-                                  "first_frame",
-                                  "last_frame"
-                                ]
-                              ]
-                            }
-                          }
-                        }
-                      },
-                      0
-                    ]
-                  },
-                  {
-                    "$gt": [
-                      {
-                        "$len": {
-                          "$filter": {
-                            "from": {
-                              "$ref": "request.images"
-                            },
-                            "as": "image",
-                            "where": {
-                              "$in": [
-                                {
-                                  "$ref": "image.role"
-                                },
-                                [
-                                  "reference_image",
-                                  "subject_reference",
-                                  "style_reference"
-                                ]
-                              ]
-                            }
-                          }
-                        }
-                      },
-                      0
-                    ]
-                  }
-                ]
-              }
-            },
-            "message": "MiniMax H3 首尾帧模式不能混入普通角色或风格参考图"
           }
         ],
         "create": {

@@ -16,10 +16,12 @@ type User struct {
 	Role            UserRole   `json:"role" gorm:"index;size:24"`
 	Status          UserStatus `json:"status" gorm:"index;size:24"`
 	IsPromoter      bool       `json:"isPromoter" gorm:"not null;default:false;index"`
-	PasswordHash    string     `json:"-"`
-	LastLoginAt     *time.Time `json:"lastLoginAt"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
+	// UserGroup 是用户分组编码；空串归入 default 分组。
+	UserGroup    string     `json:"userGroup" gorm:"size:40;not null;default:'';index"`
+	PasswordHash string     `json:"-"`
+	LastLoginAt  *time.Time `json:"lastLoginAt"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
 }
 
 type AuthSession struct {

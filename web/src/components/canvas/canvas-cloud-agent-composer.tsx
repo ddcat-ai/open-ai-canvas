@@ -3,7 +3,7 @@
 // 运行中输入框保持可用（产品约定，勿收紧）：发送走插话，停止由 running 驱动，两者互不排斥。
 
 import type { Skill, SkillPreset } from "@/services/api/skills";
-import { ArrowLeft, ArrowUp, AtSign, Bookmark, Clapperboard, ImagePlus, Layers3, LoaderCircle, Palette, Shapes, Share2, ShoppingBag, Sparkles, Square, X } from "lucide-react";
+import { ArrowLeft, ArrowUp, AtSign, Bookmark, Clapperboard, ImagePlus, Layers3, LoaderCircle, Palette, Shapes, Share2, ShoppingBag, Square, X, Blocks } from "lucide-react";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -39,7 +39,7 @@ export type AgentSceneBucket = {
 };
 
 /** 场景分类：与 presets.json 的 scene 字段、技能的 tag 字段共用同一套 key。 */
-export const AGENT_SCENE_DEFS: Array<{ key: string; label: string; icon: typeof Sparkles }> = [
+export const AGENT_SCENE_DEFS: Array<{ key: string; label: string; icon: typeof Blocks }> = [
     { key: "frequent", label: "我的常用", icon: Bookmark },
     { key: "drama", label: "短剧故事", icon: Clapperboard },
     { key: "ecommerce", label: "广告电商", icon: ShoppingBag },
@@ -76,7 +76,7 @@ export function AgentSceneCapsules({
     return (
         <div className="agent-scene-capsules mx-3 mb-2 min-w-0" style={{ color: theme.node.text }}>
             <div className="agent-scene-capsules-heading">
-                <Sparkles aria-hidden="true" />
+                <Blocks aria-hidden="true" />
                 <span>{active ? active.label : "技能组合推荐"}</span>
             </div>
             <div className="agent-scene-capsules-scroll thin-scrollbar flex gap-2 overflow-x-auto px-1 py-2">
@@ -135,7 +135,7 @@ export function AgentSceneCapsules({
                                         onPickSkill(skill);
                                     }}
                                 >
-                                    <Sparkles aria-hidden="true" />
+                                    <Blocks aria-hidden="true" />
                                     <span className="agent-scene-capsule-label">{skill.skillName}</span>
                                     <span className="agent-scene-capsule-meta">{owned}</span>
                                 </button>
@@ -236,7 +236,15 @@ export function AgentChatComposer({
     }, [availableSlashSkills, slash?.query]);
     const attachmentReferences = useMemo(() => agentAttachmentReferences(attachments), [attachments]);
     const skillReferences = useMemo(() => buildSkillMentionReferences(availableSlashSkills), [availableSlashSkills]);
-    const composerReferences = useMemo(() => [...references, ...skillReferences, ...attachmentReferences].filter((reference, index, all) => all.findIndex((item) => item.id === reference.id) === index), [attachmentReferences, references, skillReferences]);
+    // 保留每个 id 第一次出现的引用；用 Set 去重，节点多时不再是平方级。
+    const composerReferences = useMemo(() => {
+        const seen = new Set<string>();
+        return [...references, ...skillReferences, ...attachmentReferences].filter((reference) => {
+            if (seen.has(reference.id)) return false;
+            seen.add(reference.id);
+            return true;
+        });
+    }, [attachmentReferences, references, skillReferences]);
     const canStop = Boolean(running && onStop);
     const canSubmit = !disabled && !submitDisabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
@@ -444,7 +452,7 @@ export function AgentChatComposer({
                                         onMouseEnter={() => setSlashIndex(index)}
                                         onClick={() => applySlashSkill(skill)}
                                     >
-                                        <Sparkles className="size-3.5 shrink-0 opacity-70" />
+                                        <Blocks className="size-3.5 shrink-0 opacity-70" />
                                         <span className="min-w-0 truncate font-medium">{skill.skillName}</span>
                                         {skill.description ? <span className="min-w-0 flex-1 truncate opacity-50">{skill.description}</span> : null}
                                     </button>

@@ -182,6 +182,26 @@ func TestAutoDLPluginArtifact(t *testing.T) {
 		t.Fatalf("b99_003 must not send first_frame: %#v", bodyB99003)
 	}
 
+	// Undeclared workflow IDs are passed through and use the generic mapping.
+	createPassthrough, err := adapter.BuildCreate(context.Background(), RequestContext{BaseURL: "https://autodl.art", Request: GenerationRequest{
+		Model: "minimax_h3_zm_nono", Prompt: "new workflow", Duration: 7, Resolution: "960P横",
+		Images: []MediaReference{{URL: "https://cdn.example/b.png", Role: "first_frame", Order: 2}, {URL: "https://cdn.example/a.png", Order: 1}},
+		Audios: []MediaReference{{URL: "https://cdn.example/a.mp3"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyPassthrough := createPassthrough.Body.(map[string]any)
+	if createPassthrough.Path != "/api/v1/comfyui/comfyui_workflow/minimax_h3_zm_nono" || bodyPassthrough["prompt"] != "new workflow" || bodyPassthrough["duration"] != 7 || bodyPassthrough["resolution"] != "960p横" ||
+		bodyPassthrough["ref_image_0"] != "https://cdn.example/a.png" || bodyPassthrough["ref_image_1"] != "https://cdn.example/b.png" || bodyPassthrough["ref_audio_0"] != "https://cdn.example/a.mp3" {
+		t.Fatalf("passthrough create = %#v, body = %#v", createPassthrough, bodyPassthrough)
+	}
+	for _, key := range []string{"first_frame", "last_frame", "audio_duration"} {
+		if _, exists := bodyPassthrough[key]; exists {
+			t.Fatalf("passthrough workflow must not send %s: %#v", key, bodyPassthrough)
+		}
+	}
+
 	failed, err := adapter.ParseCreate(context.Background(), []byte(`{"code":"RequestParameterIsWrong","data":null,"msg":"参数: resolution 的值: 768P 不在 options 列表中"}`))
 	if err != nil || failed.Status != StatusFailed || failed.Message == "" {
 		t.Fatalf("failed = %#v, err = %v", failed, err)

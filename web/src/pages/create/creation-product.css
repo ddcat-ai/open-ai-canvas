@@ -56,37 +56,20 @@
 @media (prefers-reduced-motion: reduce) {
     .creation-canvas-tile { transition: none; }
 }
-.creation-mode-tabs { position: relative; isolation: isolate; display: grid; width: min(456px, 100%); margin: 0 auto 20px; padding: 4px; border-radius: 16px; background: var(--user-surface-muted); }
-.creation-mode-indicator { position: absolute; z-index: -1; inset: 0; border-radius: 12px; background: var(--user-surface); box-shadow: 0 2px 8px color-mix(in srgb, var(--user-ink) 5%, transparent); }
-.creation-mode-button { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--user-ink-muted); font-size: 14px; font-weight: 600; cursor: pointer; transition: color var(--user-motion), transform var(--user-motion); }
-.creation-mode-button svg { width: 18px; height: 18px; stroke-width: 1.8; color: currentColor; }
+/* 创作模式切换是分段控件：12px 轨道 + 4px 内衬 + 8px 选中块（同心），选中只换表面与文字颜色，不改字重。 */
+.creation-mode-tabs { position: relative; isolation: isolate; display: grid; width: min(456px, 100%); margin: 0 auto 20px; padding: 4px; border-radius: 12px; background: var(--user-surface-muted); }
+.creation-mode-indicator { position: absolute; z-index: -1; inset: 0; border-radius: var(--button-radius); background: var(--user-surface); box-shadow: var(--button-secondary-shadow); }
+.creation-mode-button { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: var(--button-gap); min-width: 0; height: 44px; padding: 0 12px; border: 0; border-radius: var(--button-radius); background: transparent; color: var(--user-ink-muted); font-size: 14px; font-weight: var(--button-font-weight); cursor: pointer; transition: color var(--button-motion); }
+.creation-mode-button svg { width: var(--button-icon-size); height: var(--button-icon-size); stroke-width: var(--button-icon-stroke); color: currentColor; }
 .creation-mode-button[aria-pressed="true"], .creation-mode-button:hover { color: var(--user-ink); }
 .creation-mode-button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
+/* Agent 入口的提示点：随文字颜色的静态小圆点，不发光、不呼吸。 */
 .creation-mode-spark {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: #6366f1;
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.65);
-    animation: creation-mode-spark-pulse 2s ease-in-out infinite;
-}
-
-.dark .creation-mode-spark {
-    background: #818cf8;
-    box-shadow: 0 0 10px rgba(129, 140, 248, 0.85);
-}
-
-@keyframes creation-mode-spark-pulse {
-    0%, 100% {
-        transform: scale(0.85);
-        opacity: 0.45;
-        box-shadow: 0 0 4px rgba(99, 102, 241, 0.4);
-    }
-    50% {
-        transform: scale(1.3);
-        opacity: 1;
-        box-shadow: 0 0 10px rgba(99, 102, 241, 0.9), 0 0 16px rgba(99, 102, 241, 0.45);
-    }
+    background: currentColor;
+    opacity: .55;
 }
 .creation-agent-entry { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 16px 24px; padding: 28px; margin-bottom: 20px; border-radius: var(--user-radius-card); background: var(--user-surface); animation: product-card-enter var(--product-enter) var(--product-ease) backwards; }
 .creation-agent-orb { grid-row: span 2; }
@@ -99,16 +82,16 @@
 .creation-submit { margin-left: auto; flex: 0 0 auto; display: inline-flex; gap: 8px; }
 .creation-submit-cost { display: inline-flex; align-items: center; gap: 4px; color: var(--user-ink-muted); font-size: 12px; padding-inline: 8px; }
 .creation-submit-cost svg { width: 14px; height: 14px; }
+/* 开始创作：与 composer 里其他控件同高（34px）的统一主按钮，墨色实底 + 内高光，不做胶囊、扫光或加粗。
+   外层 antd 文字按钮只负责点击与禁用语义，视觉全部画在 .creation-submit-action 上。 */
 @layer utilities {
-    .app-product-workspace .creation-home .creation-submit.ant-btn { height: auto; min-height: 40px; padding: 0; border: 0; background: transparent !important; box-shadow: none; border-radius: 999px; opacity: 1; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: 8px; width: auto; height: 40px; padding: 0 16px; border-radius: 999px; background: var(--button-primary-bg); color: var(--button-primary-fg); transition: background var(--user-motion), box-shadow var(--user-motion), transform var(--user-motion); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 28%, rgb(255 255 255 / .28) 48%, transparent 68%); transform: translateX(-120%); pointer-events: none; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action span { font-size: 13px; font-weight: 600; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action svg { width: 17px; height: 17px; color: currentColor; transition: transform var(--user-motion); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:disabled .creation-submit-action { background: var(--user-surface-hover); color: var(--user-ink-muted); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action { background: var(--button-primary-hover-bg);}
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action { background: var(--button-primary-active-bg); }
-    .app-product-workspace .creation-home .creation-chat-composer.is-thread .creation-submit.ant-btn .creation-submit-action { height: 34px; padding: 0 16px; }
+    .app-product-workspace .creation-home .creation-submit.ant-btn { height: auto; min-height: var(--button-height); padding: 0; border: 0; background: transparent !important; box-shadow: none; border-radius: var(--button-radius); opacity: 1; }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: var(--button-gap); width: auto; height: var(--button-height); padding: 0 14px 0 12px; border-radius: var(--button-radius); background: var(--button-primary-bg); color: var(--button-primary-fg); box-shadow: var(--button-primary-shadow); transition: background-color var(--button-motion), box-shadow var(--button-motion), opacity var(--button-motion); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action span { font-size: var(--button-font-size); font-weight: var(--button-font-weight); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action svg { width: var(--button-icon-size); height: var(--button-icon-size); stroke-width: var(--button-icon-stroke); color: currentColor; }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:disabled .creation-submit-action { box-shadow: none; opacity: var(--button-disabled-opacity); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action { background: var(--button-primary-hover-bg); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action { background: var(--button-primary-active-bg); box-shadow: var(--button-primary-active-shadow); }
 }
 .creation-inspiration-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .creation-inspiration-filters button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; min-height: 36px; border: 0; border-radius: 999px; color: var(--user-ink-muted); background: transparent; font-size: 13px; transition: background var(--user-motion), color var(--user-motion); }
@@ -136,21 +119,22 @@
     .creation-home .creation-chat-dock { flex-wrap: wrap; gap: 12px; }
     .creation-home .creation-chat-controls { flex: 1 1 100%; width: 100%; }
 }
+/* 语音输入与 composer 其他控件同为 34px 浅底按钮（同 8px 圆角），只在悬停时加深表面。 */
 .app-user-workspace .creation-voice-trigger.ant-btn {
-    width: 36px !important;
-    min-width: 36px !important;
-    height: 36px !important;
-    border-radius: 999px !important;
-    background: var(--user-surface-muted) !important;
-    color: var(--user-ink-muted) !important;
-    transition: background var(--user-motion), color var(--user-motion), transform var(--user-motion), box-shadow var(--user-motion) !important;
+    width: var(--button-height) !important;
+    min-width: var(--button-height) !important;
+    height: var(--button-height) !important;
+    border-radius: var(--button-radius) !important;
+    background: var(--button-tonal-bg) !important;
+    color: var(--button-ghost-fg) !important;
+    transition: background-color var(--button-motion), color var(--button-motion) !important;
 }
 .app-user-workspace .creation-voice-trigger.ant-btn:hover,
 .app-user-workspace .creation-voice-trigger.ant-btn:focus-visible {
-    background: var(--user-surface-hover) !important;
-    color: var(--user-ink) !important;
+    background: var(--button-tonal-hover-bg) !important;
+    color: var(--button-ghost-hover-fg) !important;
 }
-.app-user-workspace .creation-chat-control > svg:first-child { transition: transform var(--user-motion), color var(--user-motion); color: currentColor; }
+.app-user-workspace .creation-chat-control > svg:first-child { transition: color var(--button-motion); color: currentColor; }
 .app-user-workspace .creation-model-picker .canvas-model-picker-trigger-icon { color: currentColor; }
 .app-user-workspace .creation-chat-control.is-clear:hover { background: color-mix(in srgb, var(--status-error, #c45b5b) 12%, var(--user-surface)) !important; color: var(--status-error, #c45b5b) !important; }
 
@@ -176,12 +160,9 @@
     border-color: color-mix(in srgb, var(--workspace-accent) 56%, transparent) !important;
 }
 .app-user-workspace .creation-launchpad .creation-reference-add-button:hover:not(:disabled) {
-    border-style: solid;
-    border-color: var(--user-border-strong);
-    background: var(--user-surface-hover);
-    color: var(--user-ink);
+    background: var(--button-tonal-hover-bg);
+    color: var(--button-ghost-hover-fg);
 }
-@keyframes creation-submit-sheen { to { transform: translateX(120%); } }
 @media (prefers-reduced-motion: reduce) {
     .creation-mode-button:active { transform: none; }
     .creation-agent-entry { animation: none; }
@@ -189,7 +170,6 @@
     .app-user-workspace .creation-chat-control,
     .app-user-workspace .creation-voice-trigger.ant-btn,
     .app-user-workspace .creation-submit-action { transition: none !important; transform: none !important; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action::after { animation: none; }
 }
 
 /* 参数弹窗挂在 body overlays，必须直接用用户表面 token；描边由 Ant inner 的 1px border 造成。 */

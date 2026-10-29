@@ -1,5 +1,5 @@
 import { App, Button, InputNumber, Progress, Skeleton, Switch } from "antd";
-import { Activity, AlertTriangle, Bot, Cpu, Database, Gauge, HardDrive, MemoryStick, RefreshCw, Server, ShieldCheck, Trash2, Wifi } from "lucide-react";
+import { Activity, AlertTriangle, Cpu, Database, Gauge, HardDrive, MemoryStick, RefreshCw, Server, ShieldCheck, Trash2, Wifi, Orbit } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { clearRuntimeCache, getSystemPerformance, updateAgentSessionLimit, type SystemPerformance } from "@/services/api/system-performance";
@@ -217,7 +217,7 @@ export default function SystemPerformancePage() {
 
                 {(data.agents || []).map((agent) => {
                     const draft = agentLimitDraft ?? agent.configuredLimit;
-                    return <SettingsSectionCard key={agent.id} layout="stacked" icon={<Bot className="size-4" />} title="画布 Agent 服务" description="同时进行中的对话占用一个名额。审批等待不占用。降低上限不会中断已经开始的对话，也不会在这台机器上再启动容器。" status={{ label: agent.healthy ? "服务可连接" : "服务不可达", color: agent.healthy ? "success" : "error" }} footer={<><span className="admin-performance-cache-note"><Gauge className="size-3.5" />新安装默认 30，一般不用再改</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}><InputNumber min={1} max={64} precision={0} value={draft} onChange={(value) => setAgentLimitDraft(typeof value === "number" ? value : draft)} /><Button type="primary" loading={savingAgentLimit} disabled={draft === agent.configuredLimit} onClick={() => {
+                    return <SettingsSectionCard key={agent.id} layout="stacked" icon={<Orbit className="size-4" />} title="画布 Agent 服务" description="同时进行中的对话占用一个名额。审批等待不占用。降低上限不会中断已经开始的对话，也不会在这台机器上再启动容器。" status={{ label: agent.healthy ? "服务可连接" : "服务不可达", color: agent.healthy ? "success" : "error" }} footer={<><span className="admin-performance-cache-note"><Gauge className="size-3.5" />新安装默认 30，一般不用再改</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}><InputNumber min={1} max={64} precision={0} value={draft} onChange={(value) => setAgentLimitDraft(typeof value === "number" ? value : draft)} /><Button type="primary" loading={savingAgentLimit} disabled={draft === agent.configuredLimit} onClick={() => {
                         setSavingAgentLimit(true);
                         void updateAgentSessionLimit(draft).then(() => {
                             message.success("已应用 Agent 同时对话上限");

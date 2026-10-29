@@ -41,7 +41,6 @@ import {
     Video,
     Save,
     Plus,
-    WandSparkles,
     BoxSelect,
     Image as ImageIcon,
     Users,

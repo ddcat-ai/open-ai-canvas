@@ -272,7 +272,9 @@ func taskTimestampPatchIsMergeable(patch map[string]json.RawMessage, before map[
 	return hasTaskIDBefore
 }
 
-func taskPatchAlreadyApplied(node map[string]any, patch map[string]json.RawMessage, path string) bool {
+// canvasPatchAlreadyApplied 判断补丁路径的当前值是否已等于目标值。
+// 多个观察者或重放写入同一结果时按幂等收敛处理；只出现在 before 里的断言（如 taskId 围栏）不在 patch 中，仍严格校验。
+func canvasPatchAlreadyApplied(node map[string]any, patch map[string]json.RawMessage, path string) bool {
 	desired, ok := patch[path]
 	if !ok {
 		return false
@@ -324,6 +326,8 @@ func canvasExpectedValueMatches(actual any, exists bool, expected json.RawMessag
 	return jsonEqual(actual, expectedValue)
 }
 
+// canvasObjectExpectedMatches 比较整对象基线。顶层簿记字段（updatedAt）由服务端写入随时刷新，
+// 与 patch_node 一样不参与比较，否则 Agent 或生成回写碰过的节点会让删除、连线更新整笔冲突。
 func canvasObjectExpectedMatches(actual map[string]any, expected json.RawMessage) bool {
 	if len(expected) == 0 {
 		return true
@@ -332,7 +336,17 @@ func canvasObjectExpectedMatches(actual map[string]any, expected json.RawMessage
 	if json.Unmarshal(expected, &expectedValue) != nil {
 		return false
 	}
-	return jsonEqual(actual, expectedValue)
+	return jsonEqual(withoutCanvasBookkeeping(actual), withoutCanvasBookkeeping(expectedValue))
+}
+
+func withoutCanvasBookkeeping(object map[string]any) map[string]any {
+	result := make(map[string]any, len(object))
+	for key, value := range object {
+		if _, bookkeeping := canvasNodeBookkeepingFields[key]; !bookkeeping {
+			result[key] = value
+		}
+	}
+	return result
 }
 
 func applyCanvasOperations(payload map[string]json.RawMessage, operations []CanvasOperation) error {
@@ -346,7 +360,11 @@ func applyCanvasOperations(payload map[string]json.RawMessage, operations []Canv
 				return fmt.Errorf("节点操作缺少有效节点")
 			}
 			id := canvasString(node["id"])
-			if indexOfCanvasObject(nodes, id) >= 0 {
+			if index := indexOfCanvasObject(nodes, id); index >= 0 {
+				// 同一节点已按相同内容存在（重放或另一端已提交同一结果）时幂等通过，不覆盖任何内容。
+				if canvasObjectExpectedMatches(nodes[index], op.Node) {
+					continue
+				}
 				return canvasOperationConflict("节点 %q 已存在，显式新增不能覆盖已有节点", id)
 			}
 			nodes = append(nodes, node)
@@ -379,7 +397,7 @@ func applyCanvasOperations(payload map[string]json.RawMessage, operations []Canv
 				}
 				actual, exists := canvasPathValue(nodes[index], path)
 				if !canvasExpectedValueMatches(actual, exists, expected) {
-					if mergeTaskTimestamp && taskPatchAlreadyApplied(nodes[index], op.Patch, path) {
+					if canvasPatchAlreadyApplied(nodes[index], op.Patch, path) {
 						continue
 					}
 					return canvasOperationConflict("节点 %q 的字段 %q 已被其他写入修改", op.ID, path)
@@ -437,7 +455,10 @@ func applyCanvasOperations(payload map[string]json.RawMessage, operations []Canv
 				return fmt.Errorf("连线端点节点不存在")
 			}
 			id := canvasString(edge["id"])
-			if indexOfCanvasObject(connections, id) >= 0 {
+			if index := indexOfCanvasObject(connections, id); index >= 0 {
+				if canvasObjectExpectedMatches(connections[index], op.Connection) {
+					continue
+				}
 				return canvasOperationConflict("连线 %q 已存在，显式新增不能覆盖已有连线", id)
 			}
 			connections = append(connections, edge)
@@ -461,7 +482,7 @@ func applyCanvasOperations(payload map[string]json.RawMessage, operations []Canv
 			if index < 0 {
 				return canvasObjectMissing("连线 " + op.ID)
 			}
-			if !canvasObjectExpectedMatches(connections[index], op.Expected) {
+			if !canvasObjectExpectedMatches(connections[index], op.Expected) && !canvasObjectExpectedMatches(connections[index], op.Connection) {
 				return canvasOperationConflict("连线 %q 已被其他写入修改，拒绝覆盖", op.ID)
 			}
 			connections[index] = edge
@@ -503,7 +524,8 @@ func applyCanvasOperations(payload map[string]json.RawMessage, operations []Canv
 				}
 				beforeValue = json.RawMessage("null")
 			}
-			if !canvasExpectedValueMatches(rawJSON(payload[op.Field]), payload[op.Field] != nil, beforeValue) {
+			current, exists := rawJSON(payload[op.Field]), payload[op.Field] != nil
+			if !canvasExpectedValueMatches(current, exists, beforeValue) && !canvasExpectedValueMatches(current, exists, value) {
 				return canvasOperationConflict("画布字段 %q 已被其他写入修改", op.Field)
 			}
 			if string(value) == "null" {

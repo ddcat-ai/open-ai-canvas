@@ -1,7 +1,7 @@
 import { createClientUUID } from "@/lib/client-id";
 import { App, Button, Form, Input, InputNumber, Modal, Select, Switch, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CloudUpload, Edit3, Plus, RefreshCw, Search, Trash2, WandSparkles } from "lucide-react";
+import { CloudUpload, Edit3, Plus, RefreshCw, Search, Trash2, Shapes } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
@@ -116,7 +116,7 @@ function ResourceUpload({ label, value, kind = "image", disabled, upload, onChan
     const [uploading, setUploading] = useState(false);
     return (
         <div className="admin-workbench-resource-upload">
-            <div className="admin-workbench-resource-preview">{value.url ? kind === "video" ? <video src={value.url} controls preload="metadata" /> : <img src={value.url} alt={label} /> : <WandSparkles className="size-5" />}</div>
+            <div className="admin-workbench-resource-preview">{value.url ? kind === "video" ? <video src={value.url} controls preload="metadata" /> : <img src={value.url} alt={label} /> : <Shapes className="size-5" />}</div>
             <div className="admin-workbench-resource-actions">
                 <strong>{label}</strong>
                 <small>{value.id ? (value.url ? "已上传" : "已上传，预览暂不可用") : "选择文件上传"}</small>
@@ -347,7 +347,7 @@ export default function WorkbenchToolsPage() {
             dataIndex: "name",
             render: (_, tool) => (
                 <div className="admin-workbench-tool-main">
-                    <span className="admin-workbench-tool-icon">{tool.iconUrl ? <img src={tool.iconUrl} alt="" /> : <WandSparkles className="size-4" />}</span>
+                    <span className="admin-workbench-tool-icon">{tool.iconUrl ? <img src={tool.iconUrl} alt="" /> : <Shapes className="size-4" />}</span>
                     <span>
                         <strong>{tool.name}</strong>
                         <small>{tool.subtitle || tool.description}</small>

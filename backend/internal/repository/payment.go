@@ -66,7 +66,7 @@ func (r *Repository) UpdateTopupProduct(id string, build func(existing *model.To
 			return err
 		}
 		return tx.Model(&model.TopupProduct{}).Where("id = ?", existing.ID).Updates(map[string]any{
-			"name": product.Name, "description": product.Description, "amount_fen": product.AmountFen,
+			"name": product.Name, "description": product.Description, "amount_fen": product.AmountFen, "currency": product.Currency,
 			"kind": product.Kind, "storage_bytes": product.StorageBytes, "storage_duration_days": product.StorageDurationDays,
 			"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
 			"sort_order": product.SortOrder, "sale_strategy": product.SaleStrategy,

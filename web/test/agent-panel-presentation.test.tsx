@@ -35,7 +35,7 @@ test("permission modes have distinct icons, not just distinct colors", () => {
     expect(new Set(icons).size).toBe(3);
     expect(icons[0]).toContain("lucide-lock-keyhole");
     expect(icons[1]).toContain("lucide-shield-check");
-    expect(icons[2]).toContain("lucide-sparkles");
+    expect(icons[2]).toContain("lucide-circle-play");
 });
 
 test("compact send button preserves empty-draft and sending guards", () => {

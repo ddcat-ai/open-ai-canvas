@@ -14,6 +14,17 @@ export function canvasTaskBindingStatus(node: CanvasNodeData, task: Pick<Generat
     return "loading";
 }
 
+/**
+ * 节点显示失败，但后端任务并没有被确认失败：页面轮询中断时最后一次看到的任务仍在排队或生成，
+ * 或任务已成功、只是结果回写失败。这类节点只需重新获取原任务结果，不能引导用户重新付费生成。
+ */
+export function canvasNodeCanResyncTask(metadata: CanvasNodeMetadata | undefined) {
+    if (metadata?.status !== "error" || !metadata.taskId || metadata.isBatchRoot) return false;
+    if (metadata.taskStage === "submission_unknown" || metadata.layerExtraction?.rejectedTaskId === metadata.taskId) return false;
+    if (metadata.resourceReloadAvailable) return true;
+    return metadata.taskStatus === "queued" || metadata.taskStatus === "running";
+}
+
 /** 查询/消费异常不是任务终态。只标记恢复诊断，不覆盖成功结果或新的任务绑定。 */
 export function markCanvasTaskRecoveryUnconfirmed(node: CanvasNodeData, expectedTaskId: string | undefined, detail: string): CanvasNodeData {
     if (node.metadata?.status === "success" || node.metadata?.taskId !== expectedTaskId) return node;

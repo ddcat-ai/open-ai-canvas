@@ -82,8 +82,9 @@ export function QueueBar({ projectId, summary, retrying, onRetry, onJump }: { pr
                             <button key={job.id} type="button" role="listitem" className={`drama-job is-${job.status}`} onClick={() => setDetailJob(job)}>
                                 <JobStatusIcon status={job.status} />
                                 <span className="drama-job-kind">{JOB_KIND_LABEL[job.kind]}</span>
-                                <span className="drama-job-label" title={job.label}>
+                                <span className="drama-job-label" title={job.providerStage ? `${job.label} · ${job.providerStage}` : job.label}>
                                     {job.label}
+                                    {job.status === "running" && job.providerStage ? <span className="text-foreground/50"> · {job.providerStage}</span> : null}
                                 </span>
                                 <span className="drama-job-error" title={job.error}>
                                     {job.error && (job.status === "failed" || job.status === "queued") ? job.error : ""}

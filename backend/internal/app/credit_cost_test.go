@@ -13,6 +13,7 @@ func TestCreditCostSnapshotPersistsWithoutChangingSalesOrPublicResponses(t *test
 	if err := db.AutoMigrate(&model.SystemSetting{}, &model.BillingOrder{}); err != nil {
 		t.Fatal(err)
 	}
+	ensureTestUsers(t, db, "user")
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
 	channel := model.ModelChannel{ID: "channel", Scope: model.ChannelScopeSystem, Name: "供应渠道", Enabled: true, ModelsJSON: `[]`}
 	if err := db.Create(&channel).Error; err != nil {
@@ -65,7 +66,7 @@ func TestCreditCostSnapshotPersistsWithoutChangingSalesOrPublicResponses(t *test
 	if err != nil || cost == nil || *cost != 123_456 {
 		t.Fatalf("historical cost changed: %v %v", cost, err)
 	}
-	catalog, err := svc.ModelCatalog(nil)
+	catalog, err := svc.ModelCatalog(testGroupAccess(svc), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestCreditCostSnapshotPersistsWithoutChangingSalesOrPublicResponses(t *test
 	if err := db.Migrator().DropTable(&model.LogicalModel{}); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err = svc.ModelCatalog(nil)
+	catalog, err = svc.ModelCatalog(testGroupAccess(svc), nil)
 	if err != nil || catalog.Source != ModelCatalogSourceSystem || len(catalog.Channels) != 1 {
 		t.Fatalf("catalog depends on logical models: %#v %v", catalog, err)
 	}

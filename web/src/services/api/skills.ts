@@ -56,10 +56,45 @@ export type Skill = {
     isAdded: boolean;
     isOwner: boolean;
     libraryCategoryId?: string;
+    /** 已安装或自建技能的 Agent 使用方式：auto 可被 Agent 自动发现，manual 只在点名或固定时使用。 */
+    agentMode?: SkillAgentMode;
 };
 
+export type SkillAgentMode = "auto" | "manual";
+
 /** /skills/added 只返回运行时目录需要的引用字段，不携带编辑器和同步详情。 */
-export type AddedSkillReference = Pick<Skill, "skillId" | "skillName" | "description" | "versionId" | "version" | "tag" | "isLike" | "isAdded" | "isOwner" | "libraryCategoryId">;
+export type AddedSkillReference = Pick<Skill, "skillId" | "skillName" | "description" | "versionId" | "version" | "tag" | "isLike" | "isAdded" | "isOwner" | "libraryCategoryId" | "agentMode">;
+
+/** 按行业推荐的内置技能（GET /skills/recommendations）。 */
+export type SkillRecommendationItem = {
+    skillId: string;
+    skillName: string;
+    description: string;
+    tag: string;
+    reason: string;
+    isAdded: boolean;
+};
+
+export type SkillRecommendationIndustry = {
+    industryId: string;
+    name: string;
+    description: string;
+    icon: string;
+    skills: SkillRecommendationItem[];
+    installedCount: number;
+};
+
+export type SkillRecommendationList = {
+    industries: SkillRecommendationIndustry[];
+    /** 用户技能库里可用技能总数，前端据此决定是否主动展示推荐入口。 */
+    installedTotal: number;
+};
+
+export type SkillRecommendationInstallResult = {
+    industryId: string;
+    installed: string[];
+    skipped: string[];
+};
 
 export type SkillCategory = { value: string; label: string; count?: number };
 
@@ -280,6 +315,7 @@ function normalizeAddedSkillReference(skill: AddedSkillReference): Skill {
         isAdded: skill.isAdded,
         isOwner: skill.isOwner,
         libraryCategoryId: skill.libraryCategoryId || "",
+        agentMode: skill.agentMode,
     };
 }
 
@@ -376,4 +412,20 @@ export function likeSkill(id: string) {
 
 export function unlikeSkill(id: string) {
     return http.delete<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}/like`);
+}
+
+/** 设置已安装技能是否允许 Agent 自动发现。 */
+export function setSkillAgentMode(id: string, mode: SkillAgentMode) {
+    return http.patch<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}/agent-mode`, { mode }).finally(invalidateAddedSkillsCache);
+}
+
+export function listSkillRecommendations(signal?: AbortSignal) {
+    return http.get<SkillRecommendationList>("/skills/recommendations", { signal });
+}
+
+/** 安装某个行业的推荐技能；skillIds 为空时安装该行业全部推荐。 */
+export function installSkillRecommendations(industryId: string, skillIds: string[] = []) {
+    return http
+        .post<SkillRecommendationInstallResult>(`/skills/recommendations/${encodeURIComponent(industryId)}/install`, { skillIds })
+        .finally(invalidateAddedSkillsCache);
 }

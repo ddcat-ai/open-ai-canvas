@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Input, Modal } from "antd";
-import { WandSparkles, X } from "lucide-react";
+import { X, PenLine } from "lucide-react";
 import { ModelPicker } from "@/components/model-picker";
 import type { AiConfig } from "@/stores/use-config-store";
 import { defaultImageParamsForModel } from "@/lib/model-selection";
@@ -61,7 +61,7 @@ export function CanvasNodeImageEditDialog({
                     </div>
                     <div className="mt-auto flex justify-end gap-2">
                         <Button icon={<X className="size-4" />} onClick={onClose}>取消</Button>
-                        <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!prompt.trim()} onClick={() => onConfirm({ prompt: prompt.trim(), generationConfig: { model: generationConfig.model, imageModel: generationConfig.imageModel, size: generationConfig.size, quality: generationConfig.quality, ...(preset === "remove-background" ? { transparentBackground: "true" } : {}) } })}>
+                        <Button type="primary" icon={<PenLine className="size-4" />} disabled={!prompt.trim()} onClick={() => onConfirm({ prompt: prompt.trim(), generationConfig: { model: generationConfig.model, imageModel: generationConfig.imageModel, size: generationConfig.size, quality: generationConfig.quality, ...(preset === "remove-background" ? { transparentBackground: "true" } : {}) } })}>
                             开始编辑
                         </Button>
                     </div>

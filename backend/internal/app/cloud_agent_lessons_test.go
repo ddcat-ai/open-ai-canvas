@@ -10,6 +10,8 @@ import (
 	"yingce/backend/internal/repository"
 )
 
+// 旧版经验库只剩用户与管理员的管理接口；Agent 侧的写入、注入与召回已由长期记忆文件取代。
+
 func agentLessonTestRepo(t *testing.T) *repository.Repository {
 	t.Helper()
 	s, db, _, _ := creationTestService(t)
@@ -17,13 +19,6 @@ func agentLessonTestRepo(t *testing.T) *repository.Repository {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
 	return s.repo
-}
-
-func rememberLessonCall(arguments string) cloudAgentCall {
-	return cloudAgentCall{Function: struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	}{Name: "remember_lesson", Arguments: arguments}}
 }
 
 func TestAgentLessonScrubRejectsUserTraces(t *testing.T) {
@@ -65,15 +60,13 @@ func TestAgentLessonPendingIsNotRecalledUntilApproved(t *testing.T) {
 	if err := repo.Create(entry); err != nil {
 		t.Fatal(err)
 	}
-
 	approved, err := repo.ApprovedAgentLessons("user-a", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(approved) != 0 {
-		t.Fatalf("待审记忆不该出现在召回结果里：%+v", approved)
+		t.Fatalf("待审记忆不该出现在已批准列表里：%+v", approved)
 	}
-
 	if err := repo.SetAgentLessonStatus("user-a", entry.ID, model.AgentLessonStatusApproved); err != nil {
 		t.Fatal(err)
 	}
@@ -82,14 +75,14 @@ func TestAgentLessonPendingIsNotRecalledUntilApproved(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(approved) != 1 || approved[0].Topic != "video.duration" {
-		t.Fatalf("批准后应当可召回：%+v", approved)
+		t.Fatalf("批准后应当可取回：%+v", approved)
 	}
 	other, err := repo.ApprovedAgentLessons("user-b", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(other) != 0 {
-		t.Fatalf("别人的已批准记忆不该出现在我的召回里：%+v", other)
+		t.Fatalf("别人的已批准记忆不该出现在我的列表里：%+v", other)
 	}
 }
 
@@ -176,8 +169,7 @@ func TestAgentLessonUpsertDeduplicates(t *testing.T) {
 	if err := repo.Create(makeEntry("user-c")); err != nil {
 		t.Fatal(err)
 	}
-	sameUserDup := makeEntry("user-a")
-	duplicate, err := cloudAgentFindDuplicateLesson(repo, "user-a", sameUserDup)
+	duplicate, err := cloudAgentFindDuplicateLesson(repo, "user-a", makeEntry("user-a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,370 +233,6 @@ func TestAgentLessonDedupIgnoresTopicSpelling(t *testing.T) {
 	}
 }
 
-func lessonWithSteps(topic, category string, tools ...string) model.AgentLesson {
-	steps := make([]model.AgentLessonStep, 0, len(tools))
-	for _, tool := range tools {
-		steps = append(steps, model.AgentLessonStep{Tool: tool, Action: "做点什么"})
-	}
-	raw, _ := json.Marshal(steps)
-	return model.AgentLesson{
-		ID: newID(), Topic: topic, Category: category, Situation: "某种情况",
-		Lesson: "某做法", StepsJSON: string(raw), Status: model.AgentLessonStatusApproved,
-	}
-}
-
-func TestLessonsBlockRanksMatchedFirst(t *testing.T) {
-	lessons := []model.AgentLesson{
-		lessonWithSteps("video.duration", "video"),
-		lessonWithSteps("canvas.snapshot-hash", "canvas", "canvas_apply_ops"),
-	}
-	index, matchedN := cloudAgentPickLessonIndex(lessons, "请按 canvas.snapshot-hash 处理", 20)
-	if matchedN != 1 || len(index) != 1 || index[0].Topic != "canvas.snapshot-hash" {
-		t.Fatalf("命中项应排在索引前面：matchedN=%d topics=%v", matchedN, topicsOf(index))
-	}
-}
-
-func TestLessonMatchesByRouteTools(t *testing.T) {
-	lesson := lessonWithSteps("storyboard.asset-slot-reuse", "storyboard", "canvas_apply_ops", "canvas_read_storyboard")
-	if !cloudAgentLessonMatchesTask(lesson, "把资产挂到分镜行上，正在调用 canvas_apply_ops") {
-		t.Fatal("路线工具出现在任务文本里，应当命中")
-	}
-	if cloudAgentLessonMatchesTask(lesson, "帮我写一首歌，编曲用钢琴") {
-		t.Fatal("毫不相关的任务不该命中")
-	}
-}
-
-func TestLessonMatchIgnoresGenericTokens(t *testing.T) {
-	lesson := lessonWithSteps("video", "video")
-	if cloudAgentLessonMatchesTask(lesson, "我要生成一个视频") {
-		t.Fatal("只有泛词命中时不该算相关")
-	}
-}
-
-func TestLessonTaskTextCoversPromptPlanAndCalls(t *testing.T) {
-	state := &cloudAgentRuntime{
-		Request: CloudAgentRequest{Prompt: "做个手机广告"},
-		Plan:    []cloudAgentPlanItem{{ID: "1", Title: "生成角色资产", Status: "doing"}},
-		Calls: []cloudAgentCall{{Function: struct {
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		}{Name: "generate_media"}}},
-	}
-	text := cloudAgentLessonTaskText(state)
-	for _, want := range []string{"手机广告", "生成角色资产", "generate_media"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("任务文本缺少 %q：%s", want, text)
-		}
-	}
-}
-
-func TestLessonCategoryIsControlled(t *testing.T) {
-	if _, ok := cloudAgentLessonCategoryOf("storyboard"); !ok {
-		t.Fatal("合法分类被拒")
-	}
-	if _, ok := cloudAgentLessonCategoryOf("我自己编的类"); ok {
-		t.Fatal("词表外的分类不该通过")
-	}
-	if cloudAgentNormalizeLessonCategory("乱写的") != "other" {
-		t.Fatal("未知分类应归一为 other")
-	}
-	if len(cloudAgentLessonCategoryKeys()) != len(cloudAgentLessonCategories) {
-		t.Fatal("enum 与词表不同源")
-	}
-}
-
-func TestRecallResultIndexVsFull(t *testing.T) {
-	lesson := lessonWithSteps("video.model-duration", "video", "model_list")
-	index := cloudAgentLessonResult([]model.AgentLesson{lesson}, false)
-	items := index["lessons"].([]map[string]any)
-	if _, has := items[0]["steps"]; has {
-		t.Fatal("索引层不该带路线")
-	}
-	if _, has := items[0]["lesson"]; has {
-		t.Fatal("索引层不该带做法正文")
-	}
-	if items[0]["topic"] != "video.model-duration" || items[0]["category"] != "video" {
-		t.Fatalf("索引项缺字段：%+v", items[0])
-	}
-	if index["mode"] != "index" {
-		t.Fatalf("模式标记不对：%v", index["mode"])
-	}
-	full := cloudAgentLessonResult([]model.AgentLesson{lesson}, true)
-	fullItems := full["lessons"].([]map[string]any)
-	if _, has := fullItems[0]["steps"]; !has {
-		t.Fatal("正文层必须带路线")
-	}
-	if full["mode"] != "full" {
-		t.Fatalf("模式标记不对：%v", full["mode"])
-	}
-}
-
-func TestLessonSearchTokensSplitsOnSpacesAndPunctuation(t *testing.T) {
-	got := cloudAgentLessonSearchTokens("分镜 合并 视频 合成 拼接 one take")
-	want := []string{"分镜", "合并", "视频", "合成", "拼接", "one", "take"}
-	if len(got) != len(want) {
-		t.Fatalf("切词结果 %v，期望 %v", got, want)
-	}
-	for index := range want {
-		if got[index] != want[index] {
-			t.Fatalf("切词结果 %v，期望 %v", got, want)
-		}
-	}
-	got = cloudAgentLessonSearchTokens("视频、分辨率；视频！a")
-	for _, token := range got {
-		if len([]rune(token)) < 2 {
-			t.Fatalf("单字词应当被丢掉：%v", got)
-		}
-	}
-	if len(got) != 2 {
-		t.Fatalf("标点应切开且去重，得到 %v", got)
-	}
-}
-
-func TestLessonSearchTokensAreCapped(t *testing.T) {
-	long := ""
-	for index := 0; index < 20; index++ {
-		long += "词条" + string(rune('a'+index)) + " "
-	}
-	if got := cloudAgentLessonSearchTokens(long); len(got) > cloudAgentLessonSearchTokenMax {
-		t.Fatalf("词数应被截到 %d，得到 %d", cloudAgentLessonSearchTokenMax, len(got))
-	}
-}
-
-func TestLessonSearchTokensKeepsSingleCJKRune(t *testing.T) {
-	// 单字停用词过滤照搬的是英文逻辑（a / I）；中文单字「梗」「钩」「戏」本身就是完整语义的最小单位，
-	// 被 < 2 一刀切后 tokens 为空，cloudAgentSearchLessons 会静默回落为「列前 N 条」——
-	// 用户以为搜过了，拿到的却是任意清单。
-	got := cloudAgentLessonSearchTokens("反转 钩子 梗 钩")
-	want := []string{"反转", "钩子", "梗", "钩"}
-	if len(got) != len(want) {
-		t.Fatalf("切词结果 %v，期望 %v", got, want)
-	}
-	for index := range want {
-		if got[index] != want[index] {
-			t.Fatalf("切词结果 %v，期望 %v", got, want)
-		}
-	}
-	// 只放行汉字单字：英文/数字单字与空串仍按停用词处理。
-	for _, keyword := range []string{"a", "I", "7", "", "，、。；"} {
-		if tokens := cloudAgentLessonSearchTokens(keyword); len(tokens) != 0 {
-			t.Fatalf("%q 应无候选词，得到 %v", keyword, tokens)
-		}
-	}
-}
-
-func TestLessonMatchScoreRanksByHit(t *testing.T) {
-	tokens := cloudAgentLessonSearchTokens("视频 合并 拼接")
-	strong := model.AgentLesson{Topic: "video.merge-concat-not-a-feature", Situation: "用户要把多条镜头视频合并成一条成片"}
-	weak := model.AgentLesson{Topic: "video.model-duration", Situation: "选一个全批都能出片的模型"}
-	unrelated := model.AgentLesson{Topic: "canvas.snapshot-hash", Situation: "快照过期"}
-	if cloudAgentLessonMatchScore(strong, tokens) <= cloudAgentLessonMatchScore(weak, tokens) {
-		t.Fatal("命中更多的应当分更高")
-	}
-	if cloudAgentLessonMatchScore(unrelated, tokens) != 0 {
-		t.Fatal("不相干的应当是 0 分")
-	}
-}
-
-func TestLessonSearchFindsMergeLessonByRealKeyword(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	now := time.Now()
-	seed := []model.AgentLesson{
-		{ID: newID(), Topic: "video.merge-concat-not-a-feature", Category: "video",
-			Situation: "用户要求把多条已出好的镜头视频合并成一条成片",
-			Lesson:    "分镜脚本节点没有合并视频的动作，合片属于后期剪辑", Status: model.AgentLessonStatusApproved, AuthorUserID: "user-a"},
-		{ID: newID(), Topic: "canvas.snapshot-hash", Category: "canvas",
-			Situation: "连续写画布时反复报快照过期", Lesson: "每次写成功后用返回的新 snapshotHash",
-			Status: model.AgentLessonStatusApproved, AuthorUserID: "user-a"},
-		{ID: newID(), Topic: "storyboard.asset-slot-reuse", Category: "storyboard",
-			Situation: "分镜行的资产格", Lesson: "只给空缺格生成资产", Status: model.AgentLessonStatusApproved, AuthorUserID: "user-a"},
-	}
-	for index := range seed {
-		seed[index].CreatedAt, seed[index].UpdatedAt, seed[index].LastVerifiedAt = now, now, &now
-		if err := repo.Create(&seed[index]); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got, err := cloudAgentSearchLessons(repo, "user-a", "分镜 合并 视频 合成 拼接 one take", 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) == 0 {
-		t.Fatal("切词后应当能命中")
-	}
-	if got[0].Topic != "video.merge-concat-not-a-feature" {
-		t.Fatalf("讲「合并视频」的那条应当排第一，实际第一是 %q（全部：%+v）", got[0].Topic, topicsOf(got))
-	}
-}
-
-func TestLessonSearchNoMatchReturnsActionableError(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	now := time.Now()
-	entry := model.AgentLesson{ID: newID(), Topic: "canvas.snapshot-hash", Category: "canvas",
-		Situation: "快照过期", Lesson: "用新哈希", Status: model.AgentLessonStatusApproved,
-		AuthorUserID: "user-a", CreatedAt: now, UpdatedAt: now, LastVerifiedAt: &now}
-	if err := repo.Create(&entry); err != nil {
-		t.Fatal(err)
-	}
-	_, err := cloudAgentRecallLessons(repo, "user-a", cloudAgentCall{
-		Function: struct {
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		}{Name: "recall_lessons", Arguments: `{"keyword":"完全不存在的词条xyzzy"}`},
-	})
-	if err == nil {
-		t.Fatal("搜不到应当报错")
-	}
-	if !strings.Contains(err.Error(), "列索引") {
-		t.Fatalf("报错要给出下一步，实际：%v", err)
-	}
-}
-
-func topicsOf(lessons []model.AgentLesson) []string {
-	out := make([]string, 0, len(lessons))
-	for _, lesson := range lessons {
-		out = append(out, lesson.Topic)
-	}
-	return out
-}
-
-func TestLessonsBlockDoesNotAutoInject(t *testing.T) {
-	s, db, _, _ := creationTestService(t)
-	if sqlDB, err := db.DB(); err == nil {
-		t.Cleanup(func() { _ = sqlDB.Close() })
-	}
-	now := time.Now()
-	matched := model.AgentLesson{
-		ID: newID(), Topic: "canvas.snapshot-hash", Category: "canvas",
-		Situation: "写画布时报快照过期", Lesson: "用返回的新 snapshotHash",
-		StepsJSON: `[{"tool":"canvas_apply_ops","action":"写画布"}]`,
-		Status:    model.AgentLessonStatusApproved, AuthorUserID: "user-a",
-	}
-	matched.CreatedAt, matched.UpdatedAt, matched.LastVerifiedAt = now, now, &now
-	if err := s.repo.Create(&matched); err != nil {
-		t.Fatal(err)
-	}
-
-	block, ids := s.cloudAgentRelevantLessonsBlock("user-a", "写画布时报快照过期")
-	if len(ids) != 1 || !strings.Contains(block, "canvas.snapshot-hash") {
-		t.Fatalf("相关记忆应进入召回结果：%s ids=%v", block, ids)
-	}
-	if !strings.Contains(block, "用返回的新 snapshotHash") {
-		t.Fatalf("召回结果应包含经验全文：%s", block)
-	}
-
-	got, err := s.repo.AgentLessonForUser("user-a", matched.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Injected != 0 || got.Hits != 0 {
-		t.Fatalf("未主动查阅时 injected/hits 都应是 0：injected=%d hits=%d", got.Injected, got.Hits)
-	}
-}
-
-func TestRememberLessonQueuesUntilSuccessfulRunCompletion(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	state := &cloudAgentRuntime{
-		Request: CloudAgentRequest{PermissionMode: "auto"},
-		Events:  []CloudAgentEvent{{Type: "tool_completed", Payload: map[string]any{"toolName": "canvas_apply_ops"}}},
-	}
-	result, err := cloudAgentRememberLesson(repo, "user-a", state, rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.(map[string]any)["status"] != "queued_until_success" || len(state.PendingLessonDrafts) != 1 {
-		t.Fatalf("remember_lesson should queue a bounded draft: result=%v state=%+v", result, state.PendingLessonDrafts)
-	}
-	stored, err := repo.UserAgentLessons("user-a", model.AgentLessonStatusPending, 10)
-	if err != nil || len(stored) != 0 {
-		t.Fatalf("a failed or unfinished run must not persist memory: %v (%v)", stored, err)
-	}
-	if err := cloudAgentCommitLessonDrafts(repo, "user-a", "run-a", state); err != nil {
-		t.Fatal(err)
-	}
-	stored, err = repo.UserAgentLessons("user-a", model.AgentLessonStatusPending, 10)
-	if err != nil || len(stored) != 1 || stored[0].LastVerifiedAt != nil || len(state.PendingLessonDrafts) != 0 {
-		t.Fatalf("successful completion should persist one unverified pending memory: %v (%v)", stored, err)
-	}
-}
-
-func TestRememberLessonBlockedInReadOnlyAndWithoutRealWork(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	call := rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`)
-	readOnly := &cloudAgentRuntime{
-		Request: CloudAgentRequest{PermissionMode: "read_only"},
-		Events:  []CloudAgentEvent{{Type: "tool_completed", Payload: map[string]any{"toolName": "canvas_apply_ops"}}},
-	}
-	if _, err := cloudAgentRememberLesson(repo, "user", readOnly, call); err == nil || !strings.Contains(err.Error(), "只读模式") {
-		t.Fatalf("只读模式必须拒绝写入：%v", err)
-	}
-	if cloudAgentToolAllowed(agentTestRequest(), "remember_lesson") {
-		t.Fatal("只读工具清单不该出现 remember_lesson")
-	}
-	if !cloudAgentToolAllowed(agentTestRequest(), "recall_lessons") {
-		t.Fatal("只读模式仍应能查阅已批准经验")
-	}
-
-	idle := &cloudAgentRuntime{
-		Request: CloudAgentRequest{PermissionMode: "auto"},
-		Events:  []CloudAgentEvent{{Type: "tool_completed", Payload: map[string]any{"toolName": "skills_load"}}},
-	}
-	if _, err := cloudAgentRememberLesson(repo, "user", idle, call); err == nil || !strings.Contains(err.Error(), "没有可沉淀") {
-		t.Fatalf("仅 skills_load 不能打开写入闸：%v", err)
-	}
-}
-
-func TestRememberLessonCapsWritesPerRun(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	events := []CloudAgentEvent{{Type: "tool_completed", Payload: map[string]any{"toolName": "canvas_apply_ops"}}}
-	for i := 0; i < cloudAgentRememberLessonMaxPerRun; i++ {
-		events = append(events, CloudAgentEvent{Type: "tool_completed", Payload: map[string]any{"toolName": "remember_lesson"}})
-	}
-	state := &cloudAgentRuntime{Request: CloudAgentRequest{PermissionMode: "auto"}, Events: events}
-	_, err := cloudAgentRememberLesson(repo, "user", state, rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`))
-	if err == nil || !strings.Contains(err.Error(), "最多记录") {
-		t.Fatalf("超出本轮条数上限应拒绝：%v", err)
-	}
-}
-
-func TestAttachLessonsUsesRelevantDynamicMessage(t *testing.T) {
-	s, db, _, _ := creationTestService(t)
-	if sqlDB, err := db.DB(); err == nil {
-		t.Cleanup(func() { _ = sqlDB.Close() })
-	}
-	now := time.Now()
-	lesson := &model.AgentLesson{
-		ID: newID(), Topic: "canvas.asset-reference", Category: "canvas",
-		Situation: "把图片资产接到指定镜头", Lesson: "先确认素材就绪，再连接到镜头行",
-		Status: model.AgentLessonStatusApproved, AuthorUserID: "user-a", CreatedAt: now, UpdatedAt: now,
-	}
-	if err := s.repo.Create(lesson); err != nil {
-		t.Fatal(err)
-	}
-	canonical := canonicalAgentRequest{
-		SystemPrompt: "system",
-		Messages:     []map[string]any{{"role": "user", "content": "把图片资产接到指定镜头"}},
-	}
-	s.attachCloudAgentLessons(&canonical, "user-a", "把图片资产接到指定镜头")
-	if canonical.SystemPrompt != "system" {
-		t.Fatalf("动态记忆不得改变稳定 system 前缀：%s", canonical.SystemPrompt)
-	}
-	if len(canonical.Messages) != 2 || stringField(canonical.Messages[0], cloudAgentContextSourceKey) != "agent_memory" || stringField(canonical.Messages[1], "content") != "把图片资产接到指定镜头" {
-		t.Fatalf("相关经验应作为独立动态消息注入：%+v", canonical.Messages)
-	}
-	if !strings.Contains(stringField(canonical.Messages[0], "content"), "先确认素材就绪") {
-		t.Fatalf("命中的经验应包含完整做法：%+v", canonical.Messages[0])
-	}
-	stored, err := s.repo.AgentLessonForUser("user-a", lesson.ID)
-	if err != nil || stored.Injected != 0 {
-		t.Fatalf("上下文预览不得提前递增注入计数：%+v (%v)", stored, err)
-	}
-	s.attachCloudAgentLessons(&canonical, "user-a", "分析天气")
-	if canonical.SystemPrompt != "system" || len(canonical.Messages) != 1 {
-		t.Fatalf("无相关经验时不应注入，且应移除上一步的动态块：%+v", canonical.Messages)
-	}
-}
-
 func TestUserAgentMemoryCRUDAndIsolation(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
 	if sqlDB, err := db.DB(); err == nil {
@@ -662,7 +290,7 @@ func TestUserAgentMemoryApproveIsOwnerOnly(t *testing.T) {
 	}
 	got, err := s.repo.ApprovedAgentLessons("user-a", 10)
 	if err != nil || len(got) != 1 {
-		t.Fatalf("本人批准后应可召回：%+v（%v）", got, err)
+		t.Fatalf("本人批准后应可取回：%+v（%v）", got, err)
 	}
 }
 
@@ -729,29 +357,6 @@ func TestAdminAgentLessonsFiltersByUser(t *testing.T) {
 	}
 }
 
-func TestRememberLessonGateSurvivesEventWindowAndCheckpoint(t *testing.T) {
-	state := &cloudAgentRuntime{LessonEligibleToolSuccesses: 1}
-	for i := 0; i < repository.CloudAgentJournalWindow; i++ {
-		state.Events = append(state.Events, CloudAgentEvent{Type: "message_delta"})
-	}
-	if got := cloudAgentLessonEligibleSuccesses(state); got != 1 {
-		t.Fatalf("delta 窗口不得抹掉已记录的合格成功数：got %d", got)
-	}
-
-	state.Events = nil
-	run := &model.CloudAgentExecution{}
-	if err := cloudAgentSave(run, state); err != nil {
-		t.Fatal(err)
-	}
-	restored, err := cloudAgentDecode(run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if restored.LessonEligibleToolSuccesses != 1 || cloudAgentLessonEligibleSuccesses(&restored) != 1 {
-		t.Fatalf("checkpoint 恢复后写入门禁必须保持：%+v", restored)
-	}
-}
-
 func TestPendingAgentLessonsExpireWithoutTouchingApproved(t *testing.T) {
 	repo := agentLessonTestRepo(t)
 	now := time.Now()
@@ -779,66 +384,5 @@ func TestPendingAgentLessonsExpireWithoutTouchingApproved(t *testing.T) {
 		if findErr != nil || got.Status != want.status {
 			t.Fatalf("记忆 %s 状态不符：got=%+v err=%v", want.id, got, findErr)
 		}
-	}
-}
-
-func TestRememberLessonExpiresOldPendingBeforeApplyingLimit(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	now := time.Now()
-	old := now.Add(-cloudAgentPendingLessonTTL - time.Hour)
-	for index := 0; index < cloudAgentRememberLessonPendingPerUser; index++ {
-		created := now
-		if index == 0 {
-			created = old
-		}
-		entry := &model.AgentLesson{ID: newID(), Topic: "pending", Status: model.AgentLessonStatusPending, AuthorUserID: "user-a", CreatedAt: created, UpdatedAt: created}
-		if err := repo.Create(entry); err != nil {
-			t.Fatal(err)
-		}
-	}
-	state := &cloudAgentRuntime{
-		Request:                     CloudAgentRequest{PermissionMode: "auto"},
-		LessonEligibleToolSuccesses: 1,
-	}
-	call := rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`)
-	if _, err := cloudAgentRememberLesson(repo, "user-a", state, call); err != nil {
-		t.Fatalf("过期一条后应可暂存新待审记忆：%v", err)
-	}
-	pending, err := repo.CountAgentLessonsByAuthor("user-a", model.AgentLessonStatusPending)
-	if err != nil || pending != cloudAgentRememberLessonPendingPerUser-1 {
-		t.Fatalf("run 成功前候选不得落库：%d (%v)", pending, err)
-	}
-	if err := cloudAgentCommitLessonDrafts(repo, "user-a", "run-a", state); err != nil {
-		t.Fatal(err)
-	}
-	pending, err = repo.CountAgentLessonsByAuthor("user-a", model.AgentLessonStatusPending)
-	if err != nil || pending != cloudAgentRememberLessonPendingPerUser {
-		t.Fatalf("成功收尾后待审数应回到上限：%d (%v)", pending, err)
-	}
-}
-
-func TestRememberLessonPendingLimitErrorShowsCountAndSettings(t *testing.T) {
-	repo := agentLessonTestRepo(t)
-	now := time.Now()
-	for index := 0; index < cloudAgentRememberLessonPendingPerUser; index++ {
-		entry := &model.AgentLesson{ID: newID(), Topic: "pending", Status: model.AgentLessonStatusPending, AuthorUserID: "user-a", CreatedAt: now, UpdatedAt: now}
-		if err := repo.Create(entry); err != nil {
-			t.Fatal(err)
-		}
-	}
-	state := &cloudAgentRuntime{Request: CloudAgentRequest{PermissionMode: "auto"}, LessonEligibleToolSuccesses: 1}
-	_, err := cloudAgentRememberLesson(repo, "user-a", state, rememberLessonCall(`{"topic":"canvas.snapshot-hash","category":"canvas","situation":"写画布时报快照过期","lesson":"用返回的新 snapshotHash"}`))
-	if err == nil || !strings.Contains(err.Error(), "50") || !strings.Contains(err.Error(), "设置 → Agent 记忆") {
-		t.Fatalf("拒绝信息应包含待审数量和处理入口：%v", err)
-	}
-}
-
-func TestLessonIndexRanksTaskRelevanceBeforeHitsAndMatchesTwoHanRunes(t *testing.T) {
-	now := time.Now()
-	unrelated := model.AgentLesson{ID: "unrelated", Topic: "video.duration", Situation: "竖屏视频生成时长", Hits: 9000, UpdatedAt: now}
-	relevant := model.AgentLesson{ID: "relevant", Topic: "对象绑定", Situation: "预演对象绑定角色时", Hits: 0, UpdatedAt: now.Add(-time.Hour)}
-	index, matched := cloudAgentPickLessonIndex([]model.AgentLesson{unrelated, relevant}, "请处理对象绑定", 20)
-	if matched != 1 || len(index) != 1 || index[0].ID != "relevant" {
-		t.Fatalf("任务相关记忆应先于高频无关记忆，且两字短语应命中：matched=%d index=%+v", matched, index)
 	}
 }

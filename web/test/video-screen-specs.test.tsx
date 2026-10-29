@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ModelCapabilityEditor } from "../src/components/model-capability-editor";
 import { defaultModelCapabilityConfig, modelCapabilityConfigFor, normalizeModelCapabilityConfig, normalizeVideoValue } from "../src/lib/model-capabilities";
 import type { ModelProtocolWorkflow } from "../src/lib/model-protocols";
-import { resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "../src/lib/video-screen-specs";
+import { findProtocolWorkflow, GENERIC_WORKFLOW_ID, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "../src/lib/video-screen-specs";
+import { updateChannelModelUpstreamCapabilities } from "../src/pages/admin/components/channel-model-editor-form";
 
 const workflow: ModelProtocolWorkflow = {
     id: "minimax_h3_zm_u24",
@@ -80,4 +81,40 @@ test("other video protocols keep their existing settings and controls", () => {
     const html = renderToStaticMarkup(<ModelCapabilityEditor capability="video" protocol="minimax-video" section="protocol" />);
     expect(html).not.toContain("自定义比例分辨率");
     expect(html).toContain("支持比例");
+});
+
+const genericWorkflow: ModelProtocolWorkflow = {
+    id: GENERIC_WORKFLOW_ID,
+    label: "其他工作流（透传上游模型 ID）",
+    providerId: "autodl-comfyui",
+    capability: "video",
+    parameters: [{ name: "resolution", mapping: "resolution", type: "string", values: ["480p竖", "768p竖", "960p竖", "480p横", "768p横", "960p横"] }],
+    defaults: { resolution: "768p竖" },
+};
+
+test("undeclared AutoDL workflow IDs fall back to the generic presets", () => {
+    expect(findProtocolWorkflow([workflow, genericWorkflow], "autodl-comfyui", workflow.id)).toBe(workflow);
+    expect(findProtocolWorkflow([workflow, genericWorkflow], "autodl-comfyui", "minimax_h3_zm_nono")).toBe(genericWorkflow);
+    expect(findProtocolWorkflow([workflow, genericWorkflow], "minimax-video", "minimax_h3_zm_nono")).toBeUndefined();
+    const html = renderToStaticMarkup(<ModelCapabilityEditor capability="video" protocol="autodl-comfyui" model="minimax_h3_zm_nono" workflows={[workflow, genericWorkflow]} section="protocol" />);
+    expect(html).toContain("960p横");
+    expect(html).not.toContain("未声明");
+});
+
+test("custom resolution labels survive alongside presets", () => {
+    const base = resolveWorkflowVideoScreenSpec(defaultModelCapabilityConfig("autodl-comfyui", "new").video!, genericWorkflow);
+    expect(base.resolutions).toEqual(genericWorkflow.parameters[0]!.values!);
+    expect(base.defaultResolution).toBe("768p竖");
+    const custom = updateWorkflowVideoScreenSpec(base, genericWorkflow, { resolutions: ["768p竖", "1080p竖"], defaultResolution: "1080p竖" });
+    expect(custom.resolutions).toEqual(["768p竖", "1080p竖"]);
+    expect(custom.defaultResolution).toBe("1080p竖");
+});
+
+test("selecting an AutoDL upstream writes the resolved spec into the form value", () => {
+    const protocols = [{ value: "autodl-comfyui", label: "AutoDL", capability: "video" as const, create: "", contentType: "application/json", media: "", enabled: true, workflows: [workflow, genericWorkflow] }];
+    const values = { modelKey: "minimax_h3_zm_nono", providerModelKey: "", tags: [], capability: "video" as const, protocol: "autodl-comfyui", priceTiers: [], enabled: true, capabilityConfig: defaultModelCapabilityConfig("autodl-comfyui", "") };
+    const next = updateChannelModelUpstreamCapabilities(values, protocols);
+    expect(next.capabilityConfig?.video?.resolutions).toEqual(genericWorkflow.parameters[0]!.values!);
+    expect(next.capabilityConfig?.video?.defaultResolution).toBe("768p竖");
+    expect(updateChannelModelUpstreamCapabilities(next, protocols)).toBe(next);
 });

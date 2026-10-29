@@ -158,6 +158,39 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"presets": presets})
 	})
 
+	r.GET("/skills/recommendations", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		list, err := svc.SkillRecommendations(user.ID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, list)
+	})
+
+	r.POST("/skills/recommendations/:industryId/install", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.SkillRecommendationInstallRequest
+		if err := decodeAgentJSON(c, &req, 8<<10); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		result, err := svc.InstallSkillRecommendations(user.ID, c.Param("industryId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+
 	r.GET("/skills/added", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -378,6 +411,26 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.DELETE("/skills/:id/add", setSkillAdded(svc, false))
 	r.POST("/skills/:id/like", setSkillLiked(svc, true))
 	r.DELETE("/skills/:id/like", setSkillLiked(svc, false))
+	r.PATCH("/skills/:id/agent-mode", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			Mode string `json:"mode"`
+		}
+		if err := decodeAgentJSON(c, &req, 4<<10); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		skill, err := svc.SetSkillAgentMode(user.ID, c.Param("id"), req.Mode)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"skill": skill})
+	})
 }
 
 func parseOptionalBool(value string) (bool, error) {

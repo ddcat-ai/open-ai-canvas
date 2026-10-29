@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"io"
 	"strings"
 	"unicode/utf8"
@@ -24,7 +23,7 @@ func cloudAgentHandleModelList(repo *repository.Repository, userID string, state
 	if err != nil {
 		return nil, err
 	}
-	return service.cloudAgentModelList(intent)
+	return service.cloudAgentModelList(userID, intent)
 }
 
 func cloudAgentHandleAgentProfileRead(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
@@ -61,14 +60,6 @@ func cloudAgentHandlePlanUpdate(repo *repository.Repository, userID string, stat
 
 func cloudAgentHandleAskUser(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
 	return cloudAgentAskUser(call, state)
-}
-
-func cloudAgentHandleRecallLessons(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	return cloudAgentRecallLessons(repo, userID, call)
-}
-
-func cloudAgentHandleRememberLesson(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	return cloudAgentRememberLesson(repo, userID, state, call)
 }
 
 func cloudAgentHandlePrevisSceneRead(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
@@ -336,7 +327,15 @@ func cloudAgentHandleSkillSearch(repo *repository.Repository, userID string, sta
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, cloudAgentJSONArgumentError(err)
 	}
-	return cloudAgentSearchSkills(state.Skills, args.Keyword, args.Limit)
+	service := cloudAgentToolService(services)
+	if service == nil {
+		return nil, BadAuthRequest("技能服务不可用")
+	}
+	skills, err := service.cloudAgentSkillPoolForSearch(userID, state)
+	if err != nil {
+		return nil, err
+	}
+	return cloudAgentSearchSkills(skills, args.Keyword, args.Limit)
 }
 
 func cloudAgentHandleSkillReadFile(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
@@ -351,51 +350,10 @@ func cloudAgentHandleSkillReadFile(repo *repository.Repository, userID string, s
 	if args.Offset < 0 || (args.Path == "" && args.Offset != 0) {
 		return nil, BadAuthRequest("技能读取偏移无效")
 	}
-	for _, skill := range state.Skills {
-		if skill.ID == args.SkillID {
-			if args.Path == "" {
-				return map[string]any{"version": skill.Version, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill), "guidance": "先读取 SKILL.md，再只读取入口明确引用且当前任务需要的参考文件。只能读取 files 中列出的路径；不要重复列目录或猜测路径"}, nil
-			}
-			if service != nil {
-				detail, err := service.SkillDetail(userID, skill.ID)
-				if err != nil {
-					return nil, err
-				}
-				if !detail.IsAdded || detail.Status != 1 || detail.VersionID != skill.Version || detail.ContentHash != skill.Hash {
-					return nil, creationConflict("技能已更新或不可用，请重试")
-				}
-				if args.Path == cloudAgentSkillEntryPath {
-					return cloudAgentSkillPage(skill.Version, args.Path, detail.Instruction, args.Offset)
-				}
-				if _, ok := skill.Files[args.Path]; !ok {
-					return nil, BadAuthRequest("参考文件未包含在本轮固定快照中")
-				}
-				file, err := service.SkillPackageFile(userID, skill.ID, args.Path)
-				if err != nil {
-					return nil, err
-				}
-				if file.Binary {
-					return nil, BadAuthRequest("不支持读取二进制技能文件")
-				}
-				latest, err := service.SkillDetail(userID, skill.ID)
-				if err != nil {
-					return nil, err
-				}
-				if !latest.IsAdded || latest.Status != 1 || latest.VersionID != skill.Version || latest.ContentHash != skill.Hash {
-					return nil, creationConflict("技能已更新或不可用，请重试")
-				}
-				return cloudAgentSkillPage(skill.Version, args.Path, file.Content, args.Offset)
-			}
-			if args.Path == cloudAgentSkillEntryPath && strings.TrimSpace(skill.Instruction) != "" {
-				return map[string]any{"version": skill.Version, "path": args.Path, "content": skill.Instruction}, nil
-			}
-			if content, ok := skill.Files[args.Path]; ok && content != "" {
-				return map[string]any{"version": skill.Version, "path": args.Path, "content": content}, nil
-			}
-			return nil, BadAuthRequest(fmt.Sprintf("参考文件未包含在本轮固定快照中；可读路径：%s。不要重试此路径", strings.Join(cloudAgentSkillPaths(skill), ", ")))
-		}
+	if service == nil {
+		return nil, BadAuthRequest("技能服务不可用")
 	}
-	return nil, BadAuthRequest("技能未在本轮启用，或参考文件未包含在固定快照中")
+	return service.cloudAgentReadSkillFile(userID, state, args)
 }
 
 func cloudAgentHandleTaskGet(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {

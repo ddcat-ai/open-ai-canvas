@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, type RefObject } from "react";
 import { Button, Checkbox } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { AlertCircle, Film, Play, RotateCcw, Sparkles, TriangleAlert, X } from "lucide-react";
+import { AlertCircle, Film, Play, RotateCcw, TriangleAlert, X, PenLine } from "lucide-react";
 
 import type { DramaCast, DramaModelChoice, DramaSegment, DramaShot } from "@/services/api/drama";
 
@@ -55,6 +55,165 @@ function CoverVideo({ resourceId }: { resourceId: string }) {
 function writable(segment: DramaSegment) {
     return segment.promptStatus !== "queued" && segment.promptStatus !== "running";
 }
+
+const NO_SHOTS: DramaShot[] = [];
+
+type CardActions = {
+    anchor?: number;
+    handleCardClick: (event: MouseEvent, index: number) => void;
+    toggle: (index: number) => void;
+    selectRange: (from: number, to: number, additive: boolean) => void;
+    onOpen: (segmentIndex: number, shotId?: string) => void;
+    onGenerate: (indexes: number[], model?: DramaModelChoice) => void;
+    onReprocess: (index: number) => void;
+};
+
+type CardProps = {
+    segment: DramaSegment;
+    segmentShots: DramaShot[];
+    aspectRatio: string;
+    castById: Map<string, DramaCast>;
+    isSelected: boolean;
+    focused: boolean;
+    busy: boolean;
+    reprocessing: boolean;
+    defaultModelLabel?: string;
+    actions: RefObject<CardActions>;
+};
+
+/**
+ * 单个剧情段卡片。轮询刷新时 React Query 保留未变化段的对象引用，memo 让这些卡片跳过渲染，
+ * 低配电脑上打开弹窗或轮询时不再整页重绘全部卡片。回调经 actions 引用读取，props 保持稳定。
+ */
+const SegmentCard = memo(function SegmentCard({ segment, segmentShots, aspectRatio, castById, isSelected, focused, busy, reprocessing, defaultModelLabel, actions }: CardProps) {
+    const state = segmentState(segment);
+    const error = segment.promptStatus === "failed" ? segment.promptError : segment.videoStatus === "failed" ? segment.videoError : "";
+    const act = () => actions.current;
+    return (
+        <article
+            data-segment={segment.index}
+            role="option"
+            aria-selected={isSelected}
+            aria-current={focused}
+            aria-label={`第 ${segment.index + 1} 段 ${segment.title}，${state.label}`}
+            className={`drama-sg is-${state.tone} ${isSelected ? "is-selected" : ""} ${focused ? "is-focused" : ""}`}
+            onClick={(event) => act().handleCardClick(event, segment.index)}
+            onDoubleClick={(event) => {
+                if (!(event.target as HTMLElement).closest("button, .ant-select")) act().onOpen(segment.index);
+            }}
+        >
+            <header className="drama-sg-head">
+                <Checkbox
+                    checked={isSelected}
+                    onChange={() => act().toggle(segment.index)}
+                    onClick={(event) => {
+                        const anchor = act().anchor;
+                        if (event.shiftKey && anchor !== undefined) {
+                            event.preventDefault();
+                            act().selectRange(anchor, segment.index, true);
+                        }
+                    }}
+                    aria-label={`选择第 ${segment.index + 1} 段`}
+                />
+                <span className="drama-seg-num">{segment.index + 1}</span>
+                <button type="button" className="drama-sg-title" title={segment.title} onClick={() => act().onOpen(segment.index)}>
+                    {segment.title}
+                </button>
+                {error ? (
+                    <Tooltip title={error}>
+                        <AlertCircle className="size-3.5 flex-none text-[var(--drama-err)]" aria-label="失败原因" />
+                    </Tooltip>
+                ) : segment.request.warning ? (
+                    <Tooltip title={segment.request.warning}>
+                        <TriangleAlert className="size-3.5 flex-none text-[var(--drama-warn)]" aria-label="提示" />
+                    </Tooltip>
+                ) : null}
+            </header>
+            <div className="drama-sg-body">
+                <button type="button" className="drama-sg-cover" style={{ aspectRatio: aspectRatioValue(aspectRatio) }} onClick={() => act().onOpen(segment.index)} aria-label={`打开第 ${segment.index + 1} 段`}>
+                    {segment.tailFrameResourceId && segment.videoResourceId ? (
+                        <MediaThumb resourceId={segment.tailFrameResourceId} alt="" />
+                    ) : segment.videoResourceId && hasVideo(segment) ? (
+                        <CoverVideo resourceId={segment.videoResourceId} />
+                    ) : (
+                        <span className={`drama-sg-cover-empty ${state.tone === "busy" ? "is-busy" : ""}`}>
+                            <Film className="size-4" aria-hidden />
+                        </span>
+                    )}
+                    <span className="drama-sg-cover-dur">{secondsLabel(segment.durationMs)}</span>
+                    {segment.videoResourceId ? (
+                        <span className="drama-sg-cover-play">
+                            <Play className="size-3" aria-hidden />
+                        </span>
+                    ) : null}
+                </button>
+                <div className="drama-sg-main">
+                    <div className="drama-sg-meta">
+                        <SegmentStatus segment={segment} />
+                        <span>
+                            {segmentShots.length} 镜{segment.request.maxVideoSeconds ? ` · 上限 ${segment.request.maxVideoSeconds}s` : ""}
+                        </span>
+                    </div>
+                    <SegmentInputs segment={segment} castById={castById} compact />
+                    {segmentShots.length === 1 ? (
+                        <button type="button" className="drama-sg-single" onClick={() => act().onOpen(segment.index, segmentShots[0].id)}>
+                            <span className="drama-sg-single-action">{segmentShots[0].action || segmentShots[0].imagePrompt || "未描述画面"}</span>
+                            {segmentShots[0].dialogue ? (
+                                <span className="drama-sg-single-line">
+                                    <em>{segmentShots[0].speaker || "旁白"}</em>
+                                    {segmentShots[0].dialogue}
+                                </span>
+                            ) : null}
+                        </button>
+                    ) : (
+                        <ol className="drama-sg-shots">
+                            {segmentShots.slice(0, SHOT_PREVIEW).map((shot) => (
+                                <li key={shot.id}>
+                                    <button type="button" onClick={() => act().onOpen(segment.index, shot.id)} title={shot.dialogue ? `${shot.speaker || "旁白"}：${shot.dialogue}` : shot.action}>
+                                        <b>{shot.position + 1}</b>
+                                        <span>
+                                            {shot.dialogue ? (
+                                                <>
+                                                    <em>{shot.speaker || "旁白"}</em>
+                                                    {shot.dialogue}
+                                                </>
+                                            ) : (
+                                                shot.action || shot.imagePrompt || "未描述画面"
+                                            )}
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+                            {segmentShots.length > SHOT_PREVIEW ? <li className="drama-sg-more">还有 {segmentShots.length - SHOT_PREVIEW} 镜</li> : null}
+                        </ol>
+                    )}
+                </div>
+            </div>
+            <footer className="drama-sg-foot">
+                <span className="drama-sg-model" title={segment.videoModel?.label}>
+                    {segment.videoModel?.label || defaultModelLabel || "默认视频模型"}
+                </span>
+                <span className="drama-sg-actions">
+                    {segment.videoReprocessable ? (
+                        <Button size="small" type="primary" icon={<RotateCcw className="size-3" />} disabled={busy} loading={reprocessing} title="只重新处理已生成的视频，不重新生成、不扣费" onClick={() => act().onReprocess(segment.index)}>
+                            重新处理
+                        </Button>
+                    ) : null}
+                    <Button
+                        size="small"
+                        type={generatable(segment) && !hasVideo(segment) ? "primary" : "default"}
+                        icon={<Play className="size-3" />}
+                        disabled={busy || !generatable(segment)}
+                        title={!promptReady(segment) ? "先撰写或确认本段视频提示词" : hasVideo(segment) ? "重新调用视频模型生成本段，会产生新的费用" : undefined}
+                        onClick={() => act().onGenerate([segment.index])}
+                    >
+                        {mediaBusy(segment.videoStatus) ? (segment.videoStatus === "queued" && segment.videoWait ? "等待中" : segment.request.firstFramePending ? "等上一段" : "生成中") : hasVideo(segment) ? "重新生成" : "生成"}
+                    </Button>
+                </span>
+            </footer>
+        </article>
+    );
+});
 
 /**
  * 分镜页：剧情段卡片网格。一段一次调用视频模型，卡片只放判断所需的信息：状态、预览、生成依据缩略图和前几个镜头；
@@ -122,6 +281,9 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
         setFocused(index);
         setAnchor(index);
     };
+    // 卡片 memo 后通过引用读取最新回调与连选锚点，避免每次渲染传入新函数让 memo 失效。
+    const actions = useRef<CardActions>({ anchor, handleCardClick, toggle, selectRange, onOpen, onGenerate, onReprocess });
+    actions.current = { anchor, handleCardClick, toggle, selectRange, onOpen, onGenerate, onReprocess };
 
     // 分镜页快捷键：⌘/Ctrl+A 全选，Esc 清空，J/K 或方向键切换聚焦，Shift+方向键连选，X 或空格切换选择，Enter 打开。
     useEffect(() => {
@@ -216,7 +378,7 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
                         </Tooltip>
                         <Button
                             size="small"
-                            icon={<Sparkles className="size-3.5" />}
+                            icon={<PenLine className="size-3.5" />}
                             disabled={busy || !toWrite.length}
                             onClick={() => {
                                 onWritePrompts(toWrite);
@@ -266,144 +428,21 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
                 )}
             </div>
             <div ref={gridRef} className={`drama-sg-grid ${aspectRatio === "16:9" || aspectRatio === "4:3" ? "is-landscape" : ""}`} role="listbox" aria-multiselectable aria-label="剧情段">
-                {segments.map((segment) => {
-                    const segmentShots = shotsBySegment.get(segment.index) || [];
-                    const state = segmentState(segment);
-                    const isSelected = selected.has(segment.index);
-                    const error = segment.promptStatus === "failed" ? segment.promptError : segment.videoStatus === "failed" ? segment.videoError : "";
-                    return (
-                        <article
-                            key={segment.id || segment.index}
-                            data-segment={segment.index}
-                            role="option"
-                            aria-selected={isSelected}
-                            aria-current={focused === segment.index}
-                            aria-label={`第 ${segment.index + 1} 段 ${segment.title}，${state.label}`}
-                            className={`drama-sg is-${state.tone} ${isSelected ? "is-selected" : ""} ${focused === segment.index ? "is-focused" : ""}`}
-                            onClick={(event) => handleCardClick(event, segment.index)}
-                            onDoubleClick={(event) => {
-                                if (!(event.target as HTMLElement).closest("button, .ant-select")) onOpen(segment.index);
-                            }}
-                        >
-                            <header className="drama-sg-head">
-                                <Checkbox
-                                    checked={isSelected}
-                                    onChange={() => toggle(segment.index)}
-                                    onClick={(event) => {
-                                        if (event.shiftKey && anchor !== undefined) {
-                                            event.preventDefault();
-                                            selectRange(anchor, segment.index, true);
-                                        }
-                                    }}
-                                    aria-label={`选择第 ${segment.index + 1} 段`}
-                                />
-                                <span className="drama-seg-num">{segment.index + 1}</span>
-                                <button type="button" className="drama-sg-title" title={segment.title} onClick={() => onOpen(segment.index)}>
-                                    {segment.title}
-                                </button>
-                                {error ? (
-                                    <Tooltip title={error}>
-                                        <AlertCircle className="size-3.5 flex-none text-[var(--drama-err)]" aria-label="失败原因" />
-                                    </Tooltip>
-                                ) : segment.request.warning ? (
-                                    <Tooltip title={segment.request.warning}>
-                                        <TriangleAlert className="size-3.5 flex-none text-[var(--drama-warn)]" aria-label="提示" />
-                                    </Tooltip>
-                                ) : null}
-                            </header>
-                            <div className="drama-sg-body">
-                                <button type="button" className="drama-sg-cover" style={{ aspectRatio: aspectRatioValue(aspectRatio) }} onClick={() => onOpen(segment.index)} aria-label={`打开第 ${segment.index + 1} 段`}>
-                                    {segment.tailFrameResourceId && segment.videoResourceId ? (
-                                        <MediaThumb resourceId={segment.tailFrameResourceId} alt="" />
-                                    ) : segment.videoResourceId && hasVideo(segment) ? (
-                                        <CoverVideo resourceId={segment.videoResourceId} />
-                                    ) : (
-                                        <span className={`drama-sg-cover-empty ${state.tone === "busy" ? "is-busy" : ""}`}>
-                                            <Film className="size-4" aria-hidden />
-                                        </span>
-                                    )}
-                                    <span className="drama-sg-cover-dur">{secondsLabel(segment.durationMs)}</span>
-                                    {segment.videoResourceId ? (
-                                        <span className="drama-sg-cover-play">
-                                            <Play className="size-3" aria-hidden />
-                                        </span>
-                                    ) : null}
-                                </button>
-                                <div className="drama-sg-main">
-                                    <div className="drama-sg-meta">
-                                        <SegmentStatus segment={segment} />
-                                        <span>
-                                            {segmentShots.length} 镜{segment.request.maxVideoSeconds ? ` · 上限 ${segment.request.maxVideoSeconds}s` : ""}
-                                        </span>
-                                    </div>
-                                    <SegmentInputs segment={segment} castById={castById} compact />
-                                    {segmentShots.length === 1 ? (
-                                        <button type="button" className="drama-sg-single" onClick={() => onOpen(segment.index, segmentShots[0].id)}>
-                                            <span className="drama-sg-single-action">{segmentShots[0].action || segmentShots[0].imagePrompt || "未描述画面"}</span>
-                                            {segmentShots[0].dialogue ? (
-                                                <span className="drama-sg-single-line">
-                                                    <em>{segmentShots[0].speaker || "旁白"}</em>
-                                                    {segmentShots[0].dialogue}
-                                                </span>
-                                            ) : null}
-                                        </button>
-                                    ) : (
-                                        <ol className="drama-sg-shots">
-                                            {segmentShots.slice(0, SHOT_PREVIEW).map((shot) => (
-                                                <li key={shot.id}>
-                                                    <button type="button" onClick={() => onOpen(segment.index, shot.id)} title={shot.dialogue ? `${shot.speaker || "旁白"}：${shot.dialogue}` : shot.action}>
-                                                        <b>{shot.position + 1}</b>
-                                                        <span>
-                                                            {shot.dialogue ? (
-                                                                <>
-                                                                    <em>{shot.speaker || "旁白"}</em>
-                                                                    {shot.dialogue}
-                                                                </>
-                                                            ) : (
-                                                                shot.action || shot.imagePrompt || "未描述画面"
-                                                            )}
-                                                        </span>
-                                                    </button>
-                                                </li>
-                                            ))}
-                                            {segmentShots.length > SHOT_PREVIEW ? <li className="drama-sg-more">还有 {segmentShots.length - SHOT_PREVIEW} 镜</li> : null}
-                                        </ol>
-                                    )}
-                                </div>
-                            </div>
-                            <footer className="drama-sg-foot">
-                                <span className="drama-sg-model" title={segment.videoModel?.label}>
-                                    {segment.videoModel?.label || defaultVideoModel?.label || "默认视频模型"}
-                                </span>
-                                <span className="drama-sg-actions">
-                                    {segment.videoReprocessable ? (
-                                        <Button
-                                            size="small"
-                                            type="primary"
-                                            icon={<RotateCcw className="size-3" />}
-                                            disabled={busy}
-                                            loading={reprocessing === segment.index}
-                                            title="只重新处理已生成的视频，不重新生成、不扣费"
-                                            onClick={() => onReprocess(segment.index)}
-                                        >
-                                            重新处理
-                                        </Button>
-                                    ) : null}
-                                    <Button
-                                        size="small"
-                                        type={generatable(segment) && !hasVideo(segment) ? "primary" : "default"}
-                                        icon={<Play className="size-3" />}
-                                        disabled={busy || !generatable(segment)}
-                                        title={!promptReady(segment) ? "先撰写或确认本段视频提示词" : hasVideo(segment) ? "重新调用视频模型生成本段，会产生新的费用" : undefined}
-                                        onClick={() => onGenerate([segment.index])}
-                                    >
-                                        {mediaBusy(segment.videoStatus) ? (segment.videoStatus === "queued" && segment.videoWait ? "等待中" : segment.request.firstFramePending ? "等上一段" : "生成中") : hasVideo(segment) ? "重新生成" : "生成"}
-                                    </Button>
-                                </span>
-                            </footer>
-                        </article>
-                    );
-                })}
+                {segments.map((segment) => (
+                    <SegmentCard
+                        key={segment.id || segment.index}
+                        segment={segment}
+                        segmentShots={shotsBySegment.get(segment.index) || NO_SHOTS}
+                        aspectRatio={aspectRatio}
+                        castById={castById}
+                        isSelected={selected.has(segment.index)}
+                        focused={focused === segment.index}
+                        busy={busy}
+                        reprocessing={reprocessing === segment.index}
+                        defaultModelLabel={defaultVideoModel?.label}
+                        actions={actions}
+                    />
+                ))}
             </div>
             <div className="drama-kbd-hint" aria-label="键盘快捷键">
                 <span>

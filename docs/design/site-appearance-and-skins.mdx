@@ -28,11 +28,11 @@
 3. Component：按钮、输入、卡片、弹层、菜单与复选框圆角，以及控件高度、描边、焦点环、图标、字重、悬停抬升、动效和阴影。
 4. Adapter：将同一份语义令牌同时映射到 CSS Custom Properties 和 Ant Design 全局/组件 token。
 
-皮肤合同位于 `backend/internal/app/appearance_skins.go`，前端映射位于 `web/src/lib/skin-themes.ts`。页面不得按皮肤 ID 写条件样式；业务组件只能消费语义 token。`classic` 只注入主按钮填充变量，基础表面继续由 `globals.css` 与 `app-theme.ts` 提供；服务端会逐字段比对经典主题，任何删除或伪造修改都会被拒绝。其他主题均为可编辑数据，用根节点 CSS 变量覆盖自研组件语义层，并向 Ant Design `ConfigProvider` 提供同一套颜色、交互状态、圆角、尺寸、动效和阴影值。
+皮肤合同位于 `backend/internal/app/appearance_skins.go`，前端映射位于 `web/src/lib/skin-themes.ts`。页面不得按皮肤 ID 写条件样式；业务组件只能消费语义 token。`classic` 不注入任何行内变量，基础表面与墨色主按钮都由 `globals.css`（按钮 token 在 `button-tokens.css`）与 `app-theme.ts` 提供；服务端会逐字段比对经典主题，任何删除或伪造修改都会被拒绝。其他主题均为可编辑数据，用根节点 CSS 变量覆盖自研组件语义层，并向 Ant Design `ConfigProvider` 提供同一套颜色、交互状态、圆角、尺寸、动效和阴影值。
 
-`tokens.buttons.light/dark` 分别配置主按钮填充：`mode` 为 `solid` 或 `gradient`，`angle` 为 0–360 的整数；`start/end`、`hoverStart/hoverEnd`、`activeStart/activeEnd` 和 `foreground` 为 HEX 色值。纯色模式消费原有 `primary/primaryHover/primaryActive/primaryForeground`，渐变模式使用独立参数，不改变链接、选中态、开关或危险操作。经典默认角度为 115°，常态 `#6554df → #386fbc`，悬停 `#5744cf → #356bbb`，按下 `#4938b8 → #2c5da5`，文字为白色。后台可复制经典主题后调整两种模式的全部参数。
+`tokens.buttons.light/dark` 分别配置主按钮填充：`mode` 为 `solid` 或 `gradient`，`angle` 为 0–360 的整数；`start/end`、`hoverStart/hoverEnd`、`activeStart/activeEnd` 和 `foreground` 为 HEX 色值。纯色模式消费原有 `primary/primaryHover/primaryActive/primaryForeground`，渐变模式使用独立参数，不改变链接、选中态、开关或危险操作。经典与内置主题默认均为纯色（墨色主按钮），前端不读取经典主题的填充参数。渐变参数只是管理员切到“渐变”时的初始值：同色系上亮下暗、角度 180°，不预置彩色渐变。后台可复制经典主题后调整两种模式的全部参数。
 
-旧数据整块缺少 `buttons` 时，经典主题补入默认渐变，其余主题保留纯色；局部缺失或非法写入被拒绝。读取补齐不自动写库，保存后写入版本 8；回退旧版本前应备份外观 JSON，旧版本不会呈现新渐变配置。
+旧数据整块缺少 `buttons` 时一律补入默认纯色，已保存为渐变的自定义主题保持原设置；局部缺失或非法写入被拒绝。读取补齐不自动写库，保存后写入版本 8；回退旧版本前应备份外观 JSON，旧版本不会呈现新渐变配置。
 
 主题库初始包含：
 

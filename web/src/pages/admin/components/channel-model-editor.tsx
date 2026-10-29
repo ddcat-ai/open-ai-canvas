@@ -11,6 +11,7 @@ import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type Mode
 import type { ModelProtocolDefinition } from "@/lib/model-protocols";
 import { createAdminChannelModel, testAdminChannelModel, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
+import { priceCurrencyOptions } from "@/services/api/user-groups";
 import { defaultPriceTier, normalizeUpstreamModelKey, priceTierPayloadFromForm } from "./channel-model-price-tier-form";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
 import { ChannelModelTagsEditor } from "./channel-model-tags-editor";
@@ -144,6 +145,7 @@ export function ChannelModelEditor({
                 capability: values.capability,
                 protocol: values.protocol,
                 priceTiers: values.priceTiers.map((tier) => priceTierPayloadFromForm(values.capability, tier, upstreamModel, capabilityConfig)),
+                priceCurrency: values.priceCurrency || "credits",
                 enabled: values.enabled !== false,
                 capabilityConfig,
             };
@@ -425,6 +427,14 @@ export function ChannelModelEditor({
                                     <section className="admin-model-editor-section">
                                         <SectionHeading title="用户积分价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
                                         <div className="admin-model-editor-section-content">
+                                            <Form.Item name="priceCurrency" label="计价货币" extra="积分：售价即扣除的积分。USD / CNY：售价按货币填写，扣费时按用户分组的「1 USD / 1 CNY = N 积分」换算；成本价仍以积分计。">
+                                                <Segmented
+                                                    options={priceCurrencyOptions}
+                                                    onChange={() => {
+                                                        dirtyRef.current = true;
+                                                    }}
+                                                />
+                                            </Form.Item>
                                             <Form.List
                                                 name="priceTiers"
                                                 rules={[

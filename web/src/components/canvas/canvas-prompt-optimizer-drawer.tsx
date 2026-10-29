@@ -3,7 +3,7 @@ import { App, Button, Input, Popover, Tag, Typography } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Callout } from "@/components/ui/product/callout";
 import { Bubble, Sender, type BubbleItemType } from "@ant-design/x";
-import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, LoaderCircle, Music2, Sparkles, UserRound, Video, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, Image as ImageIcon, LoaderCircle, Music2, UserRound, Video, X, PenLine } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -639,7 +639,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
             >
                 <div className="canvas-prompt-optimizer-header-main canvas-prompt-optimizer-drag-region" role="button" tabIndex={0} aria-label="移动提示词优化面板" title="拖动移动面板，方向键也可以移动" onKeyDown={handlePanelMoveKeyDown}>
                     <span className="canvas-prompt-optimizer-icon">
-                        <Sparkles className="size-4" aria-hidden="true" />
+                        <PenLine className="size-4" aria-hidden="true" />
                     </span>
                     <div className="canvas-prompt-optimizer-header-title">
                         <div className="canvas-prompt-optimizer-header-title-row">
@@ -669,7 +669,7 @@ export function CanvasPromptOptimizerDrawer({ open, children, prompt, generation
                             variant: "borderless",
                             avatar: (
                                 <span className="canvas-prompt-optimizer-message-avatar">
-                                    <Sparkles className="size-3.5" aria-hidden="true" />
+                                    <PenLine className="size-3.5" aria-hidden="true" />
                                 </span>
                             ),
                         },

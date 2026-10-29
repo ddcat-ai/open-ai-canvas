@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, ChevronUp, Focus, MousePointer2, Move3d, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, WandSparkles, type LucideIcon } from "lucide-react";
+import { Camera, ChartGantt, Check, ChevronUp, Focus, MousePointer2, Move3d, Rotate3d, Route, Scale3d, Scan, SlidersHorizontal, type LucideIcon } from "lucide-react";
 
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { PREVIS_VIEW_MODES, type PrevisViewMode } from "@/lib/canvas/previs/previs-view-modes";
@@ -178,7 +178,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
             </button>
             <span className="pv-dock__divider" />
             <button type="button" aria-pressed={props.timelineOpen} title="动画时间轴" className={`pv-dock__tool ${props.timelineOpen ? "is-active" : ""}`} onClick={props.onOpenTimeline}>
-                <WandSparkles aria-hidden />
+                <ChartGantt aria-hidden />
                 <span>时间轴</span>
             </button>
             <button type="button" aria-pressed={props.inspectorOpen} title={props.inspectorOpen ? "收起属性面板" : "打开属性面板"} className={`pv-dock__tool ${props.inspectorOpen ? "is-active is-soft" : ""}`} onClick={props.onToggleInspector}>

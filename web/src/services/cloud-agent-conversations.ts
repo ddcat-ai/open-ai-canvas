@@ -103,10 +103,18 @@ export async function loadCloudAgentPendingSubmission(conversationId: string, sc
         if (parsed.request !== undefined && (!parsed.request || parsed.request.idempotencyKey !== parsed.key || typeof parsed.request.canvasId !== "string" || typeof parsed.request.prompt !== "string")) throw new Error("invalid request");
         if (parsed.parentRunId !== undefined && typeof parsed.parentRunId !== "string") throw new Error("invalid parent");
         if (parsed.messageId !== undefined && typeof parsed.messageId !== "string") throw new Error("invalid message");
-        return { fingerprint: parsed.fingerprint, key: parsed.key, request: parsed.request, parentRunId: parsed.parentRunId, messageId: parsed.messageId, displayText: parsed.displayText, canvasReferenceNodeId: parsed.canvasReferenceNodeId } satisfies CloudAgentPendingSubmission;
+        return { fingerprint: parsed.fingerprint, key: parsed.key, request: renameLegacySkillIds(parsed.request), parentRunId: parsed.parentRunId, messageId: parsed.messageId, displayText: parsed.displayText, canvasReferenceNodeId: parsed.canvasReferenceNodeId } satisfies CloudAgentPendingSubmission;
     } catch {
         throw new Error("待确认请求记录损坏，已暂停本对话发送；请先在任务中心核对原运行，不要直接重复生成");
     }
+}
+
+// 请求字段已改名为 pinnedSkillIds，后端拒绝未知字段：升级前保存、尚未发出的待确认请求改名后再重放，
+// 否则这条对话会一直卡在“上一条请求待确认”。
+function renameLegacySkillIds(request: CloudAgentPendingSubmission["request"]) {
+    if (!request || !("skillIds" in request)) return request;
+    const { skillIds, ...rest } = request as typeof request & { skillIds?: string[] };
+    return { ...rest, pinnedSkillIds: rest.pinnedSkillIds ?? skillIds };
 }
 
 export async function saveCloudAgentPendingSubmission(conversationId: string, pending: CloudAgentPendingSubmission, scope = getActiveUserScope()) {

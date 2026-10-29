@@ -282,7 +282,8 @@ func TestCloudAgentActiveRunWithOlderCapabilityIsTerminatedWithoutResume(t *test
 func TestCloudAgentValidation(t *testing.T) {
 	for _, mutate := range []func(*CloudAgentRequest){
 		func(r *CloudAgentRequest) { r.PermissionMode = "unrestricted" },
-		func(r *CloudAgentRequest) { r.SkillIDs = []string{"skill", "skill"} },
+		func(r *CloudAgentRequest) { r.PinnedSkillIDs = []string{"skill", "skill"} },
+		func(r *CloudAgentRequest) { r.MemoryMode = "always" },
 		func(r *CloudAgentRequest) { r.ContextScope = []string{"resources"} },
 		func(r *CloudAgentRequest) { r.Budget.MaxCredits = 0 },
 		func(r *CloudAgentRequest) { r.Budget.MaxGenerationTasks = 1 },

@@ -146,16 +146,19 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	if state.Step < 0 || state.Generations < 0 || state.VideoSeconds < 0 {
 		return errors.New("Agent runtime budget or step is invalid")
 	}
-	if state.LessonEligibleToolSuccesses < 0 || state.RememberLessonSuccesses < 0 {
-		return errors.New("Agent lesson success counters are invalid")
+	if state.MemoryWriteCalls < 0 || state.SkillRecommendations < 0 || len(state.MarketSuggestions) > cloudAgentMarketSuggestionsMax {
+		return errors.New("Agent memory or skill counters are invalid")
 	}
-	if len(state.PendingLessonDrafts) > cloudAgentRememberLessonMaxPerRun {
-		return errors.New("Agent pending lesson draft count is invalid")
+	if len(state.SkillVersions) > cloudAgentSkillPoolMax+cloudAgentSkillPinnedMax {
+		return errors.New("Agent runtime skill pool is invalid")
 	}
-	for _, draft := range state.PendingLessonDrafts {
-		if strings.TrimSpace(draft.ID) == "" || strings.TrimSpace(draft.Topic) == "" || strings.TrimSpace(draft.Situation) == "" || len(draft.Evidence) > 8 {
-			return errors.New("Agent pending lesson draft is invalid")
-		}
+	if utf8.RuneCountInString(state.Memory.Text) > agentMemorySnapshotMaxRunes || utf8.RuneCountInString(state.SkillHints) > agentMemorySnapshotMaxRunes {
+		return errors.New("Agent runtime context snapshot is invalid")
+	}
+	switch state.Memory.Mode {
+	case "", model.AgentMemoryDocumentModeAuto, model.AgentMemoryDocumentModeReview, model.AgentMemoryDocumentModeOff:
+	default:
+		return errors.New("Agent runtime memory mode is invalid")
 	}
 	if state.ConfirmationRounds < 0 || state.ConfirmationRounds > cloudAgentMaxConfirmationRounds {
 		return errors.New("Agent runtime confirmation round is invalid")
@@ -472,9 +475,6 @@ func cloudAgentPruneReadCacheForCheckpoint(state *cloudAgentRuntime, limit int) 
 func cloudAgentSave(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
 	if run == nil || state == nil {
 		return errors.New("Agent runtime state is missing")
-	}
-	if cloudAgentRunTerminal(run.Status) {
-		state.PendingLessonDrafts = nil
 	}
 	// 轮内唯一裁剪 = 图片：超出保留轮次的看图结果换成文字回执（正文一律保留）。
 	// 上游每一步都会重新读取历史里的图片并按视觉 token 计费，保留整段历史既贵又没有新信息。

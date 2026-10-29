@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
-import { FileAudio, FileText, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Video } from "lucide-react";
+import { FileAudio, FileText, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Video, Blocks } from "lucide-react";
 
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { CANVAS_FOLDER_THEME_OPTIONS, resolveCanvasFolderTheme, resolveCanvasFolderThemeCover } from "@/lib/canvas/canvas-folder-theme";
@@ -195,7 +195,7 @@ function FolderNodeMedia({ node }: { node?: CanvasNodeData }) {
         return <img src={node.metadata.drawingPreviewUrl || node.metadata.content} alt="" loading="lazy" decoding="async" draggable={false} />;
     }
     if (node?.type === CanvasNodeType.Audio) return <FileAudio className="canvas-folder-file-icon" />;
-    if (node?.type === CanvasNodeType.Skill) return <Sparkles className="canvas-folder-file-icon" />;
+    if (node?.type === CanvasNodeType.Skill) return <Blocks className="canvas-folder-file-icon" />;
     if (node?.type === CanvasNodeType.Config) return <SlidersHorizontal className="canvas-folder-file-icon" />;
     if (node?.type === CanvasNodeType.Text || node?.type === CanvasNodeType.Script) {
         return <span className="canvas-folder-text-preview">{node.metadata?.content || node.title}</span>;

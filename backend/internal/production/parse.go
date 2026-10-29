@@ -210,14 +210,22 @@ func ParseScript(raw string) ([]ScriptShot, error) {
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		return nil, err
 	}
-	shots := make([]ScriptShot, 0, len(payload.Shots))
-	for _, shot := range payload.Shots {
+	return normalizeScriptShots(payload.Shots)
+}
+
+// normalizeScriptShots 清理镜头字段。只有台词的镜头必须保留，否则台词会被静默丢掉。
+func normalizeScriptShots(items []ScriptShot) ([]ScriptShot, error) {
+	shots := make([]ScriptShot, 0, len(items))
+	for _, shot := range items {
 		shot.ImagePrompt = strings.TrimSpace(shot.ImagePrompt)
 		shot.Action = strings.TrimSpace(shot.Action)
 		shot.Dialogue = strings.TrimSpace(shot.Dialogue)
 		shot.Speaker = strings.TrimSpace(shot.Speaker)
-		if shot.ImagePrompt == "" && shot.Action == "" {
+		if shot.ImagePrompt == "" && shot.Action == "" && shot.Dialogue == "" {
 			continue
+		}
+		if shot.Action == "" && shot.ImagePrompt == "" {
+			shot.Action = firstNonEmpty(shot.Speaker, "人物") + "说话"
 		}
 		if shot.ImagePrompt == "" {
 			shot.ImagePrompt = shot.Action
@@ -234,6 +242,58 @@ func ParseScript(raw string) ([]ScriptShot, error) {
 		return nil, errors.New("分镜脚本没有可用镜头")
 	}
 	return shots, nil
+}
+
+// ScriptCast 是剧本里新出现、设定表还没有的角色、道具或场景，用于即时建档时补全外观与声线。
+type ScriptCast struct {
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Appearance string `json:"appearance"`
+	Voice      string `json:"voice"`
+}
+
+// ScriptEpisode 是逐集追加的集在剧本阶段补写的梗概、钩子与悬念。
+type ScriptEpisode struct {
+	Synopsis    string `json:"synopsis"`
+	Hook        string `json:"hook"`
+	Cliffhanger string `json:"cliffhanger"`
+}
+
+// ParseScriptEpisode 读取剧本返回的本集梗概；没有时返回零值。
+func ParseScriptEpisode(raw string) ScriptEpisode {
+	text, err := ExtractJSONObject(raw)
+	if err != nil {
+		return ScriptEpisode{}
+	}
+	var payload struct {
+		Episode ScriptEpisode `json:"episode"`
+	}
+	_ = json.Unmarshal([]byte(text), &payload)
+	return ScriptEpisode{Synopsis: strings.TrimSpace(payload.Episode.Synopsis), Hook: strings.TrimSpace(payload.Episode.Hook), Cliffhanger: strings.TrimSpace(payload.Episode.Cliffhanger)}
+}
+
+// ParseScriptCast 读取剧本返回的新设定；字段缺失或格式不对时返回空，不影响镜头解析。
+func ParseScriptCast(raw string) []ScriptCast {
+	text, err := ExtractJSONObject(raw)
+	if err != nil {
+		return nil
+	}
+	var payload struct {
+		Cast []ScriptCast `json:"cast"`
+	}
+	if json.Unmarshal([]byte(text), &payload) != nil {
+		return nil
+	}
+	result := make([]ScriptCast, 0, len(payload.Cast))
+	for _, item := range payload.Cast {
+		item.Kind, item.Name = strings.TrimSpace(item.Kind), strings.TrimSpace(item.Name)
+		if item.Name == "" || (item.Kind != "character" && item.Kind != "prop" && item.Kind != "scene") {
+			continue
+		}
+		item.Appearance, item.Voice = strings.TrimSpace(item.Appearance), strings.TrimSpace(item.Voice)
+		result = append(result, item)
+	}
+	return result
 }
 
 func anyInt(value any) (int, bool) {

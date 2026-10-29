@@ -68,6 +68,8 @@ export type ChannelModel = {
     priceConfigured: boolean;
     enabled: boolean;
     priceVersion: number;
+    /** 价格档售价单位；USD/CNY 下单时按用户分组兑换比例换算成积分。 */
+    priceCurrency?: import("@/services/api/user-groups").PriceCurrency;
     capabilityVersion?: number;
     capabilityConfig?: import("@/lib/model-capabilities").ModelCapabilityConfig;
     priceTiers: ChannelModelPriceTier[];
@@ -117,6 +119,7 @@ export type ChannelModelMutation = {
     capability: ChannelModel["capability"];
     protocol?: ChannelModel["protocol"];
     enabled?: boolean;
+    priceCurrency?: ChannelModel["priceCurrency"];
     capabilityConfig?: ChannelModel["capabilityConfig"];
     priceTiers?: Array<Omit<ChannelModelPriceTier, "id" | "channelModelId" | "selectorKey" | "priceVersion" | "createdAt" | "updatedAt">>;
     billingMode?: ChannelModel["billingMode"];

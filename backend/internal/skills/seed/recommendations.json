@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "note": "按行业推荐的内置技能。只引用内置技能 skillId；被删除或停用的技能在运行时自动跳过。",
+  "industries": [
+    {
+      "industryId": "drama",
+      "name": "短剧影视",
+      "description": "从故事、剧本到分镜、表演和剪辑，覆盖短剧与影视短片的主要环节。",
+      "icon": "film",
+      "skills": [
+        {"skillId": "yingce-short-drama-workflow", "reason": "把小说或剧本整理成短剧剧本、分镜和资产，再按能力生成视频"},
+        {"skillId": "16000000000081", "reason": "一句话选题编成可拍的分集方案，开篇钩子和反转结尾"},
+        {"skillId": "16000000000084", "reason": "搭故事结构：幕、节拍、高潮与结尾"},
+        {"skillId": "16000000000073", "reason": "把扁平人物写成有欲望、有矛盾的角色"},
+        {"skillId": "16000000000075", "reason": "改对白：带动作和潜台词"},
+        {"skillId": "16000000000094", "reason": "把剧本拆成可拍的分镜和机位"},
+        {"skillId": "16000000000086", "reason": "调 AI 演员的微表情、眼神和表演"},
+        {"skillId": "16000000000088", "reason": "剪辑节奏、连续性与转场"}
+      ]
+    },
+    {
+      "industryId": "ecommerce",
+      "name": "电商营销",
+      "description": "商品图、带货视频、广告脚本和转化文案。",
+      "icon": "shopping-bag",
+      "skills": [
+        {"skillId": "16000000000105", "reason": "从竞品分析到投放的广告全链路"},
+        {"skillId": "16000000000097", "reason": "把卖点写成能转化的广告文案"},
+        {"skillId": "16000000000098", "reason": "价格锚点、选择架构等转化设计"},
+        {"skillId": "16000000000101", "reason": "一条素材做多平台、多画幅的发布片"},
+        {"skillId": "14811816962572", "reason": "服装电商的高转化模特图"},
+        {"skillId": "14811816962316", "reason": "竖版穿搭试穿视频"},
+        {"skillId": "14811816961036", "reason": "TikTok 风格的达人带货短视频脚本"},
+        {"skillId": "14811816962060", "reason": "电子产品的电影感广告视频"}
+      ]
+    },
+    {
+      "industryId": "creative",
+      "name": "创意设计",
+      "description": "生图与生视频的提示词工艺、视觉基调和图片编辑。",
+      "icon": "palette",
+      "skills": [
+        {"skillId": "16000000000095", "reason": "让生图、生视频提示词可控、可复现"},
+        {"skillId": "16000000000096", "reason": "统一画面基调：色彩、光线与运动"},
+        {"skillId": "yingce-image-editing", "reason": "用自然语言和参考图编辑画布图片"},
+        {"skillId": "yingce-image-annotation", "reason": "按编号标注多处位置再统一编辑"},
+        {"skillId": "yingce-image-layer-split", "reason": "把主体或区域拆成独立图层"},
+        {"skillId": "14811816982028", "reason": "按母版提示词批量出系列套图"},
+        {"skillId": "16000000000093", "reason": "Seedance 提示词工艺与参考图语法"},
+        {"skillId": "16000000000090", "reason": "MiniMax H3 视频提示词套件"}
+      ]
+    },
+    {
+      "industryId": "social",
+      "name": "社媒内容",
+      "description": "小红书、抖音、TikTok 等平台的内容与 IP 运营。",
+      "icon": "megaphone",
+      "skills": [
+        {"skillId": "16000000000104", "reason": "用故事营销让内容有人看"},
+        {"skillId": "14811816960268", "reason": "小红书风格的素人穿搭图"},
+        {"skillId": "15215320902412", "reason": "从零孵化治愈系原创 IP"},
+        {"skillId": "14811816980748", "reason": "数字人搞笑采访视频"},
+        {"skillId": "14811816961804", "reason": "竖版沉浸式 ASMR 开箱视频"},
+        {"skillId": "14889292802060", "reason": "UGC 风格的 App 宣传视频"}
+      ]
+    },
+    {
+      "industryId": "general",
+      "name": "通用",
+      "description": "不分行业都用得上的提示词方法与选型帮助。",
+      "icon": "shapes",
+      "skills": [
+        {"skillId": "16000000000103", "reason": "让提示词效果稳定、可复现"},
+        {"skillId": "16000000000091", "reason": "多个模型不知道怎么选时用"},
+        {"skillId": "16000000000107", "reason": "需求模糊、不知道该用哪些技能时帮你选"}
+      ]
+    }
+  ]
+}

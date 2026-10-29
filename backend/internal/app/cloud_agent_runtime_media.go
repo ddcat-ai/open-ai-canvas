@@ -155,11 +155,6 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 		if err := createTaskWithStorageQuotaRepository(repo, task, prepare.Order, policy); err != nil {
 			return err
 		}
-		if media == nil {
-			if err := repo.BumpAgentLessonInjected(run.UserID, cloudAgentInjectedMemoryIDs(input)); err != nil {
-				return err
-			}
-		}
 		if media != nil && prepared != nil {
 			if approvalID != "" {
 				if err := repo.TransferCloudAgentResourceLeases(run.UserID, approvalID, "task:"+task.ID, task.ID, prepared.Quote.ExpiresAt); err != nil {

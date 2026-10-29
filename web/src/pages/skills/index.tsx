@@ -3,7 +3,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { App, Button, Dropdown, Input } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 
-import { Boxes, Check, ChevronDown, ChevronRight, Clapperboard, FolderInput, FolderPlus, Globe2, Heart, Library, LoaderCircle, Lock, Megaphone, MoreHorizontal, Palette, Pencil, Plus, Puzzle, Search, ShoppingBag, Sparkles, Trash2, UserRound, Users } from "lucide-react";
+import { Boxes, Check, ChevronDown, ChevronRight, Clapperboard, FolderInput, FolderPlus, Globe2, Heart, Library, LoaderCircle, Lock, Megaphone, MoreHorizontal, Palette, Pencil, Plus, Puzzle, Search, ShoppingBag, Sparkles, Trash2, UserRound, Users, Info, LayoutGrid, Store } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
@@ -20,9 +20,10 @@ import { addSkill, createSkillLibraryCategory, deleteSkill, deleteSkillLibraryCa
 import { useUserStore } from "@/stores/use-user-store";
 import { Select } from "@/components/ui/base/select";
 import { useSkillCuration, curationQuery, curationIcon, effectiveCurationRoot } from "@/components/skills/skill-curation-browser";
+import { SkillRecommendationsModal } from "@/components/skills/skill-recommendations-modal";
 
 const scopeOptions: { label: string; value: SkillScope; icon: LucideIcon }[] = [
-    { label: "技能广场", value: "public", icon: Sparkles },
+    { label: "技能广场", value: "public", icon: Store },
     { label: "我的技能", value: "mine", icon: Library },
     { label: "我创建的", value: "created", icon: UserRound },
     { label: "我的收藏", value: "favorites", icon: Heart },
@@ -81,6 +82,7 @@ export default function SkillsPage() {
     const [mutatingID, setMutatingID] = useState("");
     const [editorOpen, setEditorOpen] = useState(false);
     const [installOpen, setInstallOpen] = useState(false);
+    const [recommendationsOpen, setRecommendationsOpen] = useState(false);
     const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
     const isAdmin = useUserStore((state) => state.user?.role === "admin");
     const isLibraryScope = scope === "mine" || scope === "created";
@@ -427,7 +429,7 @@ export default function SkillsPage() {
                                 <div className="skills-rail-heading"><span id="skills-rail-categories" className="collection-filter-label">分类</span></div>
                                 {curationError ? <div className="skills-rail-error" role="alert">{curationError}<Button type="link" size="small" onClick={retryCuration}>重试</Button></div> : null}
                                 <div className="skills-rail-group">
-                                    {railItem({ key: "all", label: "全部", icon: Sparkles, active: marketplaceAllActive, onClick: () => selectMarketplaceCategory("all") })}
+                                    {railItem({ key: "all", label: "全部", icon: LayoutGrid, active: marketplaceAllActive, onClick: () => selectMarketplaceCategory("all") })}
                                     {browseCategories.map((category) => {
                                         const Icon = curation?.enabled ? curationIcon(category.iconKey) : categoryIconOf(category.value);
                                         if (!curation?.enabled) return railItem({ key: category.value, label: category.label, icon: Icon, count: category.count, active: tag === category.value, onClick: () => selectMarketplaceCategory(category.value) });
@@ -485,7 +487,7 @@ export default function SkillsPage() {
                                 <h2 id="skills-results-title">{viewLabel}</h2>
                                 <span className="app-projects-header-meta">{loading && !skills.length ? "—" : `${total} 个`}</span>
                             </div>
-                            <CollectionToolbar label="搜索与排序技能" active={filtersActive} onReset={resetFilters} trailing={<Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button>}>
+                            <CollectionToolbar label="搜索与排序技能" active={filtersActive} onReset={resetFilters} trailing={<><Button icon={<Sparkles className="size-4" />} onClick={() => setRecommendationsOpen(true)}>按行业推荐</Button><Button type="primary" icon={<Plus className="size-4" />} onClick={() => setInstallOpen(true)}>安装技能</Button></>}>
                                 <Input className="min-w-0 sm:!w-56" prefix={<Search />} value={search} allowClear placeholder="搜索技能或作者" aria-label="搜索技能或作者" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
                                 <Select aria-label="技能排序" className="w-28" value={sort} options={sortOptions} onChange={(value) => { setSort(value); setPage(1); }} />
                             </CollectionToolbar>
@@ -542,7 +544,7 @@ export default function SkillsPage() {
                         </div>
                     ) : null}
                     <div className={`skills-library-category-note${categoryScope === "platform" && isAdmin ? " is-platform" : ""}`}>
-                        <Sparkles className="size-4" aria-hidden="true" />
+                        <Info className="size-4" aria-hidden="true" />
                         <p>{categoryScope === "platform" && isAdmin
                             ? "平台分类对所有用户可见、可分配，并可用于各自的技能库和画布 Agent；不会替换技能广场分类。"
                             : "个人分类只影响你的技能库和画布 Agent。短剧影视、电商营销是技能广场的共享分类，可在左侧“技能广场”下的分类中筛选。"}</p>
@@ -551,6 +553,7 @@ export default function SkillsPage() {
             </AppModal>
             <SkillDetailModal skill={activeSkill} loading={detailLoading} mutating={Boolean(activeSkill && mutatingID === activeSkill.skillId)} categories={categories} onClose={() => setActiveSkill(null)} onAdd={(skill) => void toggleAdded(skill)} onLike={(skill) => void toggleLiked(skill)} onEdit={(skill) => void openEditor(skill)} onOpenWorkbench={openWorkbench} onSync={(skill) => void synchronizeSkill(skill)} />
             <SkillInstallModal open={installOpen} onClose={() => setInstallOpen(false)} onInstalled={(skill) => { setInstallOpen(false); setActiveSkill(skill); reload(); }} onManualCreate={() => { setInstallOpen(false); void openEditor(); }} />
+            <SkillRecommendationsModal open={recommendationsOpen} onClose={() => setRecommendationsOpen(false)} onInstalled={(installed) => { if (installed.length) { reload(); refreshCounts(); } }} />
             <SkillEditorDrawer open={editorOpen} skill={editingSkill} onClose={() => setEditorOpen(false)} onSaved={(skill) => { setEditorOpen(false); setEditingSkill(null); setActiveSkill(skill); reload(); }} />
         </>
     );

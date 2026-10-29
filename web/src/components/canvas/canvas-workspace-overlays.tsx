@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { Clapperboard, Image as ImageIcon, List, Music2, Pencil, Table2, Video, WandSparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Clapperboard, Image as ImageIcon, List, Music2, Pencil, Table2, Video, Workflow as WorkflowIcon, ArrowRightLeft } from "lucide-react";
 
 import { useCanvasOverlayLayer } from "@/components/canvas/canvas-overlay-layer";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -376,7 +376,7 @@ export function CanvasConnectionCreateMenu({
                 <ConnectionCreateOption
                     expanded={activeOption === "转换"}
                     motionEnabled={!reducedMotion}
-                    icon={<WandSparkles className="size-4" />}
+                    icon={<ArrowRightLeft className="size-4" />}
                     title="转换"
                     description="本地处理图片或视频"
                     disabledReason={getDisabledReason(CanvasNodeType.MediaConversion)}

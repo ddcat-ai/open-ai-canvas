@@ -623,6 +623,9 @@ func parseAsyncMediaPoll(c PollContext, payload map[string]any, capability Capab
 	resultKind := string(capability)
 	references := mediaFromArray(payload[resultKind+"s"], capability)
 	references = append(references, mediaFromArray(payload["data"], capability)...)
+	if mediaObj := object(payload[resultKind]); mediaObj != nil {
+		references = append(references, mediaFromArray([]any{mediaObj}, capability)...)
+	}
 	if content := object(payload["content"]); content != nil {
 		references = append(references, mediaFromArray([]any{content}, capability)...)
 	}

@@ -36,6 +36,8 @@ func piOutputLimitFixture(t *testing.T) (*Service, *gorm.DB, string) {
 		}
 		profile := mustEncodeModelCapabilityConfig(t, DefaultModelCapabilityConfigForModel("chat-completion", "text-test"))
 		for _, row := range []any{
+			// 任务准入按用户分组过滤渠道，账号必须真实存在（与 SQLite 夹具一致）。
+			&model.User{ID: "user", Username: "user", Role: model.UserRoleUser, Status: model.UserStatusActive},
 			&model.ModelChannel{ID: "channel", Scope: model.ChannelScopeSystem, Enabled: true},
 			&model.ChannelModel{ID: "cm", ChannelID: "channel", ModelKey: "text-test", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, CapabilityConfigJSON: profile, BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true},
 			&model.ChannelModelPriceTier{ID: "tier", ChannelModelID: "cm", SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "fixed_request", UnitPriceMicrocredits: 100, PriceConfigured: true, Enabled: true},

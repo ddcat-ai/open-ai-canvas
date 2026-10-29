@@ -10,7 +10,7 @@ import (
 // 平台工具全集按 auto + canvas + 技能 + 视觉工具构造，覆盖最大条件工具集。
 func platformToolSchema(t *testing.T) ([]map[string]any, []byte) {
 	t.Helper()
-	req := CloudAgentRequest{PermissionMode: "auto", ContextScope: []string{"canvas"}, SkillIDs: []string{"capability-list"}, VisionEnabled: true}
+	req := CloudAgentRequest{PermissionMode: "auto", ContextScope: []string{"canvas"}, SkillsEnabled: true, MemoryMode: "auto", VisionEnabled: true}
 	req.Budget.MaxGenerationTasks = 1
 	tools := cloudAgentTools(req)
 	raw, err := json.Marshal(tools)
@@ -73,6 +73,9 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// 只增加字段名与天气/远景/模板枚举），预算显式上调到 39,000；再加入参数化组件 params 与
 	// object_array_add 后为 38,770 字节（参数键与范围同样放在 catalog 里）；再加入 actor_travel
 	// （travelStyle 枚举、fromMarker/toMarker、height）后为 39,077 字节，预算显式上调到 39,700，余量约1.6%。
+	// 主分支同期把长期记忆改用 memory_update（替换 remember_lesson / recall_lessons）并新增
+	// skill_market_search、skill_recommend（单独测量为 30 个工具、37,277 字节）；两者合并后为
+	// 30 个工具、38,984 字节，预算不变，余量约1.8%。
 	// 新增工具或字段时请重新测量并有意识地调整这个数字，而不是让 schema 悄悄膨胀
 	// （它每一步都要发、还在前缀最前面）。
 	if len(raw) > 39700 {

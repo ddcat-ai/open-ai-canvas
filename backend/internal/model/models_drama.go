@@ -25,6 +25,11 @@ const (
 	DramaEpisodeRender  = "render"
 	DramaEpisodeDone    = "done"
 
+	// 单集素材类型：小说原文需要改编；剧本与分镜是用户写好的内容，只拆镜或转录，台词逐字保留。
+	DramaSourceNovel      = "novel"
+	DramaSourceScript     = "script"
+	DramaSourceStoryboard = "storyboard"
+
 	// 媒体槽位状态：空串表示尚未开始。
 	DramaMediaQueued  = "queued"
 	DramaMediaRunning = "running"
@@ -104,10 +109,12 @@ type DramaEpisode struct {
 	Hook           string `json:"hook" gorm:"type:text"`
 	Cliffhanger    string `json:"cliffhanger" gorm:"type:text"`
 	ChapterIDsJSON string `json:"chapterIdsJson" gorm:"type:text"`
-	Stage          string `json:"stage" gorm:"index;size:16"`
-	Error          string `json:"error" gorm:"type:text"`
-	ShotCount      int    `json:"shotCount"`
-	DurationMs     int64  `json:"durationMs"`
+	// SourceFormat 是本集原文的素材类型（novel / script / storyboard），空串按小说处理。
+	SourceFormat string `json:"sourceFormat" gorm:"size:16"`
+	Stage        string `json:"stage" gorm:"index;size:16"`
+	Error        string `json:"error" gorm:"type:text"`
+	ShotCount    int    `json:"shotCount"`
+	DurationMs   int64  `json:"durationMs"`
 	// Approved 表示用户已确认本集视频提示词（逐集确认模式下的审阅关口）。
 	Approved bool `json:"approved"`
 	// MediaReleased 为 true 后才为本集生成视频；手动模式下由用户确认剧本与提示词后打开。
@@ -167,6 +174,8 @@ type DramaSegment struct {
 	VideoPromptOverride string `json:"videoPromptOverride" gorm:"type:text"`
 	// VideoModelJSON 为空时使用全剧默认视频模型。
 	VideoModelJSON string `json:"videoModelJson" gorm:"type:text"`
+	// ReferenceCastIDsJSON 为空表示按镜头自动取参考图；非空是用户为本段指定的设定 ID 列表（顺序即参考图编号，可为 []）。
+	ReferenceCastIDsJSON string `json:"referenceCastIdsJson" gorm:"type:text"`
 	// VideoStatus 为空表示待生成；TailFrameResourceID 是本段视频最后一帧，作为下一段的参考图，保证段与段衔接。
 	VideoStatus         string    `json:"videoStatus" gorm:"size:16"`
 	VideoResourceID     string    `json:"videoResourceId,omitempty" gorm:"size:36"`

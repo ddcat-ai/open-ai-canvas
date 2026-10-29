@@ -22,16 +22,19 @@ export const AGENT_TOOL_NAMES = [
     "canvas_list_node_types",
     "canvas_read_batch_table",
     "canvas_read_storyboard",
+    "drama_adopt_canvas_media",
+    "drama_get_context",
     "finish_run",
     "generate_media",
     "image_annotation_render",
     "image_layer_split",
     "image_text_detect",
+    "memory_update",
     "model_list",
     "plan_update",
-    "recall_lessons",
-    "remember_lesson",
+    "skill_market_search",
     "skill_read_file",
+    "skill_recommend",
     "skill_search",
     "task_get",
 ] as const;
@@ -52,6 +55,9 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
     canvas_apply_ops: { summary: ({ pending }) => (pending ? "准备更新画布内容" : "画布内容已保存至服务端"), failureMessage: "更新画布内容失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
     canvas_create_character: { summary: ({ pending }) => (pending ? "准备创建角色卡" : "角色卡已创建并放到画布"), failureMessage: "创建角色卡失败" },
+    // 短剧工具只在关联短剧的精修画布上出现：读取作品上下文，或把画布媒体采用为短剧的新版本（总要审批）。
+    drama_get_context: { summary: "已读取短剧设定与分集", failureMessage: "读取短剧信息失败" },
+    drama_adopt_canvas_media: { summary: ({ pending }) => (pending ? "准备采用到短剧" : "已采用到短剧，成为新的当前版本"), failureMessage: "采用到短剧失败" },
     generate_media: { summary: ({ pending, detail }) => (pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交"), failureMessage: "媒体生成未完成" },
     // 看图：只有这个工具会把图片字节真的交给模型，所以只有它可以说"画面/看图"。
     // 回执字段来源：`backend/internal/app/cloud_agent_runtime.go`（payload["result"] = 回执）。
@@ -72,12 +78,34 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
         summary: ({ pending, detail }) => (pending ? "准备收尾并给出最终答复" : field(field(detail, "result"), "completionBlocked") === true ? "收尾被拦下，继续处理未完成项" : "已收尾并给出最终答复"),
         failureMessage: "收尾未完成",
     },
+    // 长期记忆只属于当前用户，不是画布写入；结果状态来自 memory_update 回执（applied / pending_review / unchanged）。
+    memory_update: {
+        summary: ({ pending, detail }) => {
+            if (pending) return "准备整理长期记忆";
+            const status = field(field(detail, "result"), "status");
+            if (status === "pending_review") return "记忆修改已提交，等你确认";
+            if (status === "unchanged") return "记忆里已有这些内容，未改动";
+            return "长期记忆已更新";
+        },
+        failureMessage: "长期记忆未更新",
+    },
+    // 市场检索只返回候选元数据，不读正文、不安装。
+    skill_market_search: {
+        summary: ({ pending, detail }) => {
+            if (pending) return "准备在技能市场查找";
+            const matches = field(field(detail, "result"), "matches");
+            if (!Array.isArray(matches)) return "已在技能市场查找";
+            return matches.length ? `技能市场找到 ${matches.length} 个候选` : "技能市场没有匹配的技能";
+        },
+        failureMessage: "技能市场查找失败",
+    },
+    skill_recommend: { summary: ({ pending }) => (pending ? "准备推荐安装技能" : "已推荐安装技能，由你决定是否安装"), failureMessage: "技能推荐未显示" },
 };
 
 /** 画布上"读到清单"的只读工具：无像素，chip 必须是存在式。 */
 const AGENT_CANVAS_READ_TOOLS = new Set(["canvas_get_state", "canvas_list_node_types", "canvas_read_storyboard", "canvas_read_batch_table"]);
 /** 非画布信息的只读工具（模型、任务、技能、偏好）。`skills_load` 是历史事件名，保留兼容。 */
-const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_read_file", "skills_load", "agent_profile_read"]);
+const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_market_search", "skill_read_file", "skills_load", "agent_profile_read", "drama_get_context"]);
 const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image"]);
 const AGENT_CREATE_TOOLS = new Set(["generate_media", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
 const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_edit_batch_table", "image_layer_split", "image_text_detect"]);
@@ -121,6 +149,11 @@ export function agentToolCategory(toolName: string, detail?: unknown): AgentTool
     return "other";
 }
 
+/** 读的是画布清单（节点存在与规模），而不是模型、任务、技能等外部信息。 */
+export function isAgentCanvasReadTool(toolName: string): boolean {
+    return AGENT_CANVAS_READ_TOOLS.has(toolName);
+}
+
 export function agentToolCategoryLabel(toolName: string, category: AgentToolCategory): string {
     if (category === "vision") return "查看画面";
     if (category === "read") return AGENT_CANVAS_READ_TOOLS.has(toolName) ? "读取清单" : "读取信息";
@@ -162,8 +195,17 @@ export function friendlyAgentToolSummary(toolName: string, text: string, detail?
         return "任务已提交，但生成结果未完成";
     }
     if (toolName === "skills_load") {
+        if (failed) return "Skills 技能加载失败";
+        // 新事件：availableCount 是本轮可自动发现的已安装技能数，skillIds 只列用户固定的技能。
+        const available = Number(field(detail, "availableCount") ?? /发现\s*(\d+)\s*个/u.exec(text)?.[1]);
+        if (Number.isFinite(available) && available > 0) {
+            const pinned = field(detail, "skillIds");
+            const pinnedCount = Array.isArray(pinned) ? pinned.length : Number(/固定\s*(\d+)\s*个/u.exec(text)?.[1] || 0);
+            return pinnedCount ? `可自动发现 ${available} 个已安装技能 · 固定 ${pinnedCount} 个` : `可自动发现 ${available} 个已安装技能`;
+        }
+        // 历史事件文案：“已启用 3 个技能”“固定加载 3 个技能”。
         const count = /(?:加载|启用)\s*(\d+)\s*个/u.exec(text)?.[1];
-        return failed ? "Skills 技能加载失败" : count ? `已加载 ${count} 个 Skills 技能` : "已加载 Skills 技能";
+        return count ? `已加载 ${count} 个 Skills 技能` : "已加载 Skills 技能";
     }
     if (toolName === "skill_read_file") {
         const name = String(field(detail, "skillName") || field(detail, "skillId") || "Skills");

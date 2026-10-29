@@ -59,7 +59,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }, [isolateDevRepro]);
 
     return (
-        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.activeSkin)} wave={{ disabled: true }}>
+        // 两个汉字的按钮（取消、确定）不再被 antd 拉开字距，与其他按钮的文字节奏一致。
+        <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark, appearance.activeSkin)} wave={{ disabled: true }} button={{ autoInsertSpace: false }}>
             <AppFeedbackProvider>
                 <QueryClientProvider client={appQueryClient}>
                     {isolateDevRepro ? (

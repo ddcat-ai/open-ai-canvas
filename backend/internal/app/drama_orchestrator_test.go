@@ -31,8 +31,12 @@ type fakeDramaBackend struct {
 }
 
 func (f *fakeDramaBackend) resource(userID, kind, mime string) string {
+	return f.resourceSized(userID, kind, mime, 1080, 1920)
+}
+
+func (f *fakeDramaBackend) resourceSized(userID, kind, mime string, width, height int) string {
 	id := fmt.Sprintf("res-%d", f.seq.Add(1))
-	if err := f.db.Create(&model.Resource{ID: id, UserID: userID, Kind: kind, Status: model.ResourceStatusReady, MimeType: mime, Size: 10, Width: 1080, Height: 1920, CreatedAt: time.Now()}).Error; err != nil {
+	if err := f.db.Create(&model.Resource{ID: id, UserID: userID, Kind: kind, Status: model.ResourceStatusReady, MimeType: mime, Size: 10, Width: width, Height: height, CreatedAt: time.Now()}).Error; err != nil {
 		f.t.Fatalf("seed resource: %v", err)
 	}
 	return id
@@ -68,7 +72,14 @@ func (f *fakeDramaBackend) submit(userID string, req CreateTaskRequest, timeline
 		}
 	case "canvas_image":
 		f.byKind["image"]++
-		result = map[string]any{"mode": "image", "images": []any{map[string]any{"resourceId": f.resource(userID, "image", "image/png")}}}
+		// 按请求的画幅出图（与遵守尺寸参数的真实模型一致）；未声明尺寸时按竖图。
+		width, height := 1080, 1920
+		if config, ok := req.Input["config"].(map[string]any); ok {
+			if ratio, ok := dramaRatioValue(stringValue(config["size"])); ok {
+				width, height = int(1080*ratio), 1080
+			}
+		}
+		result = map[string]any{"mode": "image", "images": []any{map[string]any{"resourceId": f.resourceSized(userID, "image", "image/png", width, height)}}}
 	case "canvas_video":
 		f.byKind["video"]++
 		result = map[string]any{"mode": "video", "video": map[string]any{"resourceId": f.resource(userID, "video", "video/mp4")}}
@@ -143,6 +154,30 @@ func createTestDramaWithMedia(t *testing.T, svc *Service, review string, media s
 		t.Fatalf("create drama: %v", err)
 	}
 	return summary
+}
+
+func TestDramaChapterGroupingCreatesEpisodesWithoutPlanning(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaManual, Concurrency: 16, Models: fakeDramaModels, EpisodeMode: DramaEpisodeModeChapter, ChaptersPerEpisode: 2}
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "分组", Settings: settings, Chapters: []DramaChapterInput{{Title: "第一章", Text: "甲"}, {Title: "第二章", Text: "乙"}, {Title: "第三章", Text: "丙"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.Episodes) != 2 || !summary.Production.PlanDone {
+		t.Fatalf("3 chapters at 2 per episode must give 2 episodes: %+v", summary.Episodes)
+	}
+	first, err := svc.repo.DramaEpisode(summary.Project.ID, summary.Episodes[0].ID)
+	if err != nil || len(decodeStringList(first.ChapterIDsJSON)) != 2 {
+		t.Fatalf("first episode must hold two chapters: %+v %v", first, err)
+	}
+	// 分集完成后不能再改分集方式。
+	settings.ChaptersPerEpisode = 3
+	if _, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings}); err == nil {
+		t.Fatal("grouping must be locked once planning is done")
+	}
+	if fake.byKind["plan"] != 0 {
+		t.Fatalf("chapter grouping must not call the planner: %v", fake.byKind)
+	}
 }
 
 func TestDramaPipelineRunsNovelToFinalCutWithSampleGate(t *testing.T) {

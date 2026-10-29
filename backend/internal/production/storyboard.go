@@ -253,9 +253,10 @@ func (s StoryboardSettings) PromptRules(episodeSeconds int, segment SegmentLimit
 	case segment.MaxMs > 0:
 		fmt.Fprintf(&b, "剧情段：按剧情节拍切段（%s），在场景切换或冲突转折处断开，单段不超过 %d 秒；每段应有 3–6 个镜头和完整的小冲突，不要用一个长镜头撑满一段。\n", unit, segment.MaxMs/1000)
 	}
-	fmt.Fprintf(&b, "对白密度（%s）：短剧靠台词推动，平均每 %.0f 秒至少一句台词或旁白，全集至少 %d 句；连续无台词的镜头不超过 2 个；无台词镜头要有明确的动作或反应。\n", dialogueLabels[s.Dialogue], s.LineEverySeconds(), s.LineTarget(episodeSeconds))
-	// 每个镜头只放一句台词，镜头时长 = 说完台词 + 气口；单句越长，单位时间内的台词越少。
-	fmt.Fprintf(&b, "台词口语化、短促有力，每个镜头只放一句，一句 4–%d 字，绝不超过 %d 字；长句拆成多个镜头，对手戏用正反打来回切。有台词的镜头时长按每秒 %.1f 个字说完再留 %.1f 秒气口计算。\n", s.MaxLineRunes(), s.MaxLineRunes(), charsPerSecond, float64(s.DialoguePauseMs())/1000)
+	// 密度只是节奏参考：台词必须来自原文，原文对白不足时宁可少，不能为凑数编造或改写。
+	fmt.Fprintf(&b, "对白密度（%s）：短剧靠台词推动，尽量每 %.0f 秒有一句台词或旁白（参考全集 %d 句）；台词与旁白只能逐字取自原文，原文对白不足时宁可少也不要编造，用动作与反应镜头承接；无台词镜头要有明确的动作或反应。\n", dialogueLabels[s.Dialogue], s.LineEverySeconds(), s.LineTarget(episodeSeconds))
+	// 每个镜头只放一句台词，镜头时长 = 说完台词 + 气口；长句只能按标点拆到连续镜头，不能改字。
+	fmt.Fprintf(&b, "单镜台词不超过 %d 字，更长的台词在原文标点处拆到连续镜头，不改动字词；对手戏用正反打来回切。有台词的镜头时长按每秒 %.1f 个字说完再留 %.1f 秒气口计算。\n", s.MaxLineRunes(), charsPerSecond, float64(s.DialoguePauseMs())/1000)
 	switch s.Transition {
 	case TransitionAuto:
 		b.WriteString("转场：transition 表示进入本镜头的方式，默认 cut（硬切）；只在时间跳跃、场景大幅切换或段落收束时用 fadeblack（黑场过渡），回忆或高光闪现用 fadewhite（闪白）；每集黑场不超过 3 次。\n")

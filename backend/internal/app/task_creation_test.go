@@ -62,6 +62,7 @@ func TestResolveTaskModelSelectionAllowsExplicitSystemChannelWhenFrontendModelsE
 	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}); err != nil {
 		t.Fatal(err)
 	}
+	ensureTestUsers(t, db)
 	channel := model.ModelChannel{ID: "channel-1", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Agnes"}
 	capabilityJSON, err := json.Marshal(DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceNewAPIVideo), "agnes-video-2.5"))
 	if err != nil {
@@ -93,7 +94,8 @@ func TestResolveTaskModelSelectionAllowsExplicitSystemChannelWhenFrontendModelsE
 		t.Fatal(err)
 	}
 
-	routed, resolvedInput, err := (&Service{repo: repository.New(db)}).resolveTaskModelSelection(input, "", "canvas_video", "", true)
+	selectionSvc := &Service{repo: repository.New(db)}
+	routed, resolvedInput, err := selectionSvc.resolveTaskModelSelection(testGroupUserID(selectionSvc), input, "", "canvas_video", "", true)
 	if err != nil {
 		t.Fatalf("resolveTaskModelSelection() error = %v", err)
 	}
@@ -113,7 +115,7 @@ func TestResolveTaskModelSelectionAllowsCustomImageChannelWhenFrontendModelsEnab
 		},
 	}
 
-	routed, resolvedInput, err := (&Service{}).resolveTaskModelSelection(input, "", "canvas_image", "image", true)
+	routed, resolvedInput, err := (&Service{}).resolveTaskModelSelection("", input, "", "canvas_image", "image", true)
 	if err != nil {
 		t.Fatalf("resolveTaskModelSelection() error = %v", err)
 	}
@@ -123,7 +125,7 @@ func TestResolveTaskModelSelectionAllowsCustomImageChannelWhenFrontendModelsEnab
 }
 
 func TestResolveTaskModelSelectionStillRequiresLogicalModelWithoutExplicitSystemChannel(t *testing.T) {
-	_, _, err := (&Service{}).resolveTaskModelSelection(map[string]any{
+	_, _, err := (&Service{}).resolveTaskModelSelection("", map[string]any{
 		"mode":   "video",
 		"config": map[string]any{"model": "agnes-video-2.5"},
 	}, "", "canvas_video", "", true)
@@ -159,7 +161,7 @@ func TestResolveSystemChannelModelSelectionRebuildsAuthoritativeExecutionSpec(t 
 		"capabilityOptions": map[string]any{"imageResolution": "1k", "size": "1:1"},
 	}
 
-	resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_image", "")
 	if err != nil {
 		t.Fatalf("resolveSystemChannelModelSelection() error = %v", err)
 	}
@@ -198,7 +200,7 @@ func TestResolveSystemChannelModelSelectionPricesImageResolutionAndQualityIndepe
 		newSelectionPriceTier("2k-max", `{"operation":"text_to_image","imageResolution":"2k","quality":"max"}`, "provider-2k-max", "fixed_request"),
 	})
 
-	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"mode":   "image",
 		"config": map[string]any{"channelId": channel.ID, "model": channelModel.ModelKey, "imageResolution": "2k", "quality": "max", "size": "1:1"},
 	}, "canvas_image", "")
@@ -223,7 +225,7 @@ func TestResolveSystemChannelModelSelectionImportsLegacyGrokResolutionWithCanoni
 		newSelectionPriceTier("legacy-2k", `{"imageResolution":"2k"}`, "provider-2k", "fixed_request"),
 	})
 
-	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"mode":   "image",
 		"config": map[string]any{"channelId": channel.ID, "model": channelModel.ModelKey, "quality": "2k", "size": "16:9"},
 	}, "canvas_image", "")
@@ -246,7 +248,7 @@ func TestResolveSystemChannelModelSelectionMatchesMiniMax768PTier(t *testing.T) 
 		newSelectionPriceTier("tier-2k", `{"vquality":"1440p"}`, "MiniMax-H3", "per_second"),
 	})
 
-	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"mode":            "video",
 		"referenceImages": []any{map[string]any{"storageKey": "resource:test"}},
 		"config": map[string]any{
@@ -274,7 +276,7 @@ func TestResolveSystemChannelModelSelectionAppliesServerDefaults(t *testing.T) {
 		newSelectionPriceTier("tier-default", `{"operation":"text_to_image","imageResolution":"2k"}`, "provider-image-default", "fixed_request"),
 	})
 
-	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"mode":   "image",
 		"config": map[string]any{"channelId": channel.ID, "model": channelModel.ModelKey},
 	}, "canvas_image", "")
@@ -305,7 +307,7 @@ func TestResolveSystemChannelModelSelectionIgnoresStaleQualityWhenQualityIsUnsup
 		newSelectionPriceTier("tier-any", `{}`, "provider-image", "fixed_request"),
 	})
 
-	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"mode": "image",
 		"config": map[string]any{
 			"channelId": channel.ID,
@@ -355,7 +357,7 @@ func TestResolveSystemChannelModelSelectionRejectsUnsupportedRequest(t *testing.
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := svc.resolveSystemChannelModelSelection(test.input, "canvas_image", ""); err == nil {
+			if _, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), test.input, "canvas_image", ""); err == nil {
 				t.Fatal("resolveSystemChannelModelSelection() should reject a request outside the server capability contract")
 			}
 		})
@@ -365,7 +367,7 @@ func TestResolveSystemChannelModelSelectionRejectsUnsupportedRequest(t *testing.
 	videoSvc, _, videoChannel, videoModel := createSystemChannelSelectionFixture(t, "video", model.ChannelInterfaceNewAPIVideo, videoProfile, []model.ChannelModelPriceTier{
 		newSelectionPriceTier("video-tier", `{}`, "provider-video", "per_second"),
 	})
-	if _, err := videoSvc.resolveSystemChannelModelSelection(map[string]any{
+	if _, err := videoSvc.resolveSystemChannelModelSelection(testGroupAccess(videoSvc), map[string]any{
 		"mode":   "video",
 		"config": map[string]any{"channelId": videoChannel.ID, "model": videoModel.ModelKey},
 	}, "canvas_video", "audio_to_video"); err == nil {
@@ -381,7 +383,7 @@ func TestResolveSystemChannelModelSelectionRejectsCorruptCapabilityConfig(t *tes
 	if err := db.Model(&model.ChannelModel{}).Where("id = ?", channelModel.ID).Update("capability_config_json", "{").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	if _, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"mode":   "image",
 		"config": map[string]any{"channelId": channel.ID, "model": channelModel.ModelKey},
 	}, "canvas_image", ""); err == nil {
@@ -464,7 +466,7 @@ func TestImageResolutionPricingOnSystemChannel(t *testing.T) {
 					"imageResolution": tc.quality,
 				},
 			}
-			resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+			resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_image", "")
 			if err != nil {
 				t.Fatalf("resolve error: %v", err)
 			}
@@ -505,7 +507,7 @@ func TestParameterizedOpenAIAspectPresetSystemChannelPersistsPixelExecutionSize(
 			"imageParameters": map[string]any{"size": "16:9"},
 		},
 	}
-	resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_image", "")
 	if err != nil {
 		t.Fatalf("resolve error = %v", err)
 	}
@@ -556,7 +558,7 @@ func TestParameterizedOpenAIPixelSizeSelectionAcceptsDeclaredSizeAndResolution(t
 			"imageParameters": map[string]any{"size": "1824x1024", "imageResolution": "1k", "count": 1, "transparentBackground": false},
 		},
 	}
-	resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_image", "")
 	if err != nil {
 		t.Fatalf("resolve error = %v", err)
 	}
@@ -595,7 +597,7 @@ func TestOpenAIAspectPresetSystemChannelPersistsPixelExecutionSize(t *testing.T)
 			"imageResolution": "2k",
 		},
 	}
-	resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "")
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_image", "")
 	if err != nil {
 		t.Fatalf("resolve error: %v", err)
 	}

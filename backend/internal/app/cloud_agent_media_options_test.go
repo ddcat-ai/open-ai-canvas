@@ -323,7 +323,7 @@ func TestCloudAgentModelDefaultDurationRespectsBudgetBeforeDraftApproval(t *test
 
 func TestCloudAgentMediaCatalogOffersMinimalGenerationArguments(t *testing.T) {
 	s, _, _ := agentMediaFixture(t)
-	result, err := s.cloudAgentModelList(nil)
+	result, err := s.cloudAgentModelList(testGroupUserID(s), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

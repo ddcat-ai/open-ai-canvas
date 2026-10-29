@@ -13,7 +13,9 @@
     color: var(--upload-text);
 }
 
-/* 本地预览：模糊与放大量由组件按真实进度给出，这里只负责把每次进度变化平滑过渡。 */
+/* 本地预览两层：极小尺寸放大的磨砂底图 + 按进度淡入的清晰原图。
+   只过渡 opacity（合成层即可完成），不对原图使用 filter: blur——缩放画布时它会逐帧重新栅格化整张原图。 */
+.canvas-file-upload-thumb,
 .canvas-file-upload-preview {
     position: absolute;
     inset: 0;
@@ -22,8 +24,12 @@
     object-fit: contain;
     pointer-events: none;
     user-select: none;
-    transition: filter 480ms var(--motion-ease-out), transform 480ms var(--motion-ease-out);
+}
+.canvas-file-upload-thumb {
     animation: canvas-file-upload-preview-in var(--motion-dur-slow) var(--motion-ease-out) both;
+}
+.canvas-file-upload-preview {
+    transition: opacity 480ms var(--motion-ease-out);
 }
 
 .canvas-file-upload-glow {
@@ -44,12 +50,6 @@
     pointer-events: none;
 }
 
-/* 有预览时模糊已作用在图片本身，遮罩只保留一层很淡的雾面提亮，不再叠加 backdrop-filter。 */
-.canvas-file-upload[data-preview] .canvas-file-upload-frost {
-    background: color-mix(in srgb, var(--upload-surface) 18%, transparent);
-    backdrop-filter: none;
-    transition: opacity 480ms var(--motion-ease-out);
-}
 
 .canvas-file-upload-frost::after {
     content: "";
@@ -89,12 +89,11 @@
     gap: var(--space-1);
     padding: 2px var(--space-2);
     border-radius: var(--r-full);
-    background: color-mix(in srgb, var(--upload-surface) 62%, transparent);
+    background: color-mix(in srgb, var(--upload-surface) 82%, transparent);
     color: var(--upload-text);
     font-size: var(--fs-tiny);
     font-variant-numeric: tabular-nums;
     line-height: 1.5;
-    backdrop-filter: blur(8px);
     pointer-events: none;
 }
 
@@ -114,13 +113,13 @@
 
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
 .canvas-file-upload[data-static] .canvas-file-upload-frost::after,
-.canvas-file-upload[data-static] .canvas-file-upload-preview,
+.canvas-file-upload[data-static] .canvas-file-upload-thumb,
 .canvas-file-upload[data-static] .canvas-file-upload-chip-dot { animation: none; }
 .canvas-file-upload[data-static] .canvas-file-upload-glow,
 .canvas-file-upload[data-static] .canvas-file-upload-frost,
 .canvas-file-upload[data-static] .canvas-file-upload-preview { transition: none; }
 
 @media (prefers-reduced-motion: reduce) {
-    .canvas-file-upload-glow, .canvas-file-upload-frost::after, .canvas-file-upload-preview, .canvas-file-upload-chip-dot { animation: none; }
+    .canvas-file-upload-glow, .canvas-file-upload-frost::after, .canvas-file-upload-thumb, .canvas-file-upload-chip-dot { animation: none; }
     .canvas-file-upload-glow, .canvas-file-upload-frost, .canvas-file-upload-preview { transition: none; }
 }

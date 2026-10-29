@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { App, Button, Modal, Tag, Image as AntImage, Segmented } from "antd";
-import { Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw } from "lucide-react";
 
 import { getMyFeedbacks, type FeedbackItem, type FeedbackType, type FeedbackAttachment } from "@/services/api/feedback";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
@@ -143,7 +143,7 @@ function FeedbackDetailCard({ item, onPreviewVideo }: { item: FeedbackItem; onPr
     const typeConfig: Record<FeedbackType, { label: string; color: string; icon: typeof Bug }> = {
         bug: { label: "Bug 缺陷", color: "error", icon: Bug },
         feature: { label: "功能提议", color: "processing", icon: Lightbulb },
-        improvement: { label: "体验建议", color: "cyan", icon: Sparkles },
+        improvement: { label: "体验建议", color: "cyan", icon: Lightbulb },
         other: { label: "其他反馈", color: "default", icon: MessageSquare },
     };
 

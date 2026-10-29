@@ -2,18 +2,24 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button, Input } from "antd";
 import type { TextAreaRef } from "antd/es/input/TextArea";
-import { BookMarked, Check, Eye, FileText, PenLine, RotateCcw, Search, Sparkles, TriangleAlert } from "lucide-react";
+import { BookMarked, Check, Eye, FileText, PenLine, RotateCcw, Search, TriangleAlert, Blocks } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { CHARACTER_VARIABLES, renderAssetPrompt, SCENE_VARIABLES, unknownAssetVariables } from "@/lib/drama/asset-prompt";
 import { cn } from "@/lib/utils";
-import { getDramaAssetSchemes, type DramaAssetMode, type DramaAssetSchemeCatalog, type DramaAssetSettings } from "@/services/api/drama";
+import { getDramaAssetSchemes, type DramaAssetMode, type DramaAssetSchemeCatalog, type DramaAssetSettings, type DramaModelOption } from "@/services/api/drama";
 import { getSkillFile, listAddedSkills, listSkillFiles } from "@/services/api/skills";
 
 // 角色/场景参考图方案：开工前选定，设置页可改。保存的是全文提示词，预览就是实际发送的内容。
 
 const PROMPT_LIMIT = 4000;
 const CUSTOM_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16"];
+/** 场景与道具参考图固定横版，与后端 production.AssetImageRatio 一致。 */
+const ASSET_IMAGE_RATIO = "16:9";
+
+function tierLabel(tier: string) {
+    return tier.toUpperCase();
+}
 
 export function useAssetSchemes() {
     return useQuery({ queryKey: ["drama-asset-schemes"], queryFn: getDramaAssetSchemes, staleTime: 10 * 60_000 });
@@ -62,7 +68,22 @@ function SchemeGlyph({ mode }: { mode: DramaAssetMode }) {
     );
 }
 
-export function AssetSchemePicker({ value, onChange, sample, layout = "wide" }: { value?: DramaAssetSettings; onChange: (value: DramaAssetSettings) => void; sample?: Partial<AssetPreviewSample>; layout?: "wide" | "compact" }) {
+/**
+ * imageModel 是当前选中的图片模型：用来只列出它能给出的画幅与分辨率档位，并提前提示保存时会被拒绝的组合。
+ */
+export function AssetSchemePicker({
+    value,
+    onChange,
+    sample,
+    layout = "wide",
+    imageModel,
+}: {
+    value?: DramaAssetSettings;
+    onChange: (value: DramaAssetSettings) => void;
+    sample?: Partial<AssetPreviewSample>;
+    layout?: "wide" | "compact";
+    imageModel?: DramaModelOption;
+}) {
     const { modal } = App.useApp();
     const catalogQuery = useAssetSchemes();
     const catalog = catalogQuery.data;
@@ -71,6 +92,10 @@ export function AssetSchemePicker({ value, onChange, sample, layout = "wide" }: 
     const editorRef = useRef<TextAreaRef>(null);
     const preview = { ...FALLBACK_SAMPLE, ...Object.fromEntries(Object.entries(sample || {}).filter(([, item]) => item)) } as AssetPreviewSample;
     if (!catalog || !value) return <div className="drama-assets is-loading">正在读取参考图方案…</div>;
+    // 能力未知（旧后端或模型列表未加载）时不做限制，交给服务端保存时校验。
+    const ratios = imageModel?.imageRatios;
+    const tiers = imageModel?.imageResolutions || [];
+    const ratioProblems = ratios ? [...new Set([ASSET_IMAGE_RATIO, value.characterRatio])].filter((ratio) => !ratios.includes(ratio)) : [];
 
     const scheme = catalog.schemes.find((item) => item.mode === value.mode);
     const prompt = tab === "character" ? value.characterPrompt : value.scenePrompt;
@@ -145,14 +170,58 @@ export function AssetSchemePicker({ value, onChange, sample, layout = "wide" }: 
                 <div className="drama-assets-ratio">
                     <span>角色参考图画幅</span>
                     <div className="drama-tabs" role="radiogroup" aria-label="角色参考图画幅">
-                        {CUSTOM_RATIOS.map((ratio) => (
-                            <button key={ratio} type="button" role="radio" className="drama-tab" aria-checked={value.characterRatio === ratio} onClick={() => onChange({ ...value, characterRatio: ratio })}>
-                                {ratio}
-                            </button>
-                        ))}
+                        {CUSTOM_RATIOS.map((ratio) => {
+                            const unsupported = Boolean(ratios && !ratios.includes(ratio));
+                            return (
+                                <button
+                                    key={ratio}
+                                    type="button"
+                                    role="radio"
+                                    className="drama-tab"
+                                    aria-checked={value.characterRatio === ratio}
+                                    disabled={unsupported && value.characterRatio !== ratio}
+                                    title={unsupported ? "所选图片模型没有接近这个画幅的尺寸" : undefined}
+                                    onClick={() => onChange({ ...value, characterRatio: ratio })}
+                                >
+                                    {ratio}
+                                </button>
+                            );
+                        })}
                     </div>
-                    <small>实际像素按图片模型支持的最接近档位出图</small>
+                    <small>画幅通过尺寸参数发给图片模型；模型给不出接近的尺寸时不能选择</small>
                 </div>
+            ) : null}
+            {imageModel ? (
+                <div className="drama-assets-ratio">
+                    <span>参考图分辨率</span>
+                    {tiers.length ? (
+                        <div className="drama-tabs" role="radiogroup" aria-label="参考图分辨率">
+                            <button type="button" role="radio" className="drama-tab" aria-checked={!value.resolution} onClick={() => onChange({ ...value, resolution: undefined })}>
+                                模型默认{imageModel.defaultImageResolution ? ` · ${tierLabel(imageModel.defaultImageResolution)}` : ""}
+                            </button>
+                            {tiers.map((tier) => (
+                                <button key={tier} type="button" role="radio" className="drama-tab" aria-checked={value.resolution === tier} onClick={() => onChange({ ...value, resolution: tier })}>
+                                    {tierLabel(tier)}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <small>所选图片模型不提供分辨率档位，按模型默认尺寸出图</small>
+                    )}
+                    {tiers.length ? <small>分辨率越高越清晰、单张越贵；参考图主要用于保持人物与场景一致，一般 1K–2K 足够</small> : null}
+                </div>
+            ) : null}
+            {ratioProblems.length ? (
+                <p className="drama-assets-warning" role="alert">
+                    <TriangleAlert className="size-3.5" />
+                    所选图片模型给不出 {ratioProblems.join("、")} 画幅的参考图，保存时会被拒绝。请在“模型”里换用能指定这个尺寸的图片模型{value.mode === "custom" ? "，或改角色参考图画幅" : ""}。
+                </p>
+            ) : null}
+            {value.resolution && imageModel && !tiers.includes(value.resolution) ? (
+                <p className="drama-assets-warning" role="alert">
+                    <TriangleAlert className="size-3.5" />
+                    所选图片模型不支持 {tierLabel(value.resolution)} 分辨率，保存时会被拒绝，请改选上面的档位。
+                </p>
             ) : null}
 
             <div className="drama-assets-editor">
@@ -201,7 +270,7 @@ export function AssetSchemePicker({ value, onChange, sample, layout = "wide" }: 
                 ) : null}
                 {tab === "character" && value.sourceSkillName ? (
                     <p className="drama-assets-source">
-                        <Sparkles className="size-3.5" />
+                        <Blocks className="size-3.5" />
                         约束来自技能「{value.sourceSkillName}」{value.sourcePath ? ` · ${value.sourcePath}` : ""}
                     </p>
                 ) : null}

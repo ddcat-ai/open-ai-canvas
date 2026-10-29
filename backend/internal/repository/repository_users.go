@@ -74,10 +74,16 @@ func (r *Repository) TotalCreditBalance() (int64, error) {
 	return total, err
 }
 
-func (r *Repository) AdminUsers(keyword string, role model.UserRole, status model.UserStatus, limit int, offset int) ([]model.User, int64, error) {
+// group 为空表示不过滤；default 分组同时匹配未分配分组（空编码）的用户。
+func (r *Repository) AdminUsers(keyword string, role model.UserRole, status model.UserStatus, group string, limit int, offset int) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
 	query := r.db.Model(&model.User{})
+	if value := strings.TrimSpace(group); value == model.DefaultUserGroupCode {
+		query = query.Where("user_group = ? OR user_group = ''", value)
+	} else if value != "" {
+		query = query.Where("user_group = ?", value)
+	}
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
 		query = query.Where("lower(username) LIKE ? OR lower(display_name) LIKE ? OR lower(email) LIKE ?", pattern, pattern, pattern)

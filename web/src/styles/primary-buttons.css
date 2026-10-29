@@ -1,17 +1,55 @@
 @import "./unified-buttons.css";
 @import "./unified-inputs.css";
 
-/* AntD accepts solid color tokens; button fills also support validated gradients. */
-:root[data-skin] .ant-btn.ant-btn-primary:where(:not(.ant-btn-dangerous, .ant-btn-color-danger, .ant-btn-background-ghost, :disabled, .ant-btn-disabled)) {
-    background: var(--button-primary-bg) !important;
+/* 主按钮与危险实心按钮（docs/ui-design-system.md §3.0「按钮」）。
+   AntD 主题 token 只能表达纯色，这里统一接管实底、文字、边缘与质感阴影：经典皮肤是墨色实底，
+   自定义皮肤可写入渐变，所以用 background 简写。aria-pressed 表示持久选择而不是主操作，
+   交给 globals.css 的软选中态处理。页面不要再为主按钮写渐变、发光或自己的主色。 */
+:root .ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled, .ant-btn-disabled, [aria-pressed="true"]) {
     border-color: transparent !important;
+    background: var(--button-primary-bg) !important;
     color: var(--button-primary-fg) !important;
+    box-shadow: var(--button-primary-shadow) !important;
 }
 
-:root[data-skin] .ant-btn.ant-btn-primary:where(:not(.ant-btn-dangerous, .ant-btn-color-danger, .ant-btn-background-ghost, :disabled, .ant-btn-disabled)):hover {
+:root .ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled, .ant-btn-disabled, [aria-pressed="true"]):hover {
     background: var(--button-primary-hover-bg) !important;
 }
 
-:root[data-skin] .ant-btn.ant-btn-primary:where(:not(.ant-btn-dangerous, .ant-btn-color-danger, .ant-btn-background-ghost, :disabled, .ant-btn-disabled)):active {
+:root .ant-btn.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled, .ant-btn-disabled, [aria-pressed="true"]):active {
     background: var(--button-primary-active-bg) !important;
+    box-shadow: var(--button-primary-active-shadow) !important;
+}
+
+/* 禁用的主按钮保留墨色、整体降透明度：仍能看出这是这一组的主操作，只是暂时不可用。 */
+:root .ant-btn.ant-btn-color-primary.ant-btn-variant-solid:is(:disabled, .ant-btn-disabled):not([aria-pressed="true"]) {
+    border-color: transparent !important;
+    background: var(--button-primary-bg) !important;
+    color: var(--button-primary-fg) !important;
+    box-shadow: none !important;
+    opacity: var(--button-disabled-opacity);
+}
+
+:root .ant-btn.ant-btn-color-dangerous.ant-btn-variant-solid:not(:disabled, .ant-btn-disabled) {
+    border-color: transparent !important;
+    background: var(--button-danger-bg) !important;
+    color: var(--button-danger-fg) !important;
+    box-shadow: var(--button-danger-shadow) !important;
+}
+
+:root .ant-btn.ant-btn-color-dangerous.ant-btn-variant-solid:not(:disabled, .ant-btn-disabled):hover {
+    background: var(--button-danger-hover-bg) !important;
+}
+
+:root .ant-btn.ant-btn-color-dangerous.ant-btn-variant-solid:not(:disabled, .ant-btn-disabled):active {
+    background: var(--button-danger-active-bg) !important;
+    box-shadow: none !important;
+}
+
+:root .ant-btn.ant-btn-color-dangerous.ant-btn-variant-solid:is(:disabled, .ant-btn-disabled) {
+    border-color: transparent !important;
+    background: var(--button-danger-bg) !important;
+    color: var(--button-danger-fg) !important;
+    box-shadow: none !important;
+    opacity: var(--button-disabled-opacity);
 }

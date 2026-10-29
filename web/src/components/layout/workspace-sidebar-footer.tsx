@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router";
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { UserAvatar } from "@/components/layout/user-avatar";
+import { UserGroupBadge } from "@/components/layout/user-group-badge";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { applyUserSession } from "@/lib/user-session";
@@ -72,7 +73,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                             <div className="flex items-center gap-3 border-b border-border/65 px-1 pb-3">
                                 <SidebarUserAvatar user={user} className="size-8" />
                                 <div className="min-w-0 flex-1">
-                                    <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><IdentityProviderBadge user={user} /></div>
+                                    <div className="flex min-w-0 items-center gap-2"><span className="truncate text-sm font-medium">{user.displayName || user.username}</span><UserGroupBadge /><IdentityProviderBadge user={user} /></div>
                                     {creditsEnabled ? <div className="mt-0.5 truncate text-[var(--fs-label)] tabular-nums text-foreground/45">可用 {balance} 积分</div> : null}
                                 </div>
                             </div>
@@ -99,7 +100,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     <button type="button" className={cn("app-workspace-account-button flex min-h-10 w-full min-w-0 items-center overflow-hidden rounded-md text-left transition-colors hover:bg-surface-hover", accountClassName)} title={creditsEnabled ? `${user.displayName || user.username} · ${balance} 积分` : user.displayName || user.username}>
                         <SidebarUserAvatar user={user} className="size-7" />
                         <span className={cn("min-w-0 flex-1 flex-col", expandedClassName)}>
-                            <span className="truncate text-xs font-medium">{user.displayName || user.username}</span>
+                            <span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-xs font-medium">{user.displayName || user.username}</span><UserGroupBadge compact /></span>
                             {creditsEnabled ? <span className="mt-0.5 block truncate text-[var(--fs-micro)] tabular-nums text-foreground/42">{balance} 积分</span> : null}
                         </span>
                         <ChevronRight className={cn("size-3.5 shrink-0 text-foreground/30", expandedClassName)} />

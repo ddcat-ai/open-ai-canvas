@@ -54,7 +54,7 @@ func TestChannelModelLabelSaveAndCatalogPreserveChannelIdentity(t *testing.T) {
 			firstID = saved.ID
 		}
 	}
-	catalog, err := svc.ModelCatalog(nil)
+	catalog, err := svc.ModelCatalog(testGroupAccess(svc), nil)
 	if err != nil || len(catalog.Channels) != 2 {
 		t.Fatalf("catalog: %#v, %v", catalog, err)
 	}

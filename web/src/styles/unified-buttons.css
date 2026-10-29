@@ -1,3 +1,11 @@
+/* =========================================================================
+   统一按钮细节（docs/ui-design-system.md §3.0「按钮」）
+   几何与默认配色来自 app-theme.ts / admin-ant-theme.ts 的 Button token，颜色值全部取
+   globals.css 的 --button-* 组件 token；主按钮与危险实心按钮见 primary-buttons.css。
+   这里只补 token 表达不了的细节：次要按钮的实体边缘、图标尺寸与描边、图标侧光学内边距、
+   禁用、加载和键盘焦点。页面不要再为同类按钮重写这些属性。
+   ========================================================================= */
+
 /* 鼠标点击后 Chrome 仍可能给按钮 :focus-visible。统一按钮只在键盘导航时显示焦点。 */
 :where(button, .ant-btn):focus:not(:focus-visible),
 :where(button, .ant-btn):focus-visible:not([data-input-modality="keyboard"]) {
@@ -11,6 +19,81 @@
     outline-offset: 2px !important;
     box-shadow: none !important;
 }
+
+/* 只过渡颜色、边缘、阴影与透明度。AntD 默认的 transition: all 会连带过渡宽高和内边距，
+   加载、换文案时按钮会“伸缩”；按压的 0.97 缩放（globals.css 全局 button:active）即时生效，不做回弹。 */
+:root .ant-btn {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* 次要按钮是实体键：1px 边缘 + 亮色 1px 接触阴影 / 暗色顶部 1px 内高光；按下时收起阴影。 */
+:root .ant-btn.ant-btn-color-default:is(.ant-btn-variant-outlined, .ant-btn-variant-dashed):not(:disabled, .ant-btn-disabled, .ant-btn-background-ghost, [aria-pressed="true"]) {
+    box-shadow: var(--button-secondary-shadow);
+}
+
+:root .ant-btn.ant-btn-color-default:is(.ant-btn-variant-outlined, .ant-btn-variant-dashed):not(:disabled, .ant-btn-disabled, .ant-btn-background-ghost, [aria-pressed="true"]):active {
+    box-shadow: none;
+}
+
+/* 危险描边按钮：红色只给文字和淡边，悬停才出现浅红底；实心红按钮只用于确认删除这类不可逆操作。 */
+:root .ant-btn.ant-btn-color-dangerous:is(.ant-btn-variant-outlined, .ant-btn-variant-dashed):not(:disabled, .ant-btn-disabled) {
+    border-color: var(--button-danger-soft-border);
+    background: var(--button-secondary-bg);
+    color: var(--button-danger-text);
+    box-shadow: var(--button-secondary-shadow);
+}
+
+:root .ant-btn.ant-btn-color-dangerous:is(.ant-btn-variant-outlined, .ant-btn-variant-dashed):not(:disabled, .ant-btn-disabled):hover {
+    border-color: color-mix(in srgb, var(--button-danger-text) 46%, transparent);
+    background: var(--button-danger-soft-bg);
+}
+
+:root .ant-btn.ant-btn-color-dangerous.ant-btn-variant-text:not(:disabled, .ant-btn-disabled):hover {
+    background: var(--button-danger-soft-bg);
+}
+
+/* 禁用保留原本的按钮层级，只整体降低透明度；悬浮说明原因由调用方的 title / Tooltip 提供。 */
+:root .ant-btn.ant-btn-color-default:is(.ant-btn-variant-outlined, .ant-btn-variant-dashed):is(:disabled, .ant-btn-disabled) {
+    border-color: var(--button-secondary-border);
+    background: var(--button-secondary-bg);
+    color: var(--button-secondary-fg);
+    box-shadow: none;
+    opacity: var(--button-disabled-opacity);
+}
+
+:root .ant-btn.ant-btn-color-default:is(.ant-btn-variant-text, .ant-btn-variant-link):is(:disabled, .ant-btn-disabled) {
+    color: var(--button-ghost-fg);
+    opacity: var(--button-disabled-opacity);
+}
+
+/* 图标统一 16px（紧凑 14px）、1.75 描边。只处理 lucide 的默认尺寸与默认描边：
+   调用方用 size-* / size / strokeWidth 显式指定的图标保持原样。 */
+:root .ant-btn .ant-btn-icon > svg.lucide[width="24"]:not([class*="size-"]) {
+    width: var(--button-icon-size);
+    height: var(--button-icon-size);
+}
+
+:root .ant-btn.ant-btn-sm .ant-btn-icon > svg.lucide[width="24"]:not([class*="size-"]) {
+    width: var(--button-icon-size-sm);
+    height: var(--button-icon-size-sm);
+}
+
+:root .ant-btn .ant-btn-icon > svg.lucide[stroke-width="2"] {
+    stroke-width: var(--button-icon-stroke);
+}
+
+/* 光学内边距：图标自带留白，图标一侧比文字一侧少 2px，两侧看起来才等宽。
+   用负外边距而不是改 padding，任何页面自定义的 padding 都按同一比例生效。 */
+:root .ant-btn:not(.ant-btn-icon-only, .ant-btn-icon-end, .ant-btn-circle) > .ant-btn-icon:first-child:not(:only-child, .ant-btn-loading-icon) {
+    margin-inline-start: -2px;
+}
+
+:root .ant-btn.ant-btn-icon-end:not(.ant-btn-icon-only, .ant-btn-circle) > .ant-btn-icon:first-child:not(:only-child, .ant-btn-loading-icon) {
+    margin-inline-end: -2px;
+}
+
 /* 加载中宽度不变：转圈图标叠在按钮中央替换文字，文字只隐藏不移除（保留无障碍名称）。
    antd 在按钮原本没有图标时会插入加载图标并撑宽按钮，这里统一改为覆盖式。 */
 .ant-btn.ant-btn-loading:not(.ant-btn-icon-only) {
@@ -28,6 +111,12 @@
 }
 .ant-btn.ant-btn-loading:not(.ant-btn-icon-only) > :not(.ant-btn-loading-icon) {
     opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root .ant-btn {
+        transition-duration: 0.01ms;
+    }
 }
 
 .ant-select.app-unified-select[data-input-modality="keyboard"]:not(.ant-select-open) {

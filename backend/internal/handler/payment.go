@@ -183,8 +183,52 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.Redirect(http.StatusFound, "/wallet?paymentOrder="+url.QueryEscape(orderID))
 	})
 
+	r.GET("/payments/settings", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		settings, err := svc.PublicPaymentSettings(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"settings": settings})
+	})
 	admin := r.Group("/admin/payments")
 	registerPaymentExportRoutes(admin, svc)
+	admin.GET("/settings", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		settings, err := svc.AdminPaymentSettings(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"settings": settings})
+	})
+	admin.PUT("/settings", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var request service.PaymentSettings
+		if err := c.ShouldBindJSON(&request); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		settings, err := svc.UpdatePaymentSettings(user, request)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"settings": settings})
+	})
 	admin.GET("/providers", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

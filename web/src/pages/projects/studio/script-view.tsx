@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { BookOpen, BookOpenText, Clapperboard, PanelRightClose, PanelRightOpen, PenLine, Quote, ScanSearch } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, BookOpen, BookOpenText, CheckCircle2, Clapperboard, PanelRightClose, PanelRightOpen, Pencil, PenLine, Quote, ScanSearch, Trash2 } from "lucide-react";
 
 import { averageShotSeconds, normalizeStoryboard, TRANSITION_LABEL } from "@/lib/drama/storyboard";
-import { getDramaChapter, type DramaEpisodeDetail, type DramaShot, type DramaStoryboardSettings } from "@/services/api/drama";
+import { getDramaChapter, type DramaDialogueCheck, type DramaEpisodeDetail, type DramaShot, type DramaShotPatch, type DramaStoryboardSettings } from "@/services/api/drama";
 
-import { formatCount } from "../drama-shared";
+import { formatCount, SOURCE_FORMAT_LABEL, sourceFormatOf } from "../drama-shared";
+import { SourceEditModal } from "./episode-source";
 import { JobDetailModal } from "./job-detail";
+import { ShotEditor } from "./segment-dialog";
 import type { EpisodeEmpty } from "./storyboard";
 
 function storyboardSummary(value: DramaStoryboardSettings) {
@@ -47,6 +49,10 @@ export function ScriptView({
     busy,
     onCurrent,
     onRescript,
+    onPatchShot,
+    onInsertShot,
+    onDeleteShot,
+    onSourceSaved,
     empty,
 }: {
     projectId: string;
@@ -56,14 +62,36 @@ export function ScriptView({
     busy: boolean;
     onCurrent: (id: string) => void;
     onRescript: () => void;
+    onPatchShot: (shot: DramaShot, patch: DramaShotPatch) => void;
+    onInsertShot: (shot: DramaShot, position: "before" | "after") => void;
+    onDeleteShot: (shot: DramaShot) => void;
+    /** 原文已保存；rescript=true 时需要按新原文重新改编。 */
+    onSourceSaved: (rescript: boolean) => void;
     empty: EpisodeEmpty;
 }) {
     const [processOpen, setProcessOpen] = useState(false);
+    const [editingChapterId, setEditingChapterId] = useState("");
     const { modal } = App.useApp();
     const { episode, shots, chapters } = detail;
+    const format = sourceFormatOf(episode.sourceFormat);
     const [sourceOpen, setSourceOpen] = useState(true);
     const current = shots.find((shot) => shot.id === currentId);
     const scenes = useMemo(() => groupScenes(shots), [shots]);
+    const segmentSizes = useMemo(() => {
+        const sizes = new Map<number, number>();
+        for (const shot of shots) sizes.set(shot.segmentIndex, (sizes.get(shot.segmentIndex) || 0) + 1);
+        return sizes;
+    }, [shots]);
+    const confirmDelete = (shot: DramaShot) =>
+        modal.confirm({
+            title: `删除镜头 ${String(shot.position + 1).padStart(2, "0")}？`,
+            content: shot.dialogue ? `这个镜头的台词“${shot.dialogue}”会一起删除，本段视频提示词与视频标记过期。` : "本段视频提示词与视频会标记过期，需要重新撰写和生成。",
+            okText: "删除",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            centered: true,
+            onOk: () => onDeleteShot(shot),
+        });
     const confirmRescript = () =>
         modal.confirm({
             title: `重新改编第 ${episode.number} 集？`,
@@ -80,6 +108,9 @@ export function ScriptView({
                 <section className="drama-scriptv-brief">
                     <div className="drama-scriptv-brief-head">
                         <span className="drama-eyebrow">本集梗概</span>
+                        <span className="drama-scriptv-format" title={SOURCE_FORMAT_LABEL[format].detail}>
+                            素材：{SOURCE_FORMAT_LABEL[format].title}
+                        </span>
                         <div className="ml-auto flex items-center gap-2">
                             {detail.scriptJob ? (
                                 <Button size="small" type="text" icon={<ScanSearch className="size-3.5" />} onClick={() => setProcessOpen(true)}>
@@ -119,6 +150,7 @@ export function ScriptView({
                             · 实际 {shots.length} 镜 · {(shots.reduce((sum, shot) => sum + shot.durationMs, 0) / 1000).toFixed(0)} 秒
                         </span>
                     </div>
+                    {detail.dialogueCheck ? <DialogueCheckNotice check={detail.dialogueCheck} busy={busy} onRescript={confirmRescript} /> : null}
                 </section>
 
                 {shots.length ? (
@@ -139,13 +171,20 @@ export function ScriptView({
                                         role="button"
                                         tabIndex={0}
                                         aria-current={shot.id === currentId}
-                                        onClick={() => onCurrent(shot.id)}
+                                        onClick={() => {
+                                            if (shot.id !== currentId) onCurrent(shot.id);
+                                        }}
                                         onKeyDown={(event) => {
-                                            if (event.key === "Enter") onCurrent(shot.id);
+                                            if (event.key === "Enter" && event.target === event.currentTarget) onCurrent(shot.id);
                                         }}
                                     >
                                         <span className="drama-screenplay-index">{String(shot.position + 1).padStart(2, "0")}</span>
                                         <div className="min-w-0">
+                                            {shot.id === currentId ? null : (
+                                                <span className="drama-screenplay-edit" aria-hidden>
+                                                    <Pencil className="size-3.5" />
+                                                </span>
+                                            )}
                                             <div className="drama-screenplay-tags">
                                                 {shot.shotSize ? <span>{shot.shotSize}</span> : null}
                                                 {shot.camera && shot.camera !== "固定" ? <span>{shot.camera}</span> : null}
@@ -158,13 +197,37 @@ export function ScriptView({
                                                     </span>
                                                 ) : null}
                                             </div>
-                                            {shot.action ? <p className="drama-screenplay-action">{shot.action}</p> : null}
-                                            {shot.dialogue ? (
-                                                <div className="drama-screenplay-line">
-                                                    <b>{shot.speaker || "旁白"}</b>
-                                                    <p>{shot.dialogue}</p>
+                                            {shot.id === currentId ? (
+                                                // 选中的镜头直接在剧本里改：失焦保存，改动只让本段提示词与视频过期。
+                                                <div className="drama-screenplay-editor" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                                                    <ShotEditor shot={shot} onPatch={(patch) => onPatchShot(shot, patch)} />
+                                                    <div className="drama-screenplay-editor-actions">
+                                                        <Button size="small" icon={<ArrowUpToLine className="size-3.5" />} disabled={busy} onClick={() => onInsertShot(shot, "before")}>
+                                                            在前面插入镜头
+                                                        </Button>
+                                                        <Button size="small" icon={<ArrowDownToLine className="size-3.5" />} disabled={busy} onClick={() => onInsertShot(shot, "after")}>
+                                                            在后面插入镜头
+                                                        </Button>
+                                                        <span className="flex-1" />
+                                                        <Tooltip title={(segmentSizes.get(shot.segmentIndex) || 0) <= 1 ? "这是本剧情段唯一的镜头，删除会改变分段；可以改写内容或重新改编本集" : ""}>
+                                                            <Button size="small" danger type="text" icon={<Trash2 className="size-3.5" />} disabled={busy || (segmentSizes.get(shot.segmentIndex) || 0) <= 1} onClick={() => confirmDelete(shot)}>
+                                                                删除镜头
+                                                            </Button>
+                                                        </Tooltip>
+                                                    </div>
                                                 </div>
-                                            ) : null}
+                                            ) : (
+                                                <>
+                                                    {shot.action ? <p className="drama-screenplay-action">{shot.action}</p> : null}
+                                                    {shot.dialogue ? (
+                                                        <div className="drama-screenplay-line">
+                                                            <b>{shot.speaker || "旁白"}</b>
+                                                            <p>{shot.dialogue}</p>
+                                                        </div>
+                                                    ) : null}
+                                                    {!shot.action && !shot.dialogue ? <p className="drama-screenplay-action is-empty">空镜头，点击填写动作或台词</p> : null}
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -181,12 +244,64 @@ export function ScriptView({
                 )}
             </div>
             <JobDetailModal projectId={projectId} job={processOpen ? detail.scriptJob : undefined} onClose={() => setProcessOpen(false)} onLocate={() => undefined} />
-            {sourceOpen ? <SourcePane projectId={projectId} chapters={chapters} quote={current?.sourceQuote || ""} /> : null}
+            {sourceOpen ? <SourcePane projectId={projectId} chapters={chapters} quote={current?.sourceQuote || ""} onEdit={setEditingChapterId} /> : null}
+            <SourceEditModal
+                open={Boolean(editingChapterId)}
+                projectId={projectId}
+                episodeId={episode.id}
+                episodeFormat={format}
+                chapter={chapters.find((chapter) => chapter.id === editingChapterId)}
+                onClose={() => setEditingChapterId("")}
+                onSaved={(rescript) => {
+                    setEditingChapterId("");
+                    onSourceSaved(rescript);
+                }}
+            />
         </div>
     );
 }
 
-function SourcePane({ projectId, chapters, quote }: { projectId: string; chapters: DramaEpisodeDetail["chapters"]; quote: string }) {
+/** 原文台词逐句核对：列出没有逐字出现在镜头台词里的原文台词（被删或被改写）。 */
+function DialogueCheckNotice({ check, busy, onRescript }: { check: DramaDialogueCheck; busy: boolean; onRescript: () => void }) {
+    const [expanded, setExpanded] = useState(false);
+    if (!check.sourceLines) return null;
+    if (!check.missingCount) {
+        return (
+            <div className="drama-dialogue-check is-ok">
+                <CheckCircle2 className="size-3.5 shrink-0" />
+                原文 {check.sourceLines} 句台词都已逐字保留在镜头里
+            </div>
+        );
+    }
+    const shown = expanded ? check.missing : check.missing.slice(0, 3);
+    return (
+        <div className="drama-dialogue-check" role="status">
+            <div className="drama-dialogue-check-head">
+                <AlertTriangle className="size-4 shrink-0" />
+                <strong>
+                    原文 {check.sourceLines} 句台词中有 {check.missingCount} 句没有逐字出现在镜头里
+                </strong>
+                <span className="flex-1" />
+                <Button size="small" disabled={busy} onClick={onRescript}>
+                    重新改编
+                </Button>
+            </div>
+            <span className="drama-dialogue-check-hint">可能被删掉或改写了。可以点镜头直接改台词、插入镜头补上，或重新改编本集。</span>
+            <ul>
+                {shown.map((line) => (
+                    <li key={line}>「{line}」</li>
+                ))}
+            </ul>
+            {check.missing.length > 3 ? (
+                <button type="button" className="drama-link" onClick={() => setExpanded((value) => !value)}>
+                    {expanded ? "收起" : `展开全部${check.missingCount > check.missing.length ? `（显示前 ${check.missing.length} 句）` : ""}`}
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
+function SourcePane({ projectId, chapters, quote, onEdit }: { projectId: string; chapters: DramaEpisodeDetail["chapters"]; quote: string; onEdit: (chapterId: string) => void }) {
     const [chapterId, setChapterId] = useState(chapters[0]?.id || "");
     const activeId = chapters.some((chapter) => chapter.id === chapterId) ? chapterId : chapters[0]?.id || "";
     const query = useQuery({ queryKey: ["drama", projectId, "chapter", activeId], queryFn: ({ signal }) => getDramaChapter(projectId, activeId, signal), enabled: Boolean(activeId), staleTime: 300_000 });
@@ -212,10 +327,17 @@ function SourcePane({ projectId, chapters, quote }: { projectId: string; chapter
     return (
         <aside className="drama-source" aria-label="小说原文">
             <header className="drama-source-head">
-                <span className="drama-eyebrow">
-                    <BookOpen className="size-3.5" />
-                    原文对照
-                </span>
+                <div className="drama-source-title">
+                    <span className="drama-eyebrow">
+                        <BookOpen className="size-3.5" />
+                        原文对照
+                    </span>
+                    {activeId ? (
+                        <Button size="small" type="text" icon={<Pencil className="size-3.5" />} onClick={() => onEdit(activeId)}>
+                            编辑原文
+                        </Button>
+                    ) : null}
+                </div>
                 <div className="drama-source-tabs thin-scrollbar" role="tablist" aria-label="原文章节">
                     {chapters.map((chapter) => (
                         <button key={chapter.id} type="button" role="tab" aria-selected={chapter.id === activeId} onClick={() => setChapterId(chapter.id)}>

@@ -17,14 +17,14 @@ func TestAllVideoProtocolsQuoteReserveAndSettleWithoutProviderUsage(t *testing.T
 				t.Fatal(err)
 			}
 			intent := ModelRequestIntent{Capability: "video", Options: map[string]any{"vquality": "720p", "size": "16:9", "videoSeconds": 5}}
-			quote, err := svc.QuoteChannelModel(ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: intent})
+			quote, err := svc.QuoteChannelModel(testGroupUserID(svc), ChannelModelQuoteRequest{ChannelID: channel.ID, ModelKey: channelModel.ModelKey, Intent: intent})
 			if err != nil {
 				t.Fatal(err)
 			}
 			assertVideoTokenQuote(t, quote, 1_900_800)
 			input := quoteInput(intent, channelModel.ModelKey)
 			input["config"].(map[string]any)["channelId"] = channel.ID
-			input, err = svc.resolveSystemChannelModelSelection(input, "canvas_video", "")
+			input, err = svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_video", "")
 			if err != nil {
 				t.Fatal(err)
 			}

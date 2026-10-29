@@ -5,7 +5,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { formatCredits } from "@/constant/credits";
 import { accountStorageMeter, accountStorageStateMessage, formatStorageCapacity, formatStorageDate, formatStorageDuration } from "@/lib/account-storage-usage";
 import { cn } from "@/lib/utils";
-import type { PaymentProvider, TopupProduct, TopupProductKind } from "@/services/api/payments";
+import { formatPaymentAmount, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
 import { storageGrantActive, type UserStorageGrant } from "@/services/api/storage-grants";
 
@@ -59,7 +59,7 @@ function ProductCard({ product, selected, onSelect }: { product: TopupProduct; s
                     {availability ? <span className={cn("wallet-topup-chip", !product.canPurchase && "is-muted")}>{availability}</span> : null}
                 </span>
                 <span className="wallet-topup-card-price">
-                    <small>¥</small>
+                    <small>{product.currency === "USD" ? "$" : "¥"}</small>
                     {(product.amountFen / 100).toFixed(2)}
                 </span>
             </span>
@@ -224,7 +224,7 @@ export function WalletTopupPanel({
                                         {selectedProduct.kind === "storage" ? ` · ${formatStorageDuration(selectedProduct.storageDurationDays)}` : ""}
                                     </small>
                                 </span>
-                                <b>¥ {(selectedProduct.amountFen / 100).toFixed(2)}</b>
+                                <b>{formatPaymentAmount(selectedProduct.amountFen, selectedProduct.currency)}</b>
                             </>
                         ) : (
                             <span className="wallet-topup-checkout-hint">选择一个套餐</span>

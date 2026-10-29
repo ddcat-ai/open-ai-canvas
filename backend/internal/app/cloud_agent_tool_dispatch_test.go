@@ -57,7 +57,8 @@ func TestCloudAgentAdvertisedToolsMatchAuthorization(t *testing.T) {
 							req.ContextScope = []string{"canvas"}
 						}
 						if skills {
-							req.SkillIDs = []string{"skill"}
+							req.SkillsEnabled = true
+							req.MemoryMode = "auto"
 						}
 						advertised := map[string]bool{}
 						for _, definition := range cloudAgentTools(req) {

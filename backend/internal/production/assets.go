@@ -101,6 +101,8 @@ type AssetSettings struct {
 	CharacterPrompt string `json:"characterPrompt"`
 	ScenePrompt     string `json:"scenePrompt"`
 	CharacterRatio  string `json:"characterRatio"`
+	// Resolution 是参考图分辨率档位（1k / 1.5k / 2k / 4k），空串按图片模型默认档位。
+	Resolution      string `json:"resolution,omitempty"`
 	SourceSkillID   string `json:"sourceSkillId,omitempty"`
 	SourceSkillName string `json:"sourceSkillName,omitempty"`
 	SourcePath      string `json:"sourcePath,omitempty"`
@@ -133,6 +135,11 @@ func (a AssetSettings) Normalized() AssetSettings {
 	}
 	if a.Mode != AssetModeCustom {
 		a.CharacterRatio = scheme.Ratio
+	}
+	switch a.Resolution = strings.ToLower(strings.TrimSpace(a.Resolution)); a.Resolution {
+	case "", "1k", "1.5k", "2k", "4k":
+	default:
+		a.Resolution = ""
 	}
 	a.SourceSkillID = truncateRunes(strings.TrimSpace(a.SourceSkillID), 64)
 	a.SourceSkillName = truncateRunes(strings.TrimSpace(a.SourceSkillName), 120)

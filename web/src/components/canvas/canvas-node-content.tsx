@@ -72,6 +72,20 @@ export function canvasNodeUsesCustomContent(node: CanvasNodeData, isEditingConte
     );
 }
 
+/**
+ * 内容区是否自己展示“生成中 / 失败”状态（与下方 CanvasNodeContent 的分支保持一致）。
+ * 自己展示时节点外层不再叠加同义的状态徽章，避免同一状态出现两遍。
+ */
+export function canvasNodeRendersStatusContent(node: CanvasNodeData, options: { isBatchRoot: boolean; isEditingContent: boolean; hasCustomRenderer: boolean }) {
+    const status = node.metadata?.status;
+    if (status !== "loading" && status !== "error") return false;
+    if (node.metadata?.fileUpload) return false;
+    if (options.hasCustomRenderer && canvasNodeUsesCustomContent(node, options.isEditingContent)) return false;
+    if (node.type === ART_CRITIQUE_NODE_TYPE || node.type === MEDIA_CONVERSION_NODE_TYPE) return false;
+    if (options.isBatchRoot) return !node.metadata?.content && !node.metadata?.storageKey;
+    return true;
+}
+
 export function CanvasNodeContent(props: CanvasNodeContentProps) {
     if (props.node.metadata?.fileUpload) return <CanvasFileUploadContent node={props.node} theme={props.theme} reduceMotion={props.disableMediaEffects} />;
     // Preserve the decoded image across LOD changes; only its surrounding
@@ -87,7 +101,7 @@ export function CanvasNodeContent(props: CanvasNodeContentProps) {
     if (props.node.type === MEDIA_CONVERSION_NODE_TYPE) return <MediaConversionNodeContent node={props.node} theme={props.theme} />;
     if (props.isBatchRoot) return <ImageNodeContent {...props} />;
     if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onOpenTaskDetails={props.onOpenTaskDetails} />;
-    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onReloadResource={props.onReloadResource} />;
+    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onReloadResource={props.onReloadResource} onOpenTaskDetails={props.onOpenTaskDetails} />;
 
     const pluginDefinition = getNodeDefinition(props.node.type)?.plugin;
     if (pluginDefinition) return <PluginCanvasNodeContent {...props} renderer={pluginDefinition.renderer} schema={pluginDefinition.schema} />;

@@ -116,15 +116,19 @@ type AppearanceSkinButtonFill struct {
 	Foreground  string `json:"foreground"`
 }
 
-func defaultAppearanceSkinButtons(gradient bool) AppearanceSkinButtons {
-	fill := AppearanceSkinButtonFill{
-		Mode: "solid", Angle: 115, Start: "#6554df", End: "#386fbc",
-		HoverStart: "#5744cf", HoverEnd: "#356bbb", ActiveStart: "#4938b8", ActiveEnd: "#2c5da5", Foreground: "#ffffff",
+// 主按钮默认使用皮肤主操作色的纯色墨；渐变色值只是管理员切到“渐变”时的初始值，
+// 取同色系上亮下暗，与 web/src/lib/skin-themes.ts 的 DEFAULT_BUTTON_FILLS 保持同值。
+func defaultAppearanceSkinButtons() AppearanceSkinButtons {
+	return AppearanceSkinButtons{
+		Light: AppearanceSkinButtonFill{
+			Mode: "solid", Angle: 180, Start: "#3f3f46", End: "#18181b",
+			HoverStart: "#52525b", HoverEnd: "#27272a", ActiveStart: "#27272a", ActiveEnd: "#09090b", Foreground: "#fafafa",
+		},
+		Dark: AppearanceSkinButtonFill{
+			Mode: "solid", Angle: 180, Start: "#ffffff", End: "#e4e4e7",
+			HoverStart: "#ffffff", HoverEnd: "#f4f4f5", ActiveStart: "#e4e4e7", ActiveEnd: "#d4d4d8", Foreground: "#18181b",
+		},
 	}
-	if gradient {
-		fill.Mode = "gradient"
-	}
-	return AppearanceSkinButtons{Light: fill, Dark: fill}
 }
 
 type AppearanceSkinTheme struct {
@@ -188,9 +192,9 @@ func defaultAppearanceSkinThemes() []AppearanceSkinTheme {
 	})
 	violet.Tokens.Components = appearanceSkinComponentPreset(7, 7, 12, 14, 9, 4)
 
-	studio.Tokens.Buttons = defaultAppearanceSkinButtons(false)
-	warm.Tokens.Buttons = defaultAppearanceSkinButtons(false)
-	violet.Tokens.Buttons = defaultAppearanceSkinButtons(false)
+	studio.Tokens.Buttons = defaultAppearanceSkinButtons()
+	warm.Tokens.Buttons = defaultAppearanceSkinButtons()
+	violet.Tokens.Buttons = defaultAppearanceSkinButtons()
 	return []AppearanceSkinTheme{classic, studio, warm, violet}
 }
 
@@ -213,7 +217,7 @@ func defaultClassicAppearanceSkin() AppearanceSkinTheme {
 				AdminBackground: "#101010", AdminSurface: "#181818", AdminSubtle: "#202020", AdminStrong: "#2a2a2a", AuthBackground: "#08090c", AuthPanel: "#0b0c10", AuthCard: "#121318", AuthAccent: "#93c5fd", AuthMuted: "#8a8b91",
 			},
 			Components: appearanceSkinComponentPreset(6, 6, 12, 12, 8, 4),
-			Buttons:    defaultAppearanceSkinButtons(true),
+			Buttons:    defaultAppearanceSkinButtons(),
 		},
 	}
 }
@@ -279,7 +283,7 @@ func normalizeAppearanceSkinThemes(themes []AppearanceSkinTheme) []AppearanceSki
 		// Only a wholly absent legacy button block is upgraded. Partial or
 		// malformed submitted parameters remain invalid on the write path.
 		if result[index].Tokens.Buttons == (AppearanceSkinButtons{}) {
-			result[index].Tokens.Buttons = defaultAppearanceSkinButtons(result[index].Locked)
+			result[index].Tokens.Buttons = defaultAppearanceSkinButtons()
 		}
 		var fallback AppearanceSkinTokens
 		for _, builtin := range builtins {

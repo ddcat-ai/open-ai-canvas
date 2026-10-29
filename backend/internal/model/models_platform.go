@@ -149,17 +149,27 @@ type SkillLibraryCategory struct {
 }
 
 type UserSkillState struct {
-	ID                 string    `json:"id" gorm:"primaryKey;size:36"`
-	UserID             string    `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_skill,priority:1"`
-	SkillID            string    `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_user_skill_state_user_skill,priority:2"`
-	LibraryCategoryID  string    `json:"libraryCategoryId" gorm:"size:36;index"`
-	InstalledVersionID string    `json:"installedVersionId" gorm:"size:36;index"`
-	AutoUpdate         bool      `json:"autoUpdate"`
-	Added              bool      `json:"added" gorm:"index"`
-	Liked              bool      `json:"liked" gorm:"index"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	ID                 string `json:"id" gorm:"primaryKey;size:36"`
+	UserID             string `json:"userId" gorm:"index;size:36;uniqueIndex:idx_user_skill_state_user_skill,priority:1"`
+	SkillID            string `json:"skillId" gorm:"size:36;index;uniqueIndex:idx_user_skill_state_user_skill,priority:2"`
+	LibraryCategoryID  string `json:"libraryCategoryId" gorm:"size:36;index"`
+	InstalledVersionID string `json:"installedVersionId" gorm:"size:36;index"`
+	AutoUpdate         bool   `json:"autoUpdate"`
+	Added              bool   `json:"added" gorm:"index"`
+	Liked              bool   `json:"liked" gorm:"index"`
+	// AgentMode 为空或 auto 时 Agent 可以自动发现该技能；manual 只在用户点名或固定时使用。
+	AgentMode string `json:"agentMode,omitempty" gorm:"size:16"`
+	// AgentUseCount / AgentLastUsedAt 只记录 Agent 实际读取，用于决定目录里谁优先列出。
+	AgentUseCount   int64      `json:"agentUseCount"`
+	AgentLastUsedAt *time.Time `json:"agentLastUsedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
+
+const (
+	UserSkillAgentModeAuto   = "auto"
+	UserSkillAgentModeManual = "manual"
+)
 
 type Tool struct {
 	ID            int64     `json:"id" gorm:"primaryKey;autoIncrement"`

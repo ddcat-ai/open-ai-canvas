@@ -22,11 +22,12 @@ type SystemAnnouncementCenterProps = {
     style?: CSSProperties;
     showLabel?: boolean;
     labelClassName?: string;
+    /** 兼容旧调用：入口按钮已统一为只变色、不位移不缩放（docs/ui-design-system.md §3.0）。 */
     staticMotion?: boolean;
     autoOpen?: boolean;
 };
 
-export function SystemAnnouncementCenter({ userId, className, style, showLabel = false, labelClassName, staticMotion = false, autoOpen = false }: SystemAnnouncementCenterProps) {
+export function SystemAnnouncementCenter({ userId, className, style, showLabel = false, labelClassName, autoOpen = false }: SystemAnnouncementCenterProps) {
     const reducedMotion = useReducedMotion();
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
@@ -80,13 +81,10 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
 
     return (
         <>
-            <motion.button
+            <button
                 type="button"
                 className={className}
                 style={style}
-                whileHover={reducedMotion || staticMotion ? undefined : { y: -1, scale: 1.035 }}
-                whileTap={reducedMotion || staticMotion ? undefined : { scale: 0.94 }}
-                transition={aceternityMotion.spring.dock}
                 onClick={() => void openAnnouncements()}
                 aria-label={unreadCount ? `系统公告，${unreadCount} 条未读` : "系统公告"}
                 title="系统公告"
@@ -114,7 +112,7 @@ export function SystemAnnouncementCenter({ userId, className, style, showLabel =
                         <Tag color={unreadCount > 0 ? "gold" : undefined} className="!m-0 !min-w-6 !px-2 !text-center !text-[var(--fs-micro)] !font-medium !leading-[18px] tabular-nums">{announcements.length}</Tag>
                     </span>
                 ) : null}
-            </motion.button>
+            </button>
             {open ? (
                 <Suspense fallback={null}>
                     <AnnouncementTimelineModal

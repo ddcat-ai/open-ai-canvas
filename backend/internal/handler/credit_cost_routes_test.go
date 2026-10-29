@@ -28,7 +28,7 @@ func TestChannelCostHTTPAuthorizationAndPublicProjection(t *testing.T) {
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}, &model.IDSequence{}, &model.SystemSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.UserGroup{}, &model.UserGroupChannel{}, &model.AuthSession{}, &model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}, &model.IDSequence{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, role := range []model.UserRole{model.UserRoleAdmin, model.UserRoleUser} {

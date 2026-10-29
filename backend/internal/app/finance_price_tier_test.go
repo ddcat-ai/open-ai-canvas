@@ -21,6 +21,7 @@ func TestImageSpecificationQuoteAgreesWithTaskBilling(t *testing.T) {
 	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}); err != nil {
 		t.Fatal(err)
 	}
+	ensureTestUsers(t, db, "user-1", "user")
 	channelModel := model.ChannelModel{
 		ID: "image-channel-model", ChannelID: "image-channel", ModelKey: "image-model", Capability: "image",
 		Protocol: model.ChannelInterfaceOpenAIImage, Enabled: true, PriceConfigured: true,
@@ -58,7 +59,7 @@ func TestImageSpecificationQuoteAgreesWithTaskBilling(t *testing.T) {
 			"channelId": channelModel.ChannelID, "model": channelModel.ModelKey, "quality": strings.ToUpper(selector["quality"]),
 		}}
 		intent := ModelRequestIntentFromTaskInput(input, "canvas_image", "image")
-		quote, err := svc.QuoteLogicalModel("logical-image", intent)
+		quote, err := svc.QuoteLogicalModel(testGroupUserID(svc), "logical-image", intent)
 		if err != nil {
 			t.Fatalf("quote %s: %v", tier.ID, err)
 		}
@@ -70,11 +71,11 @@ func TestImageSpecificationQuoteAgreesWithTaskBilling(t *testing.T) {
 			t.Fatalf("tier %s: quote=%#v order=%#v", tier.ID, quote, order)
 		}
 	}
-	quote, err := svc.QuoteLogicalModel("logical-image", ModelRequestIntent{Capability: "image"})
+	quote, err := svc.QuoteLogicalModel(testGroupUserID(svc), "logical-image", ModelRequestIntent{Capability: "image"})
 	if err != nil || quote.AmountMicrocredits != 2_000_000 {
 		t.Fatalf("default resolution quote=%#v error=%v", quote, err)
 	}
-	if _, err := svc.QuoteLogicalModel("logical-image", ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": "8k"}}); err == nil {
+	if _, err := svc.QuoteLogicalModel(testGroupUserID(svc), "logical-image", ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": "8k"}}); err == nil {
 		t.Fatal("unconfigured resolution must not be quoted")
 	}
 }
@@ -87,6 +88,7 @@ func TestTaskBillingOrderMatchesSystemImagePriceTierFromRequestedSpec(t *testing
 	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}); err != nil {
 		t.Fatal(err)
 	}
+	ensureTestUsers(t, db, "user-1", "user")
 	channelModel := model.ChannelModel{
 		ID: "channel-model-1", ChannelID: "channel-1", ModelKey: "gpt-image-2", ProviderModelKey: "gpt-image-2",
 		Capability: "image", Protocol: model.ChannelInterfaceOpenAIImage, BillingMode: "fixed_request",

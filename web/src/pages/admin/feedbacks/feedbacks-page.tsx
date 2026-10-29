@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { App, Button, Drawer, Input, Modal, Popconfirm, Select, Space, Table, Tag, Image as AntImage, Segmented } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { AlertCircle, Archive, ArchiveRestore, Bug, CheckCircle2, Clock, FileText, Inbox, Lightbulb, MessageSquare, Paperclip, Play, RefreshCw, Search, Send, Sparkles, UserRound } from "lucide-react";
+import { AlertCircle, Archive, ArchiveRestore, Bug, CheckCircle2, Clock, FileText, Inbox, Lightbulb, MessageSquare, Paperclip, Play, RefreshCw, Search, Send, UserRound, Clock3 } from "lucide-react";
 
 import { getAdminFeedbacks, updateAdminFeedback, archiveAdminFeedback, type FeedbackItem, type FeedbackType, type FeedbackStatus, type FeedbackAttachment } from "@/services/api/feedback";
 import { AdminPageFrame } from "../components/admin-shell";
@@ -104,7 +104,7 @@ export default function AdminFeedbacksPage() {
     const typeConfig: Record<FeedbackType, { label: string; color: string; icon: typeof Bug }> = {
         bug: { label: "Bug 缺陷", color: "error", icon: Bug },
         feature: { label: "功能提议", color: "processing", icon: Lightbulb },
-        improvement: { label: "体验建议", color: "cyan", icon: Sparkles },
+        improvement: { label: "体验建议", color: "cyan", icon: Lightbulb },
         other: { label: "其他反馈", color: "default", icon: MessageSquare },
     };
 
@@ -276,7 +276,7 @@ export default function AdminFeedbacksPage() {
                             <p className="text-xs text-blue-600 dark:text-blue-400">处理中</p>
                             <p className="text-xl font-semibold text-blue-600 dark:text-blue-400 mt-0.5">{processingCount}</p>
                         </div>
-                        <Sparkles className="size-5 text-blue-500 opacity-60" />
+                        <Clock3 className="size-5 text-blue-500 opacity-60" />
                     </div>
                     <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-4 flex items-center justify-between">
                         <div>

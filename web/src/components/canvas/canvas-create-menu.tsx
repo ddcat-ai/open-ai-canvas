@@ -1,7 +1,5 @@
-import { motion, useReducedMotion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
 
-import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -15,23 +13,39 @@ export type CanvasCreateCommand = {
     onClick: () => void;
 };
 
+/**
+ * 添加节点菜单：节点网格无边框，靠表面明度分层；
+ * 工作流与导入资源合并到底部浅底轨道，hover 时提亮为浮层表面。
+ */
 export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[] }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const themeKey = useActiveTheme();
+    const theme = canvasThemes[themeKey];
+    const isDark = themeKey === "dark";
     const projectCommands = commands.filter((command) => command.section === "project");
     const nodeCommands = commands.filter((command) => command.section === "node");
-    const workflowCommands = commands.filter((command) => command.section === "workflow");
-    const resourceCommands = commands.filter((command) => command.section === "resource");
+    const footerCommands = [...commands.filter((command) => command.section === "workflow"), ...commands.filter((command) => command.section === "resource")];
+    const vars = {
+        "--create-hover": theme.toolbar.itemHover,
+        "--create-chip": theme.toolbar.itemHover,
+        "--create-chip-hover": theme.toolbar.activeBg,
+        "--create-track": theme.toolbar.itemHover,
+        // 亮色轨道内提亮为白色浮块并配贴边小阴影；暗色只靠表面提亮，不用投影。
+        "--create-track-hover": isDark ? theme.toolbar.activeBg : theme.spatial.elevated,
+        "--create-track-hover-shadow": isDark ? "none" : "var(--shadow-xs)",
+        "--tw-ring-color": theme.node.muted,
+        color: theme.node.text,
+    } as CSSProperties;
 
     return (
-        <div>
-            <header className="flex min-h-7 items-center justify-between gap-2 border-b pb-2" style={{ borderColor: theme.toolbar.border }}>
-                <h2 className="font-semibold leading-none" style={{ fontSize: "var(--fs-caption)" }}>添加节点</h2>
+        <div className="flex flex-col" style={vars}>
+            <header className="flex h-8 items-center justify-between gap-2 pl-2 pr-1">
+                <h2 className="font-semibold leading-none" style={{ fontSize: "var(--fs-ui)" }}>添加节点</h2>
                 {projectCommands.map((command) => (
                     <button
                         key={command.id}
                         type="button"
-                        className="inline-flex h-6 min-w-0 items-center gap-1 rounded-[var(--dock-item-radius)] px-2 font-medium outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/8 [&_svg]:size-3"
-                        style={{ color: theme.node.muted, fontSize: "var(--fs-tiny)", "--tw-ring-color": theme.node.muted } as CSSProperties}
+                        className="inline-flex h-6 min-w-0 items-center gap-1 rounded-[var(--r-md)] px-2 font-medium outline-none transition-colors hover:bg-[var(--create-chip-hover)] focus-visible:ring-2 [&_svg]:size-3.5"
+                        style={{ color: theme.node.muted, background: "var(--create-chip)", fontSize: "var(--fs-label)" }}
                         title={command.label}
                         onMouseDown={(event) => event.stopPropagation()}
                         onClick={command.onClick}
@@ -42,68 +56,53 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
                 ))}
             </header>
 
-            <MenuSection title="创作节点" color={theme.node.muted} />
-            <CanvasCreateCommandGrid commands={nodeCommands} variant="node" />
-
-            {workflowCommands.length ? (
-                <>
-                    <MenuSection title="工作流" color={theme.node.muted} spaced />
-                    <CanvasCreateCommandGrid commands={workflowCommands} variant="workflow" />
-                </>
-            ) : null}
-
-            <MenuSection title="导入资源" color={theme.node.muted} spaced />
-            <CanvasCreateCommandGrid commands={resourceCommands} variant="compact" />
-        </div>
-    );
-}
-
-function CanvasCreateCommandGrid({ commands, variant }: { commands: CanvasCreateCommand[]; variant: "node" | "compact" | "workflow" }) {
-    const theme = canvasThemes[useActiveTheme()];
-    const reducedMotion = useReducedMotion();
-
-    return (
-        <div className={cn("grid gap-1", variant === "node" ? "grid-cols-4" : variant === "workflow" ? "grid-cols-1" : "grid-cols-2")}>
-            {commands.map((command) => (
-                <motion.button
-                    key={command.id}
-                    type="button"
-                    whileHover={reducedMotion ? undefined : { y: -1 }}
-                    whileTap={reducedMotion ? undefined : { scale: 0.98 }}
-                    transition={aceternityMotion.spring.dock}
-                    className={cn(
-                        "group min-w-0 overflow-hidden border border-black/10 bg-white/70 outline-none transition-colors hover:border-black/20 hover:bg-black/5 focus-visible:ring-2 dark:border-white/10 dark:bg-white/[.04] dark:hover:border-white/20 dark:hover:bg-white/8",
-                        variant === "node"
-                            ? "flex h-[var(--canvas-create-node-height)] flex-col items-start justify-between rounded-[var(--dock-item-radius)] px-2 py-2 text-left"
-                            : variant === "workflow"
-                                ? "flex h-[var(--canvas-create-resource-height)] items-center justify-start gap-2 rounded-[var(--dock-item-radius)] px-2 text-left"
-                                : "flex h-[var(--canvas-create-resource-height)] items-center justify-center gap-2 rounded-[var(--dock-item-radius)] px-2 text-center",
-                    )}
-                    style={{ color: theme.node.text, "--tw-ring-color": theme.node.muted } as CSSProperties}
-                    title={command.label}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={command.onClick}
-                >
-                    {variant === "node" ? (
-                        <>
-                            <span className="flex w-full min-w-0 items-center justify-between gap-1">
-                                <span className="grid size-6 shrink-0 place-items-center opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-5">{command.icon}</span>
-                                {command.badge ? <span className="shrink-0 font-medium leading-none" style={{ color: theme.node.muted, fontSize: "var(--fs-tiny)" }}>{command.badge}</span> : null}
+            <div role="group" aria-label="创作节点" className="mt-1 grid grid-cols-4 gap-0.5">
+                {nodeCommands.map((command) => (
+                    <button
+                        key={command.id}
+                        type="button"
+                        className="group relative flex h-[var(--canvas-create-node-height)] min-w-0 flex-col items-center justify-center gap-2 rounded-[var(--r-md)] px-1 outline-none transition-colors hover:bg-[var(--create-hover)] focus-visible:ring-2"
+                        title={command.badge ? `${command.label}（${command.badge}）` : command.label}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={command.onClick}
+                    >
+                        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--create-chip)] transition-colors group-hover:bg-[var(--create-chip-hover)] [&_svg]:size-[18px] [&_svg]:stroke-[1.75]">
+                            {command.icon}
+                        </span>
+                        <span className="block w-full truncate text-center font-medium leading-none" style={{ fontSize: "var(--fs-caption)" }}>{command.label}</span>
+                        {command.badge ? (
+                            <span
+                                className="absolute right-1 top-1 rounded-[var(--r-xs)] px-1 font-medium leading-4"
+                                style={{ color: theme.node.muted, background: "var(--create-chip)", fontSize: "var(--fs-label)" }}
+                            >
+                                {command.badge}
                             </span>
-                            <span className="block w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium leading-none" style={{ fontSize: "var(--fs-label)" }}>{command.label}</span>
-                        </>
-                    ) : (
-                        <>
-                            <span className="grid size-4 shrink-0 place-items-center opacity-65 transition-opacity group-hover:opacity-100 [&_svg]:size-3.5">{command.icon}</span>
-                            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium leading-none" style={{ fontSize: "var(--fs-label)" }}>{command.label}</span>
-                        </>
-                    )}
-                </motion.button>
-            ))}
+                        ) : null}
+                    </button>
+                ))}
+            </div>
+
+            {footerCommands.length ? (
+                <div role="group" aria-label="工作流与导入资源" className="mt-2 grid gap-0.5 rounded-[10px] p-0.5" style={{ background: "var(--create-track)", gridTemplateColumns: `repeat(${footerCommands.length}, minmax(0, 1fr))` }}>
+                    {footerCommands.map((command) => (
+                        <button
+                            key={command.id}
+                            type="button"
+                            className={cn(
+                                "group flex h-[var(--canvas-create-resource-height)] min-w-0 items-center justify-center gap-1.5 rounded-[var(--r-md)] px-2 font-medium outline-none transition-[background-color,box-shadow] hover:bg-[var(--create-track-hover)] hover:shadow-[var(--create-track-hover-shadow)] focus-visible:ring-2",
+                                "[&_svg]:size-3.5",
+                            )}
+                            style={{ fontSize: "var(--fs-caption)" }}
+                            title={command.label}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={command.onClick}
+                        >
+                            <span className="grid shrink-0 place-items-center opacity-70 transition-opacity group-hover:opacity-100">{command.icon}</span>
+                            <span className="truncate">{command.label}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
-}
-
-function MenuSection({ title, color, spaced = false }: { title: string; color: string; spaced?: boolean }) {
-    return <h3 className="mb-1 mt-2 px-1 font-medium leading-none" style={{ color, fontSize: "var(--fs-tiny)", marginTop: spaced ? "var(--space-4)" : "var(--space-2)" }}>{title}</h3>;
 }

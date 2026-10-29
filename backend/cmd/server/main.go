@@ -86,6 +86,9 @@ func run(ctx context.Context) error {
 	if err := svc.EnsureSystemChannelModels(); err != nil {
 		return err
 	}
+	if err := svc.EnsureDefaultUserGroup(); err != nil {
+		return err
+	}
 	if err := svc.EnsureDefaultPromptTemplates(); err != nil {
 		return err
 	}

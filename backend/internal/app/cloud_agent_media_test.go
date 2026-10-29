@@ -109,7 +109,7 @@ func approveAgentMediaDraft(t *testing.T, s *Service, runID string) {
 
 func TestCloudAgentMediaApprovalCreatesNodeReferencesAndResult(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
-	catalog, err := s.cloudAgentModelList(nil)
+	catalog, err := s.cloudAgentModelList(testGroupUserID(s), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -592,7 +592,7 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		catalog, err := s.cloudAgentModelList(intent)
+		catalog, err := s.cloudAgentModelList(testGroupUserID(s), intent)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -619,7 +619,7 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := s.cloudAgentModelList(intent)
+	catalog, err := s.cloudAgentModelList(testGroupUserID(s), intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,7 +633,7 @@ func TestCloudAgentImageCatalogTreatsUnselectedPricedOptionsAsCandidates(t *test
 	imageModel := seedAgentLogicalImageModel(t, s, db)
 	intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{}}
 
-	models, err := s.PublicLogicalModels(&intent)
+	models, err := s.PublicLogicalModels(testGroupAccess(s), &intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -649,7 +649,7 @@ func TestCloudAgentImageCatalogTreatsUnselectedPricedOptionsAsCandidates(t *test
 		t.Fatalf("admin projection should expose the route's 9 configured tiers: %#v", adminModels)
 	}
 
-	catalog, err := s.cloudAgentModelList(&intent)
+	catalog, err := s.cloudAgentModelList(testGroupUserID(s), &intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -663,12 +663,12 @@ func TestCloudAgentImageCatalogTreatsUnselectedPricedOptionsAsCandidates(t *test
 	if logicalEntry == nil || len(logicalEntry["priceTiers"].([]PublicLogicalModelPriceTier)) != 9 {
 		t.Fatalf("agent catalog did not expose the logical candidate with 9 price tiers: %#v", logicalEntry)
 	}
-	defaultRoute, err := s.ResolveLogicalModel(imageModel.ID, intent)
+	defaultRoute, err := s.ResolveLogicalModel(nil, imageModel.ID, intent)
 	if err != nil || defaultRoute.PriceTier == nil {
 		t.Fatalf("declared model defaults must resolve a priced specification: %v", err)
 	}
 	selectedIntent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{"imageResolution": "4k", "quality": "max"}}
-	routed, err := s.ResolveLogicalModel(imageModel.ID, selectedIntent)
+	routed, err := s.ResolveLogicalModel(nil, imageModel.ID, selectedIntent)
 	if err != nil || routed.PriceTier == nil || routed.PriceTier.ID != "agent-image-4k-max" {
 		t.Fatalf("complete selection should resolve only its exact price tier: routed=%#v error=%v", routed, err)
 	}
@@ -683,14 +683,14 @@ func TestCloudAgentImageCatalogRejectsUnpricedExplicitCombination(t *testing.T) 
 	s.invalidateRouteCatalog()
 	intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{}, Options: map[string]any{"imageResolution": "4k", "quality": "max"}}
 
-	models, err := s.PublicLogicalModels(&intent)
+	models, err := s.PublicLogicalModels(testGroupAccess(s), &intent)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(models) != 1 || models[0].ID != imageModel.ID || models[0].Available {
 		t.Fatalf("supported but unpriced explicit combination must not be available: %#v", models)
 	}
-	catalog, err := s.cloudAgentModelList(&intent)
+	catalog, err := s.cloudAgentModelList(testGroupUserID(s), &intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,7 +698,7 @@ func TestCloudAgentImageCatalogRejectsUnpricedExplicitCombination(t *testing.T) 
 	if strings.Contains(string(encoded), "\"logicalModelId\":\""+imageModel.ID+"\"") {
 		t.Fatalf("agent exposed a model with no price tier for the explicit combination: %s", encoded)
 	}
-	if _, err := s.ResolveLogicalModel(imageModel.ID, intent); err == nil {
+	if _, err := s.ResolveLogicalModel(nil, imageModel.ID, intent); err == nil {
 		t.Fatal("strict routing accepted an explicitly unpriced combination")
 	}
 }

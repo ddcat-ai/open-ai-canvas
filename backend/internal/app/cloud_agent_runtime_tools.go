@@ -17,14 +17,6 @@ import (
 )
 
 func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgentCall, result any, err error) bool {
-	if state != nil && err == nil {
-		if cloudAgentLessonToolEligible(call.Function.Name) {
-			state.LessonEligibleToolSuccesses++
-		}
-		if call.Function.Name == agenttool.RememberLesson {
-			state.RememberLessonSuccesses++
-		}
-	}
 	payload := map[string]any{"toolName": call.Function.Name, "callId": call.ID, "arguments": call.Function.Arguments}
 	if call.Function.Name == agenttool.SkillReadFile {
 		var args struct {
@@ -33,10 +25,9 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 		}
 		if json.Unmarshal([]byte(call.Function.Arguments), &args) == nil {
 			payload["skillId"], payload["path"] = args.SkillID, args.Path
-			for _, skill := range state.Skills {
-				if skill.ID == args.SkillID {
-					payload["skillName"] = skill.Name
-					break
+			if fields, ok := result.(map[string]any); ok && err == nil {
+				if name, _ := fields["skillName"].(string); name != "" {
+					payload["skillName"] = name
 				}
 			}
 		}
@@ -165,6 +156,10 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 	state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "tool", "tool_call_id": call.ID, "content": string(raw)})
 	if err == nil {
 		cloudAgentCompactSupersededReadResult(state, call)
+	}
+	// Pi 直接接收工具结果，不经过旧调度器；末项不是看图时也必须补送本批图片。
+	if state.CallIndex+1 >= len(state.Calls) {
+		cloudAgentFlushPendingImages(state)
 	}
 	state.CallIndex++
 	state.Approval = nil

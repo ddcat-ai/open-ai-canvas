@@ -425,7 +425,7 @@ func verifyPlans(db *gorm.DB, svc *service.Service, plans []familyPlan) error {
 		}
 		for _, route := range plan.routes {
 			intent := routeIntent(route.spec)
-			resolved, err := svc.ResolveLogicalModel(family.ID, intent)
+			resolved, err := svc.ResolveLogicalModel(nil, family.ID, intent)
 			if err != nil {
 				return fmt.Errorf("验证模型家族 %s 的渠道 SKU %s 失败：%w", plan.definition.Code, route.channelModel.ModelKey, err)
 			}

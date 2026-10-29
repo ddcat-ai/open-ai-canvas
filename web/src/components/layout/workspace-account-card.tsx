@@ -5,6 +5,7 @@ import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { useUserStore } from "@/stores/use-user-store";
 import { UserAvatar } from "./user-avatar";
+import { UserGroupAvatarRing, UserGroupBadge } from "./user-group-badge";
 import "./workspace-account-card.css";
 
 /** 同一账户卡片用于顶部和侧栏；余额与退出均复用真实服务。 */
@@ -17,8 +18,8 @@ export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () =>
     if (!user) return null;
     return <section className="workspace-account-card" aria-label="我的账户">
         <header className="workspace-account-card-identity">
-            <UserAvatar user={user} className="workspace-account-card-avatar" />
-            <div><strong>{user.displayName || user.username}</strong><span>@{user.username}</span></div>
+            <UserGroupAvatarRing><UserAvatar user={user} className="workspace-account-card-avatar" /></UserGroupAvatarRing>
+            <div><strong className="workspace-account-card-name"><span>{user.displayName || user.username}</span><UserGroupBadge /></strong><span>@{user.username}</span></div>
             <em>{user.role === "admin" ? "管理员" : "创作者"}</em>
         </header>
         {creditsEnabled ? <div className="workspace-account-card-wallet">

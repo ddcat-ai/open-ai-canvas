@@ -202,29 +202,48 @@ export function getAntThemeConfig(dark: boolean, skinID: unknown = "classic"): T
             motionDurationSlow: `${Math.min(Math.max(skin.motionNormal ?? 180, 240), 250)}ms`,
         },
         components: {
+            // 按钮统一规范见 docs/ui-design-system.md §3.0：三套主题（根 / 用户工作台 / 后台）只在高度上
+            // 区分密度，圆角、字号字重、内边距、图标间距和默认配色同值。颜色取 globals.css 的 --button-*，
+            // 主按钮与危险实心按钮的实底和质感阴影由 primary-buttons.css 接管，这里的阴影 token 保持 none。
             Button: {
                 defaultShadow: "none",
                 primaryShadow: "none",
                 dangerShadow: "none",
-                dangerColor: color.dangerForeground,
+                dangerColor: "var(--button-danger-fg)",
                 fontWeight: skin.buttonFontWeight || 500,
                 borderRadius: skin.buttonRadius || skin.borderRadius || 8,
+                borderRadiusSM: skin.buttonRadius || skin.borderRadius || 8,
+                borderRadiusLG: skin.buttonRadius || skin.borderRadius || 8,
+                contentFontSize: 13,
+                contentFontSizeSM: 12,
+                contentFontSizeLG: 14,
                 paddingInline: 12,
                 paddingInlineLG: 16,
                 paddingInlineSM: 8,
+                iconGap: 6,
+                onlyIconSize: 16,
+                onlyIconSizeSM: 14,
+                onlyIconSizeLG: 16,
                 colorPrimary: color.solidBg,
                 colorPrimaryHover: color.solidHoverBg,
                 colorPrimaryActive: color.solidActiveBg,
                 primaryColor: color.solidFg,
-                defaultBg: skin.controlSurface || "transparent",
-                defaultColor: color.selectedFg,
-                defaultBorderColor: color.controlBorder,
-                defaultHoverBg: skin.controlHover || color.selectedBg,
-                defaultHoverColor: color.selectedFg,
-                defaultHoverBorderColor: color.controlBorder,
-                defaultActiveBg: skin.controlActive || color.selectedHoverBg,
-                defaultActiveColor: color.selectedFg,
-                defaultActiveBorderColor: color.controlBorder,
+                defaultBg: skin.controlSurface || "var(--button-secondary-bg)",
+                defaultColor: skin.selectedForeground || "var(--button-secondary-fg)",
+                defaultBorderColor: skin.controlBorder || "var(--button-secondary-border)",
+                defaultHoverBg: skin.controlHover || "var(--button-secondary-hover-bg)",
+                defaultHoverColor: skin.selectedForeground || "var(--button-secondary-fg)",
+                defaultHoverBorderColor: skin.controlBorder || "var(--button-secondary-hover-border)",
+                defaultActiveBg: skin.controlActive || "var(--button-secondary-active-bg)",
+                defaultActiveColor: skin.selectedForeground || "var(--button-secondary-fg)",
+                defaultActiveBorderColor: skin.controlBorder || "var(--button-secondary-hover-border)",
+                defaultBgDisabled: "var(--button-secondary-bg)",
+                textTextColor: "var(--button-ghost-fg)",
+                textTextHoverColor: "var(--button-ghost-hover-fg)",
+                textTextActiveColor: "var(--button-ghost-hover-fg)",
+                textHoverBg: "var(--button-ghost-hover-bg)",
+                // antd 6 文字按钮按下态取 colorFill（color-light-active）。
+                colorFill: "var(--button-ghost-active-bg)",
             },
             Input: {
                 borderRadius: skin.inputRadius || 8,
@@ -408,21 +427,20 @@ export function getWorkspaceAntThemeConfig(): ThemeConfig {
             motionEaseInBack: "cubic-bezier(0.7, 0, 0.84, 0)",
         },
         components: {
-            // 用户工作台按钮的唯一几何与配色来源。主按钮颜色仍由皮肤（primary-buttons.css）决定；
-            // 次要按钮为透明底 + 1px 细线，文字按钮为透明底 + 弱化文字，hover 只换表面。
+            // 用户工作台与根主题、后台共用同一套按钮规范（docs/ui-design-system.md §3.0），这里只收紧高度。
+            // 主按钮实底由 primary-buttons.css 接管；次要按钮是带 1px 边缘的实体键，文字按钮悬停才出现底色。
             Button: {
                 borderRadius: 8, borderRadiusSM: 8, borderRadiusLG: 8,
                 fontWeight: 500, contentFontSize: 13, contentFontSizeSM: 12, contentFontSizeLG: 14,
                 paddingInline: 12, paddingInlineSM: 8, paddingInlineLG: 16,
-                iconGap: 8, onlyIconSize: 16, onlyIconSizeSM: 14, onlyIconSizeLG: 16,
-                defaultBg: "transparent", defaultColor: "var(--user-ink)", defaultBorderColor: "var(--user-border)",
-                defaultHoverBg: "var(--user-surface-muted)", defaultHoverColor: "var(--user-ink)", defaultHoverBorderColor: "var(--user-border-strong)",
-                defaultActiveBg: "var(--user-surface-hover)", defaultActiveColor: "var(--user-ink)", defaultActiveBorderColor: "var(--user-border-strong)",
-                textTextColor: "var(--user-ink-muted)", textTextHoverColor: "var(--user-ink)", textTextActiveColor: "var(--user-ink)",
+                iconGap: 6, onlyIconSize: 16, onlyIconSizeSM: 14, onlyIconSizeLG: 16,
+                defaultBg: "var(--button-secondary-bg)", defaultColor: "var(--button-secondary-fg)", defaultBorderColor: "var(--button-secondary-border)",
+                defaultHoverBg: "var(--button-secondary-hover-bg)", defaultHoverColor: "var(--button-secondary-fg)", defaultHoverBorderColor: "var(--button-secondary-hover-border)",
+                defaultActiveBg: "var(--button-secondary-active-bg)", defaultActiveColor: "var(--button-secondary-fg)", defaultActiveBorderColor: "var(--button-secondary-hover-border)",
+                textTextColor: "var(--button-ghost-fg)", textTextHoverColor: "var(--button-ghost-hover-fg)", textTextActiveColor: "var(--button-ghost-hover-fg)",
                 // antd 6 文字按钮按下态取 colorFill（color-light-active）。
-                textHoverBg: "var(--user-surface-muted)", colorFill: "var(--user-surface-hover)",
-                // 禁用的次要按钮保持透明底，整体透明度由 workspace-product.css 统一降低。
-                defaultBgDisabled: "transparent",
+                textHoverBg: "var(--button-ghost-hover-bg)", colorFill: "var(--button-ghost-active-bg)",
+                defaultBgDisabled: "var(--button-secondary-bg)",
                 defaultShadow: "none", primaryShadow: "none", dangerShadow: "none",
             },
             Input: {

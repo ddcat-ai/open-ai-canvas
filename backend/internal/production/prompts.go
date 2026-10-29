@@ -147,8 +147,41 @@ func PlanPrompt(title string, settings Settings, bibleSummary string, batch []Ch
 	return b.String()
 }
 
+// 单集素材类型：novel 需要改编；script / storyboard 是用户写好的内容，只拆镜或转录。
+const (
+	SourceNovel      = "novel"
+	SourceScript     = "script"
+	SourceStoryboard = "storyboard"
+)
+
+// NormalizeSourceFormat 把未知或空的素材类型归为小说原文。
+func NormalizeSourceFormat(value string) string {
+	switch strings.TrimSpace(value) {
+	case SourceScript:
+		return SourceScript
+	case SourceStoryboard:
+		return SourceStoryboard
+	}
+	return SourceNovel
+}
+
+// ScriptSourceChapterRunes 是剧本提示词里每章原文的上限；逐集追加的原文不允许超过它，避免被静默截断而丢台词。
+const ScriptSourceChapterRunes = 12000
+
 func ScriptSystemPrompt() string {
-	return "你是竖屏短剧导演兼分镜师。你把单集大纲和原文拆成可直接写成视频提示词的镜头表。只保留镜头能拍到的动作和能说出口的台词，内心独白改为可见反应或台词。" + jsonOnly
+	return "你是竖屏短剧导演兼分镜师。你把单集素材拆成可直接写成视频提示词的镜头表，只写镜头能拍到的动作。" +
+		"台词是作者的原创内容：原文里的每一句台词都必须逐字保留并按原顺序出现，不得改写、润色、缩写、合并或删除，也不得编造原文没有的台词。" + jsonOnly
+}
+
+// sourceFormatRules 说明素材类型对拆镜方式的约束。
+func sourceFormatRules(format string) string {
+	switch NormalizeSourceFormat(format) {
+	case SourceScript:
+		return "【素材类型】用户已写好的剧本。按剧本顺序逐场逐句拆镜：每一句台词、旁白、画外音都必须出现且一字不改；舞台说明与动作描写转成镜头的 action 和画面。不要增加剧本没有的情节和台词，不要为了钩子或悬念调整顺序。\n"
+	case SourceStoryboard:
+		return "【素材类型】用户已做好的分镜。原文的每个镜头对应输出一个镜头，顺序和数量保持一致，不合并、不删除、不新增；台词、说话人、动作、景别、运镜、时长、转场按原文转录，原文没写的字段再按画面补全。\n"
+	}
+	return "【素材类型】小说原文。引号内的对白逐字照搬为台词；叙述和心理描写改成可拍到的动作与表情，确需旁白时用“旁白”逐字摘取原文叙述句，不要自己写旁白。\n"
 }
 
 type ScriptContext struct {
@@ -166,27 +199,50 @@ type ScriptContext struct {
 	Segment        SegmentLimits
 	SceneSummary   string
 	SourceChapters []Chapter
+	// SourceFormat 是本集素材类型，决定是改编、按剧本拆镜还是转录分镜。
+	SourceFormat string
 }
 
 func ScriptPrompt(ctx ScriptContext) string {
 	settings := ctx.Settings.Normalized()
+	format := NormalizeSourceFormat(ctx.SourceFormat)
 	shotTarget := settings.Storyboard.ShotTarget(settings.EpisodeSeconds)
+	maxLine := settings.Storyboard.MaxLineRunes()
 	var b strings.Builder
 	fmt.Fprintf(&b, "作品：%s\n第 %d 集《%s》\n画幅：%s · 单集约 %d 秒 · 对白语言：%s\n视觉风格：%s\n画面规则：%s\n\n", ctx.Title, ctx.EpisodeNumber, ctx.EpisodeTitle, settings.AspectRatio, settings.EpisodeSeconds, settings.Language, firstNonEmpty(settings.StylePrompt, "写实电影感"), firstNonEmpty(ctx.VisualRules, "保持全剧统一"))
-	fmt.Fprintf(&b, "本集大纲：%s\n开场钩子：%s\n结尾悬念：%s\n\n", ctx.Synopsis, ctx.Hook, ctx.Cliffhanger)
+	fmt.Fprintf(&b, "本集大纲：%s\n开场钩子：%s\n结尾悬念：%s\n\n", firstNonEmpty(ctx.Synopsis, "以原文为准"), firstNonEmpty(ctx.Hook, "以原文为准"), firstNonEmpty(ctx.Cliffhanger, "以原文为准"))
+	b.WriteString(sourceFormatRules(format))
 	b.WriteString("【角色表】（name 必须从这里选；新出现的人物用其原文称呼）\n" + firstNonEmpty(ctx.CastSummary, "无") + "\n")
 	b.WriteString("【道具表】（props 从这里选；新出现的关键道具用原文称呼）\n" + firstNonEmpty(ctx.PropSummary, "无") + "\n")
 	b.WriteString("【场景表】\n" + firstNonEmpty(ctx.SceneSummary, "无") + "\n\n")
-	fmt.Fprintf(&b, "输出约 %d 个镜头：\n", shotTarget)
+	switch format {
+	case SourceStoryboard:
+		b.WriteString("镜头数与原分镜一致，输出：\n")
+	case SourceScript:
+		fmt.Fprintf(&b, "镜头数以完整容纳剧本全部台词为准（参考约 %d 个），输出：\n", shotTarget)
+	default:
+		fmt.Fprintf(&b, "输出约 %d 个镜头：\n", shotTarget)
+	}
 	b.WriteString(`{"shots":[{"scene":"场景名","characters":["出镜角色名"],"props":["画面中出现的关键道具名"],"speaker":"说话人（旁白写“旁白”，无台词留空）",` +
-		fmt.Sprintf(`"dialogue":"一句台词（4–%d 字，无则空）","action":"画面里发生的动作","shotSize":"特写/近景/中景/全景/远景",`, settings.Storyboard.MaxLineRunes()) +
+		`"dialogue":"本镜台词，逐字摘自原文（无则空）","action":"画面里发生的动作","shotSize":"特写/近景/中景/全景/远景",` +
 		`"camera":"固定/推/拉/摇/跟/环绕","durationSeconds":4,"transition":"cut/fadeblack/fadewhite","imagePrompt":"本镜起幅画面：人物站位与朝向、动作、表情、构图、光线、环境",` +
-		`"videoPrompt":"本镜头时长内的动作与镜头运动描述，按时间顺序写清起止","sourceQuote":"对应原文的一小句"}]}` + "\n")
+		`"videoPrompt":"本镜头时长内的动作与镜头运动描述，按时间顺序写清起止","sourceQuote":"对应原文的一小句"}],` +
+		`"cast":[{"kind":"character/prop/scene","name":"上面三张表里没有、本集新出现的角色/道具/场景","appearance":"可直接用于生图的外貌服装或外形环境描述（原文未写明的按身份合理补全）","voice":"角色的音色与说话方式（道具、场景留空）"}]}` + "\n")
 	b.WriteString(settings.Storyboard.PromptRules(settings.EpisodeSeconds, ctx.Segment))
-	b.WriteString("规则：第一个镜头就是钩子；每个镜头最多一句台词，对话用正反打拆成多个短镜；imagePrompt 中用角色名、道具名指代，不要重复外貌描述；最后一个镜头停在悬念。\n\n")
+	fmt.Fprintf(&b, "台词规则：每个镜头最多一句台词；一句台词超过 %d 字时，在原文标点处拆到同一说话人的连续镜头里，拆开后按顺序拼起来必须与原文一字不差；对话用正反打拆成多个镜头。\n", maxLine)
+	if format == SourceNovel {
+		b.WriteString("结构：第一个镜头就是钩子，最后一个镜头停在悬念，只调整镜头取舍与顺序，不改台词。\n")
+	} else {
+		b.WriteString("结构：保持原文的剧情顺序，不为钩子或悬念改动内容。\n")
+	}
+	b.WriteString("imagePrompt 中用角色名、道具名指代，不要重复外貌描述；cast 只列表里没有的新设定，没有则给空数组。\n")
+	if strings.TrimSpace(ctx.Synopsis) == "" {
+		b.WriteString(`本集还没有梗概：在 JSON 顶层另给 "episode":{"synopsis":"本集剧情梗概（80-150字）","hook":"开场钩子","cliffhanger":"结尾悬念"}，按原文概括。` + "\n")
+	}
+	b.WriteString("\n")
 	b.WriteString("【对应原文】\n")
 	for _, chapter := range ctx.SourceChapters {
-		b.WriteString("## " + chapter.Title + "\n" + truncateRunes(chapter.Text, 12000) + "\n\n")
+		b.WriteString("## " + chapter.Title + "\n" + truncateRunes(chapter.Text, ScriptSourceChapterRunes) + "\n\n")
 	}
 	return b.String()
 }

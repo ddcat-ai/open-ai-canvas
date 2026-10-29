@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Box, Camera, Clapperboard, Lightbulb, LockKeyhole, Move3d, Sparkles, Timer } from "lucide-react";
+import { Box, Camera, Clapperboard, Lightbulb, LockKeyhole, Move3d, Timer, MousePointerClick } from "lucide-react";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -62,7 +62,7 @@ export function CanvasPrevisNodePanel({ node, scene, readNodeContent, onOpen, pr
                 <Stat icon={<Box className="size-3" />} value={objectCount} label="对象" />
                 <Stat icon={<Camera className="size-3" />} value={cameraCount} label="机位" />
                 <Stat icon={<Lightbulb className="size-3" />} value={lightCount} label="灯光" />
-                <span className="previs-node-card-footer-action"><Sparkles className="size-3" />双击打开</span>
+                <span className="previs-node-card-footer-action"><MousePointerClick className="size-3" />双击打开</span>
             </footer>
         </div>
     );

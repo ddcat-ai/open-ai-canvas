@@ -11,12 +11,12 @@ import (
 // 工具 schema 是模型契约，也是 prompt cache 前缀的第一段。重构（注册表、typed args）
 // 必须逐字节保持输出不变；确实需要改契约时用 UPDATE_GOLDEN=1 重新生成并在评审中检查 diff。
 func cloudAgentToolGoldenRequests() map[string]CloudAgentRequest {
-	full := CloudAgentRequest{PermissionMode: "auto", ContextScope: []string{"canvas"}, SkillIDs: []string{"capability-list"}, VisionEnabled: true}
+	full := CloudAgentRequest{PermissionMode: "auto", ContextScope: []string{"canvas"}, SkillsEnabled: true, MemoryMode: "auto", VisionEnabled: true}
 	full.Budget.MaxGenerationTasks = 1
 	return map[string]CloudAgentRequest{
 		"full":             full,
-		"read_only_canvas": {PermissionMode: "read_only", ContextScope: []string{"canvas"}},
-		"approval_canvas":  {PermissionMode: "request_approval", ContextScope: []string{"canvas"}},
+		"read_only_canvas": {PermissionMode: "read_only", ContextScope: []string{"canvas"}, MemoryMode: "auto"},
+		"approval_canvas":  {PermissionMode: "request_approval", ContextScope: []string{"canvas"}, MemoryMode: "review"},
 		"no_canvas":        {PermissionMode: "auto"},
 	}
 }

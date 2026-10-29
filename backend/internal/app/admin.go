@@ -16,6 +16,8 @@ type CreateAdminUserRequest struct {
 	Password    string           `json:"password"`
 	Role        model.UserRole   `json:"role"`
 	Status      model.UserStatus `json:"status"`
+	// UserGroup 为空表示默认分组。
+	UserGroup string `json:"userGroup"`
 }
 
 type UpdateUserRequest struct {
@@ -26,6 +28,8 @@ type UpdateUserRequest struct {
 	Status      model.UserStatus `json:"status"`
 	// IsPromoter 为空表示不修改推广人标记。
 	IsPromoter *bool `json:"isPromoter"`
+	// UserGroup 为空指针表示不修改分组；空串或 default 表示默认分组。
+	UserGroup *string `json:"userGroup"`
 }
 
 type BulkDisableUsersRequest struct {
@@ -41,6 +45,7 @@ type AdminListQuery struct {
 	Keyword string
 	Status  string
 	Type    string
+	Group   string
 	Page    int
 	Limit   int
 }

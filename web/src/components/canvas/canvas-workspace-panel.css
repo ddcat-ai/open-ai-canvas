@@ -247,3 +247,15 @@
         transition: none;
     }
 }
+/* 无底板的画布工具条：去掉材质与模糊，与画布融为一体；图标用正文色并加一层投影，在点阵和节点上仍清晰可辨。 */
+.canvas-floating-dock.is-bare {
+    padding-inline: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+.canvas-floating-dock.is-bare .aceternity-dock-command svg {
+    filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--background) 85%, transparent));
+}
+.canvas-floating-dock.is-bare .aceternity-dock-separator {
+    opacity: 0.5;
+}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 	"yingce/backend/internal/repository"
 )
 
@@ -78,7 +79,7 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 	if err != nil {
 		return s.markProviderCancellationUncertain(task, "读取上游取消配置失败，费用待核对："+err.Error())
 	}
-	if !supportsProviderCancellation(input.Config.InterfaceType) {
+	if !s.supportsProviderCancellation(input.Config.InterfaceType) {
 		return s.markProviderCancellationUncertain(task, "当前上游协议不支持取消，费用待核对")
 	}
 
@@ -87,7 +88,7 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 	requestTask := *task
 	requestTask.InputJSON = mustJSON(input)
 	requestCtx = withProviderRequestKind(withProviderAnalytics(requestCtx, s, requestTask), "cancel")
-	if err := cancelProviderTask(requestCtx, input.Config, task.ProviderRequestID); err != nil {
+	if err := s.cancelProviderTask(requestCtx, input, task.ProviderRequestID); err != nil {
 		return s.markProviderCancellationUncertain(task, "上游取消请求结果不明确，费用待核对："+safeProviderLogError(err))
 	}
 	_ = s.log(task.UserID, task.ID, "info", "已请求上游取消，等待供应商确认", task.ProviderRequestID)
@@ -106,7 +107,7 @@ func (s *Service) reconcileProviderCancellation(ctx context.Context, task *model
 	queryTask := *task
 	queryTask.InputJSON = mustJSON(input)
 	queryCtx := withProviderRequestKind(withProviderAnalytics(ctx, s, queryTask), "cancel-query")
-	outcome, providerStatus, err := queryProviderCancellation(queryCtx, input.Config, task.ProviderRequestID)
+	outcome, providerStatus, err := s.queryProviderCancellation(queryCtx, input, task.ProviderRequestID)
 	if err != nil {
 		if task.ProviderCancelAttempts >= providerCancellationMaxAttempts-1 {
 			return s.markProviderCancellationUncertain(task, "连续查询上游取消状态失败，费用待核对："+safeProviderLogError(err))
@@ -195,6 +196,80 @@ func (s *Service) providerCancellationInput(task *model.Task) (canvasGenerationI
 
 func supportsProviderCancellation(interfaceType string) bool {
 	return interfaceType == string(model.ChannelInterfaceGeminiVeo) || model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(interfaceType))
+}
+
+// supportsProviderCancellation 在手写协议之外，也接受分离式回查且声明了 cancel 的声明式插件：
+// cancel 发出取消，poll 的状态映射确认上游是否真的取消（确认后才退积分）。
+// 其他声明了 cancel 的插件（如 OpenAI Videos 的 DELETE 实为删除）语义未逐一核实，暂不启用。
+func (s *Service) supportsProviderCancellation(interfaceType string) bool {
+	if supportsProviderCancellation(interfaceType) {
+		return true
+	}
+	_, _, ok := s.declarativeCancellationAdapter(context.Background(), interfaceType)
+	return ok
+}
+
+func (s *Service) declarativeCancellationAdapter(ctx context.Context, interfaceType string) (context.Context, protocol.Adapter, bool) {
+	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, strings.TrimSpace(interfaceType))
+	if !ok {
+		return ctx, nil, false
+	}
+	metadata := adapter.Metadata()
+	return ctx, adapter, metadata.DetachedPolling && metadata.Cancel != "" && metadata.Poll != ""
+}
+
+func (s *Service) cancelProviderTask(ctx context.Context, input canvasGenerationInput, providerRequestID string) error {
+	if supportsProviderCancellation(input.Config.InterfaceType) {
+		return cancelProviderTask(ctx, input.Config, providerRequestID)
+	}
+	ctx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
+	if !ok {
+		return errors.New("当前上游协议不支持取消")
+	}
+	request := protocolRequestFromInput(input)
+	spec, err := adapter.BuildCancel(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID})
+	if err != nil {
+		return err
+	}
+	_, err = executeProtocolRequest(ctx, input.Config, spec)
+	return err
+}
+
+func (s *Service) queryProviderCancellation(ctx context.Context, input canvasGenerationInput, providerRequestID string) (providerCancellationOutcome, string, error) {
+	if supportsProviderCancellation(input.Config.InterfaceType) {
+		return queryProviderCancellation(ctx, input.Config, providerRequestID)
+	}
+	ctx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
+	if !ok {
+		return "", "", errors.New("当前上游协议不支持取消状态查询")
+	}
+	// 只读状态，不下载结果：取消确认前上游已完成的视频按“已完成”结算，不再入库。
+	request := protocolRequestFromInput(input)
+	pollContext := protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID}
+	spec, err := adapter.BuildPoll(ctx, pollContext)
+	if err != nil {
+		return "", "", err
+	}
+	body, err := executeProtocolRequest(ctx, input.Config, spec)
+	if err != nil {
+		return "", "", err
+	}
+	state, err := adapter.ParsePoll(ctx, pollContext, body)
+	if err != nil {
+		return "", "", err
+	}
+	status := string(state.Status)
+	switch state.Status {
+	case protocol.StatusCancelled:
+		return providerCancellationConfirmed, status, nil
+	case protocol.StatusSucceeded:
+		return providerCancellationSucceeded, status, nil
+	case protocol.StatusFailed:
+		return providerCancellationFailed, firstNonEmpty(state.Message, status), nil
+	default:
+		return providerCancellationPending, firstNonEmpty(state.Stage, status), nil
+	}
 }
 
 func cancelProviderTask(ctx context.Context, config providerConfig, providerRequestID string) error {

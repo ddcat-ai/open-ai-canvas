@@ -2,7 +2,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { useEffect, useState } from "react";
 import { CanvasToolPopover } from "./canvas-tool-popover";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { LoaderCircle, Sparkles, Wrench, X, XCircle } from "lucide-react";
+import { LoaderCircle, Wrench, X, XCircle, Aperture } from "lucide-react";
 
 import { listTools, type ToolScope, type ToolSummary } from "@/services/api/tools";
 import { FEED_TABS, toAbsoluteUrl } from "@/lib/canvas/canvas-tool-presentation";
@@ -136,7 +136,7 @@ export function CanvasChooseEffectPicker({
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <Sparkles className="size-3 shrink-0" />
+                <Aperture className="size-3 shrink-0" />
                 <span className="truncate">{resolvedLabel || "特效"}</span>
                 {activeToolId != null && onClear ? (
                     <button

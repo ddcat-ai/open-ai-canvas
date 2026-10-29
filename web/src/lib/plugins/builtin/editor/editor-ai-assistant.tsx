@@ -2,7 +2,7 @@
 // 小批命令直接进入统一 dispatch，大批命令先由用户确认；宿主拒绝无效命令并显示 saveError。
 // 请求显式携带用户选择的文本模型，不能沿用可能指向图片模型的全局默认值。
 import { useRef, useState, useEffect } from "react";
-import { Bot, Loader2, RotateCcw, Send, ShieldAlert } from "lucide-react";
+import { Loader2, RotateCcw, Send, ShieldAlert, Orbit } from "lucide-react";
 import { requestImageQuestion } from "@/services/api/image";
 import type { AiTextMessage } from "@/services/api/image-contracts";
 import { useConfigStore, useEffectiveConfig, modelOptionLabel } from "@/stores/use-config-store";
@@ -277,7 +277,7 @@ export function EditorAiAssistant() {
                 {entries.length === 0 && (
                     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
                         <div className="grid size-10 place-items-center rounded-full bg-[var(--previs-dock-active-surface)]">
-                            <Bot className="size-4 text-[var(--previs-dock-fg)]/80" />
+                            <Orbit className="size-4 text-[var(--previs-dock-fg)]/80" />
                         </div>
                         <p className="text-xs text-[var(--previs-dock-fg)]/70">AI 剪辑助手</p>
                         <p className="max-w-[240px] text-[var(--fs-label)] leading-relaxed text-[var(--previs-dock-fg)]/50">

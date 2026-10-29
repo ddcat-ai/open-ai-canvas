@@ -34,7 +34,7 @@ export type AgentProfileView = {
     layers: AgentProfileLayer[];
 };
 
-export type AgentApprovalPreviewOperation = "add_node" | "update_node" | "connect_nodes" | "arrange_nodes" | "generate_media" | "create_storyboard" | "edit_storyboard" | "create_character" | "plan_step";
+export type AgentApprovalPreviewOperation = "add_node" | "update_node" | "connect_nodes" | "arrange_nodes" | "generate_media" | "create_storyboard" | "edit_storyboard" | "create_character" | "plan_step" | "adopt_drama_media";
 
 export type AgentApprovalPreviewItem = {
     operation: AgentApprovalPreviewOperation;
@@ -138,7 +138,8 @@ export type CreateAgentRunInput = {
     logicalModelId?: string;
     channelId?: string;
     channelModelKey?: string;
-    skillIds?: string[];
+    /** 对话固定或本条消息点名的技能；其余已安装技能由 Agent 按目录自动发现。 */
+    pinnedSkillIds?: string[];
     focusNodeIds?: string[];
     focusNodeOmittedCount?: number;
     permissionMode?: AgentPermissionMode;

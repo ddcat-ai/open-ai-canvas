@@ -104,6 +104,7 @@ type Service struct {
 	creditPolicyMu           sync.RWMutex
 	creditPolicyCache        *CreditPolicy
 	creditPolicyAt           time.Time
+	userGroups               userGroupState
 	modelAvailabilityMu      sync.RWMutex
 	modelAvailabilityCache   map[publicModelAvailabilityKey]*PublicModelAvailability
 	modelAvailabilityAt      time.Time

@@ -97,10 +97,8 @@ func cloudAgentReadCacheKeyForState(repo *repository.Repository, userID string, 
 			SkillID string `json:"skillId"`
 		}
 		if json.Unmarshal([]byte(call.Function.Arguments), &args) == nil {
-			for _, skill := range state.Skills {
-				if skill.ID == args.SkillID {
-					return fmt.Sprintf("%s:skill-version:%s:%s", key, skill.Version, skill.Hash)
-				}
+			if version := state.SkillVersions[args.SkillID]; version != "" {
+				return fmt.Sprintf("%s:skill-version:%s", key, version)
 			}
 		}
 	}

@@ -1,6 +1,6 @@
 import { Button, Form, Input, InputNumber } from "antd";
 import { IconButton, SegmentedControl, Select, Tooltip } from "@/pages/admin/ui/controls";
-import { Check, Copy, LockKeyhole, Moon, Plus, Sparkles, Sun, Trash2 } from "lucide-react";
+import { Check, Copy, LockKeyhole, Moon, Plus, Sun, Trash2, Palette } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { SKIN_COLOR_GROUPS, SKIN_COMPONENT_NUMBER_FIELDS, SKIN_BUTTON_COLOR_FIELDS, getSkinButtonAppearance, skinSwatches, type SkinButtonFill, type SkinComponentTokens, type SkinDefinition, type SkinModeTokens, type SkinThemeMode } from "@/lib/skin-themes";
@@ -272,7 +272,7 @@ function SkinThemePreview({ theme, mode }: { theme: SkinDefinition; mode: SkinTh
         <div className="admin-skin-live-preview" style={{ background: color.canvas, color: color.text, borderColor: color.border, borderRadius: component.cardRadius }}>
             <div className="admin-skin-live-preview-card" style={{ background: color.surface, borderColor: color.border, borderRadius: component.cardRadius, boxShadow: shadow }}>
                 <span className="admin-skin-live-preview-icon" style={{ background: color.surfaceSubtle, color: color.iconActive, borderRadius: component.inputRadius }}>
-                    <Sparkles />
+                    <Palette />
                 </span>
                 <div>
                     <strong>控件组合预览</strong>

@@ -57,25 +57,22 @@ export function WorkingDots({
 }
 
 /**
- * WorkingGlow: soft breathing halo rendered over a "busy" control (send
- * button, composer capsule). Color accepts a hex value or a CSS variable
- * (e.g. `var(--creation-text)`); the blurred layer uses color-mix so both
- * work. Disabled under prefers-reduced-motion. Caller positions it: wrap the
- * control in a `relative` container and pass the matching border radius.
+ * WorkingGlow: busy outline rendered over a control that is still working
+ * (send button, composer capsule). Only a 1px ring breathes in opacity; no
+ * blurred halo, so busy states stay quiet and match the button standard in
+ * docs/ui-design-system.md §3.0. Color accepts a hex value or a CSS variable.
+ * Disabled under prefers-reduced-motion. Caller positions it: wrap the control
+ * in a `relative` container and pass the matching border radius.
  */
 export function WorkingGlow({ active, color, radius = 0, className }: { active: boolean; color: string; radius?: number | string; className?: string }) {
     const reducedMotion = useReducedMotion();
     if (!active || reducedMotion) return null;
-    const soft = `color-mix(in srgb, ${color} 55%, transparent)`;
     return (
         <motion.div
             aria-hidden
             className={className}
             style={{ position: "absolute", inset: 0, borderRadius: radius, pointerEvents: "none", boxShadow: `0 0 0 1px ${color}` }}
-            animate={{
-                opacity: [0.35, 1, 0.35],
-                boxShadow: [`0 0 0 1px ${color}`, `0 0 16px 1px ${soft}, 0 0 0 1px ${color}`, `0 0 0 1px ${color}`],
-            }}
+            animate={{ opacity: [0.2, 0.75, 0.2] }}
             transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
         />
     );

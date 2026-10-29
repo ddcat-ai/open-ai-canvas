@@ -108,6 +108,27 @@ type ImagePreparationJob = {
 const queue: ImagePreparationJob[] = [];
 let activePreparations = 0;
 
+// 正在真正下载/解码的图片地址（受并发上限约束，最多 MAX_ACTIVE_IMAGE_PREPARATIONS 个）。
+// 加载骨架只给这些节点播放微光：排队中的上百个节点若同时播放整块尺寸的动画图层，平移缩放会明显掉帧。
+const activeSources = new Map<string, number>();
+const activeListeners = new Set<() => void>();
+
+function markActiveSource(src: string, delta: 1 | -1) {
+    const next = (activeSources.get(src) || 0) + delta;
+    if (next > 0) activeSources.set(src, next);
+    else activeSources.delete(src);
+    activeListeners.forEach((listener) => listener());
+}
+
+export function subscribeCanvasImageActivity(listener: () => void) {
+    activeListeners.add(listener);
+    return () => activeListeners.delete(listener);
+}
+
+export function isCanvasImageActive(src: string) {
+    return Boolean(src && activeSources.has(src));
+}
+
 /** Load and decode one image under a shared concurrency budget. Queued work is cancellable. */
 function enqueueCanvasImage(src: string, signal: AbortSignal, timeoutMs: number): Promise<HTMLImageElement> {
     if (signal.aborted) return Promise.reject(abortError());
@@ -143,6 +164,7 @@ function pump() {
         }
         job.started = true;
         activePreparations += 1;
+        markActiveSource(job.src, 1);
         job.timeout = setTimeout(() => {
             job.image?.removeAttribute("src");
             settle(job, undefined, new Error("图片加载或解码超时"));
@@ -176,6 +198,7 @@ function settle(job: ImagePreparationJob, image?: HTMLImageElement, error?: unkn
     }
     if (job.started) {
         activePreparations = Math.max(0, activePreparations - 1);
+        markActiveSource(job.src, -1);
         pump();
     }
     if (error !== undefined) job.reject(error);

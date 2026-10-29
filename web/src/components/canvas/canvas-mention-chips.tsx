@@ -2,7 +2,32 @@
 //
 // 胶囊是 contentEditable 内的 DOM 节点，序列化时还原成 @[kind:id] 令牌；这里只负责渲染。
 
-import { Brush, Camera, Clapperboard, Clock, Contrast, FastForward, Globe2, Grid2x2, Grid3x3, Image as ImageIcon, Music2, Package, Palette, PenLine, PersonStanding, Play, Rewind, ScanFace, SlidersHorizontal, Sparkles, Sun, Wrench, X } from "lucide-react";
+import {
+    Brush,
+    Camera,
+    Clapperboard,
+    Clock,
+    Contrast,
+    FastForward,
+    Globe2,
+    Grid2x2,
+    Grid3x3,
+    Image as ImageIcon,
+    Music2,
+    Package,
+    Palette,
+    PenLine,
+    PersonStanding,
+    Play,
+    Rewind,
+    ScanFace,
+    SlidersHorizontal,
+    Sun,
+    Wrench,
+    X,
+    Blocks,
+    Aperture,
+} from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { createPortal } from "react-dom";
@@ -25,7 +50,9 @@ export const TOOL_ICON_MAP: Record<string, React.ComponentType<{ className?: str
     Rewind,
     ScanFace,
     SlidersHorizontal,
-    Sparkles,
+    Aperture,
+    // 旧提及数据里保存的图标名，渲染为光圈，不再显示 AI 星光。
+    Sparkles: Aperture,
     Sun,
 };
 
@@ -52,7 +79,7 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
     const prefix = document.createElement("span");
     prefix.className = isDecorated ? "canvas-resource-inline-skill-icon" : "canvas-resource-inline-at";
     if (reference.kind === "skill") {
-        prefix.innerHTML = inlineIconSvg(Sparkles);
+        prefix.innerHTML = inlineIconSvg(Blocks);
     } else if (reference.kind === "tool") {
         prefix.innerHTML = toolIconSvg(reference.toolIcon ?? "Grid3x3");
     } else {
@@ -151,7 +178,7 @@ export function createInlinePreview(reference: CanvasResourceReference) {
                 : reference.kind === "image" || reference.kind === "character"
                   ? ImageIcon
                   : reference.kind === "skill"
-                    ? Sparkles
+                    ? Blocks
                     : null;
     if (FallbackIcon) fallback.innerHTML = inlineIconSvg(FallbackIcon);
     return fallback;

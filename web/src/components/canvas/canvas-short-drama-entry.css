@@ -109,7 +109,8 @@
 }
 
 .canvas-entry-shell button:focus-visible {
-    box-shadow: 0 0 0 2px var(--canvas-entry-accent);
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
 }
 
 .canvas-entry-eyebrow {
@@ -196,6 +197,7 @@
     padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 }
 
+/* 输入框内的命令与发送键沿用统一按钮几何（8px 圆角），标签与灵感示例 chip 仍保留胶囊。 */
 .canvas-entry-ghost {
     display: inline-flex;
     height: var(--space-8);
@@ -203,7 +205,7 @@
     gap: var(--space-2);
     padding: 0 var(--space-2);
     border: 1px solid var(--canvas-entry-hairline);
-    border-radius: var(--r-full);
+    border-radius: var(--button-radius);
     background: transparent;
     color: var(--canvas-entry-muted);
     font-size: var(--fs-caption);
@@ -227,16 +229,17 @@
     flex-shrink: 0;
     place-items: center;
     border: 0;
-    border-radius: var(--r-full);
+    border-radius: var(--button-radius);
     background: var(--canvas-entry-accent);
     color: var(--canvas-entry-on-accent);
-    transition: opacity var(--motion-state) ease, transform var(--motion-state) var(--motion-ease-out);
+    box-shadow: var(--button-primary-shadow);
+    transition: opacity var(--motion-state) ease, filter var(--motion-state) ease;
 }
 
 .canvas-entry-send svg { width: 16px; height: 16px; stroke-width: 2.2; }
-.canvas-entry-send:not(:disabled):hover {}
-.canvas-entry-send:not(:disabled):active { transform: none; }
-.canvas-entry-shell .canvas-entry-send:disabled { cursor: not-allowed; opacity: 0.28; }
+.canvas-entry-send:not(:disabled):hover { filter: brightness(1.08); }
+.canvas-entry-send:not(:disabled):active { box-shadow: var(--button-primary-active-shadow); }
+.canvas-entry-shell .canvas-entry-send:disabled { cursor: not-allowed; box-shadow: none; opacity: var(--button-disabled-opacity); }
 
 /* ---------- 灵感示例 ---------- */
 .canvas-entry-suggestions {

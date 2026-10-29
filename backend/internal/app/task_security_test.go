@@ -19,6 +19,7 @@ func TestNormalizeTaskInputMakesTypedProviderConfigBillable(t *testing.T) {
 	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ChannelModel{}); err != nil {
 		t.Fatal(err)
 	}
+	ensureTestUsers(t, db, "user-1")
 	channelModel := model.ChannelModel{
 		ID: "model-1", ChannelID: "channel-1", ModelKey: "text-model", Capability: "text",
 		BillingMode: "fixed_request", UnitPriceMicrocredits: 100_000, PriceConfigured: true, Enabled: true,

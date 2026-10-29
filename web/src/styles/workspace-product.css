@@ -226,17 +226,13 @@
     .app-user-workspace .project-library-body { padding: var(--space-3) var(--space-2); }
     .app-user-workspace .project-library-stats { border-top: 0; padding-top: var(--space-3); }
 
-    /* 用户工作台按钮：尺寸、圆角、内边距、字重和默认/文字按钮配色全部来自
-       getWorkspaceAntThemeConfig 的 Button token（34px / 28px、9px 圆角、0 12px、13px/560）。
-       这里只补 token 表达不了的部分：图标尺寸与描边、去掉所有按钮投影、禁用透明度。 */
-    .app-product-workspace .ant-btn,
-    .app-product-overlays .ant-btn { box-shadow: none !important; }
+    /* 用户工作台按钮：尺寸、圆角、内边距、字重和配色来自 getWorkspaceAntThemeConfig 的 Button token
+       （34px / 28px、8px 圆角、0 12px、13px/500），质感、禁用与光学内边距见 styles/unified-buttons.css。
+       这里只把工作台按钮里的图标统一到 16px（紧凑 14px）与同一描边。 */
     .app-product-workspace .ant-btn > .ant-btn-icon svg,
     .app-product-overlays .ant-btn > .ant-btn-icon svg { width: var(--user-button-icon-size); height: var(--user-button-icon-size); stroke-width: var(--user-button-icon-stroke); }
     .app-product-workspace .ant-btn-sm > .ant-btn-icon svg,
     .app-product-overlays .ant-btn-sm > .ant-btn-icon svg { width: 14px; height: 14px; }
-    .app-product-workspace .ant-btn:disabled,
-    .app-product-overlays .ant-btn:disabled { opacity: .45; }
 
     /* 内容库工具栏：搜索框、选择器与按钮同高同圆角，统一为透明底 + 1px 细线。 */
     .app-user-workspace .collection-toolbar .ant-input-affix-wrapper,
@@ -777,8 +773,8 @@
 .app-user-workspace .creation-composer-stage .creation-empty-composer { min-width: 0; flex: 1 1 auto; }
 .app-user-workspace .creation-composer-stage.is-agent-mode .creation-agent-entry { min-width: 0; flex: 1 1 auto; }
 
-.creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-two-pane { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; min-height: 0; }
-.creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand-rail { display: grid; align-content: start; gap: 4px; border-right: 1px solid var(--workspace-border); padding-right: 16px; }
+.creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-two-pane { display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 12px; min-height: 0; }
+.creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand-rail { display: grid; align-content: start; gap: 4px; border-right: 1px solid color-mix(in srgb, currentColor 10%, transparent); padding-right: 12px; }
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-brand { width: 100%; }
 .creation-model-picker-surface .creation-model-picker-menu.is-model-list .canvas-model-picker-model-pane { border: 0; margin: 0; padding: 0; }
 
@@ -810,9 +806,9 @@
 /* 次要按钮 hover：与 Button token 同值，压过页面遗留的同名覆盖，保证所有内容库一致。 */
 .app-product-workspace .ant-btn-default:not(:disabled):not(.ant-btn-dangerous):not([aria-pressed="true"]):hover,
 .app-product-overlays .ant-btn-default:not(:disabled):not(.ant-btn-dangerous):not([aria-pressed="true"]):hover {
-    border-color: var(--user-border-strong) !important;
-    color: var(--user-ink) !important;
-    background: var(--user-surface-muted) !important;
+    border-color: var(--button-secondary-hover-border) !important;
+    color: var(--button-secondary-fg) !important;
+    background: var(--button-secondary-hover-bg) !important;
 }
 
 

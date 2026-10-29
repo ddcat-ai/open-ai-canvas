@@ -13,24 +13,26 @@ import (
 )
 
 type ChannelModelRequest struct {
-	ModelKey                     string                         `json:"modelKey"`
-	ProviderModelKey             string                         `json:"providerModelKey"`
-	DisplayName                  string                         `json:"displayName"`
-	ChannelLabel                 string                         `json:"channelLabel"`
-	Tags                         []model.ChannelModelTag        `json:"tags"`
-	Description                  string                         `json:"description"`
-	Icon                         string                         `json:"icon"`
-	Capability                   string                         `json:"capability"`
-	Protocol                     string                         `json:"protocol"`
-	BillingMode                  string                         `json:"billingMode"`
-	UnitPriceMicrocredits        int64                          `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64                          `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64                          `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64                          `json:"cachedTokenPriceMicrocredits"`
-	PriceConfigured              bool                           `json:"priceConfigured"`
-	Enabled                      *bool                          `json:"enabled"`
-	CapabilityConfig             *ModelCapabilityConfig         `json:"capabilityConfig"`
-	PriceTiers                   []ChannelModelPriceTierRequest `json:"priceTiers"`
+	ModelKey                     string                  `json:"modelKey"`
+	ProviderModelKey             string                  `json:"providerModelKey"`
+	DisplayName                  string                  `json:"displayName"`
+	ChannelLabel                 string                  `json:"channelLabel"`
+	Tags                         []model.ChannelModelTag `json:"tags"`
+	Description                  string                  `json:"description"`
+	Icon                         string                  `json:"icon"`
+	Capability                   string                  `json:"capability"`
+	Protocol                     string                  `json:"protocol"`
+	BillingMode                  string                  `json:"billingMode"`
+	UnitPriceMicrocredits        int64                   `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                   `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                   `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                   `json:"cachedTokenPriceMicrocredits"`
+	PriceConfigured              bool                    `json:"priceConfigured"`
+	// PriceCurrency 为空指针表示保留已有计价货币（新建时为积分）；取值 credits / USD / CNY。
+	PriceCurrency    *string                        `json:"priceCurrency"`
+	Enabled          *bool                          `json:"enabled"`
+	CapabilityConfig *ModelCapabilityConfig         `json:"capabilityConfig"`
+	PriceTiers       []ChannelModelPriceTierRequest `json:"priceTiers"`
 }
 
 const maxAdminChannelModelBatchDeleteCount = 100
@@ -185,11 +187,17 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
+	priceCurrency := ""
+	if req.PriceCurrency != nil {
+		if priceCurrency, err = normalizePriceCurrency(*req.PriceCurrency); err != nil {
+			return nil, err
+		}
+	}
 	modelID, err := s.repo.NextPrefixedID("MODEL")
 	if err != nil {
 		return nil, err
 	}
-	item := &model.ChannelModel{ID: modelID, ChannelID: channelID, Enabled: true, PriceVersion: 1}
+	item := &model.ChannelModel{ID: modelID, ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
 	previousProviderModelKey := ""
 	if id != "" {
 		item, err = s.repo.ChannelModelByID(channelID, id)
@@ -220,6 +228,11 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	item.Icon = strings.TrimSpace(req.Icon)
 	item.Capability = capability
 	item.Protocol = protocol
+	if priceCurrency != "" {
+		item.PriceCurrency = priceCurrency
+	} else if item.PriceCurrency == "" {
+		item.PriceCurrency = model.PriceCurrencyCredits
+	}
 	s.applyChannelModelPriceTierSummary(item, tiers)
 	if capability == "text" || capability == "image" || capability == "video" {
 		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())

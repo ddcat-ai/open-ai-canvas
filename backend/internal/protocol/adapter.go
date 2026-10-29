@@ -43,6 +43,14 @@ type ResultCapability interface {
 	ResultAvailable() bool
 }
 
+// MediaUploadAdapter 是可选的素材前置上传面：上游要求先上传文件拿到素材 ID，
+// create 再按 ID 引用。UploadKinds 为空表示该适配器未声明上传步骤。
+type MediaUploadAdapter interface {
+	UploadKinds() []string
+	BuildUpload(context.Context, RequestContext, MediaReference) (RequestSpec, error)
+	ParseUpload(context.Context, []byte) (string, error)
+}
+
 type AgentRequestContext struct {
 	BaseURL string
 	Model   string

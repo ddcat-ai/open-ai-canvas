@@ -11,11 +11,12 @@ import (
 
 func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/models", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
+		user, err := currentUser(c, svc)
+		if err != nil {
 			failService(c, err)
 			return
 		}
-		models, err := svc.PublicLogicalModels(nil)
+		models, err := svc.PublicLogicalModelsForUser(user, nil)
 		if err != nil {
 			failService(c, err)
 			return
@@ -23,7 +24,8 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"models": models})
 	})
 	r.POST("/models/available", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
+		user, err := currentUser(c, svc)
+		if err != nil {
 			failService(c, err)
 			return
 		}
@@ -32,7 +34,7 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, errors.New("模型能力请求格式错误"))
 			return
 		}
-		models, err := svc.PublicLogicalModels(&intent)
+		models, err := svc.PublicLogicalModelsForUser(user, &intent)
 		if err != nil {
 			failService(c, err)
 			return
@@ -40,7 +42,8 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"models": models})
 	})
 	r.POST("/models/:id/quote", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
+		user, err := currentUser(c, svc)
+		if err != nil {
 			failService(c, err)
 			return
 		}
@@ -49,7 +52,7 @@ func RegisterLogicalModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, errors.New("模型报价请求格式错误"))
 			return
 		}
-		quote, err := svc.QuoteLogicalModel(c.Param("id"), intent)
+		quote, err := svc.QuoteLogicalModel(user.ID, c.Param("id"), intent)
 		if err != nil {
 			failService(c, err)
 			return

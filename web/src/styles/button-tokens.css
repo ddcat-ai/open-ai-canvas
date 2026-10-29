@@ -1,0 +1,88 @@
+/* -------------------------------------------------------------------------
+   Button 组件 token（docs/ui-design-system.md §3.0「按钮」）
+   一套墨色单色体系覆盖全部页面：主按钮是皮肤主操作色实底，次要按钮是带 1px 边缘的实体键，
+   文字按钮只在悬停时出现底色。质感来自顶部 1px 内高光、精确的 1px 边缘和贴边接触阴影，
+   不使用渐变、发光、彩色投影或扫光。自定义皮肤会在 <html> 行内写入 --button-primary-*。
+   ------------------------------------------------------------------------- */
+:root {
+    --button-height: 34px;
+    --button-height-sm: 28px;
+    --button-height-lg: 40px;
+    --button-padding-x: 12px;
+    --button-padding-x-sm: 8px;
+    --button-padding-x-lg: 16px;
+    --button-gap: 6px;
+    --button-font-size: 13px;
+    --button-font-size-sm: 12px;
+    --button-font-size-lg: 14px;
+    --button-font-weight: 500;
+    --button-icon-size: 16px;
+    --button-icon-size-sm: 14px;
+    --button-icon-stroke: 1.75;
+    --button-motion: 150ms cubic-bezier(0.2, 0, 0, 1);
+
+    --button-primary-bg: var(--btn-solid-bg);
+    --button-primary-hover-bg: var(--btn-solid-hover-bg);
+    --button-primary-active-bg: var(--btn-solid-active-bg);
+    --button-primary-fg: var(--btn-solid-fg);
+    --button-primary-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(16 16 20 / 0.2);
+    --button-primary-active-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+
+    --button-secondary-bg: #ffffff;
+    --button-secondary-hover-bg: #f6f6f7;
+    --button-secondary-active-bg: #efeff1;
+    --button-secondary-fg: #18181b;
+    --button-secondary-border: rgb(24 24 27 / 0.12);
+    --button-secondary-hover-border: rgb(24 24 27 / 0.2);
+    --button-secondary-shadow: 0 1px 2px rgb(24 24 27 / 0.05);
+
+    --button-ghost-fg: rgb(24 24 27 / 0.68);
+    --button-ghost-hover-fg: #18181b;
+    --button-ghost-hover-bg: rgb(24 24 27 / 0.055);
+    --button-ghost-active-bg: rgb(24 24 27 / 0.085);
+
+    /* 浅底按钮：放在输入区、工具条等已有表面里的触发器（模型、参数、参考内容），不画边，只用一层浅底。 */
+    --button-tonal-bg: rgb(24 24 27 / 0.05);
+    --button-tonal-hover-bg: rgb(24 24 27 / 0.085);
+
+    --button-danger-bg: #dc2626;
+    --button-danger-hover-bg: #c81e1e;
+    --button-danger-active-bg: #b91c1c;
+    --button-danger-fg: #ffffff;
+    --button-danger-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 1px 2px rgb(127 29 29 / 0.22);
+    --button-danger-text: #dc2626;
+    --button-danger-soft-bg: rgb(220 38 38 / 0.07);
+    --button-danger-soft-border: rgb(220 38 38 / 0.28);
+
+    --button-disabled-opacity: 0.42;
+}
+
+/* 欢迎页是常驻深色的品牌舞台（<html> 不带 .dark），按钮同样取深色一组。 */
+.dark,
+.welcome-page {
+    /* 暗色不靠投影：浅色主按钮用底部 1px 内阴影交代按键厚度，次要按钮用半透明白底 + 顶部内高光。 */
+    --button-primary-shadow: inset 0 -1px 0 rgb(16 16 20 / 0.14), 0 1px 2px rgb(0 0 0 / 0.32);
+    --button-primary-active-shadow: inset 0 1px 1px rgb(16 16 20 / 0.1);
+
+    --button-secondary-bg: rgb(255 255 255 / 0.045);
+    --button-secondary-hover-bg: rgb(255 255 255 / 0.085);
+    --button-secondary-active-bg: rgb(255 255 255 / 0.065);
+    --button-secondary-fg: #f4f4f5;
+    --button-secondary-border: rgb(255 255 255 / 0.1);
+    --button-secondary-hover-border: rgb(255 255 255 / 0.16);
+    --button-secondary-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+
+    --button-ghost-fg: rgb(244 244 245 / 0.7);
+    --button-ghost-hover-fg: #f4f4f5;
+    --button-ghost-hover-bg: rgb(255 255 255 / 0.07);
+    --button-ghost-active-bg: rgb(255 255 255 / 0.1);
+
+    --button-tonal-bg: rgb(255 255 255 / 0.06);
+    --button-tonal-hover-bg: rgb(255 255 255 / 0.1);
+
+    --button-danger-hover-bg: #e03131;
+    --button-danger-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.32);
+    --button-danger-text: #f87171;
+    --button-danger-soft-bg: rgb(248 113 113 / 0.1);
+    --button-danger-soft-border: rgb(248 113 113 / 0.3);
+}

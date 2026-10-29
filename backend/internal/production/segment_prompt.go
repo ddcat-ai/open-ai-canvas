@@ -41,6 +41,8 @@ type SegmentPromptInput struct {
 	References  []SegmentReference
 	// FirstFrame 表示请求会附带上一段视频的最后一帧作为本段首帧。
 	FirstFrame bool
+	// Independent 表示各段并行独立生成：不带上一段画面，段尾也不需要为下一段做硬定格。
+	Independent bool
 	// PauseMs 是台词后的气口，已计入镜头时长；为 0 时按默认值。
 	PauseMs int64
 }
@@ -91,7 +93,7 @@ func secondsText(ms int64) string {
 
 // SegmentVideoPrompt 把一个剧情段组装成可整段生成的多镜头视频提示词：
 // 段头（承接、时长、画幅、风格）、视觉与首帧、场景与站位、角色参考、声音，以及按段内时间码切分的每个镜头。
-// 段末镜头留 1 秒硬定格作为下一段的接续基准。
+// 尾帧续接时段末镜头留 1 秒硬定格作为下一段的接续基准；并行出片（Independent）不留。
 func SegmentVideoPrompt(in SegmentPromptInput) string {
 	var b strings.Builder
 	style := firstNonEmpty(in.Style, "写实电影感")
@@ -111,7 +113,9 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 		return name
 	}
 
-	if in.Index > 0 {
+	if in.Index > 0 && in.Independent {
+		fmt.Fprintf(&b, "本段独立生成，开场站位、朝向与光线和第%d段结尾保持一致\n", in.Index)
+	} else if in.Index > 0 {
 		fmt.Fprintf(&b, "严格从第%d段视频末尾硬定格的站位、朝向、动作和光线状态继续，不重新摆位\n", in.Index)
 	}
 	fmt.Fprintf(&b, "第%d段视频《%s》\n", in.Index+1, firstNonEmpty(in.Title, "剧情段"))
@@ -123,6 +127,8 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 		switch {
 		case in.FirstFrame:
 			fmt.Fprintf(&b, "首帧即第%d段视频最后一帧（随请求附带）。本段起幅：", in.Index)
+		case in.Index > 0 && in.Independent:
+			b.WriteString("首帧（本段独立生成，按文字描述）：")
 		case in.Index > 0:
 			b.WriteString("首帧（上一段视频尚未生成，按文字描述）：")
 		default:
@@ -247,7 +253,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 		} else {
 			b.WriteString("无台词。\n")
 		}
-		if index == len(in.Shots)-1 && in.Index < in.Count-1 {
+		if index == len(in.Shots)-1 && in.Index < in.Count-1 && !in.Independent {
 			fmt.Fprintf(&b, "末1.0秒全场硬定格，人物站位、表情与光线完全凝固，作为第%d段的无缝接续基准。\n", in.Index+2)
 		}
 	}

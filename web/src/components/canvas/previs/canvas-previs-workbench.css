@@ -418,17 +418,21 @@
 .previs-desk-header-action:active {
     transform: translateY(0);
 }
+/* 主操作与全站主按钮同一种质感：实底 + 1px 内高光，不加彩色投影或加粗（docs/ui-design-system.md §3.0）。 */
 .previs-desk-header-action.is-primary {
     background: var(--pd-a0);
     border-color: var(--pd-a0);
     color: var(--pd-a-on);
-    font-weight: 600;
-    box-shadow: 0 2px 8px var(--pd-a-bg);
+    font-weight: 500;
+    box-shadow: var(--button-primary-shadow);
 }
 .previs-desk-header-action.is-primary:hover {
     background: var(--pd-a1);
     border-color: var(--pd-a1);
-    box-shadow: 0 4px 16px var(--pd-a-bg);
+    filter: brightness(1.08);
+}
+.previs-desk-header-action.is-primary:active {
+    box-shadow: var(--button-primary-active-shadow);
 }
 .previs-desk-header-action:focus-visible {
     outline: 2px solid var(--pd-a0);
@@ -3866,8 +3870,10 @@
 .previs-add-dialog__footer .pv-btn--accent {
     border-color: var(--ad-accent);
     background: var(--ad-accent);
-    color: #fff;
-    font-weight: 600;
+    /* 强调色跟随画布主题（暗色下是浅色实底），文字取主题给的对比色，不写死白色。 */
+    color: var(--pd-a-on-theme, #fff);
+    font-weight: 500;
+    box-shadow: var(--button-primary-shadow);
 }
 @media (max-width: 860px) {
     .previs-add-dialog__body {

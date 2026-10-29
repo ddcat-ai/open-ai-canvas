@@ -6,7 +6,9 @@ import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from 
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
 import { initializeImageRatioDefaults, resolveImageParameters } from "@/lib/image-parameters";
+import { findProtocolWorkflow, resolveWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import { defaultPriceTier, legacyPriceTierToForm, normalizeUpstreamModelKey, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
+import type { PriceCurrency } from "@/services/api/user-groups";
 
 export type ChannelModelFormValues = {
     modelKey: string;
@@ -19,6 +21,8 @@ export type ChannelModelFormValues = {
     capability: ModelCapabilityChoice;
     protocol?: string;
     priceTiers: PriceTierFormValues[];
+    /** 售价单位；成本价始终以积分计。 */
+    priceCurrency: PriceCurrency;
     enabled: boolean;
     capabilityConfig?: ModelCapabilityConfig;
 };
@@ -61,6 +65,7 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         capability,
         protocol,
         priceTiers: item ? (item.priceTiers?.length ? item.priceTiers.map((tier) => priceTierToForm(tier, capabilityConfig?.image, protocol)) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()],
+        priceCurrency: item?.priceCurrency || "credits",
         enabled: item?.enabled ?? true,
         capabilityConfig,
     };
@@ -124,6 +129,16 @@ export function changeChannelModelProtocol(values: ChannelModelFormValues, proto
 }
 
 export function updateChannelModelUpstreamCapabilities(values: ChannelModelFormValues, protocols: ModelProtocolDefinition[] = []): ChannelModelFormValues {
+    const workflows = protocols.find((p) => p.value === values.protocol)?.workflows;
+    if (values.capability === "video" && workflows?.length) {
+        // 工作流协议的画面规格必须写回表单；只在界面上投影会让保存提交旧协议的分辨率。
+        const profile = values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, values.providerModelKey || values.modelKey);
+        const workflow = findProtocolWorkflow(workflows, values.protocol, values.providerModelKey?.trim() || values.modelKey.trim());
+        if (!profile.video || !workflow) return values;
+        const video = resolveWorkflowVideoScreenSpec(profile.video, workflow);
+        if (JSON.stringify(video) === JSON.stringify(profile.video)) return values;
+        return { ...values, capabilityConfig: { ...profile, video } };
+    }
     const definitions = protocols.find((p) => p.value === values.protocol)?.imageParameters;
     if (values.capability === "image" && definitions) {
         const profile = values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, values.providerModelKey || values.modelKey);

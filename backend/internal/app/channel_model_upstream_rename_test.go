@@ -94,7 +94,7 @@ func TestRenamedUpstreamKeyReachesSystemChannelRequests(t *testing.T) {
 	}
 
 	// 用户在画布 Agent 选中新模型发起任务；config 形状与 cloud_agent.go 组装一致。
-	resolved, err := svc.resolveSystemChannelModelSelection(map[string]any{
+	resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), map[string]any{
 		"config": map[string]any{"channelId": channel.ID, "model": "deepseek-v4.1-flash", "channelModelKey": "deepseek-v4.1-flash"},
 	}, "canvas_text", "")
 	if err != nil {

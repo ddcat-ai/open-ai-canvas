@@ -450,6 +450,36 @@ paths:
         "200":
           description: 标准信封 data 为 presets 数组；预设只引用公开且启用的种子技能
         "500": {$ref: "#/components/responses/Error"}
+  /skills/recommendations:
+    get:
+      tags: [skills]
+      summary: 按行业列出推荐安装的内置技能
+      responses:
+        "200": {description: "标准信封 data 为 {industries, installedTotal}；每个行业含 industryId、name、description、icon、installedCount 和 skills（skillId、skillName、description、tag、reason、isAdded）。只读目录，不会自动安装"}
+        "401": {$ref: "#/components/responses/Error"}
+  /skills/recommendations/{industryId}/install:
+    parameters:
+      - {in: path, name: industryId, required: true, description: 推荐行业 ID, schema: {type: string}}
+    post:
+      tags: [skills]
+      summary: 把某个行业的推荐技能加入当前用户技能库
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                skillIds:
+                  type: array
+                  maxItems: 12
+                  items: {type: string}
+                  description: 只安装其中这些技能；传 {} 或空数组时安装该行业全部推荐
+      responses:
+        "200": {description: "标准信封 data 为 {industryId, installed, skipped}；已安装、已删除或不在该行业推荐里的技能计入 skipped，不报错"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /skills:
     get:
       tags: [skills]
@@ -502,6 +532,26 @@ paths:
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
         "404": {$ref: "#/components/responses/Error"}
+  /skills/{id}/agent-mode:
+    parameters:
+      - {in: path, name: id, required: true, description: 技能 ID, schema: {type: string}}
+    patch:
+      tags: [skills]
+      summary: 设置已安装技能是否进入 Agent 自动发现目录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: {type: string, enum: [auto, manual], description: auto 进入技能目录由 Agent 按任务自动发现；manual 只在用户固定或点名时使用}
+      responses:
+        "200": {description: 标准信封 data.skill 为更新后的技能}
+        "400": {description: mode 无效，或技能未安装（自建技能除外）}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {description: 技能不存在或对当前用户不可见}
   /skills/{id}/library-category:
     parameters:
       - {in: path, name: id, required: true, description: 技能 ID, schema: {type: string}}
@@ -961,6 +1011,100 @@ paths:
           description: 返回更新后的生效偏好视图
         "409":
           description: 偏好 revision 已变化，须重新读取后保存
+  /agent/memory:
+    get:
+      tags: [agent]
+      summary: 读取当前用户的 Agent 记忆文件
+      responses:
+        "200": {description: "标准信封 data 为 {mode, capacity, charCount, revision, entries, pendingCount, updatedAt}；entries 每条含 id、section（user|notes）、text"}
+        "401": {$ref: "#/components/responses/Error"}
+    put:
+      tags: [agent]
+      summary: 用户整体保存记忆文件（按 revision CAS）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision, entries]
+              properties:
+                revision: {type: integer, format: int64, description: 读取时的 revision；不一致返回 409}
+                entries:
+                  type: array
+                  maxItems: 80
+                  items:
+                    type: object
+                    required: [section, text]
+                    properties:
+                      id: {type: string, description: 保留原条目 ID；新条目留空}
+                      section: {type: string, enum: [user, notes]}
+                      text: {type: string, description: 单条最多 400 字}
+      responses:
+        "200": {description: 返回保存后的记忆文件；总量不得超过 capacity（5000 字），疑似密钥或敏感内容返回 400}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "409": {description: 记忆文件已被 Agent 或其他页面修改，须重新读取}
+  /agent/memory/settings:
+    patch:
+      tags: [agent]
+      summary: 设置记忆模式
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: {type: string, enum: [auto, review, off], description: auto 直接写入并可撤销；review 先暂存待确认；off 不注入也不提供写入工具}
+      responses:
+        "200": {description: 返回更新后的记忆文件}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /agent/memory/revisions:
+    get:
+      tags: [agent]
+      summary: 列出记忆文件的修改记录
+      parameters:
+        - {in: query, name: status, schema: {type: string, enum: [applied, pending, rejected]}}
+        - {in: query, name: limit, description: 默认 50, schema: {type: integer, minimum: 1, maximum: 200}}
+      responses:
+        "200": {description: "标准信封 data.revisions；每条含 id、actor（agent|user|restore|seed|admin）、runId、status、summary、baseRevision、revision、changes、canUndo、createdAt"}
+        "401": {$ref: "#/components/responses/Error"}
+  /agent/memory/revisions/{revisionId}/undo:
+    parameters:
+      - {in: path, name: revisionId, required: true, schema: {type: string}}
+    post:
+      tags: [agent]
+      summary: 撤销一次已生效的修改（恢复到修改前快照，并记一条 restore 修订）
+      responses:
+        "200": {description: 返回撤销后的记忆文件}
+        "400": {description: 修订未生效、已撤销或本身就是撤销；或撤销后会超过记忆容量}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {description: 这条修改涉及的条目之后又被改过，无法自动撤销}
+  /agent/memory/revisions/{revisionId}/decide:
+    parameters:
+      - {in: path, name: revisionId, required: true, schema: {type: string}}
+    post:
+      tags: [agent]
+      summary: 采纳或拒绝 review 模式下的待确认修改
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: {type: string, enum: [approve, reject]}
+      responses:
+        "200": {description: 返回处理后的记忆文件}
+        "400": {description: decision 无效，或这条修改已经处理过}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+        "409": {description: 记忆文件已在待确认修改之后变化，须重新查看}
   /agent/memories:
     get:
       tags: [agent]
@@ -1707,6 +1851,19 @@ paths:
                       updated: { type: integer }
         "400":
           $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /admin/agent-memory-documents:
+    get:
+      tags: [admin]
+      summary: 管理员只读查看用户的 Agent 记忆文件
+      parameters:
+        - {in: query, name: userId, description: 只看某个用户；为空时按更新时间列出, schema: {type: string}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 200}}
+      responses:
+        "200": {description: 标准信封 data.documents；每份含 userId、username、displayName 和记忆文件正文}
         "401":
           $ref: "#/components/responses/Error"
         "403":
@@ -2784,11 +2941,12 @@ components:
         profileRevision:
           type: string
           description: GET /agent/profile 的生效合并 revision；变化时拒绝创建新轮次
-        skillIds:
+        pinnedSkillIds:
           type: array
-          maxItems: 8
+          maxItems: 16
           items:
             type: string
+          description: 用户为对话固定或在本条消息里点名的技能；其余已安装且 agentMode=auto 的技能由 Agent 按技能目录自动发现
         contextScope:
           type: array
           maxItems: 1

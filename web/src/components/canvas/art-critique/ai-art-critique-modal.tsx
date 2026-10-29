@@ -3,7 +3,7 @@ import { resolveImageUrl } from "@/services/image-storage";
 import { repairIssueTarget, layoutArtCritiqueLabels, ART_CRITIQUE_CATEGORY_COLORS } from "@/lib/art-critique/annotation";
 import { executeArtCritique } from "@/services/art-critique-execution";
 import { AppModal } from "@/components/ui/product/app-modal";
-import { Sparkles, X, Image as ImageIcon, FileText, CheckCircle2, LoaderCircle, RefreshCw } from "lucide-react";
+import { X, Image as ImageIcon, FileText, CheckCircle2, LoaderCircle, RefreshCw, ScanEye } from "lucide-react";
 import { IconButton } from "@/components/ui/base/buttons";
 import { EmptyState } from "@/components/ui/product/empty-state";
 import { CreativeQuoteCard } from "@/components/creation/creative-agent-cards";
@@ -286,7 +286,7 @@ export function AiArtCritiqueModal({ node, upstreamNodes, open, onClose, onUpdat
             <div className="flex h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] min-h-0 flex-col overflow-hidden rounded-[var(--r-lg)]" style={{ background: theme.canvas.background, color: theme.node.text }}>
                 <header className="flex shrink-0 items-center gap-3 border-b px-5 py-4" style={{ borderColor: theme.node.edge }}>
                     <span className="grid size-9 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.accent.primarySoft, color: theme.accent.primary }}>
-                        <Sparkles className="size-4" aria-hidden="true" />
+                        <ScanEye className="size-4" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-2">

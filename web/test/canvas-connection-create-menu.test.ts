@@ -20,10 +20,10 @@ test("add-node submenu uses a four-column medium-size grid", () => {
     const menu = readFileSync(new URL("../src/components/canvas/canvas-create-menu.tsx", import.meta.url), "utf8");
     const context = readFileSync(new URL("../src/components/canvas/canvas-context-menu.tsx", import.meta.url), "utf8");
     const styles = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
-    expect(menu).toContain('variant === "node" ? "grid-cols-4"');
-    expect(menu).toContain("size-6 shrink-0");
+    expect(menu).toContain('aria-label="创作节点" className="mt-1 grid grid-cols-4 gap-0.5"');
+    expect(menu).toContain("size-9 shrink-0");
     expect(context).toContain('w-[360px]');
-    expect(styles).toContain("--canvas-create-node-height: var(--space-16)");
+    expect(styles).toContain("--canvas-create-node-height: calc(var(--space-16) + var(--space-3))");
 });
 
 test("only the active option expands; stationary pointer retargeting cannot switch rows", () => {

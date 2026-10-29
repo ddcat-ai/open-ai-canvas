@@ -7,7 +7,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { App, Dropdown } from "antd";
 import { displayCreationPrompt } from "./creation-references";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
-import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, Search, Trash2, X, Orbit } from "lucide-react";
 import { conversationTimestamp } from "./creation-conversations";
 import { formatMessageTime } from "./creation-workspace-messages";
 
@@ -142,7 +142,7 @@ export function CreationHistoryDrawer({
                             const showGroupHead = !keyword.trim() && (index === 0 || creationConversationBucket(conversation.updatedAt) !== creationConversationBucket(visibleConversations[index - 1].updatedAt));
                             const latest = conversationPreviewMessage(conversation);
                             const active = conversation.id === activeId;
-                            const HistoryTypeIcon = latest?.mode === "video" ? Clapperboard : latest?.mode === "image" ? ImageIcon : latest?.mode === "text" ? MessageSquareText : Sparkles;
+                            const HistoryTypeIcon = latest?.mode === "video" ? Clapperboard : latest?.mode === "image" ? ImageIcon : latest?.mode === "text" ? MessageSquareText : Orbit;
                             return [
                                 showGroupHead ? (
                                     <li key={`${conversation.id}-group`} className="creation-history-group-head">

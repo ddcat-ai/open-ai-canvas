@@ -467,7 +467,43 @@ describe("定向保存与旧 journal 的真实同步集成", () => {
         expect(fixture.reads).toBe(0);
     });
 
-    test.each([{ status: 400 }, { status: 422 }, { status: 409, reason: "canvas_mutation_id_reused" }])("未识别的拒绝保留当前编辑和原请求，不伪报成功：%j", async (options) => {
+    test("请求 ID 已被另一份内容占用时按 journal 基线重建新请求，不永久卡在重放", async () => {
+        fixture.manualTimers = true;
+        edit({ title: "Reused id edit" });
+        fixture.errors.set("canvas:1", new ApiError("mutation ID reused", { status: 409, reason: "canvas_mutation_id_reused" }));
+        await sync.saveRemoteUserDataNow("canvas");
+        expect(fixture.writes).toHaveLength(2);
+        expect(fixture.writes[1].mutationId).not.toBe(fixture.writes[0].mutationId);
+        expect(fixture.remote.title).toBe("Reused id edit");
+        expect(live().title).toBe("Reused id edit");
+        expect(journal()).toEqual([]);
+        expect(useSyncProgressStore.getState().syncingProjects.canvas).toMatchObject({ phase: "done", errorKind: undefined });
+    });
+
+    test("瞬时并发写入按原 mutationId 原样重放，不重建基线也不标记冲突", async () => {
+        fixture.manualTimers = true;
+        edit({ title: "Concurrent write edit" });
+        fixture.errors.set("canvas:1", new ApiError("画布正在更新，将自动重放原请求", { status: 409, reason: "canvas_concurrent_write" }));
+        await sync.saveRemoteUserDataNow("canvas");
+        expect(fixture.writes).toHaveLength(2);
+        expect(fixture.writes[1]).toEqual(fixture.writes[0]);
+        expect(fixture.remote.title).toBe("Concurrent write edit");
+        expect(journal()).toEqual([]);
+        expect(useSyncProgressStore.getState().syncingProjects.canvas).toMatchObject({ phase: "done", errorKind: undefined });
+    });
+
+    test("持续并发写入超过重放次数后保留原请求等待后台重试，标记为瞬时而非冲突", async () => {
+        fixture.manualTimers = true;
+        edit({ title: "Busy canvas edit" });
+        for (let write = 1; write <= 4; write++) fixture.errors.set(`canvas:${write}`, new ApiError("busy", { status: 409, reason: "canvas_concurrent_write" }));
+        await expect(sync.saveRemoteUserDataNow("canvas")).rejects.toThrow("busy");
+        expect(fixture.writes).toHaveLength(4);
+        expect(new Set(fixture.writes.map((write) => write.mutationId)).size).toBe(1);
+        expect(journal()).toHaveLength(1);
+        expect(useSyncProgressStore.getState().syncingProjects.canvas).toMatchObject({ phase: "pending", errorKind: "network" });
+    });
+
+    test.each([{ status: 400 }, { status: 422 }])("未识别的拒绝保留当前编辑和原请求，不伪报成功：%j", async (options) => {
         fixture.manualTimers = true;
         edit({ title: "Rejected local edit" });
         fixture.errors.set("canvas:1", new ApiError("rejected", options));
@@ -1105,7 +1141,6 @@ describe("定向保存与旧 journal 的真实同步集成", () => {
     });
 
     test.each([
-        { status: 409, reason: "canvas_concurrent_write" },
         { status: 500, reason: "canvas_field_conflict" },
         { status: 401, reason: "unauthorized" },
         { status: 403, reason: "forbidden" },

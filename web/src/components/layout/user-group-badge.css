@@ -1,0 +1,115 @@
+/* 用户分组徽章的组件级 token：只在这里取色，其他位置通过 is-vip / is-svip 引用。 */
+b.user-group-badge,
+.user-group-avatar-ring {
+    --user-group-vip-from: var(--status-warning, #d99a1e);
+    --user-group-vip-to: color-mix(in srgb, var(--status-warning, #d99a1e) 55%, #fff4c2);
+    --user-group-vip-ink: color-mix(in srgb, var(--status-warning, #d99a1e) 35%, #2b1d00);
+    --user-group-svip-from: var(--product-accent-violet, #6b4fc2);
+    --user-group-svip-to: var(--product-accent-pink, #ae4c77);
+    --user-group-svip-ink: #ffffff;
+}
+
+b.user-group-badge {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 3px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: normal;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+b.user-group-badge > svg {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+    stroke-width: 2.2;
+}
+
+b.user-group-badge.is-compact {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    justify-content: center;
+}
+
+b.user-group-badge.is-compact > svg {
+    width: 10px;
+    height: 10px;
+}
+
+b.user-group-badge.is-vip {
+    color: var(--user-group-vip-ink);
+    background: linear-gradient(135deg, var(--user-group-vip-to), var(--user-group-vip-from));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--user-group-vip-from) 45%, transparent);
+}
+
+b.user-group-badge.is-svip {
+    position: relative;
+    overflow: hidden;
+    color: var(--user-group-svip-ink);
+    background: linear-gradient(135deg, var(--user-group-svip-from), var(--user-group-svip-to));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--user-group-svip-from) 45%, transparent);
+}
+
+/* svip 流光：一条斜向高光周期性扫过徽章。 */
+b.user-group-badge.is-svip::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    animation: user-group-badge-shine 3.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes user-group-badge-shine {
+    0%,
+    55% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(120%);
+    }
+}
+
+.user-group-avatar-ring {
+    position: relative;
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    border-radius: 999px;
+}
+
+.user-group-avatar-ring.is-vip,
+.user-group-avatar-ring.is-svip {
+    padding: 2px;
+}
+
+.user-group-avatar-ring.is-vip {
+    background: linear-gradient(135deg, var(--user-group-vip-to), var(--user-group-vip-from));
+}
+
+.user-group-avatar-ring.is-svip {
+    background: conic-gradient(from 0deg, var(--user-group-svip-from), var(--user-group-svip-to), var(--user-group-svip-from));
+    box-shadow: 0 0 12px color-mix(in srgb, var(--user-group-svip-from) 50%, transparent);
+}
+
+/* :where 把特异性压到最低：头像自带背景时保留原背景，透明头像才补表面色，避免渐变透出图标底。 */
+.user-group-avatar-ring:where(.is-vip, .is-svip) > :where(*) {
+    border-radius: 999px;
+    background: var(--user-surface, var(--background, #fff));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    b.user-group-badge.is-svip::after {
+        animation: none;
+        display: none;
+    }
+}

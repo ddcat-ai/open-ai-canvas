@@ -1,4 +1,5 @@
 import type { GenerationRetryContext } from "@/lib/canvas/canvas-project-generation";
+import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
 import { formatVideoResolutionLabel as videoResolutionLabel, VIDEO_RESOLUTION_OPTIONS } from "@/lib/video-generation-options";
 import { imageQualityDescription, imageQualityLabel } from "@/lib/image-quality";
 import type { CreationAttachment, CreationMode } from "./creation-assets";
@@ -34,6 +35,16 @@ export type CreationMessage = {
     retryOf?: string;
     attemptGroupId?: string;
     generationStage?: string;
+    /** 最近一次观察到的任务状态、保存阶段与真实进度，只驱动生成中卡片的阶段展示，不作为业务结论。 */
+    generationStatus?: TaskStatus;
+    generationMediaStage?: GenerationTask["mediaStage"];
+    generationProgress?: number;
+    /** 页面与后端任务的连接暂时中断：任务没有被确认失败，恢复监听会继续跟进原任务。 */
+    syncInterrupted?: boolean;
+    /** sync：作品可能已生成，只是页面没拿到结果，应重新获取；task：后端确认任务失败。旧记录没有该字段。 */
+    errorKind?: "sync" | "task";
+    /** 后端确认失败，但作品已生成、可以重新保存（不重新生成、不重复扣费）。 */
+    mediaRecoverable?: boolean;
     generationEffectKeys?: string[];
 };
 export type CreationConversation = { id: string; title: string; updatedAt: string; canvasId?: string; messages: CreationMessage[] };

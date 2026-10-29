@@ -458,9 +458,10 @@ async function storedGenerationMedia(dataUrl: string, effectKey: string, mediaTy
 async function cachedRemoteGenerationVideo(video: NonNullable<BackendGenerationResult["video"]>, signal?: AbortSignal) {
     if (!video.storageKey) throw new Error("生成视频缺少云端资源标识");
     throwIfAborted(signal);
-    const blob = await getCachedResourceBlob(video.storageKey);
-    throwIfAborted(signal);
-    if (!blob) throw new Error("生成视频资源缓存失败，未标记为成功");
+    // 后端任务成功即代表视频已作为资源持久化；登记素材只需要可用的展示地址。
+    // 整段下载到浏览器只是本地缓存加速层：大视频超时或跨域下载失败不能让已落库的作品在页面上“消失”，
+    // 所以缓存放到后台预热，不阻塞成功态。画布节点回写仍单独校验缓存（canvas-generation-task-sync）。
+    void getCachedResourceBlob(video.storageKey).catch(() => undefined);
     const url = await resolveMediaUrl(video.storageKey, video.dataUrl);
     throwIfAborted(signal);
     if (!url) throw new Error("生成视频资源地址为空，未标记为成功");
@@ -470,8 +471,8 @@ async function cachedRemoteGenerationVideo(video: NonNullable<BackendGenerationR
         width: video.width || 0,
         height: video.height || 0,
         durationMs: video.durationMs,
-        bytes: video.bytes || blob.size,
-        mimeType: video.mimeType || blob.type || "video/mp4",
+        bytes: video.bytes || 0,
+        mimeType: video.mimeType || "video/mp4",
     };
 }
 

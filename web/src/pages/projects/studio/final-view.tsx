@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { App, Button } from "antd";
-import { Download, Film } from "lucide-react";
+import { Download, Film, Scissors } from "lucide-react";
 
 import type { DramaEpisodeDetail } from "@/services/api/drama";
 
@@ -8,11 +8,27 @@ import { aspectRatioValue, downloadResource, formatDuration, MediaThumb, STAGE_L
 import { secondsLabel } from "./segment-parts";
 
 /** 成片：各剧情段视频按顺序拼接，保留视频模型生成的对白与音效。片段条可跳到对应段并打开该段详情。 */
-export function FinalView({ title, detail, aspectRatio, onOpenSegment }: { title: string; detail: DramaEpisodeDetail; aspectRatio: string; onOpenSegment: (index: number) => void }) {
+export function FinalView({
+    title,
+    detail,
+    aspectRatio,
+    onOpenSegment,
+    onOpenCut,
+    cutOpening,
+}: {
+    title: string;
+    detail: DramaEpisodeDetail;
+    aspectRatio: string;
+    onOpenSegment: (index: number) => void;
+    /** 把各段视频按成片顺序载入精修画布的时间线，在画布里精剪。 */
+    onOpenCut: () => void;
+    cutOpening: boolean;
+}) {
     const { episode, segments } = detail;
     const { message } = App.useApp();
     const videoRef = useRef<HTMLVideoElement>(null);
     const url = useResourceMediaUrl(episode.finalResourceId, "playback");
+    const readySegments = segments.filter((segment) => segment.videoResourceId && (segment.videoStatus === "ready" || segment.videoStatus === "stale")).length;
     const starts: number[] = [];
     segments.reduce((cursor, segment) => {
         starts.push(cursor);
@@ -70,6 +86,10 @@ export function FinalView({ title, detail, aspectRatio, onOpenSegment }: { title
                 <Button icon={<Download className="size-4" />} disabled={!episode.finalResourceId} onClick={download}>
                     下载成片
                 </Button>
+                <Button icon={<Scissors className="size-4" />} disabled={!readySegments} loading={cutOpening} onClick={onOpenCut}>
+                    到画布精剪
+                </Button>
+                {readySegments ? <p className="drama-editor-note">按成片顺序把 {readySegments} 段视频载入精修画布的时间线；剪辑结果导出为画布上的新视频，不会替换这里的成片。</p> : null}
             </aside>
         </div>
     );

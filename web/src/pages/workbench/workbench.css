@@ -14,6 +14,11 @@
     padding: 12px !important;
     overflow: hidden;
 }
+/* 工具页的强调色与全站一致取墨色（docs/ui-design-system.md §3.0）：按钮、选中与焦点都不再染蓝紫，
+   --wb-accent-* 分类色只留给目标与工具图标。 */
+:is(.workbench-shell, .workbench-picker-modal, .workbench-settings-modal, .workbench-detail-modal) {
+    --user-primary: var(--user-accent, var(--workspace-accent));
+}
 .workbench-shell {
     --wb-page: var(--user-page-bg, var(--workspace-page, #f8f8fa));
     --wb-surface: var(--user-surface, #fff);
@@ -756,41 +761,23 @@
     text-overflow: ellipsis;
 }
 
+/* 生成按钮就是统一主按钮的大号（40px）：实底、内高光与禁用态都来自 primary-buttons.css，
+   这里只保留布局所需的最小宽度，不再画渐变、彩色投影或加粗字距。 */
 .workbench-submit.ant-btn {
-    display: inline-flex !important;
     flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
     min-width: 156px;
-    height: 48px;
-    padding-inline: 16px;
-    border-radius: 12px !important;
-    background: linear-gradient(110deg, var(--user-primary, #6c82dc), color-mix(in srgb, var(--user-primary, #6c82dc) 72%, #8b78e8)) !important;
-    box-shadow: 0 12px 28px color-mix(in srgb, var(--user-primary, #6c82dc) 22%, transparent) !important;
-    color: #fff !important;
-    font-size: 14px !important;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    height: var(--button-height-lg);
+    padding-inline: 18px;
+    border-radius: var(--button-radius);
+    font-size: var(--button-font-size-lg);
     white-space: nowrap;
-    transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
+/* 图标直接作为子元素传入（不在 .ant-btn-icon 里），需要单独收回统一的 16px / 1.75 描边。 */
 .workbench-submit.ant-btn > svg {
-    width: 17px;
-    height: 17px;
-}
-
-.workbench-submit.ant-btn:hover:not(:disabled) {
-    box-shadow: 0 16px 32px color-mix(in srgb, var(--user-primary, #6c82dc) 32%, transparent) !important;
-}
-
-.workbench-submit.ant-btn:disabled,
-.workbench-submit.ant-btn-disabled {
-    border-color: transparent !important;
-    background: var(--wb-muted) !important;
-    box-shadow: none !important;
-    color: var(--wb-text-muted) !important;
+    width: var(--button-icon-size);
+    height: var(--button-icon-size);
+    stroke-width: var(--button-icon-stroke);
 }
 .workbench-settings-chip span {
     overflow: hidden;
@@ -2000,26 +1987,28 @@
     white-space: nowrap;
 }
 
+/* “查看更多”是紧凑浅底按钮（28px、8px 圆角），不染色、不做胶囊。 */
 .workbench-goal-heading > button {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     flex: 0 0 auto;
-    min-height: 30px;
-    padding: 0 12px;
+    min-height: var(--button-height-sm);
+    padding: 0 6px 0 10px;
     border: 0;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--user-primary, var(--wb-accent-creative)) 10%, var(--wb-surface));
-    color: var(--user-primary, var(--wb-accent-creative));
+    border-radius: var(--button-radius);
+    background: var(--button-tonal-bg);
+    color: var(--button-ghost-fg);
     font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--button-font-size-sm);
+    font-weight: var(--button-font-weight);
     cursor: pointer;
-    transition: background-color 160ms ease, transform 160ms ease;
+    transition: background-color var(--button-motion), color var(--button-motion);
 }
 
 .workbench-goal-heading > button:hover {
-    background: color-mix(in srgb, var(--user-primary, var(--wb-accent-creative)) 17%, var(--wb-surface));
+    background: var(--button-tonal-hover-bg);
+    color: var(--button-ghost-hover-fg);
 }
 
 .workbench-goal-heading > button svg {

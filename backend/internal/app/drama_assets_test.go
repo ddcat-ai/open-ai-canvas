@@ -24,28 +24,46 @@ func pixelOnlyImageSpec() CapabilitySpec {
 func TestDramaImageSizeSnapsToDeclaredPreset(t *testing.T) {
 	spec := pixelOnlyImageSpec()
 	defaults := map[string]any{"size": "1824x1024"}
-	cases := map[string]string{"9:16": "1024x1824", "16:9": "1824x1024", "1:1": "1024x1024", "4:3": "1024x1024"}
+	cases := map[string]string{"9:16": "1024x1824", "16:9": "1824x1024", "1:1": "1024x1024"}
 	for ratio, want := range cases {
-		if got := dramaImageSizeFor(spec, defaults, ratio); got != want {
-			t.Fatalf("%s => %q, want %q", ratio, got, want)
+		if got := dramaImageRequestForSpec(spec, defaults, ratio, ""); got.Size != want || got.Issue != "" {
+			t.Fatalf("%s => %+v, want %q", ratio, got, want)
 		}
 	}
-	// 3:4 与 9:16、1:1 等距，任选其一都必须是模型接受的值，绝不能原样发出比例。
-	if got := dramaImageSizeFor(spec, defaults, "3:4"); got != "1024x1824" && got != "1024x1024" {
-		t.Fatalf("3:4 must snap to an accepted pixel size, got %q", got)
+	// 没有接近的档位（4:3、3:4 离 1:1 与 16:9/9:16 都超过容差）时报错，绝不悄悄出方图。
+	for _, ratio := range []string{"4:3", "3:4"} {
+		if got := dramaImageRequestForSpec(spec, defaults, ratio, ""); got.Issue == "" || got.Size != "" {
+			t.Fatalf("%s must be rejected, got %+v", ratio, got)
+		}
+	}
+	if got := dramaImageRequestForSpec(spec, defaults, "16:9", "2k"); got.Issue == "" {
+		t.Fatalf("unsupported tier must be rejected, got %+v", got)
 	}
 }
 
-func TestDramaImageSizeKeepsRatioModelsAndOmitsUndeclared(t *testing.T) {
+func TestDramaImageSizeKeepsRatioModelsAndRejectsUndeclared(t *testing.T) {
 	ratioSpec := CapabilitySpec{Capability: "image", Options: map[string]OptionConstraint{"size": {Values: []any{"1:1", "3:4", "9:16"}}}}
-	if got := dramaImageSizeFor(ratioSpec, nil, "3:4"); got != "3:4" {
-		t.Fatalf("declared ratio must pass through, got %q", got)
+	if got := dramaImageRequestForSpec(ratioSpec, nil, "3:4", ""); got.Size != "3:4" {
+		t.Fatalf("declared ratio must pass through, got %+v", got)
 	}
-	if got := dramaImageSizeFor(ratioSpec, nil, "16:9"); got != "9:16" && got != "1:1" {
-		t.Fatalf("missing ratio snaps to the nearest declared value, got %q", got)
+	if got := dramaImageRequestForSpec(ratioSpec, nil, "16:9", ""); got.Issue == "" {
+		t.Fatalf("16:9 on a portrait-only model must be rejected, got %+v", got)
 	}
-	if got := dramaImageSizeFor(CapabilitySpec{Capability: "image"}, nil, "9:16"); got != "" {
-		t.Fatalf("models without a size option use their own default, got %q", got)
+	if got := dramaImageRequestForSpec(CapabilitySpec{Capability: "image"}, nil, "9:16", ""); got.Issue == "" {
+		t.Fatalf("models without a size option cannot honour the ratio, got %+v", got)
+	}
+	// 独立分辨率参数的模型：档位明确下发，尺寸取该档位的预设。
+	tiered := CapabilitySpec{Capability: "image", Options: map[string]OptionConstraint{"size": {Values: []any{"16:9", "1:1"}}, "imageResolution": {Values: []any{"1k", "2k"}}}, ImageSize: &CapabilityImageSize{Parameter: "aspect_ratio", Presets: []CapabilityImageSizePreset{
+		{Tier: "1k", Ratio: "16:9", Size: "1824x1024"}, {Tier: "2k", Ratio: "16:9", Size: "2752x1536"}, {Tier: "1k", Ratio: "1:1", Size: "1024x1024"}, {Tier: "2k", Ratio: "1:1", Size: "2048x2048"},
+	}}}
+	if got := dramaImageRequestForSpec(tiered, map[string]any{"imageResolution": "2k"}, "16:9", ""); got.Size != "16:9" || got.Resolution != "2k" {
+		t.Fatalf("default tier must be sent explicitly, got %+v", got)
+	}
+	if got := dramaImageRequestForSpec(tiered, map[string]any{"imageResolution": "2k"}, "16:9", "1k"); got.Resolution != "1k" {
+		t.Fatalf("chosen tier must win over the model default, got %+v", got)
+	}
+	if !dramaImageRatioMismatch(1024, 1024, "16:9") || dramaImageRatioMismatch(1824, 1024, "16:9") || dramaImageRatioMismatch(0, 0, "16:9") {
+		t.Fatal("result ratio check must flag square images only")
 	}
 }
 

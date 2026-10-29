@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { agentLessonCategoryLabel, deleteAdminAgentLesson, listAdminAgentLessons, type AdminAgentLesson } from "@/services/api/admin-agent-lessons";
-import { listAdminUsers, type AdminUser } from "@/services/api/auth";
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
+import { useAdminUserOptions } from "./use-admin-user-options";
 import { Select } from "@/components/ui/base/select";
 
 function authorLabel(record: AdminAgentLesson) {
@@ -22,13 +22,9 @@ export default function AgentLessonsPanel() {
     const [status, setStatus] = useState<string>("all");
     const [keyword, setKeyword] = useState("");
     const [userId, setUserId] = useState<string | undefined>();
-    const [users, setUsers] = useState<AdminUser[]>([]);
-    const [userSearch, setUserSearch] = useState("");
-    const [searchingUsers, setSearchingUsers] = useState(false);
+    const userOptions = useAdminUserOptions(userId);
     const debouncedKeyword = useDebouncedValue(keyword.trim(), 250);
-    const debouncedUserSearch = useDebouncedValue(userSearch.trim(), 250);
     const seqRef = useRef(0);
-    const userSearchRef = useRef(0);
 
     const load = useCallback(async () => {
         const seq = ++seqRef.current;
@@ -53,30 +49,10 @@ export default function AgentLessonsPanel() {
         void load();
     }, [load]);
 
-    useEffect(() => {
-        const requestId = ++userSearchRef.current;
-        setSearchingUsers(true);
-        void listAdminUsers({ keyword: debouncedUserSearch || undefined, page: 1, pageSize: 50 })
-            .then((result) => {
-                if (requestId !== userSearchRef.current) return;
-                setUsers((current) => {
-                    const selected = current.find((user) => user.id === userId);
-                    if (selected && !result.users.some((user) => user.id === selected.id)) return [selected, ...result.users];
-                    return result.users;
-                });
-            })
-            .catch((error) => {
-                if (requestId === userSearchRef.current) message.error(error instanceof Error ? error.message : "搜索用户失败");
-            })
-            .finally(() => {
-                if (requestId === userSearchRef.current) setSearchingUsers(false);
-            });
-    }, [debouncedUserSearch, message, userId]);
-
     const remove = (record: AdminAgentLesson) => {
         modal.confirm({
             title: `删除「${record.topic}」`,
-            content: `这是 ${authorLabel(record)} 的个人记忆。删除后该用户的 Agent 也无法召回。确认删除？`,
+            content: `这是 ${authorLabel(record)} 的旧版经验记录。删除只清理历史记录，不会改动该用户的记忆文件。确认删除？`,
             okText: "删除",
             okButtonProps: { danger: true },
             onOk: async () => {
@@ -159,7 +135,7 @@ export default function AgentLessonsPanel() {
         },
         {
             title: (
-                <Tooltip title="该用户的 Agent 用 recall_lessons 取全文的次数">
+                <Tooltip title="旧版 Agent 用 recall_lessons 取全文的次数（该工具已下线）">
                     <span>查阅</span>
                 </Tooltip>
             ),
@@ -181,7 +157,7 @@ export default function AgentLessonsPanel() {
 
     return (
         <div className="flex flex-col gap-3">
-            <p className="text-xs text-foreground/60">记忆归用户自己批准和管理。这里只做巡查：可按用户、状态、关键词筛选，必要时删除违规内容。批准入口在用户的「设置 → Agent 记忆」。</p>
+            <p className="text-xs text-foreground/60">旧版经验条目已不再注入 Agent，也不会新增；首次打开记忆文件时，已批准的条目会导入为可撤销的一次修改。这里保留历史记录供巡查，必要时删除违规内容。</p>
             <AdminDataTable
                 toolbar={
                     <div className="flex flex-wrap items-center gap-2">
@@ -200,16 +176,13 @@ export default function AgentLessonsPanel() {
                             allowClear
                             showSearch
                             filterOption={false}
-                            loading={searchingUsers}
+                            loading={userOptions.searching}
                             placeholder="筛选用户"
                             className="w-[220px]"
                             value={userId}
-                            onSearch={setUserSearch}
+                            onSearch={userOptions.onSearch}
                             onChange={(value) => setUserId(value)}
-                            options={users.map((user) => ({
-                                value: user.id,
-                                label: user.displayName ? `${user.displayName}（${user.username}）` : user.username,
-                            }))}
+                            options={userOptions.options}
                         />
                         <Input.Search allowClear placeholder="主题、内容或用户名" className="w-[220px]" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
                         <Button icon={<RefreshCw className="size-4" />} onClick={() => void load()}>
@@ -226,7 +199,7 @@ export default function AgentLessonsPanel() {
                     dataSource: items,
                     pagination: { defaultPageSize: 20, showSizeChanger: true },
                 }}
-                empty={<AdminTableEmpty title="没有匹配的记忆" description="换一个用户或关键词再查。用户自己在设置页批准后才会注入该用户的会话。" />}
+                empty={<AdminTableEmpty title="没有匹配的旧版经验" description="换一个用户或关键词再查。新的记忆内容在「记忆文件」里查看。" />}
             />
         </div>
     );

@@ -71,7 +71,37 @@ type DramaSettings struct {
 	MediaMode   string         `json:"mediaMode"`
 	Concurrency int            `json:"concurrency"`
 	Models      DramaModels    `json:"models"`
+	// ReferenceLimit 是自动取参考图时每段最多随请求发送的张数，0 表示按视频模型上限；手动指定参考图的段只受模型上限约束。
+	ReferenceLimit int `json:"referenceLimit"`
+	// EpisodeMode 是小说的分集方式：chapter 按章节固定分组（每 ChaptersPerEpisode 章一集），auto 由文本模型规划。
+	// 空串是早于该设置创建的作品（分集方式没有记录）；分集完成后不能再修改。剧本与分镜总是每章一集。
+	EpisodeMode        string `json:"episodeMode,omitempty"`
+	ChaptersPerEpisode int    `json:"chaptersPerEpisode,omitempty"`
+	// VideoContinuity 是剧情段视频的衔接方式，见 DramaContinuityTailFrame / DramaContinuityParallel。
+	VideoContinuity string `json:"videoContinuity"`
 }
+
+// 剧情段视频衔接方式：tail_frame 第 2 段起用上一段视频的最后一帧做首帧，同集各段按顺序生成；
+// parallel 每段只按角色/场景参考图独立生成，同集各段同时提交，适合按班次批量出片的渠道。
+const (
+	DramaContinuityTailFrame = "tail_frame"
+	DramaContinuityParallel  = "parallel"
+)
+
+// parallelVideo 表示剧情段视频互不依赖：不等上一段、不带首帧，同集各段可同时生成。
+func (s DramaSettings) parallelVideo() bool {
+	return s.VideoContinuity == DramaContinuityParallel
+}
+
+// dramaMaxChaptersPerEpisode 是按章分集时每集最多合并的章数；dramaEpisodeSourceRunes 是合并后单集原文上限，
+// 超过会让剧本提示词过长、改编时丢情节。
+const (
+	dramaMaxChaptersPerEpisode = 12
+	dramaEpisodeSourceRunes    = 40000
+)
+
+// dramaMaxReferenceLimit 是每段参考图张数设置的上限。
+const dramaMaxReferenceLimit = 20
 
 func (s DramaSettings) normalized() DramaSettings {
 	s.Settings = s.Settings.Normalized()
@@ -99,6 +129,21 @@ func (s DramaSettings) normalized() DramaSettings {
 	}
 	if s.Concurrency > 16 {
 		s.Concurrency = 16
+	}
+	s.ReferenceLimit = max(0, min(dramaMaxReferenceLimit, s.ReferenceLimit))
+	if s.VideoContinuity != DramaContinuityParallel {
+		// 早于该设置创建的作品一直按尾帧续接，保持原行为。
+		s.VideoContinuity = DramaContinuityTailFrame
+	}
+	switch s.EpisodeMode {
+	case DramaEpisodeModeChapter, DramaEpisodeModeAuto, "":
+	default:
+		s.EpisodeMode = DramaEpisodeModeAuto
+	}
+	if s.EpisodeMode == DramaEpisodeModeChapter {
+		s.ChaptersPerEpisode = max(1, min(dramaMaxChaptersPerEpisode, s.ChaptersPerEpisode))
+	} else {
+		s.ChaptersPerEpisode = 0
 	}
 	return s
 }
@@ -131,12 +176,98 @@ type DramaChapterInput struct {
 	Text  string `json:"text"`
 }
 
+// 分集方式：auto 由文本模型把小说章节规划成集；chapter 每章就是一集，不经过分集规划，适合逐集制作。
+const (
+	DramaEpisodeModeAuto    = "auto"
+	DramaEpisodeModeChapter = "chapter"
+)
+
 type CreateDramaRequest struct {
 	Name               string              `json:"name"`
 	Chapters           []DramaChapterInput `json:"chapters"`
 	Settings           DramaSettings       `json:"settings"`
 	BudgetMicrocredits int64               `json:"budgetMicrocredits"`
 	Start              bool                `json:"start"`
+	// SourceFormat 是素材类型：novel 小说、script 剧本、storyboard 分镜；剧本与分镜总是每章一集。
+	SourceFormat string `json:"sourceFormat"`
+	EpisodeMode  string `json:"episodeMode"`
+}
+
+// AddDramaEpisodeRequest 在作品末尾追加一集：原文直接成为这一集，不经过分集规划。
+type AddDramaEpisodeRequest struct {
+	Title        string `json:"title"`
+	Text         string `json:"text"`
+	SourceFormat string `json:"sourceFormat"`
+}
+
+// UpdateDramaChapterRequest 修改原文；已写好的剧本不会自动重写，需要用户点重新改编。
+type UpdateDramaChapterRequest struct {
+	Title *string `json:"title"`
+	Text  *string `json:"text"`
+}
+
+type UpdateDramaEpisodeRequest struct {
+	Title        *string `json:"title"`
+	SourceFormat *string `json:"sourceFormat"`
+}
+
+// InsertDramaShotRequest 在指定镜头前或后插入一个空镜头，归入同一剧情段。
+type InsertDramaShotRequest struct {
+	Position string `json:"position"`
+}
+
+// SetDramaCastImageRequest 用用户上传或画布采用的图片替换参考图并锁定，之后不会被重新生成覆盖。
+type SetDramaCastImageRequest struct {
+	ResourceID      string `json:"resourceId"`
+	RestyleSegments bool   `json:"restyleSegments"`
+	// Source 为 canvas 表示从精修画布采用，版本记录标为“来自画布”；空串或 upload 为直接上传。
+	Source string `json:"source"`
+	// TaskID 是产出这张图的画布生成任务，只用于版本来源与提示词回看；与资源对不上时忽略。
+	TaskID string `json:"taskId"`
+}
+
+// AdoptDramaSegmentVideoRequest 把画布上的视频采用为剧情段当前视频。
+type AdoptDramaSegmentVideoRequest struct {
+	ResourceID string `json:"resourceId"`
+	TaskID     string `json:"taskId"`
+	// Cascade=true 时后续已生成过视频的段重新排队生成（首帧换成新视频的尾帧，保证衔接）；默认只换本段。
+	// 并行出片的作品段与段互不依赖，忽略该选项。
+	Cascade bool `json:"cascade"`
+	// ExpectedRevision 是客户端看到的剧情段版本；版本已变时拒绝，避免覆盖刚发生的修改。
+	ExpectedRevision *int64 `json:"expectedRevision"`
+}
+
+// DramaCanvasAssetsRequest 为投送到画布的短剧媒体登记素材记录：画布媒体节点必须由当前用户的素材引用资源。
+type DramaCanvasAssetsRequest struct {
+	Resources []DramaCanvasAssetInput `json:"resources"`
+}
+
+type DramaCanvasAssetInput struct {
+	ResourceID string `json:"resourceId"`
+	Title      string `json:"title"`
+	Category   string `json:"category"`
+}
+
+// DramaTakeView 是一个产物版本；Source 区分流水线生成（pipeline）、直接上传（upload）与画布采用（canvas）。
+type DramaTakeView struct {
+	ID         string `json:"id"`
+	OwnerID    string `json:"ownerId"`
+	Kind       string `json:"kind"`
+	Version    int    `json:"version"`
+	ResourceID string `json:"resourceId"`
+	TaskID     string `json:"taskId,omitempty"`
+	Prompt     string `json:"prompt"`
+	DurationMs int64  `json:"durationMs,omitempty"`
+	Source     string `json:"source"`
+	Current    bool   `json:"current"`
+	CreatedAt  string `json:"createdAt"`
+}
+
+// DramaDialogueCheck 是原文台词与镜头台词的逐句核对结果；Missing 是被删掉或改写的原文台词（最多展示 30 句）。
+type DramaDialogueCheck struct {
+	SourceLines  int      `json:"sourceLines"`
+	MissingCount int      `json:"missingCount"`
+	Missing      []string `json:"missing"`
 }
 
 type UpdateDramaSettingsRequest struct {
@@ -150,15 +281,17 @@ type DramaProductionView struct {
 	PauseReason        string        `json:"pauseReason"`
 	Settings           DramaSettings `json:"settings"`
 	BudgetMicrocredits int64         `json:"budgetMicrocredits"`
-	SpentMicrocredits  int64         `json:"spentMicrocredits"`
-	PlanDone           bool          `json:"planDone"`
-	PlanCursor         int           `json:"planCursor"`
-	SampleApproved     bool          `json:"sampleApproved"`
-	AssetsReleased     bool          `json:"assetsReleased"`
-	Logline            string        `json:"logline"`
-	Tone               string        `json:"tone"`
-	ChapterCount       int           `json:"chapterCount"`
-	WordCount          int           `json:"wordCount"`
+	// SpentMicrocredits 是作品总花费：流水线任务加关联画布上的精修任务，预算按它判断。
+	SpentMicrocredits       int64  `json:"spentMicrocredits"`
+	CanvasSpentMicrocredits int64  `json:"canvasSpentMicrocredits"`
+	PlanDone                bool   `json:"planDone"`
+	PlanCursor              int    `json:"planCursor"`
+	SampleApproved          bool   `json:"sampleApproved"`
+	AssetsReleased          bool   `json:"assetsReleased"`
+	Logline                 string `json:"logline"`
+	Tone                    string `json:"tone"`
+	ChapterCount            int    `json:"chapterCount"`
+	WordCount               int    `json:"wordCount"`
 }
 
 // DramaEpisodeStats 按剧情段统计进度：视频提示词写好几段、视频生成几段、失败几段。
@@ -175,6 +308,7 @@ type DramaEpisodeRow struct {
 	Title           string            `json:"title"`
 	Synopsis        string            `json:"synopsis"`
 	Stage           string            `json:"stage"`
+	SourceFormat    string            `json:"sourceFormat"`
 	Error           string            `json:"error"`
 	ShotCount       int               `json:"shotCount"`
 	DurationMs      int64             `json:"durationMs"`
@@ -216,6 +350,8 @@ type DramaJobView struct {
 	StartedAt        string `json:"startedAt,omitempty"`
 	FinishedAt       string `json:"finishedAt,omitempty"`
 	UpdatedAt        string `json:"updatedAt"`
+	// ProviderStage 是生成中任务的上游进度文案（如“候车 · 前面 3 条”），只在上游已接收任务时给出。
+	ProviderStage string `json:"providerStage,omitempty"`
 }
 
 // DramaJobAttempt 是工作的一次提交记录；status 为任务状态，或 rejected（提交时被准入拒绝）。
@@ -282,11 +418,15 @@ type DramaEpisodeDetail struct {
 	Jobs     []DramaJobView     `json:"jobs"`
 	// ScriptJob 是本集最近一次改编剧本的调度工作，可查看改编提示词与模型返回。
 	ScriptJob *DramaJobView `json:"scriptJob,omitempty"`
+	// DialogueCheck 只在本集有镜头、且原文章节不与其他集共用时给出（共用时无法判断哪些台词属于本集）。
+	DialogueCheck *DramaDialogueCheck `json:"dialogueCheck,omitempty"`
 }
 
 // DramaSegmentView 是一个剧情段：视频提示词、参考图、生成方式与视频结果。
 type DramaSegmentView struct {
-	ID         string   `json:"id"`
+	ID string `json:"id"`
+	// Revision 用于画布采用时的乐观并发校验。
+	Revision   int64    `json:"revision"`
 	Index      int      `json:"index"`
 	Title      string   `json:"title"`
 	ShotIDs    []string `json:"shotIds"`
@@ -302,10 +442,14 @@ type DramaSegmentView struct {
 	VideoStatus         string `json:"videoStatus"`
 	VideoResourceID     string `json:"videoResourceId,omitempty"`
 	TailFrameResourceID string `json:"tailFrameResourceId,omitempty"`
-	VideoError          string `json:"videoError,omitempty"`
+	// VideoSeconds 是当前视频进入成片的时长（秒），与成片时间线一致。
+	VideoSeconds int    `json:"videoSeconds,omitempty"`
+	VideoError   string `json:"videoError,omitempty"`
 	// VideoReprocessable：视频已生成并入库，只是结果回写（如抽尾帧）失败；可重新处理已有视频，不重新生成。
 	VideoReprocessable bool             `json:"videoReprocessable,omitempty"`
 	VideoModel         DramaModelChoice `json:"videoModel"`
+	// ReferenceMode：auto 按本段镜头自动取参考图；custom 为用户指定的参考图。
+	ReferenceMode string `json:"referenceMode"`
 	// Request 是生成本段视频时实际会发送的内容：生成方式、首帧、参考图、秒数与追加在提示词前的参考图说明。
 	Request   DramaSegmentRequest `json:"request"`
 	PromptJob *DramaJobView       `json:"promptJob,omitempty"`
@@ -324,10 +468,17 @@ type DramaSegmentRequest struct {
 	FirstFrameResourceID string                  `json:"firstFrameResourceId,omitempty"`
 	FirstFramePending    bool                    `json:"firstFramePending"`
 	References           []DramaSegmentReference `json:"references"`
+	// ReferenceCapacity 是本段最多随请求发送的参考图张数（已扣除首帧，并受每段上限约束）；ModelMaxImages 是视频模型声明的图片上限。
+	ReferenceCapacity int `json:"referenceCapacity"`
+	ModelMaxImages    int `json:"modelMaxImages"`
+	// ReferenceLimited 表示有参考图因“每段最多参考图”设置而未发送（而不是模型上限）。
+	ReferenceLimited bool `json:"referenceLimited,omitempty"`
 	// Header 是提交时放在提示词最前面的参考图对应说明，让模型知道每张图是谁。
 	Header string `json:"header"`
 	// Warning 说明请求的限制，例如模型不支持参考图、参考图超出模型上限。
 	Warning string `json:"warning,omitempty"`
+	// UnknownReferences 是提示词正文里不属于本段的“参考图N”（编号超出本段参考图数量），存在时不能提交视频。
+	UnknownReferences []string `json:"unknownReferences,omitempty"`
 }
 
 type DramaSegmentReference struct {
@@ -343,6 +494,9 @@ type DramaSegmentReference struct {
 type UpdateDramaSegmentRequest struct {
 	// VideoPromptOverride 传空串表示恢复模型撰写的版本。
 	VideoPromptOverride *string `json:"videoPromptOverride"`
+	// ReferenceCastIDs 指定本段参考图（顺序即编号，可为空数组表示不发参考图）；AutoReferences=true 恢复按镜头自动取。
+	ReferenceCastIDs *[]string `json:"referenceCastIds"`
+	AutoReferences   bool      `json:"autoReferences"`
 }
 
 // UpdateDramaShotRequest 修改镜头的剧本内容；镜头只是撰写视频提示词的素材，修改后本段提示词标记过期。
@@ -391,6 +545,12 @@ type DramaModelOption struct {
 	PriceLabel string           `json:"priceLabel"`
 	// MaxVideoSeconds 仅视频模型：单次最长生成秒数，0 表示未声明。
 	MaxVideoSeconds int `json:"maxVideoSeconds,omitempty"`
+	// TailFrameChain 仅视频模型：是否支持图生视频，可用于“尾帧续接”；不支持的模型只能并行出片。
+	TailFrameChain bool `json:"tailFrameChain,omitempty"`
+	// 以下仅图片模型：可指定的参考图分辨率档位、默认档位，以及能按默认档位准确出图的参考图画幅。
+	ImageResolutions       []string `json:"imageResolutions,omitempty"`
+	DefaultImageResolution string   `json:"defaultImageResolution,omitempty"`
+	ImageRatios            []string `json:"imageRatios,omitempty"`
 }
 
 // DramaModelUnavailable 是平台目录里有、但短剧流水线无法使用的模型及原因，前端置灰展示而不是隐藏。
@@ -409,6 +569,8 @@ type DramaEstimateRequest struct {
 	ChapterCount int           `json:"chapterCount"`
 	WordCount    int           `json:"wordCount"`
 	Settings     DramaSettings `json:"settings"`
+	// EpisodeMode 为 chapter 时每章一集，集数等于章节数。
+	EpisodeMode string `json:"episodeMode"`
 }
 
 // DramaEstimate 的 Videos 是剧情段数（一段一次视频调用），Images 是参考图数。

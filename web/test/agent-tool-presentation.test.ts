@@ -111,6 +111,22 @@ describe("Agent tool presentation", () => {
             expect(friendlyAgentToolSummary("skill_read_file", "工具执行成功", detail)).toContain("可读参考文件 1 个");
         }
     });
+    it("describes auto-discovered skills separately from pinned ones", () => {
+        expect(friendlyAgentToolSummary("skills_load", "可自动发现 12 个已安装技能，正文按需读取", { eventType: "tool_completed", availableCount: 12, skillIds: [] })).toBe("可自动发现 12 个已安装技能");
+        expect(friendlyAgentToolSummary("skills_load", "可自动发现 12 个已安装技能（固定 2 个），正文按需读取", { eventType: "tool_completed", availableCount: 12, skillIds: ["a", "b"] })).toBe("可自动发现 12 个已安装技能 · 固定 2 个");
+        // 只有文案、没有结构化字段时也能读出数字
+        expect(friendlyAgentToolSummary("skills_load", "可自动发现 5 个已安装技能（固定 1 个），正文按需读取")).toBe("可自动发现 5 个已安装技能 · 固定 1 个");
+    });
+    it("summarizes memory and skill-market tools without calling them canvas writes", () => {
+        expect(agentToolCategory("memory_update")).toBe("other");
+        expect(agentToolCategory("skill_recommend")).toBe("other");
+        expect(agentToolCategory("skill_market_search")).toBe("read");
+        expect(friendlyAgentToolSummary("memory_update", "", { eventType: "tool_completed", result: { status: "pending_review" } })).toBe("记忆修改已提交，等你确认");
+        expect(friendlyAgentToolSummary("memory_update", "", { eventType: "tool_completed", result: { status: "unchanged" } })).toBe("记忆里已有这些内容，未改动");
+        expect(friendlyAgentToolSummary("memory_update", "只读模式不能修改长期记忆", { eventType: "tool_failed" })).toBe("长期记忆未更新");
+        expect(friendlyAgentToolSummary("skill_market_search", "", { eventType: "tool_completed", result: { matches: [{ skillId: "a" }, { skillId: "b" }] } })).toBe("技能市场找到 2 个候选");
+        expect(friendlyAgentToolSummary("skill_market_search", "", { eventType: "tool_completed", result: { matches: [] } })).toBe("技能市场没有匹配的技能");
+    });
     it("preserves other tools, approval summaries and legacy status fallback", () => {
         expect(friendlyAgentToolSummary("canvas_apply_ops", "", undefined, true)).toBe("准备更新画布内容");
         expect(friendlyAgentToolSummary("skills_load", "已从用户技能库固定加载 3 个技能")).toBe("已加载 3 个 Skills 技能");

@@ -1,0 +1,117 @@
+/* Canvas image node: idle and failure surfaces. Loading uses .canvas-image-skeleton in globals.css. */
+.canvas-image-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    overflow: hidden;
+    border-radius: inherit;
+    /* 与加载骨架同一底色，加载 → 失败 → 重试之间切换时节点不跳色。 */
+    background: color-mix(in srgb, var(--canvas-gen-ink) 4%, var(--canvas-gen-surface, transparent));
+    color: var(--canvas-image-muted);
+    text-align: center;
+    container-type: size;
+}
+
+.canvas-image-state-icon {
+    width: 22px;
+    height: 22px;
+    opacity: 0.4;
+}
+
+.canvas-image-state[data-state="error"] .canvas-image-state-icon {
+    opacity: 0.6;
+}
+
+.canvas-image-state-label {
+    font-size: var(--fs-caption);
+    line-height: 1.4;
+}
+
+.canvas-image-state-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--canvas-gen-ink) 14%, transparent);
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--canvas-gen-surface) 70%, transparent);
+    color: var(--canvas-gen-ink);
+    font-size: var(--fs-tiny);
+    line-height: 1.6;
+    cursor: pointer;
+    transition:
+        background-color var(--motion-dur-fast) var(--motion-ease-out),
+        border-color var(--motion-dur-fast) var(--motion-ease-out);
+}
+
+.canvas-image-state-retry > svg {
+    width: 12px;
+    height: 12px;
+}
+.canvas-image-state-retry:hover {
+    border-color: color-mix(in srgb, var(--canvas-gen-ink) 24%, transparent);
+    background: color-mix(in srgb, var(--canvas-gen-ink) 8%, var(--canvas-gen-surface));
+}
+.canvas-image-state-retry:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+/* 节点被缩得很小时只保留图标和重试按钮，文字不挤成多行。 */
+@container (max-height: 120px) {
+    .canvas-image-state-label {
+        display: none;
+    }
+}
+
+@container (max-height: 64px) {
+    .canvas-image-state-icon {
+        display: none;
+    }
+}
+
+/* 慢加载提示叠在骨架微光之上。 */
+.canvas-image-state-hint {
+    position: absolute;
+    left: 50%;
+    bottom: var(--space-3);
+    z-index: 1;
+    max-width: calc(100% - var(--space-4));
+    padding: 2px var(--space-2);
+    overflow: hidden;
+    border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--canvas-gen-surface) 72%, transparent);
+    color: var(--canvas-image-muted, currentColor);
+    font-size: var(--fs-tiny);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    transform: translateX(-50%);
+    animation: canvas-image-state-in var(--motion-dur-slow) var(--motion-ease-out) both;
+}
+
+@keyframes canvas-image-state-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-image-state-hint {
+        animation: none;
+    }
+    .canvas-image-state-retry {
+        transition: none;
+    }
+}
+
+.no-motion .canvas-image-state-hint {
+    animation: none;
+}

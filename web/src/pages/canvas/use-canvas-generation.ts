@@ -520,6 +520,43 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         [applyGenerationTaskResult, bindGenerationTask, message, nodesRef, observeSubscribedGenerationTask, setNodes],
     );
 
+    /**
+     * 重新获取节点已绑定任务的结果：只查询并接回原任务，不重新提交、不重复扣费。
+     * 用于页面轮询中断（任务其实仍在后台跑）或结果回写失败；任务未结束时继续观察到终态。
+     */
+    const resyncGenerationTaskNode = useCallback(
+        async (node: CanvasNodeData) => {
+            const taskId = node.metadata?.taskId;
+            if (!taskId || recoveringTaskIdsRef.current.has(taskId)) return;
+            recoveringTaskIdsRef.current.add(taskId);
+            const signal = consumerControllerRef.current.signal;
+            const ownsTask = (item: CanvasNodeData) => item.id === node.id && item.metadata?.taskId === taskId;
+            setNodes((current) => current.map((item) => (ownsTask(item) ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, resourceReloadAvailable: undefined } } : item)));
+            try {
+                const completed = await observeSubscribedGenerationTask(taskId, signal, (task) => {
+                    // 成功结果交给 applyGenerationTaskResult 一次性写入，避免先把旧内容标成完成。
+                    if (task.status !== "succeeded" && nodesRef.current.some(ownsTask)) bindGenerationTask(node.id, task);
+                });
+                if (signal.aborted || !nodesRef.current.some(ownsTask)) return;
+                if (completed.status === "succeeded") await applyGenerationTaskResult(node.id, completed);
+            } catch (error) {
+                if (signal.aborted || (error instanceof Error && error.name === "AbortError")) return;
+                // applyGenerationTaskResult 已写入“可重新获取”的失败态时不覆盖，其余情况保留重新获取入口。
+                setNodes((current) =>
+                    current.map((item) =>
+                        ownsTask(item) && item.metadata?.status === NODE_STATUS_LOADING
+                            ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: generationFailureMetadata(error, nodeGenerationPrompt(item)).errorDetails, resourceReloadAvailable: true } }
+                            : item,
+                    ),
+                );
+                message.error("暂时无法获取结果，请稍后再试");
+            } finally {
+                recoveringTaskIdsRef.current.delete(taskId);
+            }
+        },
+        [applyGenerationTaskResult, bindGenerationTask, message, nodesRef, observeSubscribedGenerationTask, setNodes],
+    );
+
     useEffect(() => {
         const coordinator = recoveryCoordinatorRef.current!;
         if (!projectLoaded) {
@@ -580,6 +617,7 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
         bindGenerationTask,
         finishGenerationRequest,
         openNodeTaskDetails,
+        resyncGenerationTaskNode,
         runningNodeId,
         setRunningNodeId,
         setTaskDetail,

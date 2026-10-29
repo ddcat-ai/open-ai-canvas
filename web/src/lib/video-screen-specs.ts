@@ -13,6 +13,15 @@ export function cleanVideoScreenSpecValues(values: readonly string[]) {
         });
 }
 
+// 插件用 `*` 声明未列出工作流的默认预设；上游模型 ID 本身原样透传。
+export const GENERIC_WORKFLOW_ID = "*";
+
+export function findProtocolWorkflow(workflows: readonly ModelProtocolWorkflow[] | undefined, protocol: string | undefined, model: string) {
+    const id = model.trim().replace(/^models\//, "");
+    const candidates = (workflows || []).filter((item) => item.providerId === protocol);
+    return candidates.find((item) => item.id === id) || candidates.find((item) => item.id === GENERIC_WORKFLOW_ID);
+}
+
 export function workflowVideoScreenSpec(workflow: ModelProtocolWorkflow): VideoScreenSpecConfig {
     const resolution = workflow.parameters.find((field) => field.mapping === "resolution" || field.name === "resolution");
     return {

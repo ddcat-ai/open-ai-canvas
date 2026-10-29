@@ -106,6 +106,10 @@ export type ToolbarHandlers = {
     onNodeTimeline: (node: CanvasNodeData) => void;
     /** 打开媒体版本面板；只读分享页不提供。 */
     onNodeVersions?: (node: CanvasNodeData) => void;
+    /** 采用到短剧（设定参考图或剧情段视频）；只在关联短剧的精修画布上提供。 */
+    onNodeAdoptToDrama?: (node: CanvasNodeData) => void;
+    /** 短剧侧已有更新的版本时才提供：把节点换成短剧当前的媒体。 */
+    onNodeRefreshFromDrama?: (node: CanvasNodeData) => void;
     onNodeReversePrompt: (node: CanvasNodeData) => void;
     onNodeToggleFreeResize: (node: CanvasNodeData) => void;
     onNodeToggleLocked: (node: CanvasNodeData) => void;

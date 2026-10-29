@@ -56,9 +56,18 @@ func (providerCircuitOpenError) Error() string {
 type providerStatePendingError struct {
 	TaskID string
 	Cause  error
+	// Stage 是上游可读的排队/生成阶段，worker 退回调度时写入任务进度。
+	Stage string
+	// Detached 表示协议声明了分离式回查：上游仍在排队或生成，而不是状态未同步。
+	Detached bool
+	// PollDelay 是分离式回查的下次回查间隔；0 表示使用默认间隔。
+	PollDelay time.Duration
 }
 
 func (e providerStatePendingError) Error() string {
+	if e.Detached {
+		return fmt.Sprintf("上游任务仍在排队或生成，将继续查询原任务（任务 %s）", e.TaskID)
+	}
 	return fmt.Sprintf("上游任务状态尚未同步，将继续查询原任务（任务 %s）", e.TaskID)
 }
 

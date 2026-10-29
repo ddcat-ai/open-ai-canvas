@@ -47,7 +47,7 @@ operations 可携带 `editProofs: [{nodeId, sessionId, token}]`，服务端校�
 
 - 同范围保存使用 single-flight；调用方最长等待 15 秒，超时只返回控制权，不释放仍在执行的事务、不换 mutationId。同步 API 请求超时 15 秒，媒体上传及分片请求超时 60 秒；连续编辑每轮最多追赶两次后让出队列。
 - 素材按条同步。一条素材失败只影响引用该素材的画布，不阻断无关画布；素材版本冲突或写入被明确拒绝时备份原记录并采用云端素材。
-- 只有 operations 返回已识别的 `canvas_field_conflict`、`canvas_object_missing`、`canvas_edit_lease_conflict` 或 `canvas_media_assets_pending` 明确拒绝，才允许重建基线并生成新请求。凭据申请失败不能被当作原 operations 已回滚；`canvas_concurrent_write`、5xx 和无响应继续重放原请求。401/403 不绕过权限，未识别的拒绝如实失败并保留当前编辑与 journal。
+- 只有 operations 返回已识别的 `canvas_field_conflict`、`canvas_object_missing`、`canvas_edit_lease_conflict`、`canvas_media_assets_pending` 或 `canvas_mutation_id_reused` 明确拒绝，才允许重建基线并生成新请求。`canvas_mutation_id_reused` 表示该 ID 已有另一份请求体的 receipt，原样重放永远不会成功；按 journal 基线三方合并后，已提交的部分只应用一次。凭据申请失败不能被当作原 operations 已回滚；5xx 和无响应继续重放原请求。`canvas_concurrent_write` 在同一次保存内按原 mutationId 和原请求体间隔 250 / 600 / 1200 毫秒原样重放，仍失败才交给后台退避重试；它按瞬时错误记录，不标记为画布冲突。401/403 不绕过权限，未识别的拒绝如实失败并保留当前编辑与 journal。
 - 冲突恢复直接保留当前编辑，先持久化包含最新基线、合并修改和合并前草稿的新 journal，再更新编辑器与缓存。中途刷新时，用缓存的基线哈希识别尚未应用的投影，先接回合并结果并保留后续输入，再重放原请求；若再次冲突，以该 journal 的基线继续合并，避免使用落后的内存基线重复插字。服务端确认与本地落盘成功后才清理 journal；新 journal 落盘失败时保留原请求，不能用云端内容替换本地内容。保存期间的新编辑进入后续批次，撤销历史保留。
 - 同步静默运行，不弹出同步报错、恢复选择卡片、手动重连、采用云端、导出草稿或另存画布入口；状态图标只区分待同步和已确认。同步始终写回原画布 ID。云端已删除的画布不能伪报保存成功，也不自动创建替代画布。
 - 有缓存（包括空白画布）时先打开本地编辑器；云端加载失败不再覆盖成错误遮罩。云端待同步不拦截离开页面，真正未落盘的本地输入仍保留离开提醒。
@@ -76,13 +76,20 @@ operations 可携带 `editProofs: [{nodeId, sessionId, token}]`，服务端校�
 
 `mutationId` 是重试身份，不是版本号。请求超时、响应丢失、断网、刷新或后台自动重试时，必须使用相同的 `mutationId`、`baseRevision` 和原始 `operations`。修改原始 payload 后复用 ID 会返回 `canvas_mutation_id_reused`。
 
-`baseRevision` 是生成请求时的已确认版本，用于记录和诊断。真正的并发校验在操作本身：字段补丁使用 `before`，对象更新或删除使用 `expected`，顶层字段使用 `beforeValue`。不同字段可以合并；同一字段或同一对象的基线不匹配时返回冲突。可选顶层字段不存在时，客户端必须在 JSON 中将 `value` 或 `beforeValue` 编码为 `null`，不能让 `undefined` 被序列化为缺失属性。服务端仅兼容早期客户端对这些可选字段省略属性的请求，并按 `null` 参与同样的基线校验。
+`baseRevision` 是生成请求时的已确认版本，用于记录和诊断。真正的并发校验在操作本身：字段补丁使用 `before`，对象更新或删除使用 `expected`，顶层字段使用 `beforeValue`。不同字段可以合并；同一字段或同一对象的基线不匹配时返回冲突。
+
+服务端对“已经是目标值”的写入做幂等收敛，不再因基线过期而整笔拒绝：
+
+- `patch_node` 的某个补丁路径基线不匹配，但当前值已等于本次目标值时视为已应用。只出现在 `before`、不在 `patch` 中的断言（例如 `metadata.taskId` 任务围栏）仍严格校验。
+- `set_field` 当前值已等于 `value`、`update_connection` 当前连线已等于目标连线、`create_node` / `create_connection` 同 ID 对象已按相同内容存在时，均按已应用处理。
+- `remove_node`、`update_connection`、`remove_connection` 的整对象基线比较忽略顶层 `updatedAt` 簿记字段，与 `patch_node` 一致。Agent 或生成回写刷新节点时间后，用户删除该节点不再整笔冲突。
+- 当前值既不等于原基线也不等于目标值（第三值）、同 ID 对象内容不同、删除目标已被改过业务字段时，仍返回 `canvas_field_conflict`，由客户端按三方合并重建请求。可选顶层字段不存在时，客户端必须在 JSON 中将 `value` 或 `beforeValue` 编码为 `null`，不能让 `undefined` 被序列化为缺失属性。服务端仅兼容早期客户端对这些可选字段省略属性的请求，并按 `null` 参与同样的基线校验。
 
 ## 同任务观察结果的收敛
 
 同一任务可能由多个终端观察并保存。客户端只在原节点和新节点绑定同一非空任务 ID、且写入非空任务时间时，给补丁补充 `before["metadata.taskId"]`；换绑、首次绑定和解绑保留真实旧 ID 的基线，不能用新 ID 覆盖。
 
-服务端在应用补丁前一次性确认任务身份、存在非空的 `metadata.taskUpdatedAt` 写入，且没有 taskId 或整个 metadata 替换。满足条件时，任务时间按事件时间取较新值；其他写字段只有在原基线匹配，或当前值已经精确等于本次目标值时才接受。before-only 断言仍严格检查；当前值既不等于原值也不等于目标值仍使整笔事务冲突。清空时间、换绑任务和整块 metadata 替换不走时间合并，继续执行原字段 CAS。
+服务端在应用补丁前一次性确认任务身份、存在非空的 `metadata.taskUpdatedAt` 写入，且没有 taskId 或整个 metadata 替换。满足条件时，任务时间按事件时间取较新值；其他写字段只有在原基线匹配，或当前值已经精确等于本次目标值时才接受（目标值收敛对所有补丁路径生效，不再限于带任务围栏的请求）。before-only 断言仍严格检查；当前值既不等于原值也不等于目标值仍使整笔事务冲突。清空时间、换绑任务和整块 metadata 替换不走时间合并，继续执行原字段 CAS。
 
 ## 操作类型
 

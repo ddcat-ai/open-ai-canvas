@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	cloudAgentCompilerVersion  = "cloud-agent-policy-compiler/v5"
+	cloudAgentCompilerVersion  = "cloud-agent-policy-compiler/v6"
 	cloudAgentDefaultReasoning = "off"
 )
 
@@ -87,20 +87,10 @@ func cloudAgentCapabilityGuide() string {
 	return b.String()
 }
 
-// cloudAgentSkillManifestDescription bounds the system prompt: the description
-// is author-supplied public metadata, so it is trimmed and capped before it
-// enters the compiled policy.
-func cloudAgentSkillManifestDescription(description string) string {
-	const maxRunes = 500
-	trimmed := strings.TrimSpace(description)
-	if utf8.RuneCountInString(trimmed) <= maxRunes {
-		return trimmed
-	}
-	runes := []rune(trimmed)
-	return strings.TrimSpace(string(runes[:maxRunes])) + "…"
-}
-
-func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skills []cloudAgentSkill, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
+// compileCloudAgentPolicies 编译稳定 system：行为合同 + 能力速查 + 本轮执行事实 + 已安装技能目录。
+// 技能目录只含名称、短简介和 skillId（有预算），正文由 skill_read_file 按需读取；skillCatalog 为 nil
+// 表示本轮不发布目录（隔离的合同测试）。
+func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skillCatalog *cloudAgentSkillCatalog, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
 	system, media, err := prompts.LoadAgentPolicies()
 	if err != nil {
 		return "", cloudAgentPolicySnapshot{}, err
@@ -140,11 +130,9 @@ func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skills [
 		// User intent remains in user messages, never frozen into system context.
 		context["referenceCandidates"] = anchors[0].ReferenceAssets
 	}
-	manifests := make([]map[string]any, 0, len(skills))
-	for _, skill := range skills {
-		manifests = append(manifests, map[string]any{"skillId": skill.ID, "name": skill.Name, "description": cloudAgentSkillManifestDescription(skill.Description), "version": skill.Version, "hash": skill.Hash, "entryPath": cloudAgentSkillEntryPath, "files": cloudAgentSkillPaths(skill)})
+	if skillCatalog != nil {
+		context["skillCatalog"] = map[string]int{"installed": skillCatalog.Installed, "described": skillCatalog.Described, "namesOnly": skillCatalog.NamesOnly, "omitted": skillCatalog.Omitted}
 	}
-	context["skills"] = manifests
 	layers := make([]map[string]any, 0, len(profile.Layers))
 	for _, layer := range profile.Layers {
 		layers = append(layers, map[string]any{"scope": layer.Scope, "revision": layer.Revision, "hash": layer.Hash, "characters": utf8.RuneCountInString(layer.Content)})
@@ -156,6 +144,10 @@ func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skills [
 	}
 	b.WriteString("\n\n本轮执行上下文：\n")
 	b.Write(encoded)
+	if skillCatalog != nil && strings.TrimSpace(skillCatalog.Text) != "" {
+		b.WriteString("\n\n")
+		b.WriteString(skillCatalog.Text)
+	}
 	text := strings.TrimSpace(b.String())
 	if text == "" {
 		return "", cloudAgentPolicySnapshot{}, fmt.Errorf("compiled Agent policy is empty")

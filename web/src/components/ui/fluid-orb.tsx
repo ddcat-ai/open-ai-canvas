@@ -160,10 +160,16 @@ export function FluidOrb({ size = 56, color = "#6d5dfc", className }: FluidOrbPr
 
             const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
             const startedAt = performance.now();
+            // 尺寸由 ResizeObserver 推送：逐帧读 clientWidth 会在每帧强制一次布局。
+            let cssWidth = canvas.clientWidth;
+            let cssHeight = canvas.clientHeight;
+            // 被隐藏（例如面板打开时入口 display:none）、移出视口或标签页在后台时不再逐帧绘制。
+            let visible = true;
             const render = (now: number) => {
+                frame = 0;
                 const ratio = Math.min(window.devicePixelRatio || 1, 2);
-                const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
-                const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+                const width = Math.max(1, Math.round(cssWidth * ratio));
+                const height = Math.max(1, Math.round(cssHeight * ratio));
                 if (canvas.width !== width || canvas.height !== height) {
                     canvas.width = width;
                     canvas.height = height;
@@ -174,12 +180,32 @@ export function FluidOrb({ size = 56, color = "#6d5dfc", className }: FluidOrbPr
                 gl.uniform2f(resolution, width, height);
                 gl.uniform1f(time, motionPreference.matches ? 0.8 : (now - startedAt) / 1000);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
-                if (!motionPreference.matches) frame = window.requestAnimationFrame(render);
+                if (!motionPreference.matches && visible && document.visibilityState !== "hidden") frame = window.requestAnimationFrame(render);
             };
-            const updateMotion = () => { window.cancelAnimationFrame(frame); frame = window.requestAnimationFrame(render); };
-            motionPreference.addEventListener("change", updateMotion);
-            removeMotionListener = () => motionPreference.removeEventListener("change", updateMotion);
-            frame = window.requestAnimationFrame(render);
+            const schedule = () => {
+                window.cancelAnimationFrame(frame);
+                frame = visible && document.visibilityState !== "hidden" ? window.requestAnimationFrame(render) : 0;
+            };
+            const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(([entry]) => {
+                cssWidth = entry.contentRect.width;
+                cssHeight = entry.contentRect.height;
+                if (motionPreference.matches) schedule();
+            });
+            resizeObserver?.observe(canvas);
+            const visibilityObserver = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([entry]) => {
+                visible = entry.isIntersecting;
+                schedule();
+            });
+            visibilityObserver?.observe(canvas);
+            document.addEventListener("visibilitychange", schedule);
+            motionPreference.addEventListener("change", schedule);
+            removeMotionListener = () => {
+                motionPreference.removeEventListener("change", schedule);
+                document.removeEventListener("visibilitychange", schedule);
+                resizeObserver?.disconnect();
+                visibilityObserver?.disconnect();
+            };
+            schedule();
         } catch (error) {
             console.warn("Fluid Orb WebGL 初始化失败，已切换为 CSS 降级效果", error);
             setFallback(true);

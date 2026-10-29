@@ -15,6 +15,7 @@ import (
 
 func RegisterAgentMemoryRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerAgentMemoryProposalRoutes(r, svc)
+	registerAgentMemoryDocumentRoutes(r, svc)
 	r.GET("/agent/memories", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -179,6 +180,7 @@ func RegisterAgentMemoryRoutes(r *gin.RouterGroup, svc *service.Service) {
 }
 
 func RegisterAgentLessonAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerAgentMemoryDocumentAdminRoutes(r, svc)
 	admin := r.Group("/admin/agent-lessons")
 
 	admin.GET("", func(c *gin.Context) {

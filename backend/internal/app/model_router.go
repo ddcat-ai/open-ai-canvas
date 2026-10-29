@@ -191,7 +191,8 @@ func (s *Service) loadRouteCatalog() (*routeCatalogSnapshot, error) {
 // ResolveLogicalModel 将创作意图解析为一次可执行的路由快照。
 // 解析同时约束能力合同、启用状态、价格档和渠道协议；调用方不得在解析完成后自行替换其中任一供应链字段，
 // 否则会出现“目录显示可用、任务实际走另一条线路”的配置漂移。
-func (s *Service) ResolveLogicalModel(logicalModelID string, intent ModelRequestIntent) (*RoutedModel, error) {
+// access 为 nil 时不按用户分组过滤线路，只允许内部能力探测和离线迁移工具使用。
+func (s *Service) ResolveLogicalModel(access *userGroupAccess, logicalModelID string, intent ModelRequestIntent) (*RoutedModel, error) {
 	snapshot, err := s.routeCatalogSnapshot()
 	if err != nil {
 		return nil, err
@@ -209,7 +210,7 @@ func (s *Service) ResolveLogicalModel(logicalModelID string, intent ModelRequest
 	if match := MatchCapability(cached.ProductSpec, intent); !match.Matched {
 		return nil, modelCapabilityMismatchError(match)
 	}
-	eligible := s.eligibleLogicalRoutes(cached.Routes, intent, nil, cached.Model.PricePolicy == "channel")
+	eligible := s.eligibleLogicalRoutes(access, cached.Routes, intent, nil, cached.Model.PricePolicy == "channel")
 	if len(eligible) == 0 {
 		return nil, BadAuthRequest("当前模型暂时无法满足这组输入和参数")
 	}
@@ -224,11 +225,14 @@ func (s *Service) ResolveLogicalModel(logicalModelID string, intent ModelRequest
 	return &RoutedModel{LogicalModel: cached.Model, Revision: cached.Revision, Route: selected.Route, ChannelModel: selected.ChannelModel, CapabilitySpec: selected.CapabilitySpec, PriceTier: priceTier, Defaults: cached.Defaults, Intent: intent}, nil
 }
 
-func (s *Service) eligibleLogicalRoutes(routes []cachedLogicalRoute, intent ModelRequestIntent, tried map[string]bool, requirePriceTier bool) []cachedLogicalRoute {
+func (s *Service) eligibleLogicalRoutes(access *userGroupAccess, routes []cachedLogicalRoute, intent ModelRequestIntent, tried map[string]bool, requirePriceTier bool) []cachedLogicalRoute {
 	eligible := make([]cachedLogicalRoute, 0, len(routes))
 	maxPriority := math.MinInt
 	for _, route := range routes {
 		if !route.Route.Enabled || route.Route.Weight <= 0 || tried[route.Route.ID] || s.logicalRouteBlocked(route) {
+			continue
+		}
+		if access != nil && !access.allowsChannel(route.ChannelModel.ChannelID) {
 			continue
 		}
 		if match := MatchCapability(route.CapabilitySpec, intent); !match.Matched {

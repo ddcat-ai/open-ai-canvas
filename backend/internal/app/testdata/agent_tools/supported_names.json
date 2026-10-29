@@ -15,10 +15,11 @@
   "image_annotation_render",
   "skill_read_file",
   "skill_search",
+  "skill_market_search",
+  "skill_recommend",
   "task_get",
   "canvas_inspect_image",
-  "recall_lessons",
-  "remember_lesson",
+  "memory_update",
   "image_layer_split",
   "model_list",
   "canvas_create_storyboard",
@@ -27,5 +28,7 @@
   "canvas_edit_batch_table",
   "canvas_apply_ops",
   "canvas_arrange_nodes",
-  "generate_media"
+  "generate_media",
+  "drama_get_context",
+  "drama_adopt_canvas_media"
 ]

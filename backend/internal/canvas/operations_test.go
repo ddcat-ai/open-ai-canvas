@@ -308,6 +308,15 @@ func TestApplyCanvasOperationsTaskTimestampFenceRequiresMergeablePatch(t *testin
 		if _, err := svc.ApplyUserCanvasOperations("user", "canvas", matching); err != nil {
 			t.Fatalf("matching null deletion rejected: %v", err)
 		}
+		// 时间已被删除时再次删除是幂等收敛；服务端出现第三个时间值时仍按严格 CAS 拒绝。
+		repeated := CanvasOperationsRequest{MutationID: "delete-task-time-repeated", Operations: []CanvasOperation{{Type: "patch_node", ID: "node", Patch: map[string]json.RawMessage{"metadata.taskUpdatedAt": json.RawMessage(`null`)}, Before: map[string]json.RawMessage{"metadata.taskUpdatedAt": json.RawMessage(`"2026-04-01T00:00:02Z"`), "metadata.taskId": json.RawMessage(`"task-1"`)}}}}
+		if _, err := svc.ApplyUserCanvasOperations("user", "canvas", repeated); err != nil {
+			t.Fatalf("repeated null deletion rejected: %v", err)
+		}
+		restamp := CanvasOperationsRequest{MutationID: "restamp-task-time", Operations: []CanvasOperation{{Type: "patch_node", ID: "node", Patch: map[string]json.RawMessage{"metadata.taskUpdatedAt": json.RawMessage(`"2026-04-01T00:00:05Z"`)}, Before: map[string]json.RawMessage{"metadata.taskUpdatedAt": json.RawMessage(`null`), "metadata.taskId": json.RawMessage(`"task-1"`)}}}}
+		if _, err := svc.ApplyUserCanvasOperations("user", "canvas", restamp); err != nil {
+			t.Fatalf("restamp rejected: %v", err)
+		}
 		mismatch := CanvasOperationsRequest{MutationID: "delete-task-time-stale", Operations: []CanvasOperation{{Type: "patch_node", ID: "node", Patch: map[string]json.RawMessage{"metadata.taskUpdatedAt": json.RawMessage(`null`)}, Before: map[string]json.RawMessage{"metadata.taskUpdatedAt": json.RawMessage(`"2026-04-01T00:00:02Z"`), "metadata.taskId": json.RawMessage(`"task-1"`)}}}}
 		if _, err := svc.ApplyUserCanvasOperations("user", "canvas", mismatch); err == nil {
 			t.Fatal("mismatched null deletion accepted")
@@ -383,9 +392,9 @@ func TestApplyCanvasOperationsDoesNotRelaxTaskIdentityOrLegacyNoFence(t *testing
 	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", beforeOnly); err == nil {
 		t.Fatal("before-only task identity patch was accepted")
 	}
-	noFence := CanvasOperationsRequest{MutationID: "legacy-no-fence", Operations: []CanvasOperation{{Type: "patch_node", ID: "node", Patch: map[string]json.RawMessage{"metadata.taskStatus": json.RawMessage(`"succeeded"`), "metadata.content": json.RawMessage(`"done"`)}, Before: map[string]json.RawMessage{"metadata.taskStatus": json.RawMessage(`"queued"`), "metadata.content": json.RawMessage(`"pending"`)}}}}
+	noFence := CanvasOperationsRequest{MutationID: "legacy-no-fence", Operations: []CanvasOperation{{Type: "patch_node", ID: "node", Patch: map[string]json.RawMessage{"metadata.taskStatus": json.RawMessage(`"failed"`), "metadata.content": json.RawMessage(`"done"`)}, Before: map[string]json.RawMessage{"metadata.taskStatus": json.RawMessage(`"queued"`), "metadata.content": json.RawMessage(`"pending"`)}}}}
 	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", noFence); err == nil {
-		t.Fatal("legacy no-fence request was accepted")
+		t.Fatal("legacy no-fence request with a different desired value was accepted")
 	}
 	if _, err := svc.repo.CanvasMutationReceiptForUser("user", "canvas", "legacy-no-fence"); err == nil {
 		t.Fatal("failed legacy request created a receipt")
@@ -572,4 +581,47 @@ func newCanvasOperationTestService(t *testing.T) *Service {
 	sqlDB, _ := db.DB()
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return New(repository.New(db), nil)
+}
+
+// 另一端（或服务端回写）已经写成同一目标值时，旧基线的补丁按幂等收敛通过；
+// 目标值不同、只在 before 中出现的断言仍严格冲突。整对象基线忽略节点 updatedAt 簿记。
+func TestApplyCanvasOperationsConvergesAlreadyAppliedTargets(t *testing.T) {
+	svc := newCanvasOperationTestService(t)
+	if err := svc.repo.Create(&model.CanvasProject{ID: "canvas", UserID: "user", Title: "新标题", PayloadJSON: `{"title":"新标题","nodes":[{"id":"a","updatedAt":"2026-04-01T00:00:09Z","metadata":{"prompt":"已写入","status":"success"}},{"id":"b","metadata":{"title":"b"}},{"id":"c","updatedAt":"2026-04-01T00:00:09Z","metadata":{"title":"c"}}],"connections":[{"id":"edge","fromNodeId":"a","toNodeId":"b","label":"新"}]}`}); err != nil {
+		t.Fatal(err)
+	}
+	converged := CanvasOperationsRequest{MutationID: "converged", Operations: []CanvasOperation{
+		{Type: "patch_node", ID: "a", Patch: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"已写入"`), "metadata.status": json.RawMessage(`"success"`)}, Before: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"旧"`), "metadata.status": json.RawMessage(`"loading"`)}},
+		{Type: "create_node", Node: json.RawMessage(`{"id":"b","metadata":{"title":"b"}}`)},
+		{Type: "update_connection", ID: "edge", Connection: json.RawMessage(`{"id":"edge","fromNodeId":"a","toNodeId":"b","label":"新"}`), Expected: json.RawMessage(`{"id":"edge","fromNodeId":"a","toNodeId":"b","label":"旧"}`)},
+		{Type: "set_field", Field: "title", Value: json.RawMessage(`"新标题"`), BeforeValue: json.RawMessage(`"旧标题"`)},
+		{Type: "remove_node", ID: "c", Expected: json.RawMessage(`{"id":"c","updatedAt":"2026-04-01T00:00:01Z","metadata":{"title":"c"}}`)},
+	}}
+	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", converged); err != nil {
+		t.Fatalf("already-applied targets rejected: %v", err)
+	}
+	stored, err := svc.UserCanvasProject("user", "canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(stored), `"id":"c"`) || strings.Count(string(stored), `"id":"b"`) != 1 {
+		t.Fatalf("converged batch produced unexpected document: %s", stored)
+	}
+
+	for name, operation := range map[string]CanvasOperation{
+		"different patch target": {Type: "patch_node", ID: "a", Patch: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"第三值"`)}, Before: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"旧"`)}},
+		"before-only assertion":  {Type: "patch_node", ID: "a", Patch: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"已写入"`)}, Before: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"旧"`), "metadata.status": json.RawMessage(`"loading"`)}},
+		"different node create":  {Type: "create_node", Node: json.RawMessage(`{"id":"b","metadata":{"title":"other"}}`)},
+		"different field target": {Type: "set_field", Field: "title", Value: json.RawMessage(`"第三个标题"`), BeforeValue: json.RawMessage(`"旧标题"`)},
+		"edited node removal":    {Type: "remove_node", ID: "b", Expected: json.RawMessage(`{"id":"b","metadata":{"title":"旧 b"}}`)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := CanvasOperationsRequest{MutationID: "strict-" + name, Operations: []CanvasOperation{operation}}
+			_, err := svc.ApplyUserCanvasOperations("user", "canvas", request)
+			var appError *kernel.AppError
+			if !errors.As(err, &appError) || appError.Reason != "canvas_field_conflict" {
+				t.Fatalf("error = %v, want canvas_field_conflict", err)
+			}
+		})
+	}
 }

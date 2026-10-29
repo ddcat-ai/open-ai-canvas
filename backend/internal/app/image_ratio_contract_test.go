@@ -47,7 +47,7 @@ func TestGeminiDeclaredUltrawideRatioSurvivesAdmissionAndProvider(t *testing.T) 
 					input := map[string]any{"mode": "image", "prompt": "an apple", "referenceImages": media, "config": map[string]any{
 						"channelId": channel.ID, "model": cm.ModelKey, "imageParameters": map[string]any{"size": requested, "imageResolution": tier, "count": 1},
 					}}
-					resolved, err := svc.resolveSystemChannelModelSelection(input, "canvas_image", "image")
+					resolved, err := svc.resolveSystemChannelModelSelection(testGroupAccess(svc), input, "canvas_image", "image")
 					if err != nil {
 						t.Fatal(err)
 					}

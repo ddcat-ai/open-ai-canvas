@@ -1,15 +1,22 @@
-import { ArrowUpRight, Clapperboard, Layers3, Sparkles } from "lucide-react";
+import { ArrowUpRight, Clapperboard, Layers3, Orbit, Sparkles } from "lucide-react";
 import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
+
+/** 已安装技能少于这个数时，欢迎页主动提示按行业安装推荐技能。 */
+const RECOMMEND_SKILLS_BELOW = 3;
 
 type AgentWelcomeProps = {
     appearance: CanvasAppearance;
     /** null 表示当前不在画布中。 */
     nodeCount: number | null;
+    /** null 表示技能库还没读到。 */
+    installedSkillCount?: number | null;
     onChooseSkill: () => void;
+    onOpenSkillRecommendations?: () => void;
     onDraftPrompt: (prompt: string) => void;
 };
 
-export function AgentWelcome({ appearance, nodeCount, onChooseSkill, onDraftPrompt }: AgentWelcomeProps) {
+export function AgentWelcome({ appearance, nodeCount, installedSkillCount = null, onChooseSkill, onOpenSkillRecommendations, onDraftPrompt }: AgentWelcomeProps) {
+    const suggestRecommendations = Boolean(onOpenSkillRecommendations) && installedSkillCount !== null && installedSkillCount < RECOMMEND_SKILLS_BELOW;
     return (
         <section className="agent-welcome" aria-label="开始 Agent 创作">
             <div className="agent-welcome-intro">
@@ -18,8 +25,18 @@ export function AgentWelcome({ appearance, nodeCount, onChooseSkill, onDraftProm
                 <p>{agentCopy(appearance.welcomeDescription, appearance.agentName)}</p>
             </div>
             <div className="agent-welcome-actions">
+                {suggestRecommendations ? (
+                    <button type="button" onClick={onOpenSkillRecommendations}>
+                        <Sparkles aria-hidden="true" />
+                        <span>
+                            <strong>按行业安装推荐技能</strong>
+                            <small>{installedSkillCount ? `已安装 ${installedSkillCount} 个，装好后 Agent 会按任务自动选用` : "装好后 Agent 会按任务自动选用"}</small>
+                        </span>
+                        <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
+                    </button>
+                ) : null}
                 <button type="button" onClick={onChooseSkill}>
-                    <Sparkles aria-hidden="true" />
+                    <Orbit aria-hidden="true" />
                     <span>
                         <strong>选择技能，开始创作</strong>
                         <small>为这次创作找到合适的帮手</small>

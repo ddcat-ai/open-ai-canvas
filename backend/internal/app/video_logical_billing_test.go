@@ -36,11 +36,11 @@ func TestUnifiedVideoQuoteAndTaskUseResolvedProviderGeneration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	quote, err := svc.QuoteLogicalModel(logical.ID, ModelRequestIntent{Capability: "video"})
+	quote, err := svc.QuoteLogicalModel(testGroupUserID(svc), logical.ID, ModelRequestIntent{Capability: "video"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	routed, input, err := svc.resolveTaskModelSelection(map[string]any{"mode": "video", "config": map[string]any{}}, logical.ID, "canvas_video", "", true)
+	routed, input, err := svc.resolveTaskModelSelection(testGroupUserID(svc), map[string]any{"mode": "video", "config": map[string]any{}}, logical.ID, "canvas_video", "", true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-import { Check, Clapperboard, CloudUpload, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Play, Plus, Settings2, Sparkles, SquareDashed, Trash2, Video, X } from "lucide-react";
+import { Check, Clapperboard, CloudUpload, Download, FileText, Frame, Image as ImageIcon, MoreHorizontal, Music2, Pencil, Play, Plus, Settings2, SquareDashed, Trash2, Video, X, Blocks } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { App, Dropdown, Input } from "antd";
@@ -382,7 +382,7 @@ function getNodePresentation(node: CanvasNodeData) {
         case CanvasNodeType.Config:
             return { label: "生成配置", icon: <Settings2 className="size-3.5" /> };
         default:
-            return { label: "技能", icon: <Sparkles className="size-3.5" /> };
+            return { label: "技能", icon: <Blocks className="size-3.5" /> };
     }
 }
 

@@ -130,6 +130,13 @@ body:has(.welcome-page) {
     color: var(--welcome-black) !important;
     font-size: 12px;
 }
+/* 与统一主按钮同一种质感：浅色实底用底部 1px 内阴影交代按键厚度，不加发光。 */
+.welcome-page .welcome-header-cta.ant-btn:not(:disabled) {
+    box-shadow: var(--button-primary-shadow);
+}
+.welcome-page .welcome-header-cta.ant-btn:not(:disabled):active {
+    box-shadow: var(--button-primary-active-shadow);
+}
 .welcome-look-picker {
     position: fixed;
     top: calc(var(--welcome-header-height) + 6px);
@@ -498,12 +505,6 @@ body:has(.welcome-page) {
     color: var(--welcome-black) !important;
     font-size: 14px;
     font-weight: 500;
-    transition:
-        background 180ms,
-        transform 180ms;
-}
-.welcome-primary.ant-btn:hover {
-    transform: translateY(-2px);
 }
 .welcome-source {
     display: flex;

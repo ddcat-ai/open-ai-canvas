@@ -25,24 +25,28 @@ type ChannelModelQuoteRequest struct {
 
 // QuoteChannelModel uses the same admission/defaults/SKU selection as task
 // creation, without reserving credits or submitting a provider request.
-func (s *Service) QuoteChannelModel(req ChannelModelQuoteRequest) (*LogicalModelQuote, error) {
+func (s *Service) QuoteChannelModel(userID string, req ChannelModelQuoteRequest) (*LogicalModelQuote, error) {
 	if strings.TrimSpace(req.ChannelID) == "" || strings.TrimSpace(req.ModelKey) == "" {
 		return nil, InvalidModelSelection("报价必须指定系统渠道和模型")
 	}
 	if err := validateQuoteIntent(req.Intent); err != nil {
 		return nil, err
 	}
+	access, err := s.userGroupAccess(userID)
+	if err != nil {
+		return nil, err
+	}
 	input := quoteInput(req.Intent, req.ModelKey)
 	config := input["config"].(map[string]any)
 	config["channelId"] = req.ChannelID
-	input, err := s.resolveSystemChannelModelSelection(input, "canvas_"+req.Intent.Capability, req.Intent.Operation)
+	input, err = s.resolveSystemChannelModelSelection(access, input, "canvas_"+req.Intent.Capability, req.Intent.Operation)
 	if err != nil {
 		return nil, err
 	}
 	config = input["config"].(map[string]any)
 	estimate := estimateTaskBillingTokens(input, req.Intent.Capability)
 	intent := ModelRequestIntentFromTaskInput(input, "canvas_"+req.Intent.Capability, req.Intent.Operation)
-	order, err := s.newBillingOrderWithPriceTier("", "", "quote", req.ChannelID, req.ModelKey, req.Intent.Capability, "model_quote", requestedBillingQuantity(req.Intent.Capability, config), estimate, stringValue(config["priceTierId"]), intent)
+	order, err := s.newBillingOrderWithPriceTier(userID, "", "quote", req.ChannelID, req.ModelKey, req.Intent.Capability, "model_quote", requestedBillingQuantity(req.Intent.Capability, config), estimate, stringValue(config["priceTierId"]), intent)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +73,15 @@ func quoteFromOrder(logicalModelID string, order *model.BillingOrder, estimate t
 	return quote
 }
 
-func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIntent) (*LogicalModelQuote, error) {
+func (s *Service) QuoteLogicalModel(userID string, logicalModelID string, intent ModelRequestIntent) (*LogicalModelQuote, error) {
 	if err := validateQuoteIntent(intent); err != nil {
 		return nil, err
 	}
-	routed, err := s.ResolveLogicalModel(logicalModelID, intent)
+	access, err := s.userGroupAccess(userID)
+	if err != nil {
+		return nil, err
+	}
+	routed, err := s.ResolveLogicalModel(access, logicalModelID, intent)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +109,7 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		if routed.PriceTier != nil {
 			priceTierID = routed.PriceTier.ID
 		}
-		order, billingErr := s.newBillingOrderWithPriceTier("", "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID, resolvedIntent)
+		order, billingErr := s.newBillingOrderWithPriceTier(userID, "", "quote", routed.ChannelModel.ChannelID, routed.ChannelModel.ModelKey, capability, "model_quote", quantity, tokenEstimate, priceTierID, resolvedIntent)
 		if billingErr != nil {
 			return nil, billingErr
 		}
@@ -111,16 +119,21 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 	if routed.LogicalModel.PricePolicy != "unified" {
 		return nil, BadAuthRequest("当前模型价格策略无效")
 	}
+	pricing, err := access.pricing(model.PriceCurrencyCredits, routed.LogicalModel.Code)
+	if err != nil {
+		return nil, err
+	}
+	groupBPS := pricing.MultiplierBPS
 	amount := int64(0)
 	switch routed.LogicalModel.BillingMode {
 	case "fixed_request":
 		quantity = 1
-		amount = routed.LogicalModel.UnitPriceMicrocredits
+		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, 1, groupBPS)
 	case "per_second":
 		if (capability != "video" && capability != "audio") || quantity <= 0 {
 			return nil, BadAuthRequest("当前模型按时长计费，但请求未提供有效时长")
 		}
-		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, 10_000)
+		amount, err = creditAmount(routed.LogicalModel.UnitPriceMicrocredits, quantity, groupBPS)
 	case "token":
 		if routed.ChannelModel.Capability != capability || !supportsTokenBilling(capability, routed.ChannelModel.Protocol) {
 			return nil, BadAuthRequest("当前供应线路不支持前台模型的 Token 计费方式")
@@ -128,12 +141,12 @@ func (s *Service) QuoteLogicalModel(logicalModelID string, intent ModelRequestIn
 		if capability == "video" && (routed.LogicalModel.InputPriceMicrocredits != 0 || routed.LogicalModel.CachedPriceMicrocredits != 0) {
 			return nil, BadAuthRequest("视频 Token 仅按视频用量定价，请将输入与缓存价格设为 0")
 		}
-		pricing := &model.ChannelModel{
+		tokenPricing := &model.ChannelModel{
 			InputTokenPriceMicrocredits:  routed.LogicalModel.InputPriceMicrocredits,
 			OutputTokenPriceMicrocredits: routed.LogicalModel.OutputPriceMicrocredits,
 			CachedTokenPriceMicrocredits: routed.LogicalModel.CachedPriceMicrocredits,
 		}
-		amount, err = tokenEstimateAmount(pricing, tokenEstimate, 10_000)
+		amount, err = tokenEstimateAmount(tokenPricing, tokenEstimate, groupBPS)
 		quantity = tokenEstimate.InputTokens + tokenEstimate.OutputTokens
 	default:
 		return nil, BadAuthRequest("当前模型计费方式暂不支持")

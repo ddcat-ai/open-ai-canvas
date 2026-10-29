@@ -34,6 +34,8 @@ const (
 	ReasonQuotaExceeded       = kernel.ReasonQuotaExceeded
 	ReasonStorageCapacity     = kernel.ReasonStorageCapacityExceeded
 	ReasonStorageReadOnly     = kernel.ReasonStorageReadOnly
+	ReasonDramaBudget         = kernel.ReasonDramaBudgetExhausted
+	ReasonDramaSegmentChanged = kernel.ReasonDramaSegmentChanged
 	ReasonRateLimited         = kernel.ReasonRateLimited
 	ReasonUnavailable         = kernel.ReasonUnavailable
 	ReasonTimeout             = kernel.ReasonTimeout

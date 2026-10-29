@@ -49,11 +49,17 @@ type Policy struct {
 	OffsetDefaults []string
 	// Vision 表示工具把图片交给模型，读循环收敛时与只读工具一起收起。
 	Vision bool
-	// RequiresCanvas / RequiresSkills / RequiresWriteMode are visibility gates,
+	// RequiresCanvas / RequiresSkills / RequiresWriteMode / RequiresDrama are visibility gates,
 	// not grants of business authorization. Execution still validates ownership.
 	RequiresCanvas    bool
 	RequiresSkills    bool
 	RequiresWriteMode bool
+	// RequiresMemory 只在用户没有关闭长期记忆时暴露。
+	RequiresMemory bool
+	// RequiresDrama 只在画布关联了当前用户的短剧作品时暴露。
+	RequiresDrama bool
+	// AlwaysApprove 让写入在 auto 模式下也先审批：写入会改变画布以外的业务对象（如短剧版本）。
+	AlwaysApprove bool
 	// OutsideTransaction performs storage IO before the checkpoint transaction.
 	OutsideTransaction bool
 }
@@ -65,12 +71,18 @@ type Scope struct {
 	Vision         bool
 	ReadOnly       bool
 	IncludeProfile bool
+	// Drama 表示本轮画布关联了当前用户的短剧作品，由服务端建 run 时推导。
+	Drama bool
+	// Memory 表示本轮长期记忆处于开启状态（自动生效或需确认），由服务端建 run 时冻结。
+	Memory bool
 }
 
 func (p Policy) Allowed(scope Scope) bool {
 	return p.Name != "" &&
 		(!p.RequiresCanvas || scope.Canvas) &&
 		(!p.RequiresSkills || scope.Skills) &&
+		(!p.RequiresMemory || scope.Memory) &&
+		(!p.RequiresDrama || scope.Drama) &&
 		(!p.Vision || scope.Vision) &&
 		(!p.Write() && !p.RequiresWriteMode || !scope.ReadOnly) &&
 		(p.Name != AgentProfileRead || scope.IncludeProfile)
@@ -86,12 +98,8 @@ func (p Policy) ReadOnly() bool { return p.Kind == KindRead }
 func (p Policy) Media() bool { return p.Kind == KindMedia }
 
 func (p Policy) ApprovalRequired(permissionMode string) bool {
-	return p.Media() || (p.Write() && permissionMode == "request_approval")
+	return p.Media() || (p.Write() && (p.AlwaysApprove || permissionMode == "request_approval"))
 }
-
-// LessonEligible 表示该工具成功后可以作为沉淀经验的依据：只有真实改变画布或
-// 生成结果的工具才算数，只读和会话控制工具不算。
-func (p Policy) LessonEligible() bool { return p.Write() }
 
 // 工具名常量。业务包引用这些常量而不是字符串字面量。
 const (
@@ -111,10 +119,11 @@ const (
 	ImageAnnotationRender  = "image_annotation_render"
 	SkillReadFile          = "skill_read_file"
 	SkillSearch            = "skill_search"
+	SkillMarketSearch      = "skill_market_search"
+	SkillRecommend         = "skill_recommend"
 	TaskGet                = "task_get"
 	CanvasInspectImage     = "canvas_inspect_image"
-	RecallLessons          = "recall_lessons"
-	RememberLesson         = "remember_lesson"
+	MemoryUpdate           = "memory_update"
 	ImageLayerSplit        = "image_layer_split"
 	ModelList              = "model_list"
 	CanvasCreateStoryboard = "canvas_create_storyboard"
@@ -124,6 +133,8 @@ const (
 	CanvasApplyOps         = "canvas_apply_ops"
 	CanvasArrangeNodes     = "canvas_arrange_nodes"
 	GenerateMedia          = "generate_media"
+	DramaGetContext        = "drama_get_context"
+	DramaAdoptCanvasMedia  = "drama_adopt_canvas_media"
 )
 
 var offsets = []string{"offset", "connectionOffset", "storyboardOffset"}
@@ -160,11 +171,12 @@ func policies() []Policy {
 		{Name: ImageTextDetect, Kind: KindPrepare, RequiresCanvas: true},
 		{Name: ImageAnnotationRender, Kind: KindPrepare, RequiresCanvas: true, OutsideTransaction: true},
 		{Name: SkillReadFile, Kind: KindRead, Cacheable: true, CacheScope: CacheSkillVersion, OffsetDefaults: offsets, RequiresSkills: true, OutsideTransaction: true},
-		{Name: SkillSearch, Kind: KindRead, RequiresSkills: true},
+		{Name: SkillSearch, Kind: KindRead, RequiresSkills: true, OutsideTransaction: true},
+		{Name: SkillMarketSearch, Kind: KindRead, OutsideTransaction: true},
+		{Name: SkillRecommend, Kind: KindControl},
 		{Name: TaskGet, Kind: KindRead},
 		{Name: CanvasInspectImage, Kind: KindPrepare, Vision: true, RequiresCanvas: true},
-		{Name: RecallLessons, Kind: KindRead},
-		{Name: RememberLesson, Kind: KindControl, RequiresWriteMode: true},
+		{Name: MemoryUpdate, Kind: KindControl, RequiresWriteMode: true, RequiresMemory: true, OutsideTransaction: true},
 		{Name: ImageLayerSplit, Kind: KindMedia, RequiresCanvas: true},
 		{Name: ModelList, Kind: KindRead, Cacheable: true, RequiresCanvas: true, RequiresWriteMode: true, OutsideTransaction: true},
 		{Name: CanvasCreateStoryboard, Kind: KindWrite, RequiresCanvas: true},
@@ -174,6 +186,8 @@ func policies() []Policy {
 		{Name: CanvasApplyOps, Kind: KindWrite, RequiresCanvas: true},
 		{Name: CanvasArrangeNodes, Kind: KindWrite, RequiresCanvas: true},
 		{Name: GenerateMedia, Kind: KindMedia, RequiresCanvas: true},
+		{Name: DramaGetContext, Kind: KindRead, RequiresCanvas: true, RequiresDrama: true, OutsideTransaction: true},
+		{Name: DramaAdoptCanvasMedia, Kind: KindWrite, RequiresCanvas: true, RequiresDrama: true, AlwaysApprove: true},
 	}
 }
 

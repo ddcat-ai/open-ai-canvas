@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Skill, SkillPackageFile, SkillPackageFileContent } from "../src/services/api/skills";
-import { createSkillRuntime, resolveSkillMentions } from "../src/services/skill-runtime";
+import { createSkillRuntime, reconcileSkillSelection, resolveSkillMentions } from "../src/services/skill-runtime";
 
 function skill(overrides: Partial<Skill> = {}): Skill {
     return {
@@ -111,5 +111,35 @@ describe("skill runtime", () => {
         expect(result.selectedSkills.map((item) => item.skillId)).toEqual(["director"]);
         expect(result.prompt).toContain('<skill-context skill-id="director"');
         expect(result.metadata.skillIds).toEqual(["director"]);
+    });
+});
+
+describe("reconcileSkillSelection", () => {
+    const installed = [skill(), skill({ skillId: "script", skillName: "剧本" })];
+
+    test("剔除技能库里已不存在的技能并保持原顺序", () => {
+        expect(reconcileSkillSelection(["script", "deleted", "director", "script"], installed)).toEqual({
+            skillIds: ["script", "director"],
+            removedSkillIds: ["deleted"],
+        });
+    });
+
+    test("取消安装的技能同样视为失效", () => {
+        const catalog = [skill(), skill({ skillId: "script", isAdded: false })];
+        expect(reconcileSkillSelection(["director", "script"], catalog)).toEqual({
+            skillIds: ["director"],
+            removedSkillIds: ["script"],
+        });
+    });
+
+    test("目录未成功加载时不清空已选技能", () => {
+        expect(reconcileSkillSelection(["director", "script"], [], false)).toEqual({
+            skillIds: ["director", "script"],
+            removedSkillIds: [],
+        });
+    });
+
+    test("目录就绪且为空说明技能全被删除", () => {
+        expect(reconcileSkillSelection(["director"], [])).toEqual({ skillIds: [], removedSkillIds: ["director"] });
     });
 });

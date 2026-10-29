@@ -194,7 +194,7 @@ func TestImageParametersLegacyChannelUsesLiveContractForRouteAndBilling(t *testi
 			{Route: model.LogicalModelRoute{ID: "route", Enabled: true, Weight: 1}, CapabilitySpec: spec, ChannelModel: *stored},
 		}},
 	}}
-	routed, err := svc.ResolveLogicalModel("logical", ModelRequestIntent{Capability: "image", Options: map[string]any{"imageResolution": "2k"}})
+	routed, err := svc.ResolveLogicalModel(nil, "logical", ModelRequestIntent{Capability: "image", Options: map[string]any{"imageResolution": "2k"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestImageParametersLegacyChannelUsesLiveContractForRouteAndBilling(t *testi
 	if err != nil || tier == nil || tier.ID != routed.PriceTier.ID {
 		t.Fatalf("billing projection = %#v, %v", tier, err)
 	}
-	quote, err := svc.QuoteLogicalModel("logical", ModelRequestIntent{Capability: "image", Options: map[string]any{"imageResolution": "2k"}})
+	quote, err := svc.QuoteLogicalModel(testGroupUserID(svc), "logical", ModelRequestIntent{Capability: "image", Options: map[string]any{"imageResolution": "2k"}})
 	if err != nil || quote == nil || quote.AmountMicrocredits != tier.UnitPriceMicrocredits {
 		t.Fatalf("quote drift: %#v, %v", quote, err)
 	}

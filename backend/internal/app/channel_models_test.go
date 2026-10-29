@@ -193,7 +193,7 @@ func TestPublicSystemChannelCatalogIsolatesCorruptModel(t *testing.T) {
 		}
 	}
 
-	catalog, err := svc.publicSystemChannelCatalog(nil)
+	catalog, err := svc.publicSystemChannelCatalog(testGroupAccess(svc), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

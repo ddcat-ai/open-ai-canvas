@@ -26,6 +26,10 @@ export type CanvasNodeActionContextValue = {
     extractLayerMaterials?: (node: CanvasNodeData) => Promise<void> | void;
     /** 打开媒体版本面板；只读页面不提供，节点角标随之隐藏。 */
     openMediaVersions?: (node: CanvasNodeData) => void;
+    /** 短剧侧已有更新版本的节点（关联短剧的精修画布）；集合内容不变时引用保持不变。 */
+    dramaStaleNodeIds?: ReadonlySet<string>;
+    /** 把节点换成短剧当前的媒体，原画面进入版本历史。 */
+    refreshFromDrama?: (node: CanvasNodeData) => void;
 };
 
 export const CanvasNodeActionContext = createContext<CanvasNodeActionContextValue>({});

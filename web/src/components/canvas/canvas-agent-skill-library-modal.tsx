@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Alert, Button, Input } from "antd";
-import { Check, LoaderCircle, Plus, Search, Sparkles, Users } from "lucide-react";
+import { Check, LoaderCircle, Plus, Search, Users, Blocks } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { Skill, SkillCategory, SkillLibraryCategory } from "@/services/api/skills";
 import { curationIcon, matchesCuration, effectiveCurationRoot, type useSkillCuration } from "@/components/skills/skill-curation-browser";
+import { AGENT_PINNED_SKILL_LIMIT } from "./canvas-cloud-agent-settings";
 
 type SkillLibraryTab = "enabled" | "installed" | "market";
 
@@ -134,7 +135,7 @@ export function CanvasAgentSkillLibraryModal({
     );
 
     const emptyText = tab === "enabled"
-        ? selectedCount === 0 ? "本轮还没有启用技能，可在“我的技能”中选择" : "没有匹配的已启用技能"
+        ? selectedCount === 0 ? "还没有固定技能。已安装的技能 Agent 会按任务自动查找，需要指定时再在“我的技能”里固定" : "没有匹配的已固定技能"
         : tab === "installed"
             ? "还没有匹配的已加入技能，可前往“全部”添加"
             : "没有匹配的公开技能，换个关键词或分类试试";
@@ -253,8 +254,8 @@ export function CanvasAgentSkillLibraryModal({
                 <div className="canvas-agent-skill-library-content">
                     <header className="canvas-agent-skill-library-header">
                         <h2>技能商店</h2>
-                        <button type="button" className="canvas-agent-skill-library-count" onClick={() => changeTab("enabled")} aria-label={`查看本轮已启用的 ${selectedCount} 个技能，最多 8 个`}>
-                            已启用 <strong>{selectedCount}</strong><span> / 8</span>
+                        <button type="button" className="canvas-agent-skill-library-count" onClick={() => changeTab("enabled")} aria-label={`查看本对话已固定的 ${selectedCount} 个技能，最多 ${AGENT_PINNED_SKILL_LIMIT} 个`}>
+                            已固定 <strong>{selectedCount}</strong><span> / {AGENT_PINNED_SKILL_LIMIT}</span>
                         </button>
                     </header>
 
@@ -267,7 +268,7 @@ export function CanvasAgentSkillLibraryModal({
                                 theme={theme}
                                 categories={categories}
                                 selected={selectedSkillIds.includes(skill.skillId)}
-                                canSelect={selectedCount < 8 || selectedSkillIds.includes(skill.skillId)}
+                                canSelect={selectedCount < AGENT_PINNED_SKILL_LIMIT || selectedSkillIds.includes(skill.skillId)}
                                 onToggle={() => onToggle(skill.skillId)}
                                 onInstall={() => onInstall(skill)}
                             />
@@ -280,7 +281,7 @@ export function CanvasAgentSkillLibraryModal({
                         ) : null}
                         {!loading && visibleSkills.length === 0 ? (
                             <div className="canvas-agent-skill-library-state" style={{ color: theme.node.muted }}>
-                                <Sparkles className="size-6" aria-hidden="true" />
+                                <Blocks className="size-6" aria-hidden="true" />
                                 <span>{emptyText}</span>
                                 {tab !== "market" ? <Button size="small" onClick={() => changeTab("market")}>浏览公开技能</Button> : null}
                             </div>
@@ -289,10 +290,10 @@ export function CanvasAgentSkillLibraryModal({
                     </div>
 
                     <footer className="canvas-agent-skill-library-footer" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}>
-                        <span>{tab === "enabled" ? `${visibleSkills.length} 个技能将在本轮生效` : tab === "installed" ? `${visibleSkills.length} 个已加入技能` : `已加载 ${marketSkills.length} 个公开技能`}</span>
+                        <span>{tab === "enabled" ? `${visibleSkills.length} 个技能在本对话优先使用` : tab === "installed" ? `${visibleSkills.length} 个已加入技能，Agent 会按任务自动查找` : `已加载 ${marketSkills.length} 个公开技能`}</span>
                         {tab === "market" && hasMore ? (
                             <Button size="small" disabled={loading} loading={loading} onClick={() => void onLoadMore()}>{loading ? "加载中" : "加载更多"}</Button>
-                        ) : <span>{tab === "market" ? "已加载全部" : "最多启用 8 个"}</span>}
+                        ) : <span>{tab === "market" ? "已加载全部" : `最多固定 ${AGENT_PINNED_SKILL_LIMIT} 个`}</span>}
                     </footer>
                 </div>
             </section>
@@ -352,7 +353,7 @@ function SkillLibraryCard({ skill, rootLabel, theme, categories, selected, canSe
                         <img src={coverUrl} alt="" loading="lazy" onError={() => setCoverFailed(true)} />
                     )}
                     <span className="canvas-agent-skill-card-category">{categoryLabel}</span>
-                    {selected ? <span className="canvas-agent-skill-card-selected" aria-label="本轮已启用"><Check className="size-4" aria-hidden="true" /></span> : null}
+                    {selected ? <span className="canvas-agent-skill-card-selected" aria-label="本对话已固定"><Check className="size-4" aria-hidden="true" /></span> : null}
                 </div>
             ) : null}
             <div className={`canvas-agent-skill-card-body ${hasCover ? "" : "is-text-only"}`}>
@@ -367,13 +368,13 @@ function SkillLibraryCard({ skill, rootLabel, theme, categories, selected, canSe
                                 className={selected ? "is-selected" : ""}
                                 disabled={!canSelect}
                                 aria-pressed={selected}
-                                title={!canSelect ? "本轮最多启用 8 个 Skills" : undefined}
+                                title={!canSelect ? `每个对话最多固定 ${AGENT_PINNED_SKILL_LIMIT} 个 Skills` : "固定后本对话优先使用；不固定 Agent 也会按任务自动查找"}
                                 onClick={onToggle}
                             >
-                                {selected ? "已启用" : "使用"}
+                                {selected ? "已固定" : "固定"}
                             </Button>
                         ) : (
-                            <Button size="small" icon={<Plus className="size-3.5" />} loading={installing} disabled={installing || !canSelect} title={!canSelect ? "本轮最多启用 8 个 Skills" : undefined} onClick={() => void install()}>
+                            <Button size="small" icon={<Plus className="size-3.5" />} loading={installing} disabled={installing} onClick={() => void install()}>
                                 加入
                             </Button>
                         )}

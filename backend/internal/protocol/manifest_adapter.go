@@ -28,6 +28,36 @@ func (a manifestAdapter) AgentAvailable() bool {
 
 func (a manifestAdapter) ResultAvailable() bool { return a.manifest.ResultOperation != nil }
 
+func (a manifestAdapter) UploadKinds() []string {
+	if a.manifest.Upload == nil {
+		return nil
+	}
+	return a.manifest.Upload.Kinds
+}
+
+func (a manifestAdapter) BuildUpload(_ context.Context, c RequestContext, media MediaReference) (RequestSpec, error) {
+	if a.manifest.Upload == nil {
+		return RequestSpec{}, fmt.Errorf("protocol %s has no upload operation", a.manifest.Metadata.ID)
+	}
+	values := manifestMediaValues([]MediaReference{media})
+	return buildManifestOperationWithEnv(a.manifest.Upload.ManifestOperation, a.manifest.Auth, c.Request, "", map[string]any{"media": values[0]})
+}
+
+func (a manifestAdapter) ParseUpload(_ context.Context, body []byte) (string, error) {
+	if a.manifest.Upload == nil {
+		return "", fmt.Errorf("protocol %s has no upload operation", a.manifest.Metadata.ID)
+	}
+	payload, err := decodeObject(body)
+	if err != nil {
+		return "", err
+	}
+	id := manifestResponseString(a.manifest.Upload.ID, map[string]any{"response": payload})
+	if id == "" {
+		return "", fmt.Errorf("上游素材上传没有返回素材 ID")
+	}
+	return id, nil
+}
+
 func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (RequestSpec, error) {
 	if len(a.manifest.Contributes.Providers) == 0 {
 		return RequestSpec{}, fmt.Errorf("plugin %s does not provide a provider", a.manifest.Metadata.ID)
@@ -108,7 +138,8 @@ func (a manifestAdapter) ParseCreateWithRequest(_ context.Context, request Gener
 	if err != nil {
 		return CreateResult{}, err
 	}
-	return a.parse(payload, PollContext{}), nil
+	// 响应映射可读取 request.*（如以宿主幂等键作为上游任务 ID 的协议）。
+	return a.parse(payload, PollContext{Model: request.Model, Request: request}), nil
 }
 
 // streamedJSONAudioCreateResult decodes the chunked JSON response used by
@@ -267,7 +298,7 @@ func (a manifestAdapter) ParsePoll(_ context.Context, c PollContext, body []byte
 		return PollResult{}, err
 	}
 	result := a.parse(payload, c)
-	return PollResult{TaskID: result.TaskID, Status: result.Status, Result: result.Result, Message: result.Message}, nil
+	return PollResult{TaskID: result.TaskID, Status: result.Status, Result: result.Result, Message: result.Message, Stage: result.Stage, QueueAhead: result.QueueAhead}, nil
 }
 
 func (a manifestAdapter) BuildCancel(_ context.Context, c PollContext) (RequestSpec, error) {
@@ -313,6 +344,13 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	if manifestError(payload, response.ErrorPaths...) {
 		status = StatusFailed
 	}
+	stage := manifestResponseString(response.Stage, env)
+	queueAhead := -1
+	if response.QueueAhead != nil {
+		if value, err := evaluateManifestValue(response.QueueAhead, env); err == nil && value != nil {
+			queueAhead = max(0, manifestInt(value))
+		}
+	}
 	result := &Result{
 		Text:      manifestResponseString(response.Text, env),
 		Reasoning: manifestResponseString(response.Reasoning, env),
@@ -352,7 +390,7 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	if result.Text == "" && result.Reasoning == "" && len(result.Images) == 0 && len(result.Videos) == 0 && len(result.Audios) == 0 {
 		result = nil
 	}
-	return CreateResult{TaskID: id, Status: status, Result: result, Message: message}
+	return CreateResult{TaskID: id, Status: status, Result: result, Message: message, Stage: stage, QueueAhead: queueAhead}
 }
 
 func validateManifestRequest(rules []ManifestValidation, request GenerationRequest) error {

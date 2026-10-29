@@ -53,10 +53,12 @@ type UpdatePaymentProviderConfigRequest struct {
 }
 
 type TopupProductRequest struct {
-	Name                string                  `json:"name"`
-	Description         string                  `json:"description"`
-	Kind                model.TopupProductKind  `json:"kind"`
-	AmountFen           int64                   `json:"amountFen"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Kind        model.TopupProductKind `json:"kind"`
+	AmountFen   int64                  `json:"amountFen"`
+	// Currency 为空时使用后台默认充值货币。
+	Currency            string                  `json:"currency"`
 	CreditsMicrocredits int64                   `json:"creditsMicrocredits"`
 	StorageBytes        int64                   `json:"storageBytes"`
 	StorageDurationDays int                     `json:"storageDurationDays"`
@@ -183,7 +185,7 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		ProductID: product.ID, ProductName: product.Name, ProductKind: topupProductKind(product.Kind),
 		StorageBytes: product.StorageBytes, StorageDurationDays: product.StorageDurationDays, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
-		AmountFen: product.AmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
+		AmountFen: product.AmountFen, Currency: firstNonEmpty(product.Currency, model.PriceCurrencyCNY), CreditsMicrocredits: product.CreditsMicrocredits,
 		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}

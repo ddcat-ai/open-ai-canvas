@@ -23,10 +23,11 @@ func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 		agenttool.ImageAnnotationRender:  {Read: cloudAgentHandleImageAnnotationRender},
 		agenttool.SkillReadFile:          {Read: cloudAgentHandleSkillReadFile},
 		agenttool.SkillSearch:            {Read: cloudAgentHandleSkillSearch},
+		agenttool.SkillMarketSearch:      {Read: cloudAgentHandleSkillMarketSearch},
+		agenttool.SkillRecommend:         {Read: cloudAgentHandleSkillRecommend},
 		agenttool.TaskGet:                {Read: cloudAgentHandleTaskGet},
 		agenttool.CanvasInspectImage:     {Pipeline: cloudAgentToolVision},
-		agenttool.RecallLessons:          {Read: cloudAgentHandleRecallLessons},
-		agenttool.RememberLesson:         {Read: cloudAgentHandleRememberLesson},
+		agenttool.MemoryUpdate:           {Read: cloudAgentHandleMemoryUpdate},
 		agenttool.ImageLayerSplit:        {Pipeline: cloudAgentToolMedia},
 		agenttool.ModelList:              {Read: cloudAgentHandleModelList},
 		agenttool.CanvasCreateStoryboard: {Write: applyCloudAgentStoryboardMutation, Preview: cloudAgentPreviewStoryboardCreate},
@@ -36,6 +37,8 @@ func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 		agenttool.CanvasApplyOps:         {Write: applyCloudAgentCanvas, Preview: cloudAgentPreviewCanvas},
 		agenttool.CanvasArrangeNodes:     {Write: applyCloudAgentArrangeNodes, Preview: cloudAgentPreviewArrange},
 		agenttool.GenerateMedia:          {Pipeline: cloudAgentToolMedia},
+		agenttool.DramaGetContext:        {Read: cloudAgentHandleDramaGetContext},
+		agenttool.DramaAdoptCanvasMedia:  {Write: applyCloudAgentDramaAdopt, Preview: cloudAgentPreviewDramaAdopt},
 	}
 }
 

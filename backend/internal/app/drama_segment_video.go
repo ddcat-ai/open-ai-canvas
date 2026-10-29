@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"yingce/backend/internal/model"
@@ -52,7 +53,7 @@ func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *m
 	case settings.ReviewMode == DramaReviewSample && !p.SampleApproved && e.Number != 1:
 		return "等待确认第 1 集样片"
 	}
-	if index > 0 && !dramaSegmentVideoDone(segments[index-1]) {
+	if index > 0 && !settings.parallelVideo() && !dramaSegmentVideoDone(segments[index-1]) {
 		return "等待上一段视频生成（需要它的最后一帧）"
 	}
 	if !dramaPromptReady(segments[index]) {
@@ -100,6 +101,10 @@ func segmentVideoChoice(segment model.DramaSegment, fallback DramaModelChoice) D
 // prepareDramaSegment is shared by the request preview and provider submission.
 // Reference numbering remains stable even when a model cannot accept every image.
 func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegmentDraft, segment model.DramaSegment, previous *model.DramaSegment, casts map[string]model.DramaCast) (DramaSegmentRequest, []any, error) {
+	if settings.parallelVideo() {
+		// 并行出片：每段只按参考图独立生成，不带上一段尾帧，也就不依赖上一段完成。
+		previous = nil
+	}
 	profile, err := s.dramaVideoProfile(segmentVideoChoice(segment, settings.Models.Video))
 	if err != nil {
 		return DramaSegmentRequest{}, nil, err
@@ -131,6 +136,9 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		request.Operation = "text_to_video"
 	}
 	if !profile.supports(request.Operation) {
+		if request.Operation == "image_to_video" {
+			return request, nil, errors.New(profile.continuityIssue(settings))
+		}
 		return request, nil, fmt.Errorf("所选模型不支持本段所需的 %s", request.Operation)
 	}
 	capacity := profile.MaxImages
@@ -140,6 +148,12 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	if request.Operation == "text_to_video" {
 		capacity = 0
 	}
+	// 自动取参考图时按“每段最多参考图”收紧，人物排在最前，优先保证角色一致；手动指定的段只受模型上限约束。
+	settingLimited := draft.view.ReferenceMode != "custom" && settings.ReferenceLimit > 0 && settings.ReferenceLimit < capacity
+	if settingLimited {
+		capacity = settings.ReferenceLimit
+	}
+	request.ReferenceCapacity, request.ModelMaxImages = max(capacity, 0), profile.MaxImages
 	for _, reference := range draft.view.Request.References {
 		cast, exists := casts[reference.CastID]
 		if !exists {
@@ -154,14 +168,30 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 			}
 			refs = append(refs, ref)
 			capacity--
-			header = append(header, reference.Label+"："+reference.Name)
+			line := reference.Label + "：" + reference.Name
+			if cast.Locked {
+				// 用户锁定（含上传）的形象是硬约束，文字设定与图片冲突时以图片为准。
+				line += "（已锁定形象：" + map[string]string{"character": "五官、发型、服装", "prop": "外形、材质、颜色", "scene": "空间布局、陈设、光线"}[cast.Kind] + "必须与此图一致，文字描述与图片不符时以图片为准）"
+			}
+			header = append(header, line)
 		} else {
 			header = append(header, reference.Label+"（"+reference.Name+"）未附图，请依据文字设定："+firstNonEmpty(cast.Appearance, cast.Description))
-			request.Warning = "部分参考图未就绪或超出模型上限，详见参考图列表"
+			ready := cast.ImageStatus == model.DramaMediaReady && cast.ImageResourceID != ""
+			if ready && capacity <= 0 && settingLimited {
+				request.ReferenceLimited = true
+				request.Warning = fmt.Sprintf("本段引用 %d 个设定，按每段最多 %d 张参考图发送，其余按文字设定；可在生成依据里手动调整", len(draft.view.Request.References), settings.ReferenceLimit)
+			} else if request.Warning == "" {
+				request.Warning = "部分参考图未就绪或超出模型上限，详见参考图列表"
+			}
 		}
 		request.References = append(request.References, reference)
 	}
 	request.Header = strings.Join(header, "\n")
+	// 正文里的“参考图N”必须对应本段的参考图；换参考图后手写的提示词可能还留着旧编号。
+	if unknown := production.UnknownReferenceTokens(firstNonEmpty(segment.VideoPromptOverride, segment.VideoPrompt), len(request.References)); len(unknown) > 0 {
+		request.UnknownReferences = unknown
+		request.Warning = fmt.Sprintf("提示词里的 %s 不是本段的参考图（本段共 %d 张），生成前请改成正确的编号", strings.Join(unknown, "、"), len(request.References))
+	}
 	return request, refs, nil
 }
 
@@ -215,11 +245,11 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 	}
 	var previous *model.DramaSegment
 	for i := range rows {
-		if rows[i].ID == segment.ID && i > 0 {
+		if rows[i].ID == segment.ID && i > 0 && !r.settings.parallelVideo() {
 			previous = &rows[i-1]
 		}
 	}
-	for _, draft := range buildDramaSegmentDrafts(r.settings, r.meta, shots, casts) {
+	for _, draft := range buildDramaSegmentDrafts(r.settings, r.meta, shots, casts, rows) {
 		if draft.view.Index != segment.SegmentIndex {
 			continue
 		}
@@ -229,6 +259,9 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 		}
 		if segment.PromptSeconds > 0 && segment.PromptSeconds != request.Seconds {
 			return nil, false, errors.New("所选模型时长档位与提示词不同，请先用该模型重新撰写提示词")
+		}
+		if len(request.UnknownReferences) > 0 {
+			return nil, false, errors.New(request.Warning)
 		}
 		if request.FirstFramePending {
 			return nil, true, nil
@@ -355,40 +388,109 @@ func (s *Service) ReprocessDramaSegmentVideo(userID, projectID, episodeID string
 	return nil, BadAuthRequest("找不到可重新处理的视频结果，请重新生成本段视频")
 }
 
+// dramaTailDownloadTimeout 是抽尾帧前读取段视频的上限；超时转为可重新处理的失败，而不是一直“生成中”。
+const dramaTailDownloadTimeout = 3 * time.Minute
+
 func (s *Service) extractDramaTailFrame(userID, resourceID string) (string, error) {
 	if s.dramaTailFrameHook != nil {
 		return s.dramaTailFrameHook(userID, resourceID)
 	}
+	var tail string
+	err := s.withDramaVideoFile(userID, resourceID, func(resource *model.Resource, input string) error {
+		var saveErr error
+		tail, saveErr = s.saveDramaTailFrame(userID, resource, input)
+		return saveErr
+	})
+	return tail, err
+}
+
+// dramaVideoFacts 是对一段视频的本地探测结果：尾帧资源、实际时长与是否含音轨（探测不到时为 nil）。
+type dramaVideoFacts struct {
+	TailResourceID string
+	DurationMs     int64
+	HasAudio       *bool
+}
+
+// inspectDramaVideo 下载一次视频，抽取尾帧并探测时长与音轨；用于把画布上的视频采用为剧情段。
+func (s *Service) inspectDramaVideo(userID string, resource *model.Resource) (dramaVideoFacts, error) {
+	facts := dramaVideoFacts{DurationMs: resource.DurationMs}
+	if s.dramaTailFrameHook != nil {
+		tail, err := s.dramaTailFrameHook(userID, resource.ID)
+		facts.TailResourceID = tail
+		return facts, err
+	}
+	err := s.withDramaVideoFile(userID, resource.ID, func(opened *model.Resource, input string) error {
+		tail, err := s.saveDramaTailFrame(userID, opened, input)
+		if err != nil {
+			return err
+		}
+		facts.TailResourceID = tail
+		if probed := probeMediaDurationMs(input); probed > 0 {
+			facts.DurationMs = probed
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if hasAudio, probeErr := probeHasAudioStream(ctx, input); probeErr == nil {
+			facts.HasAudio = &hasAudio
+		}
+		return nil
+	})
+	return facts, err
+}
+
+// withDramaVideoFile 把视频资源下载到临时文件后交给 fn；读取对象存储有超时保护。
+func (s *Service) withDramaVideoFile(userID, resourceID string, fn func(resource *model.Resource, input string) error) error {
 	resource, body, err := s.OpenResource(userID, resourceID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer body.Close()
+	// 读取对象存储可能卡住：超时后关闭读取流让 io.Copy 返回，避免一段视频阻塞整个调度循环。
+	var stalled atomic.Bool
+	watchdog := time.AfterFunc(dramaTailDownloadTimeout, func() {
+		stalled.Store(true)
+		_ = body.Close()
+	})
+	defer watchdog.Stop()
 	if !strings.HasPrefix(resource.MimeType, "video/") {
-		return "", errors.New("尾帧来源不是视频")
-	}
-	ffmpegBin, err := renderFfmpegBinary()
-	if err != nil {
-		return "", fmt.Errorf("抽取尾帧失败：%w", err)
+		return errors.New("尾帧来源不是视频")
 	}
 	dir, err := os.MkdirTemp("", "yingce-drama-tail-")
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer os.RemoveAll(dir)
 	input := filepath.Join(dir, "input.mp4")
 	file, err := os.Create(input)
 	if err != nil {
-		return "", err
+		return err
 	}
 	_, copyErr := io.Copy(file, body)
+	watchdog.Stop()
 	closeErr := file.Close()
 	if copyErr != nil {
-		return "", copyErr
+		if stalled.Load() {
+			return fmt.Errorf("读取段视频超时（%d 秒），可稍后点“重新处理”", int(dramaTailDownloadTimeout.Seconds()))
+		}
+		return copyErr
 	}
 	if closeErr != nil {
-		return "", closeErr
+		return closeErr
 	}
+	return fn(resource, input)
+}
+
+// saveDramaTailFrame 用 ffmpeg 取本地视频的最后一帧并保存为图片资源。
+func (s *Service) saveDramaTailFrame(userID string, resource *model.Resource, input string) (string, error) {
+	ffmpegBin, err := renderFfmpegBinary()
+	if err != nil {
+		return "", fmt.Errorf("抽取尾帧失败：%w", err)
+	}
+	dir, err := os.MkdirTemp("", "yingce-drama-tail-out-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(dir)
 	output := filepath.Join(dir, "tail.png")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -410,7 +512,7 @@ func (s *Service) extractDramaTailFrame(userID, resourceID string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	saved, err := s.UploadResourceFile(userID, "tail.png", info.Size(), "image", resource.Width, resource.Height, 0, image, "drama-tail:"+resourceID)
+	saved, err := s.UploadResourceFile(userID, "tail.png", info.Size(), "image", resource.Width, resource.Height, 0, image, "drama-tail:"+resource.ID)
 	if err != nil {
 		return "", err
 	}

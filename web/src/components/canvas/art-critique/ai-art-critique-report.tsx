@@ -1,7 +1,7 @@
 // AI 美术评审报告视图：进度、摘要、问题卡片与详情、修改方案、筛选与画面标注叠层。
 
 import { artCritiqueCategoryLabel, type ArtCritiqueIssue, type ArtCritiqueNodeState, type ArtCritiqueOption, type ArtCritiquePipelineStage, artCritiqueSeverityLabel, artCritiqueStageLabel } from "@/lib/art-critique/contracts";
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronRight, Copy, LoaderCircle, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronRight, Copy, LoaderCircle, Target, ScanEye } from "lucide-react";
 import { ART_CRITIQUE_CATEGORY_COLORS, ART_CRITIQUE_SEVERITY_COLORS, repairIssueTarget, targetBounds } from "@/lib/art-critique/annotation";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { Button, Tag } from "antd";
@@ -312,7 +312,7 @@ export function OptionCard({ option, theme }: { option: ArtCritiqueOption; theme
     return (
         <article className="rounded-[var(--r-lg)] border px-3 py-3" style={{ borderColor: theme.node.edge, background: theme.node.fill }}>
             <div className="flex items-center gap-2 text-sm font-semibold">
-                <Sparkles className="size-4" style={{ color: ART_CRITIQUE_CATEGORY_COLORS[option.category] }} aria-hidden="true" />
+                <ScanEye className="size-4" style={{ color: ART_CRITIQUE_CATEGORY_COLORS[option.category] }} aria-hidden="true" />
                 <span className="min-w-0 flex-1">{option.title}</span>
                 <span className="shrink-0 text-[var(--fs-label)] font-normal" style={{ color: theme.node.muted }}>
                     {Math.round(option.confidence * 100)}% 参考把握

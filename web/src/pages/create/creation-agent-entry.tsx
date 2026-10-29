@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { App, Button } from "antd";
-import { ArrowUpRight, FolderOpen, Sparkles } from "lucide-react";
+import { ArrowUpRight, FolderOpen, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router";
 import { FluidOrb } from "@/components/ui/fluid-orb";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -47,7 +47,7 @@ export function CreationAgentEntry() {
     return <section className="creation-agent-entry" aria-label="画布 Agent 模式">
         <div className="creation-agent-orb" aria-hidden><FluidOrb size={88} /></div>
         <div className="creation-agent-copy"><span className="creation-agent-eyebrow">CANVAS AGENT</span><h2>不止回答，把想法落到画布上</h2><p>使用画布里的同一个 Agent，结合素材、技能与创作上下文协作。生成与修改仍需经过原有审批和额度检查。</p></div>
-        <div className="creation-agent-actions"><Button type="primary" icon={<Sparkles />} loading={busy} disabled={!hydrated} onClick={() => void start()}>{created.current ? "重试同步并进入" : "新建画布，与 Agent 创作"}<ArrowUpRight /></Button><Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>在已有画布中继续</Button></div>
+        <div className="creation-agent-actions"><Button type="primary" icon={<ArrowRight />} loading={busy} disabled={!hydrated} onClick={() => void start()}>{created.current ? "重试同步并进入" : "新建画布，与 Agent 创作"}<ArrowUpRight /></Button><Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>在已有画布中继续</Button></div>
         {error ? <p className="creation-agent-error" role="alert">{error}</p> : null}
     </section>;
 }

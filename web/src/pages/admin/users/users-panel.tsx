@@ -1,11 +1,13 @@
 import { App, Button, Dropdown, Input } from "antd";
 import { Checkbox } from "@/pages/admin/ui/controls";
-import { Ban, Search, Settings2, UserPlus } from "lucide-react";
+import { Ban, Crown, Search, Settings2, UserPlus } from "lucide-react";
+import { Link } from "react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { bulkDisableAdminUsers, deleteAdminUser, listAdminUsers, updateAdminUser, type AdminUser, type LocalUser } from "@/services/api/auth";
+import { listAdminUserGroups, type UserGroup } from "@/services/api/user-groups";
 import { useUserStore } from "@/stores/use-user-store";
 import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/admin-ui";
 import { useTableUrlState } from "../lib/use-table-url-state";
@@ -33,6 +35,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     const [createUserOpen, setCreateUserOpen] = useState(false);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [bulkDisabling, setBulkDisabling] = useState(false);
+    const [groups, setGroups] = useState<UserGroup[]>([]);
     const [visibleColumns, setVisibleColumns] = useState<Set<UserColumnKey>>(() => {
         if (typeof window === "undefined") return new Set(allColumnKeys);
         try {
@@ -44,7 +47,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         }
     });
     const requestSequence = useRef(0);
-    const hasFilters = Boolean(state.filter || state.role !== "all" || state.status !== "all");
+    const hasFilters = Boolean(state.filter || state.role !== "all" || state.status !== "all" || state.group !== "all");
     const detailIndex = detailUserId ? users.findIndex((user) => user.id === detailUserId) : -1;
     const previousUserId = detailIndex > 0 ? users[detailIndex - 1]?.id : undefined;
     const nextUserId = detailIndex >= 0 && detailIndex < users.length - 1 ? users[detailIndex + 1]?.id : undefined;
@@ -52,6 +55,12 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     useEffect(() => {
         window.localStorage.setItem(columnStorageKey, JSON.stringify([...visibleColumns]));
     }, [visibleColumns]);
+
+    useEffect(() => {
+        void listAdminUserGroups()
+            .then((result) => setGroups(result.groups))
+            .catch((error) => message.error(error instanceof Error ? error.message : "读取用户分组失败"));
+    }, [message]);
 
     useEffect(() => {
         const sequence = ++requestSequence.current;
@@ -63,6 +72,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
             keyword: debouncedFilter || undefined,
             role: state.role === "all" ? undefined : state.role,
             status: state.status === "all" ? undefined : state.status,
+            group: state.group === "all" ? undefined : state.group,
             page: state.page,
             pageSize: state.pageSize,
         })
@@ -82,7 +92,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
             .finally(() => {
                 if (sequence === requestSequence.current) setLoading(false);
             });
-    }, [debouncedFilter, message, retry, state.page, state.pageSize, state.role, state.status, update]);
+    }, [debouncedFilter, message, retry, state.group, state.page, state.pageSize, state.role, state.status, update]);
 
     const replaceUser = useCallback((nextUser: LocalUser) => {
         setUsers((items) => items.map((item) => item.id === nextUser.id ? { ...item, ...nextUser } : item));
@@ -115,12 +125,13 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     const columns = useMemo(() => createUserColumns({
         actorId: actor?.id,
         visibleColumns,
+        groups,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
         onToggleStatus: toggleStatus,
-    }), [actor?.id, toggleStatus, visibleColumns]);
+    }), [actor?.id, groups, toggleStatus, visibleColumns]);
 
-    const resetFilters = () => update({ filter: "", role: "all", status: "all", page: 1 });
+    const resetFilters = () => update({ filter: "", role: "all", status: "all", group: "all", page: 1 });
 
     const bulkDisable = () => {
         modal.confirm({
@@ -179,10 +190,18 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                             options={[{ value: "all", label: "全部状态" }, { value: "active", label: "已启用" }, { value: "disabled", label: "已停用" }]}
                             onChange={(status) => update({ status, page: 1 })}
                         />
+                        <Select
+                            aria-label="筛选用户分组"
+                            className="w-36"
+                            value={state.group}
+                            options={[{ value: "all", label: "全部分组" }, ...groups.map((group) => ({ value: group.code, label: group.name }))]}
+                            onChange={(group) => update({ group, page: 1 })}
+                        />
                     </>
                 }
                 trailing={
                     <div className="flex items-center gap-2">
+                        <Link to="/admin/user-groups"><Button icon={<Crown className="size-4" />}>分组管理</Button></Link>
                         <Button icon={<UserPlus className="size-4" />} onClick={() => { setEditingUser(null); setCreateUserOpen(true); }}>{"\u6dfb\u52a0\u7528\u6237"}</Button>
                         <Dropdown
                             trigger={["click"]}
@@ -237,8 +256,8 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
             />
 
             <AdminUserDetailDrawer userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
-            <AdminUserCreateDrawer open={createUserOpen} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
-            <AdminUserEditDrawer user={editingUser} actorId={actor?.id} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            <AdminUserCreateDrawer open={createUserOpen} groups={groups} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
+            <AdminUserEditDrawer user={editingUser} actorId={actor?.id} groups={groups} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
         </>
     );
 }

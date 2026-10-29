@@ -11,5 +11,6 @@
 - `generateAudio` 映射为 `generate_audio`。
 - prompt 只放入 text block，不再同时发送顶层 prompt。
 - 首帧、尾帧和 reference image 依据 role 转换，不按 `0/1` 猜测。
+- 首尾帧可与角色、风格参考图同时提交，不再在本地拒绝。
 
 完整字段见 [docs/interface.md](docs/interface.md)。

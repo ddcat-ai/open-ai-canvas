@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { App, Button, ColorPicker, Input, InputNumber, Progress, Segmented } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Switch } from "@/components/ui/base/switch";
-import { Captions, FileDown, FileUp, ListPlus, LoaderCircle, Plus, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { Captions, FileDown, FileUp, ListPlus, LoaderCircle, Plus, Scissors, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -555,7 +555,7 @@ export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, o
                     <Button
                         size="small"
                         type={running ? "default" : "primary"}
-                        icon={running ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                        icon={running ? <LoaderCircle className="size-3.5 animate-spin" /> : <Captions className="size-3.5" />}
                         disabled={!entries.length}
                         onClick={running ? cancelAiHighlight : () => void runAiHighlight()}
                     >

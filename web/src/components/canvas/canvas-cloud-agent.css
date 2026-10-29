@@ -1,9 +1,7 @@
 .canvas-agent-panel,
 .agent-context-popover {
-    /* Canvas theme -> material tokens. Only the floating shell blurs the canvas. */
+    /* Canvas theme -> material tokens. */
     --agent-material-solid: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-surface-base));
-    --agent-material-glass: color-mix(in srgb, var(--agent-material-solid) 68%, transparent);
-    --agent-material-sheen: color-mix(in srgb, var(--color-neutral-0) 8%, transparent);
     --agent-surface-soft: color-mix(in srgb, var(--agent-ink) 4%, transparent);
     --agent-surface-hover: color-mix(in srgb, var(--agent-ink) 7%, transparent);
     --agent-surface-raised: color-mix(in srgb, var(--agent-ink) 6%, var(--agent-material-solid));
@@ -14,6 +12,8 @@
     --agent-focus-ring: color-mix(in srgb, var(--agent-accent) 65%, var(--agent-ink));
 }
 
+/* 面板用实色、不做毛玻璃：backdrop-filter 要在画布内容变化时反复重新模糊面板下方整块区域，
+   交互起止切换实色/毛玻璃又会让整个面板重绘，是打开 Agent 后画布变卡的主要原因之一。 */
 .canvas-agent-panel {
     container-type: inline-size;
     overscroll-behavior: contain;
@@ -25,25 +25,59 @@
     box-shadow: var(--agent-material-shadow);
 }
 
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .canvas-agent-panel {
-        background: linear-gradient(145deg, var(--agent-material-sheen), transparent 55%), var(--agent-material-glass);
-        -webkit-backdrop-filter: blur(20px) saturate(140%);
-        backdrop-filter: blur(20px) saturate(140%);
-    }
+/* 停靠在画布右侧：与画布并排，不压在画布上，只留一条 1px 栏间分隔线。 */
+.canvas-agent-panel.is-docked {
+    border-left: 1px solid color-mix(in srgb, var(--agent-ink) 9%, transparent);
+    border-radius: 0;
+    box-shadow: none;
+}
 
-    /* 面板下方的画布每帧都在变：平移/缩放/拖拽节点时毛玻璃要逐帧重新模糊整块区域，
-       是 Agent 打开后画布掉帧的主因。交互期换成实色，静止后恢复。 */
-    :root:has([data-canvas-viewport-interacting="true"], [data-canvas-node-dragging="true"]) .canvas-agent-panel {
-        background: var(--agent-material-solid);
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
+.canvas-agent-panel.is-docked [data-agent-drag-handle] {
+    cursor: default;
+    touch-action: auto;
+    user-select: auto;
+}
+
+.agent-panel-dock-resizer {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 10;
+    width: 6px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+/* 悬停或聚焦时把分隔线本身调亮，提示可以拖动；不额外加粗成竖条。 */
+.agent-panel-dock-resizer::after {
+    position: absolute;
+    inset-block: 0;
+    left: -1px;
+    width: 1px;
+    background: transparent;
+    content: "";
+    transition: background-color 150ms ease;
+}
+
+.agent-panel-dock-resizer:hover::after,
+.agent-panel-dock-resizer:focus-visible::after {
+    background: color-mix(in srgb, var(--agent-accent) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-panel-dock-resizer::after {
+        transition: none;
     }
 }
 
-/* 交互期暂停面板内的循环动画，避免和画布争抢重绘。 */
-:root:has([data-canvas-viewport-interacting="true"], [data-canvas-node-dragging="true"]) .canvas-agent-panel * {
-    animation-play-state: paused !important;
+.agent-panel-dock-resizer:focus-visible {
+    outline: none;
+}
+
+/* 交互期只暂停需要逐帧重绘文字的流光；不用 `*`，否则每次平移、拖拽开始和结束都要重算面板内全部元素的样式。 */
+:root:has([data-canvas-viewport-interacting="true"], [data-canvas-node-dragging="true"]) .canvas-agent-panel :is(.agent-operation-latest, .agent-activity-title),
+:root:has([data-canvas-viewport-interacting="true"], [data-canvas-node-dragging="true"]) .canvas-agent-panel .agent-activity-glyph::after {
+    animation-play-state: paused;
 }
 
 .agent-panel-header {
@@ -771,6 +805,133 @@
     background: var(--agent-surface-raised, var(--background));
 }
 
+.agent-question-choices {
+    max-height: min(280px, 36vh);
+    overflow-y: auto;
+}
+
+/* 可点击的回复选项：Agent 回复末尾的编号选项与 ask_user 单选共用。 */
+.agent-reply-options {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+
+.agent-question-choices .agent-reply-options {
+    margin-top: 0;
+}
+
+.agent-reply-option {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 9%, transparent);
+    border-radius: var(--agent-radius-surface);
+    background: var(--agent-surface-soft);
+    color: var(--agent-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        transform 150ms ease;
+}
+
+.agent-reply-option:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--agent-accent) 45%, transparent);
+    background: var(--agent-surface-hover);
+}
+
+.agent-reply-option:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.agent-reply-option:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.agent-reply-option:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.agent-reply-option-marker {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    flex: none;
+    place-items: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-accent) 14%, transparent);
+    color: var(--agent-accent);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.agent-reply-option-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.agent-reply-option-title {
+    font-size: var(--fs-ui);
+    font-weight: 560;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.agent-reply-option-detail {
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.agent-reply-option-arrow {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    color: var(--agent-caption);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease;
+}
+
+.agent-reply-option:hover:not(:disabled) .agent-reply-option-arrow,
+.agent-reply-option:focus-visible .agent-reply-option-arrow {
+    opacity: 1;
+    transform: none;
+}
+
+@media (hover: none) {
+    .agent-reply-option-arrow {
+        opacity: 0.6;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-reply-option,
+    .agent-reply-option-arrow {
+        transition: none;
+    }
+
+    .agent-reply-option:active:not(:disabled) {
+        transform: none;
+    }
+}
+
 .agent-question-form {
     max-height: min(340px, 42vh);
     overflow-y: auto;
@@ -1058,14 +1219,6 @@
     }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-    .canvas-agent-panel {
-        background: var(--agent-material-solid);
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
     .agent-welcome-actions button {
         transition: none;
@@ -1249,141 +1402,342 @@
     }
 }
 
-.agent-tool-row {
-    /* 日志是事件流，不是连续卡片；只用间距和状态图标建立层次。 */
-    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
-    min-height: 28px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    padding: 2px 0;
-    transition: transform 160ms ease;
+/*
+ * Agent 活动流：思考过程与操作记录共用一套行几何（20px 图标块 + 标题 + 单行摘要 + 计数 + 箭头），
+ * 两者交替出现时读起来是一条整齐的步骤列表，而不是一排粗细不一的灰条。
+ *
+ * 类别只靠图标块的色调区分：色值取自节点调色板（读 = 音频蓝、创建 = 图片琥珀、
+ * 修改 = 画框绿、其他 = 配置灰），查看画面跟随画布主题强调色，思考是偏中性的主题色。
+ * 展开内容挂在图标中线的一根细导线下，与标题文字左对齐。
+ */
+.agent-activity,
+.agent-tool-row,
+.agent-tool-retry {
+    --agent-activity-ink: var(--agent-ink, var(--foreground));
+    --agent-tone: color-mix(in srgb, var(--agent-activity-ink) 55%, transparent);
 }
 
-/* Tool calls are secondary activity, not chat content. Keep the receipt row
-   scannable and reveal node links / diagnostics only on demand. */
-.agent-tool-details {
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="think"] {
+    --agent-tone: color-mix(in srgb, var(--agent-reasoning-accent, var(--agent-accent, var(--agent-activity-ink))) 45%, var(--agent-activity-ink));
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="read"] {
+    --agent-tone: var(--palette-node-audio);
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="vision"] {
+    --agent-tone: var(--agent-accent, var(--palette-node-script));
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="create"] {
+    --agent-tone: var(--palette-node-image);
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="operate"] {
+    --agent-tone: var(--palette-node-frame);
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="other"] {
+    --agent-tone: var(--palette-node-config);
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="warning"] {
+    --agent-tone: var(--status-warning);
+}
+
+:is(.agent-activity, .agent-tool-row, .agent-tool-retry)[data-agent-tone="error"] {
+    --agent-tone: var(--status-error);
+}
+
+.agent-activity {
     min-width: 0;
 }
 
-.agent-tool-summary-toggle {
-    display: flex;
-    align-items: flex-start;
+/* 连续的思考 / 操作行收成一组，组与正文之间保留消息列表的常规间距。 */
+.agent-activity + .agent-activity {
+    margin-top: 2px;
 }
 
-.agent-tool-summary-toggle::-webkit-details-marker {
+.agent-activity-row {
+    display: flex;
+    width: calc(100% + 12px);
+    min-width: 0;
+    min-height: 30px;
+    align-items: center;
+    gap: 8px;
+    margin-inline: -6px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    padding: 5px 6px;
+    color: color-mix(in srgb, var(--agent-activity-ink) 50%, transparent);
+    font: inherit;
+    font-size: var(--fs-caption);
+    line-height: 18px;
+    list-style: none;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    transition:
+        background-color 160ms var(--ease-product-enter),
+        color 160ms var(--ease-product-enter);
+}
+
+.agent-activity-row::-webkit-details-marker {
     display: none;
 }
 
-.agent-tool-chevron {
-    flex: 0 0 auto;
-    color: color-mix(in srgb, currentColor 48%, transparent);
-    transition: transform 160ms ease;
+.agent-activity-row:hover {
+    background: color-mix(in srgb, var(--agent-activity-ink) 4.5%, transparent);
 }
 
-.agent-tool-details[open] .agent-tool-chevron {
-    transform: rotate(180deg);
+.agent-activity-row:focus-visible {
+    outline: 2px solid var(--agent-focus-ring, var(--ring));
+    outline-offset: 0;
 }
 
-.agent-tool-detail-body {
-    margin: -1px 0 4px 32px;
-    padding: 0 2px 4px;
+.agent-activity-glyph {
+    position: relative;
+    display: grid;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    place-items: center;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--agent-tone) 13%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent-tone) 15%, transparent);
+    color: color-mix(in srgb, var(--agent-tone) 80%, var(--agent-activity-ink));
+    font-size: 13px;
 }
 
-/* 没有节点明细的“读取信息 / 操作画布”只保留时间线语义，不再撑成一张空卡片。 */
-.agent-tool-row--plain {
-    min-height: 24px;
-    border-color: transparent;
+/* 仍在推进的一段：图标块外圈缓慢呼吸，不让整行闪烁。 */
+.agent-activity.is-live .agent-activity-glyph::after {
+    position: absolute;
+    inset: -3px;
+    border: 1px solid color-mix(in srgb, var(--agent-tone) 40%, transparent);
     border-radius: 8px;
-    background: transparent;
-    padding: 1px 0;
+    content: "";
+    animation: agent-activity-breathe 1.8s ease-in-out infinite;
+    pointer-events: none;
 }
 
-.agent-tool-row--read {
-    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
+.agent-activity-title {
+    flex: 0 0 auto;
+    color: color-mix(in srgb, var(--agent-activity-ink) 84%, transparent);
+    font-weight: 500;
+    white-space: nowrap;
 }
 
-.agent-tool-row--create {
-    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
+.agent-activity-detail {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.agent-tool-row--operate {
-    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
+.agent-activity-meta {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-activity-ink) 6%, transparent);
+    padding: 0 6px;
+    color: color-mix(in srgb, var(--agent-activity-ink) 50%, transparent);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
 }
 
-/*
- * 看图（canvas_inspect_image）：唯一会把图片字节真交给模型的档位，用主题强调色把它与
- * "读清单 / 写画布"分开。取色走面板注入的 --agent-accent，不写字面值。
- */
-.agent-tool-row--vision {
-    --agent-tool-accent: var(--agent-accent, var(--foreground));
+.agent-activity-chevron {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    color: color-mix(in srgb, var(--agent-activity-ink) 40%, transparent);
+    transition:
+        opacity 160ms var(--ease-product-enter),
+        transform 200ms var(--ease-product-enter);
 }
 
-.agent-tool-header {
+.agent-activity[open] > .agent-activity-row .agent-activity-chevron,
+.agent-activity.is-open > .agent-activity-row .agent-activity-chevron,
+.agent-tool-retry[open] > summary .agent-activity-chevron {
+    transform: rotate(90deg);
+}
+
+.agent-activity[open] > .agent-activity-row .agent-activity-title,
+.agent-activity.is-open > .agent-activity-row .agent-activity-title,
+.agent-activity-row:hover .agent-activity-title {
+    color: var(--agent-activity-ink);
+}
+
+/* 有指针设备时箭头只在悬停 / 聚焦 / 展开时出现，一列静止的箭头本身就是噪音。 */
+@media (hover: hover) {
+    .agent-activity-row .agent-activity-chevron {
+        opacity: 0;
+    }
+
+    .agent-activity-row:hover .agent-activity-chevron,
+    .agent-activity-row:focus-visible .agent-activity-chevron,
+    .agent-activity[open] > .agent-activity-row .agent-activity-chevron,
+    .agent-activity.is-open > .agent-activity-row .agent-activity-chevron {
+        opacity: 1;
+    }
+}
+
+.agent-activity-body {
+    position: relative;
+    min-width: 0;
+    padding: 2px 0 6px 28px;
+}
+
+/* 细导线落在 20px 图标块的中线上（行左侧 -6px 外扩 + 6px 内边距 = 0）。 */
+.agent-activity-body::before {
+    position: absolute;
+    top: 0;
+    bottom: 6px;
+    left: 9.5px;
+    width: 1px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--agent-activity-ink) 10%, transparent);
+    content: "";
+}
+
+/* ---- 思考过程 ---- */
+
+.agent-reasoning[open] .agent-reasoning-preview {
+    display: none;
+}
+
+.agent-reasoning-text {
+    max-height: min(240px, 30vh);
+    min-width: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    color: color-mix(in srgb, var(--agent-activity-ink) 58%, transparent);
+    font-size: var(--fs-caption);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    scrollbar-width: thin;
+}
+
+/* ---- 操作记录 ---- */
+
+.agent-operation-feed.is-failed > .agent-activity-row {
+    background: color-mix(in srgb, var(--status-error) 6%, transparent);
+}
+
+.agent-operation-feed.is-failed .agent-operation-latest {
+    --agent-operation-ink: var(--status-error);
+    color: color-mix(in srgb, var(--status-error) 85%, var(--agent-activity-ink));
+}
+
+.agent-operation-list > * + * {
+    margin-top: 2px;
+}
+
+/* 高于创作页 creative-agent-cards.css 的同名全局规则，避免带入分隔线和内边距。 */
+.agent-operation-list .agent-tool-row {
+    min-width: 0;
+    flex: 1 1 auto;
+    border: 0;
+    padding: 0;
+}
+
+.agent-tool-step {
     display: flex;
     min-width: 0;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 4px 8px;
-    line-height: 17px;
+    min-height: 24px;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+    color: color-mix(in srgb, var(--agent-activity-ink) 66%, transparent);
+    font-size: var(--fs-caption);
+    line-height: 18px;
+    list-style: none;
 }
 
-.agent-tool-category {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 4px;
-    border: 0;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--agent-tool-accent) 9%, transparent);
-    padding: 2px 4px;
-    color: color-mix(in srgb, var(--foreground) 68%, transparent);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    line-height: 15px;
+summary.agent-tool-step {
+    cursor: pointer;
 }
 
-.agent-tool-label {
-    flex: 0 0 auto;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 15px;
-    white-space: nowrap;
+summary.agent-tool-step::-webkit-details-marker {
+    display: none;
+}
+
+summary.agent-tool-step:hover {
+    color: var(--agent-activity-ink);
+}
+
+.agent-tool-step-glyph {
+    display: grid;
+    width: 14px;
+    height: 18px;
+    flex: 0 0 14px;
+    place-items: center;
+    color: color-mix(in srgb, var(--agent-tone) 80%, var(--agent-activity-ink));
+    font-size: 13px;
+}
+
+.agent-tool-step .agent-activity-chevron {
+    margin-top: 3px;
 }
 
 .agent-tool-summary {
     min-width: 0;
-    flex: 1 1 180px;
-    overflow: hidden;
-    color: color-mix(in srgb, currentColor 82%, transparent);
-    text-overflow: ellipsis;
+    flex: 0 1 auto;
+    overflow-wrap: anywhere;
+}
+
+.agent-tool-row.is-error .agent-tool-summary {
+    color: color-mix(in srgb, var(--status-error) 85%, var(--agent-activity-ink));
+}
+
+.agent-tool-label {
+    flex: 0 0 auto;
+    margin-top: 1px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-tone) 12%, transparent);
+    padding: 0 6px;
+    color: color-mix(in srgb, var(--agent-tone) 85%, var(--agent-activity-ink));
+    font-size: var(--fs-label);
+    font-weight: 500;
+    line-height: 16px;
     white-space: nowrap;
+}
+
+.agent-tool-extra {
+    padding-left: 22px;
+}
+
+.agent-tool-extra:empty {
+    display: none;
 }
 
 .agent-tool-action-list {
     display: flex;
     min-width: 0;
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 4px;
-    margin-top: 8px;
+    margin: 2px 0 4px;
 }
 
 .agent-tool-action-link {
+    max-width: 100%;
     min-width: 0;
     border: 0;
-    border-radius: 8px;
-    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 3%, transparent));
-    padding: var(--space-2) var(--space-3);
-    color: color-mix(in srgb, currentColor 88%, transparent);
-    font-size: 11px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--agent-activity-ink) 5%, transparent);
+    padding: 3px 8px;
+    color: color-mix(in srgb, var(--agent-activity-ink) 74%, transparent);
+    font-size: var(--fs-label);
     line-height: 17px;
     overflow-wrap: anywhere;
     text-align: left;
     transition:
-        background-color 150ms ease,
-        color 150ms ease;
+        background-color 150ms var(--ease-product-enter),
+        color 150ms var(--ease-product-enter);
 }
 
 .agent-tool-action-link:not(:disabled) {
@@ -1391,218 +1745,94 @@
 }
 
 .agent-tool-action-link:not(:disabled):hover {
-    background: color-mix(in srgb, var(--foreground) 7%, transparent);
-    color: var(--foreground);
+    background: color-mix(in srgb, var(--agent-activity-ink) 9%, transparent);
+    color: var(--agent-activity-ink);
 }
 
-.agent-tool-action-link:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--foreground) 56%, transparent);
+.agent-tool-action-link:focus-visible,
+.agent-tool-more:focus-visible {
+    outline: 2px solid var(--agent-focus-ring, var(--ring));
     outline-offset: 1px;
 }
 
 .agent-tool-more {
-    align-self: flex-start;
     border: 0;
     background: transparent;
-    padding: 2px 2px 0;
-    color: color-mix(in srgb, currentColor 64%, transparent);
-    font-size: 11px;
+    padding: 1px 0;
+    color: color-mix(in srgb, var(--agent-activity-ink) 48%, transparent);
+    font-size: var(--fs-label);
     line-height: 17px;
     text-align: left;
 }
 
 .agent-tool-more:hover {
-    color: var(--foreground);
+    color: var(--agent-activity-ink);
     text-decoration: underline;
     text-decoration-style: dotted;
     text-underline-offset: 3px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .agent-tool-row,
-    .agent-tool-chevron,
-    .agent-tool-action-link {
-        transition: none;
-    }
-}
-
-/*
- * 操作记录折叠行：一轮运行动辄十几条工具记录，逐条铺开会把正文挤出可视区。
- * 默认只报最新一步，点击展开完整记录；失败时整行转红并默认展开（见 AgentOperationFeed）。
- * 类别徽标复用工具卡的 chip（.agent-tool-category），所以这里要给出 accent 默认值。
- */
-.agent-operation-feed {
-    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
-    /* 操作流与正文共用同一左对齐轴。不要用竖线把每条工具记录切成
-       独立的日志栏：用户首先要看到的是 Agent 的输出和当前动作。 */
-    min-width: 0;
-}
-
-/* 看图是唯一的"画面"档，给它主题强调色，和清单/写画布区分开（不写字面颜色）。 */
-.agent-operation-feed[data-agent-category="vision"] {
-    --agent-tool-accent: var(--agent-accent, var(--foreground));
-}
-
-.agent-operation-feed[data-agent-category="read"] {
-    --agent-tool-accent: #2563eb;
-}
-
-.agent-operation-feed[data-agent-category="create"] {
-    --agent-tool-accent: #d97706;
-}
-
-.agent-operation-feed[data-agent-category="operate"] {
-    --agent-tool-accent: #0f766e;
-}
-
-.agent-operation-feed[data-agent-category="other"] {
-    --agent-tool-accent: #64748b;
-}
-
-.agent-operation-toggle {
-    display: flex;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 4px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    padding: 4px 0;
-    color: color-mix(in srgb, var(--agent-ink, currentColor) 72%, transparent);
-    font-size: var(--fs-caption);
+.agent-tool-note {
+    display: block;
+    margin-top: 2px;
+    color: color-mix(in srgb, var(--agent-activity-ink) 52%, transparent);
+    font-size: var(--fs-label);
     line-height: 17px;
-    text-align: left;
-    cursor: pointer;
-    transition:
-        background-color 150ms ease,
-        color 150ms ease;
+    overflow-wrap: anywhere;
 }
 
-/* The folded receipt is a single sentence, not another pill-shaped card. */
-.agent-operation-list .agent-tool-category {
-    background: transparent;
-    padding-inline: 0;
-}
-
-.agent-operation-icon {
-    display: inline-flex;
-    width: 16px;
-    height: 18px;
-    flex: 0 0 16px;
-    align-items: center;
-    justify-content: center;
-    color: var(--agent-tool-accent);
-}
-
-.agent-operation-icon svg {
-    width: 14px;
-    height: 14px;
-}
-
-.agent-operation-feed.is-failed .agent-operation-icon {
-    color: #dc2626;
-}
-
-.agent-operation-kind {
-    flex: 0 0 auto;
-    font-size: var(--fs-caption);
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.agent-operation-toggle:hover {
-    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
-    color: var(--agent-ink, var(--foreground));
-}
-
-.agent-operation-toggle:focus-visible {
-    outline: 2px solid var(--agent-focus-ring, var(--foreground));
-    outline-offset: 1px;
-}
-
-.agent-operation-latest {
+/* 自动纠正：与普通步骤同一行几何，展开后列出每次尝试。 */
+.agent-tool-retry {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+}
+
+.agent-tool-retry-list {
+    display: grid;
+    gap: 4px;
+    margin: 2px 0 4px 22px;
+    padding: 0;
+    color: color-mix(in srgb, var(--agent-activity-ink) 56%, transparent);
+    font-size: var(--fs-label);
+    line-height: 17px;
+    list-style: none;
+}
+
+.agent-tool-retry-list li {
+    display: flex;
+    min-width: 0;
+    gap: 8px;
+}
+
+.agent-tool-retry-index {
+    display: grid;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    place-items: center;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--agent-activity-ink) 6%, transparent);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
 }
 
 /*
- * 流光：把文字本身当渐变蒙版，让一道高光扫过。底色与高光都从 --agent-ink 派生——不能用
- * currentColor，因为开启 background-clip 后 color 是 transparent，会自指成空。
- * 动画只挂在 .is-live 上：面板按"末尾段 + 还在跑"下发，任务完成流光立即停。
+ * 流光：把文字当渐变蒙版扫过一道高光，只挂在仍在推进的段上（操作段的最新一步、思考段的标题）。
+ * 底色与高光都从 ink 派生；开启 background-clip 后 color 是 transparent，不能用 currentColor。
  */
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
-    .agent-operation-latest {
-        background-image: linear-gradient(
-            100deg,
-            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 0%,
-            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 42%,
-            var(--agent-operation-ink, var(--agent-ink, currentColor)) 50%,
-            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 58%,
-            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 100%
-        );
+    .agent-operation-feed.is-live .agent-operation-latest,
+    .agent-reasoning.is-live > .agent-activity-row .agent-activity-title {
+        --agent-sheen-base: color-mix(in srgb, var(--agent-operation-ink, var(--agent-activity-ink)) 50%, transparent);
+        --agent-sheen-peak: var(--agent-operation-ink, var(--agent-activity-ink));
+        background-image: linear-gradient(100deg, var(--agent-sheen-base) 0%, var(--agent-sheen-base) 40%, var(--agent-sheen-peak) 50%, var(--agent-sheen-base) 60%, var(--agent-sheen-base) 100%);
         background-position: 100% 0;
         background-size: 240% 100%;
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent;
+        animation: agent-operation-sheen 2.8s linear infinite;
     }
-
-    .agent-operation-feed.is-live .agent-operation-latest {
-        animation: agent-operation-sheen 3.6s linear infinite;
-    }
-}
-
-/* 失败/被拒的一步：折叠行跟工具卡同一套红，不用主题色盖掉语义。 */
-.agent-operation-feed.is-failed .agent-operation-latest {
-    --agent-operation-ink: #dc2626;
-}
-
-.agent-operation-count {
-    flex: 0 0 auto;
-    padding: 0 2px;
-    color: color-mix(in srgb, var(--agent-ink, currentColor) 62%, transparent);
-    font-size: var(--fs-tiny);
-    line-height: 16px;
-    font-variant-numeric: tabular-nums;
-}
-
-.agent-operation-chevron {
-    width: 14px;
-    height: 14px;
-    flex: 0 0 auto;
-    opacity: 0.55;
-    transition: transform 180ms ease;
-}
-
-.agent-operation-feed.is-open .agent-operation-chevron {
-    transform: rotate(180deg);
-}
-
-.agent-operation-list {
-    margin-top: 2px;
-}
-
-.agent-operation-list > * + * {
-    margin-top: 4px;
-}
-
-.agent-operation-feed.is-failed .agent-operation-toggle {
-    border-radius: 8px;
-    background: color-mix(in srgb, #dc2626 5%, transparent);
-    padding-inline: 8px;
-}
-
-/*
- * 展开后的每一步不再重复状态图标（勾/叉）：状态与错误已经由卡片文字与折叠行颜色表达，
- * 一列彩色勾只会把"记录"读成"成绩单"。失败那一步的文字仍是红的（AgentToolCard 内联色）。
- */
-.agent-operation-list .agent-tool-status {
-    display: none;
 }
 
 @keyframes agent-operation-sheen {
@@ -1614,15 +1844,36 @@
     }
 }
 
+@keyframes agent-activity-breathe {
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(0.86);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
-    /* 与 .is-live 规则同特异性，否则关不掉动画。 */
-    .agent-operation-feed.is-live .agent-operation-latest {
+    .agent-activity-row,
+    .agent-activity-chevron,
+    .agent-tool-action-link {
+        transition: none;
+    }
+
+    .agent-activity.is-live .agent-activity-glyph::after {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    /* 与流光规则同特异性，否则关不掉动画。 */
+    .agent-operation-feed.is-live .agent-operation-latest,
+    .agent-reasoning.is-live > .agent-activity-row .agent-activity-title {
         animation: none;
         background-position: 0% 0;
-    }
-    .agent-operation-toggle,
-    .agent-operation-chevron {
-        transition: none;
     }
 }
 
@@ -1901,29 +2152,6 @@
     }
 }
 
-.agent-tool-status {
-    display: grid;
-    width: 20px;
-    height: 20px;
-    place-items: center;
-}
-
-.agent-tool-label {
-    opacity: 0.75;
-    white-space: nowrap;
-}
-
-/*
- * 推理摘要不是普通的折叠文本：它是 Agent 工作流中的“过程层”，需要
- * 比工具日志更安静、比正文更有层次。使用当前画布主题的 accent，避免
- * 固定紫色的 AI 默认样式，同时把实时状态、摘要内容和展开动作分开。
- */
-/* 信息层级：正文 / 工具调用 / 模型思考三段只靠位置、字号和对比度分层。 */
-.agent-reasoning {
-    min-width: 0;
-    color: color-mix(in srgb, var(--foreground) 58%, transparent);
-}
-
 /* 系统行、错误行和审批卡保留一个窄图标列，但不再向左挂出一条公共竖轨。 */
 .agent-timeline-marker {
     display: flex;
@@ -1931,161 +2159,6 @@
     flex: 0 0 20px;
     align-self: stretch;
     justify-content: center;
-}
-
-.agent-reasoning-card {
-    min-width: 0;
-    overflow: hidden;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    transition: background-color 160ms ease;
-}
-
-.agent-reasoning-card[open] {
-    background: var(--agent-surface-soft, color-mix(in srgb, var(--agent-reasoning-accent) 3.5%, var(--background)));
-}
-
-.agent-reasoning-summary {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 0;
-    cursor: pointer;
-    list-style: none;
-    padding: 8px 0;
-    color: color-mix(in srgb, var(--foreground) 66%, transparent);
-    user-select: none;
-}
-
-.agent-reasoning-summary::-webkit-details-marker {
-    display: none;
-}
-
-.agent-reasoning-summary:hover {
-    background: color-mix(in srgb, var(--agent-reasoning-accent) 4%, transparent);
-}
-
-.agent-reasoning-copy {
-    display: flex;
-    min-width: 0;
-    flex: 1 1 auto;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.agent-reasoning-title {
-    min-width: 0;
-    overflow: hidden;
-    color: color-mix(in srgb, var(--foreground) 72%, transparent);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 17px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.agent-reasoning-subtitle {
-    min-width: 0;
-    overflow: hidden;
-    color: color-mix(in srgb, var(--foreground) 38%, transparent);
-    font-size: 11px;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.agent-reasoning-status {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 4px;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    padding: 2px 4px;
-    color: color-mix(in srgb, var(--foreground) 45%, transparent);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 15px;
-}
-
-.agent-reasoning-status.is-live {
-    background: color-mix(in srgb, var(--agent-reasoning-accent) 9%, transparent);
-    color: var(--agent-reasoning-accent);
-}
-
-.agent-reasoning-status-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: currentColor;
-    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent);
-    animation: agent-reasoning-pulse 1.5s ease-in-out infinite;
-}
-
-.agent-reasoning-chevron {
-    display: grid;
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
-    place-items: center;
-    color: color-mix(in srgb, var(--foreground) 42%, transparent);
-    font-size: 16px;
-    line-height: 12px;
-    transform: translateY(-1px);
-    transition:
-        color 160ms ease,
-        transform 160ms ease;
-}
-
-.agent-reasoning-card[open] .agent-reasoning-chevron {
-    color: var(--agent-reasoning-accent);
-    transform: rotate(180deg) translateY(1px);
-}
-
-.agent-reasoning-content {
-    position: relative;
-    display: flex;
-    max-height: min(180px, 24vh);
-    gap: 0;
-    overflow: auto;
-    border-top: 0;
-    padding: 2px 0 8px;
-    scrollbar-gutter: stable;
-}
-
-.agent-reasoning-text {
-    min-width: 0;
-    color: color-mix(in srgb, var(--foreground) 54%, transparent);
-    font-size: 12px;
-    line-height: 1.75;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-}
-
-@keyframes agent-reasoning-pulse {
-    0%,
-    100% {
-        opacity: 0.55;
-        transform: scale(0.82);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .agent-reasoning-card,
-    .agent-reasoning-chevron {
-        transition: none;
-    }
-
-    .agent-reasoning-status-dot {
-        animation: none;
-    }
 }
 
 .agent-working-indicator {
@@ -2900,27 +2973,10 @@
     flex: 0 0 auto;
 }
 
+/* 卡片上的“使用 / 加入”是统一的紧凑次要按钮（与技能库卡片一致）；已启用由 aria-pressed 的软选中态表达，
+   不再把每张卡片的操作都画成墨色胶囊。 */
 .canvas-agent-skill-card-action .ant-btn {
     min-width: var(--space-16);
-    height: var(--space-8);
-    border: 0;
-    border-radius: var(--r-full);
-    background: var(--primary);
-    padding-inline: var(--space-3);
-    color: var(--primary-foreground);
-    box-shadow: none;
-    font-size: var(--fs-body);
-}
-
-.canvas-agent-skill-card-action .ant-btn:not(:disabled):hover {
-    background: color-mix(in srgb, var(--primary) 85%, var(--background));
-    color: var(--primary-foreground);
-}
-
-.canvas-agent-skill-card-action .ant-btn.is-selected,
-.canvas-agent-skill-card-action .ant-btn.is-selected:not(:disabled):hover {
-    background: var(--control-selected-bg);
-    color: var(--control-selected-fg);
 }
 
 .canvas-agent-skill-card-action .ant-btn:disabled {

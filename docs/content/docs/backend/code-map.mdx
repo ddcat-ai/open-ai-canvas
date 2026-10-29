@@ -7,13 +7,15 @@ description: 从产品功能快速定位主要代码入口
 
 ## 短剧自动制作
 
-- 纯逻辑：`backend/internal/production/`（作品圣经、分集与剧本提示词 `prompts.go`，模型输出解析 `parse.go`，分镜规则与时长 `storyboard.go` / `timing.go`，按视频模型上限切剧情段 `SegmentShotsForVideo`，段提示词素材稿 `segment_prompt.go` 与撰写要求 `segment_writer.go`，参考图方案 `assets.go`）。
+- 纯逻辑：`backend/internal/production/`（作品圣经、分集与剧本提示词 `prompts.go`，模型输出解析 `parse.go`，分镜规则与时长 `storyboard.go` / `timing.go`，按视频模型上限切剧情段 `SegmentShotsForVideo`，段提示词素材稿 `segment_prompt.go` 与撰写要求 `segment_writer.go`，参考图方案 `assets.go`，用户分镜表直接导入 `storyboard_import.go`，原文台词逐句核对 `dialogue_check.go`）。
 - 调度循环：`backend/internal/app/drama_orchestrator.go`（同步任务结果 → 推导工作 → 按优先级派发，租约保证单项目单循环；成片时间线由各段视频拼接）；剧情段视频请求的组装、提交、回写与最后一帧抽取在 `drama_segment_video.go`（`prepareDramaSegment` 同时供预览与提交使用）。
-- 服务与用户操作：`app/drama_service.go`（创建、摘要、单集详情与剧情段视图）、`drama_actions.go`（审阅、镜头编辑、段提示词与段视频、设定重做、放行）、`drama_models.go`（模型目录、视频能力 `dramaVideoProfile`、报价预估）；类型在 `drama_types.go`。
-- 持久化：`model/models_drama.go`、`repository/repository_drama.go`（调度与用户写入均为列级条件更新）；迁移 v61–v67 在 `database/migrations.go`。HTTP：`handler/drama_routes.go`。
+- 服务与用户操作：`app/drama_service.go`（创建、摘要、单集详情与剧情段视图）、`drama_actions.go`（审阅、镜头编辑、段提示词与段视频、设定重做、放行）、`drama_editing.go`（逐集追加、原文与素材类型修改、插入 / 删除镜头、上传并锁定参考图、台词核对）、`drama_models.go`（模型目录、视频能力 `dramaVideoProfile`、报价预估）；类型在 `drama_types.go`。
+- 持久化：`model/models_drama.go`、`repository/repository_drama.go`（调度与用户写入均为列级条件更新）；迁移 v61–v67、v71、v73 在 `database/migrations.go`。HTTP：`handler/drama_routes.go`。
 - 渲染：`app/timeline_render_plan.go` / `task_render.go` 用 ffmpeg 合成，保留段视频自带的声音。
 - 前端：`web/src/services/api/drama.ts`；`pages/projects/index.tsx`（作品列表）、`create.tsx`（上传与预估）、`detail.tsx`（制作台）。制作台子组件在 `pages/projects/studio/`：`storyboard.tsx`（剧情段卡片）、`segment-dialog.tsx`（剧情段弹窗：段视频、生成依据、镜头脚本与完整视频提示词）、`segment-parts.tsx`（状态、视频与生成依据共用组件）、`panels.tsx`（设定、待处理、制作设置）、`final-view.tsx`、`script-view.tsx`、`job-detail.tsx`；样式 `drama.css`。模型选择复用通用 `ModelPicker`（`drama-model-picker.tsx`、`lib/drama/model-choice.ts`）。
 - 回归：`internal/production/production_test.go`、`app/drama_orchestrator_test.go`、`app/drama_storyboard_test.go`、`app/drama_assets_test.go`、`web/src/lib/drama/*.test.ts`。
+- 精修画布（后端）：`app/drama_canvas.go`（作品的精修画布、投送媒体的素材登记、版本记录与来源、段视频采用与尾帧补抽、画布花费计入预算 `dramaTotalSpent`、画布任务预算闸门 `ensureDramaCanvasBudget`）、`repository/repository_drama_canvas.go`（画布花费汇总、段视频采用事务、短剧持有资源的引用 `DramaResourceReferences`）；尾帧抽取与视频时长读取在 `drama_segment_video.go`（`saveDramaTailFrame`、`inspectDramaVideo`）。Agent 工具 `drama_get_context` / `drama_adopt_canvas_media` 在 `app/cloud_agent_drama.go`，只在 `Scope.Drama`（运行画布关联短剧）时暴露。
+- 精修画布（前端）：投送的纯函数在 `web/src/lib/canvas/drama-canvas-projection.ts`（节点、段框、时间线、过期判断、分镜转短剧原文），副作用在 `web/src/services/drama-canvas.ts`（找到或新建精修画布、跳转参数、素材登记、分镜画布关联到新短剧）；画布页编排 `pages/canvas/use-canvas-drama.ts`，侧栏 `components/canvas/canvas-drama-sidebar.tsx`，采用弹窗 `components/canvas/canvas-drama-adopt-modal.tsx`。查询键 `lib/drama/drama-query-keys.ts` 与文案 `lib/drama/drama-format.ts` 由制作台和画布共用；制作台入口 `studio/use-studio.ts` 的 `useOpenDramaCanvas`，版本记录 `studio/take-list.tsx`。
 
 ## 画布实时会话
 
@@ -73,9 +75,11 @@ description: 从产品功能快速定位主要代码入口
 | 参数结构与 schema | `internal/agent/tool/{read_args,schema}.go` 由 8 个读取参数类型生成 schema，实际解码使用同一类型；其余工具保留相邻契约。`app/cloud_agent_tools.go` 输出供应商 schema，golden 测试守工具顺序和字段语义 |
 | 画布事实与节点能力 | `internal/canvas/capability/` 注册能力，`app/cloud_agent_canvas_state.go` 提供分页/定向读取；`cloud_agent.go` 只给焦点节点有界摘要及一跳邻居。旧 CanvasIntelligence、平行 CanvasToolRegistry 与无执行器的标准工具代码已移除 |
 | 单一行为策略 | `internal/prompts/agent-system-policy.md` 为 v17 运行资源；`prompts/agent_policy.go` 只 embed 此文件，并派生媒体标识；`app/cloud_agent_policy.go` 编译能力、权限等事实。独立媒体策略文件已移除，`prompts/AGENTS.md` 仅是维护约定，不拼入模型输入 |
-| 个人经验与注入 | `internal/agent/memory/candidate.go` 保存带工具证据的候选；`app/cloud_agent_lessons.go` 只在成功收尾后提交待审，并按当前步骤召回最多 5 条、JSON 正文 6 KiB 的相关经验；`cloud_agent_memory_injection.go` 在模型任务入队时识别真实注入条目，`repository/agent_lesson.go` 持久化 |
-| 压缩提案与历史恢复 | `app/cloud_agent_memory_compact.go` 负责有界轮转批次和任务，`cloud_agent_memory_proposal*.go` 生成/展示提案并接收决定；`repository/agent_memory_proposal*.go` / `agent_memory_revision.go` 做归属与版本 CAS 事务，`handler/agent_memory_proposal.go` 接线。模型与 schema 58 见数据库专题 |
-| 用户设置与证据预览 | `web/src/pages/settings/agent-memory-pane.tsx` 管理记忆及来源证据，`agent-memory-proposals.tsx` 展示 before/after、批准拒绝和恢复；`services/api/agent-memories.ts` 是类型化调用面。管理员列表仍在 `pages/admin/components/agent-lessons-panel.tsx`，不能代批 |
+| 长期记忆文件 | `app/cloud_agent_memory_document.go` 负责条目校验、快照文本、首次创建与旧经验导入；`cloud_agent_memory_document_write.go` 执行 `memory_update` 的整批操作（auto 直接生效、review 写待确认）；`cloud_agent_memory_document_api.go` 提供读取、保存、模式、修订、撤销与确认；`cloud_agent_tools_memory.go` 是工具处理器；`repository/agent_memory_document.go` 做 revision CAS 和修订裁剪；`handler/agent_memory_document.go` 接线。表结构见数据库 Schema 76 |
+| 技能自动发现与市场推荐 | `app/cloud_agent_skill_catalog.go` 冻结本轮技能范围，生成有预算的目录与技能提示；`skills/skills_agent.go` / `repository/skills_agent.go` 读目录行、使用方式与读取次数；`skills/skills_recommendations.go` + `seed/recommendations.json` 是行业推荐；`app/cloud_agent_tools_memory.go` 内的 `skill_market_search` / `skill_recommend` 只返回候选和发出安装卡片事件 |
+| 旧版经验（保留） | `app/cloud_agent_lessons.go`、`cloud_agent_memory_compact.go`、`cloud_agent_memory_proposal*.go`、`repository/agent_lesson.go` 等保留读写、导出和手动压缩接口；Agent 不再注入或写入，压缩调度不再启动，计划后续移除 |
+| 前端记忆与技能 | `web/src/pages/settings/agent-memory-pane.tsx` 管理记忆文件、模式和修订；`services/api/agent-memory.ts` 是调用面；聊天里的记忆与安装卡片在 `components/canvas/canvas-cloud-agent-memory-cards.tsx`；行业推荐弹窗在 `components/skills/skill-recommendations-modal.tsx`；管理员只读查看在 `pages/admin/components/agent-memory-documents-panel.tsx` |
+| 回复选项卡片与停靠 | `web/src/lib/canvas/agent-reply-options.ts` 识别回复末尾的编号选项，`components/canvas/canvas-agent-reply-options.tsx` 渲染卡片（`ask_user` 单选共用）；`lib/canvas/agent-panel-dock.ts`、`components/canvas/use-agent-panel-dock.ts` 管理右侧停靠，`layouts/user-layout.tsx` 为停靠面板让出宽度 |
 | 画布逐步撤销 | `app/cloud_agent_mutation.go` 生成有界快照及撤销凭据，`cloud_agent_canvas_events.go` 写 `canvas_updated.undo`，`cloud_agent_undo.go` 校验最新变更/哈希并幂等撤销；前端 `lib/canvas/agent-canvas-undo.ts` 与聊天卡片按凭据中的原运行和画布提交 |
 | 评测与架构守卫 | `internal/agent/architecture/` 守 Agent 依赖方向、协议map暴露及复杂度/尺寸存量基线；`backend/.golangci.yml` 接 Agent 域静态检查 |
 
@@ -165,7 +169,7 @@ Pi SDK 执行前的参数校验失败由 `agent-runtime/pi/agent-runtime.mjs` �
 
 ## 后端调用链
 
-AutoDL 画面规格由 `app/model_capability_screen_spec.go` 读取官方插件工作流合同，校验所选分辨率及默认值；`task_creation.go` 在价格选择之前归一化，任务校验与 `provider_video.go` 再次使用同一规则。前端 `lib/video-screen-specs.ts` 管理插件预设、所选规格与工作流切换，`ModelCapabilityEditor` 复用到系统及自定义渠道；无开关或独立草稿。
+AutoDL 画面规格由 `app/model_capability_screen_spec.go` 读取官方插件工作流合同（精确工作流优先，未声明的 ID 回退到 `*` 默认预设），校验所选分辨率及默认值，允许自定义标签；`task_creation.go` 在价格选择之前归一化，任务校验与 `provider_video.go` 再次使用同一规则。前端 `lib/video-screen-specs.ts` 管理插件预设、所选规格与工作流切换，`ModelCapabilityEditor` 复用到系统及自定义渠道；无开关或独立草稿。
 
 ```text
 HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合根）-> 业务域包 -> repository/model
@@ -201,6 +205,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | 管理后台批量操作 | `handler/auth.go` | `internal/app/admin.go`、`repository/admin_audit.go`、`repository/analytics.go` |
 | 管理后台存储资源 | `handler/admin_storage.go` | `internal/app/admin_storage.go`、`repository/admin_storage.go` |
 | 资源与请求策略 | `handler/auth.go`、`handler/security.go` | `internal/platform`、`internal/app/upload_quota.go`、`storage_quota.go`、`coordination.go` |
+| 用户分组与多币种计价 | `handler/admin_user_group_routes.go`、`handler/payment.go`（`/payments/settings`） | `internal/app/user_groups.go`（分组快照、`userGroupAccess` 渠道可见性与价格因子、管理端增删改）、`finance.go`（`groupTierPrices` 换算并写入账单快照）、`model_catalog.go` / `logical_models_catalog.go`（按分组过滤并展示实际单价）、`payment_settings.go`（默认充值货币）、`repository/repository_user_groups.go` |
 | 存储空间套餐与只读 | `handler/storage_guard.go`、`handler/storage_grants.go` | `internal/app/storage_capacity.go`（有效容量、宽限期与只读、扩容赠送/撤销）、`payment_products.go`（商品类型）、`repository/storage_grants.go`、`repository/payment.go`（`grantPaymentStorage`） |
 | 推广中心 | `handler/referral.go` | `internal/app/referral.go`（`referral` 设置、`referralEligible`、注册绑定 `bindReferral`、入账后 `grantReferralCommission`）、`repository/referral.go`（`GrantReferralCommission` 同事务写返佣、流水与余额） |
 | 模型响应拦截 | `handler/response_interception.go`、`handler/custom_proxy.go` | `internal/app/response_interception.go`、`repository/repository.go` |

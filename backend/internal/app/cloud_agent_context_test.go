@@ -137,7 +137,7 @@ func TestCloudAgentUnlimitedBudgetKeepsGenerationTools(t *testing.T) {
 		req.Budget.MaxGenerationTasks = limit
 		req.Budget.MaxVideoSeconds = limit * 100
 		for i := 0; i < 12; i++ {
-			req.SkillIDs = append(req.SkillIDs, strings.Repeat("s", i+1))
+			req.PinnedSkillIDs = append(req.PinnedSkillIDs, strings.Repeat("s", i+1))
 		}
 		if err := validateCloudAgentRequest(&req); err != nil {
 			t.Fatal(err)
@@ -172,16 +172,19 @@ func TestCloudAgentSkillsLoadOnDemandAndPage(t *testing.T) {
 		}
 		ids = append(ids, skill.SkillID)
 	}
-	snapshots, err := s.cloudAgentSkills("user", ids)
+	pool, err := s.cloudAgentBuildSkillPool("user", "写一个故事", nil, defaultCloudAgentContextBudget())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, skill := range snapshots {
-		if skill.Instruction != "" || skill.Files[cloudAgentSkillEntryPath] != "" {
-			t.Fatal("eager skill content")
+	for _, id := range ids {
+		if pool.Versions[id] == "" {
+			t.Fatalf("installed skill missing from the run pool: %s", id)
 		}
 	}
-	state := cloudAgentRuntime{Skills: snapshots}
+	if strings.Contains(pool.Catalog.Text, "中文中文") {
+		t.Fatal("eager skill content in catalog")
+	}
+	state := cloudAgentRuntime{SkillVersions: pool.Versions}
 	call := skillFeedbackCall(ids[0], cloudAgentSkillEntryPath)
 	result, err := cloudAgentReadTool(nil, "user", &state, call, s)
 	if err != nil {
@@ -197,12 +200,15 @@ func TestCloudAgentSkillsLoadOnDemandAndPage(t *testing.T) {
 	if err != nil || result.(map[string]any)["hasMore"] != false {
 		t.Fatalf("continuation failed: %v", err)
 	}
-	if _, err := cloudAgentReadTool(nil, "other-user", &cloudAgentRuntime{Skills: snapshots}, skillFeedbackCall(ids[0], cloudAgentSkillEntryPath), s); err == nil {
+	if _, err := cloudAgentReadTool(nil, "other-user", &cloudAgentRuntime{SkillVersions: pool.Versions}, skillFeedbackCall(ids[0], cloudAgentSkillEntryPath), s); err == nil {
 		t.Fatal("cross-user skill read")
 	}
-	snapshots[0].Hash = "changed"
-	if _, err := cloudAgentReadTool(nil, "user", &cloudAgentRuntime{Skills: snapshots}, skillFeedbackCall(ids[0], cloudAgentSkillEntryPath), s); err == nil {
+	changed := map[string]string{ids[0]: "changed-version"}
+	if _, err := cloudAgentReadTool(nil, "user", &cloudAgentRuntime{SkillVersions: changed}, skillFeedbackCall(ids[0], cloudAgentSkillEntryPath), s); err == nil {
 		t.Fatal("mixed skill version")
+	}
+	if _, err := cloudAgentReadTool(nil, "user", &cloudAgentRuntime{SkillVersions: map[string]string{}}, skillFeedbackCall(ids[0], cloudAgentSkillEntryPath), s); err == nil {
+		t.Fatal("skill outside the frozen run pool was readable")
 	}
 }
 

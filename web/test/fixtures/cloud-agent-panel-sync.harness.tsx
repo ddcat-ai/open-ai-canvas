@@ -180,6 +180,7 @@ mock.module("@/components/canvas/canvas-cloud-agent-panel-parts", () => ({
     },
 }));
 mock.module("@/components/canvas/canvas-agent-skill-library-modal", () => ({ CanvasAgentSkillLibraryModal: () => null }));
+mock.module("@/components/skills/skill-recommendations-modal", () => ({ SkillRecommendationsModal: () => null }));
 mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null }));
 mock.module("@/components/canvas/canvas-cloud-agent-connectors", () => ({ AgentConnectorsBar: () => null }));
 mock.module("@/components/canvas/use-agent-panel-layout", () => ({ useAgentPanelLayout: () => ({ style: {}, pointerHandlers: {}, reset: silent, onResizeKeyDown: silent }) }));
@@ -214,6 +215,12 @@ const focus = async () => {
     await act(async () => {
         window.dispatchEvent(new Event("focus"));
         await settle();
+    });
+};
+// 面板合并写入本机对话缓存；断言缓存前先触发与页面隐藏相同的立即写入（缓存 mock 同步落盘）。
+const persist = async () => {
+    await act(async () => {
+        window.dispatchEvent(new Event("pagehide"));
     });
 };
 async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversation[], initialPending: CloudAgentPendingSubmission | null = null) {
@@ -278,6 +285,7 @@ test("手机空缓存接续同画布桌面会话，审批被另一端处理后�
             observation.event({ eventId: "status", runId: "desktop", seq: 6, type: "run_status", payload: { status: "running", revision: 2 }, createdAt: waiting.updatedAt });
         });
         expect(conversationUI.approval).toBeNull();
+        await persist();
         expect(local.find((item) => item.id === "server")?.lastEventSeq).toBe(6);
         expect(generated).toBe(0);
     } finally {
@@ -325,9 +333,11 @@ test("云端发现不能替换未提交草稿，明确新建后不会重新接�
             await settle();
         });
         expect(composer.prompt).toBe("");
+        await persist();
         expect(local.some((item) => item.id === "phone-draft" && item.draft === "尚未发送的草稿")).toBe(true);
         await focus();
         expect(conversationUI.messages).toHaveLength(0);
+        await persist();
         expect(local.find((item) => item.id === activeId)?.localNewCanvasId).toBe("shared-canvas");
         expect(generated).toBe(0);
     } finally {
@@ -355,6 +365,7 @@ test("旧账号云端请求迟到时不得写入已切换账号的面板", async
             await settle();
         });
         expect(conversationUI.messages.map((item: any) => item.text)).not.toContain("结果-secret");
+        await persist();
         expect(local.some((item) => item.serverConversationId === "shared-session")).toBe(false);
     } finally {
         await mounted.close();
@@ -377,6 +388,7 @@ test("手选同画布较早历史后不被其他会话抢走，但仍能跟随�
         });
         await focus();
         expect(conversationUI.messages.map((item: any) => item.text)).toContain("结果-earlier");
+        await persist();
         expect(local.find((item) => item.id === activeId)?.localSelectedCanvasId).toBe("shared-canvas");
         remote = [{ ...earlier, run: { ...makeRun("earlier-child"), parentId: "earlier" }, messages: [{ id: "new-result", role: "assistant", text: "所选会话的新轮次" }] }, newer];
         await focus();
@@ -395,6 +407,7 @@ test("未知提交的原请求与幂等身份保留，不能因发现云端同�
         expect(pending).toEqual(original);
         expect(composer.prompt).toBe("生成森林");
         expect(conversationUI.messages).toHaveLength(0);
+        await persist();
         expect(activeId).toBe("uncertain");
         expect(generated).toBe(0);
     } finally {
@@ -472,6 +485,7 @@ test("同名多渠道不能自动换到默认收费模型，手动选择后才�
         await focus();
         expect(controls.selectedModel).toBe("");
         expect(composer.submitDisabled).toBe(true);
+        await persist();
         expect(local.find((item) => item.id === activeId)?.model).toBe("local-agent-test");
         await act(async () => {
             composer.onPromptChange("等待确认渠道的草稿");
@@ -535,6 +549,7 @@ test("同轮历史已追赶到新水位后，延迟的旧 SSE delta 不会再次
             observation.event({ eventId: "new-seven", runId: "streaming", seq: 7, type: "assistant_delta", payload: { messageId: "live-answer", text: "新内容" }, createdAt: current.updatedAt });
         });
         expect(conversationUI.messages.find((item: any) => item.id === "live-answer")?.text).toBe("完整回答新内容");
+        await persist();
         expect(local.find((item) => item.id === activeId)?.lastEventSeq).toBe(7);
         expect(generated).toBe(0);
     } finally {
@@ -658,6 +673,7 @@ test("手动重新打开当前云端历史时同步水位，旧 SSE 缓冲不会
             observation.event({ eventId: "history-delayed-five", runId: "same-current", seq: 5, type: "assistant_delta", payload: { messageId: "manual-history-answer", text: "重复内容" }, createdAt: current.updatedAt });
         });
         expect(conversationUI.messages.find((item: any) => item.id === "manual-history-answer")?.text).toBe("手动恢复的完整回复");
+        await persist();
         expect(local.find((item) => item.id === activeId)?.lastEventSeq).toBe(6);
         expect(generated).toBe(0);
     } finally {

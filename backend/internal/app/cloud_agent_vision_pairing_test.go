@@ -488,7 +488,6 @@ func TestCloudAgentPendingImagesSurviveCheckpointRoundTrip(t *testing.T) {
 	// 本用例只需要"保存/解码"这条路径，不需要真实运行身份：用空 runID 让事件身份与
 	// 下面那个裸 run（ID 为空）一致，从而绕开运行期请求校验（它只在 run 有 ID 时执行）。
 	cloudAgentToolResult("", state, state.Calls[0], cloudAgentPairingInspection("image-a", "https://example.test/a"), nil)
-	cloudAgentToolResult("", state, state.Calls[1], map[string]any{"ok": true}, nil)
 	if len(state.PendingImageInspections) != 1 {
 		t.Fatalf("expected one buffered inspection, got %d", len(state.PendingImageInspections))
 	}
@@ -510,8 +509,8 @@ func TestCloudAgentPendingImagesSurviveCheckpointRoundTrip(t *testing.T) {
 	if decoded.PendingImageInspections[0].ImageURL != "https://example.test/a" {
 		t.Fatalf("buffered image url was lost: %+v", decoded.PendingImageInspections[0])
 	}
-	// 下一个调用的转移里 flush，图片落在已经入历史的两条 tool 结果之后。
-	cloudAgentFlushPendingImages(&decoded)
+	// 恢复后完成最后一个普通工具，图片落在两条 tool 结果之后。
+	cloudAgentToolResult("", &decoded, decoded.Calls[1], map[string]any{"ok": true}, nil)
 	assertCloudAgentToolCallPairing(t, decoded.Canonical.Messages)
 	imageIndexes := cloudAgentImageMessageIndexes(decoded.Canonical.Messages)
 	if len(imageIndexes) != 1 || imageIndexes[0] != len(decoded.Canonical.Messages)-1 {
@@ -725,12 +724,12 @@ func TestCloudAgentVisionBatchKeepsToolResultsContiguousEndToEnd(t *testing.T) {
 			t.Fatalf("image message appeared before the batch finished (after advance %d): %s",
 				step, cloudAgentDebugMessages(mid.Canonical.Messages))
 		}
-		if step == len(state.Calls)-1 && len(mid.PendingImageInspections) != 2 {
-			t.Fatalf("both buffered inspections must survive the tick boundary, got %d", len(mid.PendingImageInspections))
+		if step == len(state.Calls)-1 {
+			assertPiBatchImages(t, &mid, 2)
 		}
 	}
 
-	// 第四次推进：本批调用都执行完，兜底 flush 把两张图合并成一条 user 消息。
+	// 第四次推进：本批图片已经补送，旧调度器的兜底 flush 不应重复附图。
 	if err := s.advanceCloudAgentByID("user", root.ID); err != nil {
 		t.Fatalf("batch-end advance failed: %v", err)
 	}

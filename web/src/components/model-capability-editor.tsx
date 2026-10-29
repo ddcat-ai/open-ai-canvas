@@ -9,7 +9,7 @@ import { DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, defaultImageCapabilityConf
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
-import { cleanVideoScreenSpecValues, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
+import { cleanVideoScreenSpecValues, findProtocolWorkflow, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 import { Select } from "@/components/ui/base/select";
 
@@ -50,7 +50,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     if (capability === "image") {
         return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} imageParameters={imageParameters} disabled={disabled} section={section} />;
     }
-    const workflow = workflows.find((item) => item.id === model.trim().replace(/^models\//, "") && item.providerId === protocol);
+    const workflow = findProtocolWorkflow(workflows, protocol, model);
     const storedProfile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol, model)).video!;
     const autoDL = protocol === "autodl-comfyui";
     const profile = autoDL ? resolveWorkflowVideoScreenSpec(storedProfile, workflow) : storedProfile;
@@ -715,13 +715,14 @@ function ProtocolParameterCard({ step, title, description, children, className =
 
 function AutoDLScreenSpecFields({ profile, workflow, disabled, onChange }: { profile: VideoCapabilityConfig; workflow?: ModelProtocolWorkflow; disabled: boolean; onChange: (profile: VideoCapabilityConfig) => void }) {
     if (!profile.fixedScreenSpec?.resolutions.length) {
-        return <p className="text-[var(--fs-label)] text-foreground/60">当前插件未声明此工作流的画面规格，请核对上游模型 ID。</p>;
+        return <p className="text-[var(--fs-label)] text-foreground/60">未读取到 AutoDL 插件的分辨率预设，请刷新页面重新加载协议目录；仍出现时请更新 AutoDL 插件到 2.4.0 及以上。</p>;
     }
-    const options = profile.fixedScreenSpec.resolutions;
+    // 预设来自插件；管理员可输入上游工作流支持的其他分辨率标签。
+    const options = cleanVideoScreenSpecValues([...profile.fixedScreenSpec.resolutions, ...profile.resolutions]);
     return (
         <div className="admin-capability-spec-grid">
             <Field label="输出分辨率">
-                <Select ariaLabel="输出分辨率" mode="multiple" className="admin-capability-tags w-full" disabled={disabled} value={profile.resolutions} placeholder="选择分辨率" options={options.map((item) => ({ label: item, value: item }))} onChange={(values: string[]) => {
+                <Select ariaLabel="输出分辨率" mode="tags" className="admin-capability-tags w-full" disabled={disabled} value={profile.resolutions} placeholder="选择预设或输入分辨率后回车" tokenSeparators={[",", "，"]} options={options.map((item) => ({ label: item, value: item }))} onChange={(values: string[]) => {
                     const resolutions = cleanVideoScreenSpecValues(values);
                     const defaultResolution = resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "";
                     onChange(updateWorkflowVideoScreenSpec(profile, workflow, { resolutions, defaultResolution }));

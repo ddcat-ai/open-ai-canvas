@@ -60,9 +60,12 @@ type ChannelModel struct {
 	PriceConfigured              bool                 `json:"priceConfigured" gorm:"index"`
 	Enabled                      bool                 `json:"enabled" gorm:"index"`
 	PriceVersion                 int64                `json:"priceVersion"`
-	CapabilityConfigJSON         string               `json:"-" gorm:"type:text"`
-	CapabilityVersion            int64                `json:"capabilityVersion"`
-	CapabilityConfig             map[string]any       `json:"capabilityConfig,omitempty" gorm:"-"`
+	// PriceCurrency 决定价格档售价的单位：credits 直接是微积分；USD/CNY 是百万分之一货币单位，
+	// 下单时按用户分组兑换比例换算为积分。
+	PriceCurrency        string         `json:"priceCurrency" gorm:"size:16;not null;default:credits"`
+	CapabilityConfigJSON string         `json:"-" gorm:"type:text"`
+	CapabilityVersion    int64          `json:"capabilityVersion"`
+	CapabilityConfig     map[string]any `json:"capabilityConfig,omitempty" gorm:"-"`
 	// CatalogModelKey 记录来自服务商目录的推荐模型 key，便于排查来源。
 	CatalogModelKey string `json:"catalogModelKey" gorm:"size:120;not null;default:''"`
 	// PriceTiers 是系统渠道模型的价格真相。标量价格仅为旧调用与历史数据兼容，

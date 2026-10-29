@@ -20,8 +20,9 @@ test("consecutive reasoning messages share one collapsed entry", () => {
     expect(segments[0]?.kind === "reasoning" ? segments[0].items : []).toHaveLength(2);
 
     const html = renderToStaticMarkup(<AgentReasoningFeed items={messages.slice(0, 2)} theme={canvasThemes.light} />);
-    expect(html).toContain("2 段 · 点击查看");
-    expect(html).toContain('class="agent-reasoning-card"');
+    expect(html).toContain("2 段");
+    expect(html).not.toContain("点击查看");
+    expect(html).toContain('class="agent-activity agent-reasoning"');
     expect(html).not.toContain("agent-reasoning-icon");
     expect(html).not.toContain("lucide-brain-circuit");
     expect(html).not.toContain("is-live");
@@ -38,8 +39,8 @@ test("operations fold into one line that reports only the latest action", () => 
         expect(html).not.toContain("agent-operation-list");
         expect(html).toContain("2 步");
         expect(html).toContain("读取信息");
-        expect(html).toContain('class="agent-operation-icon"');
-        expect(html).toContain("lucide-list");
+        expect(html).toContain('class="agent-activity-glyph"');
+        expect(html).toContain('data-agent-category="read"');
     }
 });
 
@@ -55,7 +56,7 @@ test("messages and reasoning stay free of decorative side icons", () => {
     const live = renderToStaticMarkup(<AgentReasoningFeed items={[{ id: "r1", role: "assistant", text: "正在整理", reasoning: true, streaming: true }]} theme={canvasThemes.light} />);
     expect(live).not.toContain("agent-reasoning-icon");
     expect(live).not.toContain("lucide-brain-circuit");
-    expect(live).toContain("模型正在思考");
+    expect(live).toContain("正在思考");
 });
 
 test("the folded line names the tier it is reporting", () => {
@@ -85,10 +86,13 @@ test("a failed step is marked and expanded instead of hidden behind the folded l
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain("更新画布内容失败");
     expect(html).toContain("agent-operation-list");
-    // 展开的完整记录仍然是原样的工具卡（含任务 ID 与历史步骤），失败那步的文字是红的
+    // 展开的完整记录仍然是原样的工具卡（含任务 ID 与历史步骤）
     expect(html).toContain("已读取画布清单（未查看画面）");
     expect(html).toContain("任务 ID：task-1");
-    expect(html).toContain("#dc2626");
+    // 失败态由 data-agent-tone="error" 与 CSS 的 --status-error 取色，不内联字面色值；展开后的每一步也不渲染状态勾/叉
+    expect(html).toContain('data-agent-tone="error"');
+    expect(html).not.toContain("#dc2626");
+    expect(html).not.toContain("agent-tool-status");
 });
 
 test("the shimmer only runs while the panel says the segment is live", () => {
@@ -101,14 +105,14 @@ test("the shimmer only runs while the panel says the segment is live", () => {
     expect(failedLive).not.toContain("is-live");
 });
 
-test("style contract: no per-step status ticks, vision tint and shimmer stay token-driven", async () => {
+test("style contract: expanded steps stay plain rows, shimmer and ink stay token-driven", async () => {
     const css = await Bun.file(new URL("../src/components/canvas/canvas-cloud-agent.css", import.meta.url)).text();
-    // 展开后的每一步不再渲染状态勾/叉（一列绿勾会把记录读成成绩单）
-    expect(css).toContain(".agent-operation-list .agent-tool-status {");
+    // 展开后的每一步是无边框无内边距的纯文本行（状态勾/叉不渲染，由上面的渲染用例保证）
+    expect(css).toContain(".agent-operation-list .agent-tool-row {");
     // 流光动画只挂在 .is-live 上：任务完成即停
-    expect(css).toContain(".agent-operation-feed.is-live .agent-operation-latest {");
-    // 类别取色走面板注入的主题 token，不写字面值
-    expect(css).toContain("--agent-tool-accent: var(--agent-accent, var(--foreground));");
+    expect(css).toContain(".agent-operation-feed.is-live .agent-operation-latest,");
+    // 文字取色走面板注入的主题 token，不写字面值
+    expect(css).toContain("--agent-activity-ink: var(--agent-ink, var(--foreground));");
 });
 
 test("style contract: 正文 / 工具调用 / 模型思考三档不再制造左侧公共竖轨", async () => {
@@ -125,7 +129,10 @@ test("style contract: 正文 / 工具调用 / 模型思考三档不再制造左�
     const reasoning = block(".agent-reasoning");
     expect(reasoning).not.toContain("margin-left");
     expect(reasoning).not.toContain("border-left");
-    expect(block(".agent-reasoning-summary")).toContain("padding: 8px 0");
+    // 摘要行的悬停底色向两侧各外扩 6px，内边距同步补回，文字仍与正文同一左边缘。
+    const row = block(".agent-activity-row");
+    expect(row).toContain("margin-inline: -6px");
+    expect(row).toContain("padding: 5px 6px");
 
     // ③ 操作流是轻量文本收据，不再绘制竖线或额外左缩进。
     const feed = block(".agent-operation-feed");
