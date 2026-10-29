@@ -101,6 +101,8 @@ type ComposerProps = {
     onReorderAttachments: (attachments: CreationAttachment[]) => void;
     onReplaceAttachment: (targetAttachmentId: string, replacement: CreationAttachment) => void;
     onReplaceReferenceFiles: (targetAttachmentId: string, files: File[]) => void;
+    /** 从系统剪贴板粘贴或拖入文件（图片/视频等）加入参考内容；管线在页面层做模式过滤与上限约束。 */
+    onExternalFiles?: (files: File[]) => void;
     onOpenLibrary: () => void;
     onModeChange: (mode: CreationMode) => void;
     model: string;
@@ -141,6 +143,43 @@ export function CreationComposer(props: ComposerProps) {
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
+    const [externalDragActive, setExternalDragActive] = useState(false);
+    const externalDragDepthRef = useRef(0);
+    const externalFileDrag = (event: React.DragEvent) => Array.from(event.dataTransfer?.types || []).includes("Files");
+    const handleExternalDragEnter = (event: React.DragEvent) => {
+        if (!externalFileDrag(event)) return;
+        event.preventDefault();
+        externalDragDepthRef.current += 1;
+        if (!interactionBusy) setExternalDragActive(true);
+    };
+    const handleExternalDragOver = (event: React.DragEvent) => {
+        // 只有拦下 dragover 浏览器才允许 drop；不拦则文件会在新标签打开。
+        if (!externalFileDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = interactionBusy ? "none" : "copy";
+    };
+    const handleExternalDragLeave = (event: React.DragEvent) => {
+        if (!externalFileDrag(event)) return;
+        externalDragDepthRef.current = Math.max(0, externalDragDepthRef.current - 1);
+        const next = event.relatedTarget as Node | null;
+        if (!next || !event.currentTarget.contains(next)) {
+            externalDragDepthRef.current = 0;
+            setExternalDragActive(false);
+        }
+    };
+    const handleExternalDrop = (event: React.DragEvent) => {
+        setExternalDragActive(false);
+        externalDragDepthRef.current = 0;
+        if (!externalFileDrag(event)) return;
+        // 参考项上的拖拽替换由 textarea 自己处理并已 preventDefault，这里让路避免双份添加。
+        if (event.defaultPrevented || interactionBusy) {
+            event.preventDefault();
+            return;
+        }
+        event.preventDefault();
+        const files = Array.from(event.dataTransfer.files || []);
+        if (files.length) props.onExternalFiles?.(files);
+    };
     const [referenceFilter, setReferenceFilter] = useState<CreationReferenceFilter>("all");
     const [canDragReferences, setCanDragReferences] = useState(false);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
@@ -297,7 +336,9 @@ export function CreationComposer(props: ComposerProps) {
         }
         return undefined;
     };
-    const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
+    const composer = (
+    <div className="creation-composer-drop-zone" data-external-drag={externalDragActive ? "true" : undefined} onDragEnter={handleExternalDragEnter} onDragOver={handleExternalDragOver} onDragLeave={handleExternalDragLeave} onDrop={handleExternalDrop}>
+    <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
         <SpotlightSurface
             className={`creation-chat-composer is-${props.variant}`}
             contentClassName="contents"
@@ -306,7 +347,7 @@ export function CreationComposer(props: ComposerProps) {
         >
         <div className="creation-chat-writing-surface">
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
+                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} onPasteFiles={props.onExternalFiles} />
                 {props.attachments.length ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
                     {trackState.isExpanded ? <div className="creation-reference-panel-header">
                         <div className="creation-reference-filter-tabs" role="group" aria-label="筛选参考内容">
@@ -435,7 +476,8 @@ export function CreationComposer(props: ComposerProps) {
         </footer>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
         </SpotlightSurface>
-    </HoverBorderGradient>;
+    </HoverBorderGradient>
+    </div>);
 
     if (!promptOptimizerOpen) return composer;
 

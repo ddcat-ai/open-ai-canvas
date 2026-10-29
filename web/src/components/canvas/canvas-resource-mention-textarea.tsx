@@ -51,6 +51,8 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     includeAssetLibrary?: boolean;
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
+    /** 粘贴系统剪贴板中的图片/视频文件时回调；未提供时粘贴维持纯文本行为。 */
+    onPasteFiles?: (files: File[]) => void;
     autoLinkEnabled?: boolean;
     mentionMenuLabels?: { connected?: string; search?: string };
 };
@@ -417,6 +419,17 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         props.onCompositionEnd?.(event as unknown as React.CompositionEvent<HTMLTextAreaElement>);
                     }}
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+                        // 系统剪贴板里的图片/视频（网页复制图片、复制文件）作为参考内容交给使用方上传；
+                        // 未提供 onPasteFiles 或剪贴板没有媒体文件时维持纯文本粘贴。
+                        const mediaFiles = Array.from(event.clipboardData?.items || [])
+                            .filter((item) => item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/")))
+                            .map((item) => item.getAsFile())
+                            .filter((file): file is File => Boolean(file));
+                        if (props.onPasteFiles && mediaFiles.length) {
+                            event.preventDefault();
+                            props.onPasteFiles(mediaFiles);
+                            return;
+                        }
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
                     }}
