@@ -897,6 +897,45 @@
     color: var(--pd-t0);
     border-color: var(--pd-b1);
 }
+.previs-inspector-tabs {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--pd-b0);
+    border-radius: var(--pd-r-md);
+    background: var(--pd-s1);
+}
+.previs-inspector-tab {
+    min-width: 0;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--pd-r-sm);
+    background: transparent;
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-sm);
+    font-weight: 500;
+    transition:
+        background 150ms,
+        color 150ms,
+        border-color 150ms;
+}
+.previs-inspector-tab:hover {
+    background: var(--pd-s2);
+    color: var(--pd-t0);
+}
+.previs-inspector-tab.is-active {
+    border-color: var(--pd-a-bd);
+    background: var(--pd-a-bg);
+    color: var(--pd-a0);
+    font-weight: 600;
+}
+.previs-inspector-tab:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: 1px;
+}
 .previs-desk-inspector-content {
     min-height: 0;
     padding: 8px 8px 16px;
