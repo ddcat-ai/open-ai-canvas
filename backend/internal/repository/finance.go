@@ -183,7 +183,8 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 		updates := map[string]any{
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
 			"execution_diagnostic_json": "", "cancellation_source": "", "cancellation_actor_id": "", "cancellation_requested_at": nil,
-			"text_draft": "", "started_at": nil, "completed_at": nil,
+			// 手动重试开启新的路由世代，领取次数也从本轮重新计算。
+			"text_draft": "", "started_at": nil, "completed_at": nil, "attempts": 0,
 			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
 			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
 			"provider_cancel_requested_at": nil, "provider_cancelled_at": nil, "provider_cancel_next_check_at": nil,
