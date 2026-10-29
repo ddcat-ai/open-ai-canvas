@@ -157,21 +157,28 @@
     align-items: center;
     gap: 8px;
     min-width: 217px;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* Logo mark — film-frame motif */
 .previs-desk-logo {
-    display: grid;
-    place-items: center;
-    width: 40px;
+    display: block;
+    min-width: 40px;
+    max-width: 160px;
     height: 26px;
+    padding: 0 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    line-height: 26px;
     border-radius: var(--pd-r-sm);
     background: linear-gradient(135deg, oklch(0.92 0.04 240), oklch(0.98 0.01 240));
     color: var(--pd-s0);
     font-weight: 600;
     font-size: 14px;
     letter-spacing: -0.02em;
-    flex: 0 0 40px;
+    flex: 0 1 auto;
     box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
 }
 

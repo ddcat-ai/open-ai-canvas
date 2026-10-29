@@ -897,8 +897,8 @@ async function shotOutputs(cdp, baseUrl) {
     const reused = await cdp.evaluate(`(async () => {
         const {openPrevisMonitorWindow}=await import('/src/components/canvas/previs/previs-monitor-window.ts');
         let firstClosed=0,secondClosed=0;
-        const first=openPrevisMonitorWindow({renderFrame:()=>null,onClosed:()=>firstClosed++});
-        const second=openPrevisMonitorWindow({renderFrame:()=>null,onClosed:()=>secondClosed++});
+        const first=openPrevisMonitorWindow({brandName:'监看测试',renderFrame:()=>null,onClosed:()=>firstClosed++});
+        const second=openPrevisMonitorWindow({brandName:'监看测试',renderFrame:()=>null,onClosed:()=>secondClosed++});
         const count=window.__previsPopup.document.querySelectorAll('canvas').length;
         first.close();const live=!second.closed();second.close();
         return {count,live,firstClosed,secondClosed};
