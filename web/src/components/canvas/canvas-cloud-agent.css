@@ -2333,6 +2333,11 @@ summary.agent-tool-step:hover {
     background: color-mix(in srgb, var(--foreground) 8%, transparent);
     color: color-mix(in srgb, var(--foreground) 62%, transparent);
 }
+.canvas-agent-approval-operation-previs_scene_create,
+.canvas-agent-approval-operation-previs_apply_patch {
+    background: #e0e7ff;
+    color: #3730a3;
+}
 
 /* 计划步骤是确认卡里的高频信息，压成一行，避免重复标签占满对话区。 */
 .canvas-agent-approval-item-plan_step {

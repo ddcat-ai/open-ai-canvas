@@ -185,9 +185,9 @@ const imageToolDefinitions: ImageToolDefinition[] = [
     },
     {
         id: "previs",
-        label: "生成预演台",
-        section: "3D 预演",
-        description: "让 Agent 识别当前图片并复现为可编辑的 3D 预演台",
+        label: "复现到世界引擎",
+        section: "世界引擎",
+        description: "让 Agent 识别当前图片并复现为世界引擎里可编辑的 3D 场景",
         icon: () => <Layers3 className="size-3.5" />,
         group: "camera",
         order: 50,

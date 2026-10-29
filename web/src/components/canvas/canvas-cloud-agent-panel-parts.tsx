@@ -910,7 +910,11 @@ export function ApprovalPreviewItemView({ item, theme, onFocusNode }: { item: Re
                           ? "计划"
                           : item.operation === "adopt_drama_media"
                             ? "采用到短剧"
-                            : "生成";
+                            : item.operation === "previs_scene_create"
+                              ? "创建场景"
+                              : item.operation === "previs_apply_patch"
+                                ? "修改场景"
+                                : "生成";
     const renderNode = (title: string | undefined, id: string | undefined, typeLabel: string | undefined, role: "source" | "target" | "node") => {
         if (!title) return null;
         const content = (

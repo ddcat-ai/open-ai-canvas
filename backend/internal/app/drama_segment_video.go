@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -109,12 +110,10 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	if err != nil {
 		return DramaSegmentRequest{}, nil, err
 	}
-	request := DramaSegmentRequest{Seconds: production.SnapVideoSeconds(draft.view.DurationMs, profile.Durations), MaxVideoSeconds: profile.maxSeconds(), References: []DramaSegmentReference{}}
+	screen := profile.screen(settings.AspectRatio)
+	request := DramaSegmentRequest{Seconds: production.SnapVideoSeconds(draft.view.DurationMs, profile.Durations), MaxVideoSeconds: profile.maxSeconds(), AspectRatio: settings.AspectRatio, Size: screen.Size, Resolution: screen.Resolution, GenerateAudio: profile.GenerateAudio, References: []DramaSegmentReference{}}
 	if draft.view.DurationMs > int64(request.MaxVideoSeconds)*1000 {
 		return request, nil, errors.New("剧情段超过所选视频模型的时长上限，请调整分镜时长或重新改编")
-	}
-	if !profile.GenerateAudio {
-		return request, nil, errors.New("所选模型未声明同步生成声音能力，请选择支持对白与音效的视频模型")
 	}
 	refs := []any{}
 	header := []string{}
@@ -154,6 +153,11 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		capacity = settings.ReferenceLimit
 	}
 	request.ReferenceCapacity, request.ModelMaxImages = max(capacity, 0), profile.MaxImages
+	if request.Operation == "text_to_video" && len(draft.view.Request.References) > 0 {
+		request.Warning = "所选视频模型不支持参考图生视频，本段按文生视频生成，人物、道具与场景只按文字设定"
+	}
+	// 没随请求发送的参考图按原因分开列出：未就绪的点名，超出上限的说明是哪种上限。
+	var missing, overflow []string
 	for _, reference := range draft.view.Request.References {
 		cast, exists := casts[reference.CastID]
 		if !exists {
@@ -177,14 +181,29 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		} else {
 			header = append(header, reference.Label+"（"+reference.Name+"）未附图，请依据文字设定："+firstNonEmpty(cast.Appearance, cast.Description))
 			ready := cast.ImageStatus == model.DramaMediaReady && cast.ImageResourceID != ""
-			if ready && capacity <= 0 && settingLimited {
+			switch {
+			case !ready:
+				missing = append(missing, reference.Label+" "+reference.Name+"（"+dramaCastImageState(cast)+"）")
+			case settingLimited:
 				request.ReferenceLimited = true
-				request.Warning = fmt.Sprintf("本段引用 %d 个设定，按每段最多 %d 张参考图发送，其余按文字设定；可在生成依据里手动调整", len(draft.view.Request.References), settings.ReferenceLimit)
-			} else if request.Warning == "" {
-				request.Warning = "部分参考图未就绪或超出模型上限，详见参考图列表"
+			default:
+				overflow = append(overflow, reference.Label+" "+reference.Name)
 			}
 		}
 		request.References = append(request.References, reference)
+	}
+	if request.Warning == "" {
+		notes := []string{}
+		if len(missing) > 0 {
+			notes = append(notes, "参考图未就绪，本段按文字设定生成："+strings.Join(missing, "、")+"；重新生成参考图后再生成本段，形象更一致")
+		}
+		if request.ReferenceLimited {
+			notes = append(notes, fmt.Sprintf("本段引用 %d 个设定，按每段最多 %d 张参考图发送，其余按文字设定；可在生成依据里手动调整", len(draft.view.Request.References), settings.ReferenceLimit))
+		}
+		if len(overflow) > 0 {
+			notes = append(notes, fmt.Sprintf("超出视频模型参考图上限（%d 张，含首帧），按文字设定生成：%s", profile.MaxImages, strings.Join(overflow, "、")))
+		}
+		request.Warning = strings.Join(notes, "；")
 	}
 	request.Header = strings.Join(header, "\n")
 	// 正文里的“参考图N”必须对应本段的参考图；换参考图后手写的提示词可能还留着旧编号。
@@ -192,7 +211,22 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		request.UnknownReferences = unknown
 		request.Warning = fmt.Sprintf("提示词里的 %s 不是本段的参考图（本段共 %d 张），生成前请改成正确的编号", strings.Join(unknown, "、"), len(request.References))
 	}
+	// 给不出作品画幅时不提交：上游会按自己的默认画幅（多为横屏）出片，花了钱也用不上。
+	if screen.Issue != "" {
+		return request, refs, errors.New(screen.Issue)
+	}
 	return request, refs, nil
+}
+
+// dramaCastImageState 是没能随请求发送的参考图当前状态，写进段视频的限制说明。
+func dramaCastImageState(cast model.DramaCast) string {
+	switch cast.ImageStatus {
+	case model.DramaMediaFailed:
+		return "生成失败"
+	case model.DramaMediaQueued, model.DramaMediaRunning:
+		return "生成中"
+	}
+	return "未生成"
 }
 
 func (s *Service) dramaResourceReference(id, name, role string) (map[string]any, error) {
@@ -277,7 +311,9 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 		if previous != nil {
 			metadata["videoStartFrameNodeId"] = "first-frame"
 		}
-		config := map[string]any{"videoSeconds": itoa(request.Seconds), "size": r.settings.AspectRatio, "videoGenerateAudio": "true"}
+		// 画面参数与声音开关取自预演：比例或分辨率标签按模型能力合同换算，不出声的模型显式关闭声音。
+		config := map[string]any{"videoSeconds": itoa(request.Seconds), "videoGenerateAudio": strconv.FormatBool(request.GenerateAudio)}
+		dramaVideoScreen{Size: request.Size, Resolution: request.Resolution}.apply(config)
 		prompt := strings.TrimSpace(request.Header + "\n\n" + firstNonEmpty(segment.VideoPromptOverride, segment.VideoPrompt))
 		payload, _ := json.Marshal(dramaRevisionPayload{Revision: segment.Revision, Seconds: request.Seconds})
 		job.PayloadJSON = string(payload)

@@ -196,19 +196,37 @@ func (s StoryboardSettings) LineTarget(episodeSeconds int) int {
 	return max(1, int(math.Round(float64(episodeSeconds)/s.LineEverySeconds())))
 }
 
-// ShotMs 计算镜头时长：剧本建议按节奏夹到上下限内，台词只会把镜头拉长、不会截断。
+// ShotMs 计算模型写的镜头时长：剧本建议按节奏夹到上下限内，台词只会把镜头拉长、不会截断。
 func (s StoryboardSettings) ShotMs(hintSeconds float64, dialogue string) int64 {
 	low, high := s.BoundsMs()
 	target := int64(math.Round(hintSeconds * 1000))
 	if target <= 0 {
 		target = DefaultShotMs
 	}
-	target = max(low, min(high, target))
-	if dialogue = strings.TrimSpace(dialogue); dialogue != "" {
-		spoken := int64(float64(len([]rune(dialogue)))/charsPerSecond*1000) + s.DialoguePauseMs()
-		if spoken > target {
-			target = min(spoken, int64(MaxStoryboardShotSeconds)*1000)
-		}
+	return s.fitDialogue(max(low, min(high, target)), dialogue)
+}
+
+// ImportedShotMs 计算用户分镜里的镜头时长：写了秒数就按写的执行（与手动改时长同为 1–60 秒），
+// 不按镜头节奏夹紧；没写时按节奏规则估算。台词同样只会把镜头拉长，保证逐字台词说得完。
+func (s StoryboardSettings) ImportedShotMs(seconds float64, dialogue string) int64 {
+	if seconds <= 0 {
+		return s.ShotMs(0, dialogue)
+	}
+	target := max(1000, min(int64(MaxStoryboardShotSeconds)*1000, int64(math.Round(seconds*1000))))
+	return s.fitDialogue(target, dialogue)
+}
+
+// SpokenMs 是说完一句台词所需的时长（含气口）；没有台词为 0。
+func (s StoryboardSettings) SpokenMs(dialogue string) int64 {
+	if dialogue = strings.TrimSpace(dialogue); dialogue == "" {
+		return 0
+	}
+	return int64(float64(len([]rune(dialogue)))/charsPerSecond*1000) + s.DialoguePauseMs()
+}
+
+func (s StoryboardSettings) fitDialogue(target int64, dialogue string) int64 {
+	if spoken := s.SpokenMs(dialogue); spoken > target {
+		target = min(spoken, int64(MaxStoryboardShotSeconds)*1000)
 	}
 	return target
 }

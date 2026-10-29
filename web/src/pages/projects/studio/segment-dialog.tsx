@@ -260,7 +260,7 @@ function SegmentToolbar({
     return (
         <section className="drama-sdx-toolbar" aria-label="生成设置">
             <div className="drama-sdx-toolbar-row">
-                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" />
+                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} />
                 <Tooltip title={segment.request.maxVideoSeconds ? `按本段镜头时长生成；模型单次最长 ${segment.request.maxVideoSeconds} 秒` : "按本段镜头时长生成"}>
                     <span className="drama-sdx-chip">{segment.request.seconds ? `${segment.request.seconds}s` : secondsLabel(segment.durationMs)}</span>
                 </Tooltip>
@@ -488,6 +488,8 @@ function AssetChip({
     );
 }
 
+type ReceiptRow = { tone: "ok" | "warn" | "info"; label: string; value: ReactNode };
+
 /** 生成依据回执：本段实际会发送什么、按什么方式生成；与提交时同一函数计算。 */
 function SegmentReceipt({ segment }: { segment: DramaSegment }) {
     const { request } = segment;
@@ -495,11 +497,19 @@ function SegmentReceipt({ segment }: { segment: DramaSegment }) {
     const sent = request.references.filter((ref) => ref.sent).length;
     const first = segment.index === 0 && !request.firstFrameResourceId && !request.firstFramePending;
     const promptText = segment.custom ? "已手动改写" : { none: "未撰写", queued: "排队撰写", running: "撰写中", ready: "已就绪", stale: "已过期，需要重新撰写", failed: "撰写失败" }[segment.promptStatus];
-    const rows: Array<{ tone: "ok" | "warn" | "info"; label: string; value: ReactNode }> = [
+    // 读到视频模型能力时才有画面与声音参数（aspectRatio 与它们一起填写）。
+    const outputRows: ReceiptRow[] = request.aspectRatio
+        ? [
+              { tone: request.size || request.resolution ? "ok" : "warn", label: "画面", value: request.resolution ? `${request.aspectRatio}（按 ${request.resolution} 出片）` : request.size ? request.aspectRatio : `${request.aspectRatio}（所选模型给不出这个画幅）` },
+              { tone: request.generateAudio ? "ok" : "warn", label: "声音", value: request.generateAudio ? "模型同步生成对白与音效" : "所选模型不出声，本段视频没有对白与音效" },
+          ]
+        : [];
+    const rows: ReceiptRow[] = [
         { tone: sent === references ? "ok" : "warn", label: "参考图实发", value: `${sent}/${references} 张${references > sent ? "（未附图的按文字设定生成）" : ""}` },
         { tone: first || request.firstFrameResourceId ? "ok" : "warn", label: "首帧", value: first ? "开场段，无首帧" : request.firstFrameResourceId ? `第 ${segment.index} 段视频最后一帧` : `等第 ${segment.index} 段视频生成` },
         { tone: "info", label: "生成方式", value: OPERATION_LABEL[request.operation] },
         { tone: "info", label: "时长", value: `${request.seconds || Math.round(segment.durationMs / 1000)} 秒${request.maxVideoSeconds ? `（模型单次最长 ${request.maxVideoSeconds} 秒）` : ""}` },
+        ...outputRows,
         { tone: "info", label: "视频模型", value: segment.videoModel?.label || "作品默认" },
         { tone: promptReady(segment) ? "ok" : "warn", label: "提示词", value: promptText },
     ];

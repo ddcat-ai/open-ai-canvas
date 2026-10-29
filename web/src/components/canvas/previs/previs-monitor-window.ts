@@ -26,7 +26,7 @@ export function openPrevisMonitorWindow(input: { renderFrame: () => PrevisMonito
     monitorSessions.get(monitor)?.();
     const doc = monitor.document;
     doc.body.replaceChildren();
-    doc.title = "影策预演台 · 镜头监看";
+    doc.title = "影策世界引擎 · 镜头监看";
     // 独立文档拿不到主站 token，这里只用纯黑监看底色与白色文字。
     doc.body.style.cssText = "margin:0;background:#000;color:#fff;font:12px/1.4 system-ui,sans-serif;overflow:hidden;display:grid;place-items:center;height:100vh;";
     const canvas = doc.createElement("canvas");

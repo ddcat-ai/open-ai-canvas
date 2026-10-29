@@ -128,10 +128,10 @@ describe("用户隔离", () => {
     });
 
     test("空 scope 一律硬失败，绝不回落到默认账号", async () => {
-        await expect(loadPrevisOnboardingProgress("")).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(loadPrevisOnboardingProgress("   ")).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(savePrevisOnboardingProgress("", ACTIVE)).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(advancePrevisOnboarding("", ACTIVE, "next")).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(loadPrevisOnboardingProgress("")).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(loadPrevisOnboardingProgress("   ")).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(savePrevisOnboardingProgress("", ACTIVE)).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(advancePrevisOnboarding("", ACTIVE, "next")).rejects.toThrow("缺少世界引擎引导的用户 scope");
     });
 
     test("存储层失败向上抛，不伪装成初始进度", async () => {
@@ -299,16 +299,16 @@ describe("推进即落盘", () => {
 describe("scope 归一化与并发写锁", () => {
     test("回归：注入 storage 时空白 scope 依旧硬失败，不因为跳过默认 localforage 分支而漏检", async () => {
         const store = memoryStorage();
-        await expect(loadPrevisOnboardingProgress("   ", store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(savePrevisOnboardingProgress("", ACTIVE, store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(advancePrevisOnboarding(" ", ACTIVE, "next", store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(resetPrevisOnboardingProgress("\t", store.storage)).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(loadPrevisOnboardingProgress("   ", store.storage)).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(savePrevisOnboardingProgress("", ACTIVE, store.storage)).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(advancePrevisOnboarding(" ", ACTIVE, "next", store.storage)).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(resetPrevisOnboardingProgress("\t", store.storage)).rejects.toThrow("缺少世界引擎引导的用户 scope");
         expect(store.writes).toEqual([]);
     });
 
     test("advance 对无变化的动作也无条件校验 scope，不因提前返回而漏检", async () => {
-        await expect(advancePrevisOnboarding("", ACTIVE, "back")).rejects.toThrow("缺少预演台引导的用户 scope");
-        await expect(advancePrevisOnboarding("   ", progressAt("apply", "completed"), "next")).rejects.toThrow("缺少预演台引导的用户 scope");
+        await expect(advancePrevisOnboarding("", ACTIVE, "back")).rejects.toThrow("缺少世界引擎引导的用户 scope");
+        await expect(advancePrevisOnboarding("   ", progressAt("apply", "completed"), "next")).rejects.toThrow("缺少世界引擎引导的用户 scope");
     });
 
     test("scope 前后空白归一化，与已裁剪的 scope 共用同一把生产键，互不分裂", async () => {
@@ -449,7 +449,7 @@ describe("引导浮层契约", () => {
 
     test("非阻塞浮层：region 语义，不是 dialog，也没有遮罩与焦点陷阱", () => {
         expect(code).toContain("<section");
-        expect(code).toContain('aria-label="预演台上手引导"');
+        expect(code).toContain('aria-label="世界引擎上手引导"');
         expect(code).not.toContain('role="dialog"');
         expect(code).not.toContain("aria-modal");
         expect(code).not.toContain("Modal");

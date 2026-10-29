@@ -209,7 +209,7 @@ export async function recordCanvas(source: PrevisCaptureSource, duration: number
             };
             onAbort = () => stop(new Error("录制已取消"));
             onHidden = () => {
-                if (document.hidden) stop(new Error("录制已中止：请保持预演台标签页可见"));
+                if (document.hidden) stop(new Error("录制已中止：请保持世界引擎标签页可见"));
             };
             activeRecorder.ondataavailable = (event) => {
                 if (event.data.size) chunks.push(event.data);

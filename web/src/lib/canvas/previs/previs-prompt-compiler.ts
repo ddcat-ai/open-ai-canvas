@@ -1,8 +1,10 @@
-import type { PrevisCamera, PrevisEnvironment, PrevisObject, PrevisScene, PrevisShot, PrevisWorld } from "@/types/previs";
+import type { PrevisCamera, PrevisEnvironment, PrevisMotionPath, PrevisObject, PrevisScene, PrevisShot, PrevisWorld } from "@/types/previs";
 import { previsActorArchetypeLabel, previsColorLabel, previsPoseLabel } from "@/lib/canvas/previs/previs-scene";
 import { resolvePrevisCatalogProp, resolvePrevisLayoutTemplate } from "@/lib/canvas/previs/previs-prop-catalog";
 import { formatPrevisTimeOfDay, PREVIS_GROUND_OPTIONS, PREVIS_WEATHER_OPTIONS } from "@/lib/canvas/previs/previs-world";
 import { previsActorPositionAt, resolvePrevisTravelStyle } from "@/lib/canvas/previs/previs-travel";
+import { previsCameraMovePhrase, resolvePrevisCameraTechnique } from "@/lib/canvas/previs/previs-camera-techniques";
+import { planPrevisMotionPath, PREVIS_PATH_EASINGS } from "@/lib/canvas/previs/previs-motion-path";
 
 const shotSizeLabels: Record<PrevisShot["shotSize"], string> = {
     extreme_wide: "大远景",
@@ -30,13 +32,16 @@ export function compilePrevisPrompt(scene: PrevisScene, shot: PrevisShot) {
     const camera = scene.cameras.find((item) => item.id === shot.cameraId) || scene.cameras[0];
     const visibleObjects = scene.objects.filter((item) => item.visible);
     const actors = visibleObjects.filter((item) => item.kind === "actor" || item.primitive === "character");
+    const moves = camera ? cameraMovesPrompt(scene, camera) : "";
     return [
         shot.prompt.trim(),
-        `镜头设计：${shotSizeLabels[shot.shotSize]}，${cameraMoveLabels[shot.cameraMove]}，时长 ${formatNumber(shot.duration)} 秒。`,
+        `镜头设计：${shotSizeLabels[shot.shotSize]}，${moves ? "运镜按下方时间线进行" : cameraMoveLabels[shot.cameraMove]}，时长 ${formatNumber(shot.duration)} 秒。`,
         camera ? cameraPrompt(camera) : "",
+        moves,
         scene.world ? worldPrompt(scene.world) : environmentPrompt(scene.environment),
         layoutPrompt(visibleObjects),
         travelPrompt(actors),
+        pathPrompt(shot, visibleObjects, camera),
         actors.length ? `角色原型与颜色映射：${actors.map((actor) => `${previsActorArchetypeLabel(actor.archetype)}${actor.name}（${actor.color}）`).join("；")}。生成视频时保持每个角色的体型、轮廓和身份稳定。` : "",
         visibleObjects.some((item) => item.kind !== "layout") ? `空间调度：${visibleObjects.filter((item) => item.kind !== "layout").map(objectPrompt).join("；")}。` : "",
         assetReferencePrompt(scene),
@@ -90,6 +95,51 @@ function travelPrompt(actors: PrevisObject[]) {
         }),
     );
     return lines.length ? `人物位移：${lines.join("；")}。移动方向、速度与时长与预演一致。` : "";
+}
+
+const FLYING_TRAVELS = new Set(["fly", "sword_fly", "float"]);
+
+/** 运镜时间线：每段「起止秒 + 手法短语」；跟拍飞行 / 御剑的人物时补一句机位随之升空。 */
+function cameraMovesPrompt(scene: PrevisScene, camera: PrevisCamera) {
+    const moves = (camera.moves ?? []).filter((move) => resolvePrevisCameraTechnique(move.technique)).toSorted((left, right) => left.start - right.start);
+    if (!moves.length) return "";
+    const lines = moves.map((move) => {
+        let phrase = previsCameraMovePhrase(move, scene);
+        if (move.technique === "follow" && move.subjectId) {
+            const subject = scene.objects.find((item) => item.id === move.subjectId);
+            const flight = subject?.travels?.find((travel) => FLYING_TRAVELS.has(travel.style) && travel.start < move.start + move.duration && move.start < travel.start + travel.duration);
+            if (flight) phrase += `，${subject?.name}${resolvePrevisTravelStyle(flight.style).label}升空时机位一起升空、保持跟随`;
+        }
+        return `${formatNumber(move.start)}–${formatNumber(move.start + move.duration)} 秒${phrase}`;
+    });
+    return `运镜：${lines.join("；")}。机位运动的方向、幅度与节奏与预演一致。`;
+}
+
+/** 路径动画：起止时间、途经点数、运动规律、停留与最高离地高度。 */
+function pathPrompt(shot: PrevisShot, objects: PrevisObject[], camera?: PrevisCamera) {
+    const describe = (name: string, path: PrevisMotionPath) => {
+        let plan;
+        try {
+            plan = planPrevisMotionPath(path, shot.duration);
+        } catch {
+            return "";
+        }
+        if (plan.stationary) return "";
+        const first = path.points[0];
+        const last = path.points[path.points.length - 1];
+        const law = PREVIS_PATH_EASINGS.find((item) => item.value === (path.easing ?? "linear"))?.label ?? "匀速";
+        const top = Math.max(...path.points.map((point) => point[1]));
+        const holds = (path.holds ?? []).map((value, index) => (value > 0 ? `在第 ${index + 1} 个途经点停留 ${formatNumber(value)} 秒` : "")).filter(Boolean);
+        return [
+            `${name} 在 ${formatNumber(plan.start)}–${formatNumber(plan.end)} 秒沿${path.curve ? "平滑曲线" : "折线"}路径${law}移动，经过 ${path.points.length} 个途经点，从 (${formatNumber(first[0])}, ${formatNumber(first[2])}) 到 (${formatNumber(last[0])}, ${formatNumber(last[2])})，全长约 ${formatNumber(plan.length)} 米`,
+            top > 0.05 ? `离地高度在 ${formatNumber(Math.min(...path.points.map((point) => point[1])))}–${formatNumber(top)} 米之间变化` : "",
+            ...holds,
+        ]
+            .filter(Boolean)
+            .join("，");
+    };
+    const lines = [...objects.filter((object) => object.motionPath).map((object) => describe(object.name, object.motionPath!)), camera?.motionPath ? describe(`摄影机${camera.name}`, camera.motionPath) : ""].filter(Boolean);
+    return lines.length ? `路径运动：${lines.join("；")}。速度变化、停顿与高度起伏与预演一致。` : "";
 }
 
 function assetReferencePrompt(scene: PrevisScene) {

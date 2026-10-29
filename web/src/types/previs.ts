@@ -85,6 +85,59 @@ export type PrevisActorTravel = {
     height?: number;
 };
 
+/**
+ * 运镜手法 ID；定义见 lib/canvas/previs/previs-camera-techniques.ts，
+ * 后端 cloud_agent_previs_camera.go 用同一份 ID 与参数范围校验 Agent 写入。
+ */
+export type PrevisCameraTechnique =
+    | "push_in"
+    | "pull_out"
+    | "dolly_zoom_out"
+    | "dolly_zoom_in"
+    | "zoom_in"
+    | "zoom_out"
+    | "pan_left"
+    | "pan_right"
+    | "tilt_up"
+    | "tilt_down"
+    | "whip_pan_left"
+    | "whip_pan_right"
+    | "roll"
+    | "truck_left"
+    | "truck_right"
+    | "pedestal_up"
+    | "pedestal_down"
+    | "crane_up"
+    | "crane_down"
+    | "orbit_left"
+    | "orbit_right"
+    | "follow"
+    | "look_at"
+    | "handheld"
+    | "shake";
+
+/** 跟拍时摄影机相对主体的方位：后方、前方（倒退跟拍）、左右两侧、俯拍、过肩、主观视角。 */
+export type PrevisCameraFollowSide = "behind" | "front" | "left" | "right" | "above" | "shoulder" | "pov";
+
+/** 运镜参数：数值（米、度、毫米、秒、强度）或跟拍方位。省略的键按场景自动取值。 */
+export type PrevisCameraMoveParams = Partial<Record<"distance" | "angle" | "height" | "rise" | "focalLength" | "lag" | "aim" | "intensity", number>> & { side?: PrevisCameraFollowSide };
+
+/**
+ * 摄影机的一段运镜：从 start 起 duration 秒内完成，结束后保持终点机位。
+ * 多段按开始时间依次叠加，后一段从前一段当时的机位继续；手持、震动是只在时间窗内生效的叠加层。
+ */
+export type PrevisCameraMoveSegment = {
+    id: string;
+    technique: PrevisCameraTechnique;
+    start: number;
+    duration: number;
+    /** 运动规律；省略为缓入缓出。 */
+    easing?: PrevisPathEasing;
+    /** 跟拍、跟摇必填；环绕、希区柯克变焦可选（给了就围绕 / 盯住这个对象）。 */
+    subjectId?: string;
+    params?: PrevisCameraMoveParams;
+};
+
 /** 用户在视口里右键标记的坐标点（A、B、C…），Agent 可按标签引用。 */
 export type PrevisMarker = {
     id: string;
@@ -92,11 +145,38 @@ export type PrevisMarker = {
     position: PrevisVec3;
 };
 
+/** 运动规律：匀速、加速（缓入）、减速（缓出）、缓入缓出。 */
+export type PrevisPathEasing = "linear" | "ease_in" | "ease_out" | "smooth";
+
+/**
+ * 路径动画：途经点 + 速率 + 运动规律，由 previs-motion-path.ts 展开成 transform 关键帧。
+ * 点的 Y 是离地高度（米，地面为 0）：演员写进关键帧的 lift，摄影机与道具直接作为位置高度。
+ * 后端 cloud_agent_previs_path.go 用同一套规则展开 Agent 写入的路径。
+ */
 export type PrevisMotionPath = {
     points: PrevisVec3[];
+    /** 速度档（旧数据与 Agent 默认值）；设置了 metersPerSecond 时以米/秒为准。 */
     speed: "slow" | "walk" | "run";
     startDelay: number;
     orientToPath: boolean;
+    /** 基准速度（米/秒）。 */
+    metersPerSecond?: number;
+    /** 移动总用时（秒，不含停留）；设置后按用时反推速度。 */
+    duration?: number;
+    easing?: PrevisPathEasing;
+    /** 平滑曲线（经过每个途经点）；否则为折线。 */
+    curve?: boolean;
+    /** 每段（第 i 点到第 i+1 点）的速度倍率，默认 1。 */
+    speeds?: number[];
+    /** 到达第 i 个点后停留的秒数，默认 0。 */
+    holds?: number[];
+};
+
+/** 用户画的参考轨迹（不绑定对象），Agent 按标签读取并用到演员或摄影机上。 */
+export type PrevisSketchPath = {
+    id: string;
+    label: string;
+    points: PrevisVec3[];
 };
 
 export type PrevisKeyframe = {
@@ -104,6 +184,8 @@ export type PrevisKeyframe = {
     time: number;
     transform: PrevisTransform;
     easing?: PrevisKeyframeEasing;
+    /** 演员离地高度（米）：演员位置始终贴地，路径高度写在这里，在求值时抬起人偶。 */
+    lift?: number;
 };
 
 export type PrevisFingerBone =
@@ -258,6 +340,8 @@ export type PrevisCamera = {
     far: number;
     keyframes: PrevisKeyframe[];
     motionPath?: PrevisMotionPath;
+    /** 运镜段（推拉摇移、环绕、跟拍…），叠加在 transform 关键帧之上按镜头时间求值。 */
+    moves?: PrevisCameraMoveSegment[];
 };
 
 export type PrevisLight = {
@@ -309,6 +393,8 @@ export type PrevisScene = {
     world?: PrevisWorld;
     /** 右键标记的坐标点。 */
     markers?: PrevisMarker[];
+    /** 画笔或折线画下、未绑定对象的参考轨迹。 */
+    paths?: PrevisSketchPath[];
     gridVisible: boolean;
     objects: PrevisObject[];
     cameras: PrevisCamera[];

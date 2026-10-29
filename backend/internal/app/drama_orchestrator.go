@@ -176,7 +176,13 @@ func (r *dramaRun) syncJobs() error {
 		job := &jobs[i]
 		if job.Status == model.DramaJobRunning {
 			if err := r.syncRunningJob(job); err != nil {
-				return err
+				var deferred *dramaSyncDeferred
+				if !errors.As(err, &deferred) {
+					return err
+				}
+				// 任务或账单暂时读不到：本作业保持运行、下一轮再读，不按失败或 0 花费落账。
+				// 不中断本轮，前面已回写的作业花费随本轮进度一起保存。
+				slog.Warn("drama job sync deferred", "project", r.project.ID, "job", job.ID, "error", deferred.err)
 			}
 		}
 		if job.Status == model.DramaJobQueued || job.Status == model.DramaJobRunning {
@@ -189,14 +195,27 @@ func (r *dramaRun) syncJobs() error {
 	return nil
 }
 
+// dramaSyncDeferred 表示作业的任务或账单暂时读不到（如数据库繁忙），本轮跳过、下一轮重读。
+type dramaSyncDeferred struct{ err error }
+
+func (e *dramaSyncDeferred) Error() string { return e.err.Error() }
+
 func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 	task, err := r.s.repo.Task(job.TaskID)
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return r.failJob(job, "任务记录丢失")
+	}
+	if err != nil {
+		// 读库出错不等于任务丢失：已付费的生成结果可能还在，不能直接判失败。
+		return &dramaSyncDeferred{err: err}
 	}
 	switch task.Status {
 	case model.TaskStatusSucceeded:
-		job.CostMicrocredits = r.taskCost(task)
+		cost, err := r.taskCost(task)
+		if err != nil {
+			return &dramaSyncDeferred{err: err}
+		}
+		job.CostMicrocredits = cost
 		if !dramaAttemptRecorded(job, task.ID) {
 			r.production.SpentMicrocredits += job.CostMicrocredits
 		}
@@ -212,7 +231,11 @@ func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 		job.Status, job.FinishedAt, job.Error = model.DramaJobSucceeded, &now, ""
 		return r.s.repo.SaveDramaJob(job)
 	case model.TaskStatusFailed, model.TaskStatusCancelled:
-		job.CostMicrocredits = r.taskCost(task)
+		cost, err := r.taskCost(task)
+		if err != nil {
+			return &dramaSyncDeferred{err: err}
+		}
+		job.CostMicrocredits = cost
 		if !dramaAttemptRecorded(job, task.ID) {
 			r.production.SpentMicrocredits += job.CostMicrocredits
 		}
@@ -227,15 +250,22 @@ type dramaResultIssue struct{ message string }
 
 func (e *dramaResultIssue) Error() string { return e.message }
 
-func (r *dramaRun) taskCost(task *model.Task) int64 {
+// taskCost 是任务实际结算的花费；读账单出错时返回错误，由调用方推迟到下一轮，不按 0 记账（否则预算被少算）。
+func (r *dramaRun) taskCost(task *model.Task) (int64, error) {
 	if task.BillingOrderID == "" {
-		return 0
+		return 0, nil
 	}
 	order, err := r.s.repo.BillingOrder(task.BillingOrderID)
-	if err != nil || order == nil || order.Status == model.BillingStatusRefunded {
-		return 0
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
 	}
-	return order.AmountMicrocredits
+	if err != nil {
+		return 0, err
+	}
+	if order.Status == model.BillingStatusRefunded {
+		return 0, nil
+	}
+	return order.AmountMicrocredits, nil
 }
 
 // failJob 让失败落到具体镜头或设定上，进入“待处理”而不是卡住整条流水线。
@@ -830,7 +860,7 @@ func (r *dramaRun) applyScript(job *model.DramaJob, task *model.Task) error {
 	if episode.Stage != model.DramaEpisodeScript || episode.Revision != payload.Revision {
 		return nil
 	}
-	return r.applyScriptShots(episode, scripted, production.ParseScriptCast(text), production.ParseScriptEpisode(text))
+	return r.applyScriptShots(episode, scripted, production.ParseScriptCast(text), production.ParseScriptEpisode(text), false)
 }
 
 // applyDirectStoryboard 用户上传的分镜能直接解析时跳过文本模型，镜头与台词原样入库。返回是否已处理。
@@ -850,7 +880,7 @@ func (r *dramaRun) applyDirectStoryboard(e *model.DramaEpisode) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	if err := r.applyScriptShots(e, scripted, nil, production.ScriptEpisode{}); err != nil {
+	if err := r.applyScriptShots(e, scripted, nil, production.ScriptEpisode{}, true); err != nil {
 		return true, r.s.repo.UpdateDramaEpisodeUser(e.ID, map[string]any{"error": "分镜导入失败：" + err.Error()})
 	}
 	return true, nil
@@ -858,7 +888,12 @@ func (r *dramaRun) applyDirectStoryboard(e *model.DramaEpisode) (bool, error) {
 
 // applyScriptShots 把镜头表写入本集：解析角色、道具与场景引用，按分镜规则计时并切分剧情段。
 // hints 是剧本给出的新设定外观，用于即时建档；info 补齐逐集追加时缺少的梗概。
-func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []production.ScriptShot, hints []production.ScriptCast, info production.ScriptEpisode) error {
+// imported 表示镜头来自用户分镜：写明的时长照写执行，只有模型写的剧本才按镜头节奏夹紧。
+func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []production.ScriptShot, hints []production.ScriptCast, info production.ScriptEpisode, imported bool) error {
+	shotMs := r.settings.Storyboard.ShotMs
+	if imported {
+		shotMs = r.settings.Storyboard.ImportedShotMs
+	}
 	casts, err := r.s.repo.DramaCasts(r.project.ID)
 	if err != nil {
 		return err
@@ -894,23 +929,24 @@ func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []prod
 	}
 	shots := make([]model.DramaShot, 0, len(scripted))
 	for index, item := range scripted {
+		// 剧本列出的人物与道具全部挂到镜头上；每段实际发几张参考图由“每段最多参考图”和模型上限决定，人物优先。
 		castIDs := []string{}
 		for _, name := range item.Characters {
-			if id := resolve(characters, "character", name); id != "" && !containsString(castIDs, id) && len(castIDs) < 4 {
+			if id := resolve(characters, "character", name); id != "" && !containsString(castIDs, id) {
 				castIDs = append(castIDs, id)
 			}
 		}
 		speakerID := resolve(characters, "character", item.Speaker)
-		if speakerID != "" && !containsString(castIDs, speakerID) && len(castIDs) < 4 {
+		if speakerID != "" && !containsString(castIDs, speakerID) {
 			castIDs = append(castIDs, speakerID)
 		}
 		propIDs := []string{}
 		for _, name := range item.Props {
-			if id := resolve(props, "prop", name); id != "" && !containsString(propIDs, id) && len(propIDs) < 3 {
+			if id := resolve(props, "prop", name); id != "" && !containsString(propIDs, id) {
 				propIDs = append(propIDs, id)
 			}
 		}
-		shot := model.DramaShot{ID: newID(), ProjectID: r.project.ID, EpisodeID: episode.ID, Position: index, Scene: truncateRunes(item.Scene, 120), SceneCastID: resolve(scenes, "scene", item.Scene), CastIDsJSON: encodeStringList(castIDs), PropIDsJSON: encodeStringList(propIDs), Speaker: truncateRunes(item.Speaker, 60), Dialogue: truncateRunes(item.Dialogue, dramaMaxDialogueRunes), Action: truncateRunes(item.Action, 1000), ShotSize: truncateRunes(item.ShotSize, 30), Camera: truncateRunes(item.Camera, 60), DurationMs: r.settings.Storyboard.ShotMs(item.DurationSeconds, item.Dialogue), ImagePrompt: truncateRunes(item.ImagePrompt, 2000), VideoPrompt: truncateRunes(item.VideoPrompt, 2000), SourceQuote: truncateRunes(item.SourceQuote, 300), Transition: production.NormalizeTransition(item.Transition), CreatedAt: now, UpdatedAt: now}
+		shot := model.DramaShot{ID: newID(), ProjectID: r.project.ID, EpisodeID: episode.ID, Position: index, Scene: truncateRunes(item.Scene, 120), SceneCastID: resolve(scenes, "scene", item.Scene), CastIDsJSON: encodeStringList(castIDs), PropIDsJSON: encodeStringList(propIDs), Speaker: truncateRunes(item.Speaker, 60), Dialogue: truncateRunes(item.Dialogue, dramaMaxDialogueRunes), Action: truncateRunes(item.Action, 1000), ShotSize: truncateRunes(item.ShotSize, 30), Camera: truncateRunes(item.Camera, 60), DurationMs: shotMs(item.DurationSeconds, item.Dialogue), ImagePrompt: truncateRunes(item.ImagePrompt, 2000), VideoPrompt: truncateRunes(item.VideoPrompt, 2000), SourceQuote: truncateRunes(item.SourceQuote, 300), Transition: production.NormalizeTransition(item.Transition), CreatedAt: now, UpdatedAt: now}
 		shots = append(shots, shot)
 	}
 	profile, err := r.s.dramaVideoProfile(r.settings.Models.Video)
@@ -1392,6 +1428,8 @@ func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) 
 	if err != nil || (episode.Stage != model.DramaEpisodeRender) {
 		return nil, true, nil
 	}
+	// 先记下版本：时间线装配失败时 failJob 要按这个版本把原因写到本集上，否则本集没有错误、每轮重新排队合成。
+	job.PayloadJSON = encodeDramaRevision(episode.Revision)
 	segments, err := r.s.repo.DramaSegments(episode.ID)
 	if err != nil {
 		return nil, false, err
@@ -1400,7 +1438,6 @@ func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
-	job.PayloadJSON = encodeDramaRevision(episode.Revision)
 	return r.s.createDramaRenderTask(r.project, timeline)
 }
 

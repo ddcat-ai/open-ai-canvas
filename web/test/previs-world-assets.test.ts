@@ -141,9 +141,9 @@ describe("previs actor travel and markers", () => {
         expect(cruise.style).toBe("sword_fly");
         expect(cruise.lift).toBeCloseTo(2.5, 1);
         expect(evaluatePrevisTravel(actor, 4)!.lift).toBeLessThan(0.05);
-        // 飞行中不迈步：步态被抑制，离地高度进入人偶姿态。
+        // 飞行中不迈步：步态被抑制，离地高度（米）进入人偶姿态。
         const pose = evaluatePrevisActorPose(actor, 2.5);
-        expect(pose.lift).toBeCloseTo(2.5, 1);
+        expect(pose.worldLift).toBeCloseTo(2.5, 1);
         expect(pose.locomotion).toBe("still");
     });
 

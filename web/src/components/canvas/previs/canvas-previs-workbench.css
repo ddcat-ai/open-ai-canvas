@@ -2497,11 +2497,51 @@
     box-shadow: var(--pd-shadow-floating);
     font-size: var(--pd-ts-sm);
     text-align: center;
-    pointer-events: none;
+    /* 条上有画笔/折线切换、高度与完成按钮，必须可点。 */
+    pointer-events: auto;
 }
 .pv-trajectory-guide small {
     color: var(--pd-t1);
     font-size: var(--pd-ts-xs);
+}
+.pv-trajectory-guide__tools {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: var(--pd-r-sm);
+    background: var(--pd-s2);
+}
+.pv-trajectory-guide__tools button,
+.pv-trajectory-guide__action {
+    padding: 2px 10px;
+    border-radius: var(--pd-r-sm);
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-xs);
+}
+.pv-trajectory-guide__tools button.is-active {
+    background: var(--pd-t0);
+    color: #fff;
+}
+.pv-trajectory-guide__height {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--pd-ts-xs);
+}
+.pv-trajectory-guide__height .ant-input-number,
+.pv-trajectory-guide__height .ant-input-number-affix-wrapper {
+    width: 84px;
+}
+.pv-trajectory-guide__action {
+    border: 1px solid var(--pd-b1);
+}
+.pv-trajectory-guide__action.is-primary {
+    border-color: var(--pd-t0);
+    background: var(--pd-t0);
+    color: #fff;
+}
+.pv-trajectory-guide__action:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
 }
 .pv-pane-no-cam {
     position: absolute;

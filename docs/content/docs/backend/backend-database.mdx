@@ -258,7 +258,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 画布操作支持 `create_canvas`、`create_node`、`patch_node`、`remove_node`、`create_connection`、`update_connection`、`remove_connection`、`set_field`。创建操作显式创建对象；更新和删除要求对象存在，并以 `before`、`expected` 或 `beforeValue` 做字段/对象级并发校验。删除节点同时删除其连接，迟到的媒体回写返回对象缺失冲突。`viewport` 是本地视图状态，不进入远端 operations。
 
-旧的画布版本历史、恢复和整批 PUT 不属于当前用户写入合同；数据库迁移保留既有历史表以兼容已部署数据，但新写入不依赖它们。Agent、媒体回写、预演台、创作提交及导入路径都复用同一 operations 服务。
+旧的画布版本历史、恢复和整批 PUT 不属于当前用户写入合同；数据库迁移保留既有历史表以兼容已部署数据，但新写入不依赖它们。Agent、媒体回写、世界引擎、创作提交及导入路径都复用同一 operations 服务。
 
 画布/素材结构化配额使用 `UserStructuredStorageUsage`，仅聚合当前用户的 `assets` 和 `canvas_projects` 数量及 `payload_json` 字节数。SQLite 使用 `length(CAST(... AS BLOB))`，PostgreSQL 使用 `octet_length(...)`，避免中文按字符计数；空值按零字节处理。operations 通过事务 repository 读取用量后再写入，不增加缓存或配额表，不变更 schema。完整 `UserStorageUsage` 仍用于需要任务及日志统计的路径，画布保存不再为未使用的任务/日志指标扫描大字段。
 

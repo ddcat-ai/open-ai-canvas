@@ -23,7 +23,7 @@ export function PrevisViewToolbar({ viewMode, onViewModeChange, inline = false }
     return (
         <div
             role="group"
-            aria-label="预演台取景模式"
+            aria-label="世界引擎取景模式"
             className={inline ? "previs-view-toolbar-inline" : "absolute right-3 top-3 z-[var(--z-toolbar)] inline-flex items-center gap-1 rounded-[var(--r-lg)] border p-1 shadow-xl backdrop-blur"}
             style={inline ? undefined : { borderColor: "var(--previs-sequencer-border)", background: "var(--previs-dock-surface)", color: "var(--previs-dock-fg)" }}
         >

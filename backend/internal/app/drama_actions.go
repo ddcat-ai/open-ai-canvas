@@ -24,6 +24,9 @@ func (s *Service) UpdateDramaSettings(userID string, projectID string, req Updat
 	if req.Settings != nil {
 		current := parseDramaSettings(productionRow.SettingsJSON)
 		next := req.Settings.normalized()
+		if !production.ValidAspectRatio(next.AspectRatio) {
+			return DramaSummary{}, BadAuthRequest("不支持的画幅：" + next.AspectRatio)
+		}
 		if problem := production.ValidateAssetPrompts(next.Assets); problem != "" {
 			return DramaSummary{}, BadAuthRequest(problem)
 		}
@@ -624,6 +627,9 @@ func (s *Service) GenerateDramaSegments(userID, projectID, episodeID string, req
 		profile, err := s.dramaVideoProfile(choice)
 		if err != nil {
 			return nil, err
+		}
+		if issue := profile.screen(settings.AspectRatio).Issue; issue != "" {
+			return nil, BadAuthRequest(issue)
 		}
 		// 第 1 段总用参考图或文生视频；尾帧续接的后续段才需要图生视频。
 		if issue := profile.continuityIssue(settings); issue != "" && index > 0 {

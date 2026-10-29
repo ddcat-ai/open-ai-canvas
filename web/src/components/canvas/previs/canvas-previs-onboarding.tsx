@@ -13,7 +13,7 @@ import {
 } from "@/lib/canvas/previs/previs-onboarding";
 
 /**
- * 预演台首次上手引导浮层。
+ * 世界引擎首次上手引导浮层。
  *
  * 硬约束：
  * - 非阻塞。不是 dialog，没有遮罩，不抢焦点，不做焦点陷阱：引导旁边就是要动手的工作台，
@@ -170,7 +170,7 @@ export function CanvasPrevisOnboarding({ scope, open = true, restartSignal = 0, 
     return (
         <section
             className={`grid gap-[var(--space-2)] ${className || ""}`}
-            aria-label="预演台上手引导"
+            aria-label="世界引擎上手引导"
             style={{
                 padding: "var(--space-3)",
                 border: "var(--stroke-1) solid var(--border-semantic)",

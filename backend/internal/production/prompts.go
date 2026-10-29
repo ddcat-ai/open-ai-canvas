@@ -33,11 +33,24 @@ type Settings struct {
 // MaxEpisodeSeconds 是单集时长上限（20 分钟）；更长的内容应拆成多集。
 const MaxEpisodeSeconds = 1200
 
+// AspectRatios 是作品可选的画幅，第一个是未填写时的默认值。
+var AspectRatios = []string{"9:16", "16:9", "1:1", "3:4", "4:3"}
+
+// ValidAspectRatio 判断是否是作品可选的画幅；入口处校验，不把未知值悄悄改成默认画幅。
+func ValidAspectRatio(ratio string) bool {
+	for _, value := range AspectRatios {
+		if value == ratio {
+			return true
+		}
+	}
+	return false
+}
+
 func (s Settings) Normalized() Settings {
 	s.Assets = s.Assets.Normalized()
 	s.Storyboard = s.Storyboard.Normalized()
 	if s.AspectRatio == "" {
-		s.AspectRatio = "9:16"
+		s.AspectRatio = AspectRatios[0]
 	}
 	if s.EpisodeSeconds <= 0 {
 		s.EpisodeSeconds = 90
@@ -55,11 +68,6 @@ func (s Settings) Normalized() Settings {
 	s.StylePrompt = truncateRunes(strings.TrimSpace(s.StylePrompt), 1200)
 	s.StyleName = truncateRunes(strings.TrimSpace(s.StyleName), 60)
 	s.Language = truncateRunes(strings.TrimSpace(s.Language), 30)
-	switch s.AspectRatio {
-	case "9:16", "16:9", "1:1", "3:4", "4:3":
-	default:
-		s.AspectRatio = "9:16"
-	}
 	return s
 }
 

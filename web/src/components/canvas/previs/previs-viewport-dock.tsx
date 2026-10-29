@@ -31,7 +31,7 @@ const RENDER_VIEW_BUTTONS: Array<{ mode: PrevisRenderMode; label: string; icon: 
 
 export function PrevisViewportDock({ transformMode, renderMode, renderModes, onTransformModeChange, onRenderModeChange, onAddActor, onAddBox, onAddLight, onAddCamera, onAlignCamera }: PrevisViewportDockProps) {
     return (
-        <nav className="previs-viewport-dock" aria-label="预演台视口工具">
+        <nav className="previs-viewport-dock" aria-label="世界引擎视口工具">
             <DockButton label="移动对象" active={transformMode === "translate"} onClick={() => onTransformModeChange("translate")}>
                 <Move3D />
             </DockButton>

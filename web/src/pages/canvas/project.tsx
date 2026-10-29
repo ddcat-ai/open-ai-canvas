@@ -3587,7 +3587,7 @@ function CanvasViewportPage() {
                                 <Suspense
                                     fallback={
                                         <div className="fixed inset-0 z-[var(--z-toast)] grid place-items-center px-5" style={{ background: theme.canvas.background, color: theme.node.text }}>
-                                            <WorkspaceState icon="loading" title="正在加载 3D 预演台" description="准备场景、镜头与空间控制。" />
+                                            <WorkspaceState icon="loading" title="正在加载世界引擎" description="准备场景、镜头与空间控制。" />
                                         </div>
                                     }
                                 >

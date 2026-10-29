@@ -26,7 +26,7 @@ describe("image to previs Agent prompt", () => {
         expect(prompt).toContain("普通图片中的人物不是角色卡");
         expect(prompt).toContain("禁止传 characterName");
         expect(prompt).not.toContain("createPrevisBillboard");
-        expect(buildImageToPrevisDisplayText()).toBe("根据此图生成 3D 预演台");
+        expect(buildImageToPrevisDisplayText()).toBe("根据此图生成世界引擎场景");
     });
 
     test("routes the image workflow to a configured vision-capable text model", () => {

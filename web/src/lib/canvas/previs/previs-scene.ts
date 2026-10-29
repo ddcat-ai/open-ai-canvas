@@ -312,6 +312,17 @@ export function interpolatePrevisTransform(base: PrevisTransform, keyframes: Pre
     };
 }
 
+/** 关键帧上的演员离地高度（米），与位置同一缓动插值；没有关键帧写 lift 时为 0。 */
+export function interpolatePrevisKeyframeLift(keyframes: PrevisKeyframe[], time: number): number {
+    if (!keyframes.length || !keyframes.some((item) => item.lift)) return 0;
+    const value = (item: PrevisKeyframe) => (Number.isFinite(item.lift) ? Math.max(0, item.lift!) : 0);
+    const previous = [...keyframes].reverse().find((item) => item.time <= time) || keyframes[0];
+    const next = keyframes.find((item) => item.time >= time) || keyframes[keyframes.length - 1];
+    if (previous.id === next.id) return value(previous);
+    const progress = resolvePrevisKeyframeProgress((time - previous.time) / Math.max(next.time - previous.time, PREVIS_KEYFRAME_EPSILON), previous.easing);
+    return value(previous) + (value(next) - value(previous)) * progress;
+}
+
 export function interpolatePrevisBoneRotation(base: PrevisQuat, keyframes: PrevisBoneKeyframe[], time: number): PrevisQuat {
     if (!keyframes.length) return base;
     const previous = [...keyframes].reverse().find((item) => item.time <= time) || keyframes[0];

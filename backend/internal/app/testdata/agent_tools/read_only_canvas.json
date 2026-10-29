@@ -223,13 +223,17 @@
   },
   {
     "function": {
-      "description": "读取预演摘要；无 sceneId 返回目录和 canvasSnapshotHash，有则返回场景与 snapshotHash。includeTransforms=true 返回坐标；不返回 URL/storage key。",
+      "description": "读取世界引擎场景摘要；无 sceneId 返回目录和 canvasSnapshotHash，有则返回场景与 snapshotHash。includeTransforms=true 返回坐标；不返回 URL/storage key。",
       "name": "previs_scene_read",
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "includeTransforms": {
             "type": "boolean"
+          },
+          "manual": {
+            "description": "可选。说明书主题，首次操作先读 rules",
+            "type": "string"
           },
           "objectIds": {
             "items": {

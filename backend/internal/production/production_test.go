@@ -84,6 +84,22 @@ func TestShotDurationFollowsDialogue(t *testing.T) {
 		t.Fatalf("absolute shot cap, got %d", got)
 	}
 }
+func TestImportedShotKeepsWrittenDuration(t *testing.T) {
+	rules := StoryboardSettings{}
+	if got := rules.ImportedShotMs(8, ""); got != 8000 {
+		t.Fatalf("a storyboard's 8s shot must stay 8s instead of the 6s pacing cap, got %d", got)
+	}
+	if got := rules.ImportedShotMs(1, strings.Repeat("话", 18)); got != 4500 {
+		t.Fatalf("written duration still grows to fit the verbatim line, got %d", got)
+	}
+	if got := rules.ImportedShotMs(0, ""); got != DefaultShotMs {
+		t.Fatalf("a missing duration falls back to the pacing estimate, got %d", got)
+	}
+	if got := rules.ImportedShotMs(90, ""); got != MaxStoryboardShotSeconds*1000 {
+		t.Fatalf("same 60s cap as manual edits, got %d", got)
+	}
+}
+
 func TestStoryboardRules(t *testing.T) {
 	fast := StoryboardSettings{Pacing: PacingFast, Dialogue: DialogueDense, SegmentMode: SegmentFixed, SegmentSeconds: 10}
 	if got := fast.ShotMs(9, ""); got != 4000 {

@@ -4,7 +4,7 @@ import { App, Button, Checkbox, Input, InputNumber, Select, Switch } from "antd"
 import { AlertCircle, ArrowRight, Brush, CheckCheck, Clapperboard, Film, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Upload, UserRound, UsersRound, Cpu, PackageCheck, Play } from "lucide-react";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
-import { dramaChoiceKey } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaVideoRatioIssue } from "@/lib/drama/model-choice";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import {
     getDramaCastImpact,
@@ -631,6 +631,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
     const catalogQuery = useDramaModelCatalog();
     const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.video));
     const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.image));
+    const videoRatioProblem = dramaVideoRatioIssue(videoOption, current.aspectRatio);
     const continuity: DramaVideoContinuity = settings.videoContinuity || "tail_frame";
     const sampleCharacter = cast.find((item) => item.kind === "character" && item.appearance);
     const sampleScene = cast.find((item) => item.kind === "scene" && item.appearance);
@@ -730,12 +731,15 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                             <DramaModelPicker
                                                 capability={capability}
                                                 value={settings.models[capability]}
+                                                aspectRatio={current.aspectRatio}
                                                 placeholder={`选择${CAPABILITY_META[capability].label}模型`}
                                                 onChange={(choice) => setSettings({ ...settings, models: { ...settings.models, [capability]: choice } })}
                                             />
                                         </div>
                                     ))}
                                 </div>
+                                {videoRatioProblem ? <p className="drama-cfg-note">当前视频模型{videoRatioProblem}，剧情段视频无法提交，请换模型。</p> : null}
+                                {videoOption?.generateAudio === false ? <p className="drama-cfg-note">当前视频模型不同步生成声音，剧情段视频没有对白与音效。</p> : null}
                             </section>
                         </div>
                         <aside className="drama-cfg-side">
@@ -783,7 +787,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                     options={(Object.keys(VIDEO_CONTINUITY_LABEL) as DramaVideoContinuity[]).map((mode) => ({ value: mode, ...VIDEO_CONTINUITY_LABEL[mode] }))}
                                     onChange={(videoContinuity) => setSettings({ ...settings, videoContinuity })}
                                 />
-                                {continuity === "tail_frame" && videoOption && videoOption.tailFrameChain === false ? <p className="drama-cfg-note">当前视频模型不支持图生视频，无法尾帧续接，请改用并行出片或换模型。</p> : null}
+                                {continuity === "tail_frame" && videoOption && !videoOption.tailFrameChain ? <p className="drama-cfg-note">当前视频模型不支持图生视频，无法尾帧续接，请改用并行出片或换模型。</p> : null}
                                 {continuity !== (current.videoContinuity || "tail_frame") ? <p className="drama-cfg-note">已写好的段视频提示词按原方式撰写，切换后可在剧情段里重新撰写；已提交的视频会做完。</p> : null}
                             </section>
                             <section className="drama-cfg-card">

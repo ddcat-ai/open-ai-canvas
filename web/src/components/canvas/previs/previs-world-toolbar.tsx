@@ -1,7 +1,7 @@
 import { Building2, Camera, Clapperboard, Film, Globe2, Keyboard, Layers, ListTree, Map as MapIcon, Shapes, Trees, UserRound, Video, type LucideIcon } from "lucide-react";
 
 /**
- * 预演台左侧悬浮工具条：按工作流分组「搭世界 → 拍戏 → 出片」，每个入口直达对应面板或添加页。
+ * 世界引擎左侧悬浮工具条：按工作流分组「搭世界 → 拍戏 → 出片」，每个入口直达对应面板或添加页。
  * 只负责触发，不持有状态；激活态由工作台传入。
  */
 export type PrevisWorldToolbarAction = "world" | "building" | "nature" | "base" | "layout" | "actor" | "camera" | "shot" | "animate" | "clay" | "depth" | "list" | "shortcuts";
@@ -39,7 +39,7 @@ const GROUPS: Array<{ title: string; items: ToolbarItem[] }> = [
 
 export function PrevisWorldToolbar({ active, busy, onAction }: { active: Partial<Record<PrevisWorldToolbarAction, boolean>>; busy?: boolean; onAction: (action: PrevisWorldToolbarAction) => void }) {
     return (
-        <nav className="pv-world-toolbar" aria-label="预演台工具" data-canvas-no-zoom>
+        <nav className="pv-world-toolbar" aria-label="世界引擎工具" data-canvas-no-zoom>
             {GROUPS.map((group) => (
                 <div key={group.title} className="pv-world-toolbar__group" role="group" aria-label={group.title}>
                     <span className="pv-world-toolbar__title">{group.title}</span>

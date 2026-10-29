@@ -41,13 +41,14 @@ export function groundPrevisObject(object: PrevisObject): PrevisObject {
         keyframesChanged = true;
         return { ...keyframe, transform: grounded };
     });
-    const pathChanged = locked && object.motionPath?.points.some((point) => point[1] !== PREVIS_GROUND_Y);
+    // 路径点的 Y 是离地高度（演员悬空移动时写进关键帧 lift），只拉回地下的点，不压平。
+    const pathChanged = locked && object.motionPath?.points.some((point) => !(point[1] >= PREVIS_GROUND_Y));
     if (transform === object.transform && !keyframesChanged && !pathChanged) return object;
     return {
         ...object,
         transform,
         keyframes: keyframesChanged ? keyframes : object.keyframes,
-        motionPath: pathChanged && object.motionPath ? { ...object.motionPath, points: object.motionPath.points.map((point) => [point[0], PREVIS_GROUND_Y, point[2]]) } : object.motionPath,
+        motionPath: pathChanged && object.motionPath ? { ...object.motionPath, points: object.motionPath.points.map((point) => [point[0], point[1] >= PREVIS_GROUND_Y ? point[1] : PREVIS_GROUND_Y, point[2]]) } : object.motionPath,
     };
 }
 

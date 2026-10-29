@@ -78,6 +78,26 @@ describe("Agent approval presentation", () => {
         expect(view.items[0].nodeTitle).toBe("开场分镜");
     });
 
+    it("keeps world-engine preview items with operation details instead of the unrecognized fallback", () => {
+        // 世界引擎补丁（含 camera_move）的审批项若被丢掉，卡片会退成「审批参数无法识别」且看不到任何运镜摘要。
+        const view = agentApprovalPresentation({
+            call: { function: { name: "previs_apply_patch", arguments: "{}" } },
+            preview: {
+                kind: "previs_mutation",
+                title: "确认世界引擎修改",
+                description: "Agent 准备修改世界引擎场景《御剑》。批准后才会写入当前画布。",
+                items: [{ operation: "previs_apply_patch", nodeId: "scene-1", nodeTitle: "御剑", details: ["摄影机《主摄影机》0.0–6.0s follow 跟拍，主体《主角》（side=behind）"], summary: "修改世界引擎场景《御剑》" }],
+            },
+        });
+        expect(view.source).toBe("server");
+        expect(view.title).toBe("确认世界引擎修改");
+        expect(view.items).toHaveLength(1);
+        expect(view.items[0].operation).toBe("previs_apply_patch");
+        // nodeId 是场景 ID，不能变成「定位到画布节点」按钮。
+        expect(view.items[0].nodeId).toBeUndefined();
+        expect(view.items[0].details?.[0]).toContain("follow");
+    });
+
     it("states when an unknown approval cannot identify a target", () => {
         const view = agentApprovalPresentation({ toolName: "unknown_tool", arguments: {} });
         expect(view.items).toHaveLength(0);

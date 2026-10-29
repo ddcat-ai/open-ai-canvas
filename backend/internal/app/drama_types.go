@@ -464,6 +464,13 @@ type DramaSegmentRequest struct {
 	Operation       string `json:"operation"`
 	Seconds         int    `json:"seconds"`
 	MaxVideoSeconds int    `json:"maxVideoSeconds"`
+	// AspectRatio 是作品画幅；Size / Resolution 是实际发送的画面参数：声明比例参数的模型发 Size，
+	// 用完整分辨率标签表达横竖的模型发 Resolution（例如 768p竖）。
+	AspectRatio string `json:"aspectRatio"`
+	Size        string `json:"size,omitempty"`
+	Resolution  string `json:"resolution,omitempty"`
+	// GenerateAudio 表示视频模型同步生成对白与音效；为 false 时本段视频没有声音。
+	GenerateAudio bool `json:"generateAudio"`
 	// FirstFrame 是上一段视频的最后一帧；第一段为空。FirstFramePending 表示上一段还没生成，生成后才能提交本段。
 	FirstFrameResourceID string                  `json:"firstFrameResourceId,omitempty"`
 	FirstFramePending    bool                    `json:"firstFramePending"`
@@ -547,6 +554,10 @@ type DramaModelOption struct {
 	MaxVideoSeconds int `json:"maxVideoSeconds,omitempty"`
 	// TailFrameChain 仅视频模型：是否支持图生视频，可用于“尾帧续接”；不支持的模型只能并行出片。
 	TailFrameChain bool `json:"tailFrameChain,omitempty"`
+	// VideoRatios 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。
+	VideoRatios []string `json:"videoRatios,omitempty"`
+	// GenerateAudio 仅视频模型：是否同步生成对白与音效；false 时段视频没有声音。
+	GenerateAudio *bool `json:"generateAudio,omitempty"`
 	// 以下仅图片模型：可指定的参考图分辨率档位、默认档位，以及能按默认档位准确出图的参考图画幅。
 	ImageResolutions       []string `json:"imageResolutions,omitempty"`
 	DefaultImageResolution string   `json:"defaultImageResolution,omitempty"`

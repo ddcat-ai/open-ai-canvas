@@ -3,7 +3,7 @@ import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics
 import { formatPrevisDiagnosticCode, projectPrevisDiagnostic, type PrevisDiagnosticCode, type PrevisDiagnosticFields } from "@/lib/canvas/previs/previs-diagnostics";
 
 /**
- * 预演台故障事件的唯一记录入口。
+ * 世界引擎故障事件的唯一记录入口。
  *
  * 复用统一的 client-diagnostics 缓冲区，绝不另建平行日志。
  * 只传固定 message 与安全 code/字段；stack 一律不填。
@@ -23,7 +23,7 @@ export function resetPrevisDiagnosticDedupe(): void {
 }
 
 /**
- * 记录一条预演台诊断事件。
+ * 记录一条世界引擎诊断事件。
  * 返回是否真的写入（未知 code 或命中去重窗口时返回 false），便于测试断言。
  */
 export function recordPrevisDiagnostic(code: PrevisDiagnosticCode, fields: PrevisDiagnosticFields = {}): boolean {

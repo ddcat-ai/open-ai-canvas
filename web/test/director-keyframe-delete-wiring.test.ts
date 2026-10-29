@@ -51,7 +51,7 @@ describe("workbench 接入时间轴关键帧删除", () => {
 });
 
 describe("workbench 快捷键接线", () => {
-    const effect = slice(workbench, "// 预演台是全屏浮层，快捷键挂在 window", "/** 对象 transform 编辑的唯一入口");
+    const effect = slice(workbench, "// 世界引擎是全屏浮层，快捷键挂在 window", "/** 对象 transform 编辑的唯一入口");
 
     test("监听挂在 window keydown，并随 open 装卸", () => {
         expect(effect).toContain("if (!open) return;");

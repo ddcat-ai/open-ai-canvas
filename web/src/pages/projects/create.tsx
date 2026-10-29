@@ -10,7 +10,7 @@ import { decodeNovelText } from "@/lib/canvas/canvas-document";
 import { analyzeNovel, EPISODE_GROUP_CHARS, EPISODE_SOURCE_CHARS, sourceChars, titleFromFileName } from "@/lib/drama/novel-parse";
 import { ApiError } from "@/services/api/request";
 import { linkCanvasToDrama } from "@/services/drama-canvas";
-import { dramaChoiceKey } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaVideoOptionFits, dramaVideoRatioIssue } from "@/lib/drama/model-choice";
 import { DEFAULT_STORYBOARD } from "@/lib/drama/storyboard";
 import {
     createDrama,
@@ -109,13 +109,24 @@ export default function DramaCreatePage() {
     const style = findDramaStyle(styleId);
     const catalogQuery = useDramaModelCatalog();
     const resolvedModels = useMemo<DramaModels | undefined>(() => {
-        const defaults = catalogQuery.data?.defaults;
-        if (!defaults) return undefined;
-        return { text: models.text || defaults.text, image: models.image || defaults.image, video: models.video || defaults.video };
-    }, [catalogQuery.data, models]);
+        const catalog = catalogQuery.data;
+        if (!catalog) return undefined;
+        const { defaults } = catalog;
+        // 没手动选视频模型时按当前画幅与衔接方式挑：目录默认值给不出就换第一个给得出的，都不行留空并说明原因。
+        const videoOptions = catalog.options.video || [];
+        const fitting = videoOptions.filter((option) => dramaVideoOptionFits(option, aspectRatio, videoContinuity));
+        const video = models.video || fitting.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(defaults.video))?.choice || fitting[0]?.choice || {};
+        return { text: models.text || defaults.text, image: models.image || defaults.image, video };
+    }, [aspectRatio, catalogQuery.data, models, videoContinuity]);
     const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(resolvedModels?.video));
     const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(resolvedModels?.image));
     const missingCapabilities = (Object.keys(CAPABILITY_LABEL) as DramaCapability[]).filter((capability) => catalogQuery.data && !dramaChoiceKey(resolvedModels?.[capability]));
+    // 目录里有视频模型、但没有一个能按当前画幅与衔接方式出片：说清原因，不笼统说“没有可用模型”。
+    const noFittingVideo = missingCapabilities.includes("video") && Boolean(catalogQuery.data?.options.video?.length);
+    const unavailableCapabilities = missingCapabilities.filter((capability) => !(capability === "video" && noFittingVideo));
+    const videoRatioProblem = dramaVideoRatioIssue(videoOption, aspectRatio);
+    // 服务端只在支持图生视频时下发 tailFrameChain，缺省即不支持。
+    const tailFrameProblem = videoContinuity === "tail_frame" && Boolean(videoOption) && !videoOption?.tailFrameChain;
     const settings = {
         aspectRatio,
         episodeSeconds,
@@ -141,6 +152,7 @@ export default function DramaCreatePage() {
             episodeMode,
             chaptersPerEpisode,
             episodeSeconds,
+            aspectRatio,
             videoContinuity,
             JSON.stringify(storyboard),
             assets?.resolution || "",
@@ -228,7 +240,7 @@ export default function DramaCreatePage() {
         onError: (error) => message.error(error instanceof ApiError || error instanceof Error ? error.message : "创建失败"),
     });
     const tooLong = Boolean(analysis?.issues.some((issue) => issue.kind === "too_long")) || Boolean(oversizedGroup);
-    const canStart = Boolean(analysis && name.trim() && resolvedModels && missingCapabilities.length === 0 && !tooLong && !create.isPending);
+    const canStart = Boolean(analysis && name.trim() && resolvedModels && missingCapabilities.length === 0 && !videoRatioProblem && !tailFrameProblem && !tooLong && !create.isPending);
     const unitLabel = perEpisode && chaptersPerEpisode === 1 ? "集" : "章";
 
     const previewChapter = analysis?.chapters[previewIndex];
@@ -528,7 +540,7 @@ export default function DramaCreatePage() {
                                     </button>
                                 ))}
                             </div>
-                            {videoContinuity === "tail_frame" && videoOption?.tailFrameChain === false ? (
+                            {tailFrameProblem ? (
                                 <p className="drama-cfg-note" role="alert">
                                     当前视频模型不支持图生视频，无法尾帧续接；请改用并行出片或换模型。
                                 </p>
@@ -547,12 +559,19 @@ export default function DramaCreatePage() {
                                         capability={capability}
                                         size="sm"
                                         showPrice={false}
+                                        aspectRatio={aspectRatio}
                                         value={resolvedModels?.[capability]}
                                         placeholder={`选择${CAPABILITY_LABEL[capability]}模型`}
                                         onChange={(choice) => setModels((current) => ({ ...current, [capability]: choice }))}
                                     />
                                 </div>
                             ))}
+                            {videoRatioProblem ? (
+                                <p className="drama-cfg-note" role="alert">
+                                    当前视频模型{videoRatioProblem}，请换模型或改画幅。
+                                </p>
+                            ) : null}
+                            {videoOption?.generateAudio === false ? <p className="drama-cfg-note">当前视频模型不同步生成声音，剧情段视频没有对白与音效。</p> : null}
                         </section>
                         <div className="drama-field">
                             <div className="drama-field-label">
@@ -561,10 +580,16 @@ export default function DramaCreatePage() {
                             </div>
                             <InputNumber className="!w-full" min={0} precision={0} value={budgetCredits} onChange={(value) => setBudgetCredits(value ?? 0)} suffix="积分" aria-label="预算上限" />
                         </div>
-                        {missingCapabilities.length ? (
+                        {unavailableCapabilities.length ? (
                             <p className="flex items-start gap-2 text-[var(--fs-tiny)] leading-5 text-[var(--status-error)]">
                                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                                还没有可用的{missingCapabilities.map((capability) => CAPABILITY_LABEL[capability]).join("、")}模型，请联系管理员在后台开通。
+                                还没有可用的{unavailableCapabilities.map((capability) => CAPABILITY_LABEL[capability]).join("、")}模型，请联系管理员在后台开通。
+                            </p>
+                        ) : null}
+                        {noFittingVideo ? (
+                            <p className="flex items-start gap-2 text-[var(--fs-tiny)] leading-5 text-[var(--status-error)]">
+                                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                                {videoContinuity === "tail_frame" ? `没有能按 ${aspectRatio} 尾帧续接出片的视频模型，请换画幅、改用并行出片或联系管理员。` : `没有能按 ${aspectRatio} 出片的视频模型，请换画幅或联系管理员。`}
                             </p>
                         ) : null}
                     </div>

@@ -131,7 +131,7 @@ operations 可携带 `editProofs: [{nodeId, sessionId, token}]`，服务端校�
 
 ## Agent 和媒体回写
 
-普通编辑、Agent、媒体生成终态、预演台、创作提交、LibTV/TapNow 导入都必须经过同一 operations 服务。Agent 事件里的 `canvasPatch` 只是客户端通知：小变更携带有界对象增量；删除、重排、顶层字段变化或事件过大时使用 `requiresRefresh: true`，客户端重新读取后继续处理未确认 journal。
+普通编辑、Agent、媒体生成终态、世界引擎、创作提交、LibTV/TapNow 导入都必须经过同一 operations 服务。Agent 事件里的 `canvasPatch` 只是客户端通知：小变更携带有界对象增量；删除、重排、顶层字段变化或事件过大时使用 `requiresRefresh: true`，客户端重新读取后继续处理未确认 journal。
 
 媒体终态只更新仍存在且任务绑定未变化的节点。目标节点已删除、任务绑定已改变或资源不可用时，任务记录保留，画布不创建幽灵节点。
 

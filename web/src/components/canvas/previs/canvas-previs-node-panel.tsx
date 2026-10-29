@@ -42,19 +42,19 @@ export function CanvasPrevisNodePanel({ node, scene, readNodeContent, onOpen, pr
                 data-canvas-no-zoom
                 className="previs-node-preview group"
                 style={{ background: theme.node.fill, borderColor: theme.node.stroke }}
-                title={professional ? "打开 3D 预演台" : "切换到专业模式后编辑预演台"}
+                title={professional ? "打开世界引擎" : "切换到专业模式后编辑世界引擎"}
                 disabled={!professional}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); onOpen(); }}
             >
                 {preview.kind === "image"
-                    ? <CachedResourceImage src={preview.url} storageKey={preview.storageKey} alt={`${title} 已回写的预演台构图`} className="previs-node-preview-image" draggable={false} eager fallback={<PrevisPreviewState kind="empty" theme={theme} />} onError={() => setFailedUrl(preview.url || preview.storageKey || "" )} />
+                    ? <CachedResourceImage src={preview.url} storageKey={preview.storageKey} alt={`${title} 已回写的世界引擎构图`} className="previs-node-preview-image" draggable={false} eager fallback={<PrevisPreviewState kind="empty" theme={theme} />} onError={() => setFailedUrl(preview.url || preview.storageKey || "" )} />
                     : scene && scene.objects.length > 0
                         ? <PrevisMiniViewport scene={scene} />
                         : <PrevisPreviewState kind={preview.kind} theme={theme} />}
                 <span className={`previs-node-preview-cta ${professional ? "group-hover:opacity-100 group-focus-visible:opacity-100" : "opacity-100"}`} style={{ background: `${theme.toolbar.panel}e8`, color: theme.node.text }}>
-                    {professional ? <><Move3d className="size-3.5" />进入预演台</> : <><LockKeyhole className="size-3.5" />专业模式可编辑</>}
+                    {professional ? <><Move3d className="size-3.5" />进入世界引擎</> : <><LockKeyhole className="size-3.5" />专业模式可编辑</>}
                 </span>
             </button>
 
@@ -76,7 +76,7 @@ function PrevisPreviewState({ kind, theme }: { kind: "loading" | "empty"; theme:
                 <Clapperboard className="size-4" style={{ color: theme.node.muted }} aria-hidden />
             </span>
             <span className="max-w-full truncate text-xs font-semibold" style={{ color: theme.node.text }}>{loading ? "正在准备场景" : "尚未生成预览"}</span>
-            <span className="max-w-full text-[var(--fs-label)] leading-4" style={{ color: theme.node.muted }}>{loading ? "场景数据加载完成后显示" : "进入预演台并回写构图后显示"}</span>
+            <span className="max-w-full text-[var(--fs-label)] leading-4" style={{ color: theme.node.muted }}>{loading ? "场景数据加载完成后显示" : "进入世界引擎并回写构图后显示"}</span>
         </div>
     );
 }

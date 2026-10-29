@@ -49,7 +49,7 @@ const QUICK_VIEWS: Array<{ mode: PrevisViewMode; label: string }> = [
 ];
 
 /**
- * 预演台底部工具条：浅色、图标带文字，当前工具实心高亮，一眼看清在用什么。
+ * 世界引擎底部工具条：浅色、图标带文字，当前工具实心高亮，一眼看清在用什么。
  * 左到右：编辑工具 → 画路径 → 取景 → 导航 → 面板。场景列表与快捷键在左侧工具条。
  */
 export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
@@ -74,7 +74,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
     const quickActive = QUICK_VIEWS.some((item) => item.mode === props.viewMode);
     const moreLabel = quickActive ? "更多" : (PREVIS_VIEW_MODES.find((item) => item.mode === props.viewMode)?.label ?? "更多");
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="pv-canvas-dock pv-dock" role="toolbar" aria-label="预演台视口工具" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="pv-canvas-dock pv-dock" role="toolbar" aria-label="世界引擎视口工具" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {viewMenuOpen ? (
                     <motion.div role="dialog" aria-label="取景模式" initial={{ opacity: 0, y: 10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.98 }} transition={{ duration: 0.16 }} className="pv-dock__menu">

@@ -1,5 +1,5 @@
 /**
- * 预演台键盘快捷键解析。
+ * 世界引擎键盘快捷键解析。
  *
  * 纯函数：只把「按键事件形状」映射为语义动作，不碰 DOM、不改场景。
  * 组件层负责注册监听与执行动作，因此这里可以完整单测。
@@ -218,7 +218,7 @@ export function blocksPrevisShortcut(target: unknown): boolean {
  * detail === 0 表示键盘激活（Enter/Space 合成的 click），此时必须保留焦点，
  * 否则 Tab 序列会断、键盘用户会丢失位置。判据与 plugins 页一致。
  *
- * 预演台的按钮分散在 workbench、dock、sequencer 三处，各自没有公共基组件，
+ * 世界引擎的按钮分散在 workbench、dock、sequencer 三处，各自没有公共基组件，
  * 因此这条规则集中在这里，避免每个 onClick 各写一遍而慢慢走偏。
  */
 export function releasePrevisFocusAfterPointer(event: { detail: number; currentTarget: { blur?: () => void } }): void {

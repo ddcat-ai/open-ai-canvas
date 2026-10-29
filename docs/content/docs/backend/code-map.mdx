@@ -148,7 +148,7 @@ Pi SDK 执行前的参数校验失败由 `agent-runtime/pi/agent-runtime.mjs` �
 | 生成 Composer | `web/src/components/canvas/canvas-node-prompt-panel.tsx`、`canvas-config-composer.tsx` |
 | 风格中心、用户风格编辑与项目快照 | `web/src/components/canvas/canvas-style-picker-modal.tsx`、`style-profile-editor-modal.tsx`、`style-asset-binding-modal.tsx`、`web/src/lib/canvas/style-profile.ts`、`web/src/services/api/style-profiles.ts` |
 | 分镜脚本节点 | `web/src/components/canvas/canvas-script-node.tsx` |
-| 3D 导演台 | `web/src/components/canvas/director/` |
+| 世界引擎（原 3D 预演台） | 工作台与视口在 `web/src/components/canvas/previs/`，场景算法在 `web/src/lib/canvas/previs/`，类型在 `web/src/types/previs.ts`；运镜手法表 `previs-camera-techniques.ts`（纯数据）、求值 `previs-camera-moves.ts`（CAM、截图、录制共用 `resolvePrevisViewFraming`）、检查器 `previs-camera-move-section.tsx`；Agent 写入在 `backend/internal/app/cloud_agent_previs*.go`，运镜白名单 `cloud_agent_previs_camera.go` 与前端手法表由 `web/test/previs-camera-moves.test.ts` 逐项比对 |
 | 节点生成上下文 | `web/src/components/canvas/canvas-node-generation.ts` |
 | 布局和连线算法 | `web/src/lib/canvas/canvas-layout.ts`、`canvas-frame.ts` |
 | 任务结果准备与按节点提交 | `web/src/lib/canvas/canvas-generation-task-sync.ts`、`canvas-generation-result.ts`；持久化协调在 `web/src/services/canvas-generation-consumer.ts` |

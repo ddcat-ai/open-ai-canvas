@@ -41,7 +41,25 @@ function fieldLabel(key: string, nodeType: string): string {
 }
 
 function operation(value: unknown): AgentApprovalPreviewOperation | null {
-    return value === "add_node" || value === "update_node" || value === "connect_nodes" || value === "arrange_nodes" || value === "generate_media" || value === "create_storyboard" || value === "edit_storyboard" || value === "create_character" || value === "plan_step" || value === "adopt_drama_media" ? value : null;
+    return value === "add_node" ||
+        value === "update_node" ||
+        value === "connect_nodes" ||
+        value === "arrange_nodes" ||
+        value === "generate_media" ||
+        value === "create_storyboard" ||
+        value === "edit_storyboard" ||
+        value === "create_character" ||
+        value === "plan_step" ||
+        value === "adopt_drama_media" ||
+        value === "previs_scene_create" ||
+        value === "previs_apply_patch"
+        ? value
+        : null;
+}
+
+/** 世界引擎审批项的 nodeId 是场景 ID，不是画布节点：不能当成「定位到画布节点」的目标。 */
+function isPrevisOperation(value: AgentApprovalPreviewOperation) {
+    return value === "previs_scene_create" || value === "previs_apply_patch";
 }
 
 function normalizeServerPreview(value: unknown): AgentApprovalPresentation | null {
@@ -56,7 +74,7 @@ function normalizeServerPreview(value: unknown): AgentApprovalPresentation | nul
         if (!item || !op || !summary) continue;
         items.push({
             operation: op,
-            nodeId: text(item.nodeId, 120) || undefined,
+            nodeId: isPrevisOperation(op) ? undefined : text(item.nodeId, 120) || undefined,
             nodeTitle: text(item.nodeTitle, 120) || undefined,
             resultTitle: text(item.resultTitle, 120) || undefined,
             nodeType: text(item.nodeType, 32) || undefined,

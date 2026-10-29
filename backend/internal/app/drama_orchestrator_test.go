@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -104,14 +105,8 @@ func newDramaTestService(t *testing.T) (*Service, *fakeDramaBackend) {
 	svc.dramaTailFrameHook = func(userID, resourceID string) (string, error) {
 		return fake.resource(userID, "image", "image/png"), nil
 	}
-	capability := &ModelCapabilityConfig{Version: 1, Video: &VideoCapabilityConfig{
-		Duration:   VideoDurationConfig{Selection: "enum", Values: []int{5, 10}, Default: 5},
-		Operations: []string{"text_to_video", "reference_to_video", "image_to_video"}, DefaultOperation: "image_to_video",
-		References:    VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MaxImages: 6},
-		GenerateAudio: VideoBooleanConfig{Supported: true, Default: true},
-		Ratios:        []string{"9:16", "16:9"}, DefaultRatio: "9:16",
-	}}
-	raw, _ := json.Marshal(capability)
+	video := dramaVideoFixture()
+	raw, _ := json.Marshal(&ModelCapabilityConfig{Version: 1, Video: &video})
 	if err := db.Create(&model.ChannelModel{ID: "drama-video", ChannelID: "ch", ModelKey: "video", Capability: "video", Protocol: model.ChannelInterfaceVolcengineArkVideo, Enabled: true, CapabilityConfigJSON: string(raw)}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -122,6 +117,40 @@ func newDramaTestService(t *testing.T) (*Service, *fakeDramaBackend) {
 		t.Fatalf("seed user: %v", err)
 	}
 	return svc, fake
+}
+
+// dramaVideoFixture 是夹具视频模型的能力合同：竖横两种比例、同步出声、三种生成方式。
+func dramaVideoFixture() VideoCapabilityConfig {
+	return VideoCapabilityConfig{
+		Duration:   VideoDurationConfig{Selection: "enum", Values: []int{5, 10}, Default: 5},
+		Operations: []string{"text_to_video", "reference_to_video", "image_to_video"}, DefaultOperation: "image_to_video",
+		References:    VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MaxImages: 6},
+		GenerateAudio: VideoBooleanConfig{Supported: true, Default: true},
+		Ratios:        []string{"9:16", "16:9"}, DefaultRatio: "9:16",
+	}
+}
+
+func setDramaVideoCapability(t *testing.T, svc *Service, fake *fakeDramaBackend, video VideoCapabilityConfig) {
+	t.Helper()
+	row, err := svc.repo.ChannelModelByKey("ch", "video")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(&ModelCapabilityConfig{Version: 1, Video: &video})
+	row.CapabilityConfigJSON = string(raw)
+	if err := fake.db.Save(row).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func dramaVideoRequests(fake *fakeDramaBackend) []CreateTaskRequest {
+	requests := []CreateTaskRequest{}
+	for _, req := range fake.requests {
+		if req.Type == "canvas_video" {
+			requests = append(requests, req)
+		}
+	}
+	return requests
 }
 
 func runDramaTicks(t *testing.T, svc *Service, projectID string, ticks int) {
@@ -233,6 +262,9 @@ func TestDramaPipelineRunsNovelToFinalCutWithSampleGate(t *testing.T) {
 	}
 	if requests[1].Input["config"].(map[string]any)["videoGenerateAudio"] != "true" {
 		t.Fatal("native dialogue must stay enabled")
+	}
+	if config := requests[0].Input["config"].(map[string]any); config["size"] != "9:16" || config["vquality"] != nil {
+		t.Fatalf("a model with declared ratios must receive the work ratio as size: %+v", config)
 	}
 	casts, _ := svc.repo.DramaCasts(project)
 	for _, cast := range casts {
@@ -361,19 +393,111 @@ func TestDramaBudgetPausesDispatch(t *testing.T) {
 }
 
 func TestDramaMissingVideoContractFails(t *testing.T) {
-	svc, fake := newDramaTestService(t)
+	svc, _ := newDramaTestService(t)
 	if _, err := svc.dramaVideoProfile(DramaModelChoice{ChannelID: "missing", ModelKey: "missing"}); err == nil {
 		t.Fatal("missing model must not synthesize duration/audio settings")
 	}
-	row, err := svc.repo.ChannelModelByKey("ch", "video")
+}
+
+func TestDramaVideoScreenFollowsCapabilityContract(t *testing.T) {
+	ratios := &VideoCapabilityConfig{Ratios: []string{"adaptive", "16:9", "9:16", "1:1"}}
+	if screen := dramaVideoScreenFor(ratios, "9:16"); screen.Size != "9:16" || screen.Resolution != "" || screen.Issue != "" {
+		t.Fatalf("a declared ratio must be sent as size: %+v", screen)
+	}
+	if screen := dramaVideoScreenFor(ratios, "3:4"); !strings.Contains(screen.Issue, "3:4") {
+		t.Fatalf("an undeclared ratio must be refused, not sent and ignored: %+v", screen)
+	}
+	if screen := dramaVideoScreenFor(&VideoCapabilityConfig{}, "9:16"); screen.Issue == "" {
+		t.Fatal("a model without ratio control cannot promise 9:16")
+	}
+	// AutoDL 一类：横竖写在完整分辨率标签里；默认横屏时，竖屏作品取同档的竖屏标签。
+	labeled := &VideoCapabilityConfig{Resolutions: []string{"480p竖", "768p竖", "480p横", "768p横"}, DefaultResolution: "768p横", FixedScreenSpec: &VideoScreenSpecConfig{}}
+	for ratio, want := range map[string]string{"9:16": "768p竖", "16:9": "768p横"} {
+		if screen := dramaVideoScreenFor(labeled, ratio); screen.Resolution != want || screen.Size != "" || screen.Issue != "" {
+			t.Fatalf("%s: %+v", ratio, screen)
+		}
+	}
+	for _, ratio := range []string{"1:1", "3:4"} {
+		if screen := dramaVideoScreenFor(labeled, ratio); screen.Issue == "" {
+			t.Fatalf("%s has no matching label and must be refused: %+v", ratio, screen)
+		}
+	}
+	pixels := &VideoCapabilityConfig{Resolutions: []string{"480p竖(480*864)", "768p竖(768*1376)", "768p横(1376*768)", "736p(1:1)"}, DefaultResolution: "768p竖(768*1376)", FixedScreenSpec: &VideoScreenSpecConfig{}}
+	if screen := dramaVideoScreenFor(pixels, "16:9"); screen.Resolution != "768p横(1376*768)" {
+		t.Fatalf("pixel labels: %+v", screen)
+	}
+	if screen := dramaVideoScreenFor(pixels, "1:1"); screen.Resolution != "736p(1:1)" {
+		t.Fatalf("square label: %+v", screen)
+	}
+}
+
+func TestDramaSegmentVideoUsesResolutionLabelAndSilentModel(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	video := dramaVideoFixture()
+	// AutoDL 一类：没有独立比例参数，默认分辨率是横屏，且不声明同步出声。
+	video.Ratios, video.DefaultRatio = []string{}, ""
+	video.Resolutions, video.DefaultResolution = []string{"768p横", "768p竖"}, "768p横"
+	video.FixedScreenSpec = &VideoScreenSpecConfig{Ratios: []string{}, Resolutions: []string{"768p横", "768p竖"}, DefaultResolution: "768p横"}
+	video.GenerateAudio = VideoBooleanConfig{}
+	setDramaVideoCapability(t, svc, fake, video)
+	project := createTestDrama(t, svc, DramaReviewAuto).Project.ID
+	runDramaTicks(t, svc, project, 24)
+	requests := dramaVideoRequests(fake)
+	if len(requests) == 0 {
+		t.Fatal("a model without native audio must still be usable")
+	}
+	for _, req := range requests {
+		config := req.Input["config"].(map[string]any)
+		if config["vquality"] != "768p竖" || config["size"] != nil || config["videoGenerateAudio"] != "false" {
+			t.Fatalf("a vertical work must pick the vertical label and turn audio off: %+v", config)
+		}
+	}
+}
+
+func TestDramaRefusesVideoModelWithoutWorkRatio(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, Models: fakeDramaModels}
+	settings.AspectRatio = "2:1"
+	if _, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "画幅", Settings: settings, Chapters: []DramaChapterInput{{Title: "一", Text: "甲"}}}); err == nil {
+		t.Fatal("an unknown ratio must be rejected instead of becoming 9:16")
+	}
+	project := createTestDrama(t, svc, DramaReviewAuto).Project.ID
+	video := dramaVideoFixture()
+	video.Ratios, video.DefaultRatio = []string{"16:9"}, "16:9"
+	setDramaVideoCapability(t, svc, fake, video)
+	runDramaTicks(t, svc, project, 24)
+	if got := len(dramaVideoRequests(fake)); got != 0 {
+		t.Fatalf("a model that cannot output 9:16 must not be paid for a landscape clip: %d requests", got)
+	}
+	summary, err := svc.DramaSummary("usr-drama", project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	row.CapabilityConfigJSON = `{"version":1,"video":{"operations":["text_to_video","image_to_video"],"duration":{"selection":"select","values":[5],"default":5},"generateAudio":{"supported":false}}}`
-	if err := fake.db.Save(row).Error; err != nil {
-		t.Fatal(err)
+	segments, _ := svc.repo.DramaSegments(summary.Episodes[0].ID)
+	if len(segments) == 0 || segments[0].VideoStatus != model.DramaMediaFailed || !strings.Contains(segments[0].VideoError, "9:16") {
+		t.Fatalf("the segment must fail with the ratio reason: %+v", segments)
 	}
-	if _, err := svc.dramaVideoProfile(fakeDramaModels.Video); err == nil {
-		t.Fatal("silent video must be rejected")
+	p, _ := svc.repo.DramaProduction(project)
+	current := parseDramaSettings(p.SettingsJSON)
+	if _, err := svc.UpdateDramaSettings("usr-drama", project, UpdateDramaSettingsRequest{Settings: &current}); err == nil || !strings.Contains(err.Error(), "9:16") {
+		t.Fatalf("saving settings with an incompatible video model must fail: %v", err)
+	}
+}
+
+func TestDramaVideoOptionsReportRatiosAndAudio(t *testing.T) {
+	svc, _ := newDramaTestService(t)
+	option := svc.dramaModelOption(fakeDramaModels.Video, "video", "视频", "")
+	if !slices.Equal(option.VideoRatios, []string{"9:16", "16:9"}) || option.GenerateAudio == nil || !*option.GenerateAudio || !option.TailFrameChain {
+		t.Fatalf("video options must expose ratios and audio: %+v", option)
+	}
+	wide := DramaModelOption{Capability: "video", Choice: DramaModelChoice{ChannelID: "wide"}, TailFrameChain: true, VideoRatios: []string{"16:9"}}
+	parallelOnly := DramaModelOption{Capability: "video", Choice: DramaModelChoice{ChannelID: "vertical"}, VideoRatios: []string{"9:16"}}
+	vertical := DramaSettings{Settings: production.Settings{AspectRatio: "9:16"}, VideoContinuity: DramaContinuityTailFrame}
+	if picked, ok := preferredDramaOption([]DramaModelOption{wide, parallelOnly}, vertical); ok {
+		t.Fatalf("must not fall back to a model that cannot serve the work: %+v", picked)
+	}
+	vertical.VideoContinuity = DramaContinuityParallel
+	if picked, ok := preferredDramaOption([]DramaModelOption{wide, parallelOnly}, vertical); !ok || picked.Choice.ChannelID != "vertical" {
+		t.Fatalf("a parallel vertical work must pick the vertical model: %+v %v", picked, ok)
 	}
 }

@@ -360,7 +360,7 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
                     <>
                         <b className="text-[var(--fs-label)]">已选 {selected.size} 段</b>
                         <div className="drama-board-model">
-                            <DramaModelPicker capability="video" size="sm" value={batchModel || defaultVideoModel} onChange={setBatchModel} placeholder="视频模型" />
+                            <DramaModelPicker capability="video" size="sm" value={batchModel || defaultVideoModel} onChange={setBatchModel} placeholder="视频模型" aspectRatio={aspectRatio} />
                         </div>
                         <Tooltip title={toGenerate.length < selected.size ? `${selected.size - toGenerate.length} 段提示词未就绪或正在生成，会跳过` : undefined}>
                             <Button

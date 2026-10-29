@@ -1,4 +1,4 @@
-/* 预演台「世界」面板与布景检查器。只用预演台 --pd-* token。 */
+/* 世界引擎「世界」面板与布景检查器。只用世界引擎 --pd-* token。 */
 .pv-world {
     display: flex;
     flex-direction: column;

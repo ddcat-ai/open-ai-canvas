@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { fitImageNodeSize, preserveImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
+import { resolvePrevisShotCameraMove } from "@/lib/canvas/previs/previs-camera-techniques";
 import { createPrevisSceneFromTemplate, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
 import { mergePrevisOutputPreview, upsertPrevisSceneById } from "@/lib/canvas/previs/previs-session";
 import { PREVIS_DEFAULT_WORLD } from "@/lib/canvas/previs/previs-world";
@@ -36,7 +37,7 @@ const PREVIS_NODE_SIZE = { width: 520, height: 340 } as const;
 const PREVIS_LEGACY_NODE_SIZE = { width: 760, height: 500 } as const;
 
 function shouldUpgradePrevisNodeSize(node: CanvasNodeData) {
-    // 只迁移预演台曾经写入的默认尺寸；用户后续手动调整过的节点保持原样。
+    // 只迁移世界引擎曾经写入的默认尺寸；用户后续手动调整过的节点保持原样。
     const isLegacyDefault = node.width === PREVIS_LEGACY_NODE_SIZE.width && node.height === PREVIS_LEGACY_NODE_SIZE.height;
     const isEarlyCompactDefault = node.width <= 720 && node.height <= 320;
     return isLegacyDefault || isEarlyCompactDefault;
@@ -107,7 +108,7 @@ export function useCanvasPrevis({
             setSelectedNodeIds(new Set([node.id]));
             setSelectedConnectionId(null);
             updateProject(projectId, { previsScenes: upsertPrevisSceneById(currentPrevisScenes(projectId, previsScenes), scene) });
-            message.success("已创建预演台节点，点击缩略图进入编辑");
+            message.success("已创建世界引擎节点，点击缩略图进入编辑");
         },
         [previsScenes, getCanvasCenter, message, nodesRef, projectId, setNodes, setSelectedConnectionId, setSelectedNodeIds, updateProject],
     );
@@ -177,10 +178,10 @@ export function useCanvasPrevis({
                 ...existingPreview,
                 id: previewId,
                 type: CanvasNodeType.Image,
-                title: `${sourceNode.title} · 预演台构图`,
+                title: `${sourceNode.title} · 世界引擎构图`,
                 position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
                 ...preserveImageNodeSize(existingPreview, previewSize),
-                metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["预演台构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
+                metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["世界引擎构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
             };
             if (previewIndex >= 0) nextNodes[previewIndex] = previewNode;
             else nextNodes.push(previewNode);
@@ -203,7 +204,7 @@ export function useCanvasPrevis({
                         ...videoMetadata(videoUpload),
                         prompt: output.prompt,
                         workflowKind: "reference_video",
-                        assetTags: ["预演台白膜", `镜头:${sourceNode.title}`],
+                        assetTags: ["世界引擎白膜", `镜头:${sourceNode.title}`],
                         producedModel: undefined,
                         producedModelCandidate: undefined,
                     },
@@ -232,7 +233,7 @@ export function useCanvasPrevis({
                         ...imageMetadata(depthImage),
                         prompt: output.prompt,
                         workflowKind: "reference_set",
-                        assetTags: ["预演台深度", `镜头:${sourceNode.title}`],
+                        assetTags: ["世界引擎深度", `镜头:${sourceNode.title}`],
                         producedModel: undefined,
                         producedModelCandidate: undefined,
                     },
@@ -258,7 +259,7 @@ export function useCanvasPrevis({
                         ...videoMetadata(depthVideoUpload),
                         prompt: output.prompt,
                         workflowKind: "reference_video",
-                        assetTags: ["预演台深度", `镜头:${sourceNode.title}`],
+                        assetTags: ["世界引擎深度", `镜头:${sourceNode.title}`],
                         producedModel: undefined,
                         producedModelCandidate: undefined,
                     },
@@ -286,7 +287,7 @@ export function useCanvasPrevis({
                 previsClayVideoNodeId: clayVideoId,
                 composerContent: output.prompt,
                 prompt: output.prompt,
-                videoCameraMoveId: output.shot.cameraMove,
+                videoCameraMoveId: resolvePrevisShotCameraMove(output.scene, output.shot),
                 videoCameraMovePrompt: output.prompt,
                 referenceAssetNodeIds,
             };

@@ -53,6 +53,9 @@ func (s *Service) CreateDrama(userID string, req CreateDramaRequest) (DramaSumma
 		req.Settings.EpisodeMode, req.Settings.ChaptersPerEpisode = DramaEpisodeModeChapter, 1
 	}
 	settings := req.Settings.normalized()
+	if !production.ValidAspectRatio(settings.AspectRatio) {
+		return DramaSummary{}, BadAuthRequest("不支持的画幅：" + settings.AspectRatio)
+	}
 	if problem := production.ValidateAssetPrompts(settings.Assets); problem != "" {
 		return DramaSummary{}, BadAuthRequest(problem)
 	}

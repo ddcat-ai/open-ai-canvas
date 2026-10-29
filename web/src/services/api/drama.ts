@@ -325,6 +325,12 @@ export type DramaSegmentRequest = {
     operation: "image_to_video" | "reference_to_video" | "text_to_video" | "";
     seconds: number;
     maxVideoSeconds: number;
+    /** 作品画幅；size / resolution 是实际发送的画面参数：声明比例的模型发 size，用分辨率标签表达横竖的模型发 resolution（如 768p竖）。 */
+    aspectRatio: string;
+    size?: string;
+    resolution?: string;
+    /** 视频模型同步生成对白与音效；false 时本段视频没有声音。 */
+    generateAudio: boolean;
     firstFrameResourceId?: string;
     firstFramePending: boolean;
     references: DramaSegmentReference[];
@@ -388,6 +394,10 @@ export type DramaModelOption = {
     maxVideoSeconds?: number;
     /** 仅视频模型：支持图生视频，可用于尾帧续接；为 false 时只能并行出片。 */
     tailFrameChain?: boolean;
+    /** 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。 */
+    videoRatios?: string[];
+    /** 仅视频模型：是否同步生成对白与音效；false 时剧情段视频没有声音。 */
+    generateAudio?: boolean;
     imageResolutions?: string[];
     defaultImageResolution?: string;
     imageRatios?: string[];

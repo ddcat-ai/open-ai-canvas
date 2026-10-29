@@ -85,8 +85,10 @@ describe("模式接线", () => {
 
     test("动画模式把 Transform 轨迹接入视口，隐藏演员和零长度轨迹不显示", () => {
         expect(workbench).toContain("showMotionPaths\n");
-        expect(viewport).toContain('object.visible && (object.kind === "actor" || object.primitive === "character")');
+        // 只有关键帧的演员画关键帧轨迹；有路径（motionPath）的对象改画可编辑途经点（含高度）。
+        expect(viewport).toContain('object.visible && !object.motionPath && (object.kind === "actor" || object.primitive === "character")');
         expect(viewport).toContain("previsTransformPathLength(object.keyframes) > 0.001");
+        expect(viewport).toContain("object.visible && object.motionPath && object.motionPath.points.length > 1");
         expect(viewport).toContain("<Line points={points}");
         expect(viewport).toContain("interpolatePrevisTransform(sorted[0].transform, sorted, playhead).position");
     });
@@ -147,10 +149,13 @@ describe("模式接线", () => {
         expect(workbench).toContain(") : selectedLight ? (");
     });
 
-    test("运镜生成只更新首尾帧并提示到动画模式继续编辑，不清空手工关键帧", () => {
-        expect(workbench).toContain("resolvePrevisCameraMoveKeyframes(item.keyframes");
-        expect(workbench).toContain("已更新运镜首尾关键帧，可在动画模式继续编辑");
-        expect(workbench).not.toContain("keyframes: [{ id: nanoid(), time: 0, transform: start }");
+    test("运镜写成摄影机运镜段，不再按世界坐标轴生成首尾关键帧，深度范围按运镜后的机位采样", () => {
+        const inspectors = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/previs-inspectors.tsx"), "utf8");
+        expect(inspectors).toContain("<PrevisCameraMoveSection");
+        expect(inspectors).toContain("onChange={(moves) => onUpdateCamera({ moves })}");
+        expect(workbench).not.toContain("cameraMoveTransform");
+        expect(workbench).not.toContain("resolvePrevisCameraMoveKeyframes");
+        expect(workbench).toContain("evaluatePrevisCamera(current, camera, ratio * activeShot.duration)");
     });
 
     test("小屏通过 dock 开合属性检查器，姿态与骨骼入口仍可达", () => {
@@ -183,7 +188,7 @@ describe("模式接线", () => {
         const recovery = slice(workbench, "// 打开会话时检查合法本地恢复候选", "const activeShot =");
         const pageHide = slice(workbench, "// 离开页面：", "// 卸载兜底：");
         const unmount = slice(workbench, "// 卸载兜底：", "const undo =");
-        const shortcuts = slice(workbench, "// 预演台是全屏浮层", "/** 对象 transform 编辑的唯一入口");
+        const shortcuts = slice(workbench, "// 世界引擎是全屏浮层", "/** 对象 transform 编辑的唯一入口");
         // 锁住各自的依赖数组，同时允许格式器换行和尾逗号。
         expect(recovery).toMatch(/\},\s*\[message,\s*modal,\s*open,\s*scene,\s*writeDraft\],?\s*\);/);
         expect(pageHide).toMatch(/\},\s*\[mirrorDraft,\s*stagedTransaction\],?\s*\);/);
@@ -192,7 +197,7 @@ describe("模式接线", () => {
     });
 });
 
-describe("异步预演台输出使用最新权威状态", () => {
+describe("异步世界引擎输出使用最新权威状态", () => {
     test("上传后重新核验节点与场景，并把预览引用合入最新 scene", () => {
         expect(hook).toContain("const sourceNodeAtStart = nodesRef.current.find");
         expect(hook).toContain("const outputProjectId = projectId;");
@@ -235,7 +240,7 @@ describe("模式控件可发现、可键盘、小屏可达", () => {
     test("有可见文字标签与 hint title，不是纯图标", () => {
         expect(nav).toContain("{item.label}");
         expect(nav).toContain("title={item.hint}");
-        expect(nav).toContain('aria-label="预演台模式"');
+        expect(nav).toContain('aria-label="世界引擎模式"');
     });
 
     test("带 data-mode 测试锚点：E2E 不靠中文文案定位模式按钮", () => {

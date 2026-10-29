@@ -75,7 +75,11 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// （travelStyle 枚举、fromMarker/toMarker、height）后为 39,077 字节，预算显式上调到 39,700，余量约1.6%。
 	// 主分支同期把长期记忆改用 memory_update（替换 remember_lesson / recall_lessons）并新增
 	// skill_market_search、skill_recommend（单独测量为 30 个工具、37,277 字节）；两者合并后为
-	// 30 个工具、38,984 字节，预算不变，余量约1.8%。
+	// 30 个工具、38,984 字节，预算不变，余量约1.8%。世界引擎加入 camera_move / camera_move_remove（technique、
+	// subjectId 两个字段；手法表、参数范围和大师手法配方放在 previs_scene_read.catalog）并把预演台改名为世界引擎后为
+	// 39,236 字节，预算不变，余量约1.2%。路径动画加入 pathId（引用用户画的参考轨迹）并把 easing 扩展为运动规律
+	// （ease_in / ease_out；路径规则放在 catalog.rules）后为 39,299 字节，预算不变，余量约1.0%。previs_scene_read 加入 manual（世界引擎说明书主题；正文按需返回，
+	// 主题目录放在读取结果里）后为 39,394 字节，预算不变，余量约0.8%。
 	// 新增工具或字段时请重新测量并有意识地调整这个数字，而不是让 schema 悄悄膨胀
 	// （它每一步都要发、还在前缀最前面）。
 	if len(raw) > 39700 {

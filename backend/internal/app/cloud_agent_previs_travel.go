@@ -27,7 +27,7 @@ func cloudAgentPrevisMarkerPosition(scene map[string]any, label string) ([]float
 		labels = append(labels, stringValue(marker["label"]))
 	}
 	if len(labels) == 0 {
-		return nil, BadAuthRequest("场景里还没有标记点；请用户在预演台视口右键地面「标记为点 A」，或改用 pathPoints 给出坐标")
+		return nil, BadAuthRequest("场景里还没有标记点；请用户在世界引擎视口右键地面「标记为点 A」，或改用 pathPoints 给出坐标")
 	}
 	return nil, BadAuthRequest(fmt.Sprintf("标记点 %q 不存在，现有：%s", wanted, strings.Join(labels, "、")))
 }

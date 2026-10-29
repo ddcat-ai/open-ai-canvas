@@ -1,6 +1,6 @@
 import { Euler, Quaternion } from "three";
 
-import { interpolatePrevisBoneRotation, interpolatePrevisTransform, resolvePrevisKeyframeProgress } from "@/lib/canvas/previs/previs-scene";
+import { interpolatePrevisBoneRotation, interpolatePrevisKeyframeLift, interpolatePrevisTransform, resolvePrevisKeyframeProgress } from "@/lib/canvas/previs/previs-scene";
 import { evaluatePrevisTravel, previsTravelGaitRun, previsTravelPose, previsTravelSuppressesGait } from "@/lib/canvas/previs/previs-travel";
 import type { PrevisActorMotion, PrevisHumanoidBone, PrevisKeyframe, PrevisMotionId, PrevisObject, PrevisPose, PrevisQuat } from "@/types/previs";
 
@@ -363,8 +363,10 @@ export function previsHorizontalSpeed(keyframes: PrevisKeyframe[], time: number)
 
 export type PrevisEvaluatedPose = {
     rotations: Record<PrevisMannequinBone, PrevisQuat>;
-    /** 贴地之后额外抬起的高度（跳跃）。 */
+    /** 动作片段（跳跃、欢呼）的抬起高度，按身高比例。 */
     lift: number;
+    /** 位移段（飞行、御剑、悬浮、跳跃）与路径高度的离地高度（米，地面为 0）。 */
+    worldLift: number;
     /** 当前步态信息，供 UI/提示词展示。 */
     locomotion: "still" | "walk" | "run";
 };
@@ -388,7 +390,10 @@ export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "key
     // 位移段（飞行、御剑、悬浮、跳跃、闪现）：飞行类不迈步，走/跑/冲刺强制对应步态。
     const travel = object.travels?.length ? evaluatePrevisTravel({ travels: object.travels, keyframes: object.keyframes || [], transform: object.transform ?? { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }, time) : null;
     const speed = previsHorizontalSpeed(object.keyframes || [], time);
-    const moveWeight = previsTravelSuppressesGait(travel) ? 0 : smoothstep(0.08, 0.45, speed);
+    // 路径高度（关键帧 lift）：离地超过 0.2 米就不再迈步，改为悬空姿态。
+    const pathLift = interpolatePrevisKeyframeLift(object.keyframes || [], time);
+    const airborne = smoothstep(0.2, 0.6, pathLift);
+    const moveWeight = previsTravelSuppressesGait(travel) ? 0 : smoothstep(0.08, 0.45, speed) * (1 - airborne);
     let locomotion: PrevisEvaluatedPose["locomotion"] = "still";
     if (moveWeight > 0) {
         const run = previsTravelGaitRun(travel) ?? smoothstep(2, 2.8, speed);
@@ -403,6 +408,14 @@ export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "key
     }
 
     let lift = 0;
+    let worldLift = pathLift;
+    if (airborne > 0 && !travel) {
+        const floatPose = previsTravelPose({ style: "float", weight: airborne, lift: pathLift, progress: 0, local: time, distance: 0 });
+        for (const bone of PREVIS_MANNEQUIN_BONES) {
+            const target = floatPose?.[bone];
+            if (target) current.get(bone)!.slerp(eulerToQuat(target), airborne);
+        }
+    }
     if (travel) {
         const travelPose = previsTravelPose(travel);
         if (travelPose && travel.weight > 0) {
@@ -411,7 +424,7 @@ export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "key
                 if (target) current.get(bone)!.slerp(eulerToQuat(target), travel.weight);
             }
         }
-        lift = Math.max(lift, travel.lift);
+        worldLift = Math.max(worldLift, travel.lift);
     }
     for (const motion of object.motions || []) {
         const definition = PREVIS_MOTIONS[motion.motion];
@@ -434,7 +447,7 @@ export function evaluatePrevisActorPose(object: Pick<PrevisObject, "pose" | "key
         const keyframes = object.boneTracks?.find((item) => item.bone === bone)?.keyframes;
         rotations[bone] = keyframes?.length ? interpolatePrevisBoneRotation(staged, keyframes, time) : staged;
     }
-    return { rotations, lift, locomotion };
+    return { rotations, lift, worldLift, locomotion };
 }
 
 function smoothstep(edge0: number, edge1: number, value: number) {

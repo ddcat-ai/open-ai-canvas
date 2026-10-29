@@ -1,7 +1,7 @@
 import type { PrevisAspectRatio, PrevisCamera, PrevisShot } from "@/types/previs";
 
 /**
- * 预演台镜头光学的唯一真源。
+ * 世界引擎镜头光学的唯一真源。
  *
  * 约定：传感器按 Super35 / 全画幅 36mm 宽度计算水平视角，three PerspectiveCamera 需要的是
  * 竖直 fov，因此按镜头画幅比例把水平视角换算成竖直视角。这样同一焦段在 9:16 竖屏与

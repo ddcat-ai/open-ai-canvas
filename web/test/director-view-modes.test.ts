@@ -684,7 +684,7 @@ describe("切换器可发现、可键盘、无新增全局样式", () => {
         expect(toolbar).toContain('type="button"');
         expect(toolbar).toContain("aria-pressed={active}");
         expect(toolbar).toContain('role="group"');
-        expect(toolbar).toContain('aria-label="预演台取景模式"');
+        expect(toolbar).toContain('aria-label="世界引擎取景模式"');
     });
 
     test("每个按钮都有 aria-label 与 title，图标化文字也能被读出", () => {

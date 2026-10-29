@@ -884,9 +884,9 @@ func TestCloudAgentPrevisGroundScene(t *testing.T) {
 	if y(creationMaps(objects[0]["keyframes"])[0]) != 0 {
 		t.Fatal("actor keyframe must be grounded")
 	}
-	for _, point := range objects[0]["motionPath"].(map[string]any)["points"].([]any) {
-		if numberValue(point.([]any)[1], -99) != 0 {
-			t.Fatal("actor path must be grounded")
-		}
+	// 路径点 Y 是离地高度：地下的点拉回 0，空中的点保留（演员沿路径悬空移动）。
+	points := objects[0]["motionPath"].(map[string]any)["points"].([]any)
+	if numberValue(points[0].([]any)[1], -99) != 0 || numberValue(points[1].([]any)[1], -99) != 2 {
+		t.Fatalf("actor path heights wrong: %#v", points)
 	}
 }
