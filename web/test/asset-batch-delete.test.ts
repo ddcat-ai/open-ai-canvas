@@ -275,7 +275,7 @@ describe("素材批量删除", () => {
     test("素材页和选择器的批量及清空入口使用数组同步方法", () => {
         const page = readFileSync(new URL("../src/pages/assets/index.tsx", import.meta.url), "utf8");
         const picker = readFileSync(new URL("../src/components/assets/asset-library-picker-modal.tsx", import.meta.url), "utf8");
-        expect(page).toContain("deleteAssetsWithRemoteSync(trashAssets.map");
+        expect(page).toContain("deleteAssetsWithRemoteSync(batch)");
         expect(page).toContain("const ids = [...selectedIds]");
         expect(page).toContain("deleteAssetsWithRemoteSync(ids)");
         expect(page).not.toContain("validAssets.filter((asset) => selectedIds.includes(asset.id))");
