@@ -30,21 +30,28 @@ function authorized(request) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-function acquire(request) {
+function acquire(response) {
+  if (response.destroyed) return Promise.reject(new Error("Agent request cancelled while queued"));
   if (active < maxSessions) {
     active += 1;
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
-    const waiter = { resolve, reject };
+    const waiter = {
+      resolve: () => {
+        response.off("close", abort);
+        resolve();
+      },
+      reject,
+    };
     waiters.push(waiter);
     const abort = () => {
       const index = waiters.indexOf(waiter);
       if (index >= 0) waiters.splice(index, 1);
       reject(new Error("Agent request cancelled while queued"));
     };
-    if (request.aborted || request.destroyed) abort();
-    else request.once("aborted", abort);
+    // 请求体正常读完也会 destroyed；排队取消跟随尚未结束的响应连接。
+    response.once("close", abort);
   });
 }
 
@@ -136,10 +143,15 @@ const server = createServer(async (request, response) => {
     return;
   }
   try {
-    await acquire(request);
+    await acquire(response);
   } catch (error) {
+    if (response.destroyed) return;
     response.writeHead(499, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: error instanceof Error ? error.message : "cancelled" }));
+    return;
+  }
+  if (response.destroyed) {
+    release();
     return;
   }
 
@@ -162,7 +174,7 @@ const server = createServer(async (request, response) => {
   const stop = () => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   };
-  request.on("aborted", stop);
+  response.once("close", stop);
   response.writeHead(200, { "content-type": "application/x-ndjson" });
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString("utf8");
