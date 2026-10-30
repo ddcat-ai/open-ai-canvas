@@ -123,7 +123,7 @@ func TestCreateBackupReadsBackendDataAsRoot(t *testing.T) {
 	}
 	for _, call := range runner.calls {
 		joined := strings.Join(call, " ")
-		if strings.Contains(joined, "exec -T --user root backend tar -C /data -cf - .") {
+		if strings.Contains(joined, "run --rm --no-deps --pull never -T --user root --entrypoint tar backend -C /data -cf - .") {
 			return
 		}
 	}
