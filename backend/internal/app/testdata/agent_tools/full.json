@@ -1553,7 +1553,7 @@
   },
   {
     "function": {
-      "description": "把画布上就绪的形象图片（可加声音音频）打包成角色卡：写入角色库并在画布放置角色卡节点，按权限审批。已有同名角色卡先复用；definition 只填有依据的设定。",
+      "description": "把就绪形象图与可选声音打包为角色卡，写入角色库和画布，按权限审批。先复用同名角色卡；definition 只填有依据的设定。",
       "name": "canvas_create_character",
       "parameters": {
         "additionalProperties": false,
@@ -1563,7 +1563,49 @@
             "type": "string"
           },
           "definition": {
-            "description": "可选设定：role/appearance/physique/clothing/personality/props/consistencyPrompt/multiViewPrompt/voiceLanguage/voiceAge/voiceTimbre 为字符串，aliases 为字符串数组",
+            "additionalProperties": false,
+            "properties": {
+              "aliases": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "appearance": {
+                "type": "string"
+              },
+              "clothing": {
+                "type": "string"
+              },
+              "consistencyPrompt": {
+                "type": "string"
+              },
+              "multiViewPrompt": {
+                "type": "string"
+              },
+              "personality": {
+                "type": "string"
+              },
+              "physique": {
+                "type": "string"
+              },
+              "props": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "voiceAge": {
+                "type": "string"
+              },
+              "voiceLanguage": {
+                "type": "string"
+              },
+              "voiceTimbre": {
+                "type": "string"
+              }
+            },
+            "required": [],
             "type": "object"
           },
           "imageNodeId": {
