@@ -23,7 +23,7 @@ import { saveCanvasDrawing, type CanvasDrawingRenderDraft } from "@/lib/canvas/c
 import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, loadCanvasProjectForEditing, saveRemoteUserDataNow, scheduleRemoteUserDataSync } from "@/services/user-data-sync";
 import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/services/api/user-data";
 import { useUserStore } from "@/stores/use-user-store";
-import { listProjects } from "@/services/api/projects";
+import { getProject, listProjects } from "@/services/api/projects";
 import { loadCanvasProjectPage } from "@/lib/workspace-route-modules";
 import { resourceFileUrl, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { primeResourceBlobCache } from "@/services/resource-blob-cache";
@@ -177,6 +177,18 @@ export default function CanvasPage() {
             }
             hideLoading();
             const remoteSyncEnabled = hasRemoteUserDataSyncSession();
+            // 源画布的 projectId 属于导出它的实例，目标实例通常没有这个项目；
+            // 直接拿它关联素材会让 POST /projects/{id}/assets 返回 404 并中断整个导入。
+            // 目标实例存在同名项目时才沿用，否则退回"不关联项目"的自由画布语义。
+            const resolveImportDomainProjectId = async (projectId?: string) => {
+                if (!projectId || !remoteSyncEnabled) return undefined;
+                try {
+                    await getProject(projectId);
+                    return projectId;
+                } catch {
+                    return undefined;
+                }
+            };
             let remoteSyncWarning: unknown;
 
             for (const item of data.projects) {
@@ -244,6 +256,10 @@ export default function CanvasPage() {
                                 ...(nextStorageKey !== undefined ? { storageKey: nextStorageKey } : {}),
                                 ...(content !== undefined ? { content } : {}),
                                 ...(previewContent !== undefined ? { previewContent } : {}),
+                                // 跨实例导入时 assetId 属于源实例，在目标实例不存在。保留它会让
+                                // ensureCanvasNodeAsset 先去云端拉这个陌生 ID 并失败，因此只保留
+                                // 已完成映射的 assetId，其余交给 ensureCanvasNodeAsset 在目标实例重建。
+                                ...(node.metadata?.assetId && !mapped ? { assetId: undefined } : {}),
                                 drawingEngine: node.type === "drawing" && node.metadata?.drawingId ? drawingEngineById.get(node.metadata.drawingId) || node.metadata.drawingEngine || "tldraw" : node.metadata?.drawingEngine,
                             },
                         };
@@ -260,7 +276,14 @@ export default function CanvasPage() {
                                   return mapped
                                       ? {
                                             ...clip,
-                                            directMedia: { ...directMedia, storageKey: mapped.storageKey, url: mapped.url, dataUrl: directMedia.dataUrl ? mapped.url : directMedia.dataUrl, content: directMedia.content ? mapped.url : directMedia.content },
+                                            directMedia: {
+                                                ...directMedia,
+                                                storageKey: mapped.storageKey,
+                                                url: mapped.url,
+                                                dataUrl: directMedia.dataUrl ? mapped.url : directMedia.dataUrl,
+                                                content: directMedia.content ? mapped.url : directMedia.content,
+                                                assetId: undefined,
+                                            },
                                         }
                                       : clip;
                               }),
@@ -276,7 +299,7 @@ export default function CanvasPage() {
                         const storageKey = node.metadata.storageKey || "";
                         let assetId = storageKey ? assetIdByStorageKey.get(storageKey) : undefined;
                         if (!assetId) {
-                            const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: item.project.projectId, node, source: "canvas-upload" });
+                            const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: await resolveImportDomainProjectId(item.project.projectId), node, source: "canvas-upload" });
                             assetId = result.assetId;
                             if (storageKey) assetIdByStorageKey.set(storageKey, assetId);
                         }
@@ -287,7 +310,9 @@ export default function CanvasPage() {
                         for (const clip of remappedTimeline.clips) {
                             const media = clip.directMedia;
                             const content = media?.url || media?.dataUrl || media?.content || "";
-                            if (!media || media.assetId || !media.storageKey || !content || media.kind === "text") {
+                            // 不能因为 media.assetId 已存在就跳过重建：跨实例导入时它是源实例的 ID，
+                            // 在目标实例查不到，必须按 storageKey 重新建立素材关联。
+                            if (!media || !media.storageKey || !content || media.kind === "text") {
                                 clips.push(clip);
                                 continue;
                             }
@@ -303,7 +328,7 @@ export default function CanvasPage() {
                                     height: media.height || (type === CanvasNodeType.Audio ? 120 : 240),
                                     metadata: { content, storageKey: media.storageKey, naturalWidth: media.width, naturalHeight: media.height, durationMs: media.durationMs, bytes: media.bytes, mimeType: media.mimeType },
                                 };
-                                const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: item.project.projectId, node, source: "canvas-upload" });
+                                const result = await ensureCanvasNodeAsset({ canvasId: importedProjectId, domainProjectId: await resolveImportDomainProjectId(item.project.projectId), node, source: "canvas-upload" });
                                 assetId = result.assetId;
                                 assetIdByStorageKey.set(media.storageKey, assetId);
                             }
