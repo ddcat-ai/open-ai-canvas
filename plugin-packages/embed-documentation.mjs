@@ -1,6 +1,7 @@
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { packageDirectories } from "./package-directories.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const contractStart = "<!-- YINGCE_MANIFEST_CONTRACT_START -->";
@@ -36,16 +37,12 @@ ${JSON.stringify(contract, null, 2)}
 ${contractEnd}`;
 }
 
-const entries = await readdir(root, { withFileTypes: true });
 const requestedPackageIDs = new Set(process.argv.slice(2).map((value) => value.trim()).filter(Boolean));
-const packageDirectories = entries
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .filter((name) => requestedPackageIDs.size === 0 || requestedPackageIDs.has(name))
-  .sort();
+const directories = (await packageDirectories(root))
+  .filter((name) => requestedPackageIDs.size === 0 || requestedPackageIDs.has(name));
 
 let updated = 0;
-for (const packageID of packageDirectories) {
+for (const packageID of directories) {
   const packageRoot = join(root, packageID);
   let manifestSource;
   try {

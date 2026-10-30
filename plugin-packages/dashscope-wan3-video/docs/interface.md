@@ -44,7 +44,7 @@
 | `create.body.model` | `{"$ref":"request.model"}` |
 | `create.body.input.prompt` | `{"$omitEmpty":{"$ref":"request.prompt"}}` |
 | `create.body.input.media` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.dashscope-wan3-video.media"},{"$map":{"from":{"$sortByOrder":{"$ref":"request.inputs"}},"as":"media","in":{"type":{"$coalesce":[{"$ref":"media.role"},{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"image"]},"then":"reference_image","else":{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"video"]},"then":"reference_video","else":{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"audio"]},"then":"reference_audio","else":{"$ref":"media.kind"}}}}}}}]},"url":{"$ref":"media.value"}}}}]}}` |
-| `create.body.parameters.resolution` | `{"$omitEmpty":{"$ref":"request.resolution"}}` |
+| `create.body.parameters.resolution` | `{"$omitEmpty":{"$upper":{"$ref":"request.resolution"}}}` |
 | `create.body.parameters.ratio` | `{"$omitEmpty":{"$ref":"request.aspectRatio"}}` |
 | `create.body.parameters.duration` | `{"$omitEmpty":{"$ref":"request.duration"}}` |
 | `create.body.parameters.audio` | `{"$coalesce":[{"$ref":"request.providerOptions.dashscope-wan3-video.audio"},{"$ref":"request.generateAudio"}]}` |
@@ -98,7 +98,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "dashscope-wan3-video",
   "name": "DashScope Wan 3.0 Video",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Alibaba Cloud / 影策",
   "description": "DashScope Wan 3.0 Video 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -385,7 +385,9 @@
             "parameters": {
               "resolution": {
                 "$omitEmpty": {
-                  "$ref": "request.resolution"
+                  "$upper": {
+                    "$ref": "request.resolution"
+                  }
                 }
               },
               "ratio": {
