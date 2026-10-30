@@ -326,6 +326,23 @@ func (r *Repository) SaveDramaJob(job *model.DramaJob) error {
 	return r.db.Save(job).Error
 }
 
+// RecordDramaJobCost 将本次任务的去重记录与作品花费一起提交。
+func (r *Repository) RecordDramaJobCost(job *model.DramaJob, previousAttempts string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.DramaJob{}).
+			Where("id = ? AND project_id = ? AND task_id = ? AND attempts_json = ?", job.ID, job.ProjectID, job.TaskID, previousAttempts).
+			Updates(map[string]any{"attempts_json": job.AttemptsJSON, "cost_microcredits": job.CostMicrocredits, "updated_at": time.Now()})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("短剧作业已变化，请重新读取结算记录")
+		}
+		return tx.Model(&model.DramaProduction{}).Where("project_id = ?", job.ProjectID).
+			Update("spent_microcredits", gorm.Expr("spent_microcredits + ?", job.CostMicrocredits)).Error
+	})
+}
+
 // CancelDramaJobs 取消尚未派发的排队工作；已提交的任务由任务中心各自收尾。
 func (r *Repository) CancelQueuedDramaJobs(projectID string, filter func(*gorm.DB) *gorm.DB) error {
 	query := r.db.Model(&model.DramaJob{}).Where("project_id = ? AND status = ?", projectID, model.DramaJobQueued)
@@ -465,7 +482,7 @@ func (r *Repository) SaveDramaProductionProgress(production *model.DramaProducti
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 		if err := tx.Model(&model.DramaProduction{}).Where("project_id = ?", production.ProjectID).Updates(map[string]any{
-			"stage": production.Stage, "bible_json": production.BibleJSON, "spent_microcredits": production.SpentMicrocredits,
+			"stage": production.Stage, "bible_json": production.BibleJSON,
 			"plan_done": production.PlanDone, "last_tick_at": production.LastTickAt, "updated_at": now,
 		}).Error; err != nil {
 			return err

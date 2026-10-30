@@ -125,6 +125,8 @@ description: 影策后端核心持久化表与状态边界
 
 参考图方案 `settings_json.assets` 新增可选的 `resolution`（`1k` / `1.5k` / `2k` / `4k`，空串按图片模型默认档位），不改表结构；旧作品没有该字段，按模型默认档位处理。
 
+短剧任务派发时，任务、计费预留与 `drama_jobs.task_id/status` 在同一事务中提交，随后才唤醒执行队列；提示词精简续任务和本地成片渲染也遵循这一边界。任务结算后先将 `attempts_json` 去重记录与 `drama_productions.spent_microcredits` 增量一起提交，再应用生成结果；调度进度保存不覆盖花费。中断恢复继续读取原任务和已记账记录，不自动回填历史漏计金额。此调整不改变表结构。
+
 精修画布不新增表或列：作品的精修画布是 `canvas_projects.project_id` 等于作品 ID 的画布；画布上的花费在读取时按 `tasks.project_id`（画布 ID）关联 `billing_orders` 汇总，不写入 `drama_productions.spent_microcredits`；投送到画布的媒体在 `assets` 登记 ID 为 `drama-<resourceId>` 的素材入口（`payload_json.metadata.source=short-drama`），不复制文件。从画布采用的版本在 `drama_takes` 中按产出任务所属画布或 `prompt="画布采用"` 判断来源。
 
 剧情段按连续场景切分，并保证每段总时长不超过所选视频模型的单次上限；单个镜头超过上限时改编失败并提示调整分镜规则。第 2 段起的视频请求以上一段视频的最后一帧作为首帧（`image_to_video`），上一段未生成时本段排队等待；开场段使用参考图（`reference_to_video`），模型不支持时退回 `text_to_video`。参考图按“角色 → 道具 → 场景”编号，与提示词里的“参考图N”一致，提交时在提示词开头追加对应说明。最后一帧由后端用 ffmpeg 抽取，镜像需包含 ffmpeg。
