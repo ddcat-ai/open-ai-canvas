@@ -463,6 +463,8 @@ export async function hydrateNodeGenerationContext(
             if (image.source?.kind === "drawing") return resolveCanvasDrawingReference(projectId, image);
             if (image.source?.kind === "colorgrade") return resolveCanvasColorGradeReference(image);
             if (!materializeStoredMedia && resourceIdFromStorageKey(image.storageKey)) return image;
+            // 后端可直接接收外链，浏览器提前下载失败不应阻断任务提交。
+            if (!materializeStoredMedia && /^https?:\/\//i.test(image.url || image.dataUrl)) return image;
             return { ...image, dataUrl: await imageToDataUrl(image) };
         }),
     );
