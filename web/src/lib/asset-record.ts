@@ -124,6 +124,21 @@ export function parseAssetRecordList(values: unknown): Asset[] {
     });
 }
 
+/** 展示分页可隔离历史坏记录；同步快照和写入仍须使用严格解析。 */
+export function parseAssetRecordListLenient(values: unknown): Asset[] {
+    if (!Array.isArray(values)) throw new Error("素材列表无效");
+    const assets: Asset[] = [];
+    values.forEach((item, index) => {
+        try {
+            assets.push(parseAssetRecord(item));
+        } catch (error) {
+            const id = isRecord(item) && typeof item.id === "string" && item.id.trim() ? item.id : `#${index}`;
+            console.warn(`素材 ${id} 合同无效，已从列表略过：${error instanceof Error ? error.message : String(error)}`);
+        }
+    });
+    return assets;
+}
+
 function requireMediaLocator(primary: string, storageKey: string | undefined, label: string, primaryKey: string) {
     if (!primary.trim() && !storageKey?.trim()) {
         throw new Error(`${label}素材缺少 ${primaryKey} 或 storageKey`);

@@ -9,7 +9,7 @@ import { fenceRejectedTaskTimestampMutation, repairLegacyTaskIdFence } from "@/l
 import { getActiveUserScope } from "@/lib/user-scope";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
-import { parseAssetRecordList } from "@/lib/asset-record";
+import { parseAssetRecordList, parseAssetRecordListLenient } from "@/lib/asset-record";
 import { rebaseAssetSnapshot } from "@/lib/asset-storage-revision";
 import { assetForRemoteSync } from "@/lib/asset-remote-sync";
 import type { Asset } from "@/stores/use-asset-store";
@@ -499,7 +499,8 @@ export async function loadAssetLibraryPage(options: Parameters<typeof listRemote
     // 分页列表是展示数据，不是同步快照。不要把每一页都合并进全局
     // asset store，否则滚动/翻页会不断重建并持久化整个素材数组。
     // 真正被画布引用的素材仍由 loadAssetsForUse 按 ID 拉取并写入 store。
-    return { ...result, assets: parseAssetRecordList(result.assets) };
+    // 单条历史坏记录只影响展示，不把略过项写回为删除。
+    return { ...result, assets: parseAssetRecordListLenient(result.assets) };
 }
 
 function acceptRemoteAssets(remoteAssets: Asset[], refresh = false) {
