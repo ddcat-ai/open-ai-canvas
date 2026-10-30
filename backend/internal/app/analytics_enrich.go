@@ -28,7 +28,11 @@ func (s *Service) estimateCallCost(log *model.ApiCallLog) {
 	if log.Billable {
 		cost = pricing.PerRequestMicros
 	}
-	cost += log.InputTokens * pricing.InputPerMillionMicros / 1_000_000
+	uncachedInputTokens := log.InputTokens - log.CachedTokens
+	if uncachedInputTokens < 0 {
+		uncachedInputTokens = 0
+	}
+	cost += uncachedInputTokens * pricing.InputPerMillionMicros / 1_000_000
 	cost += log.OutputTokens * pricing.OutputPerMillionMicros / 1_000_000
 	cost += log.CachedTokens * pricing.CachedPerMillionMicros / 1_000_000
 	cost += int64(log.MediaCount) * pricing.PerMediaMicros
@@ -106,8 +110,16 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		log.InputTokens, log.CachedTokens = 0, 0
 		log.OutputTokens, log.UsageAvailable = videoCompletionTokens(payload, arkVideo)
 	} else if usage != nil {
-		inputTokens, inputAvailable := firstInt64Value(usage, "input_tokens", "prompt_tokens")
-		outputTokens, outputAvailable := firstInt64Value(usage, "output_tokens", "completion_tokens")
+		inputFields := []string{"input_tokens", "prompt_tokens"}
+		outputFields := []string{"output_tokens", "completion_tokens"}
+		// Some Chat Completions relays also return Responses counters as zero
+		// placeholders. Prefer the counters native to the requested endpoint.
+		if strings.HasSuffix(strings.TrimSuffix(log.Path, "/"), "/chat/completions") {
+			inputFields[0], inputFields[1] = inputFields[1], inputFields[0]
+			outputFields[0], outputFields[1] = outputFields[1], outputFields[0]
+		}
+		inputTokens, inputAvailable := firstInt64Value(usage, inputFields...)
+		outputTokens, outputAvailable := firstInt64Value(usage, outputFields...)
 		if inputAvailable {
 			log.InputTokens = inputTokens
 		}
