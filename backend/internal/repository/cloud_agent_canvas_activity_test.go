@@ -21,6 +21,8 @@ import (
 func TestCanvasAgentActivityIndexed(t *testing.T) {
 	for _, driver := range []string{"sqlite", "postgres"} {
 		t.Run(driver, func(t *testing.T) {
+			// SQLite 临时文件与 PostgreSQL 临时 schema 互不相干，两种驱动并行跑。
+			t.Parallel()
 			config := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
 			var dialector gorm.Dialector = sqlite.Open(filepath.Join(t.TempDir(), "activity.db") + "?_journal_mode=WAL&_busy_timeout=5000")
 			if driver == "postgres" {

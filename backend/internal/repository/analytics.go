@@ -126,6 +126,22 @@ func (r *Repository) PublicModelAvailabilityLogs(filter PublicModelAvailabilityF
 	return logs, query.Find(&logs).Error
 }
 
+// AdminModelHealthLogs 返回管理端模型稳定性所需的 create 结果，按时间倒序并限制条数。
+func (r *Repository) AdminModelHealthLogs(filter PublicModelAvailabilityFilter, limit int) ([]model.ApiCallLog, error) {
+	var logs []model.ApiCallLog
+	if len(filter.ChannelIDs) == 0 || !filter.To.After(filter.From) {
+		return logs, nil
+	}
+	query := whereTimeRange(r.db.Select("channel_id", "model", "status", "status_code", "error_code", "duration_ms", "created_at"), "api_call_logs.created_at", filter.From, filter.To).
+		Where("api_call_logs.channel_id IN ?", filter.ChannelIDs).
+		Where("api_call_logs.model <> ''").
+		Where("api_call_logs.request_kind = ?", "create").
+		Where("api_call_logs.status IN ?", []model.ApiCallStatus{model.ApiCallStatusSucceeded, model.ApiCallStatusFailed}).
+		Order("api_call_logs.created_at desc").
+		Limit(limit)
+	return logs, query.Find(&logs).Error
+}
+
 // PublicModelRecentLogs 从当前时间往前推查询指定渠道最近的调用日志（按时间倒序），用于计算每个模型最近的执行结果状态点。
 func (r *Repository) PublicModelRecentLogs(channelIDs []string, limit int) ([]model.ApiCallLog, error) {
 	var logs []model.ApiCallLog

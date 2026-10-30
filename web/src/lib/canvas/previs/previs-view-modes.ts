@@ -156,7 +156,7 @@ export function resolvePrevisEffectiveViewport(input: { mode: PrevisViewMode; fr
  * 机位取 playhead 上的求值：transform 关键帧插值，再叠加运镜段（推拉摇移、环绕、跟拍、变焦…），
  * 所以 CAM 模式下拖时间轴就是在预览成片运镜。截图、录制、第二屏监看都走这里。
  */
-export function resolvePrevisViewFraming(input: { scene: PrevisScene; mode: PrevisViewMode; playhead: number; cameraId?: string | null }): PrevisViewFraming | null {
+export function resolvePrevisViewFraming(input: { scene: PrevisScene; mode: PrevisViewMode; playhead: number; cameraId?: string | null; viewportAspect?: number }): PrevisViewFraming | null {
     if (!previsViewModeCapabilities(input.mode).framed) return null;
     const camera = (input.cameraId ? input.scene.cameras.find((item) => item.id === input.cameraId) : null) || resolvePrevisActiveCamera(input.scene);
     if (!camera) return null;
@@ -171,7 +171,8 @@ export function resolvePrevisViewFraming(input: { scene: PrevisScene; mode: Prev
     const view = degenerate ? new Vector3(0, 0, -1).applyEuler(new Euler(...state.rotation)) : raw;
     const target: PrevisVec3 = degenerate ? [position[0] + view.x, position[1] + view.y, position[2] + view.z] : state.target;
     // 焦段是光学真源：fov 按镜头画幅从焦段换算（变焦运镜改的是焦段），避免 Agent 只改焦段时画面不变。
-    const fov = resolvePrevisShotFov({ focalLength: state.focalLength, fov: camera.fov }, resolvePrevisActiveShot(input.scene));
+    // 自适应画幅没有固定比例，按调用方给出的视口宽高比换算。
+    const fov = resolvePrevisShotFov({ focalLength: state.focalLength, fov: camera.fov }, resolvePrevisActiveShot(input.scene), input.viewportAspect);
     const viewDirection = view.toArray() as PrevisVec3;
     const up = rollPrevisUp(resolvePrevisViewUp(state.rotation, viewDirection), viewDirection, state.roll);
     return { cameraId: camera.id, position, target, up, fov, near: camera.near, far: camera.far };

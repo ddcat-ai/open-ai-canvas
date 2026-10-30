@@ -234,9 +234,10 @@ func (s *Service) UpsertUserCanvasProject(userID string, raw json.RawMessage) (U
 	return s.upsertUserCanvasProjectWithHistory(userID, raw, "automatic")
 }
 
+// 回执只保存重放需要的摘要。每次 operations 都会写一条回执，写入整份画布会让表随编辑次数线性膨胀；
+// 早期回执里残留的 document 字段在解码时被忽略，并随保留期过期清理。
 type canvasMutationReceiptResult struct {
-	Summary  UserDataSummary `json:"summary"`
-	Document json.RawMessage `json:"document"`
+	Summary UserDataSummary `json:"summary"`
 }
 
 func decodeCanvasMutationReceipt(raw string, result *UserDataSummary) error {
@@ -391,11 +392,7 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 			}
 			result = UserDataSummary{ID: project.ID, Title: project.Title, CreatedAt: project.CreatedAt, UpdatedAt: project.UpdatedAt, Revision: project.Revision,
 				SaveAudit: &CanvasSaveAudit{NodesBefore: canvasNodeCount(existingPayload), NodesAfter: canvasNodeCount(project.PayloadJSON)}}
-			document, err := canvasProjectPayload(project)
-			if err != nil {
-				return err
-			}
-			encoded, err := json.Marshal(canvasMutationReceiptResult{Summary: result, Document: document})
+			encoded, err := json.Marshal(canvasMutationReceiptResult{Summary: result})
 			if err != nil {
 				return err
 			}

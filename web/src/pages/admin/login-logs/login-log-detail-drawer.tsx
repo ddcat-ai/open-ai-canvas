@@ -1,7 +1,7 @@
 import { Alert, Button, Skeleton } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { AppDrawer } from "@/components/ui/product/app-drawer/app-drawer";
+import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { getAdminLoginLog, type LoginLog } from "@/services/api/login-logs";
 import { loginEventLabels, loginLogDevice, loginMethodLabels, loginSourceLabels } from "./login-log-display";
 
@@ -45,7 +45,7 @@ export function LoginLogDetailDrawer({ id, onClose }: { id: string | null; onClo
           ]
         : [];
     return (
-        <AppDrawer title="登录日志详情" open={Boolean(id)} onClose={onClose} size={560}>
+        <AdminDrawer title="登录日志详情" open={Boolean(id)} onClose={onClose} size={560}>
             {error ? (
                 <Alert
                     type="error"
@@ -70,6 +70,6 @@ export function LoginLogDetailDrawer({ id, onClose }: { id: string | null; onClo
                     ))}
                 </dl>
             )}
-        </AppDrawer>
+        </AdminDrawer>
     );
 }

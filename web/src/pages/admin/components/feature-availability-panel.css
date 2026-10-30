@@ -1,0 +1,117 @@
+/* 功能开放：10 个开关在常见 PC 视口（≥1280×800）内一屏放下，不需要上下滚动。
+   左侧工作台入口两列排列，右侧上下叠放插件和模型来源。只作用于本页根节点。 */
+
+.admin-feature-availability.is-compact-layout {
+    padding-bottom: 12px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-command-bar {
+    min-height: 48px;
+    padding: 8px 12px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+    grid-auto-rows: min-content;
+    align-items: start;
+    gap: 12px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-domain.is-workspace {
+    grid-row: span 2;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-domain-header {
+    min-height: 0;
+    padding: 10px 14px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-domain-icon {
+    width: 28px;
+    height: 28px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-domain-header h2 {
+    font-size: 13px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row-copy {
+    align-items: center;
+    gap: 9px;
+    padding: 10px 12px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row-icon {
+    width: 26px;
+    height: 26px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row-name > span {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 2px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.45;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row-control,
+.admin-feature-availability.is-compact-layout .admin-feature-board-runtime-status {
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row.is-dependent .admin-feature-board-row-copy {
+    padding-left: 30px;
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row.is-dependent .admin-feature-board-row-copy::before {
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-row.is-source {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.admin-feature-availability.is-compact-layout .admin-feature-board-source-selector {
+    width: auto;
+    margin: 0 12px 12px;
+}
+
+@media (max-width: 1180px) {
+    .admin-feature-availability.is-compact-layout .admin-feature-board {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-feature-availability.is-compact-layout .admin-feature-domain.is-workspace {
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 720px) {
+    .admin-feature-availability.is-compact-layout .admin-feature-domain.is-compact .admin-feature-domain-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-feature-availability.is-compact-layout .admin-feature-domain.is-compact .admin-feature-board-row:nth-child(odd) {
+        border-right: 0;
+    }
+
+    .admin-feature-availability.is-compact-layout .admin-feature-domain.is-compact .admin-feature-board-row:nth-last-child(-n + 2) {
+        border-bottom: 1px solid var(--admin-divider);
+    }
+
+    .admin-feature-availability.is-compact-layout .admin-feature-domain.is-compact .admin-feature-board-row:last-child {
+        border-bottom: 0;
+    }
+}

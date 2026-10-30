@@ -1,7 +1,7 @@
 import { Color, HalfFloatType, MeshBasicMaterial, MeshDepthMaterial, MeshNormalMaterial, NoToneMapping, PerspectiveCamera, SRGBColorSpace, Vector4, WebGLRenderTarget, type Object3D } from "three";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { applyClaySceneMaterials } from "@/lib/canvas/previs/previs-clay-materials";
-import { previsAspectValue, resolvePrevisOutputSize } from "@/lib/canvas/previs/previs-optics";
+import { PREVIS_AUTO_ASPECT_FALLBACK, previsAspectValue, resolvePrevisOutputSize } from "@/lib/canvas/previs/previs-optics";
 import { resolvePrevisActiveShot, resolvePrevisViewFraming } from "@/lib/canvas/previs/previs-view-modes";
 import { PREVIS_WORLD_CAMERA_FAR } from "@/lib/canvas/previs/previs-world";
 import type { PrevisRenderMode } from "@/types/previs";
@@ -58,6 +58,8 @@ export function createPrevisShotSurface(source: PrevisCaptureSource, options: Pr
     let pixels = new Uint8Array(16);
     let image = new ImageData(2, 2);
     let disposed = false;
+    // 自适应画幅取会话开始时的视口比例并冻结：录制或监看期间调整窗口不能改变输出尺寸。
+    let viewportAspect: number | undefined;
     return {
         canvas,
         render(mode: PrevisRenderMode, time?: number) {
@@ -66,10 +68,11 @@ export function createPrevisShotSurface(source: PrevisCaptureSource, options: Pr
             const context = source();
             if (!context || context.gl.getContext().isContextLost()) throw new Error("3D 视口尚未就绪或已失去上下文");
             const { gl, scene, document: data, playhead } = context;
+            viewportAspect ??= readPrevisViewportAspect(gl.domElement) ?? PREVIS_AUTO_ASPECT_FALLBACK;
             const shot = resolvePrevisActiveShot(data);
-            const framing = resolvePrevisViewFraming({ scene: data, mode: "camera", playhead: time ?? playhead });
+            const framing = resolvePrevisViewFraming({ scene: data, mode: "camera", playhead: time ?? playhead, viewportAspect });
             if (!shot || !framing || !data.cameras.some((item) => item.id === shot.cameraId)) throw new Error("镜头未绑定有效摄影机");
-            const { width, height } = resolvePrevisOutputSize(previsAspectValue(shot.aspectRatio), options.longEdge ?? 1280);
+            const { width, height } = resolvePrevisOutputSize(previsAspectValue(shot.aspectRatio, viewportAspect), options.longEdge ?? 1280);
             if (canvas.width !== width || canvas.height !== height) {
                 canvas.width = width;
                 canvas.height = height;
@@ -264,6 +267,13 @@ export async function recordCanvas(source: PrevisCaptureSource, duration: number
 
 export function canvasToBlob(canvas: HTMLCanvasElement) {
     return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("3D 预览图导出失败"))), "image/png"));
+}
+
+/** 视口 CSS 尺寸的宽高比；canvas 尚未布局时返回 undefined。 */
+function readPrevisViewportAspect(element: HTMLCanvasElement) {
+    const width = element.clientWidth;
+    const height = element.clientHeight;
+    return width > 0 && height > 0 ? width / height : undefined;
 }
 
 /** 编辑辅助物（网格、机位模型、路径、gizmo、骨骼线、关节球）不进入成片与控制图。 */

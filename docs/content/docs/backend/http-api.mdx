@@ -356,11 +356,27 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 `GET/POST /admin/channels/:id/models` 与 `PATCH /admin/channels/:id/models/:modelId` 的 `priceTiers[]` 增加 `costPricing`：`configured`、`unitPriceMicrocredits`、`inputTokenPriceMicrocredits`、`outputTokenPriceMicrocredits`、`cachedTokenPriceMicrocredits`。成本沿用该价格档的计费方式；按次/秒使用单位价，文本 Token 按输入/输出/缓存分别定价，视频 Token 只使用输出价。价格为整数微积分，范围为 0 到 1000000000000；`configured=false` 表示未配置，`true` 且价格为 0 表示显式零成本。
 
-成本保存到下单时的内部账单快照，不受售价倍率或扣费上限影响，后续改价不重算旧订单。历史逻辑模型任务切换备用线路时，成本更新为实际执行线路的快照，独立于用户售价策略。管理员请求列表、详情与 CSV 同时展示销售金额及成本金额；JSON 增加 `creditCostConfigured` 和可选 `creditCostMicrocredits`。成功结算后按实际计费数量、Token 用量或视频公式快照核算；未结算、已退回、历史无快照或缺少有效用量时不编造成本金额。
+成本保存到下单时的内部账单快照，不受售价倍率或扣费上限影响，后续改价不重算旧订单。历史逻辑模型任务切换备用线路时，成本更新为实际执行线路的快照，独立于用户售价策略。管理员请求列表、详情与 CSV 分列展示预授权、实收及成本金额；JSON 返回 `billingReservedMicrocredits`（订单预授权额）、可选 `billingSettledMicrocredits`（仅已结算订单返回实收）、`creditCostConfigured` 和可选 `creditCostMicrocredits`。预授权、待核对和已退回订单不返回实收，不能把预授权额当作扣费额；CSV 对应列为“预授权(微积分)”“实收(微积分)”。成功结算后按实际计费数量、Token 用量或视频公式快照核算；未结算、已退回、历史无快照或缺少有效用量时不编造成本金额。
 
 成本字段仅通过经过管理员权限校验的接口显式返回；普通用户的模型目录、会话模型信息、报价、任务与账单 JSON 均不包含成本配置、成本快照或成本金额。底层价格档和账单成本字段禁止 JSON 序列化，不以页面隐藏代替接口隔离。
 
 数据概览不再提供独立的“模型价格配置”入口。`GET /admin/analytics/overview` 的 `kpi`、`models[]` 使用 `finance` 返回 `settledOrders`、`costedOrders`、`revenueMicrocredits`、`costMicrocredits`、可空的 `profitMicrocredits`、`profitMargin`，取代旧的费用/币种字段。按当前请求日志时间及筛选范围关联已结算订单，以订单 ID 去重并核对用户与实际结算渠道；轮询、下载、未结算、退款和无关联账单请求不计入财务汇总。收入为实际结算积分，成本复用系统模型价格档的订单快照与计费用量，利润为收入减成本，利润率为利润占收入百分比。已知成本可显示部分合计；只要有已结算订单缺失成本，利润和利润率返回 `null`，不把未知成本视为零。无订单时利润为 `null`；零收入时利润率为 `null`。历史无成本快照的订单不按当前价回填。此处为已结算生成订单的积分毛利，不含充值收入或失败请求的上游损耗。
+
+总览的请求类指标（`kpi.upstreamRequests`、`kpi.successRate`、`kpi.p95DurationMs`、`trend[].requests`、`models[].requests` 与耗时、`failures[]`、按调用计入的活跃用户）只统计 `request_kind = create` 的模型生成请求；图片、视频的轮询结果已合并进 create 根记录，轮询、下载、上传、本地保存等阶段不计入。成功率按 succeeded /（succeeded + failed）计算，`trend[].requestSuccessRate`、`models[].taskSuccessRate`、`models[].requestSuccessRate` 在没有样本时返回 `null`，不返回 0。`trend[].consumedMicrocredits` 为当天已结算订单的实收积分，与 `kpi.finance.revenueMicrocredits` 同一口径，按订单首条可计费调用的 UTC 日期归属；`kpi.totalConsumedMicrocredits` 已移除。
+
+`GET /admin/api-logs` 与 `GET /admin/api-logs-export.csv` 支持 `from`、`to`（`YYYY-MM-DD` 按 UTC 自然日、含结束日，或 RFC 3339 时间点）、`userId`、`model`、`channelId`、`capability`；不传日期时默认近 30 个 UTC 日，单次最多 366 天。
+
+`GET /admin/billing-orders` 的每条订单额外返回 `userDisplayName`、`userAccount`，按当前页用户 ID 批量读取；字段不入库，普通用户的订单接口不返回。
+
+`GET /admin/users` 的每个用户额外返回 `rechargedMicrocredits`（已到账支付订单的到账积分合计）和 `consumedMicrocredits`（已结算计费订单的实收合计），按当前页用户批量汇总。
+
+渠道模型运营接口（均要求管理员）：
+
+| 接口 | 行为 |
+| --- | --- |
+| `GET /admin/channel-models` | 返回全部系统渠道（含停用渠道）的模型，结构同 `GET /admin/channels/:id/models` 的单项，另加 `channelName`、`channelEnabled`，供按模型名称跨渠道筛选。 |
+| `GET /admin/channel-models/health?channelId=` | 返回模型调用稳定性 `{ items, computedAt, truncated }`。每项含 `channelId`、`modelKey`、近 24 小时 `requests24h` / `succeeded24h` / `failed24h` / `successRate24h`、近 7 天 `requests7d` / `successRate7d`、`p95DurationMs24h`、最近 10 次结果 `recentResults`（左旧右新）、`lastErrorCode`、`lastFailedAt`、`lastCalledAt`。成功率为 0–1 小数，没有样本时为 `null`。只统计 `request_kind = create`，不设用户端的最少样本门槛；读取近 7 天最新 50,000 条记录，超出时 `truncated = true`。结果缓存 30 秒；不传 `channelId` 时返回全部系统渠道。 |
+| `PATCH /admin/channels/:id/models/:modelId/enabled` | 请求体 `{ "enabled": boolean }`，只改启停，不重写价格档、能力配置和价格版本；能力或协议未配置的模型不能启用。写管理员审计 `channel_model.enable` / `channel_model.disable`。 |
 
 `GET /admin/analytics/export.csv` 沿用相同口径，CSV 输出收入、成本、利润（整数微积分）；重复请求只在该筛选范围内选定的一行记录金额，未知值留空。
 
@@ -721,7 +737,7 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 | `POST /dramas/estimate` | 按章节数、字数与设置估算集数、镜头数、剧情段视频数、参考图数与费用区间（基于真实报价，含重试余量）；`episodeMode=chapter` 时集数等于章节数 |
 | `POST /dramas` | 一次性创建作品、写入原文与制作设置；`start=true` 立即进入自动制作。`sourceFormat` 为 `novel`（默认）/ `script` / `storyboard`；分集方式写在 `settings.episodeMode`（`auto` 模型分集 / `chapter` 按章分集，顶层 `episodeMode` 只在设置里没写时使用）与 `settings.chaptersPerEpisode`（按章分集时每 1–12 章一集，默认 1），剧本与分镜总是每章一集。按章分集时建档即写好各集、不经过分集规划，合并后单集原文 ≤ 4 万字。任何分集方式下单章都 ≤ 1.2 万字（剧本提示词每章读取上限，超出会丢台词，所以直接拒绝）。请求体上限 32 MiB，单章 ≤ 6 万字，全书 ≤ 600 万字 |
 | `GET /dramas/:id` | 制作台摘要：控制面状态、每集按剧情段聚合的进度 `stats`（`segments`、`promptReady`、`videoReady`、`failed`）、队列计数、待处理收件箱。`cast_failed` 的 `castKind` 为 character/prop/scene；`segment_failed` 带 `episodeNumber`、`segmentIndex` 与失败环节 `media`（prompt/video） |
-| `PATCH /dramas/:id/settings` | 修改单集时长（30–1200 秒）、分镜规则 `storyboard`（`segmentMode` auto/fixed/range、`segmentSeconds`、`segmentMinSeconds`、`segmentMaxSeconds`、`pacing`、`dialogue`、`transition`、`transitionMs`）、视频提示词技能 `promptSkill`（`{ skillId, skillName, path }`，不可读时返回 400；传空 `skillId` 清除）、每段最多参考图 `referenceLimit`（0–20，0 为按视频模型上限，只约束自动取参考图的段）、审阅方式、生成节奏、参考图方案、模型、并发与预算；分集方式 `episodeMode` / `chaptersPerEpisode` 只能在分集完成（`planDone`）前修改，只影响还没分集的章节，改成按章分集后下一轮调度直接把剩余章节分组建集、在途的模型规划作废；开工后不能修改画幅；画幅只接受 9:16 / 16:9 / 1:1 / 3:4 / 4:3（创建作品同样，未知值返回 400，不再改成 9:16），视频模型给不出作品画幅时返回 400；提示词包含未知变量时返回 400 |
+| `PATCH /dramas/:id/settings` | 修改单集时长（30–1200 秒）、分镜规则 `storyboard`（`segmentMode` auto/fixed/range、`segmentSeconds`、`segmentMinSeconds`、`segmentMaxSeconds`、`pacing`、`dialogue`、`transition`、`transitionMs`、`performance`、`cameraMotion`）、视频提示词技能 `promptSkill`（`{ skillId, skillName, path }`，不可读时返回 400；传空 `skillId` 清除）、资产提取与分镜拆分技能 `bibleSkill` / `scriptSkill`（同格式）、视频分辨率 `videoResolution`（空为模型默认）、每段最多参考图 `referenceLimit`（0–20，0 为按视频模型上限，只约束自动取参考图的段）、审阅方式、生成节奏、参考图方案、模型、并发与预算；分集方式 `episodeMode` / `chaptersPerEpisode` 只能在分集完成（`planDone`）前修改，只影响还没分集的章节，改成按章分集后下一轮调度直接把剩余章节分组建集、在途的模型规划作废；开工后不能修改画幅；画幅只接受 9:16 / 16:9 / 1:1 / 3:4 / 4:3（创建作品同样，未知值返回 400，不再改成 9:16），视频模型给不出作品画幅时返回 400；提示词包含未知变量时返回 400 |
 | `POST /dramas/:id/media/release` | 手动模式下放行生成：`target=assets` 只生成参考图，`episodes`（配合 `episodeIds`，最多 500）生成指定集的参考图与剧情段视频，`all` 全部开始 |
 | `POST /dramas/:id/start` · `/pause` · `/retry-failed` | 继续 / 暂停 / 把失败的参考图、段提示词与段视频重新排队，返回 `{ segments, casts }` |
 
@@ -766,6 +782,16 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 - 既没有比例也没有 `fixedScreenSpec` 的模型视为给不出任何画幅。
 
 给不出作品画幅的视频模型：创建作品、保存设置与按段生成返回 400；已排队的段提交前失败并写明原因，不调用上游，避免模型按自己的默认画幅（多为横屏）出片。`videoGenerateAudio` 按模型能力发送：声明同步出声的模型为 `"true"`，否则为 `"false"`。估算报价使用同样的画面参数与声音开关。
+
+视频分辨率：`settings.videoResolution` 为空时不发 `vquality`，由任务准入按模型默认分辨率补齐；指定后，声明比例的模型同时发送 `size` 与匹配到的 `vquality`（`720`、`720p`、`4k`、`2160p` 等写法按同一档位匹配），`fixedScreenSpec` 模型只在与作品画幅一致的标签里取同档（作品竖屏、选 `768p` 时发 `768p竖`）。所选模型没有这一档时按“给不出”处理（保存设置与生成返回 400，已排队的段失败并写明原因），不悄悄降档。`GET /dramas/models` 的视频模型附 `videoResolutions` 与 `defaultVideoResolution`；`fixedScreenSpec` 模型的横竖标签合并成一档（`768p竖`、`768p横` 列为 `768p`）。
+
+提示词长度：剧情段请求预演 `request.promptMaxChars` 是视频模型的提示词上限（含开头的参考图说明）。撰写段提示词时，正文上限 = 模型上限 − 当前参考图说明 − 2，写作目标再留一成余量；结果超出正文上限时同一作业自动提交精简任务（最多 2 次，保留镜头、时间码、台词与参考图编号），仍超长时保存这一版并让本段提示词失败。提交视频前再核对一次：模型撰写的版本超长（换了上限更小的模型，或参考图说明变长）时退回待撰写并按当前上限重写，不截断；手动改写的版本超长时本段视频失败并写明字数。
+
+段提示词写法：`settings.storyboard.performance`（表演强度）与 `cameraMotion`（运镜动感）都是 1–10 的整数，缺省或 0 按 5，超出范围夹到 1–10。提示词写入档位与刻度两端，并按 1–2 / 3–4 / 5–6 / 7–8 / 9–10 五段给出具体要求（表演：内敛 / 克制 / 自然 / 饱满 / 夸张；运镜：静态 / 稳定 / 标准 / 动感 / 强烈）；镜头表里的运镜词按 1–3 缓慢、4–7 按情绪、8–10 快速三组换写。不改镜头时长。尾帧续接时段末只要求末 0.5 秒动作收住、镜头停稳，不再要求整段凝固的硬定格。
+
+文字步骤与参考图模型：`settings.models` 可选 `bibleText`（资产提取）、`scriptText`（分镜拆分）、`promptText`（视频提示词与自动精简）、`characterImage`、`propImage`、`sceneImage`，为空沿用 `text` / `image`；单独指定的模型必须在当前用户的短剧模型目录里，否则保存返回 400。`settings.bibleSkill`、`settings.scriptSkill` 与 `promptSkill` 同格式，执行该步骤时把技能文件全文交给文本模型；资产提取与分镜拆分的输出 JSON 结构不变，技能与结构冲突时以结构为准。`settings.assets.propResolution`、`sceneResolution` 分别是道具、场景参考图的分辨率档位，`resolution` 只用于角色参考图。
+
+文本任务：短剧的作品圣经、分集、剧本、段提示词与精简任务都以上游流式（`textOptions.stream=true`）请求，避免长输出在中转站网关前因长时间无响应被断开（524）；结果仍在流结束后整段写入任务结果，模型能力声明不支持流式时改走非流式。单次任务仍受运行策略“文本任务超时”约束。
 
 ### 精修画布
 

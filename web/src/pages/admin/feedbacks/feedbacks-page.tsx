@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { App, Button, Drawer, Input, Modal, Popconfirm, Select, Space, Table, Tag, Image as AntImage, Segmented } from "antd";
+import { App, Button, Input, Popconfirm, Select, Space, Table, Tag, Image as AntImage, Segmented } from "antd";
+import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import type { ColumnsType } from "antd/es/table";
 import { AlertCircle, Archive, ArchiveRestore, Bug, CheckCircle2, Clock, FileText, Inbox, Lightbulb, MessageSquare, Paperclip, Play, RefreshCw, Search, Send, UserRound, Clock3 } from "lucide-react";
 
@@ -386,7 +387,7 @@ export default function AdminFeedbacksPage() {
             </div>
 
             {/* Detail & Reply Drawer */}
-            <Drawer
+            <AdminDrawer
                 open={drawerOpen}
                 onClose={() => setDrawerOpen(false)}
                 width={560}
@@ -511,15 +512,15 @@ export default function AdminFeedbacksPage() {
                         </div>
                     </div>
                 ) : null}
-            </Drawer>
+            </AdminDrawer>
 
             {/* Video Preview Modal */}
             {previewVideoUrl ? (
-                <Modal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} destroyOnClose title="附件视频预览">
+                <AdminModal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} title="附件视频预览">
                     <div className="py-2">
                         <video src={previewVideoUrl} controls autoPlay className="w-full max-h-[60vh] rounded-lg bg-black" />
                     </div>
-                </Modal>
+                </AdminModal>
             ) : null}
         </AdminPageFrame>
     );

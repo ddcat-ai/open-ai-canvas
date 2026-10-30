@@ -23,11 +23,60 @@ func (c DramaModelChoice) Empty() bool {
 }
 
 // DramaModels 是制作用到的三类模型：文本（改编、分镜、视频提示词）、图片（角色/道具/场景参考图）、
-// 视频（按剧情段生成带对白与音效的视频）。
+// 视频（按剧情段生成带对白与音效的视频）。文字步骤与参考图类型可以单独指定模型，为空沿用同能力的默认模型。
 type DramaModels struct {
 	Text  DramaModelChoice `json:"text"`
 	Image DramaModelChoice `json:"image"`
 	Video DramaModelChoice `json:"video"`
+
+	BibleText      DramaModelChoice `json:"bibleText"`
+	ScriptText     DramaModelChoice `json:"scriptText"`
+	PromptText     DramaModelChoice `json:"promptText"`
+	CharacterImage DramaModelChoice `json:"characterImage"`
+	PropImage      DramaModelChoice `json:"propImage"`
+	SceneImage     DramaModelChoice `json:"sceneImage"`
+}
+
+// 文字步骤：bible 资产提取（作品圣经），script 分镜拆分（每集剧本与镜头表），prompt 剧情段视频提示词。
+// 分集规划沿用默认文本模型。
+const (
+	DramaStepBible  = "bible"
+	DramaStepScript = "script"
+	DramaStepPrompt = "prompt"
+)
+
+// textFor 是文字步骤实际使用的文本模型。
+func (m DramaModels) textFor(step string) DramaModelChoice {
+	var override DramaModelChoice
+	switch step {
+	case DramaStepBible:
+		override = m.BibleText
+	case DramaStepScript:
+		override = m.ScriptText
+	case DramaStepPrompt:
+		override = m.PromptText
+	}
+	if !override.Empty() {
+		return override
+	}
+	return m.Text
+}
+
+// imageFor 是某类参考图（character / prop / scene）实际使用的图片模型。
+func (m DramaModels) imageFor(kind string) DramaModelChoice {
+	var override DramaModelChoice
+	switch kind {
+	case "character":
+		override = m.CharacterImage
+	case "prop":
+		override = m.PropImage
+	case "scene":
+		override = m.SceneImage
+	}
+	if !override.Empty() {
+		return override
+	}
+	return m.Image
 }
 
 func (m DramaModels) choice(capability string) DramaModelChoice {
@@ -56,17 +105,35 @@ const (
 	DramaReviewAuto   = "auto"
 )
 
-// DramaSkillRef 指向用户技能库里的一个技能文件，用作剧情段视频提示词的写作方法。
+// DramaSkillRef 指向用户技能库里的一个技能文件，用作文字步骤（资产提取、分镜拆分、视频提示词）的写作方法。
 type DramaSkillRef struct {
 	SkillID   string `json:"skillId"`
 	SkillName string `json:"skillName"`
 	Path      string `json:"path"`
 }
 
+// normalizedDramaSkillRef 截断字段长度；没有技能 ID 时视为未选择。
+func normalizedDramaSkillRef(value *DramaSkillRef) *DramaSkillRef {
+	if value == nil {
+		return nil
+	}
+	ref := DramaSkillRef{SkillID: truncateRunes(strings.TrimSpace(value.SkillID), 64), SkillName: truncateRunes(strings.TrimSpace(value.SkillName), 120), Path: truncateRunes(strings.TrimSpace(value.Path), 300)}
+	if ref.SkillID == "" {
+		return nil
+	}
+	if ref.Path == "" {
+		ref.Path = "SKILL.md"
+	}
+	return &ref
+}
+
 type DramaSettings struct {
 	production.Settings
 	// PromptSkill 为空时按内置格式撰写段视频提示词。
 	PromptSkill *DramaSkillRef `json:"promptSkill,omitempty"`
+	// BibleSkill / ScriptSkill 是资产提取与分镜拆分的写作技能，为空按内置规则；输出结构始终由系统固定。
+	BibleSkill  *DramaSkillRef `json:"bibleSkill,omitempty"`
+	ScriptSkill *DramaSkillRef `json:"scriptSkill,omitempty"`
 	ReviewMode  string         `json:"reviewMode"`
 	MediaMode   string         `json:"mediaMode"`
 	Concurrency int            `json:"concurrency"`
@@ -79,6 +146,8 @@ type DramaSettings struct {
 	ChaptersPerEpisode int    `json:"chaptersPerEpisode,omitempty"`
 	// VideoContinuity 是剧情段视频的衔接方式，见 DramaContinuityTailFrame / DramaContinuityParallel。
 	VideoContinuity string `json:"videoContinuity"`
+	// VideoResolution 是剧情段视频的分辨率档位（取自视频模型声明的分辨率，如 720p、1080p）；空串按模型默认。
+	VideoResolution string `json:"videoResolution,omitempty"`
 }
 
 // 剧情段视频衔接方式：tail_frame 第 2 段起用上一段视频的最后一帧做首帧，同集各段按顺序生成；
@@ -114,16 +183,9 @@ func (s DramaSettings) normalized() DramaSettings {
 		// 早于该设置创建的作品一直是全自动，保持原行为；新建作品由 CreateDrama 默认 manual。
 		s.MediaMode = DramaMediaAuto
 	}
-	if s.PromptSkill != nil {
-		ref := DramaSkillRef{SkillID: truncateRunes(strings.TrimSpace(s.PromptSkill.SkillID), 64), SkillName: truncateRunes(strings.TrimSpace(s.PromptSkill.SkillName), 120), Path: truncateRunes(strings.TrimSpace(s.PromptSkill.Path), 300)}
-		s.PromptSkill = nil
-		if ref.SkillID != "" {
-			if ref.Path == "" {
-				ref.Path = "SKILL.md"
-			}
-			s.PromptSkill = &ref
-		}
-	}
+	s.PromptSkill = normalizedDramaSkillRef(s.PromptSkill)
+	s.BibleSkill = normalizedDramaSkillRef(s.BibleSkill)
+	s.ScriptSkill = normalizedDramaSkillRef(s.ScriptSkill)
 	if s.Concurrency <= 0 {
 		s.Concurrency = 4
 	}
@@ -131,6 +193,10 @@ func (s DramaSettings) normalized() DramaSettings {
 		s.Concurrency = 16
 	}
 	s.ReferenceLimit = max(0, min(dramaMaxReferenceLimit, s.ReferenceLimit))
+	s.VideoResolution = truncateRunes(strings.TrimSpace(s.VideoResolution), 32)
+	if isAutomaticVideoResolution(s.VideoResolution) {
+		s.VideoResolution = ""
+	}
 	if s.VideoContinuity != DramaContinuityParallel {
 		// 早于该设置创建的作品一直按尾帧续接，保持原行为。
 		s.VideoContinuity = DramaContinuityTailFrame
@@ -469,6 +535,8 @@ type DramaSegmentRequest struct {
 	AspectRatio string `json:"aspectRatio"`
 	Size        string `json:"size,omitempty"`
 	Resolution  string `json:"resolution,omitempty"`
+	// PromptMaxChars 是视频模型的提示词字符上限（含开头的参考图说明）；0 表示未声明。
+	PromptMaxChars int `json:"promptMaxChars,omitempty"`
 	// GenerateAudio 表示视频模型同步生成对白与音效；为 false 时本段视频没有声音。
 	GenerateAudio bool `json:"generateAudio"`
 	// FirstFrame 是上一段视频的最后一帧；第一段为空。FirstFramePending 表示上一段还没生成，生成后才能提交本段。
@@ -558,6 +626,9 @@ type DramaModelOption struct {
 	VideoRatios []string `json:"videoRatios,omitempty"`
 	// GenerateAudio 仅视频模型：是否同步生成对白与音效；false 时段视频没有声音。
 	GenerateAudio *bool `json:"generateAudio,omitempty"`
+	// VideoResolutions 仅视频模型：作品可指定的分辨率档位（如 720p、1080p）与模型默认档位；为空表示模型不提供可选分辨率。
+	VideoResolutions       []string `json:"videoResolutions,omitempty"`
+	DefaultVideoResolution string   `json:"defaultVideoResolution,omitempty"`
 	// 以下仅图片模型：可指定的参考图分辨率档位、默认档位，以及能按默认档位准确出图的参考图画幅。
 	ImageResolutions       []string `json:"imageResolutions,omitempty"`
 	DefaultImageResolution string   `json:"defaultImageResolution,omitempty"`

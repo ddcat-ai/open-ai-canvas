@@ -1021,6 +1021,46 @@
 .pv-dock__camera-list small {
     color: #8b919b;
 }
+/* 画幅：工具条入口复用 .pv-aspect-glyph 示意，弹层为 4 列比例卡片。 */
+.pv-dock__tool > .pv-aspect-glyph {
+    width: 16px;
+    height: 16px;
+}
+.pv-dock__menu--aspect {
+    width: 320px;
+    margin-left: -160px;
+}
+.pv-dock__aspect-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+.pv-dock__aspect-grid button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 58px;
+    border-radius: 8px;
+    background: #f4f5f7;
+    color: #4b5260;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.pv-dock__aspect-grid button:hover {
+    background: #e8eaee;
+    color: #1d2026;
+}
+.pv-dock__aspect-grid button.is-active {
+    background: #1d2026;
+    color: #fff;
+}
+.pv-dock__aspect-grid button:focus-visible {
+    outline: 2px solid #1d2026;
+    outline-offset: 1px;
+}
 @media (prefers-reduced-motion: reduce) {
     .pv-dock__tool {
         transition: none;

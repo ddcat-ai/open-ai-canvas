@@ -6,7 +6,7 @@ import { PaymentCheckoutCode } from "@/components/payment-checkout-code";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { createClientUUID } from "@/lib/client-id";
 import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
-import { closePaymentOrder, createPaymentOrder, getPaymentOrder, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder } from "@/services/api/payments";
+import { closePaymentOrder, createPaymentOrder, formatPaymentAmount, getPaymentOrder, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder } from "@/services/api/payments";
 
 function grantedText(order: PaymentOrder) {
     return order.productKind === "storage" ? "支付已确认，存储空间已扩容" : "支付已确认，积分已经到账";
@@ -152,7 +152,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
                     <span className="workspace-wallet-payment-icon">
                         <CreditCard />
                     </span>
-                    <strong>¥ {(order.amountFen / 100).toFixed(2)}</strong>
+                    <strong>{formatPaymentAmount(order.amountFen, order.currency)}</strong>
                     <p>
                         {order.productName} · {paymentOrderGrantLabel(order)}
                     </p>

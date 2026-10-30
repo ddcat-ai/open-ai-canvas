@@ -20,3 +20,9 @@ func adminChannelModel(item model.ChannelModel) adminChannelModelResponse {
 	}
 	return adminChannelModelResponse{ChannelModel: item, PriceTiers: tiers}
 }
+
+type adminChannelModelListResponse struct {
+	adminChannelModelResponse
+	ChannelName    string `json:"channelName"`
+	ChannelEnabled bool   `json:"channelEnabled"`
+}

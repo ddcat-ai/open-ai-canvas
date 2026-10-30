@@ -4417,6 +4417,10 @@
     color: var(--workspace-accent);
     font-weight: 500;
 }
+.drama-sd-pane-foot .is-over {
+    color: var(--drama-err);
+    font-weight: 500;
+}
 /* ===== 剧情段：分镜页卡片与弹窗共用的状态、视频与生成依据 ===== */
 .drama-sg-status {
     display: inline-flex;
@@ -6092,4 +6096,145 @@ button.drama-sdx-asset-text:focus-visible {
     gap: 6px;
     color: var(--drama-err);
     font-size: var(--fs-micro);
+}
+
+/* ===== 制作步骤：文字步骤（文本模型 + 技能）与参考图（图片模型 + 分辨率），一类一行 ===== */
+.drama-steps {
+    display: grid;
+    border: 1px solid var(--drama-line);
+    border-radius: var(--radius-lg);
+    background: var(--drama-panel);
+}
+.drama-step-row {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 16px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--drama-line);
+}
+.drama-step-row:first-child {
+    border-top: 0;
+}
+.drama-step-label {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding-top: 20px;
+}
+.drama-step-label strong {
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+}
+.drama-step-label small,
+.drama-step-note {
+    color: var(--drama-faint);
+    font-size: var(--fs-micro);
+    line-height: 1.5;
+}
+.drama-step-field {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.drama-step-caption {
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+}
+.drama-step-model {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+.drama-step-model > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.drama-step-model > .ant-btn {
+    flex: none;
+}
+.drama-step-warn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--drama-err);
+    font-size: var(--fs-micro);
+}
+.drama-res-tabs {
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+.drama-res-tabs .drama-tab {
+    height: 26px;
+    padding: 0 10px;
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+}
+.drama-pskill.is-compact .drama-pskill-current {
+    min-height: 32px;
+    padding: 4px 4px 4px 10px;
+}
+.drama-pskill-edit {
+    display: inline-grid;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--drama-muted);
+}
+.drama-pskill-edit:hover {
+    color: var(--foreground);
+    background: var(--drama-sunken);
+}
+.drama-pskill-edit:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 1px;
+}
+@media (max-width: 960px) {
+    .drama-step-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .drama-step-label {
+        padding-top: 0;
+    }
+}
+
+/* 分镜规则：表演强度与运镜动感 1–10 档滑杆 */
+.drama-sbrules-level {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    max-width: 480px;
+}
+.drama-sbrules-level-track {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.drama-sbrules-slider.ant-slider {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 4px 8px 20px;
+}
+.drama-sbrules-level-value {
+    flex: none;
+    min-width: 40px;
+    padding-top: 2px;
+    color: var(--foreground);
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+.drama-sbrules-level-value small {
+    color: var(--drama-faint);
+    font-weight: 400;
+}
+.drama-sbrules-slider .ant-slider-mark-text {
+    color: var(--drama-muted);
+    font-size: var(--fs-micro);
+}
+.drama-sbrules-slider .ant-slider-mark-text-active {
+    color: var(--foreground);
 }

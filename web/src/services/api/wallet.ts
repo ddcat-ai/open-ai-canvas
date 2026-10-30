@@ -215,6 +215,9 @@ export type AdminRedeemCodePage = {
 export type BillingOrder = {
     id: string;
     userId: string;
+    /** 仅管理端计费核对列表返回。 */
+    userDisplayName?: string;
+    userAccount?: string;
     taskId?: string;
     channelId: string;
     model: string;
@@ -304,6 +307,39 @@ export function updateAdminEmailSetting(input: Partial<EmailSetting>) {
 
 export function listAdminChannelModels(channelId: string) {
     return http.get<{ models: ChannelModel[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models`);
+}
+
+export type AdminChannelModelListItem = ChannelModel & { channelName: string; channelEnabled: boolean };
+
+/** 全部系统渠道（含停用渠道）的模型，供跨渠道按模型名称筛选。 */
+export function listAdminAllChannelModels() {
+    return http.get<{ models: AdminChannelModelListItem[] }>("/admin/channel-models");
+}
+
+/** 模型调用稳定性：只统计模型生成请求（create），不设最少样本门槛，小样本按真实计数展示。 */
+export type AdminChannelModelHealth = {
+    channelId: string;
+    modelKey: string;
+    requests24h: number;
+    succeeded24h: number;
+    failed24h: number;
+    successRate24h: number | null;
+    requests7d: number;
+    successRate7d: number | null;
+    p95DurationMs24h: number;
+    recentResults: boolean[];
+    lastErrorCode?: string;
+    lastFailedAt?: string;
+    lastCalledAt?: string;
+};
+
+export function getAdminChannelModelHealth(channelId?: string) {
+    return http.get<{ items: AdminChannelModelHealth[]; computedAt: string; truncated: boolean }>("/admin/channel-models/health", { params: channelId ? { channelId } : undefined });
+}
+
+/** 只改启停，不重写价格与能力配置。 */
+export function setAdminChannelModelEnabled(channelId: string, id: string, enabled: boolean) {
+    return http.patch<{ model: ChannelModel }>(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}/enabled`, { enabled });
 }
 
 // 管理员从上游读取模型目录；确认导入后才会写入渠道模型，价格和启用仍需人工确认。

@@ -45,3 +45,23 @@ func (r *Repository) FinalizeCanvasMutationReceipt(receipt *model.CanvasMutation
 	}
 	return nil
 }
+
+// DeleteCanvasMutationReceiptsBefore 分批删除过期回执，每批独立提交，避免首次清理积压数据时长时间持有锁。
+// 回执只服务于响应丢失后的短期重放；过期后重放的请求按字段/对象基线校验，已生效的操作返回冲突或成为空操作。
+func (r *Repository) DeleteCanvasMutationReceiptsBefore(cutoff time.Time, batchSize int) (int64, error) {
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	var total int64
+	for {
+		expired := r.db.Model(&model.CanvasMutationReceipt{}).Select("id").Where("created_at < ?", cutoff).Order("created_at").Limit(batchSize)
+		result := r.db.Where("id IN (?)", expired).Delete(&model.CanvasMutationReceipt{})
+		if result.Error != nil {
+			return total, result.Error
+		}
+		total += result.RowsAffected
+		if result.RowsAffected < int64(batchSize) {
+			return total, nil
+		}
+	}
+}

@@ -1,5 +1,6 @@
 import { createClientUUID } from "@/lib/client-id";
-import { App, Button, Form, Input, InputNumber, Modal, Select, Switch, Upload } from "antd";
+import { App, Button, Form, Input, InputNumber, Select, Switch, Upload } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import type { ColumnsType } from "antd/es/table";
 import { CloudUpload, Edit3, Plus, RefreshCw, Search, Trash2, Shapes } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -414,7 +415,7 @@ export default function WorkbenchToolsPage() {
                     empty={<div className="admin-workbench-tools-empty">当前类型还没有工具，使用“新建工具”创建首个目录项。</div>}
                 />
             </div>
-            <Modal
+            <AdminModal
                 title={draft.id ? "编辑工作台工具" : "新建工作台工具"}
                 open={editorOpen}
                 onCancel={() => !editorBusy && setEditorOpen(false)}
@@ -641,7 +642,7 @@ export default function WorkbenchToolsPage() {
                         ))}
                     </section>
                 </Form>
-            </Modal>
+            </AdminModal>
         </AdminPageFrame>
     );
 }

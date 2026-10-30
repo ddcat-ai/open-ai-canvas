@@ -14,12 +14,6 @@ import { getSkillFile, listAddedSkills, listSkillFiles } from "@/services/api/sk
 
 const PROMPT_LIMIT = 4000;
 const CUSTOM_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16"];
-/** 场景与道具参考图固定横版，与后端 production.AssetImageRatio 一致。 */
-const ASSET_IMAGE_RATIO = "16:9";
-
-function tierLabel(tier: string) {
-    return tier.toUpperCase();
-}
 
 export function useAssetSchemes() {
     return useQuery({ queryKey: ["drama-asset-schemes"], queryFn: getDramaAssetSchemes, staleTime: 10 * 60_000 });
@@ -92,10 +86,10 @@ export function AssetSchemePicker({
     const editorRef = useRef<TextAreaRef>(null);
     const preview = { ...FALLBACK_SAMPLE, ...Object.fromEntries(Object.entries(sample || {}).filter(([, item]) => item)) } as AssetPreviewSample;
     if (!catalog || !value) return <div className="drama-assets is-loading">正在读取参考图方案…</div>;
-    // 能力未知（旧后端或模型列表未加载）时不做限制，交给服务端保存时校验。
+    // imageModel 是角色参考图实际使用的图片模型；能力未知（模型列表未加载）时不做限制，交给服务端保存时校验。
+    // 道具与场景固定 16:9，能列入短剧模型目录的图片模型都给得出。
     const ratios = imageModel?.imageRatios;
-    const tiers = imageModel?.imageResolutions || [];
-    const ratioProblems = ratios ? [...new Set([ASSET_IMAGE_RATIO, value.characterRatio])].filter((ratio) => !ratios.includes(ratio)) : [];
+    const ratioProblems = ratios && !ratios.includes(value.characterRatio) ? [value.characterRatio] : [];
 
     const scheme = catalog.schemes.find((item) => item.mode === value.mode);
     const prompt = tab === "character" ? value.characterPrompt : value.scenePrompt;
@@ -191,36 +185,10 @@ export function AssetSchemePicker({
                     <small>画幅通过尺寸参数发给图片模型；模型给不出接近的尺寸时不能选择</small>
                 </div>
             ) : null}
-            {imageModel ? (
-                <div className="drama-assets-ratio">
-                    <span>参考图分辨率</span>
-                    {tiers.length ? (
-                        <div className="drama-tabs" role="radiogroup" aria-label="参考图分辨率">
-                            <button type="button" role="radio" className="drama-tab" aria-checked={!value.resolution} onClick={() => onChange({ ...value, resolution: undefined })}>
-                                模型默认{imageModel.defaultImageResolution ? ` · ${tierLabel(imageModel.defaultImageResolution)}` : ""}
-                            </button>
-                            {tiers.map((tier) => (
-                                <button key={tier} type="button" role="radio" className="drama-tab" aria-checked={value.resolution === tier} onClick={() => onChange({ ...value, resolution: tier })}>
-                                    {tierLabel(tier)}
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <small>所选图片模型不提供分辨率档位，按模型默认尺寸出图</small>
-                    )}
-                    {tiers.length ? <small>分辨率越高越清晰、单张越贵；参考图主要用于保持人物与场景一致，一般 1K–2K 足够</small> : null}
-                </div>
-            ) : null}
             {ratioProblems.length ? (
                 <p className="drama-assets-warning" role="alert">
                     <TriangleAlert className="size-3.5" />
-                    所选图片模型给不出 {ratioProblems.join("、")} 画幅的参考图，保存时会被拒绝。请在“模型”里换用能指定这个尺寸的图片模型{value.mode === "custom" ? "，或改角色参考图画幅" : ""}。
-                </p>
-            ) : null}
-            {value.resolution && imageModel && !tiers.includes(value.resolution) ? (
-                <p className="drama-assets-warning" role="alert">
-                    <TriangleAlert className="size-3.5" />
-                    所选图片模型不支持 {tierLabel(value.resolution)} 分辨率，保存时会被拒绝，请改选上面的档位。
+                    角色参考图所用的图片模型给不出 {ratioProblems.join("、")} 画幅，保存时会被拒绝。请在上方换用能指定这个尺寸的角色图片模型{value.mode === "custom" ? "，或改角色参考图画幅" : ""}。
                 </p>
             ) : null}
 

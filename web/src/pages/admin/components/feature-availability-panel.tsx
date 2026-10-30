@@ -3,10 +3,13 @@ import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
 import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Boxes, ImageIcon, Quote } from "lucide-react";
 
+import { Link } from "react-router";
+
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
+import "./feature-availability-panel.css";
 
 type FeatureKey =
     "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "inspirationSourcesVisible" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled";
@@ -194,7 +197,7 @@ export default function FeatureAvailabilityPanel() {
         if (key === "frontendModelsEnabled" && !enabled) {
             modal.confirm({
                 title: "关闭前台模型功能？",
-                content: "关闭后用户将直接使用系统渠道中配置的模型；管理后台仍保留前台模型配置入口，重新开启后即可继续使用。",
+                content: "关闭后用户将直接使用系统渠道中配置的模型。已有前台模型配置会保留，后台侧栏不再显示该入口，仍可从本页“配置前台模型”继续编辑；重新开启后即可继续使用。",
                 okText: "确认关闭",
                 cancelText: "取消",
                 okButtonProps: { danger: true },
@@ -248,7 +251,7 @@ export default function FeatureAvailabilityPanel() {
     const enabledPluginFeatures = pluginFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
 
     return (
-        <div className="admin-settings-stack admin-feature-availability">
+        <div className="admin-settings-stack admin-feature-availability is-compact-layout">
             <div className="admin-feature-command-bar">
                 <div className="admin-feature-command-copy" aria-live="polite">
                     <div className="flex flex-wrap items-center gap-2">
@@ -272,10 +275,11 @@ export default function FeatureAvailabilityPanel() {
 
             <div className="admin-feature-board" aria-label="功能开放控制台">
                 <FeatureDomainPanel
+                    className="is-compact is-workspace"
                     title="1. 用户工作台入口"
                     description="先决定普通用户能进入哪些核心工作区"
                     icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/7 开放`} tone={enabledWorkspaceFeatures === 5 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/${workspaceFeatureRows.length} 开放`} tone={enabledWorkspaceFeatures === workspaceFeatureRows.length ? "success" : "neutral"} />}
                 >
                     {workspaceFeatureRows.map((row) => (
                         <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
@@ -286,7 +290,7 @@ export default function FeatureAvailabilityPanel() {
                     title="2. 插件开放范围"
                     description="先开放插件中心，再决定系统插件是否可见"
                     icon={<PlugZap className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledPluginFeatures}/2 生效`} tone={enabledPluginFeatures === 2 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledPluginFeatures}/${pluginFeatureRows.length} 生效`} tone={enabledPluginFeatures === pluginFeatureRows.length ? "success" : "neutral"} />}
                 >
                     <FeatureSettingRow row={pluginFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={1} />
                     {draftFeatures.pluginCenterEnabled ? <FeatureSettingRow row={pluginFeatureRows[1]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={2} /> : null}
@@ -305,9 +309,9 @@ export default function FeatureAvailabilityPanel() {
     );
 }
 
-function FeatureDomainPanel({ title, description, icon, status, children }: { title: string; description: string; icon: ReactNode; status: ReactNode; children: ReactNode }) {
+function FeatureDomainPanel({ className, title, description, icon, status, children }: { className?: string; title: string; description: string; icon: ReactNode; status: ReactNode; children: ReactNode }) {
     return (
-        <section className="admin-feature-domain">
+        <section className={cn("admin-feature-domain", className)}>
             <header className="admin-feature-domain-header">
                 <span className="admin-feature-domain-icon">{icon}</span>
                 <div className="admin-feature-domain-copy min-w-0 flex-1">
@@ -333,7 +337,7 @@ function FeatureSettingRow({ row, saved, draft, saving, onChange, step }: { row:
                 <span className="admin-feature-board-row-name">
                     {step ? <small>第 {step} 步</small> : null}
                     <strong>{row.title}</strong>
-                    <span>{row.description}</span>
+                    <span title={row.description}>{row.description}</span>
                 </span>
                 {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
             </div>
@@ -354,7 +358,10 @@ function FeatureSourceRow({ row, saved, draft, saving, onChange }: { row: Featur
                 <span className="admin-feature-board-row-name">
                     <small>模型来源</small>
                     <strong>用户模型目录</strong>
-                    <span>{row.description}</span>
+                    <span title={row.description}>{row.description}</span>
+                    <Link to="/admin/models" className="admin-feature-board-row-link">
+                        配置前台模型
+                    </Link>
                 </span>
                 {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
             </div>

@@ -101,8 +101,11 @@ type AssetSettings struct {
 	CharacterPrompt string `json:"characterPrompt"`
 	ScenePrompt     string `json:"scenePrompt"`
 	CharacterRatio  string `json:"characterRatio"`
-	// Resolution 是参考图分辨率档位（1k / 1.5k / 2k / 4k），空串按图片模型默认档位。
+	// Resolution / PropResolution / SceneResolution 是角色、道具、场景参考图的分辨率档位（1k / 1.5k / 2k / 4k），
+	// 空串按该类参考图所用图片模型的默认档位。
 	Resolution      string `json:"resolution,omitempty"`
+	PropResolution  string `json:"propResolution,omitempty"`
+	SceneResolution string `json:"sceneResolution,omitempty"`
 	SourceSkillID   string `json:"sourceSkillId,omitempty"`
 	SourceSkillName string `json:"sourceSkillName,omitempty"`
 	SourcePath      string `json:"sourcePath,omitempty"`
@@ -136,15 +139,32 @@ func (a AssetSettings) Normalized() AssetSettings {
 	if a.Mode != AssetModeCustom {
 		a.CharacterRatio = scheme.Ratio
 	}
-	switch a.Resolution = strings.ToLower(strings.TrimSpace(a.Resolution)); a.Resolution {
-	case "", "1k", "1.5k", "2k", "4k":
-	default:
-		a.Resolution = ""
-	}
+	a.Resolution = normalizedAssetTier(a.Resolution)
+	a.PropResolution = normalizedAssetTier(a.PropResolution)
+	a.SceneResolution = normalizedAssetTier(a.SceneResolution)
 	a.SourceSkillID = truncateRunes(strings.TrimSpace(a.SourceSkillID), 64)
 	a.SourceSkillName = truncateRunes(strings.TrimSpace(a.SourceSkillName), 120)
 	a.SourcePath = truncateRunes(strings.TrimSpace(a.SourcePath), 240)
 	return a
+}
+
+func normalizedAssetTier(value string) string {
+	switch value = strings.ToLower(strings.TrimSpace(value)); value {
+	case "1k", "1.5k", "2k", "4k":
+		return value
+	}
+	return ""
+}
+
+// ResolutionFor 是某类参考图（character / prop / scene）的分辨率档位，空串按模型默认。
+func (a AssetSettings) ResolutionFor(kind string) string {
+	switch kind {
+	case "prop":
+		return a.PropResolution
+	case "scene":
+		return a.SceneResolution
+	}
+	return a.Resolution
 }
 
 // FrameHint 返回首帧提示词里对参考图版式的说明。

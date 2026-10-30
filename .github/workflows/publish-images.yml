@@ -17,8 +17,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 发版时先推 main 再推 tag：tag 一轮排在同 SHA 的 main 一轮之后。main 一轮整体成功即说明
+  # 这个提交的质量检查已通过，tag 一轮不再重跑。查不到或查询失败都按未通过处理，照常跑检查。
+  reuse:
+    name: Reuse verified main checks
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      verified: ${{ steps.lookup.outputs.verified }}
+    steps:
+      - id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          verified=false
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            total=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/publish-images.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push&status=success&per_page=1" --jq '.total_count' || echo 0)
+            if [[ "$total" =~ ^[0-9]+$ ]] && (( total > 0 )); then
+              verified=true
+            fi
+          fi
+          echo "verified=$verified" | tee -a "$GITHUB_OUTPUT"
+
   checks:
     name: Quality checks
+    needs: reuse
+    if: ${{ needs.reuse.outputs.verified != 'true' }}
     uses: ./.github/workflows/quality.yml
 
   prepare:
@@ -138,7 +164,9 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.image }} manifest
-    needs: [checks, prepare, build]
+    needs: [reuse, checks, prepare, build]
+    # 检查只有两种放行方式：本轮跑过并通过，或本轮跳过且 reuse 确认同 SHA 的 main 一轮已成功。
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.build.result == 'success' && (needs.checks.result == 'success' || (needs.checks.result == 'skipped' && needs.reuse.outputs.verified == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -175,7 +203,8 @@ jobs:
 
   release:
     name: Publish release assets
-    if: startsWith(github.ref, 'refs/tags/v')
+    # 上游 checks 可能被跳过，默认的 success() 会因此连带跳过本任务，所以显式只看 publish 结果。
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.publish.result == 'success' }}
     needs: publish
     runs-on: ubuntu-latest
     permissions:

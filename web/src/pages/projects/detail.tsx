@@ -335,6 +335,7 @@ export default function DramaStudioPage() {
                                         aspectRatio={aspectRatio}
                                         castById={castById}
                                         defaultVideoModel={production.settings.models.video}
+                                        videoResolution={production.settings.videoResolution}
                                         busy={busy}
                                         keyboardEnabled={openSegmentIndex === undefined && view === "production"}
                                         onOpen={openSegment}
@@ -391,6 +392,7 @@ export default function DramaStudioPage() {
                             reprocessing={reprocessSegment.isPending}
                             onReprocess={(segment) => reprocessSegment.mutate(segment.index)}
                             defaultVideoModel={production.settings.models.video}
+                            videoResolution={production.settings.videoResolution}
                             onOpenCast={(id) => openView("cast", { cast: id, segment: null, shot: null })}
                             onOpenCanvas={(segment) => void canvas.open({ kind: "segment", episodeId, segmentIndex: segment.index })}
                             canvasOpening={Boolean(canvas.opening?.startsWith("segment:"))}

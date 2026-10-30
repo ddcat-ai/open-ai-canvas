@@ -221,6 +221,12 @@ func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 		}
 		recordDramaAttempt(job, task.ID, string(task.Status), "", job.CostMicrocredits)
 		if applyErr := r.applyJob(job, task); applyErr != nil {
+			var next *dramaJobContinued
+			if errors.As(applyErr, &next) {
+				// 本任务的花费已记入历次提交；作业换成新任务继续运行，下一轮读取新任务的结果。
+				job.TaskID, job.CostMicrocredits = next.taskID, 0
+				return r.s.repo.SaveDramaJob(job)
+			}
 			var issue *dramaResultIssue
 			if errors.As(applyErr, &issue) {
 				return r.failJob(job, issue.message)
@@ -249,6 +255,11 @@ func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 type dramaResultIssue struct{ message string }
 
 func (e *dramaResultIssue) Error() string { return e.message }
+
+// dramaJobContinued 表示结果需要同一作业再跑一轮（例如段提示词超长时自动精简），taskID 是已提交的新任务。
+type dramaJobContinued struct{ taskID string }
+
+func (e *dramaJobContinued) Error() string { return "作业继续运行：" + e.taskID }
 
 // taskCost 是任务实际结算的花费；读账单出错时返回错误，由调用方推迟到下一轮，不按 0 记账（否则预算被少算）。
 func (r *dramaRun) taskCost(task *model.Task) (int64, error) {
@@ -1141,17 +1152,51 @@ func (r *dramaRun) submitSegmentPrompt(job *model.DramaJob) (*model.Task, bool, 
 		if len(draft.input.Shots) > 0 {
 			draft.input.Shots[len(draft.input.Shots)-1].DurationMs += int64(seconds)*1000 - draft.view.DurationMs
 		}
-		payload, _ := json.Marshal(dramaRevisionPayload{Revision: segment.Revision, Seconds: seconds})
+		maxChars, err := r.segmentPromptBudget(profile, draft, segment, rows, castByID)
+		if err != nil {
+			return nil, false, err
+		}
+		// 文本模型数字数常常超出要求，写作目标比硬上限再留一成；硬上限在结果回写时校验。
+		draft.input.MaxChars = maxChars * 9 / 10
+		payload, _ := json.Marshal(dramaRevisionPayload{Revision: segment.Revision, Seconds: seconds, MaxChars: maxChars})
 		job.PayloadJSON = string(payload)
-		skill, err := r.s.dramaWritingSkill(r.project.UserID, r.settings.PromptSkill)
+		skill, err := r.s.dramaWritingSkill(r.project.UserID, r.settings.PromptSkill, "视频提示词")
 		if err != nil {
 			return nil, false, err
 		}
 		prompt := production.SegmentWriterPrompt(draft.input, production.SegmentVideoPrompt(draft.input), previous, skill)
-		task, err := r.createTask("text", "text", prompt, r.textInput(job, production.SegmentWriterSystemPrompt()))
+		task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepPrompt), "text", "text", prompt, r.textInput(job, production.SegmentWriterSystemPrompt()))
 		return task, false, err
 	}
 	return nil, true, nil
+}
+
+// dramaPromptCondenseAttempts 是段提示词超出视频模型上限时自动精简的次数上限。
+const dramaPromptCondenseAttempts = 2
+
+// dramaMinPromptBudget 是段提示词正文至少要有的字符数；参考图说明占掉太多时直接报错，不写一段注定被拒的提示词。
+const dramaMinPromptBudget = 300
+
+// segmentPromptBudget 是本段提示词正文的字符上限：视频模型提示词上限减去提交时加在开头的参考图说明。
+// 参考图说明按当前参考图状态预演；之后参考图状态变化导致超长时，提交视频前会退回重写（见 submitSegmentVideo）。返回 0 表示不限。
+func (r *dramaRun) segmentPromptBudget(profile dramaVideoProfile, draft dramaSegmentDraft, segment *model.DramaSegment, rows []model.DramaSegment, casts map[string]model.DramaCast) (int, error) {
+	if profile.PromptMaxChars <= 0 {
+		return 0, nil
+	}
+	var previous *model.DramaSegment
+	for i := range rows {
+		if rows[i].ID == segment.ID && i > 0 && !r.settings.parallelVideo() {
+			previous = &rows[i-1]
+		}
+	}
+	// 预演失败（如画幅不符）不阻止撰写：提交视频时会报出同一原因，届时也会再核对一次字数。
+	request, _, _ := r.s.prepareDramaSegment(r.settings, draft, *segment, previous, casts)
+	header := utf8.RuneCountInString(request.Header)
+	budget := profile.PromptMaxChars - header - 2
+	if budget < dramaMinPromptBudget {
+		return 0, fmt.Errorf("开头的参考图说明占用 %d 个字符，所选视频模型的提示词上限只有 %d 个字符，放不下本段正文；请减少本段参考图，或换用提示词上限更大的视频模型", header, profile.PromptMaxChars)
+	}
+	return budget, nil
 }
 
 func (r *dramaRun) applySegmentPrompt(job *model.DramaJob, task *model.Task) error {
@@ -1167,8 +1212,42 @@ func (r *dramaRun) applySegmentPrompt(job *model.DramaJob, task *model.Task) err
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return err
 	}
+	if chars := utf8.RuneCountInString(prompt); payload.MaxChars > 0 && chars > payload.MaxChars {
+		if payload.Condensed < dramaPromptCondenseAttempts {
+			return r.condenseSegmentPrompt(job, payload, prompt, chars)
+		}
+		// 自动精简后仍超长：保存这一版供手动精简，本段标记失败；不截断，也不提交注定被拒的视频。
+		if _, err := r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, map[string]any{"video_prompt": truncateRunes(prompt, 12000), "prompt_seconds": payload.Seconds}); err != nil {
+			return err
+		}
+		return &dramaResultIssue{message: fmt.Sprintf("视频提示词 %d 个字符，自动精简 %d 次后仍超过本段上限 %d 个字符（视频模型上限减去开头的参考图说明）；请手动精简后保存，或重新撰写", chars, payload.Condensed, payload.MaxChars)}
+	}
 	_, err = r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, map[string]any{"video_prompt": truncateRunes(prompt, 12000), "prompt_status": model.DramaMediaReady, "prompt_error": "", "prompt_seconds": payload.Seconds})
 	return err
+}
+
+// condenseSegmentPrompt 让文本模型把超长的段提示词精简到上限内。同一作业换成精简任务继续运行，
+// 撰写状态保持“撰写中”，精简结果回写时按同一上限再校验一次。
+func (r *dramaRun) condenseSegmentPrompt(job *model.DramaJob, payload dramaRevisionPayload, prompt string, chars int) error {
+	segment, err := r.s.repo.DramaSegment(r.project.ID, job.ShotID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if segment.Revision != payload.Revision {
+		// 撰写期间镜头或参考图已改，这一版作废，调度会按新素材重写。
+		return nil
+	}
+	task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepPrompt), "text", "text", production.SegmentCondensePrompt(prompt, payload.MaxChars), r.textInput(job, production.SegmentCondenseSystemPrompt()))
+	if err != nil {
+		return &dramaResultIssue{message: fmt.Sprintf("视频提示词 %d 个字符，超过本段上限 %d 个字符，自动精简未能提交：%s", chars, payload.MaxChars, err.Error())}
+	}
+	payload.Condensed++
+	encoded, _ := json.Marshal(payload)
+	job.PayloadJSON = string(encoded)
+	return &dramaJobContinued{taskID: task.ID}
 }
 
 func (r *dramaRun) metadata(job *model.DramaJob) map[string]any {
@@ -1197,17 +1276,26 @@ func (r *dramaRun) createTaskWith(choice DramaModelChoice, capability string, op
 	return task, err
 }
 
-// imageRequest 把参考图期望画幅与作品指定的分辨率换算到所选模型真正支持的尺寸；一轮调度内按画幅缓存。
-func (r *dramaRun) imageRequest(ratio string) dramaImageRequest {
+// imageRequest 把某类参考图的期望画幅与分辨率换算到该类所用图片模型真正支持的尺寸；一轮调度内按模型、画幅与档位缓存。
+func (r *dramaRun) imageRequest(kind string) dramaImageRequest {
 	if r.imageSizes == nil {
 		r.imageSizes = map[string]dramaImageRequest{}
 	}
-	request, cached := r.imageSizes[ratio]
+	choice, ratio, tier := r.settings.Models.imageFor(kind), r.castImageRatio(kind), r.settings.Assets.ResolutionFor(kind)
+	key := dramaChoiceCacheKey(choice) + "|" + ratio + "|" + tier
+	request, cached := r.imageSizes[key]
 	if !cached {
-		request = r.s.dramaImageRequestFor(r.settings.Models.Image, ratio, r.settings.Assets.Resolution)
-		r.imageSizes[ratio] = request
+		request = r.s.dramaImageRequestFor(choice, ratio, tier)
+		r.imageSizes[key] = request
 	}
 	return request
+}
+
+func dramaChoiceCacheKey(choice DramaModelChoice) string {
+	if choice.LogicalModelID != "" {
+		return "l:" + choice.LogicalModelID
+	}
+	return "c:" + choice.ChannelID + ":" + choice.ModelKey
 }
 
 // castImageRatio 是设定参考图的期望画幅：场景与道具统一横版 16:9，角色按参考图方案。
@@ -1218,8 +1306,11 @@ func (r *dramaRun) castImageRatio(kind string) string {
 	return production.AssetImageRatio
 }
 
+// textInput 让上游以流式返回：剧本与分镜这类长输出在非流式下要等全部写完才回第一个字节，
+// 中转站前的网关（如 Cloudflare 约 100 秒无响应）会先断开并报 524；流式边写边回，连接一直有数据。
+// 结果仍在流结束后整段写入任务结果，模型声明不支持流式时由执行层改走非流式。
 func (r *dramaRun) textInput(job *model.DramaJob, systemPrompt string) map[string]any {
-	return map[string]any{"config": map[string]any{"systemPrompt": systemPrompt}, "textOptions": map[string]any{"stream": false}, "metadata": r.metadata(job)}
+	return map[string]any{"config": map[string]any{"systemPrompt": systemPrompt}, "textOptions": map[string]any{"stream": true}, "metadata": r.metadata(job)}
 }
 
 func (r *dramaRun) loadChapters(ids []string) ([]production.Chapter, error) {
@@ -1245,9 +1336,13 @@ func (r *dramaRun) submitBible() (*model.Task, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	prompt := production.BiblePrompt(r.project.Name, r.settings.Settings, chapters, dramaBibleSampleRunes)
-	input := map[string]any{"config": map[string]any{"systemPrompt": production.BibleSystemPrompt()}, "textOptions": map[string]any{"stream": false}, "metadata": map[string]any{"source": "drama_production", "domainProjectId": r.project.ID}}
-	task, err := r.createTask("text", "text", prompt, input)
+	skill, err := r.s.dramaWritingSkill(r.project.UserID, r.settings.BibleSkill, "资产提取")
+	if err != nil {
+		return nil, false, err
+	}
+	prompt := production.BiblePrompt(r.project.Name, r.settings.Settings, chapters, dramaBibleSampleRunes, skill)
+	input := map[string]any{"config": map[string]any{"systemPrompt": production.BibleSystemPrompt()}, "textOptions": map[string]any{"stream": true}, "metadata": map[string]any{"source": "drama_production", "domainProjectId": r.project.ID}}
+	task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepBible), "text", "text", prompt, input)
 	return task, false, err
 }
 
@@ -1328,14 +1423,18 @@ func (r *dramaRun) submitScript(job *model.DramaJob) (*model.Task, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
+	skill, err := r.s.dramaWritingSkill(r.project.UserID, r.settings.ScriptSkill, "分镜拆分")
+	if err != nil {
+		return nil, false, err
+	}
 	prompt := production.ScriptPrompt(production.ScriptContext{
 		Segment: r.settings.Storyboard.SegmentLimits(profile.maxSeconds()),
 		Title:   r.project.Name, Settings: r.settings.Settings, VisualRules: r.meta.VisualRules,
 		EpisodeNumber: episode.Number, EpisodeTitle: episode.Title, Synopsis: episode.Synopsis, Hook: episode.Hook, Cliffhanger: episode.Cliffhanger,
 		CastSummary: r.castSummary("character", 30), PropSummary: r.castSummary("prop", 20), SceneSummary: r.castSummary("scene", 20), SourceChapters: chapters,
-		SourceFormat: episode.SourceFormat,
+		SourceFormat: episode.SourceFormat, Skill: skill,
 	})
-	task, err := r.createTask("text", "text", prompt, r.textInput(job, production.ScriptSystemPrompt()))
+	task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepScript), "text", "text", prompt, r.textInput(job, production.ScriptSystemPrompt()))
 	return task, false, err
 }
 
@@ -1352,7 +1451,7 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 	// 角色按参考图方案的画幅（内置方案均为 16:9，自定义方案可改）。画幅通过尺寸参数约束，
 	// 不只靠提示词；模型给不出接近的尺寸时直接失败并说明原因，不退回模型默认的方图。
 	ratio := r.castImageRatio(cast.Kind)
-	request := r.imageRequest(ratio)
+	request := r.imageRequest(cast.Kind)
 	if request.Issue != "" {
 		return nil, false, errors.New(request.Issue)
 	}
@@ -1364,7 +1463,7 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 	config := map[string]any{"count": "1"}
 	request.apply(config)
 	input := map[string]any{"config": config, "metadata": metadata}
-	task, err := r.createTask("image", "text_to_image", prompt, input)
+	task, err := r.createTaskWith(r.settings.Models.imageFor(cast.Kind), "image", "text_to_image", prompt, input)
 	return task, false, err
 }
 

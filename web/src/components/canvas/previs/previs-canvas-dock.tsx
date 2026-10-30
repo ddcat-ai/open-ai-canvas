@@ -4,7 +4,8 @@ import { Camera, ChartGantt, Check, ChevronUp, Focus, MousePointer2, Move3d, Rot
 
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { PREVIS_VIEW_MODES, type PrevisViewMode } from "@/lib/canvas/previs/previs-view-modes";
-import type { PrevisCamera } from "@/types/previs";
+import { PREVIS_ASPECT_RATIOS, previsAspectOption } from "@/lib/canvas/previs/previs-optics";
+import type { PrevisAspectRatio, PrevisCamera } from "@/types/previs";
 import { PREVIS_TOOL_LABELS, type PrevisToolMode } from "@/lib/canvas/previs/previs-shortcuts";
 
 type TransformMode = PrevisToolMode;
@@ -18,6 +19,9 @@ export type PrevisCanvasDockProps = {
     onToggleTrajectory: () => void;
     viewMode: PrevisViewMode;
     onViewModeChange: (mode: PrevisViewMode) => void;
+    /** 当前镜头画幅；选择后由宿主写入镜头并切到机位视图预览安全框。 */
+    aspectRatio?: PrevisAspectRatio;
+    onAspectRatioChange: (value: PrevisAspectRatio) => void;
     cameras: PrevisCamera[];
     viewedCameraId: string | null;
     onViewCamera: (id: string) => void;
@@ -54,14 +58,16 @@ const QUICK_VIEWS: Array<{ mode: PrevisViewMode; label: string }> = [
  */
 export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
     const rootRef = useRef<HTMLDivElement>(null);
-    const [viewMenuOpen, setViewMenuOpen] = useState(false);
+    // 取景与画幅两个弹层互斥，同一时间只开一个。
+    const [openMenu, setOpenMenu] = useState<"view" | "aspect" | null>(null);
+    const toggleMenu = (menu: "view" | "aspect") => setOpenMenu((current) => (current === menu ? null : menu));
     useEffect(() => {
-        if (!viewMenuOpen) return;
+        if (!openMenu) return;
         const close = (event: PointerEvent) => {
-            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setViewMenuOpen(false);
+            if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpenMenu(null);
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setViewMenuOpen(false);
+            if (event.key === "Escape") setOpenMenu(null);
         };
         document.addEventListener("pointerdown", close, true);
         document.addEventListener("keydown", closeOnEscape);
@@ -69,15 +75,47 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
             document.removeEventListener("pointerdown", close, true);
             document.removeEventListener("keydown", closeOnEscape);
         };
-    }, [viewMenuOpen]);
+    }, [openMenu]);
     const trajectoryLabel = props.trajectoryDrawing ? "结束绘制" : props.trajectoryKind === "camera" ? "画运镜" : "画走位";
     const quickActive = QUICK_VIEWS.some((item) => item.mode === props.viewMode);
     const moreLabel = quickActive ? "更多" : (PREVIS_VIEW_MODES.find((item) => item.mode === props.viewMode)?.label ?? "更多");
+    const currentAspect = previsAspectOption(props.aspectRatio);
     return (
         <div ref={rootRef} data-canvas-no-zoom className="pv-canvas-dock pv-dock" role="toolbar" aria-label="世界引擎视口工具" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
-                {viewMenuOpen ? (
-                    <motion.div role="dialog" aria-label="取景模式" initial={{ opacity: 0, y: 10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.98 }} transition={{ duration: 0.16 }} className="pv-dock__menu">
+                {openMenu === "aspect" ? (
+                    <motion.div key="aspect" role="dialog" aria-label="画幅比例" initial={{ opacity: 0, y: 10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.98 }} transition={{ duration: 0.16 }} className="pv-dock__menu pv-dock__menu--aspect">
+                        <div className="pv-dock__menu-title">
+                            <span>画幅比例</span>
+                            <small>决定机位取景与输出尺寸</small>
+                        </div>
+                        <div className="pv-dock__aspect-grid" role="radiogroup" aria-label="画幅比例">
+                            {PREVIS_ASPECT_RATIOS.map((item) => {
+                                const checked = item.value === currentAspect.value;
+                                return (
+                                    <button
+                                        key={item.value}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={checked}
+                                        aria-label={`${item.label} ${item.hint}`}
+                                        title={item.hint}
+                                        className={checked ? "is-active" : undefined}
+                                        onClick={() => {
+                                            props.onAspectRatioChange(item.value);
+                                            setOpenMenu(null);
+                                        }}
+                                    >
+                                        <PrevisAspectGlyph ratio={item.ratio} large />
+                                        <span>{item.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                ) : null}
+                {openMenu === "view" ? (
+                    <motion.div key="view" role="dialog" aria-label="取景模式" initial={{ opacity: 0, y: 10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.98 }} transition={{ duration: 0.16 }} className="pv-dock__menu">
                         <div className="pv-dock__menu-title">
                             <span>取景</span>
                             <small>只改变观察方式，不写入场景</small>
@@ -95,7 +133,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                                         className={checked ? "is-active" : undefined}
                                         onClick={() => {
                                             props.onViewModeChange(item.mode);
-                                            setViewMenuOpen(false);
+                                            setOpenMenu(null);
                                         }}
                                     >
                                         {item.label}
@@ -119,7 +157,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                                                 className={current ? "is-active" : undefined}
                                                 onClick={() => {
                                                     props.onViewCamera(camera.id);
-                                                    setViewMenuOpen(false);
+                                                    setOpenMenu(null);
                                                 }}
                                             >
                                                 <Camera className="size-3.5" />
@@ -162,11 +200,15 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                         </button>
                     );
                 })}
-                <button type="button" aria-expanded={viewMenuOpen} title="更多取景与机位（C 切换 3D / 机位）" className={!quickActive ? "is-active" : ""} onClick={() => setViewMenuOpen((value) => !value)}>
+                <button type="button" aria-expanded={openMenu === "view"} title="更多取景与机位（C 切换 3D / 机位）" className={!quickActive ? "is-active" : ""} onClick={() => toggleMenu("view")}>
                     {moreLabel}
-                    <ChevronUp className={`size-3 transition-transform ${viewMenuOpen ? "" : "rotate-180"}`} aria-hidden />
+                    <ChevronUp className={`size-3 transition-transform ${openMenu === "view" ? "" : "rotate-180"}`} aria-hidden />
                 </button>
             </div>
+            <button type="button" aria-expanded={openMenu === "aspect"} title={`画幅比例：${currentAspect.label}（${currentAspect.hint}）`} className={`pv-dock__tool ${openMenu === "aspect" ? "is-active is-soft" : ""}`} onClick={() => toggleMenu("aspect")}>
+                <PrevisAspectGlyph ratio={currentAspect.ratio} />
+                <span>{currentAspect.label}</span>
+            </button>
             <span className="pv-dock__divider" />
             <button type="button" title="聚焦选中对象 (F)" className="pv-dock__tool" onClick={props.onFocusSelected}>
                 <Focus aria-hidden />
@@ -186,5 +228,35 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                 <span>属性</span>
             </button>
         </div>
+    );
+}
+
+/** 画幅示意：按比例画一个居中矩形；自适应（无固定比例）画四角取景框。 */
+function PrevisAspectGlyph({ ratio, large = false }: { ratio?: number; large?: boolean }) {
+    const box = 16;
+    const max = 13;
+    const width = ratio ? (ratio >= 1 ? max : Math.max(4, max * ratio)) : 13;
+    const height = ratio ? (ratio >= 1 ? Math.max(4, max / ratio) : max) : 10;
+    const x = (box - width) / 2;
+    const y = (box - height) / 2;
+    const corner = 3.5;
+    return (
+        <span className={`pv-aspect-glyph ${large ? "is-large" : ""}`} aria-hidden>
+            <svg viewBox={`0 0 ${box} ${box}`} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                {ratio ? (
+                    <rect x={x} y={y} width={width} height={height} rx={1.4} strokeWidth={1.4} />
+                ) : (
+                    <path
+                        strokeWidth={1.4}
+                        d={[
+                            `M${x} ${y + corner}V${y}H${x + corner}`,
+                            `M${x + width - corner} ${y}H${x + width}V${y + corner}`,
+                            `M${x + width} ${y + height - corner}V${y + height}H${x + width - corner}`,
+                            `M${x + corner} ${y + height}H${x}V${y + height - corner}`,
+                        ].join("")}
+                    />
+                )}
+            </svg>
+        </span>
     );
 }

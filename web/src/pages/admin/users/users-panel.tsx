@@ -13,11 +13,14 @@ import { AdminBatchBar, AdminDataTable, AdminTableEmpty } from "../components/ad
 import { useTableUrlState } from "../lib/use-table-url-state";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import { createUserColumns, userColumnOptions, type UserColumnKey } from "./users-columns";
-import { AdminUserCreateDrawer, AdminUserEditDrawer } from "./users-drawer";
+import { AdminUserCreateModal, AdminUserEditModal } from "./users-modals";
+import { UserCreditAdjustModal } from "./user-credit-adjust-modal";
+import "./users-page.css";
 import { Select } from "@/components/ui/base/select";
 import { AdminSearchInput } from "../components/admin-search-input";
 
-const columnStorageKey = "admin-users-visible-columns";
+// v2：新增累计充值、累计消耗、最近登录列，旧的显示列偏好不再适用。
+const columnStorageKey = "admin-users-visible-columns-v2";
 const allColumnKeys = userColumnOptions.map((item) => item.key);
 
 export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: LocalUser) => void }) {
@@ -32,6 +35,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
     const [retry, setRetry] = useState(0);
     const [detailUserId, setDetailUserId] = useState<string | null>(null);
     const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+    const [adjustingUser, setAdjustingUser] = useState<AdminUser | null>(null);
     const [createUserOpen, setCreateUserOpen] = useState(false);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [bulkDisabling, setBulkDisabling] = useState(false);
@@ -128,6 +132,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
         groups,
         onView: (user) => setDetailUserId(user.id),
         onEdit: (user) => { setCreateUserOpen(false); setEditingUser(user); },
+        onAdjustCredits: setAdjustingUser,
         onToggleStatus: toggleStatus,
     }), [actor?.id, groups, toggleStatus, visibleColumns]);
 
@@ -249,15 +254,16 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                     columns,
                     dataSource: users,
                     pagination: false,
-                    scroll: { x: 860 },
+                    scroll: { x: 1320 },
                 }}
                 empty={loadError ? <div className="admin-inline-load-error" role="status"><span>用户数据暂不可用：{loadError}</span><Button size="small" onClick={() => setRetry((value) => value + 1)}>重试</Button></div> : <AdminTableEmpty filtered={hasFilters} />}
                 footer={<PaginationBar alwaysShow current={state.page} pageSize={state.pageSize} total={total} onChange={(page, pageSize) => update({ page: pageSize !== state.pageSize ? 1 : page, pageSize })} />}
             />
 
             <AdminUserDetailDrawer userId={detailUserId} previousUserId={previousUserId} nextUserId={nextUserId} onNavigate={setDetailUserId} onClose={() => setDetailUserId(null)} />
-            <AdminUserCreateDrawer open={createUserOpen} groups={groups} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
-            <AdminUserEditDrawer user={editingUser} actorId={actor?.id} groups={groups} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            <AdminUserCreateModal open={createUserOpen} groups={groups} onClose={() => setCreateUserOpen(false)} onCreated={addUser} />
+            <AdminUserEditModal user={editingUser} actorId={actor?.id} groups={groups} onClose={() => setEditingUser(null)} onSaved={replaceUser} />
+            <UserCreditAdjustModal user={adjustingUser} onClose={() => setAdjustingUser(null)} onAdjusted={(patch) => setUsers((items) => items.map((item) => (item.id === patch.id ? { ...item, ...patch } : item)))} />
         </>
     );
 }

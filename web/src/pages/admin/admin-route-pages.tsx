@@ -128,7 +128,7 @@ export function FeatureAvailabilityPage() {
 
 export function StorageResourcesPage() {
     return (
-        <AdminPageFrame title="存储资源" description="只读查看资源记录、容量分布与文件预览" scroll>
+        <AdminPageFrame title="存储资源" description="查看资源记录、容量分布与文件预览，可删除单个或批量资源" scroll>
             <StorageResourcesPanel />
         </AdminPageFrame>
     );

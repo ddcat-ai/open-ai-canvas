@@ -79,7 +79,7 @@ const PREVIS_ADD_BUTTONS: Array<{ kind: PrevisAddKind; label: string; icon: type
 import { nanoid } from "nanoid";
 import { type PrevisShortcutAction, resolvePrevisShortcut, blocksPrevisShortcut, releasePrevisFocusAfterPointer, PREVIS_SHORTCUT_GUIDE, PREVIS_TOOL_LABELS } from "@/lib/canvas/previs/previs-shortcuts";
 import { saveAs } from "file-saver";
-import { resolvePrevisDepthRange } from "@/lib/canvas/previs/previs-optics";
+import { previsAspectOption, resolvePrevisDepthRange } from "@/lib/canvas/previs/previs-optics";
 import { formatPrevisTimecode, openPrevisMonitorWindow, type PrevisMonitorHandle } from "./previs-monitor-window";
 import { Euler, Vector3, type AnimationClip } from "three";
 import { compilePrevisPrompt } from "@/lib/canvas/previs/previs-prompt-compiler";
@@ -1943,6 +1943,7 @@ export function CanvasPrevisWorkbench({
                             <Camera className="size-3" />
                             <span>{(selectedCamera || activeCamera)?.name}</span>
                             <span className="pv-cam-hud__meta">{(selectedCamera || activeCamera)?.focalLength}mm</span>
+                            <span className="pv-cam-hud__meta">{previsAspectOption(activeShot.aspectRatio).label}</span>
                         </div>
                     ) : null}
                     {trajectoryDrawing ? (
@@ -1999,6 +2000,12 @@ export function CanvasPrevisWorkbench({
                         onToggleTrajectory={() => setTrajectoryDrawing((active) => !active)}
                         viewMode={viewMode}
                         onViewModeChange={setViewMode}
+                        aspectRatio={activeShot.aspectRatio}
+                        onAspectRatioChange={(aspectRatio) => {
+                            if (aspectRatio !== previsAspectOption(activeShot.aspectRatio).value) updateShot(activeShot.id, { aspectRatio });
+                            // 画幅只在机位视图里有安全框：选完直接切过去，看到的就是成片取景。
+                            setViewMode("camera");
+                        }}
                         cameras={draft.cameras}
                         viewedCameraId={selectedCameraId || activeShot.cameraId || null}
                         onViewCamera={(id) => {

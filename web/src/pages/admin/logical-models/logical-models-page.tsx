@@ -1,4 +1,5 @@
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Segmented, Switch, Table, Tag } from "antd";
+import { Alert, App, Button, Form, Input, InputNumber, Segmented, Switch, Table, Tag } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
@@ -273,18 +274,18 @@ export default function LogicalModelsPage() {
         { title: "状态", width: 130, render: (_, item) => logicalModelStatusTag(item) },
         {
             title: "操作",
-            width: 230,
+            width: 300,
             align: "right",
             render: (_, item) => (
                 <AdminRowActions
                     primary={{ label: "编辑", icon: <Pencil className="size-3.5" />, onClick: () => openModel(item) }}
-                    visibleActionCount={1}
+                    visibleActionCount={3}
                     actions={[
-                        { key: "simulate", label: "模拟供应线路匹配", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
+                        { key: "simulate", label: "模拟线路", icon: <FlaskConical className="size-3.5" />, onClick: () => openSimulation(item) },
                         { key: "toggle", label: item.enabled ? "停用" : "启用", onClick: () => void toggleModel(item) },
                         {
                             key: "archive",
-                            label: "归档模型",
+                            label: "归档",
                             icon: <Archive className="size-3.5" />,
                             danger: true,
                             disabled: deletingModelId === item.id,
@@ -340,7 +341,7 @@ export default function LogicalModelsPage() {
                     setKeyword("");
                     setPage(1);
                 }}
-                table={{ className: "admin-logical-model-table", rowKey: "id", size: "small", loading, pagination: false, columns: modelColumns, dataSource: paginatedModels, scroll: { x: 980 } }}
+                table={{ className: "admin-logical-model-table", rowKey: "id", size: "small", loading, pagination: false, columns: modelColumns, dataSource: paginatedModels, scroll: { x: 1050 } }}
                 empty={<AdminTableEmpty filtered={Boolean(deferredKeyword)} title="暂无模型" />}
                 footer={
                     <PaginationBar
@@ -357,7 +358,7 @@ export default function LogicalModelsPage() {
             />
 
             <ModelEditorModal
-                admin
+                shell={AdminModal}
                 open={editingModel !== undefined}
                 busy={saving}
                 title={editingModel ? "编辑前台模型" : "新增前台模型"}
@@ -491,11 +492,10 @@ export default function LogicalModelsPage() {
                 )}
             </ModelEditorModal>
 
-            <Modal
+            <AdminModal
                 title={simulatingModel ? `供应线路匹配模拟 - ${simulatingModel.name}` : "供应线路匹配模拟"}
                 open={Boolean(simulatingModel)}
                 className="workspace-modal workspace-modal-wide admin-simulation-modal"
-                rootClassName="admin-modal-root"
                 centered
                 destroyOnHidden
                 onCancel={() => setSimulatingModel(undefined)}
@@ -543,7 +543,7 @@ export default function LogicalModelsPage() {
                         ) : null}
                     </div>
                 ) : null}
-            </Modal>
+            </AdminModal>
         </AdminPageFrame>
     );
 }

@@ -129,7 +129,9 @@ description: 影策后端核心持久化表与状态边界
 
 剧情段按连续场景切分，并保证每段总时长不超过所选视频模型的单次上限；单个镜头超过上限时改编失败并提示调整分镜规则。第 2 段起的视频请求以上一段视频的最后一帧作为首帧（`image_to_video`），上一段未生成时本段排队等待；开场段使用参考图（`reference_to_video`），模型不支持时退回 `text_to_video`。参考图按“角色 → 道具 → 场景”编号，与提示词里的“参考图N”一致，提交时在提示词开头追加对应说明。最后一帧由后端用 ffmpeg 抽取，镜像需包含 ffmpeg。
 
-作品设置 `settings_json` 保存画幅、单集时长 `episodeSeconds`（30–1200 秒）、风格、对白语言、审阅方式 `reviewMode`（sample 先完整做出第 1 集样片 / every 每集确认提示词 / auto）、生成节奏 `mediaMode`（manual 新作品默认，先只跑文本 / auto）、参考图方案 `assets`、分镜规则 `storyboard`（剧情段切法 `segmentMode`：auto 智能，在场景切换处断开、单段不超过视频模型单次上限；fixed 固定，每段 `segmentSeconds` 秒、只按时长装箱；range 范围，每段 `segmentMinSeconds`–`segmentMaxSeconds` 秒，达到下限后在场景切换处断开。秒数 4–60，三种模式的数值都保存，任何模式实际都不超过视频模型单次上限；`pacing` fast/standard/slow 决定单镜 1.5–4 / 2–6 / 3–10 秒；`dialogue` dense/standard/sparse 约每 3 / 4.5 / 7 秒一句台词或旁白；`transition`、`transitionMs`）、视频提示词技能 `promptSkill`（`skillId`、`skillName`、`path`，撰写段提示词时把该技能文件全文交给文本模型；保存与撰写时都校验当前用户可读，不可读直接报错）、并发与 text/image/video 三类模型。旧版分镜规则字段 `durationMode`、`fixedSeconds`、`minSeconds`、`maxSeconds` 已删除，读取时忽略，下次保存设置即从 JSON 中去掉。
+作品设置 `settings_json` 保存画幅、单集时长 `episodeSeconds`（30–1200 秒）、风格、对白语言、审阅方式 `reviewMode`（sample 先完整做出第 1 集样片 / every 每集确认提示词 / auto）、生成节奏 `mediaMode`（manual 新作品默认，先只跑文本 / auto）、参考图方案 `assets`、分镜规则 `storyboard`（剧情段切法 `segmentMode`：auto 智能，在场景切换处断开、单段不超过视频模型单次上限；fixed 固定，每段 `segmentSeconds` 秒、只按时长装箱；range 范围，每段 `segmentMinSeconds`–`segmentMaxSeconds` 秒，达到下限后在场景切换处断开。秒数 4–60，三种模式的数值都保存，任何模式实际都不超过视频模型单次上限；`pacing` rapid/fast/standard/relaxed/slow 决定单镜 1.5–3 / 1.5–4 / 2–6 / 2.5–8 / 3–10 秒（缺省 fast）；`dialogue` dense/standard/sparse 约每 3 / 4.5 / 7 秒一句台词或旁白；`transition`、`transitionMs`（150–1500 毫秒，缺省 150））、视频提示词技能 `promptSkill`（`skillId`、`skillName`、`path`，撰写段提示词时把该技能文件全文交给文本模型；保存与撰写时都校验当前用户可读，不可读直接报错）、并发与 text/image/video 三类模型。旧版分镜规则字段 `durationMode`、`fixedSeconds`、`minSeconds`、`maxSeconds` 已删除，读取时忽略，下次保存设置即从 JSON 中去掉。
+
+`settings_json` 另有以下可选键，不改表结构，旧作品缺省时按括号里的默认处理：`videoResolution`（剧情段视频分辨率，取自视频模型声明的档位；空为模型默认）、`bibleSkill` / `scriptSkill`（资产提取、分镜拆分的写作技能，格式同 `promptSkill`；空为内置规则）、`storyboard.performance` 与 `storyboard.cameraMotion`（1–10 整数，缺省或 0 按 5）、`assets.propResolution` / `assets.sceneResolution`（道具、场景参考图分辨率；`assets.resolution` 只用于角色参考图，旧作品的道具、场景改为按模型默认档位）、`models.bibleText` / `scriptText` / `promptText` / `characterImage` / `propImage` / `sceneImage`（按步骤或参考图类型单独指定的模型，空为沿用 `models.text` / `models.image`）。剧情段工作的 `payload_json` 增加 `maxChars`（撰写时的正文字符上限）与 `condensed`（本次已自动精简次数），只在调度内部使用。
 
 Schema 67 `drama_segment_production` 从逐镜流程迁到剧情段流程：先把镜头上已有的配音/首帧/视频资源归档为历史版本，再删除 `drama_shots` 的 `video_model_json`、`speaker_cast_id`、`frame_prompt_override`、`video_prompt_override`、`audio_*`、`frame_*`、`video_resource_id`、`video_status`、`approved`、`locked`、`error`，删除 `drama_casts.voice_key` 与 `drama_episodes.frames_approved`，新增 `drama_episodes.approved`、`drama_shots.prop_ids_json` 与 `drama_segments` 的视频列。存在旧逐镜数据时，未完成的集回到剧本阶段、作品暂停并提示重新改编，排队中的旧工作取消，不会自动重发收费任务。Schema 62–66 是同一功能的中间版本（剧情段字段、工作历次提交、手动放行、转场、剧情段表）。
 
@@ -252,9 +254,9 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
 | `canvas_projects` | 当前画布内容及递增 `revision` | 所有正常画布写入都通过 operations 服务更新；对象删除后迟到更新不能隐式重建 |
-| `canvas_mutation_receipts` | 保存 `(user_id, canvas_id, mutation_id)`、请求摘要、确定性结果和提交 revision | 唯一请求身份与画布内容在同一事务提交；同 ID 不同摘要返回冲突 |
+| `canvas_mutation_receipts` | 保存 `(user_id, canvas_id, mutation_id)`、请求摘要、提交摘要 `result_json` 和提交 revision | 唯一请求身份与画布内容在同一事务提交；同 ID 不同摘要返回冲突；`result_json` 不含画布正文；创建超过 7 天的回执由后台 worker 每小时分批删除 |
 
-`canvas_mutation_receipts` 不保存整批历史版本，只保存一次请求的恢复结果。服务端在事务内锁定画布、创建或读取 receipt、校验字段/对象基线、应用 operations、递增 revision、写入结果并完成 receipt；事务失败时不留下可重放的半成品。客户端可在响应丢失、断网或刷新后用原始 `mutationId` 和原始 payload 重放。
+`canvas_mutation_receipts` 不保存整批历史版本，也不保存画布正文，只保存一次请求的恢复摘要。早期构建在 `result_json` 中写入整份画布，每次编辑一份且从不清理，表随编辑次数线性增长；升级后旧回执在 7 天内被清理。PostgreSQL 删除行后空间只供表内复用，不归还磁盘；需要回收磁盘时先备份，在维护窗口执行 `VACUUM (FULL, ANALYZE) canvas_mutation_receipts;`（会锁表），或用 `pg_repack` 在线重整。服务端在事务内锁定画布、创建或读取 receipt、校验字段/对象基线、应用 operations、递增 revision、写入结果并完成 receipt；事务失败时不留下可重放的半成品。客户端可在响应丢失、断网或刷新后用原始 `mutationId` 和原始 payload 重放。
 
 画布操作支持 `create_canvas`、`create_node`、`patch_node`、`remove_node`、`create_connection`、`update_connection`、`remove_connection`、`set_field`。创建操作显式创建对象；更新和删除要求对象存在，并以 `before`、`expected` 或 `beforeValue` 做字段/对象级并发校验。删除节点同时删除其连接，迟到的媒体回写返回对象缺失冲突。`viewport` 是本地视图状态，不进入远端 operations。
 

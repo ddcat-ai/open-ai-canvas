@@ -897,6 +897,45 @@
     color: var(--pd-t0);
     border-color: var(--pd-b1);
 }
+.previs-inspector-tabs {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--pd-b0);
+    border-radius: var(--pd-r-md);
+    background: var(--pd-s1);
+}
+.previs-inspector-tab {
+    min-width: 0;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--pd-r-sm);
+    background: transparent;
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-sm);
+    font-weight: 500;
+    transition:
+        background 150ms,
+        color 150ms,
+        border-color 150ms;
+}
+.previs-inspector-tab:hover {
+    background: var(--pd-s2);
+    color: var(--pd-t0);
+}
+.previs-inspector-tab.is-active {
+    border-color: var(--pd-a-bd);
+    background: var(--pd-a-bg);
+    color: var(--pd-a0);
+    font-weight: 600;
+}
+.previs-inspector-tab:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: 1px;
+}
 .previs-desk-inspector-content {
     min-height: 0;
     padding: 8px 8px 16px;
@@ -3077,6 +3116,73 @@
     opacity: 0.6;
     font-variant-numeric: tabular-nums;
 }
+/* 画幅：dock 入口 = 比例示意 + 当前值；弹层为 4 列比例卡片。 */
+.pv-dock-aspect {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    white-space: nowrap;
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.pv-aspect-glyph {
+    display: inline-grid;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+}
+.pv-aspect-glyph.is-large {
+    width: 22px;
+    height: 22px;
+}
+.pv-aspect-glyph svg {
+    width: 100%;
+    height: 100%;
+}
+.pv-canvas-dock__menu--aspect {
+    width: 320px;
+    margin-left: -160px;
+}
+.pv-canvas-dock__aspect-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+.pv-canvas-dock__aspect-grid button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 58px;
+    border: 0;
+    border-radius: var(--dock-item-radius, 8px);
+    background: var(--dock-command-bg, rgba(255, 255, 255, 0.04));
+    color: inherit;
+    font-size: var(--pd-ts-2xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.78;
+    transition:
+        background 150ms var(--pd-ease-snap),
+        color 150ms var(--pd-ease-snap);
+}
+.pv-canvas-dock__aspect-grid button:hover {
+    background: var(--dock-command-hover, rgba(255, 255, 255, 0.1));
+    opacity: 1;
+}
+.pv-canvas-dock__aspect-grid button.is-active {
+    background: var(--dock-command-active, #fff);
+    color: var(--dock-command-active-text, #000);
+    opacity: 1;
+}
+.pv-canvas-dock__aspect-grid button:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: 2px;
+}
 .pv-cam-hud {
     position: absolute;
     top: 12px;
@@ -3110,7 +3216,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
     .pv-canvas-dock__view-grid button,
-    .pv-canvas-dock__camera-list button {
+    .pv-canvas-dock__camera-list button,
+    .pv-canvas-dock__aspect-grid button {
         transition: none;
     }
 }
@@ -3768,6 +3875,48 @@
 .previs-add-dialog__card-thumb .pv-prop-thumb {
     width: 100%;
     height: 100%;
+}
+/* 角色卡：左侧竖版人偶缩略图（统一机位，身高可比），右侧标题与说明。 */
+.previs-add-dialog__card--figure {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    column-gap: 8px;
+    row-gap: 2px;
+    min-height: 84px;
+    padding: 6px 8px 6px 6px;
+}
+.previs-add-dialog__card--figure .previs-add-dialog__card-thumb {
+    display: grid;
+    grid-row: 1 / span 2;
+    place-items: center;
+    width: 36px;
+    height: 72px;
+    border-radius: 6px;
+    background: var(--ad-surface-2);
+}
+.previs-add-dialog__card--figure .previs-add-dialog__card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+}
+.previs-add-dialog__card--figure .previs-add-dialog__card-title,
+.previs-add-dialog__card--figure .previs-add-dialog__card-hint {
+    grid-column: 2;
+    min-width: 0;
+}
+.previs-add-dialog__card--figure .previs-add-dialog__card-title {
+    align-self: end;
+}
+.previs-add-dialog__card--figure .previs-add-dialog__card-hint {
+    align-self: start;
+}
+.previs-add-dialog__card-placeholder {
+    width: 18px;
+    height: 18px;
+    color: var(--ad-faint);
 }
 .previs-add-dialog__card-title {
     display: inline-flex;

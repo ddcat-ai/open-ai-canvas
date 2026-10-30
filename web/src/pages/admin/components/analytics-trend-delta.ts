@@ -13,9 +13,9 @@ export function formatCountDelta(current?: number, previous?: number) {
     return { value: `较前一日 ${direction} ${value}`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };
 }
 
-// 任一天没有上游请求时成功率按 0 返回，并不代表质量下降；此时不比较，避免显示「↓ 99.3pp」。
-export function formatRateDelta(current?: number, previous?: number, currentRequests?: number, previousRequests?: number) {
-    if (current === undefined || previous === undefined || !currentRequests || !previousRequests) return undefined;
+// 没有已完成请求的日子成功率为 null，不代表质量下降；任一天为 null 时不比较，避免显示「↓ 99.3pp」。
+export function formatRateDelta(current?: number | null, previous?: number | null) {
+    if (current === undefined || current === null || previous === undefined || previous === null) return undefined;
     const delta = current - previous;
     const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
     return { value: `较前一日 ${direction} ${Math.abs(delta).toFixed(1)}pp`, tone: delta >= 0 ? ("success" as const) : ("warning" as const) };

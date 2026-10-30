@@ -1,0 +1,60 @@
+/* 用户编辑 / 新建弹窗：短字段两列排列，带说明的长字段占满一行。 */
+.admin-user-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+}
+
+.admin-user-form-grid > .ant-form-item.is-wide {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+    .admin-user-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* 调积分弹窗：先看当前余额，核对步骤再显示变化量与调整后余额。 */
+.admin-user-credit-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.admin-user-credit-summary > div {
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-2);
+    padding: 8px 12px;
+}
+
+.admin-user-credit-summary dt {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-user-credit-summary dd {
+    margin: 2px 0 0;
+    color: var(--admin-text);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-user-credit-summary dd.is-positive {
+    color: var(--admin-status-success);
+}
+
+.admin-user-credit-summary dd.is-negative {
+    color: var(--admin-status-error);
+}
+
+.admin-user-credit-note {
+    margin: 0;
+    color: var(--admin-text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}

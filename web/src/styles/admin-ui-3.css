@@ -884,6 +884,21 @@
     font-size: 10px;
 }
 
+.admin-feature-board-row-name > .admin-feature-board-row-link {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--admin-text-primary);
+    font-size: 11px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.admin-feature-board-row-name > .admin-feature-board-row-link:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
 .admin-feature-board-row-name > em.is-warning {
     color: color-mix(in srgb, var(--admin-status-warning) 78%, var(--admin-text-primary));
 }

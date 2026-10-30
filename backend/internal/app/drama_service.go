@@ -59,7 +59,10 @@ func (s *Service) CreateDrama(userID string, req CreateDramaRequest) (DramaSumma
 	if problem := production.ValidateAssetPrompts(settings.Assets); problem != "" {
 		return DramaSummary{}, BadAuthRequest(problem)
 	}
-	if _, err := s.dramaWritingSkill(userID, settings.PromptSkill); err != nil {
+	if err := s.validateDramaSkills(userID, settings); err != nil {
+		return DramaSummary{}, err
+	}
+	if err := s.validateDramaModelOverrides(userID, settings.Models); err != nil {
 		return DramaSummary{}, err
 	}
 	models, err := s.resolveDramaModels(userID, settings)
@@ -768,7 +771,7 @@ func buildDramaSegmentDrafts(settings DramaSettings, meta dramaBibleMeta, shots 
 	for position, group := range groups {
 		view := DramaSegmentView{Index: group[0].SegmentIndex, Title: firstNonEmpty(group[0].SegmentTitle, group[0].Scene, "剧情段"), ShotIDs: []string{}, Request: DramaSegmentRequest{References: []DramaSegmentReference{}}}
 		characterIDs, propIDs, sceneIDs := []string{}, []string{}, []string{}
-		input := production.SegmentPromptInput{Index: position, Count: len(groups), Title: view.Title, AspectRatio: settings.AspectRatio, Style: settings.StylePrompt, VisualRules: meta.VisualRules, Language: settings.Language, PauseMs: settings.Storyboard.DialoguePauseMs(), Independent: settings.parallelVideo()}
+		input := production.SegmentPromptInput{Index: position, Count: len(groups), Title: view.Title, AspectRatio: settings.AspectRatio, Style: settings.StylePrompt, VisualRules: meta.VisualRules, Language: settings.Language, PauseMs: settings.Storyboard.DialoguePauseMs(), Independent: settings.parallelVideo(), Performance: settings.Storyboard.Performance, CameraMotion: settings.Storyboard.CameraMotion}
 		for _, shot := range group {
 			view.ShotIDs = append(view.ShotIDs, shot.ID)
 			view.DurationMs += shot.DurationMs

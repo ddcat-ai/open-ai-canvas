@@ -13,7 +13,10 @@ export type DramaModelChoice = {
 
 export type DramaCapability = "text" | "image" | "video";
 
-export type DramaModels = Record<DramaCapability, DramaModelChoice>;
+/** 按文字步骤或参考图类型单独指定的模型；为空沿用同能力的默认模型。 */
+export type DramaModelOverride = "bibleText" | "scriptText" | "promptText" | "characterImage" | "propImage" | "sceneImage";
+
+export type DramaModels = Record<DramaCapability, DramaModelChoice> & Partial<Record<DramaModelOverride, DramaModelChoice>>;
 
 export type DramaReviewMode = "sample" | "every" | "auto";
 
@@ -28,8 +31,10 @@ export type DramaAssetSettings = {
     characterPrompt: string;
     scenePrompt: string;
     characterRatio: string;
-    /** 参考图分辨率档位（1k / 1.5k / 2k / 4k）；空串或缺省按图片模型默认档位。 */
+    /** 角色 / 道具 / 场景参考图的分辨率档位（1k / 1.5k / 2k / 4k）；空串或缺省按该类所用图片模型的默认档位。 */
     resolution?: string;
+    propResolution?: string;
+    sceneResolution?: string;
     sourceSkillId?: string;
     sourceSkillName?: string;
     sourcePath?: string;
@@ -58,13 +63,20 @@ export type DramaStoryboardSettings = {
     segmentSeconds: number;
     segmentMinSeconds: number;
     segmentMaxSeconds: number;
-    pacing: "fast" | "standard" | "slow";
+    /** 镜头节奏五档，从快到慢；缺省为快节奏。 */
+    pacing: DramaPacing;
     dialogue: "dense" | "standard" | "sparse";
     transition: "auto" | "cut" | "fadeblack" | "fadewhite";
     transitionMs: number;
+    /** 表演强度 1–10（1 内敛、5 自然、10 夸张外放）；只改变剧本与段视频提示词的写法。 */
+    performance: number;
+    /** 运镜动感 1–10（1 静态、5 有动机的运镜、10 强烈冲击）。 */
+    cameraMotion: number;
 };
 
-/** 用户技能库里的一个技能文件，作为剧情段视频提示词的写作方法。 */
+export type DramaPacing = "rapid" | "fast" | "standard" | "relaxed" | "slow";
+
+/** 用户技能库里的一个技能文件，作为文字步骤（资产提取、分镜拆分、视频提示词）的写作方法。 */
 export type DramaSkillRef = { skillId: string; skillName: string; path: string };
 
 export type DramaTransition = "cut" | "fadeblack" | "fadewhite";
@@ -79,6 +91,11 @@ export type DramaSettings = {
     storyboard: DramaStoryboardSettings;
     /** 为空时按内置格式撰写段视频提示词。 */
     promptSkill?: DramaSkillRef;
+    /** 资产提取、分镜拆分的写作技能；为空按内置规则，输出结构始终由系统固定。 */
+    bibleSkill?: DramaSkillRef;
+    scriptSkill?: DramaSkillRef;
+    /** 剧情段视频分辨率档位（取自视频模型声明的分辨率）；缺省按模型默认。 */
+    videoResolution?: string;
     reviewMode: DramaReviewMode;
     mediaMode: DramaMediaMode;
     concurrency: number;
@@ -329,6 +346,8 @@ export type DramaSegmentRequest = {
     aspectRatio: string;
     size?: string;
     resolution?: string;
+    /** 视频模型的提示词字符上限（含开头的参考图说明）；缺省表示未声明。 */
+    promptMaxChars?: number;
     /** 视频模型同步生成对白与音效；false 时本段视频没有声音。 */
     generateAudio: boolean;
     firstFrameResourceId?: string;
@@ -398,6 +417,9 @@ export type DramaModelOption = {
     videoRatios?: string[];
     /** 仅视频模型：是否同步生成对白与音效；false 时剧情段视频没有声音。 */
     generateAudio?: boolean;
+    /** 仅视频模型：作品可指定的分辨率档位与模型默认档位；为空表示不提供可选分辨率。 */
+    videoResolutions?: string[];
+    defaultVideoResolution?: string;
     imageResolutions?: string[];
     defaultImageResolution?: string;
     imageRatios?: string[];

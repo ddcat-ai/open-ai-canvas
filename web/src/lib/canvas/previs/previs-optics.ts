@@ -9,14 +9,35 @@ import type { PrevisAspectRatio, PrevisCamera, PrevisShot } from "@/types/previs
  */
 export const PREVIS_SENSOR_WIDTH_MM = 36;
 
-export const PREVIS_ASPECT_RATIOS: Array<{ value: PrevisAspectRatio; label: string; ratio: number }> = [
-    { value: "9:16", label: "9:16 竖屏", ratio: 9 / 16 },
-    { value: "16:9", label: "16:9 横屏", ratio: 16 / 9 },
-    { value: "2.39:1", label: "2.39:1 宽银幕", ratio: 2.39 },
+/** 未设置画幅的镜头按短剧竖屏处理。 */
+export const PREVIS_DEFAULT_ASPECT_RATIO: PrevisAspectRatio = "9:16";
+/** 自适应画幅拿不到有效视口尺寸时的回落比例。 */
+export const PREVIS_AUTO_ASPECT_FALLBACK = 16 / 9;
+
+/** 画幅选项按从宽到窄排列；auto 没有固定比例，由调用方传入视口宽高比。 */
+export const PREVIS_ASPECT_RATIOS: Array<{ value: PrevisAspectRatio; label: string; hint: string; ratio?: number }> = [
+    { value: "auto", label: "自适应", hint: "跟随视口" },
+    { value: "2.39:1", label: "2.39:1", hint: "宽银幕", ratio: 2.39 },
+    { value: "21:9", label: "21:9", hint: "超宽屏", ratio: 21 / 9 },
+    { value: "16:9", label: "16:9", hint: "横屏", ratio: 16 / 9 },
+    { value: "4:3", label: "4:3", hint: "经典", ratio: 4 / 3 },
+    { value: "1:1", label: "1:1", hint: "方形", ratio: 1 },
+    { value: "3:4", label: "3:4", hint: "竖版", ratio: 3 / 4 },
+    { value: "9:16", label: "9:16", hint: "竖屏", ratio: 9 / 16 },
 ];
 
-export function previsAspectValue(value?: PrevisAspectRatio): number {
-    return PREVIS_ASPECT_RATIOS.find((item) => item.value === value)?.ratio ?? 9 / 16;
+export function previsAspectOption(value?: PrevisAspectRatio) {
+    return PREVIS_ASPECT_RATIOS.find((item) => item.value === (value ?? PREVIS_DEFAULT_ASPECT_RATIO)) ?? PREVIS_ASPECT_RATIOS.find((item) => item.value === PREVIS_DEFAULT_ASPECT_RATIO)!;
+}
+
+/**
+ * 画幅宽高比。auto 使用 viewportAspect（视口宽/高），视口尺寸无效时回落 16:9；
+ * 未设置或未知值按默认竖屏。
+ */
+export function previsAspectValue(value?: PrevisAspectRatio, viewportAspect?: number): number {
+    const option = previsAspectOption(value);
+    if (option.ratio) return option.ratio;
+    return viewportAspect !== undefined && Number.isFinite(viewportAspect) && viewportAspect > 0 ? viewportAspect : PREVIS_AUTO_ASPECT_FALLBACK;
 }
 
 /** 水平视角（度）。 */
@@ -32,10 +53,10 @@ export function previsVerticalFov(focalLength: number, aspect: number): number {
     return (2 * Math.atan(Math.tan(halfHorizontal) / safeAspect) * 180) / Math.PI;
 }
 
-/** CAM 取景与离线渲染共用：镜头摄影机在给定镜头画幅下的竖直 fov。 */
-export function resolvePrevisShotFov(camera: Pick<PrevisCamera, "focalLength" | "fov">, shot?: Pick<PrevisShot, "aspectRatio"> | null): number {
+/** CAM 取景与离线渲染共用：镜头摄影机在给定镜头画幅下的竖直 fov。viewportAspect 只对自适应画幅生效。 */
+export function resolvePrevisShotFov(camera: Pick<PrevisCamera, "focalLength" | "fov">, shot?: Pick<PrevisShot, "aspectRatio"> | null, viewportAspect?: number): number {
     if (!Number.isFinite(camera.focalLength) || camera.focalLength <= 0) return camera.fov;
-    return previsVerticalFov(camera.focalLength, previsAspectValue(shot?.aspectRatio));
+    return previsVerticalFov(camera.focalLength, previsAspectValue(shot?.aspectRatio, viewportAspect));
 }
 
 /**

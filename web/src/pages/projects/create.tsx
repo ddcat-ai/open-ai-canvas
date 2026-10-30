@@ -10,7 +10,7 @@ import { decodeNovelText } from "@/lib/canvas/canvas-document";
 import { analyzeNovel, EPISODE_GROUP_CHARS, EPISODE_SOURCE_CHARS, sourceChars, titleFromFileName } from "@/lib/drama/novel-parse";
 import { ApiError } from "@/services/api/request";
 import { linkCanvasToDrama } from "@/services/drama-canvas";
-import { dramaChoiceKey, dramaVideoOptionFits, dramaVideoRatioIssue } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaVideoOptionFits, dramaVideoRatioIssue, dramaVideoResolutionIssue } from "@/lib/drama/model-choice";
 import { DEFAULT_STORYBOARD } from "@/lib/drama/storyboard";
 import {
     createDrama,
@@ -30,7 +30,7 @@ import {
 import { EpisodeGroupField, formatCount, formatCredits, MEDIA_MODE_LABEL, SOURCE_FORMAT_LABEL, SourceFormatPicker, VIDEO_CONTINUITY_LABEL } from "./drama-shared";
 import { AssetSchemePicker, defaultAssetSettings, useAssetSchemes } from "./asset-scheme";
 import { DramaModelPicker, useDramaModelCatalog } from "./drama-model-picker";
-import { PromptSkillField } from "./prompt-skill";
+import { DramaAssetImageModels, DramaTextSteps, VideoResolutionField } from "./step-settings";
 import { EpisodeDurationInput, StoryboardRules } from "./storyboard-rules";
 import { DramaStylePicker } from "./style-picker";
 import "./drama.css";
@@ -50,7 +50,7 @@ const REVIEW_MODES: Array<{ value: DramaReviewMode; title: string; detail: strin
     { value: "every", title: "每集确认提示词", detail: "每集生成视频前停下来，等你审阅各剧情段的视频提示词与参考图。" },
     { value: "auto", title: "全自动", detail: "不打断，直接从小说跑到成片，可随时在制作台修改重做。" },
 ];
-const CAPABILITY_LABEL: Record<DramaCapability, string> = { text: "改编与分镜", image: "角色与场景参考图", video: "剧情段视频" };
+const CAPABILITY_LABEL: Record<DramaCapability, string> = { text: "默认文本", image: "默认图片", video: "剧情段视频" };
 const EPISODE_MODES: Array<{ value: DramaEpisodeMode; title: string; detail: string }> = [
     { value: "chapter", title: "按章分集", detail: "按章节顺序固定分集，默认每章一集，也可以每 2–12 章合成一集；可以只放第 1 集，之后在制作台追加。单章不超过 1.2 万字。" },
     { value: "auto", title: "整本导入，自动分集", detail: "由模型按剧情把章节规划成集（可合并或拆分章节），适合一次导入整本小说；章节多时耗时更长。" },
@@ -99,6 +99,9 @@ export default function DramaCreatePage() {
     const [videoContinuity, setVideoContinuity] = useState<DramaVideoContinuity>("tail_frame");
     const [storyboard, setStoryboard] = useState<DramaStoryboardSettings>(DEFAULT_STORYBOARD);
     const [promptSkill, setPromptSkill] = useState<DramaSkillRef>();
+    const [bibleSkill, setBibleSkill] = useState<DramaSkillRef>();
+    const [scriptSkill, setScriptSkill] = useState<DramaSkillRef>();
+    const [videoResolution, setVideoResolution] = useState<string>();
     const [models, setModels] = useState<Partial<DramaModels>>({});
     const [budgetCredits, setBudgetCredits] = useState<number | null>(null);
     const assetCatalog = useAssetSchemes();
@@ -114,12 +117,15 @@ export default function DramaCreatePage() {
         const { defaults } = catalog;
         // 没手动选视频模型时按当前画幅与衔接方式挑：目录默认值给不出就换第一个给得出的，都不行留空并说明原因。
         const videoOptions = catalog.options.video || [];
-        const fitting = videoOptions.filter((option) => dramaVideoOptionFits(option, aspectRatio, videoContinuity));
+        const fitting = videoOptions.filter((option) => dramaVideoOptionFits(option, aspectRatio, videoContinuity, videoResolution));
         const video = models.video || fitting.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(defaults.video))?.choice || fitting[0]?.choice || {};
-        return { text: models.text || defaults.text, image: models.image || defaults.image, video };
-    }, [aspectRatio, catalogQuery.data, models, videoContinuity]);
+        return { ...models, text: models.text || defaults.text, image: models.image || defaults.image, video };
+    }, [aspectRatio, catalogQuery.data, models, videoContinuity, videoResolution]);
     const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(resolvedModels?.video));
-    const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(resolvedModels?.image));
+    // 角色参考图用单独指定的模型，没有就用默认图片模型；参考图方案按它检查角色画幅。
+    const characterImage = dramaChoiceKey(resolvedModels?.characterImage) ? resolvedModels?.characterImage : resolvedModels?.image;
+    const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(characterImage));
+    const videoResolutionProblem = dramaVideoResolutionIssue(videoOption, videoResolution);
     const missingCapabilities = (Object.keys(CAPABILITY_LABEL) as DramaCapability[]).filter((capability) => catalogQuery.data && !dramaChoiceKey(resolvedModels?.[capability]));
     // 目录里有视频模型、但没有一个能按当前画幅与衔接方式出片：说清原因，不笼统说“没有可用模型”。
     const noFittingVideo = missingCapabilities.includes("video") && Boolean(catalogQuery.data?.options.video?.length);
@@ -138,6 +144,9 @@ export default function DramaCreatePage() {
         videoContinuity,
         storyboard,
         ...(promptSkill ? { promptSkill } : {}),
+        ...(bibleSkill ? { bibleSkill } : {}),
+        ...(scriptSkill ? { scriptSkill } : {}),
+        ...(videoResolution ? { videoResolution } : {}),
         concurrency: 4,
         models: resolvedModels,
         episodeMode,
@@ -155,10 +164,9 @@ export default function DramaCreatePage() {
             aspectRatio,
             videoContinuity,
             JSON.stringify(storyboard),
-            assets?.resolution || "",
-            dramaChoiceKey(resolvedModels?.text),
-            dramaChoiceKey(resolvedModels?.image),
-            dramaChoiceKey(resolvedModels?.video),
+            [assets?.resolution, assets?.propResolution, assets?.sceneResolution, assets?.characterRatio].join("|"),
+            videoResolution || "",
+            JSON.stringify(resolvedModels || {}),
         ],
         queryFn: ({ signal }) => estimateDrama({ chapterCount: analysis!.chapters.length, wordCount: analysis!.words, settings, episodeMode }, signal),
         enabled: Boolean(analysis && resolvedModels),
@@ -240,7 +248,7 @@ export default function DramaCreatePage() {
         onError: (error) => message.error(error instanceof ApiError || error instanceof Error ? error.message : "创建失败"),
     });
     const tooLong = Boolean(analysis?.issues.some((issue) => issue.kind === "too_long")) || Boolean(oversizedGroup);
-    const canStart = Boolean(analysis && name.trim() && resolvedModels && missingCapabilities.length === 0 && !videoRatioProblem && !tailFrameProblem && !tooLong && !create.isPending);
+    const canStart = Boolean(analysis && name.trim() && resolvedModels && missingCapabilities.length === 0 && !videoRatioProblem && !videoResolutionProblem && !tailFrameProblem && !tooLong && !create.isPending);
     const unitLabel = perEpisode && chaptersPerEpisode === 1 ? "集" : "章";
 
     const previewChapter = analysis?.chapters[previewIndex];
@@ -432,24 +440,32 @@ export default function DramaCreatePage() {
                     <DramaStylePicker value={styleId} onChange={setStyleId} />
                     <section>
                         <div className="drama-section-title">
-                            <h2>角色参考图方案</h2>
-                            <span>参考图是每个镜头保持人物一致的锚点，开工后也能在设置里改</span>
+                            <h2>文字步骤</h2>
+                            <span>每一步可以单独选文本模型和写作技能；不选就用默认文本模型和内置写法</span>
                         </div>
-                        <AssetSchemePicker value={assets} onChange={setAssetDraft} sample={{ style: style?.prompt || "", characterName: "主角", sceneName: "主场景" }} layout="compact" imageModel={imageOption} />
+                        <DramaTextSteps
+                            models={resolvedModels}
+                            onModelsChange={(patch) => setModels((current) => ({ ...current, ...patch }))}
+                            skills={{ bible: bibleSkill, script: scriptSkill, prompt: promptSkill }}
+                            onSkillChange={(step, value) => (step === "bible" ? setBibleSkill(value) : step === "script" ? setScriptSkill(value) : setPromptSkill(value))}
+                        />
+                    </section>
+                    <section>
+                        <div className="drama-section-title">
+                            <h2>参考图</h2>
+                            <span>参考图是每个镜头保持人物一致的锚点；角色、道具、场景可以用不同的图片模型与分辨率，开工后也能在设置里改</span>
+                        </div>
+                        <div className="grid gap-3">
+                            <DramaAssetImageModels models={resolvedModels} onModelsChange={(patch) => setModels((current) => ({ ...current, ...patch }))} assets={assets} onAssetsChange={setAssetDraft} />
+                            <AssetSchemePicker value={assets} onChange={setAssetDraft} sample={{ style: style?.prompt || "", characterName: "主角", sceneName: "主场景" }} layout="compact" imageModel={imageOption} />
+                        </div>
                     </section>
                     <section>
                         <div className="drama-section-title">
                             <h2>分镜规则</h2>
-                            <span>决定剧情段多长、段内镜头节奏、台词密度与转场</span>
+                            <span>决定剧情段多长、段内镜头节奏、台词密度、表演与运镜</span>
                         </div>
                         <StoryboardRules value={storyboard} onChange={setStoryboard} episodeSeconds={episodeSeconds} maxVideoSeconds={videoOption?.maxVideoSeconds} videoModelLabel={resolvedModels?.video?.label} />
-                    </section>
-                    <section>
-                        <div className="drama-section-title">
-                            <h2>视频提示词技能</h2>
-                            <span>撰写每个剧情段的视频提示词时遵循的写作方法</span>
-                        </div>
-                        <PromptSkillField value={promptSkill} onChange={setPromptSkill} />
                     </section>
                     <section>
                         <div className="drama-section-title">
@@ -560,12 +576,17 @@ export default function DramaCreatePage() {
                                         size="sm"
                                         showPrice={false}
                                         aspectRatio={aspectRatio}
+                                        videoResolution={videoResolution}
                                         value={resolvedModels?.[capability]}
                                         placeholder={`选择${CAPABILITY_LABEL[capability]}模型`}
                                         onChange={(choice) => setModels((current) => ({ ...current, [capability]: choice }))}
                                     />
                                 </div>
                             ))}
+                            <div className="drama-compose-model-row">
+                                <span>视频分辨率</span>
+                                <VideoResolutionField option={videoOption} value={videoResolution} onChange={setVideoResolution} />
+                            </div>
                             {videoRatioProblem ? (
                                 <p className="drama-cfg-note" role="alert">
                                     当前视频模型{videoRatioProblem}，请换模型或改画幅。
@@ -590,6 +611,7 @@ export default function DramaCreatePage() {
                             <p className="flex items-start gap-2 text-[var(--fs-tiny)] leading-5 text-[var(--status-error)]">
                                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                                 {videoContinuity === "tail_frame" ? `没有能按 ${aspectRatio} 尾帧续接出片的视频模型，请换画幅、改用并行出片或联系管理员。` : `没有能按 ${aspectRatio} 出片的视频模型，请换画幅或联系管理员。`}
+                                {videoResolution ? "也可以把视频分辨率改回默认。" : ""}
                             </p>
                         ) : null}
                     </div>

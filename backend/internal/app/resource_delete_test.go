@@ -242,6 +242,8 @@ func TestDeleteGeneratedAssetTaskReferences(t *testing.T) {
 		{name: "completed output on canvas", status: model.TaskStatusSucceeded, canvas: true, block: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// 每个子用例独立建库、迁移并启动自己的删除 worker，互不共享状态，可以并行。
+			t.Parallel()
 			svc, db, _ := newResourceDeletionTestService(t)
 			payload := `{"url":"/api/resources/generated-resource/file"}`
 			resource := model.Resource{ID: "generated-resource", UserID: "user-1", Provider: "unsupported-test-provider", ObjectKey: "generated.png", Status: model.ResourceStatusReady}

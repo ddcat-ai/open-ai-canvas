@@ -10,7 +10,7 @@ import { useAssetStore } from "@/stores/use-asset-store";
 import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resource-references";
 import { InlineReferencePreview, referencePreviewUrl, syncInlineMentionPreviews } from "./canvas-mention-chips";
 import { MentionMenu, clamp, mentionCaretRect } from "./canvas-mention-menu";
-import { getEditableSelection, renderEditableContent, serializeEditableValue, setEditableSelection } from "./canvas-mention-editable";
+import { getEditableSelection, renderEditableContent, serializeEditableSelection, serializeEditableValue, setEditableSelection } from "./canvas-mention-editable";
 import { mapCanvasTextOffset, mergeCanvasText } from "@/lib/canvas/canvas-text-merge";
 
 export { TOOL_ICON_MAP } from "./canvas-mention-chips";
@@ -419,6 +419,19 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
                         event.preventDefault();
                         replaceEditableSelection(event.clipboardData.getData("text/plain"));
+                    }}
+                    onCopy={(event: ClipboardEvent<HTMLDivElement>) => {
+                        const text = serializeEditableSelection(event.currentTarget);
+                        if (text === null) return;
+                        event.preventDefault();
+                        event.clipboardData.setData("text/plain", text);
+                    }}
+                    onCut={(event: ClipboardEvent<HTMLDivElement>) => {
+                        const text = serializeEditableSelection(event.currentTarget);
+                        if (text === null) return;
+                        event.preventDefault();
+                        event.clipboardData.setData("text/plain", text);
+                        if (!readOnly) replaceEditableSelection("");
                     }}
                     onDragOver={(event: DragEvent<HTMLDivElement>) => {
                         const reference = referenceForDropTarget(event.target);

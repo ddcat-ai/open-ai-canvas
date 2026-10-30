@@ -1,4 +1,5 @@
-import { Alert, App, Button, Input, Modal } from "antd";
+import { Alert, App, Button, Input } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import type { ColumnsType } from "antd/es/table";
 import { Download, Eye, Search, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
@@ -260,7 +261,7 @@ export default function StorageResourcesPanel() {
                 empty={<AdminTableEmpty filtered={hasFilters} title={hasFilters ? undefined : "暂无资源记录"} description={hasFilters ? undefined : "资源上传或生成后会显示在这里。"} />}
                 footer={<PaginationBar alwaysShow current={page} pageSize={pageSize} total={total} onChange={(nextPage, nextSize) => updateUrl({ page: nextSize !== pageSize ? 1 : nextPage, pageSize: nextSize })} />}
             />
-            <Modal
+            <AdminModal
                 title={previewing ? fileName(previewing.objectKey) || "资源预览" : "资源预览"}
                 open={Boolean(previewing)}
                 width={880}
@@ -275,7 +276,7 @@ export default function StorageResourcesPanel() {
                 destroyOnHidden
             >
                 {previewing ? <ResourcePreview resource={previewing} /> : null}
-            </Modal>
+            </AdminModal>
         </div>
     );
 }

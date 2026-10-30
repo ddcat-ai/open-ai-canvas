@@ -194,3 +194,39 @@ func (r *Repository) resourcePhysicalStats(dimensionExpression string) (map[stri
 func resourceProviderExpression() string {
 	return "COALESCE(NULLIF(provider, ''), 'local')"
 }
+
+// UserCreditTotals 汇总一页用户的累计充值到账积分与累计结算消耗，供管理端用户列表展示。
+type UserCreditTotal struct {
+	RechargedMicrocredits int64
+	ConsumedMicrocredits  int64
+}
+
+func (r *Repository) UserCreditTotals(ids []string) (map[string]UserCreditTotal, error) {
+	result := make(map[string]UserCreditTotal, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	type row struct {
+		UserID string
+		Total  int64
+	}
+	var recharged []row
+	if err := r.db.Model(&model.PaymentOrder{}).Select("user_id, COALESCE(SUM(credits_microcredits), 0) AS total").Where("user_id IN ? AND status = ?", ids, model.PaymentOrderCredited).Group("user_id").Scan(&recharged).Error; err != nil {
+		return nil, err
+	}
+	var consumed []row
+	if err := r.db.Model(&model.BillingOrder{}).Select("user_id, COALESCE(SUM(actual_amount_microcredits), 0) AS total").Where("user_id IN ? AND status = ?", ids, model.BillingStatusSettled).Group("user_id").Scan(&consumed).Error; err != nil {
+		return nil, err
+	}
+	for _, item := range recharged {
+		total := result[item.UserID]
+		total.RechargedMicrocredits = item.Total
+		result[item.UserID] = total
+	}
+	for _, item := range consumed {
+		total := result[item.UserID]
+		total.ConsumedMicrocredits = item.Total
+		result[item.UserID] = total
+	}
+	return result, nil
+}

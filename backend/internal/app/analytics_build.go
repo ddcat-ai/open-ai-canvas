@@ -117,12 +117,12 @@ func buildAnalyticsTrend(filter repository.AnalyticsFilter, tasks []model.Task, 
 		key := log.CreatedAt.UTC().Format("2006-01-02")
 		if point := points[key]; point != nil {
 			point.Requests++
-			if log.BillingAmount > 0 {
-				point.ConsumedMicrocredits += log.BillingAmount
-			}
-			requestTotals[key]++
-			if log.Status == model.ApiCallStatusSucceeded {
+			switch log.Status {
+			case model.ApiCallStatusSucceeded:
+				requestTotals[key]++
 				requestSuccess[key]++
+			case model.ApiCallStatusFailed:
+				requestTotals[key]++
 			}
 			if activeByDay[key] == nil {
 				activeByDay[key] = map[string]bool{}
@@ -151,7 +151,7 @@ func buildAnalyticsTrend(filter repository.AnalyticsFilter, tasks []model.Task, 
 	for _, key := range keys {
 		point := points[key]
 		point.ActiveUsers = len(activeByDay[key])
-		point.RequestSuccessRate = ratio(requestSuccess[key], requestTotals[key])
+		point.RequestSuccessRate = optionalRatio(requestSuccess[key], requestTotals[key])
 		result = append(result, *point)
 	}
 	return result
@@ -164,6 +164,7 @@ func buildAnalyticsModels(tasks []model.Task, logs []model.ApiCallLog) []Analyti
 		taskSuccess    int
 		taskTotal      int
 		requestSuccess int
+		requestTotal   int
 		durations      []int64
 	}
 	items := map[string]*accumulator{}
@@ -194,8 +195,12 @@ func buildAnalyticsModels(tasks []model.Task, logs []model.ApiCallLog) []Analyti
 		item.row.Requests++
 		item.users[log.UserID] = true
 		item.durations = append(item.durations, log.DurationMs)
-		if log.Status == model.ApiCallStatusSucceeded {
+		switch log.Status {
+		case model.ApiCallStatusSucceeded:
+			item.requestTotal++
 			item.requestSuccess++
+		case model.ApiCallStatusFailed:
+			item.requestTotal++
 		}
 		if log.UsageAvailable {
 			item.row.UsageAvailable = true
@@ -209,8 +214,8 @@ func buildAnalyticsModels(tasks []model.Task, logs []model.ApiCallLog) []Analyti
 	result := make([]AnalyticsModelRow, 0, len(items))
 	for _, item := range items {
 		item.row.UniqueUsers = len(item.users)
-		item.row.TaskSuccessRate = ratio(item.taskSuccess, item.taskTotal)
-		item.row.RequestSuccessRate = ratio(item.requestSuccess, item.row.Requests)
+		item.row.TaskSuccessRate = optionalRatio(item.taskSuccess, item.taskTotal)
+		item.row.RequestSuccessRate = optionalRatio(item.requestSuccess, item.requestTotal)
 		item.row.P50DurationMs = percentile(item.durations, 0.5)
 		item.row.P95DurationMs = percentile(item.durations, 0.95)
 		result = append(result, item.row)
@@ -381,6 +386,27 @@ func ratio(value int, total int) float64 {
 		return 0
 	}
 	return float64(value) * 100 / float64(total)
+}
+
+// optionalRatio 区分“没有样本”和“成功率为 0”，前者返回 nil。
+func optionalRatio(value int, total int) *float64 {
+	if total == 0 {
+		return nil
+	}
+	result := ratio(value, total)
+	return &result
+}
+
+// upstreamCreateLogs 只保留发往上游的生成请求。图片、视频的轮询结果已合并进 create 根记录；
+// 轮询、下载、上传、本地保存等阶段若再计入，会重复放大请求数并拉低成功率与 P95。
+func upstreamCreateLogs(logs []model.ApiCallLog) []model.ApiCallLog {
+	result := make([]model.ApiCallLog, 0, len(logs))
+	for _, log := range logs {
+		if log.RequestKind == "create" {
+			result = append(result, log)
+		}
+	}
+	return result
 }
 
 func percentile(values []int64, quantile float64) int64 {

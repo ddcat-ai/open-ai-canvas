@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Checkbox, Input, InputNumber, Select, Switch } from "antd";
-import { AlertCircle, ArrowRight, Brush, CheckCheck, Clapperboard, Film, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Upload, UserRound, UsersRound, Cpu, PackageCheck, Play } from "lucide-react";
+import { AlertCircle, ArrowRight, Brush, CheckCheck, Clapperboard, Film, FolderOpen, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Upload, UserRound, UsersRound, Cpu, PackageCheck, Play } from "lucide-react";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { dramaChoiceKey, dramaVideoRatioIssue } from "@/lib/drama/model-choice";
@@ -28,11 +28,12 @@ import {
 import { aspectRatioValue, CAST_KIND_LABEL, EpisodeGroupField, formatCredits, MEDIA_MODE_LABEL, mediaBusy, MediaThumb, parseList, VIDEO_CONTINUITY_LABEL } from "../drama-shared";
 import { AssetSchemePicker } from "../asset-scheme";
 import { DramaModelPicker, useDramaModelCatalog } from "../drama-model-picker";
-import { PromptSkillField } from "../prompt-skill";
+import { DramaAssetImageModels, DramaTextSteps, VideoResolutionField } from "../step-settings";
 import { StoryboardRules } from "../storyboard-rules";
 import { progressFillStyle } from "@/lib/progress-fill";
 import { uploadResourceFile } from "@/services/api/resources";
 import { DramaTakeList } from "./take-list";
+import { CastLibraryPicker } from "./cast-library-picker";
 
 // 制作台的三个整页视图：设定（角色 / 道具 / 场景）、待处理、制作设置。都在主区域内展示，不使用抽屉遮挡。
 
@@ -242,19 +243,24 @@ function CastEditor({ projectId, cast, ratios, onChanged, onOpenCanvas, canvasOp
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "操作失败"),
     });
-    // 上传的形象图直接成为参考图并锁定：不会被重新生成覆盖，剧情段视频按这张图生成。
+    // 上传或从素材库选的形象图直接成为参考图并锁定：不会被重新生成覆盖，剧情段视频按这张图生成。
     const fileRef = useRef<HTMLInputElement>(null);
+    const [libraryOpen, setLibraryOpen] = useState(false);
+    const imageAdopted = (result: Awaited<ReturnType<typeof setDramaCastImage>>) => {
+        if (result.unchanged) message.info("已在使用这张图");
+        else message.success(result.affectedSegments ? `已替换并锁定形象；${result.affectedSegments} 个剧情段的视频需重新生成` : "已替换并锁定形象，之后的剧情段视频按这张图生成");
+        onChanged();
+    };
     const upload = useMutation({
         mutationFn: async (file: File) => {
             const resource = await uploadResourceFile(file, "image", { fileName: file.name });
             return setDramaCastImage(projectId, cast.id, resource.id, restyle);
         },
-        onSuccess: (result) => {
-            message.success(result.affectedSegments ? `已替换并锁定形象；${result.affectedSegments} 个剧情段的视频需重新生成` : "已替换并锁定形象，之后的剧情段视频按这张图生成");
-            onChanged();
-        },
+        onSuccess: imageAdopted,
         onError: (error) => message.error(error instanceof Error ? error.message : "上传失败"),
     });
+    // 素材库选图的失败由选择弹窗内联显示，这里只处理成功。
+    const adoptLibraryImage = async (resourceId: string) => imageAdopted(await setDramaCastImage(projectId, cast.id, resourceId, restyle));
     const impact = impactQuery.data;
     const isCharacter = cast.kind === "character";
     const kindLabel = CAST_KIND_LABEL[cast.kind];
@@ -325,6 +331,10 @@ function CastEditor({ projectId, cast, ratios, onChanged, onOpenCanvas, canvasOp
                 <Button icon={<Upload className="size-4" />} loading={upload.isPending} onClick={() => fileRef.current?.click()}>
                     上传形象图
                 </Button>
+                <Button className="drama-editor-wide" icon={<FolderOpen className="size-4" />} onClick={() => setLibraryOpen(true)}>
+                    从素材库选择
+                </Button>
+                {libraryOpen ? <CastLibraryPicker open={libraryOpen} cast={cast} onClose={() => setLibraryOpen(false)} onPick={adoptLibraryImage} /> : null}
                 <input
                     ref={fileRef}
                     type="file"
@@ -590,8 +600,8 @@ function InboxChip({ item, cast, onOpen }: { item: DramaInboxItem; cast?: DramaC
 // ===== 制作设置 =====
 
 const CAPABILITY_META: Record<DramaCapability, { label: string; hint: string }> = {
-    text: { label: "改编与分镜", hint: "改编剧本、拆分剧情段与镜头" },
-    image: { label: "参考图", hint: "角色、道具与场景参考图" },
+    text: { label: "默认文本", hint: "分集规划，及没有单独指定模型的文字步骤" },
+    image: { label: "默认图片", hint: "没有单独指定模型的参考图" },
     video: { label: "剧情段视频", hint: "每段一个带对白与音效的视频，可按段换模型" },
 };
 const REVIEW_LABEL: Record<DramaReviewMode, { title: string; detail: string }> = {
@@ -630,8 +640,11 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
     });
     const catalogQuery = useDramaModelCatalog();
     const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.video));
-    const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.image));
+    // 角色参考图用单独指定的模型，没有就用默认图片模型；参考图方案按它检查角色画幅。
+    const characterImage = dramaChoiceKey(settings.models.characterImage) ? settings.models.characterImage : settings.models.image;
+    const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(characterImage));
     const videoRatioProblem = dramaVideoRatioIssue(videoOption, current.aspectRatio);
+    const setModels = (patch: Partial<DramaSettings["models"]>) => setSettings({ ...settings, models: { ...settings.models, ...patch } });
     const continuity: DramaVideoContinuity = settings.videoContinuity || "tail_frame";
     const sampleCharacter = cast.find((item) => item.kind === "character" && item.appearance);
     const sampleScene = cast.find((item) => item.kind === "scene" && item.appearance);
@@ -677,11 +690,17 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 />
                             </section>
                             <section className="drama-cfg-card">
-                                <SettingsTitle title="视频提示词技能" detail="撰写剧情段视频提示词时遵循的写作方法；对之后撰写的段生效" icon={<ScrollText className="size-4" />} />
-                                <PromptSkillField value={settings.promptSkill} onChange={(promptSkill) => setSettings({ ...settings, promptSkill })} />
+                                <SettingsTitle title="文字步骤" detail="每一步可以单独选文本模型和写作技能；不选就用默认文本模型和内置写法，对之后执行的步骤生效" icon={<ScrollText className="size-4" />} />
+                                <DramaTextSteps
+                                    models={settings.models}
+                                    onModelsChange={setModels}
+                                    skills={{ bible: settings.bibleSkill, script: settings.scriptSkill, prompt: settings.promptSkill }}
+                                    onSkillChange={(step, value) => setSettings({ ...settings, [step === "bible" ? "bibleSkill" : step === "script" ? "scriptSkill" : "promptSkill"]: value })}
+                                />
                             </section>
                             <section className="drama-cfg-card">
-                                <SettingsTitle title="参考图方案" detail="参考图随剧情段视频请求一起发送，是人物与道具保持一致的锚点；修改只影响之后生成的参考图" icon={<UsersRound className="size-4" />} />
+                                <SettingsTitle title="参考图" detail="参考图随剧情段视频请求一起发送，是人物与道具保持一致的锚点；角色、道具、场景可以用不同的图片模型与分辨率，修改只影响之后生成的参考图" icon={<UsersRound className="size-4" />} />
+                                <DramaAssetImageModels models={settings.models} onModelsChange={setModels} assets={settings.assets} onAssetsChange={(assets) => setSettings({ ...settings, assets })} />
                                 <AssetSchemePicker
                                     value={settings.assets}
                                     onChange={(assets) => setSettings({ ...settings, assets })}
@@ -732,11 +751,19 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                                 capability={capability}
                                                 value={settings.models[capability]}
                                                 aspectRatio={current.aspectRatio}
+                                                videoResolution={settings.videoResolution}
                                                 placeholder={`选择${CAPABILITY_META[capability].label}模型`}
-                                                onChange={(choice) => setSettings({ ...settings, models: { ...settings.models, [capability]: choice } })}
+                                                onChange={(choice) => setModels({ [capability]: choice })}
                                             />
                                         </div>
                                     ))}
+                                    <div className="drama-cfg-model">
+                                        <div className="drama-cfg-model-label">
+                                            <strong>视频分辨率</strong>
+                                            <small>对之后提交的剧情段视频生效</small>
+                                        </div>
+                                        <VideoResolutionField option={videoOption} value={settings.videoResolution} onChange={(videoResolution) => setSettings({ ...settings, videoResolution })} />
+                                    </div>
                                 </div>
                                 {videoRatioProblem ? <p className="drama-cfg-note">当前视频模型{videoRatioProblem}，剧情段视频无法提交，请换模型。</p> : null}
                                 {videoOption?.generateAudio === false ? <p className="drama-cfg-note">当前视频模型不同步生成声音，剧情段视频没有对白与音效。</p> : null}

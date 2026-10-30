@@ -302,34 +302,35 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     detail={data ? `日 ${formatNumber(data.kpi.dau)} · 周 ${formatNumber(data.kpi.wau)} · 月 ${formatNumber(data.kpi.mau)}` : undefined}
                 />
                 <AnalyticsHealthCard icon={<CircleDollarSign className="size-4" />} label="用户总余额" value={data ? formatCredits(data.kpi.totalBalanceMicrocredits ?? 0) : "--"} detail="当前所有用户可用积分余额" />
-                <AnalyticsHealthCard icon={<CircleDollarSign className="size-4" />} label="范围消耗" value={data ? formatCredits(data.kpi.totalConsumedMicrocredits ?? 0) : "--"} detail="筛选范围内已计费调用" />
+                <AnalyticsHealthCard
+                    icon={<CircleDollarSign className="size-4" />}
+                    label="范围消耗"
+                    value={finance ? formatCredits(finance.revenueMicrocredits) : "--"}
+                    detail={finance ? `已结算 ${formatNumber(finance.settledOrders)} 笔订单实收` : undefined}
+                />
                 <AnalyticsHealthCard
                     icon={<Workflow className="size-4" />}
                     label="生成任务"
                     value={data ? formatNumber(data.kpi.generationTasks) : "--"}
                     trend={formatCountDelta(currentTrend?.tasks, previousTrend?.tasks)}
-                    detail={data ? `上游请求 ${formatNumber(data.kpi.upstreamRequests)}` : undefined}
+                    detail={data ? `模型生成请求 ${formatNumber(data.kpi.upstreamRequests)}` : undefined}
                 />
                 <AnalyticsHealthCard
                     icon={<Gauge className="size-4" />}
                     label="服务质量"
                     value={data && data.kpi.upstreamRequests > 0 ? percent(data.kpi.successRate) : "--"}
-                    trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate, currentTrend?.requests, previousTrend?.requests)}
-                    detail={data ? (data.kpi.upstreamRequests ? "真实上游请求成功率" : "当前范围暂无请求") : undefined}
+                    trend={formatRateDelta(currentTrend?.requestSuccessRate, previousTrend?.requestSuccessRate)}
+                    detail={data ? (data.kpi.upstreamRequests ? "模型生成请求成功率" : "当前范围暂无请求") : undefined}
                     tone={!data || !data.kpi.upstreamRequests ? "neutral" : data.kpi.successRate < 90 ? "warning" : "success"}
                 />
-                <AnalyticsHealthCard icon={<Clock3 className="size-4" />} label="P95 请求耗时" value={data && data.kpi.upstreamRequests > 0 ? formatDuration(data.kpi.p95DurationMs) : "--"} detail="筛选范围内的上游请求" />
+                <AnalyticsHealthCard icon={<Clock3 className="size-4" />} label="P95 请求耗时" value={data && data.kpi.upstreamRequests > 0 ? formatDuration(data.kpi.p95DurationMs) : "--"} detail="模型生成请求，不含状态查询与下载" />
                 <AnalyticsHealthCard icon={<Workflow className="size-4" />} label="当前排队" value={data ? formatNumber(data.kpi.currentQueuedTasks) : "--"} detail="实时快照 · 非历史累计" tone={data?.kpi.currentQueuedTasks ? "warning" : "neutral"} />
                 <AnalyticsHealthCard
                     icon={<CircleDollarSign className="size-4" />}
-                    label="费用统计（积分）"
+                    label="成本与利润（积分）"
                     value={
                         finance ? (
                             <dl className="admin-analytics-finance-values">
-                                <div>
-                                    <dt>收入</dt>
-                                    <dd>{formatCredits(finance.revenueMicrocredits)}</dd>
-                                </div>
                                 <div>
                                     <dt>成本</dt>
                                     <dd>{formatFinanceCost(finance)}</dd>
@@ -338,12 +339,16 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                                     <dt>利润</dt>
                                     <dd>{formatCredits(finance.profitMicrocredits)}</dd>
                                 </div>
+                                <div>
+                                    <dt>利润率</dt>
+                                    <dd>{formatFinanceMargin(finance.profitMargin)}</dd>
+                                </div>
                             </dl>
                         ) : (
                             "--"
                         )
                     }
-                    detail={finance ? `已结算 ${finance.settledOrders} 笔 · 利润率 ${formatFinanceMargin(finance.profitMargin)}` : undefined}
+                    detail={finance ? `成本覆盖 ${finance.costedOrders}/${finance.settledOrders} 笔已结算订单` : undefined}
                     tone={finance && (finance.costedOrders < finance.settledOrders || (finance.profitMicrocredits ?? 0) < 0) ? "warning" : "neutral"}
                 />
             </section>
@@ -353,7 +358,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                     <div className="admin-analytics-section-heading">
                         <div>
                             <h2 id="admin-analytics-trend-title">{trendTitle}</h2>
-                            <p>{trendMetric === "volume" ? "生成任务与真实上游请求分开统计。" : trendMetric === "quality" ? "成功率按真实上游请求计算。" : "活跃用户按自然日去重统计。"}</p>
+                            <p>{trendMetric === "volume" ? "生成任务与模型生成请求分开统计，不含状态查询、下载与保存。" : trendMetric === "quality" ? "成功率按模型生成请求计算；没有请求的日期留空。" : "活跃用户按自然日去重统计。"}</p>
                         </div>
                         <div className="admin-analytics-trend-switch" role="group" aria-label="趋势指标">
                             {(
@@ -381,7 +386,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                                     {trendMetric === "volume" ? (
                                         <>
                                             <Area yAxisId="primary" type="monotone" dataKey="tasks" name="生成任务" stroke="var(--admin-chart-primary)" fill="var(--admin-chart-primary)" fillOpacity={0.1} />
-                                            <Area yAxisId="primary" type="monotone" dataKey="requests" name="上游请求" stroke="var(--admin-chart-secondary)" fill="var(--admin-chart-secondary)" fillOpacity={0.08} />
+                                            <Area yAxisId="primary" type="monotone" dataKey="requests" name="生成请求" stroke="var(--admin-chart-secondary)" fill="var(--admin-chart-secondary)" fillOpacity={0.08} />
                                         </>
                                     ) : null}
                                     {trendMetric === "quality" ? <Line yAxisId="primary" type="monotone" dataKey="requestSuccessRate" name="成功率" stroke="var(--admin-chart-warning)" dot={false} strokeWidth={2} /> : null}
@@ -571,8 +576,9 @@ function capabilityLabel(value: string) {
     return capabilityOptions.find((item) => item.value === value)?.label || "未分类";
 }
 
-function percent(value: number) {
-    return `${Number(value || 0).toFixed(1)}%`;
+function percent(value: number | null) {
+    if (value === null || value === undefined) return "--";
+    return `${Number(value).toFixed(1)}%`;
 }
 
 function formatDuration(value: number) {

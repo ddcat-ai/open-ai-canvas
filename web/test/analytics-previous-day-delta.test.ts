@@ -13,14 +13,16 @@ describe("运营总览「较前一日」", () => {
         expect(formatCountDelta(3, 0)).toEqual({ value: "较前一日 ↑ 3", tone: "success" });
     });
 
-    test("任一天没有上游请求时不比较成功率", () => {
-        expect(formatRateDelta(0, 99.3, 0, 120)).toBeUndefined();
-        expect(formatRateDelta(98, 0, 50, 0)).toBeUndefined();
-        expect(formatRateDelta(0, 0, 0, 0)).toBeUndefined();
+    test("任一天没有已完成请求（成功率为 null）时不比较", () => {
+        expect(formatRateDelta(null, 99.3)).toBeUndefined();
+        expect(formatRateDelta(98, null)).toBeUndefined();
+        expect(formatRateDelta(null, null)).toBeUndefined();
+        expect(formatRateDelta(undefined, 98)).toBeUndefined();
     });
 
-    test("两天都有请求时照常显示 pp 差值", () => {
-        expect(formatRateDelta(95, 97.5, 40, 80)).toEqual({ value: "较前一日 ↓ 2.5pp", tone: "warning" });
-        expect(formatRateDelta(99, 98, 40, 80)).toEqual({ value: "较前一日 ↑ 1.0pp", tone: "success" });
+    test("两天都有请求时照常显示 pp 差值，真实的 0% 也参与比较", () => {
+        expect(formatRateDelta(95, 97.5)).toEqual({ value: "较前一日 ↓ 2.5pp", tone: "warning" });
+        expect(formatRateDelta(99, 98)).toEqual({ value: "较前一日 ↑ 1.0pp", tone: "success" });
+        expect(formatRateDelta(0, 50)).toEqual({ value: "较前一日 ↓ 50.0pp", tone: "warning" });
     });
 });

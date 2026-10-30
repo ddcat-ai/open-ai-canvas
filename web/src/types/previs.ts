@@ -56,7 +56,8 @@ export type PrevisLayout = {
 export type PrevisPose = "neutral" | "stand" | "t_pose" | "walk" | "run" | "sit" | "squat" | "kneel_single" | "kneel_double" | "hands_hips" | "lean" | "bow" | "think" | "fight" | "kick" | "throw" | "push" | "wave" | "reach" | "arms_crossed" | "phone";
 export type PrevisCameraMove = "static" | "push_in" | "pull_out" | "pan_left" | "pan_right" | "tilt_up" | "tilt_down" | "orbit_left" | "orbit_right" | "handheld";
 export type PrevisShotSize = "extreme_wide" | "wide" | "full" | "medium" | "close_up" | "extreme_close_up";
-export type PrevisAspectRatio = "9:16" | "16:9" | "2.39:1";
+/** auto = 自适应：取景与输出跟随当前视口宽高比。 */
+export type PrevisAspectRatio = "auto" | "2.39:1" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 export type PrevisRenderMode = "beauty" | "clay" | "depth" | "normal" | "pose";
 export type PrevisKeyframeEasing = "step" | "linear" | "smooth";
 

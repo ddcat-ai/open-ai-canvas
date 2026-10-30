@@ -75,6 +75,24 @@ export function serializeNode(node: ChildNode): string {
     return serializeNodeList(node.childNodes);
 }
 
+/**
+ * 选区对应的提示词原文：引用块输出它的 token（如“参考图6”“@[asset:id]”），只选中一部分的引用块也输出完整 token。
+ * 浏览器原生复制会跳过 user-select:none 的引用文字并在块级子元素处插入换行，所以复制与剪切都要用它写剪贴板。
+ * 选区为空或不在 root 内时返回 null，由浏览器按原生行为处理。
+ */
+export function serializeEditableSelection(root: HTMLElement | null): string | null {
+    if (!root) return null;
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed || !root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+    const ancestor = range.commonAncestorContainer;
+    const mention = (ancestor instanceof Element ? ancestor : ancestor.parentElement)?.closest<HTMLElement>("[data-mention-token]");
+    if (mention && root.contains(mention)) return mention.dataset.mentionToken || "";
+    // cloneContents 会带上被部分选中的引用块外壳（含 data-mention-token），serializeNode 按 token 输出。
+    return serializeNodeList(Array.from(range.cloneContents().childNodes)).replace(/\u00a0/g, " ");
+}
+
 export function getEditableSelection(root: HTMLElement | null): EditableSelection | null {
     if (!root) return null;
     const selection = window.getSelection();

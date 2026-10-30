@@ -118,7 +118,8 @@ type ApiCallLog struct {
 	MediaStage             string        `json:"mediaStage,omitempty" gorm:"-"`
 	BillingOrderID         string        `json:"billingOrderId,omitempty" gorm:"index;size:36"`
 	BillingStatus          BillingStatus `json:"billingStatus,omitempty" gorm:"-"`
-	BillingAmount          int64         `json:"billingAmountMicrocredits" gorm:"-"`
+	BillingReservedAmount  int64         `json:"billingReservedMicrocredits" gorm:"-"`
+	BillingSettledAmount   *int64        `json:"billingSettledMicrocredits,omitempty" gorm:"-"`
 	BillingAvailable       bool          `json:"billingAvailable" gorm:"-"`
 	CreditCostConfigured   bool          `json:"creditCostConfigured" gorm:"-"`
 	CreditCostMicrocredits *int64        `json:"creditCostMicrocredits,omitempty" gorm:"-"`

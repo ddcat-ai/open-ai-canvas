@@ -1239,3 +1239,111 @@
 - 在“画布配置”后新增“更新公告”，沿用统一保存、刷新、撤销和离开保护。
 - 支持开关、多版本内容块、整行／半行布局和实时预览；后台颜色使用既有独立 token，窄屏单列。
 - 沿用既有外观配置 JSON 存储，无新增数据库表；公告草稿与当前站点构建版本分别管理。
+## 批次 141：管理后台重设计阶段 0（报表口径与缺陷修复）
+- 目的：按《管理后台信息架构与报表重设计》阶段 0，先修报表口径和已确认缺陷，不改导航结构。
+- 修改前状况：总览“范围消耗”恒为 0；总览把轮询、下载、上传、本地保存计入请求数、成功率和 P95；无请求日成功率画成 0%；请求明细“销售积分”一列混合预授权和实收；请求明细不能按日期、用户、模型、渠道筛选；计费核对用户名依赖只含最近 100 个注册用户的引用数据；请求详情“自动查询”“保存并查询”绑定同一函数；“恢复任务”对所有视频行显示；功能开放徽标成功态写死为 5；存储资源描述写“只读”；关闭前台模型后后台路由被拦截，与关闭确认文案矛盾；移动端按路径全等判断当前页；后台仍混用 antd 原生 Modal/Drawer 与用户端 AppModal/AppDrawer。
+- 涉及文件：后端 `internal/app/analytics.go`、`analytics_build.go`、`analytics_finance.go`、`analytics_api_logs.go`、`finance.go`、`internal/model/models_channel.go`、`models_finance.go` 及两份测试；前端 `router.tsx`、`services/api/auth.ts`、`wallet.ts`、`components/model-editor-modal.tsx`、`styles/admin-ui-3.css`、`pages/admin/` 下 25 个页面与组件、两份测试；文档 `http-api.mdx`、`features.mdx`。
+- 具体改动：
+  - 总览请求类指标只统计 `request_kind = create`；成功率改为 succeeded /（succeeded + failed），没有样本时返回 `null`，趋势图留空。“范围消耗”改用已结算订单实收；“费用统计”卡改为“成本与利润”，显示成本、利润、利润率和成本覆盖笔数，不再重复显示收入。移除 `kpi.totalConsumedMicrocredits`，`trend[].consumedMicrocredits` 改为按订单实收计算。
+  - 请求日志 JSON 用 `billingReservedMicrocredits` 与可选 `billingSettledMicrocredits` 替代 `billingAmountMicrocredits`；列表“计费”视图、积分计算列、详情和 CSV 分列显示预授权与实收。
+  - 请求明细新增 UTC 日期范围（默认按 UTC 日历显示近 30 天，最多 366 天）、用户、模型、渠道筛选，全部写入 URL，导出继承同一筛选。
+  - `GET /admin/billing-orders` 返回 `userDisplayName`、`userAccount`，计费核对列表和核对确认框直接使用。
+  - “恢复任务”入口、批量恢复和详情里的视频恢复区块只对失败的视频任务开放；“自动查询”“保存并查询”合并为“查询上游任务”。
+  - 功能开放徽标按实际项数计算；存储资源描述改为可删除；`/admin/models` 不再受 `frontendModelsEnabled` 拦截，侧栏仍只在开启时显示，功能开放页的模型来源行增加“配置前台模型”链接，关闭确认文案同步说明。
+  - 移动端导航复用 `isAdminNavigationPath` 前缀匹配，并在全部入口中查找当前页。
+  - 后台浮层统一为 `AdminModal` / `AdminDrawer`：15 个文件中的 antd 原生 Modal/Drawer、`provider-catalog-wizard` 的 AppModal、`login-log-detail-drawer` 的 AppDrawer 全部替换；`ModelEditorModal` 改为接收 `shell`，前台模型页传入 `AdminModal`；`Modal.info` 静态调用改为 `App.useApp().modal`。原先没有 `admin-modal-root` / `admin-drawer` 根类的浮层（支付三个抽屉、用户与分组抽屉、渠道编辑、工作台工具、反馈、存储预览、排序弹窗）现在会拿到后台浮层样式。
+- 修改前副本：`.local/ui-change-backups/admin-redesign-phase0/`，按仓库相对路径从 HEAD 导出。SHA-256：
+
+| 文件 | 修改前 SHA-256 |
+| --- | --- |
+| `backend/internal/app/analytics.go` | `754bea94bbef59d290d3c8c03011ea52fe04816f7b6ec020637093b8c86f9873` |
+| `backend/internal/app/analytics_api_logs.go` | `60ec577173635d8b05801cc5c78ac4d2e5e86a01fd1552e53f79636869cd62f2` |
+| `backend/internal/app/analytics_build.go` | `626e7ceca7512b53cff06d35d0ca47294ac2778d6724732ac408c6e2537e9e4a` |
+| `backend/internal/app/analytics_finance.go` | `86f03ee65c7c1a33d3a44a53559b93c3942b7a864034332b05c012773f085f9d` |
+| `backend/internal/app/analytics_finance_test.go` | `71660be388ad068c6807332c84a516c214fb472a1f43ab880bc2403da8c99735` |
+| `backend/internal/app/api_log_billing_test.go` | `ee251701daec709c5019b880b02c8b391dc7d3d6c0f7b2f5289623adec1018ac` |
+| `backend/internal/app/finance.go` | `f946c347cb98afcc1322f9f50b1f3d5c96e7f272e2b69db92c62bbe2e51c5f48` |
+| `backend/internal/model/models_channel.go` | `c91c739719c71460865ec6ab821490eafadd58112ff6629f2a688e54505f36b8` |
+| `backend/internal/model/models_finance.go` | `8716df4f500386d37d399d5f380e7c0f9865a14c2b3133e19b32590c04a0379e` |
+| `docs/content/docs/backend/http-api.mdx` | `10a509492e1eecb4ddd79a488c216b72c3ef440a2e4e26f129fd1b50ed383326` |
+| `docs/content/docs/overview/features.mdx` | `10a4e53771b75a04bde6a05368c3f9387c66757e482621a9cdb8044031ca2a87` |
+| `web/src/components/model-editor-modal.tsx` | `7006e3eb224788ed45434ec588c93ba11b4fa7c559b923ccc5b68469cddb3b74` |
+| `web/src/pages/admin/admin-route-pages.tsx` | `39ebe7a36b62187a17c61cb37dee81b51be513bde20cd20572c2b53472434102` |
+| `web/src/pages/admin/channels/channels-page.tsx` | `6dc6df0c990bb75746f92ce79ff0a799d150a706e664d6d46004af6f4954ed7e` |
+| `web/src/pages/admin/channels/provider-catalog-wizard.tsx` | `dd56f5e6e7ac0a236ec2efdb500e51556bec7c784bd16eeb4640c66c17e266a2` |
+| `web/src/pages/admin/components/admin-announcement-editor.tsx` | `b8b85abc6feb2b805a5ddbea00dd6609294d16a8220e821726427c025868a911` |
+| `web/src/pages/admin/components/admin-banner-announcements-panel.tsx` | `fbbf544fc0c30d1bc359a6ca5e9f8a5468db156f0127b6d01b9a03862871da8f` |
+| `web/src/pages/admin/components/admin-shell.tsx` | `d9575dbc71ff73fa35c4288f1c9eb5d970ea8ea126f13c3c5dcf89c69bd849aa` |
+| `web/src/pages/admin/components/analytics-panel.tsx` | `e180b3e3ce642c3d6cf6acca6f1f2f23d1df818eff6cecf2d9ac0a8f574ea275` |
+| `web/src/pages/admin/components/analytics-trend-delta.ts` | `b0c372f6c802f951d6b0086803a513ed22339b8357b901961ab7723a072c023a` |
+| `web/src/pages/admin/components/api-log-detail-drawer.tsx` | `47d90737e57e86b3086af83a216d32d7a14d51dd68702c1eee3e4693f8ef6ad8` |
+| `web/src/pages/admin/components/billing-auto-refund-toggle.tsx` | `d5d6d98aa1d8a1f79d4e5c440f7f26acf6b590940ab3f45e9c315885a63f3ad0` |
+| `web/src/pages/admin/components/channel-model-manager.tsx` | `1b2e3f0435c64aeaea0b28877711a73d830bfed10ad716a9092c6aa67f5f25d7` |
+| `web/src/pages/admin/components/channel-order-dialog.tsx` | `dfe270e8059065a18e1ef6d743500828b42b981ac728ec3faca5db51edfc3539` |
+| `web/src/pages/admin/components/credit-operations-panel.tsx` | `63f22761b107ebb9d60d43b4b96fe4017413ab88886010a5d01b835954831d31` |
+| `web/src/pages/admin/components/feature-availability-panel.tsx` | `83fc1c4ad1dce7820f4c74a54e12c96a7e08d047d737631bccd7fe87320d684c` |
+| `web/src/pages/admin/components/redemption-codes-modals.tsx` | `062403d3e9e9d2ac907a536e544303fc7674558e61ce141888fee98ca141f10d` |
+| `web/src/pages/admin/components/storage-resources-panel.tsx` | `95457f3b893cfb9b3b2d15395d43ae5078ad5074ec7460e89371bcd7ef7bc6a2` |
+| `web/src/pages/admin/feedbacks/feedbacks-page.tsx` | `5001305f06244c513a6c1d741473ae3e62394b218c3dfd6d87a1576c36bc7605` |
+| `web/src/pages/admin/logical-models/logical-models-page.tsx` | `6b7b87a31a25c19508dcf2b4371a4bffd72d791188ac07acce46d10cf09cc98b` |
+| `web/src/pages/admin/login-logs/login-log-detail-drawer.tsx` | `2e89d962aedc52e1307a278abb22d87fbff1f77ae6e44a56678854a4a46ea9b4` |
+| `web/src/pages/admin/logs/log-view.ts` | `69909d4bb266ba2a8b8cd15840acdf36ecf08501d4c9e0c3af7679a440f98d29` |
+| `web/src/pages/admin/logs/logs-page.tsx` | `6f04395b404db196dbc6efa7cf40c4c9cadcaba4559d83cf4d03ed941b5716da` |
+| `web/src/pages/admin/payments/payments-page.tsx` | `9ec4385f28f4d2d35c47ef99d0524f92dbaff97342c9b470982c91b2ea8ae70f` |
+| `web/src/pages/admin/user-groups/user-group-editor.tsx` | `a69013c156c416d20626e4cf0a7a2d123acb7e402c0f5eb091981a431628e652` |
+| `web/src/pages/admin/users/users-drawer.tsx` | `da1d131aeb149a5409c7f3b89892cbf1cec40c662a90088afc61046896d994bc` |
+| `web/src/pages/admin/workbench-tools/workbench-tools-page.tsx` | `8b968384b3801b848429e0a14b3c841d8c79e61f142c62f8ce88c009af8e2733` |
+| `web/src/router.tsx` | `ba7a9e18f54fcfa8c28f24c8cd0a7a15a2bcde58a4d2cffbadd14b829c069e1c` |
+| `web/src/services/api/auth.ts` | `928a8488de7c0bd8598726b5309fe0fcc6b50334e92d7c4b494c8f7b39ce9f42` |
+| `web/src/services/api/wallet.ts` | `13bc9f5581e34bdcbd31a8ed2d7a88ef0e5db43fd34012a2820d59cfc013840e` |
+| `web/src/styles/admin-ui-3.css` | `bc3efee6c8763cbeba7d9358cfe8dd9164283e48afa3618c1b3a1b3208b5f439` |
+| `web/test/admin-ui-regressions.test.ts` | `aba5f9d2a87b4055135e6658aefa9d51b5d17cd7bced148bc316e34f2351cc28` |
+| `web/test/analytics-previous-day-delta.test.ts` | `332923762fe739c1d1e9655a15544ea772150e1e4302571602bb9b54b60d3e33` |
+
+- 验证：`go test ./...` 通过；`bun run typecheck`、`bun run lint`、`bun test`（2880 项）与 `bun run build` 通过；改动文件中原本已按 Prettier 格式化的文件仍通过格式检查。未做登录态浏览器验收，列入 pending-test。
+- 逐项回滚：先用上表核对副本，再从 `.local/ui-change-backups/admin-redesign-phase0/` 按相对路径逐文件恢复。前后端字段改名（`billingAmountMicrocredits` → 预授权 / 实收两列，移除 `totalConsumedMicrocredits`，成功率可为 `null`）需要前后端同时回滚。
+## 批次 142：按业务对象整理后台（导航合并、用户运营、渠道稳定性、功能开放一屏）
+- 目的：按管理员的日常工作重排后台，而不只是调样式。管理员主要做四件事：看运行是否正常、处理用户与积分、管模型供给和价格、偶尔改平台配置。此前同一对象拆成多个侧栏入口，高频操作收在“更多”和抽屉里，渠道看不到稳定性，也不能跨渠道查模型。
+- 修改前状况：侧栏 4 组 32 个入口平铺，行高 44px；页头分组链接跳到分组第一项；用户编辑是抽屉，停用和编辑收在“更多”，没有从用户行直接调积分的入口；用户列表没有累计充值、累计消耗、最近登录；渠道模型表没有成功率；模型只能在单个渠道内搜索，启停要进 1120px 编辑弹窗底栏；渠道操作只外露“编辑”；支付订单操作全部收在“更多”；功能开放 10 个开关纵向排成长列表，需要滚动。
+- 涉及文件：
+  - 后端：新增 `internal/app/admin_channel_model_health.go` 及测试；修改 `app/admin.go`、`app/admin_users.go`、`app/service.go`、`handler/finance.go`、`handler/admin_channel_model_response.go`、`repository/analytics.go`、`repository/admin_storage.go`、`repository/finance_channel_models.go`。
+  - 前端：`components/admin-shell.tsx`、`components/admin-ui.tsx`、`theme/admin-chrome.css`、`users/`（`users-drawer.tsx` 改名为 `users-modals.tsx`，新增 `user-credit-adjust-modal.tsx`、`users-page.css`）、`channels/channels-page.tsx`、`channels-page.css`、新增 `channels/all-channel-models-panel.tsx`、新增 `components/channel-model-health.tsx`、`components/channel-model-manager.tsx`、`components/feature-availability-panel.tsx`、新增 `feature-availability-panel.css`、`payments/payments-page.tsx`、`logical-models/logical-models-page.tsx`、`services/api/auth.ts`、`wallet.ts`、`test/admin-ui-regressions.test.ts`。
+  - 文档：`http-api.mdx`、`pending-test.mdx`、`admin-ui-design-standard.md`。
+- 具体改动：
+  - 导航：5 组 17 个入口，分组可折叠；合并入口在页头下方显示路由页签。路由地址不变，旧书签和外部链接仍可用。
+  - 用户：编辑、新建改为 640px 两列弹窗；行操作“详情 · 编辑 · 调积分 · 停用”全部外露；调积分弹窗带入目标用户并保留“填写 → 核对 → 写入”两步；新增累计充值、累计消耗、最近登录列。后端 `GET /admin/users` 按页批量汇总两项累计值。
+  - 渠道与模型：新增“全部模型”视图（`GET /admin/channel-models`）；新增稳定性列与“24h 成功率低于 80%”筛选（`GET /admin/channel-models/health`）；模型行内启停（`PATCH .../enabled`，写审计）；渠道列表显示渠道 24 小时成功率；渠道操作全部外露。
+  - 行操作：`AdminRowActions` 默认最多外露 3 个次要操作；支付订单只显示当前状态可执行的操作；前台模型行操作全部外露。
+  - 功能开放：根节点加 `is-compact-layout`，页面私有样式改为两栏一屏布局。
+- 修改前副本：本批与批次 141 共同修改的文件，修改前基线是 HEAD，副本在 `.local/ui-change-backups/admin-redesign-phase0/`；只在本批修改的文件，副本在 `.local/ui-change-backups/admin-business-142/`。SHA-256：
+
+| 文件 | 修改前 SHA-256 |
+| --- | --- |
+| `backend/internal/app/admin.go` | `423170ab57418cabbbb25cffb3842136c521a2048328644673c6497a72e26f73` |
+| `backend/internal/app/admin_users.go` | `fd557a7ae9c1df287594c90755e1449bd653f17e4548d9a2f784a0bdd304d7b7` |
+| `backend/internal/app/service.go` | `a00a8b0f2f44048d57910e42d41f1f954314deb29a69fda7b74b8a2c0b262254` |
+| `backend/internal/handler/finance.go` | `3f84dea931daced21a7cbad2cf12195f459719a5af6e8f9a7f1bbebc34877d6f` |
+| `backend/internal/handler/admin_channel_model_response.go` | `12accb9419048e035dfcabd6c8988bfd1b5fb52b30a01580dcf533e76494124f` |
+| `backend/internal/repository/analytics.go` | `0d761072f4ae8dd80e4faf2a37b7ab99de6195eea84dda520936931f1b7bb4d6` |
+| `backend/internal/repository/admin_storage.go` | `f29f6188d01ebc95f4fd4493f443c597b2e373ff9dbb947c8eb4532ae68a13ad` |
+| `backend/internal/repository/finance_channel_models.go` | `bff5f63a95ee63bba45cabc061324a5ec0e7accd5d54fcc2eaa15e38ce019d13` |
+| `web/src/pages/admin/components/admin-ui.tsx` | `fcfeca56b6c5e495c6bb39b3dbdd2dfa24ab3ca89bafbcbe5036b6fd46fc50d3` |
+| `web/src/pages/admin/theme/admin-chrome.css` | `842e0f9156a8cb08afcb12536a53b52990e9880d79ff181677199244561adb41` |
+| `web/src/pages/admin/channels/channels-page.css` | `5618c88d76ed78aac66cee986540cf51bbab99f346c4f1c0d47dcb255445039b` |
+| `web/src/pages/admin/users/users-columns.tsx` | `d761a751bd9c69a0d9ea28b9479277110b78058f5ec53fc4decac08e40ab4154` |
+| `web/src/pages/admin/users/users-panel.tsx` | `2cffc7678536778528a07b5c16b7eb7e06f8d11421e128f7358659d8a485d86a` |
+| `web/src/pages/admin/users/users-drawer.tsx` | `da1d131aeb149a5409c7f3b89892cbf1cec40c662a90088afc61046896d994bc` |
+
+  `admin-shell.tsx`、`channels-page.tsx`、`channel-model-manager.tsx`、`feature-availability-panel.tsx`、`payments-page.tsx`、`logical-models-page.tsx`、`auth.ts`、`wallet.ts`、`admin-ui-regressions.test.ts` 在批次 141 和本批都有修改，HEAD 副本与哈希见批次 141。
+- 验证：`go test ./...`；`bun run typecheck`、`bun run lint`、`bun test`（2881 项）、`bun run build` 通过；新增文件和原本已格式化的文件通过 Prettier。未做登录态浏览器验收。
+- 逐项回滚：只在本批修改的文件从 `admin-business-142/` 恢复；两批共同修改的文件需先从 `admin-redesign-phase0/` 恢复到 HEAD，再按需重做批次 141；删除本批新增的 5 个前端文件和 2 个后端文件，并把 `users-modals.tsx` 改回 `users-drawer.tsx`。
+## 批次 143：撤回页签式合并，消除切换白屏
+- 目的：按反馈修正批次 142。页签合并过多，页签入口不易发现；每次切换页签都要等新页面代码加载，内容区被替换成“正在加载管理页面…”，看起来像白屏一下。
+- 原因：后台每个页面单独懒加载，路由又关闭了 startTransition（`application.tsx` 的 `useTransitions={false}`），首次打开任何后台页面都会触发 Suspense 加载态。批次 142 把相邻页面做成页签后，这个问题更容易被注意到，并不是页签本身导致的。
+- 涉及文件：`web/src/pages/admin/components/admin-shell.tsx`、`theme/admin-chrome.css`、`users/users-panel.tsx`、`web/src/router.tsx`、新增 `web/src/pages/admin/admin-page-loader.ts`、`web/test/admin-ui-regressions.test.ts`、`admin-ui-design-standard.md`、`pending-test.mdx`。
+- 具体改动：
+  - 侧栏恢复每个页面一个入口，保留批次 142 的两级折叠；分组调整为运营监控（4）、用户与运营（10）、模型与渠道（2）、创作与扩展（6）、系统设置（10）。默认只展开当前分组，展开状态存储键改为 `admin-nav-expanded-groups-v2`。删除页头页签及其样式。
+  - 用户管理页恢复“分组管理”按钮。
+  - 新增 `lazyAdminPage` / `preloadAdminPages`：后台 32 个页面改用可预取的懒加载，进入后台后逐个在空闲时预取；已加载的页面直接同步渲染，不再经过 Suspense。没有修改全站的 `useTransitions` 设置，用户端不受影响。
+- 修改前副本：本批开始前的状态是批次 142 的未提交工作区，修改前没有另存副本。回滚只能按批次 142 的描述重新写回导航数据和页签代码；`admin-page-loader.ts` 可以直接删除，并把 `router.tsx` 中的 `lazyAdminPage(` 改回 `lazy(`。
+- 验证：`bun run typecheck`、`bun run lint`、`bun test`（2881 项）、`bun run build` 通过，改动文件通过 Prettier。未做浏览器验收。

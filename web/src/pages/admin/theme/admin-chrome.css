@@ -94,6 +94,71 @@
     margin-top: 16px;
 }
 
+/* 展开态侧栏：分组为可折叠的一级，入口为二级；分组之间靠标题行分隔，不再额外留白。 */
+[data-admin-root] .admin-sidebar-nav.is-tree .admin-nav-group + .admin-nav-group {
+    margin-top: 4px;
+}
+
+[data-admin-root] .admin-nav-group-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 28px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition:
+        color var(--admin-motion),
+        background-color var(--admin-motion);
+}
+
+[data-admin-root] .admin-nav-group-toggle:hover {
+    background: var(--admin-nav-hover);
+    color: var(--admin-text-secondary);
+}
+
+[data-admin-root] .admin-nav-group.is-current .admin-nav-group-toggle {
+    color: var(--admin-text-secondary);
+}
+
+[data-admin-root] .admin-nav-group-toggle:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 1px;
+}
+
+[data-admin-root] .admin-nav-group-chevron {
+    flex: 0 0 auto;
+    transition: transform var(--admin-motion);
+}
+
+[data-admin-root] .admin-nav-group-chevron.is-collapsed {
+    transform: rotate(-90deg);
+}
+
+[data-admin-root] .admin-sidebar-nav.is-tree .admin-nav-group-items {
+    margin-top: 2px;
+    margin-bottom: 4px;
+}
+
+[data-admin-root] .admin-page-location-section.is-link:hover {
+    text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-admin-root] .admin-nav-group-chevron,
+    [data-admin-root] .admin-nav-group-toggle {
+        transition: none;
+    }
+}
+
 [data-admin-root] .admin-nav-group-label,
 [data-admin-root] .admin-nav-group-label span {
     display: block;
@@ -137,7 +202,7 @@
 [data-admin-root] .admin-nav-link {
     position: relative;
     display: flex;
-    min-height: 44px;
+    min-height: 34px;
     align-items: center;
     gap: 8px;
     padding: 0 12px;
@@ -343,7 +408,7 @@
     text-decoration: none;
 }
 
-[data-admin-root] .admin-page-location-section:hover {
+[data-admin-root] a.admin-page-location-section:hover {
     color: var(--admin-text);
 }
 

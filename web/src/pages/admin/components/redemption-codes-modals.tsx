@@ -1,6 +1,7 @@
 // 兑换码批次的创建抽屉、生成结果与批次明细弹窗。
 
-import { App, Button, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Space } from "antd";
+import { App, Button, Form, Input, InputNumber, Popconfirm, Space } from "antd";
+import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import { Ban, Copy, KeyRound, TicketCheck } from "lucide-react";
 import { formatCredits } from "@/constant/credits";
 import { type AdminRedeemCode, disableAdminRedeemCode, listAdminRedeemBatchCodes, type RedeemBatch } from "@/services/api/wallet";
@@ -50,12 +51,12 @@ export function CreateRedeemBatchDrawer({
 }) {
     return (
         <>
-            <Drawer
+            <AdminDrawer
                 title="生成兑换码批次"
                 open={open && !pending}
                 size="min(600px, 100vw)"
                 onClose={onClose}
-                rootClassName="admin-drawer admin-redemption-drawer"
+                rootClassName="admin-redemption-drawer"
                 destroyOnHidden
                 mask={{ closable: !creating && !pending }}
                 keyboard={!creating && !pending}
@@ -151,9 +152,9 @@ export function CreateRedeemBatchDrawer({
                         </dl>
                     </section>
                 </Form>
-            </Drawer>
+            </AdminDrawer>
 
-            <Modal
+            <AdminModal
                 title="确认生成兑换码批次"
                 open={Boolean(pending)}
                 okText="确认生成"
@@ -167,7 +168,6 @@ export function CreateRedeemBatchDrawer({
                 closable={!creating}
                 keyboard={!creating}
                 destroyOnHidden
-                rootClassName="admin-modal-root"
             >
                 {pending ? (
                     <div className="admin-operation-confirmation">
@@ -196,7 +196,7 @@ export function CreateRedeemBatchDrawer({
                         </dl>
                     </div>
                 ) : null}
-            </Modal>
+            </AdminModal>
         </>
     );
 }
@@ -225,12 +225,11 @@ export function GeneratedCodesModal({ codes, batchId, onClose }: { codes: string
         }
     };
     return (
-        <Modal
+        <AdminModal
             title={`已生成 ${codes.length} 个兑换码`}
             open={codes.length > 0}
             onCancel={onClose}
             destroyOnHidden
-            rootClassName="admin-modal-root"
             footer={
                 <Space>
                     <Button onClick={onClose}>完成</Button>
@@ -256,7 +255,7 @@ export function GeneratedCodesModal({ codes, batchId, onClose }: { codes: string
                 </p>
             ) : null}
             <Input.TextArea aria-label="新生成的兑换码预览" value={previewContent} readOnly autoSize={{ minRows: 10, maxRows: 18 }} className="font-mono text-xs" />
-        </Modal>
+        </AdminModal>
     );
 }
 
@@ -405,7 +404,7 @@ export function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batc
     ];
 
     return (
-        <Modal
+        <AdminModal
             title={batchSummary ? `兑换码明细 · ${batchSummary.note || formatTime(batchSummary.createdAt)}` : "兑换码明细"}
             open={Boolean(batch)}
             onCancel={() => {
@@ -426,7 +425,6 @@ export function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batc
                 </Space>
             }
             width={1080}
-            rootClassName="admin-modal-root"
         >
             {!plaintextAvailable ? <div className="admin-redemption-sensitive-notice is-warning">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
             <div className="admin-redemption-detail-summary">
@@ -474,6 +472,6 @@ export function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batc
                     }
                 />
             </div>
-        </Modal>
+        </AdminModal>
     );
 }

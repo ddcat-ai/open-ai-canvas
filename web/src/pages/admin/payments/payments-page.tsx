@@ -1,6 +1,6 @@
 import { PaymentBrandIcon } from "@/components/payment-brand-icons";
 import { Callout } from "@/pages/admin/ui/controls";
-import { App, Button, DatePicker, Descriptions, Drawer, Form, Input, InputNumber, Tabs, Typography } from "antd";
+import { App, Button, DatePicker, Descriptions, Form, Input, InputNumber, Tabs, Typography } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { Switch } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
@@ -618,23 +618,18 @@ export default function AdminPaymentsPage() {
         {
             title: "操作",
             key: "actions",
-            width: 150,
+            width: 220,
             fixed: "right",
             align: "center",
+            // 只显示当前状态下能执行的操作：已到账或已关闭的订单只剩“详情”，不再出现一排禁用按钮或“更多”。
             render: (_, order) => (
                 <AdminRowActions
                     primary={{ label: "详情", icon: <Eye className="size-3.5" />, onClick: () => setSelectedOrder(order) }}
-                    visibleActionCount={0}
                     actions={[
-                        { key: "sync", label: "同步支付状态", icon: <RefreshCw className="size-3.5" />, disabled: Boolean(orderActionId) || ["credited", "closed"].includes(order.status), onClick: () => queryOrder(order) },
-                        {
-                            key: "close",
-                            label: "关闭订单",
-                            icon: <XCircle className="size-3.5" />,
-                            danger: true,
-                            disabled: Boolean(orderActionId) || !["created", "pending", "create_failed", "closing"].includes(order.status),
-                            onClick: () => closeOrder(order),
-                        },
+                        ...(!["credited", "closed"].includes(order.status) ? [{ key: "sync", label: "同步状态", icon: <RefreshCw className="size-3.5" />, disabled: Boolean(orderActionId), onClick: () => queryOrder(order) }] : []),
+                        ...(["created", "pending", "create_failed", "closing"].includes(order.status)
+                            ? [{ key: "close", label: "关闭", icon: <XCircle className="size-3.5" />, danger: true, disabled: Boolean(orderActionId), onClick: () => closeOrder(order) }]
+                            : []),
                     ]}
                 />
             ),
@@ -955,7 +950,7 @@ export default function AdminPaymentsPage() {
             </AdminDrawer>
             <AdminUserDetailDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
 
-            <Drawer
+            <AdminDrawer
                 title={providerDrawer ? `配置 ${providerDrawer.name}` : "配置支付渠道"}
                 width={620}
                 open={Boolean(providerDrawer)}
@@ -1000,9 +995,9 @@ export default function AdminPaymentsPage() {
                         })}
                     </Form>
                 ) : null}
-            </Drawer>
+            </AdminDrawer>
 
-            <Drawer
+            <AdminDrawer
                 title={productDrawer ? "编辑商品" : "新增商品"}
                 width={520}
                 open={productDrawer !== undefined}
@@ -1124,9 +1119,9 @@ export default function AdminPaymentsPage() {
                         <Switch />
                     </Form.Item>
                 </Form>
-            </Drawer>
+            </AdminDrawer>
 
-            <Drawer
+            <AdminDrawer
                 title={detailRun ? `${providerNames[detailRun.providerId] || detailRun.providerId} · ${detailRun.billDate} 对账明细` : "对账明细"}
                 width="min(1080px, 94vw)"
                 open={Boolean(detailRun)}
@@ -1175,7 +1170,7 @@ export default function AdminPaymentsPage() {
                     empty={<AdminTableEmpty title={detailRun?.status === "failed" ? "本次对账未生成明细" : "账单没有交易记录"} />}
                     footer={<PaginationBar alwaysShow current={detailPage} pageSize={detailPageSize} total={detailTotal} onChange={(page, size) => detailRun && void openRunDetails(detailRun, size !== detailPageSize ? 1 : page, size, detailResult)} />}
                 />
-            </Drawer>
+            </AdminDrawer>
         </AdminPageFrame>
     );
 }

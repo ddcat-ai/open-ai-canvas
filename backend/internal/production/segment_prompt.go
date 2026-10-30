@@ -45,6 +45,11 @@ type SegmentPromptInput struct {
 	Independent bool
 	// PauseMs 是台词后的气口，已计入镜头时长；为 0 时按默认值。
 	PauseMs int64
+	// Performance / CameraMotion 是作品的表演强度与运镜动感 1–10（见 StoryboardSettings），0 按默认档。
+	Performance  int
+	CameraMotion int
+	// MaxChars 是撰写正文的目标字符数上限（视频模型上限扣除系统追加的参考图说明与余量）；0 表示不限。
+	MaxChars int
 }
 
 // pauseText 是写进提示词的气口时长，例如“0.5”。
@@ -58,15 +63,48 @@ func (in SegmentPromptInput) pauseText() string {
 
 var shotLens = map[string]string{"特写": "85mm", "近景": "50mm", "中景": "35mm", "全景": "24mm", "远景": "16mm"}
 
-var cameraMove = map[string]string{
-	"固定": "固定机位",
-	"推":  "缓慢推近",
-	"拉":  "缓慢拉远",
-	"摇":  "水平横摇",
-	"跟":  "跟随主体移动",
-	"环绕": "小幅弧线环绕",
-	"升降": "垂直升降",
-	"手持": "手持轻微晃动",
+// cameraMoves 按运镜动感给出镜头表里运镜的写法：1–3 档缓慢、4–7 档按情绪、8–10 档快速。
+var cameraMoves = [3]map[string]string{
+	{
+		"固定": "固定机位",
+		"推":  "缓慢推近",
+		"拉":  "缓慢拉远",
+		"摇":  "缓慢横摇",
+		"跟":  "平稳跟拍",
+		"环绕": "小幅弧线环绕",
+		"升降": "缓慢升降",
+		"手持": "轻微手持",
+	},
+	{
+		"固定": "固定机位",
+		"推":  "随情绪推近",
+		"拉":  "拉远交代环境",
+		"摇":  "水平横摇",
+		"跟":  "跟随主体移动",
+		"环绕": "弧线环绕",
+		"升降": "垂直升降",
+		"手持": "手持跟拍，带呼吸感",
+	},
+	{
+		"固定": "固定机位",
+		"推":  "快速推近",
+		"拉":  "快速拉远",
+		"摇":  "快速甩摇",
+		"跟":  "手持跟拍",
+		"环绕": "环绕运镜",
+		"升降": "大幅升降",
+		"手持": "手持晃动跟拍",
+	},
+}
+
+func cameraMoveText(level int, camera string) string {
+	switch level = normalizedDirectionLevel(level, DefaultCameraLevel); {
+	case level <= 3:
+		return cameraMoves[0][camera]
+	case level >= 8:
+		return cameraMoves[2][camera]
+	}
+	return cameraMoves[1][camera]
 }
 
 var chineseOrdinals = []string{"一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"}
@@ -93,7 +131,7 @@ func secondsText(ms int64) string {
 
 // SegmentVideoPrompt 把一个剧情段组装成可整段生成的多镜头视频提示词：
 // 段头（承接、时长、画幅、风格）、视觉与首帧、场景与站位、角色参考、声音，以及按段内时间码切分的每个镜头。
-// 尾帧续接时段末镜头留 1 秒硬定格作为下一段的接续基准；并行出片（Independent）不留。
+// 尾帧续接时段末镜头留 0.5 秒收势作为下一段的接续基准（不整段凝固，避免成片里出现静止画面）；并行出片（Independent）不留。
 func SegmentVideoPrompt(in SegmentPromptInput) string {
 	var b strings.Builder
 	style := firstNonEmpty(in.Style, "写实电影感")
@@ -116,7 +154,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	if in.Index > 0 && in.Independent {
 		fmt.Fprintf(&b, "本段独立生成，开场站位、朝向与光线和第%d段结尾保持一致\n", in.Index)
 	} else if in.Index > 0 {
-		fmt.Fprintf(&b, "严格从第%d段视频末尾硬定格的站位、朝向、动作和光线状态继续，不重新摆位\n", in.Index)
+		fmt.Fprintf(&b, "严格从第%d段视频末尾的站位、朝向、动作、情绪和光线状态继续，不重新摆位\n", in.Index)
 	}
 	fmt.Fprintf(&b, "第%d段视频《%s》\n", in.Index+1, firstNonEmpty(in.Title, "剧情段"))
 	fmt.Fprintf(&b, "%s秒｜%s｜%s｜%s对白｜无字幕｜%d个镜头\n", secondsText(total), firstNonEmpty(in.AspectRatio, "9:16"), style, language, len(in.Shots))
@@ -165,7 +203,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	if len(scenes) > 0 {
 		b.WriteString("空间锁定：" + strings.Join(scenes, "；") + "。\n")
 	}
-	b.WriteString("人物站位与朝向在本段内保持一致，切镜不越轴，不穿模。\n")
+	b.WriteString("切镜保持轴线与画面左右关系，不越轴，不穿模；人物按剧情走位。\n")
 
 	characters, props := []SegmentReference{}, []SegmentReference{}
 	for _, ref := range in.References {
@@ -206,7 +244,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	}
 	b.WriteString("\n【光源与声音】\n")
 	b.WriteString("光线方向与色温在本段内保持连续。")
-	b.WriteString("对白使用" + language + "，口型与台词同步，环境音随画面动作。\n")
+	b.WriteString("对白使用" + language + "，口型与台词同步，台词带情绪与语气，环境音随画面动作。\n")
 	for _, voice := range voices {
 		b.WriteString(voice + "\n")
 	}
@@ -216,12 +254,13 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 		start, end := cursor, cursor+shot.DurationMs
 		cursor = end
 		heading := firstNonEmpty(shot.ShotSize, "镜头")
-		if move := cameraMove[shot.Camera]; move != "" && shot.Camera != "固定" {
+		move := cameraMoveText(in.CameraMotion, shot.Camera)
+		if move != "" && shot.Camera != "固定" {
 			heading += "·" + shot.Camera
 		}
 		fmt.Fprintf(&b, "\n【%s—%s秒｜镜头%s：%s】\n", segmentClock(start), segmentClock(end), chineseOrdinal(index), heading)
 		framing := strings.TrimSpace(shotLens[shot.ShotSize] + shot.ShotSize)
-		if move := cameraMove[shot.Camera]; move != "" {
+		if move != "" {
 			framing = strings.TrimSpace(framing + "，" + move)
 		}
 		if framing != "" {
@@ -254,7 +293,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 			b.WriteString("无台词。\n")
 		}
 		if index == len(in.Shots)-1 && in.Index < in.Count-1 && !in.Independent {
-			fmt.Fprintf(&b, "末1.0秒全场硬定格，人物站位、表情与光线完全凝固，作为第%d段的无缝接续基准。\n", in.Index+2)
+			fmt.Fprintf(&b, "末0.5秒动作收住、镜头停稳，人物保留呼吸与眼神的细微动态，作为第%d段的接续基准。\n", in.Index+2)
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")

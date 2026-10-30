@@ -1,4 +1,5 @@
-import { App, Button, InputNumber, Modal, Spin } from "antd";
+import { App, Button, InputNumber, Spin } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { ArrowDown, ArrowUp, GripVertical, ListOrdered } from "lucide-react";
 import { useRef, useState } from "react";
 import { AdminEmpty } from "@/pages/admin/components/admin-ui";
@@ -73,7 +74,7 @@ export function ChannelOrderDialog({ channelId, onSaved }: { channelId?: string;
             <Button icon={<ListOrdered className="size-4" />} onClick={() => void start()}>
                 {channelId ? "自定义排序" : "设置排序"}
             </Button>
-            <Modal
+            <AdminModal
                 title={channelId ? "自定义模型排序" : "调整渠道顺序"}
                 open={open}
                 onCancel={() => setOpen(false)}
@@ -164,7 +165,7 @@ export function ChannelOrderDialog({ channelId, onSaved }: { channelId?: string;
                         )}
                     </div>
                 </Spin>
-            </Modal>
+            </AdminModal>
         </>
     );
 }

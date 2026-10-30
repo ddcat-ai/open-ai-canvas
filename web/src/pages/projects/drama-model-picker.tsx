@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ModelPicker } from "@/components/model-picker";
-import { dramaChoiceKey, dramaChoiceKeys, dramaChoiceToModel, dramaVideoRatioIssue, modelToDramaChoice } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaChoiceKeys, dramaChoiceToModel, dramaVideoRatioIssue, dramaVideoResolutionIssue, modelToDramaChoice } from "@/lib/drama/model-choice";
 import { cn } from "@/lib/utils";
 import { getDramaModels, type DramaCapability, type DramaModelChoice } from "@/services/api/drama";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -22,6 +22,7 @@ export function DramaModelPicker({
     onChange,
     placeholder,
     aspectRatio,
+    videoResolution,
     size = "md",
     showPrice = true,
     className,
@@ -31,6 +32,8 @@ export function DramaModelPicker({
     onChange: (choice: DramaModelChoice) => void;
     placeholder?: string;
     aspectRatio?: string;
+    /** 视频模型：作品指定的分辨率，给不出的模型置灰。 */
+    videoResolution?: string;
     size?: "sm" | "md";
     showPrice?: boolean;
     className?: string;
@@ -53,14 +56,14 @@ export function DramaModelPicker({
             if (!keys.length) return "个人渠道的密钥只保存在浏览器，短剧在服务端无人值守执行，只能使用平台模型";
             if (!catalogQuery.data) return "";
             const matched = matchChoice(model);
-            if (matched) return capability === "video" && aspectRatio ? dramaVideoRatioIssue(allowed.get(matched), aspectRatio) : "";
+            if (matched) return capability === "video" ? (aspectRatio && dramaVideoRatioIssue(allowed.get(matched), aspectRatio)) || dramaVideoResolutionIssue(allowed.get(matched), videoResolution) : "";
             for (const key of keys) {
                 const reason = blocked.get(key);
                 if (reason) return reason;
             }
             return "模型列表已更新，请刷新页面后再选";
         },
-        [allowed, aspectRatio, blocked, capability, catalogQuery.data, config, matchChoice],
+        [allowed, aspectRatio, blocked, capability, catalogQuery.data, config, matchChoice, videoResolution],
     );
     const current = dramaChoiceToModel(config, capability, value);
 

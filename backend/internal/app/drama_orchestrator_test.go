@@ -401,32 +401,32 @@ func TestDramaMissingVideoContractFails(t *testing.T) {
 
 func TestDramaVideoScreenFollowsCapabilityContract(t *testing.T) {
 	ratios := &VideoCapabilityConfig{Ratios: []string{"adaptive", "16:9", "9:16", "1:1"}}
-	if screen := dramaVideoScreenFor(ratios, "9:16"); screen.Size != "9:16" || screen.Resolution != "" || screen.Issue != "" {
+	if screen := dramaVideoScreenFor(ratios, "9:16", ""); screen.Size != "9:16" || screen.Resolution != "" || screen.Issue != "" {
 		t.Fatalf("a declared ratio must be sent as size: %+v", screen)
 	}
-	if screen := dramaVideoScreenFor(ratios, "3:4"); !strings.Contains(screen.Issue, "3:4") {
+	if screen := dramaVideoScreenFor(ratios, "3:4", ""); !strings.Contains(screen.Issue, "3:4") {
 		t.Fatalf("an undeclared ratio must be refused, not sent and ignored: %+v", screen)
 	}
-	if screen := dramaVideoScreenFor(&VideoCapabilityConfig{}, "9:16"); screen.Issue == "" {
+	if screen := dramaVideoScreenFor(&VideoCapabilityConfig{}, "9:16", ""); screen.Issue == "" {
 		t.Fatal("a model without ratio control cannot promise 9:16")
 	}
 	// AutoDL 一类：横竖写在完整分辨率标签里；默认横屏时，竖屏作品取同档的竖屏标签。
 	labeled := &VideoCapabilityConfig{Resolutions: []string{"480p竖", "768p竖", "480p横", "768p横"}, DefaultResolution: "768p横", FixedScreenSpec: &VideoScreenSpecConfig{}}
 	for ratio, want := range map[string]string{"9:16": "768p竖", "16:9": "768p横"} {
-		if screen := dramaVideoScreenFor(labeled, ratio); screen.Resolution != want || screen.Size != "" || screen.Issue != "" {
+		if screen := dramaVideoScreenFor(labeled, ratio, ""); screen.Resolution != want || screen.Size != "" || screen.Issue != "" {
 			t.Fatalf("%s: %+v", ratio, screen)
 		}
 	}
 	for _, ratio := range []string{"1:1", "3:4"} {
-		if screen := dramaVideoScreenFor(labeled, ratio); screen.Issue == "" {
+		if screen := dramaVideoScreenFor(labeled, ratio, ""); screen.Issue == "" {
 			t.Fatalf("%s has no matching label and must be refused: %+v", ratio, screen)
 		}
 	}
 	pixels := &VideoCapabilityConfig{Resolutions: []string{"480p竖(480*864)", "768p竖(768*1376)", "768p横(1376*768)", "736p(1:1)"}, DefaultResolution: "768p竖(768*1376)", FixedScreenSpec: &VideoScreenSpecConfig{}}
-	if screen := dramaVideoScreenFor(pixels, "16:9"); screen.Resolution != "768p横(1376*768)" {
+	if screen := dramaVideoScreenFor(pixels, "16:9", ""); screen.Resolution != "768p横(1376*768)" {
 		t.Fatalf("pixel labels: %+v", screen)
 	}
-	if screen := dramaVideoScreenFor(pixels, "1:1"); screen.Resolution != "736p(1:1)" {
+	if screen := dramaVideoScreenFor(pixels, "1:1", ""); screen.Resolution != "736p(1:1)" {
 		t.Fatalf("square label: %+v", screen)
 	}
 }

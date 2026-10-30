@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/production"
@@ -22,6 +23,10 @@ import (
 type dramaRevisionPayload struct {
 	Revision int64 `json:"revision"`
 	Seconds  int   `json:"seconds,omitempty"`
+	// MaxChars 是段提示词正文的字符上限：视频模型提示词上限减去撰写时的参考图说明；0 表示不限。
+	MaxChars int `json:"maxChars,omitempty"`
+	// Condensed 是本次撰写已做的自动精简次数。
+	Condensed int `json:"condensed,omitempty"`
 }
 
 func encodeDramaRevision(revision int64) string {
@@ -110,8 +115,8 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	if err != nil {
 		return DramaSegmentRequest{}, nil, err
 	}
-	screen := profile.screen(settings.AspectRatio)
-	request := DramaSegmentRequest{Seconds: production.SnapVideoSeconds(draft.view.DurationMs, profile.Durations), MaxVideoSeconds: profile.maxSeconds(), AspectRatio: settings.AspectRatio, Size: screen.Size, Resolution: screen.Resolution, GenerateAudio: profile.GenerateAudio, References: []DramaSegmentReference{}}
+	screen := profile.screen(settings.AspectRatio, settings.VideoResolution)
+	request := DramaSegmentRequest{Seconds: production.SnapVideoSeconds(draft.view.DurationMs, profile.Durations), MaxVideoSeconds: profile.maxSeconds(), AspectRatio: settings.AspectRatio, Size: screen.Size, Resolution: screen.Resolution, PromptMaxChars: profile.PromptMaxChars, GenerateAudio: profile.GenerateAudio, References: []DramaSegmentReference{}}
 	if draft.view.DurationMs > int64(request.MaxVideoSeconds)*1000 {
 		return request, nil, errors.New("剧情段超过所选视频模型的时长上限，请调整分镜时长或重新改编")
 	}
@@ -315,6 +320,16 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 		config := map[string]any{"videoSeconds": itoa(request.Seconds), "videoGenerateAudio": strconv.FormatBool(request.GenerateAudio)}
 		dramaVideoScreen{Size: request.Size, Resolution: request.Resolution}.apply(config)
 		prompt := strings.TrimSpace(request.Header + "\n\n" + firstNonEmpty(segment.VideoPromptOverride, segment.VideoPrompt))
+		if chars := utf8.RuneCountInString(prompt); request.PromptMaxChars > 0 && chars > request.PromptMaxChars {
+			if strings.TrimSpace(segment.VideoPromptOverride) != "" {
+				return nil, false, fmt.Errorf("手动改写的视频提示词加上开头的参考图说明共 %d 个字符，超过所选视频模型上限 %d 个字符；请精简改写内容，或恢复模型版本后按上限重新撰写", chars, request.PromptMaxChars)
+			}
+			// 模型撰写的版本放不下（换了上限更小的模型，或参考图说明变长）：退回待撰写，按当前上限重写后再提交，不截断。
+			if _, err := r.s.repo.UpdateDramaSegmentRevision(segment.ID, segment.Revision, map[string]any{"prompt_status": "", "prompt_error": ""}); err != nil {
+				return nil, false, err
+			}
+			return nil, true, nil
+		}
 		payload, _ := json.Marshal(dramaRevisionPayload{Revision: segment.Revision, Seconds: request.Seconds})
 		job.PayloadJSON = string(payload)
 		task, err := r.createTaskWith(segmentVideoChoice(*segment, r.settings.Models.Video), "video", request.Operation, prompt, map[string]any{"config": config, "referenceImages": refs, "metadata": metadata})

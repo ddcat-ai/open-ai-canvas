@@ -1,4 +1,5 @@
-import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Switch } from "antd";
+import { App, Button, DatePicker, Form, Input, InputNumber, Popconfirm, Switch } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import type { ColumnsType } from "antd/es/table";
 import { Trash2, Edit3, Search } from "lucide-react";
 import dayjs, { type Dayjs } from "dayjs";
@@ -362,7 +363,7 @@ export default function AdminBannerAnnouncementsPanel({
                 }}
             />
 
-            <Modal
+            <AdminModal
                 title={dialog?.mode === "edit" ? "编辑常驻通知" : "新建常驻通知"}
                 open={Boolean(dialog)}
                 onCancel={requestClose}
@@ -371,7 +372,6 @@ export default function AdminBannerAnnouncementsPanel({
                 centered
                 destroyOnHidden
                 width="min(880px, calc(100vw - 32px))"
-                rootClassName="admin-modal-root"
             >
                 <Form
                     form={form}
@@ -440,7 +440,7 @@ export default function AdminBannerAnnouncementsPanel({
                         <DatePicker.RangePicker showTime format="YYYY-MM-DD HH:mm" className="w-full" />
                     </Form.Item>
                 </Form>
-            </Modal>
+            </AdminModal>
         </div>
     );
 }

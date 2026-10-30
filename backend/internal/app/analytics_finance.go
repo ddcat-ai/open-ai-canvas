@@ -81,8 +81,16 @@ func applyAnalyticsFinance(overview *AnalyticsOverview, records map[string]analy
 		row := &overview.Models[index]
 		rows[[2]string{row.Model, row.Capability}] = &row.Finance
 	}
+	points := make(map[string]*AnalyticsTrendPoint, len(overview.Trend))
+	for index := range overview.Trend {
+		points[overview.Trend[index].Day] = &overview.Trend[index]
+	}
 	for _, record := range records {
 		overview.KPI.Finance.add(record)
+		// 与 KPI 同一口径：已结算订单实收，按订单首条可计费调用的日期归属。
+		if point := points[record.Log.CreatedAt.UTC().Format("2006-01-02")]; point != nil {
+			point.ConsumedMicrocredits += record.Revenue
+		}
 		if row := rows[[2]string{firstNonEmpty(record.Log.Model, "未识别"), record.Log.Capability}]; row != nil {
 			row.add(record)
 		}

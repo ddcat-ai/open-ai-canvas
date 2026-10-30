@@ -28,7 +28,7 @@ export const DRAMA_STYLE_CATEGORIES: Array<{ key: "all" | "hot" | DramaStyleCate
 ];
 
 const MEDIUM: Record<DramaStyleCategory, string> = {
-    live: "真人实拍短剧质感，电影级布光，真实皮肤纹理与毛孔，自然景深，竖屏构图主体突出，人物面部清晰可读",
+    live: "真人实拍短剧质感，电影级布光，真实皮肤纹理与毛孔，自然景深，竖屏构图主体突出，人物面部清晰可读、表情自然生动",
     "3d": "高品质 3D 动画渲染，建模精致，材质与光照物理可信，角色表情生动",
     "2d": "高品质 2D 动画漫剧，线稿清晰流畅，上色干净，角色五官稳定",
     art: "具有鲜明艺术语言的风格化画面，全剧统一笔触与材质",

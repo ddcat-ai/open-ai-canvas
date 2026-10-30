@@ -2,7 +2,7 @@ import { App, Button, Checkbox, Input, InputNumber, Spin } from "antd";
 import { ArrowLeft, Check, ExternalLink, Gift, RefreshCw, Search, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { AppModal } from "@/components/ui/product/app-modal";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import {
     getProviderCatalog,
     installProviderCatalog,
@@ -150,7 +150,7 @@ export function ProviderCatalogWizard({ open, onClose, onCustom, onInstalled }: 
     const stepIndex = stepLabels.findIndex((item) => item.key === step);
 
     return (
-        <AppModal flush open={open} width={1080} onCancel={() => !installing && onClose()} footer={null} title={null} rootClassName="admin-modal-root pcw-root" mask={{ closable: !installing }}>
+        <AdminModal flush open={open} width={1080} onCancel={() => !installing && onClose()} footer={null} title={null} rootClassName="pcw-root" mask={{ closable: !installing }}>
             <div className="pcw">
                 <header className="pcw-header">
                     <div className="pcw-title-row">
@@ -170,7 +170,7 @@ export function ProviderCatalogWizard({ open, onClose, onCustom, onInstalled }: 
                 {step === "connect" && provider ? renderConnect(provider) : null}
                 {step === "pricing" && provider ? renderPricing(provider) : null}
             </div>
-        </AppModal>
+        </AdminModal>
     );
 
     function renderPick() {

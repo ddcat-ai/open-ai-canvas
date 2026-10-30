@@ -28,27 +28,27 @@ type AnalyticsOverview struct {
 }
 
 type AnalyticsKPI struct {
-	ActiveUsers               int              `json:"activeUsers"`
-	DAU                       int              `json:"dau"`
-	WAU                       int              `json:"wau"`
-	MAU                       int              `json:"mau"`
-	GenerationTasks           int              `json:"generationTasks"`
-	UpstreamRequests          int              `json:"upstreamRequests"`
-	SuccessRate               float64          `json:"successRate"`
-	P95DurationMs             int64            `json:"p95DurationMs"`
-	CurrentQueuedTasks        int64            `json:"currentQueuedTasks"`
-	Finance                   AnalyticsFinance `json:"finance"`
-	TotalBalanceMicrocredits  int64            `json:"totalBalanceMicrocredits"`
-	TotalConsumedMicrocredits int64            `json:"totalConsumedMicrocredits"`
+	ActiveUsers              int              `json:"activeUsers"`
+	DAU                      int              `json:"dau"`
+	WAU                      int              `json:"wau"`
+	MAU                      int              `json:"mau"`
+	GenerationTasks          int              `json:"generationTasks"`
+	UpstreamRequests         int              `json:"upstreamRequests"`
+	SuccessRate              float64          `json:"successRate"`
+	P95DurationMs            int64            `json:"p95DurationMs"`
+	CurrentQueuedTasks       int64            `json:"currentQueuedTasks"`
+	Finance                  AnalyticsFinance `json:"finance"`
+	TotalBalanceMicrocredits int64            `json:"totalBalanceMicrocredits"`
 }
 
+// 成功率在分母为 0 时为 null：没有请求或任务的日子不能画成 0%。
 type AnalyticsTrendPoint struct {
-	Day                  string  `json:"day"`
-	Tasks                int     `json:"tasks"`
-	Requests             int     `json:"requests"`
-	ActiveUsers          int     `json:"activeUsers"`
-	RequestSuccessRate   float64 `json:"requestSuccessRate"`
-	ConsumedMicrocredits int64   `json:"consumedMicrocredits"`
+	Day                  string   `json:"day"`
+	Tasks                int      `json:"tasks"`
+	Requests             int      `json:"requests"`
+	ActiveUsers          int      `json:"activeUsers"`
+	RequestSuccessRate   *float64 `json:"requestSuccessRate"`
+	ConsumedMicrocredits int64    `json:"consumedMicrocredits"`
 }
 
 type AnalyticsModelRow struct {
@@ -57,8 +57,8 @@ type AnalyticsModelRow struct {
 	Tasks              int              `json:"tasks"`
 	Requests           int              `json:"requests"`
 	UniqueUsers        int              `json:"uniqueUsers"`
-	TaskSuccessRate    float64          `json:"taskSuccessRate"`
-	RequestSuccessRate float64          `json:"requestSuccessRate"`
+	TaskSuccessRate    *float64         `json:"taskSuccessRate"`
+	RequestSuccessRate *float64         `json:"requestSuccessRate"`
 	P50DurationMs      int64            `json:"p50DurationMs"`
 	P95DurationMs      int64            `json:"p95DurationMs"`
 	InputTokens        int64            `json:"inputTokens"`
@@ -136,6 +136,8 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 	if filter.ChannelID != "" {
 		tasks = tasksWithLoggedRequests(tasks, logs)
 	}
+	// 请求类指标只看 create；财务仍按全部日志找订单的首条可计费调用，口径见 analyticsFinancialRecords。
+	upstreamLogs := upstreamCreateLogs(logs)
 	activityFilter := filter
 	rollingFrom := filter.To.AddDate(0, 0, -30)
 	if rollingFrom.Before(activityFilter.From) {
@@ -174,13 +176,8 @@ func (s *Service) AdminAnalytics(actor *model.User, query AnalyticsQuery) (*Anal
 	if err != nil {
 		return nil, err
 	}
-	result := buildAnalyticsOverview(filter, tasks, rollingTasks, rollingLogs, logs, activities, users)
+	result := buildAnalyticsOverview(filter, tasks, rollingTasks, upstreamCreateLogs(rollingLogs), upstreamLogs, activities, users)
 	result.KPI.TotalBalanceMicrocredits = totalBalance
-	for _, log := range logs {
-		if log.BillingAmount > 0 {
-			result.KPI.TotalConsumedMicrocredits += log.BillingAmount
-		}
-	}
 	records, err := s.analyticsFinancialRecords(logs)
 	if err != nil {
 		return nil, err

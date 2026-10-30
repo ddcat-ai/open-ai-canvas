@@ -51,13 +51,14 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertBillingSnapshot(t, logs[0], true, model.BillingStatusSettled, 780_000)
-	assertBillingSnapshot(t, logs[1], true, model.BillingStatusReserved, 900_000)
-	assertBillingSnapshot(t, logs[2], true, model.BillingStatusUncertain, 1_200_000)
-	assertBillingSnapshot(t, logs[3], true, model.BillingStatusRefunded, 0)
-	assertBillingSnapshot(t, logs[4], false, "", 0)
-	assertBillingSnapshot(t, logs[5], false, "", 0)
-	assertBillingSnapshot(t, logs[6], false, "", 0)
+	settled := int64(780_000)
+	assertBillingSnapshot(t, logs[0], true, model.BillingStatusSettled, 1_000_000, &settled)
+	assertBillingSnapshot(t, logs[1], true, model.BillingStatusReserved, 900_000, nil)
+	assertBillingSnapshot(t, logs[2], true, model.BillingStatusUncertain, 1_200_000, nil)
+	assertBillingSnapshot(t, logs[3], true, model.BillingStatusRefunded, 650_000, nil)
+	assertBillingSnapshot(t, logs[4], false, "", 0, nil)
+	assertBillingSnapshot(t, logs[5], false, "", 0, nil)
+	assertBillingSnapshot(t, logs[6], false, "", 0, nil)
 	if !logs[0].CreditCostConfigured || logs[0].CreditCostMicrocredits == nil || *logs[0].CreditCostMicrocredits != 456_789 {
 		t.Fatalf("request cost missing: %#v", logs[0])
 	}
@@ -68,9 +69,10 @@ func TestDecorateAPICallLogsUsesBillingOrderSnapshot(t *testing.T) {
 	}
 }
 
-func assertBillingSnapshot(t *testing.T, log model.ApiCallLog, available bool, status model.BillingStatus, amount int64) {
+func assertBillingSnapshot(t *testing.T, log model.ApiCallLog, available bool, status model.BillingStatus, reserved int64, settled *int64) {
 	t.Helper()
-	if log.BillingAvailable != available || log.BillingStatus != status || log.BillingAmount != amount {
-		t.Fatalf("billing snapshot for %s = {available:%v status:%q amount:%d}, want {available:%v status:%q amount:%d}", log.ID, log.BillingAvailable, log.BillingStatus, log.BillingAmount, available, status, amount)
+	settledMatches := (log.BillingSettledAmount == nil) == (settled == nil) && (settled == nil || *log.BillingSettledAmount == *settled)
+	if log.BillingAvailable != available || log.BillingStatus != status || log.BillingReservedAmount != reserved || !settledMatches {
+		t.Fatalf("billing snapshot for %s = {available:%v status:%q reserved:%d settled:%v}, want {available:%v status:%q reserved:%d settled:%v}", log.ID, log.BillingAvailable, log.BillingStatus, log.BillingReservedAmount, log.BillingSettledAmount, available, status, reserved, settled)
 	}
 }

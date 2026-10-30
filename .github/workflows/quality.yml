@@ -37,11 +37,17 @@ jobs:
       - name: Check Agent architecture
         run: go test -count=1 ./internal/agent/architecture
 
-  backend:
-    name: Backend checks
+  # internal/app 约 1350 个用例在同一进程里串行执行（单包约 5 分钟），是后端检查的关键路径。
+  # 这里把它按用例名轮转分成 4 片，其余包作为第 5 片，5 个 Runner 并行；汇总由 Backend checks 完成。
+  backend-tests:
+    name: Backend tests (${{ matrix.shard }})
     runs-on: ubuntu-latest
     # go test 自身有 20 分钟超时；这里兜底防止依赖服务卡死时占用 Runner 数小时。
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [app-1, app-2, app-3, app-4, rest]
     defaults:
       run:
         working-directory: backend
@@ -85,6 +91,7 @@ jobs:
           sudo apt-get install -y -qq redis-server
           sudo systemctl stop redis-server || true
       - name: Check formatting
+        if: matrix.shard == 'rest'
         shell: bash
         run: |
           unformatted="$(gofmt -l .)"
@@ -95,17 +102,66 @@ jobs:
           fi
       - name: Run Go tests
         shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          APP_SHARDS: "4"
         run: |
-          set -o pipefail
-          # internal/app 约 1000 个用例串行执行，是后端检查的关键路径（本地约 2–3 分钟）。
+          set -euo pipefail
           # 此前每个用例构造 Service 时都会完整解压 85MB 官方插件包（约 4 秒/次，累计 7 分钟以上），
-          # 现已改为只读清单 + 进程内缓存；若该包耗时再次明显上涨，先查 newPluginRuntime。
-          go test -json -timeout=20m ./... | tee "$RUNNER_TEMP/go-tests.jsonl"
+          # 现已改为只读清单 + 进程内缓存；若 internal/app 耗时再次明显上涨，先查 newPluginRuntime。
+          out="$RUNNER_TEMP/go-tests.jsonl"
+          if [ "$SHARD" = rest ]; then
+            packages=$(go list ./... | grep -vx 'yingce/backend/internal/app')
+            # shellcheck disable=SC2086 # 包路径不含空格，按空白展开为多个参数。
+            go test -json -timeout=20m $packages | tee "$out"
+            exit 0
+          fi
+          # 顶层用例按名字排序后轮转分片；子用例跟随顶层用例，不会被拆开或漏跑。
+          names=$(go test -list '.' ./internal/app | grep -E '^(Test|Example|Fuzz)[A-Za-z0-9_]*$' | sort | awk -v n="$APP_SHARDS" -v i="${SHARD#app-}" '(NR - 1) % n == i - 1')
+          [ -n "$names" ] || { echo "::error::shard $SHARD has no tests"; exit 1; }
+          echo "shard $SHARD: $(printf '%s\n' "$names" | wc -l) top-level tests"
+          pattern="^($(printf '%s\n' "$names" | paste -sd'|' -))\$"
+          go test -json -timeout=20m -run "$pattern" ./internal/app | tee "$out"
+      - name: Upload Go test timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/go-tests.jsonl
+          if-no-files-found: ignore
+
+  # 汇总分片结果，保留原有的 Backend checks 检查名，仓库必需检查不用改。
+  backend:
+    name: Backend checks
+    needs: backend-tests
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: go-test-timings-*
+          path: ${{ runner.temp }}/shards
+      - name: Merge Go test timings
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(find "$RUNNER_TEMP/shards" -name go-tests.jsonl | wc -l)
+          echo "merged $count shard timing files"
+          find "$RUNNER_TEMP/shards" -name go-tests.jsonl -exec cat {} + > "$RUNNER_TEMP/go-tests.jsonl"
+      - name: Require every shard to pass
+        env:
+          RESULT: ${{ needs.backend-tests.result }}
+        run: |
+          [ "$RESULT" = success ] || { echo "::error::Backend test shards finished with: $RESULT"; exit 1; }
       - name: Ensure dependency-backed tests were not skipped
         shell: bash
         run: |
-          python3 ../.github/scripts/test_check_dependency_tests.py
-          python3 ../.github/scripts/check-dependency-tests.py "$RUNNER_TEMP/go-tests.jsonl"
+          python3 .github/scripts/test_check_dependency_tests.py
+          python3 .github/scripts/check-dependency-tests.py "$RUNNER_TEMP/go-tests.jsonl"
       - name: Upload Go test timings
         if: always()
         uses: actions/upload-artifact@v4

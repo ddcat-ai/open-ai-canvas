@@ -4,7 +4,7 @@ import { App, Button } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, BookOpen, BookOpenText, CheckCircle2, Clapperboard, PanelRightClose, PanelRightOpen, Pencil, PenLine, Quote, ScanSearch, Trash2 } from "lucide-react";
 
-import { averageShotSeconds, normalizeStoryboard, TRANSITION_LABEL } from "@/lib/drama/storyboard";
+import { averageShotSeconds, normalizeStoryboard, PACING_LABEL, TRANSITION_LABEL } from "@/lib/drama/storyboard";
 import { getDramaChapter, type DramaDialogueCheck, type DramaEpisodeDetail, type DramaShot, type DramaShotPatch, type DramaStoryboardSettings } from "@/services/api/drama";
 
 import { formatCount, SOURCE_FORMAT_LABEL, sourceFormatOf } from "../drama-shared";
@@ -15,7 +15,7 @@ import type { EpisodeEmpty } from "./storyboard";
 
 function storyboardSummary(value: DramaStoryboardSettings) {
     const rules = normalizeStoryboard(value);
-    const duration = `${{ fast: "快节奏", standard: "标准节奏", slow: "舒缓节奏" }[rules.pacing]}（平均 ${averageShotSeconds(rules)} 秒/镜）· 对白${{ dense: "密集", standard: "标准", sparse: "克制" }[rules.dialogue]} · 剧情段${{ auto: "智能切分", fixed: `固定 ${rules.segmentSeconds} 秒`, range: `${rules.segmentMinSeconds}–${rules.segmentMaxSeconds} 秒` }[rules.segmentMode]}`;
+    const duration = `${PACING_LABEL[rules.pacing]}（平均 ${averageShotSeconds(rules)} 秒/镜）· 对白${{ dense: "密集", standard: "标准", sparse: "克制" }[rules.dialogue]} · 剧情段${{ auto: "智能切分", fixed: `固定 ${rules.segmentSeconds} 秒`, range: `${rules.segmentMinSeconds}–${rules.segmentMaxSeconds} 秒` }[rules.segmentMode]}`;
     const transition = rules.transition === "auto" ? "转场智能" : `转场统一${TRANSITION_LABEL[rules.transition]}`;
     return `${duration} · ${transition}`;
 }

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Drawer, Form, Input, InputNumber, Modal } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { App, Button, Form, Input, InputNumber } from "antd";
+import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import type { ColumnsType } from "antd/es/table";
 import { BadgeCheck, Coins, Plus, RefreshCw, Search, Trash2, Undo2 } from "lucide-react";
 
@@ -58,11 +59,6 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
     const userSearchRequestRef = useRef(0);
     const selectedAdjustmentUserId = Form.useWatch("userId", adjustmentForm);
 
-    const userLabels = useMemo(() => {
-        const labels = new Map<string, string>();
-        for (const user of [...users, ...adjustmentUsers]) labels.set(user.id, user.displayName || user.username);
-        return labels;
-    }, [adjustmentUsers, users]);
     const selectedAdjustmentUser = adjustmentUsers.find((user) => user.id === selectedAdjustmentUserId);
     const pendingAdjustmentUser = adjustmentUsers.find((user) => user.id === pendingAdjustment?.userId);
 
@@ -295,11 +291,11 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             title: "用户",
             dataIndex: "userId",
             width: 150,
-            render: (id: string) => (
+            render: (id: string, order) => (
                 <div>
-                    <div className="font-medium">{userLabels.get(id) || "未知用户"}</div>
+                    <div className="font-medium">{billingOrderUserLabel(order) || "未知用户"}</div>
                     <div className="mt-0.5 truncate text-xs text-foreground/50" title={id}>
-                        {id}
+                        {order.userAccount ? `@${order.userAccount}` : id}
                     </div>
                 </div>
             ),
@@ -467,14 +463,14 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 />
             </section>
 
-            <Drawer
+            <AdminDrawer
                 title="积分策略"
                 open={activeOperation === "policy"}
                 size="min(700px, 100vw)"
                 onClose={() => {
                     if (!savingPolicy) onOperationChange(null);
                 }}
-                rootClassName="admin-drawer admin-credit-drawer"
+                rootClassName="admin-credit-drawer"
                 destroyOnHidden
                 mask={{ closable: !savingPolicy }}
                 keyboard={!savingPolicy}
@@ -585,9 +581,9 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         </section>
                     </Form>
                 )}
-            </Drawer>
+            </AdminDrawer>
 
-            <Drawer
+            <AdminDrawer
                 title="人工调账"
                 open={activeOperation === "adjustment"}
                 size="min(580px, 100vw)"
@@ -595,7 +591,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                     if (adjusting || pendingAdjustment) return;
                     onOperationChange(null);
                 }}
-                rootClassName="admin-drawer admin-credit-drawer"
+                rootClassName="admin-credit-drawer"
                 destroyOnHidden
                 mask={{ closable: !adjusting && !pendingAdjustment }}
                 keyboard={!adjusting && !pendingAdjustment}
@@ -649,9 +645,9 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         </Form.Item>
                     </section>
                 </Form>
-            </Drawer>
+            </AdminDrawer>
 
-            <Modal
+            <AdminModal
                 title={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减用户积分" : "确认增加用户积分"}
                 open={Boolean(pendingAdjustment)}
                 okText={pendingAdjustment?.amount && pendingAdjustment.amount < 0 ? "确认扣减" : "确认增加"}
@@ -664,7 +660,6 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 mask={{ closable: !adjusting }}
                 closable={!adjusting}
                 destroyOnHidden
-                rootClassName="admin-modal-root"
                 okButtonProps={{ danger: Boolean(pendingAdjustment && pendingAdjustment.amount < 0) }}
             >
                 {pendingAdjustment ? (
@@ -701,9 +696,9 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         </dl>
                     </div>
                 ) : null}
-            </Modal>
+            </AdminModal>
 
-            <Modal
+            <AdminModal
                 title={resolutionTitle}
                 open={Boolean(resolutionTarget)}
                 okText={resolutionTarget?.action === "settle" ? "确认结算" : "退回预授权"}
@@ -718,7 +713,6 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                 mask={{ closable: !resolving }}
                 closable={!resolving}
                 destroyOnHidden
-                rootClassName="admin-modal-root"
                 okButtonProps={{ danger: resolutionTarget?.action === "refund" }}
             >
                 {resolutionTarget ? (
@@ -737,7 +731,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                                 <>
                                     <div>
                                         <dt>用户</dt>
-                                        <dd>{userLabels.get(resolutionTarget.order.userId) || resolutionTarget.order.userId}</dd>
+                                        <dd>{billingOrderUserLabel(resolutionTarget.order) || resolutionTarget.order.userId}</dd>
                                     </div>
                                     <div>
                                         <dt>模型 / 场景</dt>
@@ -759,7 +753,7 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
                         <Input.TextArea rows={4} maxLength={500} showCount placeholder="例如：供应商后台确认任务未产生费用" />
                     </Form.Item>
                 </Form>
-            </Modal>
+            </AdminModal>
         </div>
     );
 }
@@ -780,6 +774,11 @@ function CreditAccountSummary({ user }: { user: AdjustmentUser }) {
             </div>
         </dl>
     );
+}
+
+// 用户名由计费订单列表接口按当前页返回，不再从只含最近注册用户的引用数据里查。
+function billingOrderUserLabel(order: BillingOrder) {
+    return order.userDisplayName || order.userAccount || "";
 }
 
 function canResolveBillingOrder(order: BillingOrder) {

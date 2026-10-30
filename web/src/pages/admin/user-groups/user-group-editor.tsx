@@ -1,4 +1,5 @@
-import { App, Button, Drawer, Form, Input, InputNumber, Select } from "antd";
+import { App, Button, Form, Input, InputNumber, Select } from "antd";
+import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -85,7 +86,7 @@ export function UserGroupEditor({ open, group, onClose, onSaved }: { open: boole
     };
 
     return (
-        <Drawer
+        <AdminDrawer
             title={group ? `编辑分组 · ${group.name}` : "新建分组"}
             open={open}
             size="min(640px, 100vw)"
@@ -186,6 +187,6 @@ export function UserGroupEditor({ open, group, onClose, onSaved }: { open: boole
                     <InputNumber className="w-40" min={-100000} max={100000} />
                 </Form.Item>
             </Form>
-        </Drawer>
+        </AdminDrawer>
     );
 }

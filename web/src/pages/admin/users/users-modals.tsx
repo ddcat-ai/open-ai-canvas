@@ -1,4 +1,5 @@
-import { App, Button, Drawer, Form, Input } from "antd";
+import { App, Button, Form, Input } from "antd";
+import { AdminModal } from "@/pages/admin/ui/overlays";
 import { Select, Switch } from "@/pages/admin/ui/controls";
 import { useEffect, useState } from "react";
 
@@ -11,7 +12,7 @@ function userGroupOptions(groups: UserGroup[]) {
     return groups.map((group) => ({ value: group.code, label: `${group.name}（倍率 ${formatRatioBasisPoints(group.ratioBasisPoints)}）` }));
 }
 
-export function AdminUserEditDrawer({ user, actorId, groups, onClose, onSaved }: { user: AdminUser | null; actorId?: string; groups: UserGroup[]; onClose: () => void; onSaved: (user: LocalUser) => void }) {
+export function AdminUserEditModal({ user, actorId, groups, onClose, onSaved }: { user: AdminUser | null; actorId?: string; groups: UserGroup[]; onClose: () => void; onSaved: (user: LocalUser) => void }) {
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<UserFormValues>();
@@ -72,20 +73,25 @@ export function AdminUserEditDrawer({ user, actorId, groups, onClose, onSaved }:
     };
 
     return (
-        <Drawer
+        <AdminModal
             title={user ? `编辑用户 · ${user.displayName || user.username}` : "编辑用户"}
             open={Boolean(user)}
-            size="min(520px, 100vw)"
-            onClose={close}
+            width={640}
+            onCancel={close}
             mask={{ closable: !saving }}
-            destroyOnHidden
-            extra={
-                <Button type="primary" loading={saving} onClick={() => void save()}>
-                    保存
-                </Button>
+            closable={!saving}
+            footer={
+                <div className="flex justify-end gap-2">
+                    <Button disabled={saving} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="primary" loading={saving} onClick={() => void save()}>
+                        保存
+                    </Button>
+                </div>
             }
         >
-            <Form form={form} layout="vertical" requiredMark={false}>
+            <Form form={form} layout="vertical" requiredMark={false} className="admin-user-form-grid">
                 <Form.Item label="用户名">
                     <Input value={user ? `@${user.username}` : ""} disabled />
                 </Form.Item>
@@ -95,7 +101,7 @@ export function AdminUserEditDrawer({ user, actorId, groups, onClose, onSaved }:
                 <Form.Item name="email" label="邮箱" rules={[{ type: "email", message: "请输入有效邮箱" }]}>
                     <Input placeholder="name@example.com" />
                 </Form.Item>
-                <Form.Item name="password" label="重置密码" extra="留空表示不修改；保存后该用户已有登录会话会失效。" rules={[{ min: 8, message: "密码至少 8 位" }]}>
+                <Form.Item className="is-wide" name="password" label="重置密码" extra="留空表示不修改；保存后该用户已有登录会话会失效。" rules={[{ min: 8, message: "密码至少 8 位" }]}>
                     <Input.Password placeholder="输入新密码以手动重置" autoComplete="new-password" />
                 </Form.Item>
                 <Form.Item name="role" label="角色" extra={editingSelf ? "不能在此修改当前管理员自己的角色。" : "角色变更会立即影响后台访问权限。"}>
@@ -116,14 +122,14 @@ export function AdminUserEditDrawer({ user, actorId, groups, onClose, onSaved }:
                         ]}
                     />
                 </Form.Item>
-                <Form.Item name="userGroup" label="用户分组" extra="分组决定可见的系统渠道与模型、统一折扣和货币兑换比例；用户下次刷新工作台后生效。">
+                <Form.Item className="is-wide" name="userGroup" label="用户分组" extra="分组决定可见的系统渠道与模型、统一折扣和货币兑换比例；用户下次刷新工作台后生效。">
                     <Select options={userGroupOptions(groups)} />
                 </Form.Item>
-                <Form.Item name="isPromoter" label="推广人" valuePropName="checked" extra="推广中心设为「指定推广人」时，只有推广人能看到推广中心并获得返佣；全民推广时此标记不影响资格。">
+                <Form.Item className="is-wide" name="isPromoter" label="推广人" valuePropName="checked" extra="推广中心设为「指定推广人」时，只有推广人能看到推广中心并获得返佣；全民推广时此标记不影响资格。">
                     <Switch />
                 </Form.Item>
             </Form>
-        </Drawer>
+        </AdminModal>
     );
 }
 
@@ -137,7 +143,7 @@ type CreateUserFormValues = {
     userGroup: string;
 };
 
-export function AdminUserCreateDrawer({ open, groups, onClose, onCreated }: { open: boolean; groups: UserGroup[]; onClose: () => void; onCreated: (user: AdminUser) => void }) {
+export function AdminUserCreateModal({ open, groups, onClose, onCreated }: { open: boolean; groups: UserGroup[]; onClose: () => void; onCreated: (user: AdminUser) => void }) {
     const { message, modal } = App.useApp();
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm<CreateUserFormValues>();
@@ -189,20 +195,25 @@ export function AdminUserCreateDrawer({ open, groups, onClose, onCreated }: { op
     };
 
     return (
-        <Drawer
-            title={"\u6dfb\u52a0\u7528\u6237"}
+        <AdminModal
+            title="添加用户"
             open={open}
-            size="min(520px, 100vw)"
-            onClose={close}
+            width={640}
+            onCancel={close}
             mask={{ closable: !saving }}
-            destroyOnHidden
-            extra={
-                <Button type="primary" loading={saving} onClick={() => void save()}>
-                    {"\u4fdd\u5b58"}
-                </Button>
+            closable={!saving}
+            footer={
+                <div className="flex justify-end gap-2">
+                    <Button disabled={saving} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="primary" loading={saving} onClick={() => void save()}>
+                        创建用户
+                    </Button>
+                </div>
             }
         >
-            <Form form={form} layout="vertical" requiredMark={false}>
+            <Form form={form} layout="vertical" requiredMark={false} className="admin-user-form-grid">
                 <Form.Item name="username" label={"\u7528\u6237\u540d"} rules={[{ required: true, whitespace: true, message: "\u8bf7\u8f93\u5165\u7528\u6237\u540d" }]}>
                     <Input placeholder={"3-32 \u4f4d\u5b57\u6bcd\u3001\u6570\u5b57\u3001\u4e0b\u5212\u7ebf\u6216\u8fde\u5b57\u7b26"} />
                 </Form.Item>
@@ -235,6 +246,6 @@ export function AdminUserCreateDrawer({ open, groups, onClose, onCreated }: { op
                     <Select options={userGroupOptions(groups)} />
                 </Form.Item>
             </Form>
-        </Drawer>
+        </AdminModal>
     );
 }

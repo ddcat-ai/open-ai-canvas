@@ -78,11 +78,21 @@ func BibleSystemPrompt() string {
 	return "你是资深短剧总编剧与美术指导。你阅读网络小说，为改编竖屏短剧建立“作品圣经”。" + jsonOnly
 }
 
-// BiblePrompt 基于抽样后的全书文本建立角色、场景与整体风格。
-func BiblePrompt(title string, settings Settings, chapters []Chapter, maxChars int) string {
+// structuredSkillBlock 把写作技能交给输出 JSON 的步骤：技能决定取舍、粒度与写法，输出结构仍以本步骤的 JSON 为准，
+// 否则后续解析会失败。
+func structuredSkillBlock(step string, skill *WritingSkill) string {
+	if skill == nil || strings.TrimSpace(skill.Content) == "" {
+		return ""
+	}
+	return fmt.Sprintf("【写作技能：%s】\n下面是%s必须遵循的方法与标准（来自技能文件 %s）。按技能决定取舍、粒度与写法；输出仍然只能是下面要求的 JSON，字段名与结构不变，技能与 JSON 结构冲突时以 JSON 结构为准，技能里要求的其他输出格式不要输出。\n<skill>\n%s\n</skill>\n\n", skill.Name, step, skill.Path, truncateRunes(strings.TrimSpace(skill.Content), MaxWritingSkillRunes))
+}
+
+// BiblePrompt 基于抽样后的全书文本建立角色、场景与整体风格；skill 不为空时按技能的方法提取。
+func BiblePrompt(title string, settings Settings, chapters []Chapter, maxChars int, skill *WritingSkill) string {
 	settings = settings.Normalized()
 	var b strings.Builder
 	fmt.Fprintf(&b, "作品：%s\n画幅：%s\n视觉风格：%s\n对白语言：%s\n章节总数：%d\n\n", title, settings.AspectRatio, firstNonEmpty(settings.StylePrompt, "写实电影感"), settings.Language, len(chapters))
+	b.WriteString(structuredSkillBlock("提取角色、道具与场景", skill))
 	b.WriteString("请输出：\n")
 	b.WriteString(`{"logline":"一句话卖点","tone":"整体基调","visualRules":"统一的画面规则（色调/光线/服化道年代）",` +
 		`"characters":[{"name":"标准名","aliases":["别名/称呼"],"role":"主角/反派/配角","gender":"男/女","age":"年龄段",` +
@@ -209,6 +219,8 @@ type ScriptContext struct {
 	SourceChapters []Chapter
 	// SourceFormat 是本集素材类型，决定是改编、按剧本拆镜还是转录分镜。
 	SourceFormat string
+	// Skill 是分镜拆分的写作技能，为空按内置规则。
+	Skill *WritingSkill
 }
 
 func ScriptPrompt(ctx ScriptContext) string {
@@ -219,6 +231,7 @@ func ScriptPrompt(ctx ScriptContext) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "作品：%s\n第 %d 集《%s》\n画幅：%s · 单集约 %d 秒 · 对白语言：%s\n视觉风格：%s\n画面规则：%s\n\n", ctx.Title, ctx.EpisodeNumber, ctx.EpisodeTitle, settings.AspectRatio, settings.EpisodeSeconds, settings.Language, firstNonEmpty(settings.StylePrompt, "写实电影感"), firstNonEmpty(ctx.VisualRules, "保持全剧统一"))
 	fmt.Fprintf(&b, "本集大纲：%s\n开场钩子：%s\n结尾悬念：%s\n\n", firstNonEmpty(ctx.Synopsis, "以原文为准"), firstNonEmpty(ctx.Hook, "以原文为准"), firstNonEmpty(ctx.Cliffhanger, "以原文为准"))
+	b.WriteString(structuredSkillBlock("拆分镜头", ctx.Skill))
 	b.WriteString(sourceFormatRules(format))
 	b.WriteString("【角色表】（name 必须从这里选；新出现的人物用其原文称呼）\n" + firstNonEmpty(ctx.CastSummary, "无") + "\n")
 	b.WriteString("【道具表】（props 从这里选；新出现的关键道具用原文称呼）\n" + firstNonEmpty(ctx.PropSummary, "无") + "\n")

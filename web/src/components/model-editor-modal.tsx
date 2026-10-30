@@ -1,8 +1,7 @@
 import { Tabs } from "antd";
-import { AppModal } from "@/components/ui/product/app-modal";
-import type { ReactNode } from "react";
+import { AppModal, type AppModalProps } from "@/components/ui/product/app-modal";
+import type { ComponentType, ReactNode } from "react";
 import "./model-editor-modal.css";
-
 export function ModelEditorModal({
     title,
     subtitle,
@@ -13,7 +12,7 @@ export function ModelEditorModal({
     onTabChange,
     items,
     busy = false,
-    admin = false,
+    shell: Shell = AppModal,
     children,
 }: {
     title: string;
@@ -25,19 +24,19 @@ export function ModelEditorModal({
     onTabChange?: (key: string) => void;
     items?: Array<{ key: string; label: string; children: ReactNode }>;
     busy?: boolean;
-    admin?: boolean;
+    /** 弹窗外壳。管理后台传入 AdminModal，保持后台浮层与用户端产品壳隔离。 */
+    shell?: ComponentType<AppModalProps>;
     children?: ReactNode | ((tabs: ReactNode) => ReactNode);
 }) {
     const tabs = items?.length ? <Tabs activeKey={activeKey} onChange={onTabChange} animated={false} items={items.map((item) => ({ ...item, forceRender: true, children: <div className="model-editor-panel">{item.children}</div> }))} /> : null;
     const content = typeof children === "function" ? children(tabs) : children || tabs;
-
     return (
-        <AppModal
+        <Shell
             open={open}
             centered
             width={1120}
             destroyOnHidden
-            rootClassName={`${admin ? "admin-modal-root " : ""}model-editor-modal`}
+            rootClassName="model-editor-modal"
             title={
                 <div>
                     {title}
@@ -52,6 +51,6 @@ export function ModelEditorModal({
             flush styles={{ body: { minHeight: 0, flex: 1 }, header: { margin: 0 }, footer: { margin: 0 } }}
         >
             {content}
-        </AppModal>
+        </Shell>
     );
 }

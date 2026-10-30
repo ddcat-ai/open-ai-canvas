@@ -17,6 +17,8 @@ type Props = {
     aspectRatio: string;
     castById: Map<string, DramaCast>;
     defaultVideoModel: DramaModelChoice;
+    /** 作品指定的视频分辨率；批量换模型时给不出的置灰。 */
+    videoResolution?: string;
     busy: boolean;
     /** 剧情段弹窗打开时暂停分镜页快捷键，避免和弹窗内的输入冲突。 */
     keyboardEnabled: boolean;
@@ -220,7 +222,7 @@ const SegmentCard = memo(function SegmentCard({ segment, segmentShots, aspectRat
  * 完整内容在剧情段弹窗里。
  * 选择：单击聚焦，⌘/Ctrl 单击切换选择，Shift 单击连选；快捷键见底部提示。
  */
-export function Storyboard({ shots, segments, aspectRatio, castById, defaultVideoModel, busy, keyboardEnabled, onOpen, onGenerate, onReprocess, reprocessing, onWritePrompts, empty }: Props) {
+export function Storyboard({ shots, segments, aspectRatio, castById, defaultVideoModel, videoResolution, busy, keyboardEnabled, onOpen, onGenerate, onReprocess, reprocessing, onWritePrompts, empty }: Props) {
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [focused, setFocused] = useState<number>();
     const [anchor, setAnchor] = useState<number>();
@@ -360,7 +362,7 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
                     <>
                         <b className="text-[var(--fs-label)]">已选 {selected.size} 段</b>
                         <div className="drama-board-model">
-                            <DramaModelPicker capability="video" size="sm" value={batchModel || defaultVideoModel} onChange={setBatchModel} placeholder="视频模型" aspectRatio={aspectRatio} />
+                            <DramaModelPicker capability="video" size="sm" value={batchModel || defaultVideoModel} onChange={setBatchModel} placeholder="视频模型" aspectRatio={aspectRatio} videoResolution={videoResolution} />
                         </div>
                         <Tooltip title={toGenerate.length < selected.size ? `${selected.size - toGenerate.length} 段提示词未就绪或正在生成，会跳过` : undefined}>
                             <Button

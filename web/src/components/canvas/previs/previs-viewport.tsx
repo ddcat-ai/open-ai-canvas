@@ -76,7 +76,7 @@ import {
 import { PrevisViewToolbar } from "@/components/canvas/previs/previs-view-toolbar";
 import type { PrevisToolMode } from "@/lib/canvas/previs/previs-shortcuts";
 import { resolveMediaUrl } from "@/services/file-storage";
-import type { PrevisCamera, PrevisEnvironment, PrevisHumanoidBone, PrevisLight, PrevisMotionPath, PrevisObject, PrevisQuat, PrevisRenderMode, PrevisRig, PrevisScene, PrevisTransform, PrevisVec3 } from "@/types/previs";
+import type { PrevisAspectRatio, PrevisCamera, PrevisEnvironment, PrevisHumanoidBone, PrevisLight, PrevisMotionPath, PrevisObject, PrevisQuat, PrevisRenderMode, PrevisRig, PrevisScene, PrevisTransform, PrevisVec3 } from "@/types/previs";
 import { applyActorReferenceMaterial, applyPrevisBoneTracks, previsFingerGroup, inferPrevisRig, normalizeModel, readRigRestRotations, screenPixelsToWorldRadius, updateActorReferenceColor } from "./previs-viewport-rig";
 import { captureFrame, createPrevisShotSurface, recordCanvas, type PrevisCaptureOptions } from "./previs-viewport-capture";
 import { previsAspectValue, resolvePrevisSafeFrame } from "@/lib/canvas/previs/previs-optics";
@@ -341,7 +341,7 @@ export const PrevisViewport = forwardRef<PrevisViewportHandle, PrevisViewportPro
             </PrevisViewportErrorBoundary>
             {/* 取景切换是纯视口状态：放在 DOM 层，不随 Canvas 重建而丢失。 */}
             {onViewModeChange ? <PrevisViewToolbar viewMode={props.viewMode ?? PREVIS_DEFAULT_VIEW_MODE} onViewModeChange={onViewModeChange} /> : null}
-            {props.viewMode === "camera" ? <PrevisSafeFrameOverlay aspect={previsAspectValue(resolvePrevisActiveShot(props.scene)?.aspectRatio)} /> : null}
+            {props.viewMode === "camera" ? <PrevisSafeFrameOverlay aspectRatio={resolvePrevisActiveShot(props.scene)?.aspectRatio} /> : null}
             {showNavigation ? <PrevisNavigationToolbar navigation={navigation} /> : null}
             {capture.contextLost ? <PrevisViewportNotice title="3D 显示上下文已丢失" description="浏览器回收了 WebGL 上下文。等待自动恢复，或立即重建视口。" actionLabel="重建 3D 视口" onAction={retry} /> : null}
             {!capture.contextLost && showModelLoadNotice && failedIds.length ? (
@@ -566,10 +566,11 @@ function PrevisSceneContent({
     const [orthoCamera] = useState(() => new OrthographicCamera(-1, 1, 1, -1, 0.05, 500));
     // CAM 与正交轴向的取景解算都是纯函数：mode 不匹配时各自返回 null，互不冲突。
     // 活动相机不直接看 viewMode：CAM 取景失败必须回落 free，否则会露出从未写入的 camCamera。
-    const rawCamFraming = resolvePrevisViewFraming({ scene, mode: viewMode, playhead, cameraId: selectedCameraId });
     // CAM 视口满铺容器，但镜头画幅由安全框表达：按「安全框内正好是镜头取景」反推容器 fov。
-    const shotAspect = previsAspectValue(resolvePrevisActiveShot(scene)?.aspectRatio);
+    // 自适应画幅的镜头比例就是容器比例，安全框等于整个视口。
     const containerAspect = size.width / Math.max(size.height, 1);
+    const rawCamFraming = resolvePrevisViewFraming({ scene, mode: viewMode, playhead, cameraId: selectedCameraId, viewportAspect: containerAspect });
+    const shotAspect = previsAspectValue(resolvePrevisActiveShot(scene)?.aspectRatio, containerAspect);
     const camFraming = rawCamFraming
         ? { ...rawCamFraming, fov: resolvePrevisContainerFov(rawCamFraming.fov, shotAspect, containerAspect), far: scene.world ? Math.max(rawCamFraming.far, PREVIS_WORLD_CAMERA_FAR) : rawCamFraming.far }
         : null;
@@ -2722,7 +2723,7 @@ function resolvePrevisContainerFov(shotFov: number, shotAspect: number, containe
 }
 
 /** CAM 取景时的画幅安全框：框外压暗，框内即镜头成片。纯 DOM，不参与捕捉。 */
-function PrevisSafeFrameOverlay({ aspect }: { aspect: number }) {
+function PrevisSafeFrameOverlay({ aspectRatio }: { aspectRatio?: PrevisAspectRatio }) {
     const ref = useRef<HTMLDivElement>(null);
     const [box, setBox] = useState({ width: 0, height: 0 });
     useEffect(() => {
@@ -2732,7 +2733,7 @@ function PrevisSafeFrameOverlay({ aspect }: { aspect: number }) {
         observer.observe(element);
         return () => observer.disconnect();
     }, []);
-    const frame = resolvePrevisSafeFrame(box, aspect);
+    const frame = resolvePrevisSafeFrame(box, previsAspectValue(aspectRatio, box.width / Math.max(box.height, 1)));
     return (
         <div ref={ref} className="pv-safe-frame" aria-hidden>
             {box.width ? <div className="pv-safe-frame__window" style={{ left: frame.left, top: frame.top, width: frame.width, height: frame.height }} /> : null}

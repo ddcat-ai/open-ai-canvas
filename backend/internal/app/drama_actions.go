@@ -30,7 +30,10 @@ func (s *Service) UpdateDramaSettings(userID string, projectID string, req Updat
 		if problem := production.ValidateAssetPrompts(next.Assets); problem != "" {
 			return DramaSummary{}, BadAuthRequest(problem)
 		}
-		if _, err := s.dramaWritingSkill(userID, next.PromptSkill); err != nil {
+		if err := s.validateDramaSkills(userID, next); err != nil {
+			return DramaSummary{}, err
+		}
+		if err := s.validateDramaModelOverrides(userID, next.Models); err != nil {
 			return DramaSummary{}, err
 		}
 		// 画幅决定已生成画面的构图，制作开始后不允许修改。
@@ -628,7 +631,7 @@ func (s *Service) GenerateDramaSegments(userID, projectID, episodeID string, req
 		if err != nil {
 			return nil, err
 		}
-		if issue := profile.screen(settings.AspectRatio).Issue; issue != "" {
+		if issue := profile.screen(settings.AspectRatio, settings.VideoResolution).Issue; issue != "" {
 			return nil, BadAuthRequest(issue)
 		}
 		// 第 1 段总用参考图或文生视频；尾帧续接的后续段才需要图生视频。
@@ -672,7 +675,7 @@ func (s *Service) requireDramaModelOption(userID string, capability string, choi
 			return nil
 		}
 	}
-	return BadAuthRequest("所选视频模型不可用，请重新选择")
+	return BadAuthRequest("所选" + map[string]string{"text": "文本", "image": "图片", "video": "视频"}[capability] + "模型不可用，请重新选择")
 }
 
 func dramaSameChoice(a, b DramaModelChoice) bool {

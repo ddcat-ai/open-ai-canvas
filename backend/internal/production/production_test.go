@@ -73,7 +73,8 @@ func TestShotDurationFollowsDialogue(t *testing.T) {
 	if got := ShotDurationMs(0, ""); got != DefaultShotMs {
 		t.Fatalf("default duration, got %d", got)
 	}
-	if got := ShotDurationMs(40, ""); got != 6000 {
+	// 默认快节奏，单镜上限 4 秒。
+	if got := ShotDurationMs(40, ""); got != 4000 {
 		t.Fatalf("script hints are clamped to the pacing max, got %d", got)
 	}
 	// 台词比上限更长时以说完为准，不截断台词；仍受单镜绝对上限约束。
@@ -222,10 +223,10 @@ func TestSegmentVideoPrompt(t *testing.T) {
 		},
 	})
 	for _, want := range []string{
-		"严格从第2段视频末尾硬定格", "第3段视频《神丹入腹》", "11.5秒｜9:16｜国漫3D｜中文对白｜无字幕｜2个镜头",
+		"严格从第2段视频末尾的站位", "第3段视频《神丹入腹》", "11.5秒｜9:16｜国漫3D｜中文对白｜无字幕｜2个镜头",
 		"首帧即第2段视频最后一帧（随请求附带）", "陆沉（参考图1）：18岁少年", "演武台（参考图2）：汉白玉浮空台", "陆沉：低沉青年音",
-		"【00.00—05.50秒｜镜头一：特写·推】", "85mm特写，缓慢推近。", "二狗：“张嘴！”",
-		"【05.50—11.50秒｜镜头二：中景】", "本镜从黑场淡入。", "无台词。", "作为第4段的无缝接续基准",
+		"【00.00—05.50秒｜镜头一：特写·推】", "85mm特写，随情绪推近。", "二狗：“张嘴！”",
+		"【05.50—11.50秒｜镜头二：中景】", "本镜从黑场淡入。", "无台词。", "作为第4段的接续基准",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("segment prompt missing %q:\n%s", want, prompt)
@@ -243,7 +244,7 @@ func TestSegmentVideoPrompt(t *testing.T) {
 
 func TestSegmentPromptKeepsDialogueAndNativeVoice(t *testing.T) {
 	prompt := SegmentVideoPrompt(SegmentPromptInput{Index: 0, Count: 2, Language: "中文", Shots: []SegmentShot{{Speaker: "林逸", Dialogue: "我来守护你。", DurationMs: 5000}}, References: []SegmentReference{{Kind: "character", Name: "林逸", Voice: "少年低沉", Label: "参考图1"}}})
-	for _, text := range []string{"我来守护你。", "少年低沉", "口型与台词同步", "末1.0秒"} {
+	for _, text := range []string{"我来守护你。", "少年低沉", "口型与台词同步", "末0.5秒"} {
 		if !strings.Contains(prompt, text) {
 			t.Fatalf("missing %s: %s", text, prompt)
 		}

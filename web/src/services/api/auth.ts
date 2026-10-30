@@ -43,6 +43,9 @@ export type LocalUser = {
 export type AdminUser = LocalUser & {
     availableMicrocredits: number;
     reservedMicrocredits: number;
+    /** 仅用户列表返回：累计充值到账积分与累计已结算消耗。 */
+    rechargedMicrocredits?: number;
+    consumedMicrocredits?: number;
 };
 
 export type AuthSessionPayload = {
@@ -75,7 +78,10 @@ export type ApiCallLog = {
     mediaStage?: GenerationTask["mediaStage"];
     billingOrderId?: string;
     billingStatus?: BillingOrder["status"];
-    billingAmountMicrocredits: number;
+    /** 订单预授权额；与实收分列，未结算时不能当成扣费额。 */
+    billingReservedMicrocredits: number;
+    /** 仅已结算订单返回实收。 */
+    billingSettledMicrocredits?: number;
     billingAvailable: boolean;
     source: string;
     capability: "text" | "image" | "video" | "audio" | "";
@@ -202,18 +208,18 @@ export type AdminAnalytics = {
         p95DurationMs: number;
         currentQueuedTasks: number;
         totalBalanceMicrocredits?: number;
-        totalConsumedMicrocredits?: number;
         finance?: AnalyticsFinance | null;
     };
-    trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number; consumedMicrocredits?: number }>;
+    /** 成功率为 null 表示当天没有已完成的请求，不是 0%。consumedMicrocredits 为已结算订单实收。 */
+    trend: Array<{ day: string; tasks: number; requests: number; activeUsers: number; requestSuccessRate: number | null; consumedMicrocredits: number }>;
     models: Array<{
         model: string;
         capability: string;
         tasks: number;
         requests: number;
         uniqueUsers: number;
-        taskSuccessRate: number;
-        requestSuccessRate: number;
+        taskSuccessRate: number | null;
+        requestSuccessRate: number | null;
         p50DurationMs: number;
         p95DurationMs: number;
         inputTokens: number;
@@ -636,7 +642,8 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
+export type AdminApiLogParams = AdminListParams &
+    Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });

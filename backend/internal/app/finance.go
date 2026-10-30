@@ -310,6 +310,21 @@ func (s *Service) AdminBillingOrderPage(actor *model.User, query AdminListQuery)
 	if err != nil {
 		return nil, err
 	}
+	// 用户名随当前页按 ID 批量读取；不能依赖只含最近注册用户的 /admin/references。
+	userIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		userIDs = append(userIDs, item.UserID)
+	}
+	users, err := s.repo.UsersByIDs(uniqueNonEmpty(userIDs))
+	if err != nil {
+		return nil, err
+	}
+	for index := range items {
+		if user, exists := users[items[index].UserID]; exists {
+			items[index].UserDisplayName = user.DisplayName
+			items[index].UserAccount = user.Username
+		}
+	}
 	return &BillingOrderPage{Orders: items, Total: total, Page: page, Limit: limit}, nil
 }
 

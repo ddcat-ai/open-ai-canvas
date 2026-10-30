@@ -18,7 +18,7 @@ import {
 } from "@/types/previs";
 import { type PrevisModeCapabilities } from "@/lib/canvas/previs/previs-modes";
 import { PREVIS_ACTOR_ARCHETYPES, PREVIS_ACTOR_COLORS, previsActorArchetypeLabel, previsActorProfileForArchetype, previsBoneLabel, previsPoseLabel } from "@/lib/canvas/previs/previs-scene";
-import { previsHorizontalFov } from "@/lib/canvas/previs/previs-optics";
+import { PREVIS_ASPECT_RATIOS, previsAspectOption, previsHorizontalFov } from "@/lib/canvas/previs/previs-optics";
 import { Button, ColorPicker, Dropdown, Input, InputNumber, type MenuProps, Slider } from "antd";
 import { Select } from "@/components/ui/base/select";
 import { Switch } from "@/components/ui/base/switch";
@@ -605,8 +605,8 @@ export function ShotInspector({
                         <Select
                             className="w-full"
                             size="small"
-                            value={shot.aspectRatio || "9:16"}
-                            options={["9:16", "16:9", "2.39:1"].map((value) => ({ label: value, value }))}
+                            value={previsAspectOption(shot.aspectRatio).value}
+                            options={PREVIS_ASPECT_RATIOS.map((item) => ({ label: item.label, value: item.value }))}
                             onChange={(aspectRatio: PrevisAspectRatio) => onUpdateShot({ aspectRatio })}
                         />
                     </Field>

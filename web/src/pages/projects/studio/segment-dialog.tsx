@@ -58,6 +58,8 @@ type Props = {
     reprocessing: boolean;
     onReprocess: (segment: DramaSegment) => void;
     defaultVideoModel: DramaModelChoice;
+    /** 作品指定的视频分辨率；换模型时给不出的置灰。 */
+    videoResolution?: string;
     onOpenCast: (castId: string) => void;
     /** 把本段投送到精修画布（已投送则定位），在画布上换首尾帧、延长或重新生成后采用回来。 */
     onOpenCanvas: (segment: DramaSegment) => void;
@@ -79,6 +81,7 @@ export function SegmentDialog({
     writing,
     reprocessing,
     defaultVideoModel,
+    videoResolution,
     onClose,
     onNavigate,
     onPatchShot,
@@ -145,6 +148,7 @@ export function SegmentDialog({
                                 busy={busy}
                                 writing={writing}
                                 defaultVideoModel={defaultVideoModel}
+                                videoResolution={videoResolution}
                                 onGenerate={(model) => onGenerate(segment, model)}
                                 onWritePrompt={() => onWritePrompt(segment)}
                             />
@@ -230,6 +234,7 @@ function SegmentToolbar({
     busy,
     writing,
     defaultVideoModel,
+    videoResolution,
     onGenerate,
     onWritePrompt,
 }: {
@@ -238,6 +243,7 @@ function SegmentToolbar({
     busy: boolean;
     writing: boolean;
     defaultVideoModel: DramaModelChoice;
+    videoResolution?: string;
     onGenerate: (model?: DramaModelChoice) => void;
     onWritePrompt: () => void;
 }) {
@@ -260,7 +266,7 @@ function SegmentToolbar({
     return (
         <section className="drama-sdx-toolbar" aria-label="生成设置">
             <div className="drama-sdx-toolbar-row">
-                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} />
+                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} videoResolution={videoResolution} />
                 <Tooltip title={segment.request.maxVideoSeconds ? `按本段镜头时长生成；模型单次最长 ${segment.request.maxVideoSeconds} 秒` : "按本段镜头时长生成"}>
                     <span className="drama-sdx-chip">{segment.request.seconds ? `${segment.request.seconds}s` : secondsLabel(segment.durationMs)}</span>
                 </Tooltip>
@@ -500,7 +506,11 @@ function SegmentReceipt({ segment }: { segment: DramaSegment }) {
     // 读到视频模型能力时才有画面与声音参数（aspectRatio 与它们一起填写）。
     const outputRows: ReceiptRow[] = request.aspectRatio
         ? [
-              { tone: request.size || request.resolution ? "ok" : "warn", label: "画面", value: request.resolution ? `${request.aspectRatio}（按 ${request.resolution} 出片）` : request.size ? request.aspectRatio : `${request.aspectRatio}（所选模型给不出这个画幅）` },
+              {
+                  tone: request.size || request.resolution ? "ok" : "warn",
+                  label: "画面",
+                  value: request.resolution ? `${request.aspectRatio}（按 ${request.resolution} 出片）` : request.size ? request.aspectRatio : `${request.aspectRatio}（所选模型给不出这个画幅）`,
+              },
               { tone: request.generateAudio ? "ok" : "warn", label: "声音", value: request.generateAudio ? "模型同步生成对白与音效" : "所选模型不出声，本段视频没有对白与音效" },
           ]
         : [];
@@ -708,6 +718,9 @@ function SegmentPrompt({ segment, castById, writing, onSave, onWrite }: { segmen
         [castById, request.references],
     );
     const usage = useMemo(() => referenceUsage(draft, request.references.length), [draft, request.references.length]);
+    // 与服务端一致按字符（码点）计：参考图说明 + 空行 + 正文。
+    const sentChars = Array.from([request.header, draft.trim()].filter(Boolean).join("\n\n")).length;
+    const overLimit = Boolean(request.promptMaxChars && sentChars > request.promptMaxChars);
     const unmentioned = request.references.filter((_, index) => !usage.used.has(index + 1));
     const commit = () => {
         const next = draft.trim();
@@ -809,9 +822,18 @@ function SegmentPrompt({ segment, castById, writing, onSave, onWrite }: { segmen
             ) : draft && unmentioned.length ? (
                 <p className="drama-sg-note">正文还没有引用 {unmentioned.map((ref) => `${ref.label}（${ref.name}）`).join("、")}；参考图仍会随请求发送，在正文里写明谁是谁，视频模型才不会认错。</p>
             ) : null}
+            {overLimit ? (
+                <p className="drama-sg-note is-error" role="alert">
+                    连同开头的参考图说明共 {sentChars} 个字符，超过视频模型上限 {request.promptMaxChars} 个字符。
+                    {segment.custom ? "手动改写的版本需要精简后才能生成视频。" : "生成视频时会按上限自动重新撰写，不会截断。"}
+                </p>
+            ) : null}
             <div className="drama-sd-pane-foot">
                 {dirty ? <span className="is-dirty">未保存 · 失焦或 ⌘↵ 保存，Esc 放弃</span> : <span>直接修改正文，失焦自动保存</span>}
-                <span>{draft.length} 字</span>
+                <span className={overLimit ? "is-over" : undefined} title="与视频模型校验口径一致：开头的参考图说明 + 正文">
+                    发送全文 {sentChars}
+                    {request.promptMaxChars ? ` / ${request.promptMaxChars}` : ""} 字
+                </span>
             </div>
         </section>
     );

@@ -7,6 +7,7 @@ import { Color, Object3D, type PerspectiveCamera } from "three";
 
 import { PrevisLayoutVisual, PrevisPropVisual } from "./previs-prop-view";
 import { usePrevisPropThumbnails } from "./previs-prop-thumbnails";
+import { usePrevisActorThumbnails } from "./use-previs-actor-thumbnails";
 import { formatPrevisSize, PREVIS_LAYOUT_TEMPLATES, PREVIS_PROP_CATALOG, PREVIS_PROP_CATEGORIES, resolvePrevisPropSize, type PrevisCatalogProp, type PrevisLayoutTemplateInfo, type PrevisPropCategoryId } from "@/lib/canvas/previs/previs-prop-catalog";
 import { expandPrevisArray, previsArrayDefaultSpacing, PREVIS_ARRAY_PATTERNS, type PrevisArrayPattern, type PrevisArraySpec } from "@/lib/canvas/previs/previs-array";
 import { PrevisPropParamFields } from "./previs-world-panel";
@@ -99,6 +100,7 @@ export function PrevisAddDialog({
     const [lightPreset, setLightPreset] = useState<PrevisLightPreset>(PREVIS_LIGHT_PRESETS[0]);
     const [cameraPreset, setCameraPreset] = useState<PrevisCameraPreset>(PREVIS_CAMERA_PRESETS[1]);
     const [currentView, setCurrentView] = useState<PrevisTransform | null>(null);
+    const actorThumbnails = usePrevisActorThumbnails(open && kind === "actor");
 
     useEffect(() => {
         if (!open) return;
@@ -159,7 +161,15 @@ export function PrevisAddDialog({
                             <>
                                 <OptionGrid>
                                     {PREVIS_ACTOR_TEMPLATES.map((template) => (
-                                        <OptionCard key={template.id} active={actorTemplate.id === template.id} title={template.label} hint={template.hint} onClick={() => setActorTemplate(template)} />
+                                        <OptionCard
+                                            key={template.id}
+                                            variant="figure"
+                                            active={actorTemplate.id === template.id}
+                                            title={template.label}
+                                            hint={template.hint}
+                                            thumb={actorThumbnails[template.id] ? <img src={actorThumbnails[template.id]} alt="" draggable={false} /> : <UserRound className="previs-add-dialog__card-placeholder" />}
+                                            onClick={() => setActorTemplate(template)}
+                                        />
                                     ))}
                                 </OptionGrid>
                                 <OptionSection title="颜色">
@@ -343,9 +353,26 @@ function OptionSection({ title, children }: { title: string; children: React.Rea
     );
 }
 
-function OptionCard({ active, title, hint, thumb, swatch, onClick }: { active: boolean; title: string; hint?: string; thumb?: React.ReactNode; swatch?: string; onClick: () => void }) {
+function OptionCard({
+    active,
+    title,
+    hint,
+    thumb,
+    swatch,
+    variant,
+    onClick,
+}: {
+    active: boolean;
+    title: string;
+    hint?: string;
+    thumb?: React.ReactNode;
+    swatch?: string;
+    /** figure：左侧竖版人物缩略图，右侧标题与说明。 */
+    variant?: "figure";
+    onClick: () => void;
+}) {
     return (
-        <button type="button" className={`previs-add-dialog__card ${active ? "is-active" : ""}`} aria-pressed={active} onClick={onClick}>
+        <button type="button" className={`previs-add-dialog__card ${variant ? `previs-add-dialog__card--${variant}` : ""} ${active ? "is-active" : ""}`} aria-pressed={active} onClick={onClick}>
             {thumb ? <span className="previs-add-dialog__card-thumb">{thumb}</span> : null}
             <span className="previs-add-dialog__card-title">
                 {swatch ? <span className="previs-add-dialog__card-swatch" style={{ background: swatch }} /> : null}

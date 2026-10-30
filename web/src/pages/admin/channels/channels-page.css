@@ -443,3 +443,103 @@
         padding: 12px;
     }
 }
+
+/* 模型稳定性单元：成功率 + 最近 10 次结果，与用户端可用率同一口径但不设最少样本门槛。 */
+.admin-model-health {
+    display: inline-flex;
+    min-width: 108px;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 6px;
+    outline: none;
+}
+
+.admin-model-health:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+.admin-model-health-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.admin-model-health-head strong {
+    color: var(--admin-text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-model-health[data-tone="success"] .admin-model-health-head strong {
+    color: var(--admin-status-success);
+}
+
+.admin-model-health[data-tone="warning"] .admin-model-health-head strong {
+    color: var(--admin-status-warning);
+}
+
+.admin-model-health[data-tone="error"] .admin-model-health-head strong {
+    color: var(--admin-status-error);
+}
+
+.admin-model-health-head span {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-model-health-track {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 2px;
+}
+
+.admin-model-health-pill {
+    height: 6px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--admin-text-muted) 22%, transparent);
+}
+
+.admin-model-health-pill.is-success {
+    background: var(--admin-status-success);
+}
+
+.admin-model-health-pill.is-failed {
+    background: var(--admin-status-error);
+}
+
+/* 渠道列表中的 24 小时成功率徽标。 */
+.admin-channel-item-health {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-channel-item-health[data-tone="success"] {
+    color: var(--admin-status-success);
+}
+
+.admin-channel-item-health[data-tone="warning"] {
+    color: var(--admin-status-warning);
+}
+
+.admin-channel-item-health[data-tone="error"] {
+    color: var(--admin-status-error);
+}
+
+/* 渠道与模型页的视图切换：按渠道管理 / 跨渠道查全部模型。 */
+.admin-channel-view-switch.ant-segmented {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    margin-bottom: 12px;
+}
+
+.admin-all-models {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
