@@ -125,15 +125,20 @@ func cloudAgentPrevisSceneRead(repo *repository.Repository, userID, canvasID str
 		projection["spatialLayout"] = cloudAgentPrevisSpatialLayout(scene)
 		projection["coordinateGuide"] = "坐标系: Y轴向上，单位为米，地面 Y=0。人物高约1.8m。position=[X,Y,Z]，rotation=[绕X,绕Y,绕Z弧度]。target是摄影机焦点坐标。路径点与参考轨迹的 Y 是离地高度。"
 	}
-	return map[string]any{
+	result := map[string]any{
 		"canvasId":           canvasID,
 		"scene":              projection,
 		"snapshotHash":       creationHash(scene),
 		"canvasSnapshotHash": cloudAgentCanvasHash(doc),
 		"revision":           canvas.Revision,
 		"catalog":            cloudAgentPrevisCatalogGuide(),
-		"guidance":           "安全摘要。修改用 previs_apply_patch；预演用 previs_preview；布局规划用 includeTransforms=true 获取精确坐标。snapshotHash 只代表该场景。",
-	}, nil
+		"guidance":           "安全摘要。修改用 previs_apply_patch；预演用 previs_preview；布局规划用 includeTransforms=true 获取精确坐标。设计运镜前读 manual=shots。snapshotHash 只代表该场景。",
+	}
+	if reviews := cloudAgentPrevisShotReviews(scene); len(reviews) > 0 {
+		result["review"] = reviews
+		result["reviewGuide"] = cloudAgentPrevisReviewGuide
+	}
+	return result, nil
 }
 
 // previsMapSafe safely casts a value to map[string]any, returning an empty map on failure.
@@ -291,6 +296,14 @@ func cloudAgentPrevisPreview(repo *repository.Repository, userID, canvasID strin
 	}, nil
 }
 
+// cloudAgentPrevisShotAspectRatio 返回镜头画幅；未设置时与前端一致按 9:16 竖屏。
+func cloudAgentPrevisShotAspectRatio(shot map[string]any) string {
+	if aspect := stringValue(shot["aspectRatio"]); aspect != "" {
+		return aspect
+	}
+	return "9:16"
+}
+
 func findPrevisScene(scenes []map[string]any, id string) (map[string]any, bool) {
 	for _, scene := range scenes {
 		if stringValue(scene["id"]) == id {
@@ -316,13 +329,14 @@ func projectPrevisScene(scene map[string]any, shotID string, objectIDs map[strin
 			continue
 		}
 		shots = append(shots, map[string]any{
-			"id":         stringValue(shot["id"]),
-			"name":       truncateRunes(stringValue(shot["name"]), 160),
-			"cameraId":   stringValue(shot["cameraId"]),
-			"duration":   numberValue(shot["duration"], 5),
-			"fps":        int(numberValue(shot["fps"], 24)),
-			"shotSize":   stringValue(shot["shotSize"]),
-			"cameraMove": stringValue(shot["cameraMove"]),
+			"id":          stringValue(shot["id"]),
+			"name":        truncateRunes(stringValue(shot["name"]), 160),
+			"cameraId":    stringValue(shot["cameraId"]),
+			"duration":    numberValue(shot["duration"], 5),
+			"fps":         int(numberValue(shot["fps"], 24)),
+			"shotSize":    stringValue(shot["shotSize"]),
+			"aspectRatio": cloudAgentPrevisShotAspectRatio(shot),
+			"cameraMove":  stringValue(shot["cameraMove"]),
 		})
 	}
 	objects := make([]map[string]any, 0)

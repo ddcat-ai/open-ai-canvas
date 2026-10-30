@@ -32,6 +32,9 @@ const cloudAgentPrevisMaxCameraMoves = 24
 
 var cloudAgentPrevisCameraFollowSides = []string{"behind", "front", "left", "right", "above", "shoulder", "pov"}
 
+// 跟拍景别：按焦段与画幅换算距离、注视高度与机位高度，只对 behind/front/left/right 生效；与前端 PREVIS_CAMERA_FOLLOW_SHOT_SIZES 同序。
+var cloudAgentPrevisCameraFollowShotSizes = []string{"extreme_close_up", "close_up", "medium", "full", "wide", "extreme_wide"}
+
 var cloudAgentPrevisCameraTechniques = []cloudAgentPrevisCameraTechnique{
 	{ID: "push_in", Name: "推镜头", Subject: "none", Params: []cloudAgentPrevisCameraParam{{Key: "distance", Min: 0.1, Max: 200}}},
 	{ID: "pull_out", Name: "拉镜头", Subject: "none", Params: []cloudAgentPrevisCameraParam{{Key: "distance", Min: 0.1, Max: 200}}},
@@ -54,7 +57,7 @@ var cloudAgentPrevisCameraTechniques = []cloudAgentPrevisCameraTechnique{
 	{ID: "crane_down", Name: "摇臂降（distance=同时前推）", Subject: "none", Params: []cloudAgentPrevisCameraParam{{Key: "height", Min: 0.2, Max: 100}, {Key: "distance", Min: 0, Max: 200}}},
 	{ID: "orbit_left", Name: "左环绕", Subject: "optional", Params: []cloudAgentPrevisCameraParam{{Key: "angle", Min: 5, Max: 720}, {Key: "rise", Min: -50, Max: 50}, {Key: "aim", Min: 0, Max: 20}}},
 	{ID: "orbit_right", Name: "右环绕", Subject: "optional", Params: []cloudAgentPrevisCameraParam{{Key: "angle", Min: 5, Max: 720}, {Key: "rise", Min: -50, Max: 50}, {Key: "aim", Min: 0, Max: 20}}},
-	{ID: "follow", Name: "跟拍（随演员移动，飞行/御剑时一起升空）", Subject: "required", Params: []cloudAgentPrevisCameraParam{{Key: "side", Options: cloudAgentPrevisCameraFollowSides}, {Key: "distance", Min: 0, Max: 60}, {Key: "height", Min: -5, Max: 100}, {Key: "lag", Min: 0, Max: 2}, {Key: "aim", Min: 0, Max: 20}}},
+	{ID: "follow", Name: "跟拍（随演员移动，飞行/御剑时一起升空；shotSize 按景别取距离，换 side/shotSize 时用 blend 秒绕主体过渡）", Subject: "required", Params: []cloudAgentPrevisCameraParam{{Key: "side", Options: cloudAgentPrevisCameraFollowSides}, {Key: "shotSize", Options: cloudAgentPrevisCameraFollowShotSizes}, {Key: "distance", Min: 0, Max: 60}, {Key: "height", Min: -5, Max: 100}, {Key: "lag", Min: 0, Max: 2}, {Key: "blend", Min: 0, Max: 10}, {Key: "aim", Min: 0, Max: 20}}},
 	{ID: "look_at", Name: "跟摇（机位不动盯住主体）", Subject: "required", Params: []cloudAgentPrevisCameraParam{{Key: "aim", Min: 0, Max: 20}}},
 	{ID: "handheld", Name: "手持晃动（叠加层）", Subject: "none", Layer: true, Params: []cloudAgentPrevisCameraParam{{Key: "intensity", Min: 0.1, Max: 3}}},
 	{ID: "shake", Name: "冲击震动（叠加层）", Subject: "none", Layer: true, Duration: 0.6, Params: []cloudAgentPrevisCameraParam{{Key: "intensity", Min: 0.1, Max: 3}}},
@@ -157,6 +160,9 @@ func cloudAgentPrevisApplyCameraMove(scene map[string]any, camera map[string]any
 		return fmt.Sprintf("删除摄影机《%s》的一段运镜", cameraName), nil
 	}
 
+	if strings.TrimSpace(operation.Recipe) != "" {
+		return cloudAgentPrevisApplyCameraRecipe(scene, camera, operation)
+	}
 	technique, ok := cloudAgentPrevisFindCameraTechnique(strings.TrimSpace(operation.Technique))
 	if !ok {
 		return "", BadAuthRequest(fmt.Sprintf("运镜手法 %q 不受支持；先读 previs_scene_read 的 catalog.cameraMoves", operation.Technique))
@@ -391,8 +397,5 @@ func cloudAgentPrevisCameraMovesGuide() string {
 	return strings.Join(parts, "；")
 }
 
-// cloudAgentPrevisCameraRecipesGuide 是大师手法的组合配方，与前端 PREVIS_CAMERA_RECIPES 同名。
-const cloudAgentPrevisCameraRecipesGuide = "希区柯克眩晕=dolly_zoom_out(subjectId=人物)；斯皮尔伯格情绪推镜=push_in 4-6 秒慢推到人物；迈克尔·贝英雄环绕=低机位 orbit_right angle=180 subjectId；诺兰航拍拉升=crane_up height=12 distance=16；王家卫贴身手持=follow side=behind distance=2.2 lag=0.12 叠加 handheld intensity=1.6；库布里克一点透视跟拍=follow side=behind distance=5，人物居中对称；黑泽明侧面平移=follow side=left distance=6；韦斯·安德森横移甩镜=truck_right 后接结尾 0.5 秒 whip_pan_right；御剑跟拍=先 actor_travel sword_fly，再 follow side=behind distance=6 lag=0.35，后半段叠加 orbit_left angle=120 subjectId；螺旋升镜=orbit_left angle=360 rise=4；港式急推=zoom_in duration=0.4 easing=linear；冲击震屏=shake 0.6 秒。"
-
 // cloudAgentPrevisCameraRules 写进 catalog.rules：运镜叠加语义与常见误用。
-const cloudAgentPrevisCameraRules = "运镜用 camera_move：id=摄影机 ID，technique 见 cameraMoves，time 起始秒，duration 用时（省略到镜头结束），easing 运动规律（linear 匀速/ease_in 加速/ease_out 减速/smooth 缓入缓出，默认 smooth），subjectId=跟拍、环绕、注视的演员或物体，params 见各手法（省略即自动：推镜按距离比例、跟拍按方位）。多段按开始时间叠加：后一段从前一段结束的机位继续，同时生效的段会组合（环绕+升高=螺旋）；handheld/shake 是叠加层，可与任何运镜重叠。跟拍会随 actor_travel 的飞行、御剑高度一起升空；follow 的 side：behind 后方、front 倒退前跟、left/right 人物侧面、above 俯拍、shoulder 过肩、pov 主观。重做运镜先 camera_move_remove（不给 keyframeId 即清空），只改一段用 keyframeId 传运镜 id 覆盖。不要再用 camera_keyframe_upsert 手算推拉摇移。"
+const cloudAgentPrevisCameraRules = "运镜用 camera_move：id=摄影机 ID，technique 见 cameraMoves，或 recipe 见 cameraRecipes（一次写入整套多段运镜，二选一），time 起始秒，duration 用时（省略到镜头结束），easing 运动规律（linear 匀速/ease_in 加速/ease_out 减速/smooth 缓入缓出，默认 smooth），subjectId=跟拍、环绕、注视的演员或物体，params 见各手法（省略时取默认值，默认值只保证能看，不保证好看；按镜头设计写明距离、角度、景别）。多段按开始时间叠加：后一段从前一段结束的机位继续，同时生效的段会组合（环绕+升高=螺旋）；handheld/shake 是叠加层，可与任何运镜重叠。跟拍会随 actor_travel 的飞行、御剑高度一起升空；follow 的 side：behind 后方、front 倒退前跟、left/right 人物侧面、above 俯拍、shoulder 过肩、pov 主观；shotSize 按景别与焦段算距离和注视高度（extreme_close_up 面部大特写、close_up 肩部以上…），给了 distance 时以 distance 为准；后一段 follow 换方位或景别时给 blend（秒）让机位绕着人物过渡，不给时约 0.6 秒内甩过去。镜头设计与节拍见 manual=shots。重做运镜先 camera_move_remove（不给 keyframeId 即清空），只改一段用 keyframeId 传运镜 id 覆盖。不要再用 camera_keyframe_upsert 手算推拉摇移。"

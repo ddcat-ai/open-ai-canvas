@@ -115,7 +115,7 @@ func cloudAgentPrevisCatalogGuide() map[string]any {
 		"layouts":       strings.Join(layouts, "；"),
 		"params":        cloudAgentPrevisParamsGuide(),
 		"cameraMoves":   cloudAgentPrevisCameraMovesGuide(),
-		"cameraRecipes": cloudAgentPrevisCameraRecipesGuide,
+		"cameraRecipes": cloudAgentPrevisCameraRecipesGuide(),
 		"rules":         "实物一律 kind=prop+propId，原点在底面中心、y=0 贴地，不要用 box/cylinder 拼。数量明确的建筑/树/车用参数化组件（params 定层数、尺寸、风格）配 object_array_add（count+pattern+spacing+vary），例如三栋 12 层玻璃楼：propId=building,count=3,params={floors:12,style:glass}。成片街区、城镇、园林、森林用一个 kind=layout。外景先 world_update 设置时间、天气、远景。人物 A→B 移动用 actor_travel（travelStyle=walk/run/dash/jump/fly/sword_fly/float/teleport，time 起始秒，duration 用时，fromMarker/toMarker 为 scene.markers 的标签，如 A、B；没给起点则从演员当前位置出发），飞行类可给 height 米。不要用 actor_motion_add run 代替位移：那是原地动作。" + cloudAgentPrevisPathRules + cloudAgentPrevisCameraRules,
 	}
 }

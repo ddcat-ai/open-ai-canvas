@@ -83,6 +83,7 @@ type cloudAgentPrevisPatchOperation struct {
 	Duration    *float64 `json:"duration"`
 	FPS         *int     `json:"fps"`
 	ShotSize    string   `json:"shotSize"`
+	AspectRatio string   `json:"aspectRatio"`
 	CameraMove  string   `json:"cameraMove"`
 	Prompt      *string  `json:"prompt"`
 	FocalLength *float64 `json:"focalLength"`
@@ -124,7 +125,9 @@ type cloudAgentPrevisPatchOperation struct {
 	Height      *float64 `json:"height"`
 
 	// camera_move：运镜手法与跟拍 / 环绕主体；参数走 params，白名单见 cloud_agent_previs_camera.go。
+	// recipe 与 technique 二选一：按大师手法表一次展开成多段运镜，见 cloud_agent_previs_camera_recipes.go。
 	Technique string  `json:"technique"`
+	Recipe    string  `json:"recipe"`
 	SubjectID *string `json:"subjectId"`
 
 	// world_update：时间、天气、远景、地面范围；worldEnabled=false 关闭世界环境。
@@ -201,6 +204,7 @@ func cloudAgentPrevisPatchOperationSchema() map[string]any {
 		"duration":             map[string]any{"type": "number", "minimum": 0.1, "maximum": 60},
 		"fps":                  map[string]any{"type": "integer", "minimum": 1, "maximum": 60},
 		"shotSize":             map[string]any{"type": "string", "enum": []string{"extreme_wide", "wide", "full", "medium", "close_up", "extreme_close_up"}},
+		"aspectRatio":          map[string]any{"type": "string", "enum": cloudAgentPrevisAspectRatios},
 		"cameraMove":           map[string]any{"type": "string", "enum": []string{"static", "push_in", "pull_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "orbit_left", "orbit_right", "handheld"}},
 		"prompt":               map[string]any{"type": "string", "maxLength": 2000},
 		"focalLength":          map[string]any{"type": "number", "minimum": 1, "maximum": 300},
@@ -238,6 +242,7 @@ func cloudAgentPrevisPatchOperationSchema() map[string]any {
 		"toMarker":             map[string]any{"type": "string", "maxLength": 8},
 		"height":               map[string]any{"type": "number", "minimum": 0, "maximum": 50},
 		"technique":            map[string]any{"type": "string", "maxLength": 24},
+		"recipe":               map[string]any{"type": "string", "maxLength": 32},
 		"subjectId":            map[string]any{"type": "string", "maxLength": 80},
 		"pathId":               map[string]any{"type": "string", "maxLength": 80},
 	}
@@ -715,6 +720,11 @@ func cloudAgentPrevisValidateScene(scene map[string]any) error {
 		}
 		if err := cloudAgentPrevisValidateText(stringValue(shot["prompt"]), "导演镜头提示词", 2000, false); err != nil {
 			return err
+		}
+		if aspect, ok := shot["aspectRatio"]; ok && aspect != nil {
+			if err := cloudAgentPrevisValidateEnum(stringValue(aspect), "导演镜头画幅", cloudAgentPrevisAspectRatios...); err != nil {
+				return err
+			}
 		}
 	}
 	for _, light := range creationMaps(scene["lights"]) {
@@ -1870,6 +1880,12 @@ func cloudAgentPrevisApplyPatchOperation(scene map[string]any, operation cloudAg
 			return cloudAgentApprovalPreviewItem{}, err
 		}
 		shot := map[string]any{"id": operation.ID, "name": name, "cameraId": cameraID, "duration": duration, "fps": fps, "shotSize": shotSize, "cameraMove": cameraMove, "prompt": "", "cuts": []any{}}
+		if operation.AspectRatio != "" {
+			if err := cloudAgentPrevisValidateEnum(operation.AspectRatio, "镜头画幅 aspectRatio", cloudAgentPrevisAspectRatios...); err != nil {
+				return cloudAgentApprovalPreviewItem{}, err
+			}
+			shot["aspectRatio"] = operation.AspectRatio
+		}
 		if operation.Prompt != nil {
 			if err := cloudAgentPrevisValidateText(*operation.Prompt, "镜头提示词", 2000, false); err != nil {
 				return cloudAgentApprovalPreviewItem{}, err
@@ -1931,6 +1947,12 @@ func cloudAgentPrevisApplyPatchOperation(scene map[string]any, operation cloudAg
 				return cloudAgentApprovalPreviewItem{}, err
 			}
 			shot["shotSize"] = operation.ShotSize
+		}
+		if operation.AspectRatio != "" {
+			if err := cloudAgentPrevisValidateEnum(operation.AspectRatio, "镜头画幅 aspectRatio", cloudAgentPrevisAspectRatios...); err != nil {
+				return cloudAgentApprovalPreviewItem{}, err
+			}
+			shot["aspectRatio"] = operation.AspectRatio
 		}
 		if operation.CameraMove != "" {
 			if err := cloudAgentPrevisValidateEnum(operation.CameraMove, "镜头运镜", "static", "push_in", "pull_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "orbit_left", "orbit_right", "handheld"); err != nil {
@@ -2206,8 +2228,10 @@ func applyCloudAgentPrevisMutation(repo *repository.Repository, userID, canvasID
 	appliedPreview := cloudAgentCanvasAppliedPreview(plan.Preview)
 	afterCanvasHash := cloudAgentCanvasHash(plan.Document)
 	afterSceneHash := plan.ResultSnapshotHash
+	var reviews []map[string]any
 	if scene, ok := findPrevisScene(creationMaps(plan.Document["previsScenes"]), plan.SceneID); ok {
 		afterSceneHash = creationHash(scene)
+		reviews = cloudAgentPrevisShotReviews(scene)
 	}
 	if len(recorder) > 0 && recorder[0] != nil {
 		if err := recorder[0](repo, cloudAgentMutationInput{UserID: userID, CanvasID: canvasID, StepID: call.ID, Operation: plan.Operation, BeforeSnapshotHash: plan.BeforeSnapshotHash, AfterSnapshotHash: afterCanvasHash, BeforeJSON: plan.BeforeJSON, Preview: &appliedPreview}); err != nil {
@@ -2218,8 +2242,16 @@ func applyCloudAgentPrevisMutation(repo *repository.Repository, userID, canvasID
 	if resultSnapshotHash == "" {
 		resultSnapshotHash = afterCanvasHash
 	}
-	return map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "nodeId": plan.NodeID, "shotId": plan.ShotID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": afterCanvasHash, "committed": true, "summary": appliedPreview.Description, "preview": appliedPreview}, nil
+	result := map[string]any{"canvasId": canvasID, "sceneId": plan.SceneID, "nodeId": plan.NodeID, "shotId": plan.ShotID, "snapshotHash": resultSnapshotHash, "canvasSnapshotHash": afterCanvasHash, "committed": true, "summary": appliedPreview.Description, "preview": appliedPreview}
+	if len(reviews) > 0 {
+		result["review"] = reviews
+		result["reviewGuide"] = cloudAgentPrevisReviewGuide
+	}
+	return result, nil
 }
+
+// cloudAgentPrevisAspectRatios 与前端 PREVIS_ASPECT_RATIOS（previs-optics.ts）同序；auto 跟随视口，未设置时按 9:16。
+var cloudAgentPrevisAspectRatios = []string{"auto", "2.39:1", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}
 
 // cloudAgentPrevisMotionIDs 与前端 PREVIS_MOTIONS（previs-motion.ts）一一对应。
 var cloudAgentPrevisMotionIDs = []string{"idle", "walk", "run", "talk", "wave", "nod", "shake_head", "look_around", "point", "phone_call", "sit_idle", "clap", "fight_idle", "punch", "jump", "fall", "cry", "cheer", "slap", "hold_hand", "hit_react"}

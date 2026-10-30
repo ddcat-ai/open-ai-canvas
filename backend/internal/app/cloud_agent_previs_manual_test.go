@@ -56,6 +56,7 @@ var (
 	previsManualInlineOp  = regexp.MustCompile("`(\\{\"type\":.*?\\})`")
 	previsManualMotions   = regexp.MustCompile(`actor_motion_add(?: motion=)?\s*([a-z_]+(?:\s*[|/]\s*[a-z_]+)*)`)
 	previsManualSnakeWord = regexp.MustCompile(`\b[a-z]+(?:_[a-z]+)*\b`)
+	previsManualRecipeRef = regexp.MustCompile("recipe[ =]`?([a-z_]+)`?")
 )
 
 // 说明书里的示例必须是当前工具真的接受的写法：字段名、操作类型、手法、动作、布景模板和道具 ID 都要存在。
@@ -94,6 +95,11 @@ func TestCloudAgentPrevisManualExamplesMatchTools(t *testing.T) {
 						t.Fatalf("manual %s uses unknown technique %q", topic.ID, operation.Technique)
 					}
 				}
+				if operation.Recipe != "" {
+					if _, ok := cloudAgentPrevisFindCameraRecipe(operation.Recipe); !ok {
+						t.Fatalf("manual %s uses unknown recipe %q", topic.ID, operation.Recipe)
+					}
+				}
 				if operation.Motion != "" && !slices.Contains(cloudAgentPrevisMotionIDs, operation.Motion) {
 					t.Fatalf("manual %s uses unknown motion %q", topic.ID, operation.Motion)
 				}
@@ -128,10 +134,16 @@ func TestCloudAgentPrevisManualExamplesMatchTools(t *testing.T) {
 				t.Fatalf("manual %s mentions unknown camera technique %q", topic.ID, word)
 			}
 		}
+		for _, match := range previsManualRecipeRef.FindAllStringSubmatch(content, -1) {
+			if _, ok := cloudAgentPrevisFindCameraRecipe(match[1]); !ok {
+				t.Fatalf("manual %s mentions unknown recipe %q", topic.ID, match[1])
+			}
+		}
 		for _, word := range previsManualSnakeWord.FindAllString(content, -1) {
 			if strings.HasPrefix(word, "ancient_") || strings.HasPrefix(word, "modern_") {
-				if !slices.Contains(cloudAgentPrevisLayoutIDs, word) {
-					t.Fatalf("manual %s mentions unknown layout %q", topic.ID, word)
+				// ancient_shop、modern_house 这类是目录道具，ancient_city、modern_street 是布景模板。
+				if _, isProp := cloudAgentPrevisFindProp(word); !isProp && !slices.Contains(cloudAgentPrevisLayoutIDs, word) {
+					t.Fatalf("manual %s mentions unknown layout or prop %q", topic.ID, word)
 				}
 			}
 		}

@@ -1,12 +1,22 @@
 import { nanoid } from "nanoid";
 
-import { PREVIS_CAMERA_MAX_MOVES, previsCameraMoveNumber, resolvePrevisCameraFollowSide, resolvePrevisCameraTechnique, sanitizePrevisCameraMoveParams, type PrevisCameraRecipe } from "@/lib/canvas/previs/previs-camera-techniques";
+import {
+    expandPrevisCameraRecipe,
+    PREVIS_CAMERA_MAX_MOVES,
+    previsCameraMoveNumber,
+    resolvePrevisCameraFollowShotSize,
+    resolvePrevisCameraFollowSide,
+    resolvePrevisCameraTechnique,
+    sanitizePrevisCameraMoveParams,
+    type PrevisCameraRecipe,
+} from "@/lib/canvas/previs/previs-camera-techniques";
 import { resolvePrevisObjectBox } from "@/lib/canvas/previs/previs-frame-bounds";
 import { previsMannequinExtents, resolvePrevisMannequinProfile } from "@/lib/canvas/previs/previs-mannequin";
 import { previsPathEase } from "@/lib/canvas/previs/previs-motion-path";
+import { PREVIS_AUTO_ASPECT_FALLBACK, previsAspectValue, previsFramingDistance } from "@/lib/canvas/previs/previs-optics";
 import { interpolatePrevisKeyframeLift, interpolatePrevisTransform } from "@/lib/canvas/previs/previs-scene";
 import { evaluatePrevisTravel } from "@/lib/canvas/previs/previs-travel";
-import type { PrevisCamera, PrevisCameraMoveParams, PrevisCameraMoveSegment, PrevisCameraTechnique, PrevisObject, PrevisScene, PrevisVec3 } from "@/types/previs";
+import type { PrevisCamera, PrevisCameraFollowSide, PrevisCameraMoveParams, PrevisCameraMoveSegment, PrevisCameraTechnique, PrevisObject, PrevisScene, PrevisVec3 } from "@/types/previs";
 
 /**
  * 摄影机在镜头时间 t 的取景：先按 transform 关键帧插值出基础机位，再按开始时间依次叠加运镜段。
@@ -143,15 +153,16 @@ export function resolvePrevisSubjectState(object: PrevisObject, time: number): P
     return { root: [x, y + lift, z], forward, height: previsMannequinExtents(profile).height * scaleY };
 }
 
-type Context = { objects: Map<string, PrevisObject> };
+/** aspect：镜头画幅宽高比，跟拍景别按它换算取景距离（自适应画幅固定用 16:9，避免调整窗口时机位跟着变）。 */
+type Context = { objects: Map<string, PrevisObject>; aspect: number };
 
 function subjectAt(context: Context, move: PrevisCameraMoveSegment, time: number) {
     const object = move.subjectId ? context.objects.get(move.subjectId) : undefined;
     return object ? resolvePrevisSubjectState(object, time) : null;
 }
 
-function aimPoint(subject: PrevisSubjectState, move: PrevisCameraMoveSegment): PrevisVec3 {
-    const aim = previsCameraMoveNumber(move, "aim") ?? subject.height * 0.72;
+function aimPoint(subject: PrevisSubjectState, move: PrevisCameraMoveSegment, aimRatio = 0.72): PrevisVec3 {
+    const aim = previsCameraMoveNumber(move, "aim") ?? subject.height * aimRatio;
     return add(subject.root, [0, aim, 0]);
 }
 
@@ -168,28 +179,120 @@ function progress(move: PrevisCameraMoveSegment, time: number) {
     return previsPathEase(move.easing ?? "smooth", raw);
 }
 
-/** 镜头中途接管机位（跟拍、跟摇、环绕主体）时的切入权重；从 0 秒开始的段直接到位。 */
+/**
+ * 镜头中途接管机位（跟拍、跟摇、环绕主体）时的切入权重。
+ * 跟拍给了 blend 就按 blend 秒过渡；没给时从 0 秒开始的段直接到位，中途开始的段约 0.6 秒内切入。
+ */
 function entryWeight(move: PrevisCameraMoveSegment, time: number) {
     if (time < move.start) return 0;
-    if (move.start <= 0.05) return 1;
-    const blend = clamp(move.duration / 3, 0.15, 0.6);
+    const requested = previsCameraMoveNumber(move, "blend");
+    if (requested === undefined && move.start <= 0.05) return 1;
+    const blend = requested ?? clamp(move.duration / 3, 0.15, 0.6);
+    if (blend <= 1e-3) return 1;
     return smoothstep((time - move.start) / blend);
 }
 
-function followPose(subject: PrevisSubjectState, aimSubject: PrevisSubjectState, move: PrevisCameraMoveSegment) {
+/** 主体右手方向（演员默认面朝 +Z，右手在 -X）。 */
+function rightOf(forward: PrevisVec3): PrevisVec3 {
+    return [-forward[2], 0, forward[0]];
+}
+
+function wrapAngle(angle: number) {
+    let value = angle;
+    while (value > Math.PI) value -= Math.PI * 2;
+    while (value < -Math.PI) value += Math.PI * 2;
+    return value;
+}
+
+/**
+ * 跟拍切入的机位过渡：以主体为圆心，方位角、水平半径、高度分别插值。
+ * 换方位（过肩→正面、后方→侧面）时机位绕着人物走，不会沿直线从人物身体里穿过去。
+ * 两个方位接近正对（例如正后方到正前方）时最短方向不稳定，按 via 指定的一侧绕行：
+ * 目标在人物右侧、过肩时从右边绕，在左侧时从左边绕，其余默认右边；整段过渡方向不变，不会中途翻面。
+ */
+function arcBlend(from: PrevisVec3, to: PrevisVec3, subject: PrevisSubjectState, via: "left" | "right", weight: number): PrevisVec3 {
+    if (weight >= 1) return to;
+    if (weight <= 0) return from;
+    const pivot = subject.root;
+    const a: PrevisVec3 = [from[0] - pivot[0], 0, from[2] - pivot[2]];
+    const b: PrevisVec3 = [to[0] - pivot[0], 0, to[2] - pivot[2]];
+    const ra = Math.hypot(a[0], a[2]);
+    const rb = Math.hypot(b[0], b[2]);
+    // 机位贴着主体（主观视角）时方位角没有意义，直接插值。
+    if (ra < 0.25 || rb < 0.25) return lerp(from, to, weight);
+    const angleA = Math.atan2(a[0], a[2]);
+    let delta = wrapAngle(Math.atan2(b[0], b[2]) - angleA);
+    if (Math.abs(delta) > Math.PI * 0.85) {
+        const mid = angleA + delta / 2;
+        const side = dot([Math.sin(mid), 0, Math.cos(mid)], rightOf(subject.forward)) >= 0 ? "right" : "left";
+        if (side !== via) delta -= Math.sign(delta) * Math.PI * 2;
+    }
+    const angle = angleA + delta * weight;
+    const radius = ra + (rb - ra) * weight;
+    return [pivot[0] + Math.sin(angle) * radius, from[1] + (to[1] - from[1]) * weight, pivot[2] + Math.cos(angle) * radius];
+}
+
+/**
+ * 跟拍切入时的视线：插值视线方向而不是焦点坐标。
+ * 机位绕着人物走时，旧焦点（例如过肩镜头看向人物前方 8 米）可能已经在机位身后；直接插值焦点坐标，
+ * 镜头会背对人物。这里把方向从旧视线球面插值到「从当前机位看新焦点」，并且方向比机位先转完，
+ * 像摄影师一边绕一边先把镜头摇向人物。权重 0 时与上一段机位完全连续，权重 1 时就是新机位的视线。
+ */
+function blendFollowTarget(state: State, position: PrevisVec3, target: PrevisVec3, weight: number): PrevisVec3 {
+    if (weight >= 1) return target;
+    if (weight <= 0) return state.target;
+    const from = sub(state.target, state.position);
+    const to = sub(target, position);
+    const fromLength = length(from);
+    const toLength = length(to);
+    if (fromLength < 1e-6 || toLength < 1e-6) return lerp(state.target, target, weight);
+    // 开方让视线比机位先转：权重 0.1 时视线已转过约 45%，人物不会在绕行初段滑出画面边缘。
+    const k = smoothstep(Math.min(1, 1.6 * Math.sqrt(weight)));
+    const a = scale(from, 1 / fromLength);
+    const b = scale(to, 1 / toLength);
+    const cosine = clamp(dot(a, b), -1, 1);
+    let direction: PrevisVec3;
+    if (cosine > 0.9995) {
+        direction = normalize(lerp(a, b, k), b);
+    } else if (cosine < -0.9995) {
+        // 正好反向：绕竖直轴转半圈，避免球面插值没有确定的转动方向。
+        direction = rotatePrevisVectorAroundAxis(a, UP, Math.PI * k);
+    } else {
+        const theta = Math.acos(cosine);
+        const sine = Math.sin(theta);
+        direction = add(scale(a, Math.sin((1 - k) * theta) / sine), scale(b, Math.sin(k * theta) / sine));
+    }
+    return add(position, scale(direction, fromLength + (toLength - fromLength) * k));
+}
+
+/** 景别只对后方、前方、左右侧生效；俯拍、过肩、主观视角有自己的几何。 */
+function framedShotSize(side: PrevisCameraFollowSide, move: PrevisCameraMoveSegment) {
+    return side === "behind" || side === "front" || side === "left" || side === "right" ? resolvePrevisCameraFollowShotSize(move.params?.shotSize) : undefined;
+}
+
+function followPose(subject: PrevisSubjectState, aimSubject: PrevisSubjectState, move: PrevisCameraMoveSegment, optics: { focalLength: number; aspect: number }) {
     const side = resolvePrevisCameraFollowSide(move.params?.side);
-    const distance = previsCameraMoveNumber(move, "distance") ?? side.distance;
-    const height = previsCameraMoveNumber(move, "height") ?? subject.height * side.heightRatio;
+    const size = framedShotSize(side.value, move);
+    const focalLength = Number.isFinite(optics.focalLength) && optics.focalLength > 0 ? optics.focalLength : 35;
+    const distance = previsCameraMoveNumber(move, "distance") ?? (size ? previsFramingDistance(size.extent * subject.height, focalLength, optics.aspect) : side.distance);
+    const height = previsCameraMoveNumber(move, "height") ?? subject.height * (size ? size.eye : side.heightRatio);
+    const framedTarget = aimPoint(aimSubject, move, size?.aim);
     const forward = subject.forward;
-    const right: PrevisVec3 = [-forward[2], 0, forward[0]];
+    const right = rightOf(forward);
     const lifted = (point: PrevisVec3, extra: number): PrevisVec3 => add(point, [0, extra, 0]);
     switch (side.value) {
-        case "front":
-            return { position: lifted(add(subject.root, scale(forward, distance)), height), target: aimPoint(aimSubject, move) };
+        case "front": {
+            // 倒退跟拍的滞后让人物追近机位；近景、特写距离很短，跑动时人物会撞进镜头。
+            // 机位到人物当前位置沿前进方向至少保留 75% 的取景距离。
+            const position = add(subject.root, scale(forward, distance));
+            const ahead = dot(sub(position, aimSubject.root), forward);
+            const guarded = ahead < distance * 0.75 ? add(position, scale(forward, distance * 0.75 - ahead)) : position;
+            return { position: lifted(guarded, height), target: framedTarget };
+        }
         case "left":
-            return { position: lifted(sub(subject.root, scale(right, distance)), height), target: aimPoint(aimSubject, move) };
+            return { position: lifted(sub(subject.root, scale(right, distance)), height), target: framedTarget };
         case "right":
-            return { position: lifted(add(subject.root, scale(right, distance)), height), target: aimPoint(aimSubject, move) };
+            return { position: lifted(add(subject.root, scale(right, distance)), height), target: framedTarget };
         case "shoulder": {
             const position = lifted(add(sub(subject.root, scale(forward, distance)), scale(right, 0.45)), height);
             return { position, target: lifted(add(aimSubject.root, scale(aimSubject.forward, 8)), previsCameraMoveNumber(move, "aim") ?? aimSubject.height * 0.8) };
@@ -299,9 +402,12 @@ function applyMove(state: State, move: PrevisCameraMoveSegment, time: number, co
             // 主观与过肩贴着人物，不做滞后；其余方位用时间滞后模拟机位追赶。
             const lag = side === "pov" || side === "shoulder" ? 0 : (number("lag") ?? 0.25);
             const anchor = resolvePrevisSubjectState(object, Math.max(move.start, hold - lag));
-            const pose = followPose(anchor, lag ? resolvePrevisSubjectState(object, hold) : anchor, move);
+            const current = lag ? resolvePrevisSubjectState(object, hold) : anchor;
+            const pose = followPose(anchor, current, move, { focalLength: state.focalLength, aspect: context.aspect });
             const weight = entryWeight(move, time);
-            return { ...state, position: lerp(state.position, pose.position, weight), target: lerp(state.target, pose.target, weight) };
+            const via = side === "left" ? "left" : "right";
+            const position = arcBlend(state.position, pose.position, current, via, weight);
+            return { ...state, position, target: blendFollowTarget(state, position, pose.target, weight) };
         }
         case "look_at": {
             const subject = subjectAt(context, move, hold);
@@ -343,13 +449,26 @@ export function orderedPrevisCameraMoves(moves: PrevisCameraMoveSegment[] | unde
         .toSorted((left, right) => Number(isLayer(left)) - Number(isLayer(right)) || left.start - right.start || left.id.localeCompare(right.id));
 }
 
-export function evaluatePrevisCamera(scene: Pick<PrevisScene, "objects">, camera: PrevisCamera, time: number): PrevisCameraState {
+/** 求值时可见的场景字段：对象必需；镜头用于取跟拍景别的画幅（不传时按 16:9）。 */
+export type PrevisCameraEvaluationScene = Pick<PrevisScene, "objects"> & Partial<Pick<PrevisScene, "shots" | "activeShotId">>;
+
+/**
+ * 跟拍景别换算距离用的画幅：优先当前镜头（用这台摄影机时），否则第一个用这台摄影机的镜头。
+ * 自适应画幅固定按 16:9，避免调整窗口大小时机位距离跟着变。
+ */
+export function resolvePrevisCameraFramingAspect(scene: PrevisCameraEvaluationScene, cameraId: string) {
+    const shots = scene.shots ?? [];
+    const shot = shots.find((item) => item.id === scene.activeShotId && item.cameraId === cameraId) ?? shots.find((item) => item.cameraId === cameraId);
+    return shot ? previsAspectValue(shot.aspectRatio, PREVIS_AUTO_ASPECT_FALLBACK) : PREVIS_AUTO_ASPECT_FALLBACK;
+}
+
+export function evaluatePrevisCamera(scene: PrevisCameraEvaluationScene, camera: PrevisCamera, time: number): PrevisCameraState {
     const t = Number.isFinite(time) ? time : 0;
     const transform = interpolatePrevisTransform(camera.transform, camera.keyframes, t);
     const moves = orderedPrevisCameraMoves(camera.moves);
     let state: State = { position: transform.position, target: camera.target, focalLength: camera.focalLength, roll: 0 };
     if (moves.length) {
-        const context: Context = { objects: new Map(scene.objects.map((object) => [object.id, object])) };
+        const context: Context = { objects: new Map(scene.objects.map((object) => [object.id, object])), aspect: resolvePrevisCameraFramingAspect(scene, camera.id) };
         for (const move of moves) state = applyMove(state, move, t, context);
         // 降镜、摇臂下降不钻到地面以下。
         if (state.position[1] < 0.05) state = { ...state, position: [state.position[0], 0.05, state.position[2]] };
@@ -364,7 +483,7 @@ export function rollPrevisUp(up: PrevisVec3, view: PrevisVec3, roll: number): Pr
 }
 
 /** 镜头内的机位轨迹采样，供视口画运镜路径。 */
-export function samplePrevisCameraPath(scene: Pick<PrevisScene, "objects">, camera: PrevisCamera, duration: number, samples = 96): PrevisVec3[] {
+export function samplePrevisCameraPath(scene: PrevisCameraEvaluationScene, camera: PrevisCamera, duration: number, samples = 96): PrevisVec3[] {
     const count = Math.max(2, Math.min(240, Math.round(samples)));
     const total = Number.isFinite(duration) && duration > 0 ? duration : 0;
     return Array.from({ length: count }, (_, index) => evaluatePrevisCamera(scene, camera, (total * index) / (count - 1)).position);
@@ -412,5 +531,5 @@ export function removePrevisCameraMove(camera: PrevisCamera, moveId: string): Pr
 /** 把一个大师手法配方展开成运镜段。需要主体却没有主体时返回空数组。 */
 export function buildPrevisCameraRecipeMoves(recipe: PrevisCameraRecipe, input: { start: number; duration: number; subjectId?: string; shotDuration: number }): PrevisCameraMoveSegment[] {
     if (recipe.subject === "required" && !input.subjectId) return [];
-    return recipe.build({ start: input.start, duration: input.duration, subjectId: input.subjectId }).map((move) => createPrevisCameraMove({ ...move, subjectId: move.subjectId ?? input.subjectId }, input.shotDuration));
+    return expandPrevisCameraRecipe(recipe, { start: input.start, duration: input.duration, subjectId: input.subjectId }).map((move) => createPrevisCameraMove(move, input.shotDuration));
 }

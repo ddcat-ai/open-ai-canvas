@@ -79,7 +79,9 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// subjectId 两个字段；手法表、参数范围和大师手法配方放在 previs_scene_read.catalog）并把预演台改名为世界引擎后为
 	// 39,236 字节，预算不变，余量约1.2%。路径动画加入 pathId（引用用户画的参考轨迹）并把 easing 扩展为运动规律
 	// （ease_in / ease_out；路径规则放在 catalog.rules）后为 39,299 字节，预算不变，余量约1.0%。previs_scene_read 加入 manual（世界引擎说明书主题；正文按需返回，
-	// 主题目录放在读取结果里）后为 39,394 字节，预算不变，余量约0.8%。
+	// 主题目录放在读取结果里）后为 39,394 字节，预算不变，余量约0.8%。camera_move 加入 recipe（大师手法整套写入；
+	// 配方表与逐段构成放在 catalog.cameraRecipes）并压缩 previs_apply_patch 的运镜描述后为 39,416 字节，预算不变。
+	// shot_add / shot_update 加入 aspectRatio（镜头画幅枚举）后为 39,512 字节，预算不变，余量约0.5%。
 	// 新增工具或字段时请重新测量并有意识地调整这个数字，而不是让 schema 悄悄膨胀
 	// （它每一步都要发、还在前缀最前面）。
 	if len(raw) > 39700 {

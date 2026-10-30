@@ -1021,7 +1021,7 @@ function PrevisSceneContent({
             ))}
             {effectiveViewport.camera === "camera"
                 ? null
-                : cameraMovePaths.map((item) => <PrevisCameraMovePath key={`camera-move-${item.id}`} objects={scene.objects} camera={item} duration={activeShotDuration} playhead={playhead} />)}
+                : cameraMovePaths.map((item) => <PrevisCameraMovePath key={`camera-move-${item.id}`} objects={scene.objects} shots={scene.shots} activeShotId={scene.activeShotId} camera={item} duration={activeShotDuration} playhead={playhead} />)}
             {scene.objects
                 .filter((item) => item.visible)
                 .map((object) => (
@@ -1460,10 +1460,12 @@ function PrevisDraftPath({ points }: { points: PrevisVec3[] }) {
  * 运镜轨迹：按镜头时长采样运镜后的机位连成线，播放头处画出机位点和视线方向。
  * 只读辅助线（跟拍会随演员路径一起变化），不进成片与控制图。
  */
-function PrevisCameraMovePath({ objects, camera, duration, playhead }: { objects: PrevisObject[]; camera: PrevisCamera; duration: number; playhead: number }) {
+function PrevisCameraMovePath({ objects, shots, activeShotId, camera, duration, playhead }: { objects: PrevisObject[]; shots: PrevisScene["shots"]; activeShotId?: string; camera: PrevisCamera; duration: number; playhead: number }) {
     const color = useMemo(() => resolvePrevisCameraPalette(camera).accent, [camera]);
-    const points = useMemo(() => samplePrevisCameraPath({ objects }, camera, duration, Math.max(24, Math.round(duration * 16))).filter((point) => point.every(Number.isFinite)), [camera, duration, objects]);
-    const current = evaluatePrevisCamera({ objects }, camera, playhead);
+    // 镜头画幅参与跟拍景别的距离换算，轨迹线必须和 CAM 取景用同一份画幅。
+    const evaluationScene = useMemo(() => ({ objects, shots, activeShotId }), [activeShotId, objects, shots]);
+    const points = useMemo(() => samplePrevisCameraPath(evaluationScene, camera, duration, Math.max(24, Math.round(duration * 16))).filter((point) => point.every(Number.isFinite)), [camera, duration, evaluationScene]);
+    const current = evaluatePrevisCamera(evaluationScene, camera, playhead);
     const direction = new Vector3(...current.target).sub(new Vector3(...current.position));
     const valid = points.length > 1 && [...current.position, ...current.target].every(Number.isFinite) && direction.lengthSq() > 1e-8;
     if (!valid) return null;

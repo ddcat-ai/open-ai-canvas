@@ -191,10 +191,16 @@ func TestCloudAgentPrevisCameraMoveContract(t *testing.T) {
 	if !strings.Contains(strings.Join(types, ","), "camera_move,camera_move_remove") {
 		t.Fatalf("schema type enum missing camera moves: %v", types)
 	}
-	for _, key := range []string{"technique", "subjectId"} {
+	for _, key := range []string{"technique", "recipe", "subjectId"} {
 		if _, ok := schema[key]; !ok {
 			t.Fatalf("schema missing %s", key)
 		}
+	}
+	if !strings.Contains(moves, "shotSize=extreme_close_up/close_up/medium/full/wide/extreme_wide") || !strings.Contains(moves, "blend 0~10") {
+		t.Fatalf("catalog.cameraMoves must list follow shot sizes and blend: %s", moves)
+	}
+	if rules, _ := guide["rules"].(string); !strings.Contains(rules, "manual=shots") || !strings.Contains(rules, "recipe") {
+		t.Fatalf("catalog.rules must point to shot design and recipes: %s", rules)
 	}
 }
 

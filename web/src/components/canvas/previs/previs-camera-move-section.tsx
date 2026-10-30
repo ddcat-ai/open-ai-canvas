@@ -6,6 +6,7 @@ import { addPrevisCameraMoves, buildPrevisCameraRecipeMoves, createPrevisCameraM
 import { PREVIS_PATH_EASINGS } from "@/lib/canvas/previs/previs-motion-path";
 import {
     describePrevisCameraMove,
+    PREVIS_CAMERA_FOLLOW_SHOT_SIZES,
     PREVIS_CAMERA_FOLLOW_SIDES,
     PREVIS_CAMERA_MAX_MOVES,
     PREVIS_CAMERA_RECIPES,
@@ -15,7 +16,7 @@ import {
     type PrevisCameraNumberParamKey,
     type PrevisCameraRecipe,
 } from "@/lib/canvas/previs/previs-camera-techniques";
-import type { PrevisCamera, PrevisCameraFollowSide, PrevisCameraMoveParams, PrevisCameraMoveSegment, PrevisCameraTechnique, PrevisPathEasing, PrevisScene } from "@/types/previs";
+import type { PrevisCamera, PrevisCameraFollowSide, PrevisCameraMoveParams, PrevisCameraMoveSegment, PrevisCameraTechnique, PrevisPathEasing, PrevisScene, PrevisShotSize } from "@/types/previs";
 
 /**
  * 摄影机「运镜」：view=technique 选单个手法（推拉摇移、环绕、希区柯克变焦、跟拍…）与主体，从播放头开始添加一段；
@@ -141,6 +142,19 @@ export function PrevisCameraMoveSection({
                                     onChange={(side: PrevisCameraFollowSide) => setParams((current) => ({ ...current, side }))}
                                     options={PREVIS_CAMERA_FOLLOW_SIDES.map((item) => ({ value: item.value, label: item.label }))}
                                     aria-label="跟拍方位"
+                                />
+                            </label>
+                        ) : spec.kind === "shotSize" ? (
+                            <label key={spec.key} className="pv-camera-move__param">
+                                <span>{spec.label}</span>
+                                <Select
+                                    size="small"
+                                    allowClear
+                                    value={params.shotSize}
+                                    placeholder="按方位默认距离"
+                                    onChange={(shotSize: PrevisShotSize | undefined) => setParams((current) => ({ ...current, shotSize }))}
+                                    options={PREVIS_CAMERA_FOLLOW_SHOT_SIZES.map((item) => ({ value: item.value, label: item.label }))}
+                                    aria-label="跟拍景别"
                                 />
                             </label>
                         ) : (

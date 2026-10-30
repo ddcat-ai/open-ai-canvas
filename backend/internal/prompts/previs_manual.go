@@ -26,9 +26,12 @@ var previsManualTopics = []PrevisManualTopic{
 	{ID: "paths", Title: "用户画的轨迹", When: "用户提到画的轨迹、路径1、运镜轨迹，或要人物沿运镜轨迹走、镜头跟随"},
 	{ID: "camera", Title: "机位与景别", When: "放摄影机、定景别焦段距离、机位高度与构图"},
 	{ID: "moves", Title: "运镜", When: "推拉摇移、环绕、跟拍、大师手法、用户口语对应的手法"},
+	{ID: "shots", Title: "镜头设计", When: "用户要电影感、高级运镜、某位导演的手法或多节拍镜头时必读：节拍表、质量底线、recipe 起手、过肩跟随转面部特写范例、常见偷懒写法"},
 	{ID: "edit", Title: "修改与删除", When: "删除或修改运镜、路径、动作、对象、镜头"},
 	{ID: "output", Title: "预览与自检", When: "写完核对、白模预览、交付视频生成"},
-	{ID: "recipes", Title: "多场景范例", When: "对话、追逐、御剑、航拍揭示、打斗等完整做法"},
+	{ID: "recipes", Title: "完整范例 · 文戏", When: "可原样执行的完整做法（搭景、表演、多段运镜、画面质感提示词）：走廊过肩跟随转面部特写、双人对话三机位、顿悟眩晕变焦、雨夜抽离、物到人揭示、竖屏短剧亮相；第 0 节是所有范例的用法与按用户说法选范例"},
+	{ID: "recipes_action", Title: "完整范例 · 动作戏", When: "古街追逐、庭院打斗（环绕+急推+震屏）、御剑飞行、爆炸逃生"},
+	{ID: "recipes_epic", Title: "完整范例 · 大场面", When: "开场航拍揭示古城、将军阅兵群戏、雨夜重逢环绕"},
 }
 
 func PrevisManualTopics() []PrevisManualTopic {

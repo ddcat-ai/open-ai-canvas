@@ -3,7 +3,7 @@ import { App } from "antd";
 import { nanoid } from "nanoid";
 
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
-import { fitImageNodeSize, preserveImageNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageNodeSize, fitNodeSize, preserveImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { resolvePrevisShotCameraMove } from "@/lib/canvas/previs/previs-camera-techniques";
 import { createPrevisSceneFromTemplate, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
@@ -197,8 +197,7 @@ export function useCanvasPrevis({
                     type: CanvasNodeType.Video,
                     title: `${sourceNode.title} · 白膜视频`,
                     position: existingVideo?.position || { x: sourceNode.position.x, y: sourceNode.position.y + sourceNode.height + 48 },
-                    width: existingVideo?.width || 360,
-                    height: existingVideo?.height || 220,
+                    ...preserveImageNodeSize(existingVideo, previsVideoNodeSize(videoUpload, image)),
                     metadata: {
                         ...existingVideo?.metadata,
                         ...videoMetadata(videoUpload),
@@ -252,8 +251,7 @@ export function useCanvasPrevis({
                     type: CanvasNodeType.Video,
                     title: `${sourceNode.title} · 深度视频`,
                     position: existingDepthVideo?.position || { x: sourceNode.position.x + sourceNode.width + 48, y: sourceNode.position.y + sourceNode.height + 48 },
-                    width: existingDepthVideo?.width || 360,
-                    height: existingDepthVideo?.height || 220,
+                    ...preserveImageNodeSize(existingDepthVideo, previsVideoNodeSize(depthVideoUpload, image)),
                     metadata: {
                         ...existingDepthVideo?.metadata,
                         ...videoMetadata(depthVideoUpload),
@@ -313,4 +311,13 @@ export function useCanvasPrevis({
     );
 
     return { applyPrevisOutput, createPrevisShot, openPrevisWorkbench, savePrevisScene };
+}
+
+/**
+ * 白膜 / 深度视频节点按录制画幅取尺寸（9:16 是竖框，不再固定 360×220 横框）。
+ * 读不到视频宽高时用同一镜头的构图截图比例；用户手动调过尺寸的节点保持不变（preserveImageNodeSize）。
+ */
+function previsVideoNodeSize(video: { width?: number; height?: number }, fallback: { width: number; height: number }) {
+    const valid = (value?: number) => typeof value === "number" && Number.isFinite(value) && value > 0;
+    return valid(video.width) && valid(video.height) ? fitNodeSize(video.width!, video.height!) : fitNodeSize(fallback.width, fallback.height);
 }

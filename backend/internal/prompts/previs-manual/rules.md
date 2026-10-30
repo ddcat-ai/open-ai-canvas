@@ -25,6 +25,8 @@
 | 人物 A 点到 B 点 | `actor_travel` | `actor_motion_add run`（那是原地动作） |
 | 人物沿一条路线，或沿用户画的轨迹 | `object_motion_path_set`（pathPoints 或 pathId） | 一帧帧手写关键帧 |
 | 推拉摇移、环绕、跟拍 | `camera_move` | 用 camera_keyframe_upsert 手算 |
+| 多节拍运镜、导演手法 | `camera_move` 的 `recipe`，或按 `manual=shots` 的节拍表逐段写 | 一段运镜铺满整个镜头 |
+| 从零搭一个完整镜头（景、人、运镜） | 先读 `manual=recipes` 第 0 节，挑最接近的完整范例照着改 | 凭感觉写一两段运镜 |
 | 时间、天气 | `world_update` | 改背景色 |
 
 ## 5. 不确定就问
@@ -34,6 +36,7 @@
 
 ## 6. 写完自检
 - 写完后再读一次场景，核对：对象数量、谁在哪、路径起止时间（`motionPath.end`）、运镜段时间是否落在镜头时长内、人物是否面朝正确方向。
+- 写入结果和场景精读里的 `review` 列出镜头在数据上的单薄之处（只有一个运动节拍、参数全靠默认、跟拍换方位没有过渡、人物在走但镜头没跟）。用户要电影感时逐条处理，见 `manual=shots`；保留的要说明原因。
 - 需要看画面时用 `previs_preview` 生成白模视频；场景摘要只说明数据，不代表已经看到画面。
 
 ## 7. 修改与删除

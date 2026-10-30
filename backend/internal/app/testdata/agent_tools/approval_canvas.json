@@ -358,7 +358,7 @@
   },
   {
     "function": {
-      "description": "审批后应用语义补丁，最多32项；先读 snapshotHash。支持场景、镜头、对象、相机、灯光、动画；角色绑定须匹配画布角色卡，动画时间不超镜头时长。object_motion_path_set/clear 替换/清空对象全部 transform 关键帧。实物用 kind=prop+propId(+params)，N 个同类用 object_array_add，演员 A→B 走跑飞闪现用 actor_travel，运镜（推拉摇移、环绕、跟拍、大师手法）用 camera_move+technique(+subjectId)，街区城镇用 kind=layout，时间天气用 world_update；目录与参数见 previs_scene_read.catalog。禁止原始 JSON、URL、storage key。",
+      "description": "审批后应用语义补丁，最多32项；先读 snapshotHash。支持场景、镜头、对象、相机、灯光、动画；角色绑定须匹配画布角色卡，动画时间不超镜头时长。object_motion_path_set/clear 替换/清空对象全部 transform 关键帧。实物用 kind=prop+propId(+params)，N 个同类用 object_array_add，演员 A→B 走跑飞闪现用 actor_travel，运镜用 camera_move+technique(+subjectId)，多段大师手法用 recipe，街区城镇用 kind=layout，时间天气用 world_update；目录与参数见 previs_scene_read.catalog。禁止原始 JSON、URL、storage key。",
       "name": "previs_apply_patch",
       "parameters": {
         "additionalProperties": false,
@@ -386,6 +386,19 @@
                     "man",
                     "woman",
                     "monster"
+                  ],
+                  "type": "string"
+                },
+                "aspectRatio": {
+                  "enum": [
+                    "auto",
+                    "2.39:1",
+                    "21:9",
+                    "16:9",
+                    "4:3",
+                    "1:1",
+                    "3:4",
+                    "9:16"
                   ],
                   "type": "string"
                 },
@@ -702,6 +715,10 @@
                 },
                 "propId": {
                   "maxLength": 40,
+                  "type": "string"
+                },
+                "recipe": {
+                  "maxLength": 32,
                   "type": "string"
                 },
                 "referenceNodeId": {

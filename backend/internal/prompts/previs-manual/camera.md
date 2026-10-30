@@ -3,7 +3,8 @@
 ## 摄影机
 - 新增：`camera_add position target focalLength name`；修改：`camera_update`（改 `focalLength` 时取景会同步）。
 - 画面看向 `target`。改机位时同时改 `target`，否则镜头仍然对着原来的焦点。
-- 一个镜头只用一台摄影机：`shot_update cameraId`。正反打用两台摄影机、两个镜头。
+- 一个镜头只用一台摄影机：`shot_update cameraId`。正反打用两台摄影机、两个镜头；多个镜头共用同一条时间线，每个镜头都从 0 秒播放同一段表演（完整写法见 `manual=recipes` 第 2 节）。
+- 画幅：`shot_update aspectRatio`（auto / 2.39:1 / 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16），读取结果的 `shots[].aspectRatio` 是当前画幅，未设置按 9:16。用户已选的画幅不要改。宽银幕的竖直视角很窄，人物的脸更容易出画，`aim` 要写到脸部高度。
 
 ## 景别对照（成人 1.8 米，35mm 焦段，竖屏 9:16 的大致距离）
 | 景别 shotSize | 机位到人物距离 | target 高度 |

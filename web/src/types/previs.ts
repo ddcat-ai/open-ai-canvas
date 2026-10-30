@@ -120,8 +120,11 @@ export type PrevisCameraTechnique =
 /** 跟拍时摄影机相对主体的方位：后方、前方（倒退跟拍）、左右两侧、俯拍、过肩、主观视角。 */
 export type PrevisCameraFollowSide = "behind" | "front" | "left" | "right" | "above" | "shoulder" | "pov";
 
-/** 运镜参数：数值（米、度、毫米、秒、强度）或跟拍方位。省略的键按场景自动取值。 */
-export type PrevisCameraMoveParams = Partial<Record<"distance" | "angle" | "height" | "rise" | "focalLength" | "lag" | "aim" | "intensity", number>> & { side?: PrevisCameraFollowSide };
+/**
+ * 运镜参数：数值（米、度、毫米、秒、强度）、跟拍方位或跟拍景别。省略的键按场景自动取值。
+ * blend 是跟拍切入用时（秒）：从上一机位绕主体过渡到这一段的方位与景别。
+ */
+export type PrevisCameraMoveParams = Partial<Record<"distance" | "angle" | "height" | "rise" | "focalLength" | "lag" | "blend" | "aim" | "intensity", number>> & { side?: PrevisCameraFollowSide; shotSize?: PrevisShotSize };
 
 /**
  * 摄影机的一段运镜：从 start 起 duration 秒内完成，结束后保持终点机位。

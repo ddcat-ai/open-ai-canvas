@@ -160,6 +160,9 @@ export function CanvasPrevisWorkbench({
     const [recording, setRecording] = useState(false);
     const [lastClayExport, setLastClayExport] = useState<{ shotId: string; at: number } | null>(null);
     const [depthExporting, setDepthExporting] = useState(false);
+    /** 白膜 / 深度输出的当前阶段（录制、转码百分比、上传），显示在对应按钮上。 */
+    const [outputStage, setOutputStage] = useState<string | null>(null);
+    const outputLockRef = useRef(false);
     const [screenRecording, setScreenRecording] = useState<"shot" | "window" | null>(null);
     const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
     const [monitorOpen, setMonitorOpen] = useState(false);
@@ -1014,28 +1017,65 @@ export function CanvasPrevisWorkbench({
         }
     };
 
+    /**
+     * 白膜、深度捕捉、镜头录屏共用一把输出锁：同一时间只跑一个实时录制与转码。
+     * 用 ref 而不是 state 判断，Agent 的预览请求和连点按钮在同一帧里也不会并发启动。
+     */
+    const acquireOutputLock = () => {
+        if (outputLockRef.current) return false;
+        outputLockRef.current = true;
+        return true;
+    };
+    const releaseOutputLock = () => {
+        outputLockRef.current = false;
+        setOutputStage(null);
+    };
+
+    /** 浏览器录到的 WebM 在浏览器里转成固定帧率、裁到镜头时长的 MP4；转码进度显示在按钮上。 */
+    const recordingToMp4 = (recorded: Blob, shot: PrevisShot) =>
+        recorded.type === "video/mp4"
+            ? Promise.resolve(recorded)
+            : transcodeVideoToMp4(recorded, { fps: shot.fps, duration: shot.duration, onProgress: ({ phase, progress }) => setOutputStage(phase === "loading" ? "加载转码组件…" : `转码 ${progress}%`) });
+
+    /**
+     * 输出流程：先从同一快照截构图，再实时录制；录制期间场景必须不变（帧是按实时草稿渲染的）。
+     * 转码可能要几十秒，这段时间允许继续编辑：视频与提示词都按录制时的快照生成，只要求场景和镜头还在。
+     */
+    const publishOutputScene = (snapshot: PrevisScene, shotId: string) => {
+        const latest = draftRef.current;
+        if (!latest || latest.id !== snapshot.id || !latest.shots.some((shot) => shot.id === shotId)) throw new Error("输出期间场景或镜头已删除，请重试");
+        // 场景没动过：先镜像一次再回写画布（原有行为）。转码期间编辑过：那些编辑已随各自的提交镜像，
+        // 这里不再发布草稿，避免把正在拖动、尚未提交的滑杆值顺带写进项目。
+        if (latest !== snapshot) return latest;
+        const next = touchPrevisScene(snapshot);
+        writeAndPublish(next);
+        return next;
+    };
+
     const exportClayVideo = async () => {
         stagedTransaction.end("commit");
         const current = draftRef.current;
-        if (!current || !activeShot || !viewportRef.current || recording) return;
-        const expected = { scene: current, shotId: activeShot.id };
+        if (!current || !activeShot || !viewportRef.current || !acquireOutputLock()) return;
+        const shot = activeShot;
+        const expected = { scene: current, shotId: shot.id };
         setRecording(true);
         try {
-            // 录制按镜头时间独立求值，不再借用播放头：编辑状态与时间轴位置保持不变。
-            const recordedVideo = await viewportRef.current.recordVideo(activeShot.duration, activeShot.fps, "clay");
-            const clayVideo = recordedVideo.type === "video/mp4" ? recordedVideo : await transcodeVideoToMp4(recordedVideo);
-            if (!isPrevisOutputSnapshotCurrent(draftRef.current, expected)) throw new Error("录制期间场景或镜头已变化，请重试");
-            const next = touchPrevisScene(draftRef.current || current);
-            writeAndPublish(next);
             const beauty = await viewportRef.current.capture("beauty");
-            if (!isPrevisOutputSnapshotCurrent(draftRef.current, { scene: next, shotId: expected.shotId })) throw new Error("输出期间场景或镜头已变化，请重试");
-            await onApply({ scene: next, shot: activeShot, prompt: compilePrevisPrompt(next, activeShot), beauty, clayVideo, clayVideoMimeType: clayVideo.type });
+            setOutputStage(`录制 ${shot.duration} 秒…`);
+            // 录制按镜头时间独立求值，不再借用播放头：编辑状态与时间轴位置保持不变。
+            const recordedVideo = await viewportRef.current.recordVideo(shot.duration, shot.fps, "clay");
+            if (!isPrevisOutputSnapshotCurrent(draftRef.current, expected)) throw new Error("录制期间场景或镜头已变化，请重试");
+            const clayVideo = await recordingToMp4(recordedVideo, shot);
+            setOutputStage("上传中…");
+            const next = publishOutputScene(current, shot.id);
+            await onApply({ scene: next, shot, prompt: compilePrevisPrompt(current, shot), beauty, clayVideo, clayVideoMimeType: clayVideo.type });
             setLastClayExport({ shotId: expected.shotId, at: Date.now() });
             message.success("白膜 MP4 视频已回写画布");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "白膜视频导出失败");
         } finally {
             setRecording(false);
+            releaseOutputLock();
         }
     };
 
@@ -1056,24 +1096,27 @@ export function CanvasPrevisWorkbench({
     const exportDepthPass = async () => {
         stagedTransaction.end("commit");
         const current = draftRef.current;
-        if (!current || !activeShot || !viewportRef.current || depthExporting || recording) return;
-        const expected = { scene: current, shotId: activeShot.id };
+        if (!current || !activeShot || !viewportRef.current || !acquireOutputLock()) return;
+        const shot = activeShot;
+        const expected = { scene: current, shotId: shot.id };
         const range = resolveShotDepthRange();
         setDepthExporting(true);
         try {
-            const depth = await viewportRef.current.capture("depth", { depthNear: range.near, depthFar: range.far });
-            const recordedDepth = await viewportRef.current.recordVideo(activeShot.duration, activeShot.fps, "depth", { depthNear: range.near, depthFar: range.far });
-            const depthVideo = recordedDepth.type === "video/mp4" ? recordedDepth : await transcodeVideoToMp4(recordedDepth);
-            if (!isPrevisOutputSnapshotCurrent(draftRef.current, expected)) throw new Error("捕捉期间场景或镜头已变化，请重试");
             const beauty = await viewportRef.current.capture("beauty");
-            const next = touchPrevisScene(draftRef.current || current);
-            writeAndPublish(next);
-            await onApply({ scene: next, shot: activeShot, prompt: compilePrevisPrompt(next, activeShot), beauty, depth, depthVideo });
+            const depth = await viewportRef.current.capture("depth", { depthNear: range.near, depthFar: range.far });
+            setOutputStage(`录制 ${shot.duration} 秒…`);
+            const recordedDepth = await viewportRef.current.recordVideo(shot.duration, shot.fps, "depth", { depthNear: range.near, depthFar: range.far });
+            if (!isPrevisOutputSnapshotCurrent(draftRef.current, expected)) throw new Error("捕捉期间场景或镜头已变化，请重试");
+            const depthVideo = await recordingToMp4(recordedDepth, shot);
+            setOutputStage("上传中…");
+            const next = publishOutputScene(current, shot.id);
+            await onApply({ scene: next, shot, prompt: compilePrevisPrompt(current, shot), beauty, depth, depthVideo });
             message.success(`深度图与深度视频已回写画布（${range.near}–${range.far} 米，近白远黑）`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "深度捕捉失败");
         } finally {
             setDepthExporting(false);
+            releaseOutputLock();
         }
     };
 
@@ -1095,7 +1138,7 @@ export function CanvasPrevisWorkbench({
 
     /** 内置录屏 A：镜头摄影机按镜头时长录当前渲染模式，下载 WebM/MP4 原始录制。 */
     const recordShotToFile = async () => {
-        if (!viewportRef.current || !activeShot || screenRecording) return;
+        if (!viewportRef.current || !activeShot || screenRecording || !acquireOutputLock()) return;
         const controller = new AbortController();
         recordAbortRef.current = controller;
         setScreenRecording("shot");
@@ -1109,6 +1152,7 @@ export function CanvasPrevisWorkbench({
         } finally {
             recordAbortRef.current = null;
             setScreenRecording(null);
+            releaseOutputLock();
         }
     };
 
@@ -1557,12 +1601,16 @@ export function CanvasPrevisWorkbench({
                 const oldest = handledPreviewRequestsRef.current.values().next().value;
                 if (typeof oldest === "string") handledPreviewRequestsRef.current.delete(oldest);
             }
-            if (recording) return;
+            // 正在录制或转码（含深度捕捉、镜头录屏）时不并发启动第二路录制：两路转码共用一个 FFmpeg 实例。
+            if (outputLockRef.current) {
+                message.info("世界引擎正在输出视频，Agent 请求的白模预览已跳过，完成后可再点「生成白膜」");
+                return;
+            }
             void exportClayVideo();
         };
         window.addEventListener("previs:preview-requested", onPreviewRequested);
         return () => window.removeEventListener("previs:preview-requested", onPreviewRequested);
-    }, [activeShot?.id, draft?.id, effectiveCanvasId, exportClayVideo]);
+    }, [activeShot?.id, draft?.id, effectiveCanvasId, exportClayVideo, message]);
 
     if (!open || !draft || !activeShot) return null;
 
@@ -1650,7 +1698,7 @@ export function CanvasPrevisWorkbench({
                         classNames={{ root: "previs-add-menu-overlay" }}
                         menu={{
                             items: [
-                                { key: "shot", label: "录制镜头画面（镜头摄影机，按镜头时长）", onClick: () => void recordShotToFile() },
+                                { key: "shot", label: "录制镜头画面（镜头摄影机，按镜头时长）", disabled: recording || depthExporting, onClick: () => void recordShotToFile() },
                                 { key: "window", label: "录制世界引擎窗口（含面板与操作过程）", onClick: () => void recordWindowToFile() },
                             ],
                         }}
@@ -1665,13 +1713,27 @@ export function CanvasPrevisWorkbench({
                     <MonitorUp className="size-3.5" />
                     {monitorOpen ? "关闭监看" : "第二屏"}
                 </button>
-                <button type="button" className="previs-desk-header-action" onClick={() => void exportClayVideo()} disabled={recording || depthExporting}>
+                <button
+                    type="button"
+                    className="previs-desk-header-action"
+                    onClick={() => void exportClayVideo()}
+                    disabled={recording || depthExporting || screenRecording === "shot"}
+                    aria-busy={recording}
+                    title="录制白膜视频（镜头摄影机），在浏览器转成 MP4 后回写画布；录制时请保持标签页可见"
+                >
                     <Video className="size-3.5" />
-                    生成白膜
+                    {recording ? (outputStage ?? "录制中…") : "生成白膜"}
                 </button>
-                <button type="button" className="previs-desk-header-action" onClick={() => void exportDepthPass()} disabled={recording || depthExporting} title="捕捉深度图与深度视频（近白远黑，镜头摄影机）">
+                <button
+                    type="button"
+                    className="previs-desk-header-action"
+                    onClick={() => void exportDepthPass()}
+                    disabled={recording || depthExporting || screenRecording === "shot"}
+                    aria-busy={depthExporting}
+                    title="捕捉深度图与深度视频（近白远黑，镜头摄影机），在浏览器转成 MP4 后回写画布；录制时请保持标签页可见"
+                >
                     <Layers className="size-3.5" />
-                    {depthExporting ? "捕捉中…" : "深度捕捉"}
+                    {depthExporting ? (outputStage ?? "捕捉中…") : "深度捕捉"}
                 </button>
                 <button type="button" className="previs-desk-header-action is-primary" onClick={() => void applyToCanvas()} disabled={saving}>
                     <Save className="size-3.5" />

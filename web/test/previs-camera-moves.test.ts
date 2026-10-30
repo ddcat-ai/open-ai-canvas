@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildPrevisCameraRecipeMoves, createPrevisCameraMove, evaluatePrevisCamera, resolvePrevisSubjectState, samplePrevisCameraPath } from "@/lib/canvas/previs/previs-camera-moves";
-import { describePrevisCameraMove, PREVIS_CAMERA_FOLLOW_SIDES, PREVIS_CAMERA_RECIPES, PREVIS_CAMERA_TECHNIQUES, resolvePrevisCameraTechnique, resolvePrevisShotCameraMove } from "@/lib/canvas/previs/previs-camera-techniques";
-import { previsAspectValue, previsVerticalFov } from "@/lib/canvas/previs/previs-optics";
+import { describePrevisCameraMove, PREVIS_CAMERA_FOLLOW_SHOT_SIZES, PREVIS_CAMERA_FOLLOW_SIDES, PREVIS_CAMERA_RECIPES, PREVIS_CAMERA_TECHNIQUES, resolvePrevisCameraTechnique, resolvePrevisShotCameraMove } from "@/lib/canvas/previs/previs-camera-techniques";
+import { previsAspectValue, previsFramingDistance, previsVerticalFov } from "@/lib/canvas/previs/previs-optics";
 import { compilePrevisPrompt } from "@/lib/canvas/previs/previs-prompt-compiler";
 import { createPrevisActor, createPrevisCamera, createPrevisScene, previsIdentityTransform } from "@/lib/canvas/previs/previs-scene";
 import { applyPrevisActorTravel } from "@/lib/canvas/previs/previs-travel";
@@ -160,6 +160,66 @@ describe("跟拍", () => {
         expect(path.at(-1)![2]).toBeGreaterThan(path[0][2] + 15);
     });
 
+    /** 主角 6 秒内从原点沿 +Z 走 8 米；人物面朝 +Z，右手在 -X。 */
+    function walkScene(moves: (heroId: string) => PrevisCameraMoveSegment[]) {
+        const hero = applyPrevisActorTravel(createPrevisActor("主角", [0, 0, 0]), { from: [0, 0, 0], to: [0, 0, 8], start: 0, duration: 6, style: "walk" });
+        return setup(moves(hero.id), [hero]);
+    }
+    const horizontalOffset = (camera: PrevisVec3, root: PrevisVec3) => Math.hypot(camera[0] - root[0], camera[2] - root[2]);
+
+    test("过肩跟随换到正面：用 blend 秒绕着人物右侧过渡，不穿过身体、不跳变", () => {
+        const { scene, camera } = walkScene((id) => [
+            move("follow", 0, 3.3, { subjectId: id, params: { side: "shoulder" } }),
+            move("follow", 2.4, 3.6, { subjectId: id, params: { side: "front", shotSize: "close_up", lag: 0, blend: 2.1 } }),
+        ]);
+        const hero = scene.objects[0];
+        let previous = evaluatePrevisCamera(scene, camera, 2.3).position;
+        for (let time = 2.35; time <= 4.6; time += 0.05) {
+            const state = evaluatePrevisCamera(scene, camera, time);
+            const root = resolvePrevisSubjectState(hero, time).root;
+            expect(horizontalOffset(state.position, root)).toBeGreaterThan(0.5);
+            expect(distance(state.position, previous)).toBeLessThan(0.25);
+            previous = state.position;
+        }
+        // 过渡中点在人物右手一侧（-X），结束后在人物正前方。
+        const middle = evaluatePrevisCamera(scene, camera, 3.45).position;
+        expect(middle[0]).toBeLessThan(-0.3);
+        const end = evaluatePrevisCamera(scene, camera, 5);
+        const root = resolvePrevisSubjectState(hero, 5).root;
+        expect(end.position[2]).toBeGreaterThan(root[2] + 0.3);
+        expect(Math.abs(end.position[0] - root[0])).toBeLessThan(1e-6);
+    });
+
+    test("正后方换到正前方没有最短方向时固定从右侧绕，整段过渡不翻面", () => {
+        const { scene, camera } = walkScene((id) => [move("follow", 0, 6, { subjectId: id, params: { side: "behind", lag: 0 } }), move("follow", 2, 4, { subjectId: id, params: { side: "front", lag: 0, blend: 2 } })]);
+        for (const time of [2.3, 2.6, 3, 3.4, 3.7]) expect(evaluatePrevisCamera(scene, camera, time).position[0]).toBeLessThan(0);
+        const left = walkScene((id) => [move("follow", 0, 6, { subjectId: id, params: { side: "behind", lag: 0 } }), move("follow", 2, 4, { subjectId: id, params: { side: "left", lag: 0, blend: 2 } })]);
+        expect(evaluatePrevisCamera(left.scene, left.camera, 3).position[0]).toBeGreaterThan(0);
+    });
+
+    test("跟拍景别按焦段与画幅算距离、注视高度与机位高度", () => {
+        const { scene, camera } = walkScene((id) => [move("follow", 0, 6, { subjectId: id, params: { side: "front", shotSize: "close_up", lag: 0 } })]);
+        const subject = resolvePrevisSubjectState(scene.objects[0], 3);
+        const state = evaluatePrevisCamera(scene, camera, 3);
+        const expected = previsFramingDistance(0.3 * subject.height, 35, previsAspectValue(scene.shots[0].aspectRatio));
+        expect(horizontalOffset(state.position, subject.root)).toBeCloseTo(expected, 4);
+        expect(state.position[1]).toBeCloseTo(subject.height * 0.9, 4);
+        expect(state.target[1]).toBeCloseTo(subject.height * 0.88, 4);
+        // 焦段翻倍，同一景别的距离也翻倍；给了 distance 时以 distance 为准。
+        const tele = evaluatePrevisCamera(scene, { ...camera, focalLength: 70 }, 3);
+        expect(horizontalOffset(tele.position, subject.root)).toBeCloseTo(expected * 2, 4);
+        const fixed = walkScene((id) => [move("follow", 0, 6, { subjectId: id, params: { side: "front", shotSize: "close_up", distance: 3, lag: 0 } })]);
+        expect(horizontalOffset(evaluatePrevisCamera(fixed.scene, fixed.camera, 3).position, subject.root)).toBeCloseTo(3, 4);
+    });
+
+    test("提示词写出绕行过渡与跟拍景别", () => {
+        const { scene } = walkScene((id) => [move("follow", 0, 3, { subjectId: id, params: { side: "shoulder" } }), move("follow", 2.4, 3.6, { subjectId: id, params: { side: "front", shotSize: "close_up", blend: 2.1 } })]);
+        const prompt = compilePrevisPrompt(scene, scene.shots[0]);
+        expect(prompt).toContain("过主角肩膀的过肩镜头");
+        expect(prompt).toContain("镜头用 2.1 秒绕着主角平滑移到主角前方");
+        expect(prompt).toContain("景别为近景（肩部以上）");
+    });
+
     test("提示词写出运镜时间线，并说明机位随御剑升空", () => {
         const { scene } = swordScene();
         const prompt = compilePrevisPrompt(scene, scene.shots[0]);
@@ -235,5 +295,73 @@ describe("与后端白名单一致", () => {
     test("跟拍方位一致", () => {
         const sides = /var cloudAgentPrevisCameraFollowSides = \[\]string\{([^}]*)\}/.exec(goSource)?.[1].match(/"([a-z]+)"/g)?.map((item) => item.slice(1, -1));
         expect(sides).toEqual(PREVIS_CAMERA_FOLLOW_SIDES.map((item) => item.value));
+    });
+
+    test("跟拍景别一致", () => {
+        const sizes = /var cloudAgentPrevisCameraFollowShotSizes = \[\]string\{([^}]*)\}/.exec(goSource)?.[1].match(/"([a-z_]+)"/g)?.map((item) => item.slice(1, -1));
+        expect(sizes).toEqual(PREVIS_CAMERA_FOLLOW_SHOT_SIZES.map((item) => item.value));
+    });
+
+    test("大师手法配方 ID 与顺序一致，展开结果与共用 golden 逐项相同", () => {
+        const recipeSource = readFileSync(join(import.meta.dir, "../../backend/internal/app/cloud_agent_previs_camera_recipes.go"), "utf8");
+        const backendIds = [...recipeSource.matchAll(/\{Recipe: "([a-z_]+)"/g)].map((match) => match[1]);
+        expect(backendIds).toEqual(PREVIS_CAMERA_RECIPES.map((item) => item.id));
+        const goldenPath = join(import.meta.dir, "../../backend/internal/app/testdata/previs_camera_recipes.json");
+        const expand = (input: { start: number; duration: number; subjectId: string; shotDuration: number }) =>
+            Object.fromEntries(
+                PREVIS_CAMERA_RECIPES.map((recipe) => [
+                    recipe.id,
+                    buildPrevisCameraRecipeMoves(recipe, input)
+                        .map(({ id: _id, ...rest }) => rest)
+                        .toSorted((left, right) => left.start - right.start || left.technique.localeCompare(right.technique)),
+                ]),
+            );
+        // 改配方后：在 web 目录运行 UPDATE_GOLDEN=1 bun test test/previs-camera-moves.test.ts 重新生成，再跑后端测试确认两边一致。
+        if (process.env.UPDATE_GOLDEN === "1") {
+            const inputs = [
+                { start: 0, duration: 6, subjectId: "hero", shotDuration: 6 },
+                { start: 1.5, duration: 3, subjectId: "hero", shotDuration: 5 },
+            ];
+            const comment = "前端 PREVIS_CAMERA_RECIPES 与后端 cloudAgentPrevisCameraRecipes 对同一输入的展开结果；两边测试都按它校验。改配方后在 web 目录运行 UPDATE_GOLDEN=1 bun test test/previs-camera-moves.test.ts 重新生成。";
+            writeFileSync(goldenPath, JSON.stringify({ comment, cases: inputs.map((input) => ({ input, recipes: expand(input) })) }, null, 2) + "\n");
+        }
+        const golden = JSON.parse(readFileSync(goldenPath, "utf8")) as {
+            cases: Array<{ input: { start: number; duration: number; subjectId: string; shotDuration: number }; recipes: Record<string, Array<Omit<PrevisCameraMoveSegment, "id">>> }>;
+        };
+        expect(golden.cases.length).toBeGreaterThan(1);
+        for (const item of golden.cases) {
+            expect(Object.keys(item.recipes)).toEqual(PREVIS_CAMERA_RECIPES.map((recipe) => recipe.id));
+            expect(expand(item.input)).toEqual(item.recipes);
+        }
+    });
+});
+
+describe("过肩跟随转正面特写配方", () => {
+    test("起幅在人物肩后，落幅在人物正前方的面部大特写", () => {
+        const hero = applyPrevisActorTravel(createPrevisActor("主角", [0, 0, 0]), { from: [0, 0, 0], to: [0, 0, 8], start: 0, duration: 6, style: "walk" });
+        const moves = buildPrevisCameraRecipeMoves(PREVIS_CAMERA_RECIPES.find((item) => item.id === "ots_to_closeup")!, { start: 0, duration: 6, subjectId: hero.id, shotDuration: 6 });
+        const { scene, camera } = setup(moves, [hero]);
+        const start = evaluatePrevisCamera(scene, camera, 0.5);
+        const startRoot = resolvePrevisSubjectState(hero, 0.5).root;
+        expect(start.position[2]).toBeLessThan(startRoot[2]);
+        const end = evaluatePrevisCamera(scene, camera, 6);
+        const subject = resolvePrevisSubjectState(hero, 6);
+        expect(end.position[2]).toBeGreaterThan(subject.root[2]);
+        const expected = previsFramingDistance(0.16 * subject.height, 35, previsAspectValue(scene.shots[0].aspectRatio));
+        // 滞后让人物追近机位，但至少保留 75% 的取景距离。
+        const offset = Math.hypot(end.position[0] - subject.root[0], end.position[2] - subject.root[2]);
+        expect(offset).toBeGreaterThanOrEqual(expected * 0.75 - 1e-6);
+        expect(offset).toBeLessThanOrEqual(expected + 1e-6);
+        expect(end.target[1]).toBeGreaterThan(subject.height * 0.85);
+    });
+
+    test("倒退跟拍近景时人物跑动也不会撞进镜头", () => {
+        const runner = applyPrevisActorTravel(createPrevisActor("主角", [0, 0, 0]), { from: [0, 0, 0], to: [0, 0, 30], start: 0, duration: 5, style: "run" });
+        const { scene, camera } = setup([move("follow", 0, 6, { subjectId: runner.id, params: { side: "front", shotSize: "close_up", lag: 0.5 } })], [runner]);
+        for (const time of [0.5, 1.5, 2.5, 3.5, 4.5]) {
+            const state = evaluatePrevisCamera(scene, camera, time);
+            const root = resolvePrevisSubjectState(runner, time).root;
+            expect(state.position[2] - root[2]).toBeGreaterThan(0.3);
+        }
     });
 });

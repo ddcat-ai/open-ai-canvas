@@ -1,4 +1,4 @@
-import type { PrevisCameraFollowSide, PrevisCameraMove, PrevisCameraMoveParams, PrevisCameraMoveSegment, PrevisCameraTechnique, PrevisScene, PrevisShot } from "@/types/previs";
+import type { PrevisCameraFollowSide, PrevisCameraMove, PrevisCameraMoveParams, PrevisCameraMoveSegment, PrevisCameraTechnique, PrevisPathEasing, PrevisScene, PrevisShot, PrevisShotSize } from "@/types/previs";
 
 /**
  * 世界引擎运镜手法表（纯数据，不依赖 three，画布页也可以引用）。
@@ -8,11 +8,12 @@ import type { PrevisCameraFollowSide, PrevisCameraMove, PrevisCameraMoveParams, 
  * web/test/previs-camera-moves.test.ts 会逐项比对。
  */
 
-export type PrevisCameraNumberParamKey = Exclude<keyof PrevisCameraMoveParams, "side">;
+export type PrevisCameraNumberParamKey = Exclude<keyof PrevisCameraMoveParams, "side" | "shotSize">;
 
 export type PrevisCameraParamSpec =
     | { kind: "number"; key: PrevisCameraNumberParamKey; label: string; unit: string; min: number; max: number; step: number; defaultValue?: number; autoHint?: string }
-    | { kind: "side"; key: "side"; label: string };
+    | { kind: "side"; key: "side"; label: string }
+    | { kind: "shotSize"; key: "shotSize"; label: string };
 
 export type PrevisCameraTechniqueGroup = "dolly" | "pan" | "crane" | "follow" | "texture";
 
@@ -51,10 +52,29 @@ export const PREVIS_CAMERA_FOLLOW_SIDES: Array<{ value: PrevisCameraFollowSide; 
     { value: "pov", label: "主观视角", distance: 0.3, heightRatio: 0.93 },
 ];
 
+/**
+ * 跟拍景别：画面短边要框住的主体高度比例（extent）、画面中心高度（aim）与机位高度（eye），都按身高比例。
+ * 距离按当时焦段与镜头画幅换算（previsFramingDistance），所以同一景别换焦段、换画幅仍然框住同样的范围。
+ * 只对后方、前方、左右侧生效；俯拍、过肩、主观视角有自己的几何。
+ */
+export const PREVIS_CAMERA_FOLLOW_SHOT_SIZES: Array<{ value: PrevisShotSize; label: string; extent: number; aim: number; eye: number }> = [
+    { value: "extreme_close_up", label: "大特写（面部）", extent: 0.16, aim: 0.93, eye: 0.93 },
+    { value: "close_up", label: "近景（肩部以上）", extent: 0.3, aim: 0.88, eye: 0.9 },
+    { value: "medium", label: "中景（腰部以上）", extent: 0.62, aim: 0.74, eye: 0.86 },
+    { value: "full", label: "全景（全身）", extent: 1.3, aim: 0.52, eye: 0.82 },
+    { value: "wide", label: "远景", extent: 3.2, aim: 0.5, eye: 0.9 },
+    { value: "extreme_wide", label: "大远景", extent: 9, aim: 0.5, eye: 2.5 },
+];
+
+export function resolvePrevisCameraFollowShotSize(value: string | undefined) {
+    return value ? PREVIS_CAMERA_FOLLOW_SHOT_SIZES.find((item) => item.value === value) : undefined;
+}
+
 const number = (key: PrevisCameraNumberParamKey, label: string, unit: string, min: number, max: number, step: number, extra: { defaultValue?: number; autoHint?: string } = {}): PrevisCameraParamSpec => ({ kind: "number", key, label, unit, min, max, step, ...extra });
 const AIM = number("aim", "注视高度", "米", 0, 20, 0.1, { autoHint: "胸口" });
 const INTENSITY = number("intensity", "强度", "", 0.1, 3, 0.1, { defaultValue: 1 });
 const SIDE: PrevisCameraParamSpec = { kind: "side", key: "side", label: "方位" };
+const SHOT_SIZE: PrevisCameraParamSpec = { kind: "shotSize", key: "shotSize", label: "景别" };
 
 export const PREVIS_CAMERA_TECHNIQUES: PrevisCameraTechniqueInfo[] = [
     { id: "push_in", label: "推镜头", group: "dolly", hint: "沿视线推近主体", subject: "none", params: [number("distance", "推近", "米", 0.1, 200, 0.5, { autoHint: "距离的 45%" })] },
@@ -124,9 +144,17 @@ export const PREVIS_CAMERA_TECHNIQUES: PrevisCameraTechniqueInfo[] = [
         id: "follow",
         label: "跟拍",
         group: "follow",
-        hint: "跟着主体移动；人物飞行、御剑时机位一起升空",
+        hint: "跟着主体移动；人物飞行、御剑时机位一起升空。换方位或景别时绕主体过渡（切入用时）",
         subject: "required",
-        params: [SIDE, number("distance", "距离", "米", 0, 60, 0.5, { autoHint: "按方位" }), number("height", "高度", "米", -5, 100, 0.1, { autoHint: "按方位" }), number("lag", "滞后", "秒", 0, 2, 0.05, { defaultValue: 0.25 }), AIM],
+        params: [
+            SIDE,
+            SHOT_SIZE,
+            number("distance", "距离", "米", 0, 60, 0.5, { autoHint: "按方位或景别" }),
+            number("height", "高度", "米", -5, 100, 0.1, { autoHint: "按方位或景别" }),
+            number("lag", "滞后", "秒", 0, 2, 0.05, { defaultValue: 0.25 }),
+            number("blend", "切入用时", "秒", 0, 10, 0.1, { autoHint: "≤0.6 秒" }),
+            AIM,
+        ],
     },
     { id: "look_at", label: "跟摇", group: "follow", hint: "机位不动，镜头始终盯住主体", subject: "required", params: [AIM] },
     { id: "handheld", label: "手持", group: "texture", hint: "呼吸感的轻微晃动，可与其他运镜叠加", subject: "none", layer: true, params: [INTENSITY] },
@@ -162,6 +190,10 @@ export function sanitizePrevisCameraMoveParams(technique: PrevisCameraTechnique,
             if (params.side && PREVIS_CAMERA_FOLLOW_SIDES.some((item) => item.value === params.side)) result.side = params.side;
             continue;
         }
+        if (spec.kind === "shotSize") {
+            if (resolvePrevisCameraFollowShotSize(params.shotSize)) result.shotSize = params.shotSize;
+            continue;
+        }
         const value = params[spec.key];
         if (typeof value === "number" && Number.isFinite(value)) result[spec.key] = Math.min(spec.max, Math.max(spec.min, value));
     }
@@ -171,7 +203,25 @@ export function sanitizePrevisCameraMoveParams(technique: PrevisCameraTechnique,
 export type PrevisCameraRecipeInput = { start: number; duration: number; subjectId?: string };
 
 /**
- * 大师手法：一组运镜段的组合。Agent 端的同名配方写在 cloud_agent_previs_camera.go 的 catalog 文案里。
+ * 配方里的一段运镜，时间按配方总时长的比例写：at 开始、span 时长，max 是时长上限（秒），
+ * alignEnd 让这段贴着配方结尾；blendSpan 是跟拍切入用时占总时长的比例（展开成 params.blend 秒数）。
+ * 需要或可选主体的手法自动带上配方主体。
+ */
+export type PrevisCameraRecipeSegment = {
+    technique: PrevisCameraTechnique;
+    at: number;
+    span: number;
+    max?: number;
+    alignEnd?: boolean;
+    easing?: PrevisPathEasing;
+    blendSpan?: number;
+    params?: PrevisCameraMoveParams;
+};
+
+/**
+ * 大师手法：一组运镜段的组合（纯数据）。
+ * 后端 cloud_agent_previs_camera_recipes.go 有同一张表，Agent 用 camera_move 的 recipe 一次写入整套；
+ * 两边按 backend/internal/app/testdata/previs_camera_recipes.json 的展开结果互相校验。
  */
 export type PrevisCameraRecipe = {
     id: string;
@@ -179,40 +229,73 @@ export type PrevisCameraRecipe = {
     source: string;
     hint: string;
     subject: "none" | "optional" | "required";
-    build: (input: PrevisCameraRecipeInput) => Array<Omit<PrevisCameraMoveSegment, "id">>;
+    segments: PrevisCameraRecipeSegment[];
 };
 
 export const PREVIS_CAMERA_RECIPES: PrevisCameraRecipe[] = [
-    { id: "vertigo", label: "眩晕变焦", source: "希区柯克《迷魂记》", hint: "后退同时推焦，主体不变、背景压近", subject: "optional", build: ({ start, duration, subjectId }) => [{ technique: "dolly_zoom_out", start, duration, subjectId }] },
-    { id: "emotional_push", label: "情绪推镜", source: "斯皮尔伯格", hint: "缓慢推近人物，强调顿悟与情绪", subject: "none", build: ({ start, duration }) => [{ technique: "push_in", start, duration }] },
-    { id: "hero_orbit", label: "英雄环绕", source: "迈克尔·贝", hint: "绕主体转半圈，配低机位更有气势", subject: "optional", build: ({ start, duration, subjectId }) => [{ technique: "orbit_right", start, duration, subjectId, params: { angle: 180 } }] },
-    { id: "aerial_reveal", label: "航拍拉升", source: "诺兰", hint: "升高并后退，揭示整个世界", subject: "none", build: ({ start, duration }) => [{ technique: "crane_up", start, duration, params: { height: 12, distance: 16 } }] },
+    {
+        id: "ots_to_closeup",
+        label: "过肩跟随转正面特写",
+        source: "斯坦尼康长镜头（《摔角王》式背后跟随）",
+        hint: "贴着人物肩后跟着走，再绕到正面收成近景，最后收到面部大特写",
+        subject: "required",
+        segments: [
+            { technique: "follow", at: 0, span: 0.75, params: { side: "shoulder" } },
+            { technique: "follow", at: 0.4, span: 0.6, blendSpan: 0.35, params: { side: "front", shotSize: "close_up", lag: 0.1 } },
+            { technique: "follow", at: 0.78, span: 0.22, blendSpan: 0.18, params: { side: "front", shotSize: "extreme_close_up", lag: 0.1 } },
+            { technique: "handheld", at: 0, span: 1, params: { intensity: 0.35 } },
+        ],
+    },
+    {
+        id: "walk_and_talk",
+        label: "倒退跟拍收紧",
+        source: "《白宫风云》walk and talk",
+        hint: "在人物前方倒退跟拍中景，说到关键处收紧到近景",
+        subject: "required",
+        segments: [
+            { technique: "follow", at: 0, span: 1, params: { side: "front", shotSize: "medium", lag: 0.2 } },
+            { technique: "follow", at: 0.6, span: 0.4, blendSpan: 0.3, params: { side: "front", shotSize: "close_up", lag: 0.2 } },
+            { technique: "handheld", at: 0, span: 1, params: { intensity: 0.3 } },
+        ],
+    },
+    {
+        id: "hero_reveal",
+        label: "背影绕前亮相",
+        source: "史诗片英雄亮相",
+        hint: "从背后全景跟随，缓慢绕到正面并降低机位，收成仰拍近景",
+        subject: "required",
+        segments: [
+            { technique: "follow", at: 0, span: 0.85, params: { side: "behind", shotSize: "full", lag: 0.15 } },
+            { technique: "follow", at: 0.3, span: 0.7, blendSpan: 0.55, params: { side: "front", shotSize: "close_up", height: 0.9, lag: 0.15 } },
+        ],
+    },
+    { id: "vertigo", label: "眩晕变焦", source: "希区柯克《迷魂记》", hint: "后退同时推焦，主体不变、背景压近", subject: "optional", segments: [{ technique: "dolly_zoom_out", at: 0, span: 1 }] },
+    { id: "emotional_push", label: "情绪推镜", source: "斯皮尔伯格", hint: "缓慢推近人物，强调顿悟与情绪", subject: "none", segments: [{ technique: "push_in", at: 0, span: 1 }] },
+    { id: "hero_orbit", label: "英雄环绕", source: "迈克尔·贝", hint: "绕主体转半圈，配低机位更有气势", subject: "optional", segments: [{ technique: "orbit_right", at: 0, span: 1, params: { angle: 180 } }] },
+    { id: "aerial_reveal", label: "航拍拉升", source: "诺兰", hint: "升高并后退，揭示整个世界", subject: "none", segments: [{ technique: "crane_up", at: 0, span: 1, params: { height: 12, distance: 16 } }] },
     {
         id: "intimate_handheld",
         label: "贴身手持",
         source: "王家卫",
         hint: "近距离跟着人物，叠加手持晃动",
         subject: "required",
-        build: ({ start, duration, subjectId }) => [
-            { technique: "follow", start, duration, subjectId, params: { side: "behind", distance: 2.2, lag: 0.12 } },
-            { technique: "handheld", start, duration, params: { intensity: 1.6 } },
+        segments: [
+            { technique: "follow", at: 0, span: 1, params: { side: "behind", distance: 2.2, lag: 0.12 } },
+            { technique: "handheld", at: 0, span: 1, params: { intensity: 1.6 } },
         ],
     },
-    { id: "symmetric_follow", label: "一点透视跟拍", source: "库布里克《闪灵》", hint: "人物正后方居中跟随", subject: "required", build: ({ start, duration, subjectId }) => [{ technique: "follow", start, duration, subjectId, params: { side: "behind", distance: 5, lag: 0.3 } }] },
-    { id: "side_track", label: "侧面平移跟拍", source: "黑泽明", hint: "与人物平行移动，看清动作全貌", subject: "required", build: ({ start, duration, subjectId }) => [{ technique: "follow", start, duration, subjectId, params: { side: "left", distance: 6, lag: 0.2 } }] },
+    { id: "symmetric_follow", label: "一点透视跟拍", source: "库布里克《闪灵》", hint: "人物正后方居中跟随", subject: "required", segments: [{ technique: "follow", at: 0, span: 1, params: { side: "behind", distance: 5, lag: 0.3 } }] },
+    { id: "side_track", label: "侧面平移跟拍", source: "黑泽明", hint: "与人物平行移动，看清动作全貌", subject: "required", segments: [{ technique: "follow", at: 0, span: 1, params: { side: "left", distance: 6, lag: 0.2 } }] },
     {
         id: "whip_transition",
         label: "横移甩镜",
         source: "韦斯·安德森",
         hint: "平稳横移，结尾快速甩镜转场",
         subject: "none",
-        build: ({ start, duration }) => {
-            const whip = Math.min(0.5, duration / 2);
-            return [
-                { technique: "truck_right", start, duration: Math.max(0.1, duration - whip), params: { distance: 2.5 } },
-                { technique: "whip_pan_right", start: start + Math.max(0.1, duration - whip), duration: whip },
-            ];
-        },
+        segments: [
+            { technique: "truck_right", at: 0, span: 1, params: { distance: 2.5 } },
+            { technique: "whip_pan_right", at: 0, span: 0.5, max: 0.5, alignEnd: true },
+        ],
     },
     {
         id: "sword_chase",
@@ -220,15 +303,31 @@ export const PREVIS_CAMERA_RECIPES: PrevisCameraRecipe[] = [
         source: "仙侠动作",
         hint: "跟在人物后方一起升空，后半段绕到侧面",
         subject: "required",
-        build: ({ start, duration, subjectId }) => [
-            { technique: "follow", start, duration, subjectId, params: { side: "behind", distance: 6, lag: 0.35 } },
-            { technique: "orbit_left", start: start + duration / 2, duration: duration / 2, subjectId, params: { angle: 120 } },
+        segments: [
+            { technique: "follow", at: 0, span: 1, params: { side: "behind", distance: 6, lag: 0.35 } },
+            { technique: "orbit_left", at: 0.5, span: 0.5, params: { angle: 120 } },
         ],
     },
-    { id: "spiral_rise", label: "螺旋升镜", source: "长镜头", hint: "绕主体一圈同时升高", subject: "optional", build: ({ start, duration, subjectId }) => [{ technique: "orbit_left", start, duration, subjectId, params: { angle: 360, rise: 4 } }] },
-    { id: "crash_zoom", label: "急推变焦", source: "港式动作片", hint: "播放头处 0.4 秒猛推焦段", subject: "none", build: ({ start, duration }) => [{ technique: "zoom_in", start, duration: Math.min(0.4, duration), easing: "linear" }] },
-    { id: "impact_shake", label: "冲击震屏", source: "动作片", hint: "播放头处 0.6 秒震动", subject: "none", build: ({ start, duration }) => [{ technique: "shake", start, duration: Math.min(0.6, duration), params: { intensity: 1.2 } }] },
+    { id: "spiral_rise", label: "螺旋升镜", source: "长镜头", hint: "绕主体一圈同时升高", subject: "optional", segments: [{ technique: "orbit_left", at: 0, span: 1, params: { angle: 360, rise: 4 } }] },
+    { id: "crash_zoom", label: "急推变焦", source: "港式动作片", hint: "播放头处 0.4 秒猛推焦段", subject: "none", segments: [{ technique: "zoom_in", at: 0, span: 1, max: 0.4, easing: "linear" }] },
+    { id: "impact_shake", label: "冲击震屏", source: "动作片", hint: "播放头处 0.6 秒震动", subject: "none", segments: [{ technique: "shake", at: 0, span: 1, max: 0.6, params: { intensity: 1.2 } }] },
 ];
+
+const roundRecipeTime = (value: number) => Math.round(value * 1000) / 1000;
+
+/** 配方按开始时间与总时长展开成运镜段（未截断、未分配 id）；后端同名函数逐项一致。 */
+export function expandPrevisCameraRecipe(recipe: PrevisCameraRecipe, input: PrevisCameraRecipeInput): Array<Omit<PrevisCameraMoveSegment, "id">> {
+    return recipe.segments.map((segment) => {
+        const duration = segment.max ? Math.min(segment.span * input.duration, segment.max) : segment.span * input.duration;
+        const start = segment.alignEnd ? input.start + input.duration - duration : input.start + segment.at * input.duration;
+        const params: PrevisCameraMoveParams | undefined = segment.blendSpan ? { ...segment.params, blend: roundRecipeTime(segment.blendSpan * input.duration) } : segment.params;
+        const move: Omit<PrevisCameraMoveSegment, "id"> = { technique: segment.technique, start, duration };
+        if (segment.easing) move.easing = segment.easing;
+        if (input.subjectId && resolvePrevisCameraTechnique(segment.technique)?.subject !== "none") move.subjectId = input.subjectId;
+        if (params) move.params = { ...params };
+        return move;
+    });
+}
 
 export function resolvePrevisCameraRecipe(id: string) {
     return PREVIS_CAMERA_RECIPES.find((item) => item.id === id);
@@ -249,9 +348,13 @@ export function describePrevisCameraMove(move: PrevisCameraMoveSegment, scene?: 
     const parts = [`${formatNumber(move.start)}–${formatNumber(move.start + move.duration)}s`, info?.label ?? move.technique];
     const subject = subjectName(scene, move.subjectId);
     if (subject) parts.push(subject);
-    if (move.technique === "follow") parts.push(resolvePrevisCameraFollowSide(move.params?.side).label);
+    if (move.technique === "follow") {
+        parts.push(resolvePrevisCameraFollowSide(move.params?.side).label);
+        const size = resolvePrevisCameraFollowShotSize(move.params?.shotSize);
+        if (size) parts.push(size.label);
+    }
     for (const spec of info?.params ?? []) {
-        if (spec.kind !== "number" || spec.key === "aim" || spec.key === "lag") continue;
+        if (spec.kind !== "number" || spec.key === "aim" || spec.key === "lag" || spec.key === "blend") continue;
         const value = previsCameraMoveNumber(move, spec.key);
         if (value !== undefined && value !== 0) parts.push(`${formatNumber(value)}${spec.unit}`);
     }
@@ -307,20 +410,25 @@ export function previsCameraMovePhrase(move: PrevisCameraMoveSegment, scene?: Pi
         case "follow": {
             const who = subject ?? "主体";
             const at = value("distance") ? ` ${formatNumber(value("distance")!)} 米处` : "";
+            const size = resolvePrevisCameraFollowShotSize(move.params?.shotSize);
+            const framed = size ? `，景别为${size.label}` : "";
+            const blend = value("blend");
+            // 切入用时较长的跟拍是一次可见的机位过渡：镜头绕着人物走到新方位，而不是硬切。
+            const arrive = blend && blend >= 0.8 ? `镜头用 ${formatNumber(blend)} 秒绕着${who}平滑移到` : "镜头在";
             switch (resolvePrevisCameraFollowSide(move.params?.side).value) {
                 case "front":
-                    return `镜头在${who}前方${at}倒退跟拍，始终拍到人物正面`;
+                    return `${arrive}${who}前方${at}倒退跟拍，始终拍到人物正面${framed}`;
                 case "left":
                 case "right":
-                    return `镜头在${who}${move.params?.side === "left" ? "左" : "右"}侧${at}平行跟拍，与人物同步移动`;
+                    return `${arrive}${who}${move.params?.side === "left" ? "左" : "右"}侧${at}平行跟拍，与人物同步移动${framed}`;
                 case "above":
-                    return `镜头在${who}正上方俯拍跟随`;
+                    return `${arrive}${who}正上方俯拍跟随`;
                 case "shoulder":
-                    return `过${who}肩膀的过肩镜头，随人物前进`;
+                    return `${blend && blend >= 0.8 ? arrive + who + "肩后，" : ""}过${who}肩膀的过肩镜头，随人物前进`;
                 case "pov":
                     return `${who}的主观视角镜头，随人物一起移动`;
                 default:
-                    return `镜头在${who}身后${at}跟拍，与人物同步移动`;
+                    return `${arrive}${who}身后${at}跟拍，与人物同步移动${framed}`;
             }
         }
         case "look_at":
