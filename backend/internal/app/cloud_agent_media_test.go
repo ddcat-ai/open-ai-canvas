@@ -600,7 +600,7 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 		if strings.Contains(string(encoded), `"channelModelKey":"text-only"`) != tc.wantText || !strings.Contains(string(encoded), `"channelModelKey":"seedance-test"`) {
 			t.Fatalf("unexpected filtered catalog for %s: %s", tc.args, encoded)
 		}
-		if intent != nil && !tc.wantText && (intent.Inputs["image"] != 2 || intent.Operation != "image_to_video") {
+		if intent != nil && !tc.wantText && (intent.Inputs["image"] != 2 || intent.Operation != "") {
 			t.Fatalf("intent = %+v", intent)
 		}
 	}

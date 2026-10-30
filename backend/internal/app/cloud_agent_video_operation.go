@@ -34,6 +34,10 @@ func (s *Service) resolveCloudAgentMediaOperation(a cloudAgentMediaArgs, refs ma
 	if a.Mode != "video" {
 		return cloudAgentMediaOperation(a.Mode, refs), nil
 	}
+	if a.VideoStartFrameNodeID != "" || a.VideoEndFrameNodeID != "" {
+		// 显式帧已确定操作；模型是否接受该操作仍由后续统一准入校验。
+		return "image_to_video", nil
+	}
 	var operations []string
 	defaultOperation := ""
 	if a.LogicalModelID != "" {
