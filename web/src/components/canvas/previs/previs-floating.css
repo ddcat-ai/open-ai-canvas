@@ -1310,11 +1310,6 @@
     justify-content: space-between;
     gap: 8px;
 }
-.pv-path__transfer {
-    padding: 8px;
-    border: 1px solid var(--pd-b1);
-    border-radius: 8px;
-}
 .pv-path__transfer .ant-select {
     width: 100%;
 }
@@ -1378,6 +1373,113 @@
 .pv-path__point-tail button:disabled {
     cursor: not-allowed;
     opacity: 0.4;
+}
+/* 终点没有段速和停留：「终点」占掉两格，加号和删除仍对齐上面各行。 */
+.pv-path__point-end {
+    grid-column: span 2;
+}
+.pv-camera-move__params.pv-path__timing {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pv-path__start-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+}
+.pv-path__link {
+    color: var(--pd-t0);
+    font-size: 11px;
+    white-space: nowrap;
+}
+.pv-path__link:hover {
+    text-decoration: underline;
+}
+
+/* ── 检查器里的折叠区（途经点、手动关键帧、让人物走这条轨迹…）──────────── */
+.previs-inspector-advanced {
+    border: 1px solid var(--pd-b0);
+    border-radius: 8px;
+    background: var(--pd-s2);
+}
+.previs-inspector-advanced > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.previs-inspector-advanced > summary::-webkit-details-marker {
+    display: none;
+}
+.previs-inspector-advanced > summary::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 120ms ease;
+}
+.previs-inspector-advanced[open] > summary::before {
+    transform: rotate(45deg);
+}
+.previs-inspector-advanced > summary:hover {
+    color: var(--pd-t0);
+}
+.previs-inspector-advanced > summary:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: -2px;
+    border-radius: 8px;
+}
+.previs-inspector-advanced__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 10px 10px;
+}
+/* 折叠区本身是浅灰底，里面的途经点卡片改白底，层次才分得开。 */
+.previs-inspector-advanced .pv-path__points li {
+    background: #fff;
+}
+
+/* ── 运镜：手法 / 大师手法 / 画路径 三选一 ─────────────────────────────── */
+.pv-motion-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--pd-s3);
+}
+.pv-motion-tabs button {
+    height: 26px;
+    border-radius: 6px;
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 500;
+}
+.pv-motion-tabs button:hover {
+    color: var(--pd-t0);
+}
+.pv-motion-tabs button[aria-selected="true"] {
+    background: #fff;
+    color: var(--pd-t0);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.12);
+}
+.pv-motion-tabs button:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .previs-inspector-advanced > summary::before {
+        transition: none;
+    }
 }
 
 /* ── 时间轴上的运镜段 ─────────────────────────────────────────────────── */

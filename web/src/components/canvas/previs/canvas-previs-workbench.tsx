@@ -175,6 +175,8 @@ export function CanvasPrevisWorkbench({
     const trajectoryDraftRef = useRef(trajectoryDraft);
     trajectoryDraftRef.current = trajectoryDraft;
     const [inspectorOpen, setInspectorOpen] = useState(false);
+    /** 未选中对象时右侧面板显示「世界」还是「镜头」。 */
+    const [sceneTab, setSceneTab] = useState<"world" | "shot">("world");
     const [scenePanelOpen, setScenePanelOpen] = useState(false);
     // 桌面端侧栏常驻，可收起换取沉浸视口；窄屏下改为 scenePanelOpen/inspectorOpen 控制的浮层。
     // 世界视口全屏：对象列表默认收起，从左侧工具条「列表」打开。
@@ -238,6 +240,8 @@ export function CanvasPrevisWorkbench({
             setSelectedBone(null);
             // CAM hides camera gizmos; keep the editable scene view so the selected camera is visible.
             setViewMode("free");
+            // 摄影机的焦段、运镜与删除都在「镜头」页；停在「世界」页等于选中了却看不到它的设置。
+            setSceneTab("shot");
             setInspectorOpen(true);
             setInspectorDocked(true);
         },
@@ -686,8 +690,6 @@ export function CanvasPrevisWorkbench({
 
     /** 统一的「添加到场景」弹窗：选项 + 实时预览，确认后才写入场景。 */
     const [addDialog, setAddDialog] = useState<{ open: boolean; kind: PrevisAddKind; category?: PrevisPropCategoryId }>({ open: false, kind: "actor" });
-    /** 未选中对象时右侧面板显示「世界」还是「镜头」。 */
-    const [sceneTab, setSceneTab] = useState<"world" | "shot">("world");
     /** 打开右侧「世界」页：取消选择，展开属性面板。 */
     const openWorldSettings = () => {
         setSelectedObjectId(null);
@@ -801,6 +803,23 @@ export function CanvasPrevisWorkbench({
             const current = draftRef.current;
             if (!current || setPrevisSceneKeyframeEasing(current, target, easing) === current) return;
             commit((scene) => setPrevisSceneKeyframeEasing(scene, target, easing));
+        },
+        [commit],
+    );
+
+    /** 时间轴删除一段运镜；与检查器列表的垃圾桶同一语义，删空时去掉 moves 字段。未命中不进历史。 */
+    const deleteCameraMove = useCallback(
+        (cameraId: string, moveId: string) => {
+            const camera = draftRef.current?.cameras.find((item) => item.id === cameraId);
+            if (!camera?.moves?.some((move) => move.id === moveId)) return;
+            commit((scene) => ({
+                ...scene,
+                cameras: scene.cameras.map((item) => {
+                    if (item.id !== cameraId) return item;
+                    const moves = (item.moves ?? []).filter((move) => move.id !== moveId);
+                    return { ...item, moves: moves.length ? moves : undefined };
+                }),
+            }));
         },
         [commit],
     );
@@ -1281,7 +1300,14 @@ export function CanvasPrevisWorkbench({
         [handleObjectTransform, message, selectedActor],
     );
 
-    const trajectoryTarget = selectedActor ? { kind: "actor" as const, id: selectedActor.id, name: selectedActor.name } : selectedCamera ? { kind: "camera" as const, id: selectedCamera.id, name: selectedCamera.name } : null;
+    // 画给谁：选中的人物或道具优先（布景不能整体移动），其次是选中的摄影机；都没有时保存为参考轨迹。
+    // 视口里点道具不会取消摄影机选中，所以对象必须排在摄影机前面，否则道具的「画路径」会画成运镜。
+    const trajectoryObject = selectedObject && selectedObject.kind !== "layout" ? selectedObject : null;
+    const trajectoryTarget = trajectoryObject
+        ? { kind: trajectoryObject.kind === "actor" || trajectoryObject.primitive === "character" ? ("actor" as const) : ("object" as const), id: trajectoryObject.id, name: trajectoryObject.name }
+        : selectedCamera
+          ? { kind: "camera" as const, id: selectedCamera.id, name: selectedCamera.name }
+          : null;
     const trajectoryPreviousViewModeRef = useRef(viewMode);
     const trajectorySessionRef = useRef(false);
     useEffect(() => {
@@ -1289,10 +1315,15 @@ export function CanvasPrevisWorkbench({
             trajectorySessionRef.current = true;
             trajectoryPreviousViewModeRef.current = viewMode;
             if (viewMode !== "top") setViewMode("top");
+            // 播放中画：目标在笔下移动、起点时间也跟着变；先停下，画完会从起点重放。
+            setPlaying(false);
+            // 摄影机的运镜路径和删除入口都在「镜头」页，画之前就切过去。
+            if (trajectoryTarget?.kind === "camera") setSceneTab("shot");
             setTrajectoryDraft([]);
-            // 绘制高度默认：演员贴地，摄影机沿用当前机位高度。
-            setTrajectoryHeight(selectedCamera && !selectedActor ? Number(selectedCamera.transform.position[1].toFixed(2)) : 0);
-            message.info(trajectoryTarget ? `为「${trajectoryTarget.name}」画${trajectoryTarget.kind === "camera" ? "运镜路径" : "走位"}：画笔按住拖动；折线逐次点击、双击或回车完成` : "未选择对象：画下的轨迹会保存为参考轨迹，之后可套用或交给 Agent");
+            // 绘制高度默认：演员贴地，道具沿用它在播放头处的高度，摄影机沿用当前机位高度。
+            const height = trajectoryTarget?.kind === "camera" && selectedCamera ? selectedCamera.transform.position[1] : trajectoryTarget?.kind === "object" && trajectoryObject ? interpolatePrevisTransform(trajectoryObject.transform, trajectoryObject.keyframes, playhead).position[1] : 0;
+            setTrajectoryHeight(Number(Math.max(0, height).toFixed(2)));
+            message.info(trajectoryTarget ? `为「${trajectoryTarget.name}」画${PREVIS_TRAJECTORY_LABELS[trajectoryTarget.kind]}：画笔按住拖动；折线逐次点击、双击或回车完成` : "未选择对象：画下的轨迹会保存为参考轨迹，之后可套用或交给 Agent");
             return;
         }
         if (!trajectoryDrawing && trajectorySessionRef.current) {
@@ -1300,7 +1331,7 @@ export function CanvasPrevisWorkbench({
             setTrajectoryDraft([]);
             setViewMode(trajectoryPreviousViewModeRef.current);
         }
-    }, [message, setViewMode, trajectoryDrawing, trajectoryTarget, viewMode]);
+    }, [message, playhead, selectedCamera, setPlaying, setViewMode, trajectoryDrawing, trajectoryObject, trajectoryTarget, viewMode]);
     /**
      * 完成一条轨迹：选中演员或摄影机时写成它的路径（起点是它在播放头处的位置，经过画下的途经点），
      * 没有选中时保存为场景参考轨迹，之后可在属性面板套用，或让 Agent 按标签使用。
@@ -1326,18 +1357,25 @@ export function CanvasPrevisWorkbench({
                 const label = nextPrevisSketchPathLabel(current.paths);
                 commit((scene) => ({ ...scene, paths: [...(scene.paths ?? []), { id: nanoid(), label, points: waypoints }] }));
                 setTrajectoryDrawing(false);
+                // 参考轨迹列在「镜头」页（含删除），画完切过去，免得只在视口里看到一条虚线却找不到它。
+                setSceneTab("shot");
                 message.success(`已保存参考轨迹「${label}」：选中演员或摄影机后可在属性面板套用，也可以让 Agent 按「${label}」运动`);
                 return;
             }
             if (!waypoints.length) return;
-            const start = capabilities.timeline ? Math.min(snappedPlayhead, Math.max(0, shot.duration - 0.5)) : 0;
+            // 重画是替换原路径：沿用原来的开始时间。否则上一笔画完自动播放、播放头停在中途，
+            // 新路径会从那里起步，被压进镜头末尾很短的一段。
+            const replacedStart = (trajectoryObject ?? selectedCamera)?.motionPath?.startDelay;
+            const start = replacedStart !== undefined ? Math.min(replacedStart, Math.max(0, shot.duration - 0.5)) : capabilities.timeline ? Math.min(snappedPlayhead, Math.max(0, shot.duration - 0.5)) : 0;
             const curve = tool === "brush" && waypoints.length > 2;
             try {
-                if (selectedActor) {
-                    const at = interpolatePrevisTransform(selectedActor.transform, selectedActor.keyframes, start).position;
-                    const origin: PrevisVec3 = [at[0], interpolatePrevisKeyframeLift(selectedActor.keyframes, start), at[2]];
-                    const updated = applyPrevisMotionPath(selectedActor, { points: [origin, ...waypoints], speed: "walk", metersPerSecond: 1.4, startDelay: start, orientToPath: true, curve }, shot.duration, true);
-                    commit((scene) => ({ ...scene, objects: scene.objects.map((object) => (object.id === selectedActor.id ? { ...object, keyframes: updated.keyframes, motionPath: updated.motionPath } : object)) }));
+                if (trajectoryObject) {
+                    // 人物贴地走、面朝前进方向，高度写进 lift；道具按画下的高度移动，不转向。
+                    const locked = trajectoryTarget.kind === "actor";
+                    const at = interpolatePrevisTransform(trajectoryObject.transform, trajectoryObject.keyframes, start).position;
+                    const origin: PrevisVec3 = locked ? [at[0], interpolatePrevisKeyframeLift(trajectoryObject.keyframes, start), at[2]] : at;
+                    const updated = applyPrevisMotionPath(trajectoryObject, { points: [origin, ...waypoints], speed: "walk", metersPerSecond: locked ? 1.4 : 1.2, startDelay: start, orientToPath: locked, curve }, shot.duration, locked);
+                    commit((scene) => ({ ...scene, objects: scene.objects.map((object) => (object.id === trajectoryObject.id ? { ...object, keyframes: updated.keyframes, motionPath: updated.motionPath } : object)) }));
                 } else if (selectedCamera) {
                     const origin = interpolatePrevisTransform(selectedCamera.transform, selectedCamera.keyframes, start).position;
                     const updated = applyPrevisMotionPath(selectedCamera, { points: [origin, ...waypoints], speed: "walk", metersPerSecond: 1.2, startDelay: start, orientToPath: false, curve }, shot.duration, false);
@@ -1353,9 +1391,9 @@ export function CanvasPrevisWorkbench({
             setSequencerVisible(true);
             setPlayhead(start);
             setPlaying(true);
-            message.success(`${selectedActor ? "走位" : "运镜路径"}已生成（${waypoints.length + 1} 个途经点），可在属性面板调速率、运动规律与每个点的高度`);
+            message.success(`${PREVIS_TRAJECTORY_LABELS[trajectoryTarget.kind]}已生成（${waypoints.length + 1} 个途经点），可在属性面板调速率、运动规律与每个点的高度，也能在那里删除`);
         },
-        [capabilities.timeline, commit, message, selectedActor, selectedCamera, setMode, setPlayhead, setPlaying, setSequencerVisible, snappedPlayhead, trajectoryHeight, trajectoryTarget],
+        [capabilities.timeline, commit, message, selectedCamera, setMode, setPlayhead, setPlaying, setSequencerVisible, snappedPlayhead, trajectoryHeight, trajectoryObject, trajectoryTarget],
     );
     const handleTrajectoryComplete = useCallback((points: PrevisGroundPoint[]) => finishTrajectory(points, "brush"), [finishTrajectory]);
     const handleTrajectoryPoint = useCallback((point: PrevisGroundPoint) => setTrajectoryDraft((points) => [...points, point]), []);
@@ -1364,17 +1402,18 @@ export function CanvasPrevisWorkbench({
         if (!points.length) return;
         finishTrajectory(points, "polyline");
     }, [finishTrajectory]);
-    // 折线绘制中：回车完成、退格撤销上一个点、Esc 取消。捕获阶段处理，不触发全局快捷键。
+    // 绘制中：Esc 退出（画笔、折线都适用）；折线另有回车完成、退格撤销上一个点。捕获阶段处理，不触发全局快捷键。
     useEffect(() => {
-        if (!trajectoryDrawing || trajectoryTool !== "polyline") return;
+        if (!trajectoryDrawing) return;
         const onKeyDown = (event: KeyboardEvent) => {
-            if (blocksPrevisShortcut(event.target)) return;
-            if (event.key === "Enter") finishPolyline();
-            else if (event.key === "Backspace") setTrajectoryDraft((points) => points.slice(0, -1));
-            else if (event.key === "Escape") {
+            // Esc 不看焦点：点完「画运镜」「画走位」按钮焦点还留在按钮上，按控件守卫会把 Esc 吞掉，退不出绘制。
+            if (event.key === "Escape") {
                 setTrajectoryDraft([]);
                 setTrajectoryDrawing(false);
-            } else return;
+            } else if (trajectoryTool !== "polyline" || blocksPrevisShortcut(event.target)) return;
+            else if (event.key === "Enter") finishPolyline();
+            else if (event.key === "Backspace") setTrajectoryDraft((points) => points.slice(0, -1));
+            else return;
             event.preventDefault();
             event.stopPropagation();
         };
@@ -1920,7 +1959,8 @@ export function CanvasPrevisWorkbench({
                         onTrajectoryPoint={handleTrajectoryPoint}
                         onTrajectoryFinish={finishPolyline}
                         viewMode={viewMode}
-                        onSelectObject={setSelectedObjectId}
+                        // 绘制中笔画常从摄影机、人物或道具上起笔：不改选中目标，否则这一笔会画给别人，或切走俯视图。
+                        onSelectObject={trajectoryDrawing ? ignoreViewportSelection : setSelectedObjectId}
                         onSelectBone={setSelectedBone}
                         onGroundClick={handleGroundClick}
                         onObjectTransform={handleObjectTransform}
@@ -1928,11 +1968,11 @@ export function CanvasPrevisWorkbench({
                         onActorRigReady={handleActorRigReady}
                         selectedCameraId={selectedCameraId}
                         // 视口里点机位 = 要编辑它：留在可编辑视图（CAM 视图会隐藏机位与 gizmo，导致无法拖动）。
-                        onSelectCamera={selectSceneCamera}
+                        onSelectCamera={trajectoryDrawing ? undefined : selectSceneCamera}
                         onCameraTransform={handleCameraTransform}
                         onMovePathWaypoint={handleMovePathWaypoint}
                         onPathContextMenu={handlePathContextMenu}
-                        onPickLayoutInstance={extractLayoutInstance}
+                        onPickLayoutInstance={trajectoryDrawing ? undefined : extractLayoutInstance}
                         onGroundContextMenu={handleGroundContextMenu}
                         showModelLoadNotice
                         showNavigation={false}
@@ -1949,7 +1989,7 @@ export function CanvasPrevisWorkbench({
                     {trajectoryDrawing ? (
                         <div className="pv-trajectory-guide" role="status" data-canvas-no-zoom onPointerDown={(event) => event.stopPropagation()}>
                             <Route className="size-3.5" />
-                            <span>{trajectoryTarget ? `为「${trajectoryTarget.name}」画${trajectoryTarget.kind === "camera" ? "运镜路径" : "走位"}` : "画参考轨迹（未选对象）"}</span>
+                            <span>{trajectoryTarget ? `为「${trajectoryTarget.name}」画${PREVIS_TRAJECTORY_LABELS[trajectoryTarget.kind]}` : "画参考轨迹（未选对象）"}</span>
                             <div className="pv-trajectory-guide__tools" role="radiogroup" aria-label="绘制方式">
                                 {(
                                     [
@@ -1987,8 +2027,18 @@ export function CanvasPrevisWorkbench({
                                     </button>
                                 </>
                             ) : (
-                                <small>按住地面拖动，松开完成</small>
+                                <small>按住地面拖动，松开完成 · Esc 退出</small>
                             )}
+                            <button
+                                type="button"
+                                className="pv-trajectory-guide__action"
+                                onClick={() => {
+                                    setTrajectoryDraft([]);
+                                    setTrajectoryDrawing(false);
+                                }}
+                            >
+                                退出
+                            </button>
                         </div>
                     ) : null}
                     <PrevisCanvasDock
@@ -2018,7 +2068,7 @@ export function CanvasPrevisWorkbench({
                         onFrameScene={() => viewportRef.current?.frameScene()}
                         onZoom={(factor) => viewportRef.current?.zoom(factor)}
                         timelineOpen={capabilities.timeline && sequencerVisible}
-                        onOpenTimeline={enterAnimationMode}
+                        onToggleTimeline={() => (capabilities.timeline && sequencerVisible ? setSequencerVisible(false) : enterAnimationMode())}
                         scenePanelOpen={compactLayout ? scenePanelOpen : sceneDocked}
                         onToggleScenePanel={() => (compactLayout ? setScenePanelOpen((value) => !value) : setSceneDocked((value) => !value))}
                         inspectorOpen={compactLayout ? inspectorOpen : inspectorDocked}
@@ -2224,6 +2274,8 @@ export function CanvasPrevisWorkbench({
                         onAddShot={addShot}
                         onDeleteKeyframe={deleteKeyframe}
                         onSetKeyframeEasing={setKeyframeEasing}
+                        onDeleteCameraMove={deleteCameraMove}
+                        onDeletePath={(kind, id) => editOwnerPath(kind, id, () => null)}
                         onSelectShot={(id) => {
                             commit((current) => ({ ...current, activeShotId: id }));
                             setPlayhead(0);
@@ -2375,6 +2427,12 @@ const PREVIS_LIGHT_TOKENS = {
 
 /** 世界引擎固定使用浅色主题：白色悬浮面板压在世界视口上，不跟随应用暗色模式。 */
 const PREVIS_LIGHT_ANT_THEME = getAntThemeConfig(false);
+
+/** 画轨迹期间视口点选不生效：模块级常量，避免每次渲染换引用。 */
+function ignoreViewportSelection() {}
+
+/** 轨迹画给谁，提示条与提示语里叫什么。 */
+const PREVIS_TRAJECTORY_LABELS = { actor: "走位", object: "路径", camera: "运镜路径" } as const;
 
 /** 渲染视图全集。实际可选项由当前模式的 capabilities.renderModes 过滤。 */
 const PREVIS_RENDER_MODE_LABELS: Array<{ label: string; value: PrevisRenderMode }> = [

@@ -508,7 +508,7 @@ function PrevisSceneContent({
     scene,
     selectedObjectId,
     selectedBone,
-    transformMode,
+    transformMode: requestedTransformMode,
     renderMode,
     playhead,
     showMotionPaths = false,
@@ -529,7 +529,7 @@ function PrevisSceneContent({
     selectedCameraId,
     onSelectCamera,
     onCameraTransform,
-    onMovePathWaypoint,
+    onMovePathWaypoint: requestedMovePathWaypoint,
     onPickLayoutInstance,
     onPathContextMenu,
     onGroundContextMenu,
@@ -542,6 +542,10 @@ function PrevisSceneContent({
     onOrbitControls,
     onNavigationReady,
 }: PrevisCanvasSurfaceProps) {
+    // 画轨迹时笔画常从对象、摄影机或已有路径点上起笔：这期间不显示 gizmo、不拖机身、不拖路径点，
+    // 按下只用来画，否则同一次拖动会同时移动物体并画线。
+    const transformMode = trajectoryDrawing ? "select" : requestedTransformMode;
+    const onMovePathWaypoint = trajectoryDrawing ? undefined : requestedMovePathWaypoint;
     const { gl, camera, scene: threeScene, invalidate, set, size } = useThree();
     const orbitRef = useRef<PrevisOrbitControls>(null);
     const [transforming, setTransforming] = useState(false);
@@ -638,8 +642,14 @@ function PrevisSceneContent({
      * 世界 y=0 Plane 求交。不走 mesh onPointerMove（会被物体 stopPropagation 截断），
      * 也不做 DOM 像素伪换算；因此 pointer 悬停在物体上方时射线仍与地面相交。
      * 高频路径只写 ref，绝不 setState。
+     *
+     * 回调从 ref 读：宿主每次渲染都会换回调引用（播放、保存状态都会触发渲染），
+     * 若作为依赖，监听会在画到一半时被拆掉重装，正在画的这一笔随之丢失。
      */
+    const groundHandlersRef = useRef({ onGroundClick, onGroundContextMenu, onGroundPoint, onTrajectoryComplete, onTrajectoryPoint, onTrajectoryFinish });
+    groundHandlersRef.current = { onGroundClick, onGroundContextMenu, onGroundPoint, onTrajectoryComplete, onTrajectoryPoint, onTrajectoryFinish };
     useEffect(() => {
+        const handlers = groundHandlersRef;
         const canvasElement = gl.domElement;
         const raycaster = new Raycaster();
         const groundPlane = new Plane(new Vector3(0, 1, 0), 0);
@@ -663,7 +673,7 @@ function PrevisSceneContent({
             const point = resolveGroundPoint(event);
             // 射线与地面平行或背离时保留上一个合法点，不写非法值。
             if (!point) return;
-            onGroundPoint(canvasElement, point);
+            handlers.current.onGroundPoint(canvasElement, point);
             if (!pathDrawing) return;
             const next: PrevisVec3 = [point.x, 0, point.z];
             const previous = pathPoints[pathPoints.length - 1];
@@ -681,7 +691,7 @@ function PrevisSceneContent({
             }
             // 原生 canvas 监听先于 R3F（挂在父容器）触发：先清零，命中对象时 R3F 再置位。
             pointerHitRef.current = false;
-            if (!onGroundClick || event.isPrimary === false || event.button !== 0) return;
+            if (!handlers.current.onGroundClick || event.isPrimary === false || event.button !== 0) return;
             pointerDown = { id: event.pointerId, x: event.clientX, y: event.clientY, button: event.button };
             // 折线模式按点击加点，不按住采样；画笔模式按住拖动采样。
             if (!trajectoryDrawing || trajectoryTool !== "brush") return;
@@ -704,7 +714,7 @@ function PrevisSceneContent({
                 contextDown = null;
                 const point = moved <= 5 && !pathMenuHitRef.current ? resolveGroundPoint(event) : null;
                 pathMenuHitRef.current = false;
-                if (point && onGroundContextMenu) onGroundContextMenu(point, { x: event.clientX, y: event.clientY });
+                if (point) handlers.current.onGroundContextMenu?.(point, { x: event.clientX, y: event.clientY });
                 return;
             }
             const start = pointerDown;
@@ -721,22 +731,24 @@ function PrevisSceneContent({
                 pathPoints = [];
                 setDraftPath([]);
                 if (orbitRef.current) orbitRef.current.enabled = !transforming && effectiveViewport.orbit;
-                if (completed.length > 1) onTrajectoryComplete?.(completed.map(([x, , z]) => ({ x, z })));
+                if (completed.length > 1) handlers.current.onTrajectoryComplete?.(completed.map(([x, , z]) => ({ x, z })));
                 return;
             }
             // OrbitControls 旋转、平移或缩放结束时也会收到 pointerup，移动阈值避免误落位。
             const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-            if (distance > 5 || pointerHitRef.current) return;
+            if (distance > 5) return;
             const point = resolveGroundPoint(event);
+            // 折线绘制时点在物体上也落点（取物体下方的地面），俯视图里路线经常要穿过道具和人物。
             if (trajectoryDrawing && trajectoryTool === "polyline") {
-                if (point) onTrajectoryPoint?.(point);
+                if (point) handlers.current.onTrajectoryPoint?.(point);
                 return;
             }
-            if (point) onGroundClick?.(point);
+            if (pointerHitRef.current) return;
+            if (point) handlers.current.onGroundClick?.(point);
         };
         // 折线模式双击完成。
         const onDoubleClick = () => {
-            if (trajectoryDrawing && trajectoryTool === "polyline") onTrajectoryFinish?.();
+            if (trajectoryDrawing && trajectoryTool === "polyline") handlers.current.onTrajectoryFinish?.();
         };
 
         const onPointerCancel = (event: PointerEvent) => {
@@ -780,9 +792,9 @@ function PrevisSceneContent({
             pathPoints = [];
             setDraftPath([]);
             // 这个 renderer 的 canvas 卸载后，它记录的地面点不得再被读到。
-            onGroundPoint(canvasElement, null);
+            handlers.current.onGroundPoint(canvasElement, null);
         };
-    }, [camera, effectiveViewport.orbit, gl, onGroundClick, onGroundContextMenu, onGroundPoint, onTrajectoryComplete, onTrajectoryFinish, onTrajectoryPoint, trajectoryDrawing, trajectoryTool, transforming]);
+    }, [camera, effectiveViewport.orbit, gl, trajectoryDrawing, trajectoryTool, transforming]);
 
     // 滚轮/触控缩放与按钮缩放共用同一最近距离：环绕目标落在演员体内时不允许推进到身体内部。
     // 走 state 而不是直接写 controls.minDistance，否则 drei 每次 render 回写 props 会把它重置。

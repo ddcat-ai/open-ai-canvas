@@ -31,8 +31,8 @@ import { previsPrimitiveHalfHeight } from "@/lib/canvas/previs/previs-prop-libra
 import { dropPrevisObjectToGround } from "@/lib/canvas/previs/previs-grounding";
 import { PrevisLayoutInspectorGroup, PrevisPropVariantGroup } from "./previs-world-panel";
 import { PrevisTravelSection } from "./previs-travel-section";
-import { PrevisCameraMoveList, PrevisCameraMoveSection } from "./previs-camera-move-section";
-import { PrevisPathSection } from "./previs-path-section";
+import { PrevisCameraMotionList, PrevisCameraMoveSection } from "./previs-camera-move-section";
+import { PrevisPathSection, PrevisSketchPathList } from "./previs-path-section";
 import type { PrevisPathCameraMode } from "@/lib/canvas/previs/previs-path-transfer";
 import { resolvePrevisObjectBox } from "@/lib/canvas/previs/previs-frame-bounds";
 
@@ -396,6 +396,19 @@ export function ObjectInspector({
 
             {activeTab === "props" ? (
                 <>
+                    {/* 摆场模式没有「动画」页，但视口里仍画着这条路径：删除入口必须在这里。 */}
+                    {!capabilities.timeline && object.motionPath ? (
+                        <InspectorGroup title={isActor ? "走位" : "路径"} hint="切到「动画」调整">
+                            <div className="pv-path__head">
+                                <span className="previs-inspector-note">
+                                    有一条{isActor ? "走位" : "移动"}路径（{object.motionPath.points.length} 个点）
+                                </span>
+                                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onClearPath}>
+                                    删除路径
+                                </Button>
+                            </div>
+                        </InspectorGroup>
+                    ) : null}
                     <InspectorGroup title="位置" hint={isActor ? "始终贴地（路径高度另算）" : "Y 为离地高度，地面 0 m"}>
                         <TransformFields transform={rendered} onChange={onTransformEdit} scaleLabel={isActor ? "比例" : "尺寸"} scaleUnit={isActor ? "×" : "倍"} scaleAxisLabels={isActor ? undefined : ["W", "H", "D"]} lockY={isActor} />
                         {isActor ? null : (
@@ -550,6 +563,13 @@ export function LightInspector({ light, onUpdate, onDelete }: { light: PrevisLig
 }
 
 const LIGHT_SWATCHES: readonly string[] = ["#ffffff", "#ffe2b8", "#ffc58a", "#9cc7ff", "#c3b5ff", "#ff9b8a"];
+
+type CameraMotionTab = "technique" | "recipe" | "path";
+const CAMERA_MOTION_TABS: Array<{ id: CameraMotionTab; label: string; hint: string }> = [
+    { id: "technique", label: "手法", hint: "推拉摇移、环绕、跟拍等单个手法，从播放头加一段" },
+    { id: "recipe", label: "大师手法", hint: "一键套用整套多段运镜" },
+    { id: "path", label: "画路径", hint: "在视口里画摄影机经过的路线" },
+];
 const FOCAL_PRESETS = [18, 24, 35, 50, 85, 135];
 
 /**
@@ -591,6 +611,14 @@ export function ShotInspector({
     onDeleteSketchPath?: (id: string) => void;
 }) {
     const setFocal = (focalLength: number) => onUpdateCamera({ focalLength, fov: previsHorizontalFov(focalLength) });
+    const hasCameraPath = Boolean(camera?.motionPath);
+    const [motionTab, setMotionTab] = useState<CameraMotionTab>(() => (hasCameraPath && !camera?.moves?.length ? "path" : "technique"));
+    // 刚画出一条运镜路径（从无到有）时切到「画路径」页，直接看到它的速率、开始时间和途经点。
+    const hadCameraPathRef = useRef(hasCameraPath);
+    useEffect(() => {
+        if (hasCameraPath && !hadCameraPathRef.current) setMotionTab("path");
+        hadCameraPathRef.current = hasCameraPath;
+    }, [hasCameraPath]);
     return (
         <Inspector title={shot.name} onTitleChange={(name) => onUpdateShot({ name })}>
             <InspectorGroup title="画面">
@@ -656,43 +684,47 @@ export function ShotInspector({
                 </>
             ) : null}
             <InspectorGroup title="运镜" hint={capabilities.timeline ? undefined : "切到「动画」编排运镜"}>
-                {capabilities.timeline && camera ? null : camera?.moves?.length ? (
-                    <>
-                        <div className="previs-inspector-note">已编排 {camera.moves.length} 段运镜；切到「动画」可添加或调整，这里也能直接删除。</div>
-                        <PrevisCameraMoveList camera={camera} scene={scene} onChange={(moves) => onUpdateCamera({ moves })} onSeek={onSeek} />
-                    </>
-                ) : (
+                {/* 已有运镜放在最上面：删除不必翻过下方整块添加区。 */}
+                {camera && !capabilities.timeline && (camera.moves?.length || camera.motionPath) ? <div className="previs-inspector-note">切到「动画」可添加或调整运镜，这里也能直接删除。</div> : null}
+                {camera ? <PrevisCameraMotionList camera={camera} scene={scene} onChange={onUpdateCamera} onSeek={onSeek} /> : null}
+                {(capabilities.timeline && camera) || camera?.moves?.length ? null : (
                     <Select className="w-full" size="small" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />
                 )}
-                {!capabilities.timeline && camera?.motionPath ? (
-                    <div className="pv-path__head">
-                        <span className="previs-inspector-note">摄影机有一条运镜路径（{camera.motionPath.points.length} 个点）</span>
-                        <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => onUpdateCamera({ keyframes: [], motionPath: undefined })}>
-                            删除路径
-                        </Button>
-                    </div>
-                ) : null}
+                {/* 动画模式的路径编辑区自带参考轨迹列表；摆场模式只在这里列出并删除。 */}
+                {capabilities.timeline && camera ? null : <PrevisSketchPathList paths={scene.paths ?? []} onDelete={onDeleteSketchPath} />}
                 {capabilities.timeline && camera ? (
                     <>
-                        <PrevisCameraMoveSection camera={camera} scene={scene} playhead={playhead} shotDuration={shot.duration} onChange={(moves) => onUpdateCamera({ moves })} onSeek={onSeek} />
-                        <div className="previs-anim-guide__actions">
-                            <Button size="small" type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
-                                {pathDrawing ? "取消绘制" : camera.motionPath ? "重新画运镜路径" : "画运镜路径"}
-                            </Button>
+                        {/* 三种加运镜的方式一次只摊开一种，参数不再上下堆在一起。 */}
+                        <div className="pv-motion-tabs" role="tablist" aria-label="添加运镜的方式">
+                            {CAMERA_MOTION_TABS.map((item) => (
+                                <button key={item.id} type="button" role="tab" aria-selected={motionTab === item.id} title={item.hint} onClick={() => setMotionTab(item.id)}>
+                                    {item.label}
+                                </button>
+                            ))}
                         </div>
-                        <PrevisPathSection
-                            owner={camera}
-                            locked={false}
-                            origin={camera.transform.position}
-                            shotDuration={shot.duration}
-                            playhead={playhead}
-                            markers={scene.markers ?? []}
-                            sketchPaths={scene.paths ?? []}
-                            actors={scene.objects.filter((object) => object.kind === "actor" || object.primitive === "character").map((object) => ({ id: object.id, name: object.name }))}
-                            onUpdate={(patch) => onUpdateCamera(patch)}
-                            onTransferToActor={onTransferCameraPath}
-                            onDeleteSketchPath={onDeleteSketchPath}
-                        />
+                        {motionTab === "path" ? (
+                            <>
+                                <Button size="small" block type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
+                                    {pathDrawing ? "取消绘制" : camera.motionPath ? "重新画运镜路径" : "在视口里画运镜路径"}
+                                </Button>
+                                <PrevisPathSection
+                                    owner={camera}
+                                    locked={false}
+                                    origin={camera.transform.position}
+                                    shotDuration={shot.duration}
+                                    playhead={playhead}
+                                    markers={scene.markers ?? []}
+                                    sketchPaths={scene.paths ?? []}
+                                    actors={scene.objects.filter((object) => object.kind === "actor" || object.primitive === "character").map((object) => ({ id: object.id, name: object.name }))}
+                                    onUpdate={(patch) => onUpdateCamera(patch)}
+                                    onTransferToActor={onTransferCameraPath}
+                                    onDeleteSketchPath={onDeleteSketchPath}
+                                    showDelete={false}
+                                />
+                            </>
+                        ) : (
+                            <PrevisCameraMoveSection camera={camera} scene={scene} playhead={playhead} shotDuration={shot.duration} view={motionTab} onChange={(moves) => onUpdateCamera({ moves })} />
+                        )}
                         {capabilities.keyframes ? (
                             <details className="previs-inspector-advanced">
                                 <summary>高级：手动关键帧</summary>

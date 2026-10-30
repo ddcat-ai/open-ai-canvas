@@ -44,7 +44,8 @@ const initialState = {
     selectedObjectId: null,
     selectedBone: null,
     selectedLightId: null,
-    transformMode: "translate" as PrevisToolMode,
+    // 打开工作台默认「选择」：先点选看属性，不会一点就拖走对象或机身；要摆位再按 W 或点「移动」。
+    transformMode: "select" as PrevisToolMode,
     renderMode: "beauty" as const,
     playhead: 0,
     playing: false,

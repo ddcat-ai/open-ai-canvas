@@ -32,6 +32,10 @@ type PrevisSequencerProps = {
     onDeleteKeyframe: (target: PrevisKeyframeDeleteTarget) => void;
     /** 更新关键帧到下一帧区间的缓动。 */
     onSetKeyframeEasing: (target: PrevisKeyframeDeleteTarget, easing: PrevisKeyframeEasing) => void;
+    /** 删除摄影机的一段运镜（推拉、环绕、跟拍…）。 */
+    onDeleteCameraMove: (cameraId: string, moveId: string) => void;
+    /** 删除对象或摄影机画出的整条路径（连同路径展开的关键帧）。 */
+    onDeletePath: (kind: "object" | "camera", id: string) => void;
     onSelectShot: (id: string) => void;
 };
 
@@ -41,24 +45,41 @@ type PrevisSequencerProps = {
  */
 type TrackKey = { id: string; time: number; color?: string; label?: string; easing?: PrevisKeyframeEasing; target?: PrevisKeyframeDeleteTarget };
 
-export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId, selectedBone, playhead, playing, autoKey, height, visible, onPlayToggle, onPlayheadChange, onAutoKeyChange, onHeightChange, onVisibilityChange, onSelectObject, onSelectBone, onRecordKeyframe, onAddShot, onDeleteKeyframe, onSetKeyframeEasing, onSelectShot }: PrevisSequencerProps) {
+/** 时间轴上可删除的片段：摄影机运镜段，或对象 / 摄影机画出的路径。 */
+type ClipTarget = { kind: "move"; cameraId: string; moveId: string } | { kind: "path"; owner: "object" | "camera"; ownerId: string };
+
+export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId, selectedBone, playhead, playing, autoKey, height, visible, onPlayToggle, onPlayheadChange, onAutoKeyChange, onHeightChange, onVisibilityChange, onSelectObject, onSelectBone, onRecordKeyframe, onAddShot, onDeleteKeyframe, onSetKeyframeEasing, onDeleteCameraMove, onDeletePath, onSelectShot }: PrevisSequencerProps) {
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [snapEnabled, setSnapEnabled] = useState(true);
     const [showDetails, setShowDetails] = useState(true);
     const [timelineScale, setTimelineScale] = useState(1);
     const [selectedKey, setSelectedKey] = useState<TrackKey | null>(null);
+    const [selectedClip, setSelectedClip] = useState<ClipTarget | null>(null);
     const duration = Math.max(0.5, shot.duration);
     const fps = shot.fps || 24;
     const rootRef = useRef<HTMLDivElement>(null);
     const ticks = useMemo(() => Array.from({ length: Math.ceil(duration) + 1 }, (_, index) => index), [duration]);
     const actorObjects = objects.filter((object) => object.kind === "actor" || object.primitive === "character");
     const activeSelectedKey = selectedKey?.target && previsKeyframeTargetExists(selectedKey.target, camera, objects) ? selectedKey : null;
+    const activeSelectedClip = selectedClip && previsClipTargetExists(selectedClip, camera, objects) ? selectedClip : null;
 
     // 选择只对当前可见轨道有效。切换镜头/摄影机或外部删帧后立即废弃旧 target，
     // 避免顶部缓动与删除控件继续修改已经不可见的轨道。
     useEffect(() => {
         setSelectedKey((current) => current?.target && !previsKeyframeTargetExists(current.target, camera, objects) ? null : current);
+        setSelectedClip((current) => current && !previsClipTargetExists(current, camera, objects) ? null : current);
     }, [camera, objects]);
+
+    const selectClip = (target: ClipTarget, time: number) => {
+        setSelectedKey(null);
+        setSelectedClip(target);
+        onPlayheadChange(time);
+    };
+    const deleteClip = (target: ClipTarget) => {
+        if (target.kind === "move") onDeleteCameraMove(target.cameraId, target.moveId);
+        else onDeletePath(target.owner, target.ownerId);
+        setSelectedClip(null);
+    };
 
     const setTimeFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -84,6 +105,7 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
 
     const selectTrackKey = (key: TrackKey) => {
         if (!key.target) return;
+        setSelectedClip(null);
         setSelectedKey(key);
         onPlayheadChange(key.time);
         if (key.target.track === "camera") {
@@ -140,6 +162,7 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                     </select>
                     <button type="button" className="previs-sequencer-icon" title="删除所选关键帧" aria-label="删除所选关键帧" onClick={() => deleteTrackKey(activeSelectedKey.target!)}><Trash2 className="size-3.5" /></button>
                 </> : null}
+                {activeSelectedClip ? <button type="button" className="previs-sequencer-tool" title={activeSelectedClip.kind === "move" ? "删除所选运镜段（Delete）" : "删除所选路径（Delete）"} onClick={() => deleteClip(activeSelectedClip)}><Trash2 className="size-3.5" /><span>{activeSelectedClip.kind === "move" ? "删除运镜" : "删除路径"}</span></button> : null}
                 <span className="ml-auto flex items-center gap-1">
                     <button type="button" className="previs-sequencer-icon" title="缩小时间轴" aria-label="缩小时间轴" onClick={() => setTimelineScale((value) => Math.max(0.75, value - 0.25))}><ZoomOut className="size-3.5" /></button>
                     <button type="button" className="previs-sequencer-icon" title="放大时间轴" aria-label="放大时间轴" onClick={() => setTimelineScale((value) => Math.min(2.5, value + 0.25))}><ZoomIn className="size-3.5" /></button>
@@ -165,9 +188,10 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                         <TrackKeys duration={duration} keys={cameraKeys} />
                     </SequencerRow>
                     {camera ? <SequencerRow label={camera.name} icon="⌾" selected={!selectedObjectId} onClick={() => { onSelectObject(null); onSelectBone(null); }}>
-                        <TrackBar duration={duration} color="#78a9ff" label="Transform · 焦距 · 景深" />
+                        {/* 有路径段时让出这一行，否则两段文字叠在一起，路径段也不好点。 */}
+                        {camera.motionPath ? null : <TrackBar duration={duration} color="#78a9ff" label="Transform · 焦距 · 景深" />}
                         <TrackKeys duration={duration} keys={cameraKeys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} />
-                        <PathClip owner={camera} duration={duration} onSelect={(time) => { onSelectObject(null); onSelectBone(null); onPlayheadChange(time); }} />
+                        <PathClip owner={camera} ownerKind="camera" duration={duration} selected={activeSelectedClip} onSelect={(target, time) => { onSelectObject(null); onSelectBone(null); selectClip(target, time); }} onDelete={deleteClip} />
                     </SequencerRow> : null}
                     {camera?.moves?.length ? <SequencerRow label="运镜" icon="➚" indent selected={false} onClick={() => { onSelectObject(null); onSelectBone(null); }}>
                         <TrackClips
@@ -177,7 +201,9 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                                 const subject = move.subjectId ? scene.objects.find((item) => item.id === move.subjectId)?.name : undefined;
                                 return { id: move.id, start: move.start, duration: move.duration, layer: Boolean(info?.layer), label: `${info?.label ?? move.technique}${subject ? ` · ${subject}` : ""}`, title: describePrevisCameraMove(move, scene) };
                             })}
-                            onSelect={(time) => { onSelectObject(null); onSelectBone(null); onPlayheadChange(time); }}
+                            selectedId={activeSelectedClip?.kind === "move" ? activeSelectedClip.moveId : undefined}
+                            onSelect={(clip) => { onSelectObject(null); onSelectBone(null); selectClip({ kind: "move", cameraId: camera.id, moveId: clip.id }, clip.start); }}
+                            onDelete={(clip) => deleteClip({ kind: "move", cameraId: camera.id, moveId: clip.id })}
                         />
                     </SequencerRow> : null}
                     {actorObjects.map((object) => {
@@ -190,7 +216,7 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                             <SequencerRow label={object.name} icon={isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />} selected={selectedObjectId === object.id && !selectedBone} onClick={() => { onSelectObject(object.id); onSelectBone(null); setExpanded((current) => ({ ...current, [object.id]: !isExpanded })); }}>
                                 {/* 折叠时这是唯一的关键帧入口，必须可删除。 */}
                                 <TrackKeys duration={duration} keys={[...transformKeys, ...boneTrackKeys]} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} />
-                                <PathClip owner={object} duration={duration} onSelect={(time) => { onSelectObject(object.id); onSelectBone(null); onPlayheadChange(time); }} />
+                                <PathClip owner={object} ownerKind="object" duration={duration} selected={activeSelectedClip} onSelect={(target, time) => { onSelectObject(object.id); onSelectBone(null); selectClip(target, time); }} onDelete={deleteClip} />
                             </SequencerRow>
                             {isExpanded && showDetails ? <>
                                 <SequencerRow label="动作片段" icon="▶" indent selected={selectedObjectId === object.id && !selectedBone} onClick={() => onSelectObject(object.id)}>
@@ -208,7 +234,7 @@ export function PrevisSequencer({ scene, shot, camera, objects, selectedObjectId
                     })}
                     {objects.filter((object) => !actorObjects.some((actor) => actor.id === object.id)).map((object) => {
                         const keys: TrackKey[] = object.keyframes.filter((key) => !object.motionPath || !isPrevisPathKeyframe(key, object.id)).map((key) => ({ id: key.id, time: key.time, color: "#b8c0ca", label: `${object.name} Transform`, easing: key.easing, target: { track: "object-transform", objectId: object.id, keyframeId: key.id } }));
-                        return <SequencerRow key={object.id} label={object.name} icon="□" selected={selectedObjectId === object.id} onClick={() => { onSelectObject(object.id); onSelectBone(null); }}><TrackKeys duration={duration} keys={keys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} /><PathClip owner={object} duration={duration} onSelect={(time) => { onSelectObject(object.id); onSelectBone(null); onPlayheadChange(time); }} /></SequencerRow>;
+                        return <SequencerRow key={object.id} label={object.name} icon="□" selected={selectedObjectId === object.id} onClick={() => { onSelectObject(object.id); onSelectBone(null); }}><TrackKeys duration={duration} keys={keys} selectedTarget={activeSelectedKey?.target} onSelectKey={selectTrackKey} onDeleteKey={deleteTrackKey} /><PathClip owner={object} ownerKind="object" duration={duration} selected={activeSelectedClip} onSelect={(target, time) => { onSelectObject(object.id); onSelectBone(null); selectClip(target, time); }} onDelete={deleteClip} /></SequencerRow>;
                     })}
                 </div>
             </div>
@@ -287,35 +313,79 @@ function previsKeyframeTargetId(target: PrevisKeyframeDeleteTarget) {
     return `object:${target.objectId}:bone:${target.bone}:${target.keyframeId}`;
 }
 
-/** 路径展开的关键帧收成一段：从出发到结束，点击定位到出发时间；逐点调整在属性面板。 */
-function PathClip({ owner, duration, onSelect }: { owner: { id: string; keyframes: PrevisCamera["keyframes"]; motionPath?: PrevisCamera["motionPath"] }; duration: number; onSelect: (time: number) => void }) {
+function previsClipTargetExists(target: ClipTarget, camera: PrevisCamera | null, objects: PrevisObject[]) {
+    if (target.kind === "move") return camera?.id === target.cameraId && Boolean(camera.moves?.some((move) => move.id === target.moveId));
+    if (target.owner === "camera") return camera?.id === target.ownerId && Boolean(camera.motionPath);
+    return objects.some((object) => object.id === target.ownerId && object.motionPath);
+}
+
+/** 路径展开的关键帧收成一段：从出发到结束，点击选中并定位到出发时间，按 Delete 删除；逐点调整在属性面板。 */
+function PathClip({
+    owner,
+    ownerKind,
+    duration,
+    selected,
+    onSelect,
+    onDelete,
+}: {
+    owner: { id: string; keyframes: PrevisCamera["keyframes"]; motionPath?: PrevisCamera["motionPath"] };
+    ownerKind: "object" | "camera";
+    duration: number;
+    selected: ClipTarget | null;
+    onSelect: (target: ClipTarget, time: number) => void;
+    onDelete: (target: ClipTarget) => void;
+}) {
     if (!owner.motionPath) return null;
     const frames = owner.keyframes.filter((key) => isPrevisPathKeyframe(key, owner.id) && !key.id.endsWith("-path-hold"));
     if (frames.length < 2) return null;
     const start = Math.min(...frames.map((key) => key.time));
     const end = Math.max(...frames.map((key) => key.time));
     const label = `路径 ${start.toFixed(1)}–${end.toFixed(1)}s · ${owner.motionPath.points.length} 点`;
-    return <TrackClips duration={duration} clips={[{ id: `${owner.id}-path`, start, duration: Math.max(0.05, end - start), layer: false, label, title: `${label}（在属性面板调速率、运动规律与高度）` }]} onSelect={onSelect} />;
+    const target: ClipTarget = { kind: "path", owner: ownerKind, ownerId: owner.id };
+    const isSelected = selected?.kind === "path" && selected.owner === ownerKind && selected.ownerId === owner.id;
+    return (
+        <TrackClips
+            duration={duration}
+            clips={[{ id: `${owner.id}-path`, start, duration: Math.max(0.05, end - start), layer: false, label, title: `${label}（在属性面板调速率、运动规律与高度）` }]}
+            selectedId={isSelected ? `${owner.id}-path` : undefined}
+            onSelect={() => onSelect(target, start)}
+            onDelete={() => onDelete(target)}
+        />
+    );
 }
 
-/** 运镜段：主运镜占满行高，手持 / 震动等叠加层画成底部细条；点击把播放头移到段开始。 */
-function TrackClips({ duration, clips, onSelect }: { duration: number; clips: Array<{ id: string; start: number; duration: number; layer: boolean; label: string; title: string }>; onSelect: (time: number) => void }) {
+type SequencerClip = { id: string; start: number; duration: number; layer: boolean; label: string; title: string };
+
+/**
+ * 运镜段与路径段：主运镜占满行高，手持 / 震动等叠加层画成底部细条。
+ * 点击选中并把播放头移到段开始；选中后按 Delete / Backspace 或点顶栏「删除」移除这一段。
+ * 与关键帧按钮相同：自己拥有这些按键，不释放焦点。
+ */
+function TrackClips({ duration, clips, selectedId, onSelect, onDelete }: { duration: number; clips: SequencerClip[]; selectedId?: string; onSelect: (clip: SequencerClip) => void; onDelete: (clip: SequencerClip) => void }) {
     return (
         <div className="previs-sequencer-track-content">
             {clips.map((clip) => {
                 const color = clip.layer ? "#f0b36a" : "#78a9ff";
                 const width = Math.max(0, Math.min(clip.duration, duration - clip.start));
+                const selected = clip.id === selectedId;
                 return (
                     <button
                         key={clip.id}
                         type="button"
-                        className={`previs-sequencer-clip previs-sequencer-clip--move ${clip.layer ? "is-layer" : ""}`}
-                        style={{ left: `${(clip.start / duration) * 100}%`, width: `${(width / duration) * 100}%`, background: `${color}33`, borderColor: `${color}88`, color }}
-                        title={`${clip.title} · 点击定位`}
-                        aria-label={`定位到运镜：${clip.title}`}
+                        className={`previs-sequencer-clip previs-sequencer-clip--move ${clip.layer ? "is-layer" : ""} ${selected ? "is-selected" : ""}`}
+                        style={{ left: `${(clip.start / duration) * 100}%`, width: `${(width / duration) * 100}%`, background: `${color}${selected ? "66" : "33"}`, borderColor: selected ? color : `${color}88`, color }}
+                        title={`${clip.title} · 点击选中并定位，按 Delete 删除`}
+                        aria-label={`选择运镜：${clip.title}`}
+                        aria-pressed={selected}
                         onClick={(event) => {
                             event.stopPropagation();
-                            onSelect(clip.start);
+                            onSelect(clip);
+                        }}
+                        onKeyDown={(event) => {
+                            if (event.key !== "Delete" && event.key !== "Backspace") return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onDelete(clip);
                         }}
                     >
                         <span className="truncate">{clip.label}</span>
