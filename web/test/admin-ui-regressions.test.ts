@@ -143,7 +143,7 @@ test("storage settings keep generic S3 controls and connection validation", asyn
     for (const field of ["s3Preset", "sessionToken", "pathStyle", "allowUserS3"]) {
         expect(compacted).toContain(`name="${field}"`);
     }
-    expect(compacted).toContain('["aliyun", "tencent", "qiniu", "s3"].includes(setting.provider || "")');
+    expect(compacted).toContain('["aliyun", "tencent", "qiniu", "volcengine", "s3"].includes(setting.provider || "")');
 });
 
 test("admin navigation keeps the storage resource page reachable", async () => {

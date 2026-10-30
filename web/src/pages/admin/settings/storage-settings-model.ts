@@ -3,7 +3,7 @@
 // 服务器访问地址只校验 http/https 格式，允许本机、局域网与 HTTP 地址（产品约定，勿收紧）。
 
 import { type AdminOSSSetting } from "@/services/api/auth";
-import { DEFAULT_OSS_PATH_PREFIX, normalizeOSSConnectionTestInput } from "@/lib/oss-settings";
+import { DEFAULT_OSS_PATH_PREFIX, normalizeOSSConnectionTestInput, normalizeVolcengineTOSLocation } from "@/lib/oss-settings";
 import { type S3Preset } from "@/lib/oss-settings";
 
 export type StorageMode = "local" | AdminOSSSetting["provider"];
@@ -107,9 +107,11 @@ export function providerDraftValues(mode: Exclude<StorageMode, "local">, setting
 export function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminOSSSetting): StoragePayload {
     const mode = values.mode || "local";
     const provider = mode === "local" ? setting.provider || "aliyun" : mode;
-    const region = values.region?.trim() || "";
+    let region = values.region?.trim() || "";
     let endpoint = trimTrailingSlash(values.endpoint || "");
+    const bucket = values.bucket?.trim() || "";
     if (provider === "tencent" && !endpoint && region) endpoint = `https://cos.${region}.myqcloud.com`;
+    if (provider === "volcengine") ({ region, endpoint } = normalizeVolcengineTOSLocation({ region, endpoint, bucket }));
     return {
         enabled: mode !== "local",
         provider,
@@ -119,14 +121,14 @@ export function normalizeStoragePayload(values: Partial<OSSFormValues>, setting:
         cdnAuthMode: values.cdnAuthMode || "",
         requireCDN: values.requireCDN === true,
         allowPrivateProxy: values.allowPrivateProxy === true,
-        bucket: values.bucket?.trim() || "",
+        bucket,
         accessKeyId: values.accessKeyId?.trim() || "",
         accessKeySecret: values.accessKeySecret?.trim() || "",
-        sessionToken: values.sessionToken?.trim() || "",
+        sessionToken: provider === "volcengine" ? "" : values.sessionToken?.trim() || "",
         publicBaseUrl: trimTrailingSlash(values.publicBaseUrl || ""),
         pathPrefix: (values.pathPrefix?.trim() || DEFAULT_OSS_PATH_PREFIX).replace(/^\/+|\/+$/g, ""),
         s3Preset: values.s3Preset || "custom",
-        pathStyle: values.pathStyle === true,
+        pathStyle: provider === "volcengine" ? false : values.pathStyle === true,
         allowUserS3: values.allowUserS3 === true,
     };
 }
@@ -144,8 +146,17 @@ export function validateStorageDraft(values: OSSFormValues, setting: AdminOSSSet
     if (!draft.enabled) return validatePublicBaseURL(draft.publicBaseUrl);
     if (!draft.bucket) return "请填写对象存储 Bucket";
     if (!draft.endpoint)
-        return draft.provider === "tencent" ? "请填写腾讯云 COS Region 或 Endpoint" : draft.provider === "qiniu" ? "请填写七牛云 Kodo 上传 Endpoint" : draft.provider === "s3" ? "请填写 S3 Endpoint 服务根 URL" : "请填写阿里云 OSS Endpoint";
+        return draft.provider === "tencent"
+            ? "请填写腾讯云 COS Region 或 Endpoint"
+            : draft.provider === "qiniu"
+              ? "请填写七牛云 Kodo 上传 Endpoint"
+              : draft.provider === "volcengine"
+                ? "请填写火山引擎 TOS Region 或 Endpoint"
+                : draft.provider === "s3"
+                  ? "请填写 S3 Endpoint 服务根 URL"
+                  : "请填写阿里云 OSS Endpoint";
     if (draft.provider === "s3" && !draft.region) return "请填写 S3 Region";
+    if (draft.provider === "volcengine" && !draft.region) return "请填写火山引擎 TOS Region";
     if (!isHTTPURL(draft.endpoint)) return "Endpoint 必须是完整的 http/https 地址";
     if (draft.cdnBaseUrl && !isValidCDNBaseURL(draft.cdnBaseUrl)) return "CDN 或绑定域名只能填写 http/https 根地址，不能包含认证、路径、查询参数或片段";
     if (!draft.accessKeyId) return `请填写 ${accessKeyIdLabel(draft.provider)}`;
@@ -179,7 +190,7 @@ export function isAdminOSSSetting(value: unknown): value is AdminOSSSetting {
     const setting = value as Partial<AdminOSSSetting>;
     return (
         typeof setting.enabled === "boolean" &&
-        ["aliyun", "tencent", "qiniu", "s3"].includes(setting.provider || "") &&
+        ["aliyun", "tencent", "qiniu", "volcengine", "s3"].includes(setting.provider || "") &&
         ["aws", "r2", "b2", "rustfs", "custom"].includes(setting.s3Preset || "") &&
         typeof setting.region === "string" &&
         typeof setting.endpoint === "string" &&
@@ -204,22 +215,23 @@ export function storageConfigurationReady(mode: StorageMode, values: StoragePayl
 }
 
 export function storageProviderLabel(provider?: StorageMode) {
-    return provider === "s3" ? "S3 兼容存储" : provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
+    return provider === "s3" ? "S3 兼容存储" : provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "volcengine" ? "火山引擎 TOS" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
 }
 
 export function providerGuidance(mode: Exclude<StorageMode, "local">) {
     if (mode === "s3") return "使用预设快速填写 Region 与 Endpoint，也可以选择自定义；自托管 S3 仍受服务端私网主机白名单约束。";
     if (mode === "tencent") return "腾讯云可只填写 Region，由服务端生成标准 COS Endpoint；也可填写完整 Endpoint 覆盖。";
     if (mode === "qiniu") return "七牛上传必须配置上传 Endpoint；绑定域名可选，留空时资源由当前后端使用 AK/SK 代理读取。";
+    if (mode === "volcengine") return "火山引擎可只填写 Region，由服务端生成 S3 兼容 Endpoint；粘贴控制台的原生域名或 Bucket 域名也会换算为同地域 tos-s3 地址。浏览器直连源站时需在 Bucket 配置跨域访问。";
     return "阿里云需要完整 OSS Endpoint、Bucket 和访问密钥；CDN 域名可选。";
 }
 
 export function accessKeyIdLabel(mode: Exclude<StorageMode, "local"> | AdminOSSSetting["provider"]) {
-    return mode === "tencent" ? "SecretId" : mode === "qiniu" ? "AccessKey" : "AccessKey ID";
+    return mode === "tencent" ? "SecretId" : mode === "qiniu" ? "AccessKey" : mode === "volcengine" ? "Access Key ID" : "AccessKey ID";
 }
 
 export function accessKeySecretLabel(mode: Exclude<StorageMode, "local"> | AdminOSSSetting["provider"]) {
-    return mode === "tencent" || mode === "qiniu" ? "SecretKey" : "AccessKey Secret";
+    return mode === "tencent" || mode === "qiniu" ? "SecretKey" : mode === "volcengine" ? "Secret Access Key" : "AccessKey Secret";
 }
 
 export function isHTTPURL(value: string) {

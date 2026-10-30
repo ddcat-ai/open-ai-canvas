@@ -63,7 +63,7 @@ func PutOSSObjectContext(ctx context.Context, setting Settings, objectKey string
 	if setting.Provider == qiniuKodoProvider {
 		return putQiniuObject(ctx, setting, objectKey, mimeType, size, body)
 	}
-	if setting.Provider == s3Provider {
+	if usesS3Protocol(setting.Provider) {
 		return putS3Object(ctx, setting, objectKey, mimeType, size, body)
 	}
 	return putAliyunOSSObject(ctx, setting, objectKey, mimeType, size, body)
@@ -120,7 +120,7 @@ func GetOSSObjectRange(setting Settings, objectKey string, rangeHeader string) (
 
 func GetOriginObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	setting = NormalizeSettings(setting)
-	if setting.Provider == s3Provider {
+	if usesS3Protocol(setting.Provider) {
 		return GetS3ObjectRange(setting, objectKey, rangeHeader)
 	}
 	if setting.Provider == tencentCOSProvider {
@@ -236,7 +236,7 @@ func signingTime(signedAt time.Time) time.Time {
 
 func signedOriginObjectURL(setting Settings, objectKey string, signing objectURLSigning) (string, error) {
 	setting = NormalizeSettings(setting)
-	if setting.Provider == s3Provider {
+	if usesS3Protocol(setting.Provider) {
 		return signedS3ObjectURL(setting, objectKey, signing)
 	}
 	if setting.Provider == qiniuKodoProvider {

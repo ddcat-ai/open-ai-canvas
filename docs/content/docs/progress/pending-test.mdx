@@ -5,6 +5,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 火山引擎 TOS 对象存储
+
+- 已实现：平台存储服务与个人对象存储新增“火山引擎 TOS”（provider `volcengine`）。上传、Range 读取、预签名和删除走官方 S3 兼容域名 `tos-s3-<region>.volces.com`，复用现有 AWS SigV4 实现并强制 virtual-hosted；不新增依赖、表或迁移，不保存 Session Token 与 Path Style。
+- 已实现：只填 Region 时生成外网 S3 兼容 Endpoint；控制台的原生 Endpoint（`tos-<region>.volces.com` / `ivolces.com`）或本 Bucket 域名换算为同地域 `tos-s3` 服务根地址，Region 留空时从域名取得；地域或 Bucket 与官方域名不一致时拒绝保存。资源筛选、删除、连接测试和错误提示支持 TOS。
+- 本地验证：存储与设置专项测试（模拟 TOS 服务的写入、Range、删除、预签名与 virtual-hosted SigV4）、前后端换算一致性测试；未连接真实火山引擎账号。
+- [ ] 使用真实 Bucket 只填 Region、Bucket、Access Key ID 与 Secret Access Key，测试连接并保存，确认 Endpoint 为 `https://tos-s3-<region>.volces.com`；错误 Secret 提示鉴权失败。
+- [ ] 上传图片、视频与音频后预览、下载、删除；浏览器直连源站需在 Bucket 配置 CORS（站点来源、GET/HEAD 与 Range）。公开 CDN 域名按 `cdnAuthMode=public` 读取。
+
 ## Host Updater：停服后最终备份
 
 - 已实现：先准备并核对目标镜像，再停止 Web、Backend、Agent，随后保存 PostgreSQL 与数据目录最终快照；迁移及之后的失败使用此快照恢复。

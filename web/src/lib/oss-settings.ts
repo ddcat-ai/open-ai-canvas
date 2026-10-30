@@ -1,4 +1,4 @@
-export type OSSProvider = "aliyun" | "tencent" | "qiniu" | "s3";
+export type OSSProvider = "aliyun" | "tencent" | "qiniu" | "volcengine" | "s3";
 
 export type S3Preset = "aws" | "r2" | "b2" | "rustfs" | "custom";
 
@@ -64,6 +64,34 @@ const S3_PRESET_HINTS: Record<S3Preset, { region: string; endpoint: string; help
 };
 
 const CONNECTION_FIELDS = new Set(["provider", "s3Preset", "region", "endpoint", "cdnBaseUrl", "bucket", "accessKeyId", "accessKeySecret", "sessionToken", "pathPrefix", "pathStyle"]);
+
+// 火山引擎 TOS 官方地域，见 https://docs.volcengine.com/docs/6349/107356 。
+export const VOLCENGINE_TOS_REGION_HINT = "cn-beijing、cn-shanghai、cn-guangzhou、cn-hongkong、ap-southeast-1、ap-southeast-3";
+
+const VOLCENGINE_TOS_HOST_PATTERN = /^(?:([a-z0-9][a-z0-9-]*)\.)?tos-(?:s3-)?([a-z0-9-]+)\.(volces\.com|ivolces\.com)$/;
+
+/**
+ * 与后端 storage.normalizeVolcengineTOSLocation 保持一致：Region 生成 S3 兼容 Endpoint，
+ * 控制台的原生域名或 Bucket 域名换算为同地域 tos-s3 服务根地址；无法确定的输入保持原值，由后端拒绝。
+ */
+export function normalizeVolcengineTOSLocation(input: { region: string; endpoint: string; bucket: string }) {
+    let region = input.region.toLowerCase();
+    let endpoint = input.endpoint;
+    if (!endpoint) return { region, endpoint: region ? `https://tos-s3-${region}.volces.com` : "" };
+    if (!endpoint.includes("://")) endpoint = `https://${endpoint}`;
+    let parsed: URL;
+    try {
+        parsed = new URL(endpoint);
+    } catch {
+        return { region, endpoint };
+    }
+    const match = VOLCENGINE_TOS_HOST_PATTERN.exec(parsed.hostname.replace(/\.$/, ""));
+    if (!match || (match[1] && match[1] !== input.bucket.toLowerCase())) return { region, endpoint };
+    if (!region) region = match[2];
+    const host = `tos-s3-${match[2]}.${match[3]}${parsed.port ? `:${parsed.port}` : ""}`;
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
+    return { region, endpoint: `${parsed.protocol}//${host}${path}${parsed.search}${parsed.hash}`.replace(/\/+$/, "") };
+}
 
 export function getS3PresetHints(preset?: S3Preset) {
     return S3_PRESET_HINTS[preset || "custom"];

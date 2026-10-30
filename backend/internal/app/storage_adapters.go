@@ -56,6 +56,7 @@ var (
 	deleteTencentCOSObject      = storage.DeleteTencentCOSObject
 	deleteQiniuObject           = storage.DeleteQiniuObject
 	validateStorageEndpoint     = storage.ValidateStorageEndpoint
+	validateTOSLocation         = storage.ValidateVolcengineTOSLocation
 	standardAWSS3Endpoint       = storage.StandardAWSS3Endpoint
 	publicHTTPSStorageEndpoint  = storage.PublicHTTPSStorageEndpoint
 	newS3Client                 = storage.NewS3Client
