@@ -249,26 +249,6 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		defer os.Remove(updaterBinary)
 	}
 
-	m.setPhase(PhaseBackingUp, "创建 PostgreSQL 与数据目录 ZIP 备份")
-	backup, err := m.createBackup(fromVersion)
-	if err != nil {
-		m.failWithoutRollback(PhaseFailed, err)
-		return
-	}
-	m.mu.Lock()
-	m.state.LastBackup = &backup
-	m.state.RollbackVersion = fromVersion
-	_ = m.saveStateLocked()
-	m.mu.Unlock()
-	if err := replaceFile(m.composePath(), m.previousComposePath(), 0o600); err != nil {
-		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧 Compose 配置：%w", err))
-		return
-	}
-	if err := replaceFile(m.envPath(), m.previousEnvPath(), 0o600); err != nil {
-		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧部署环境：%w", err))
-		return
-	}
-
 	m.setPhase(PhasePulling, "拉取目标版本镜像")
 	targetImages := immutableImageRefs(m.config.Repository, targetVersion)
 	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "pull", "backend", "web", "yingce-agent"); err != nil {
@@ -281,11 +261,32 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		return
 	}
 
-	m.setPhase(PhaseDraining, "停止 Web 与 Backend，等待后台任务优雅退出")
-	if err := m.compose(m.composePath(), fromVersion, m.config.StepTimeout, nil, "stop", "web", "backend"); err != nil {
-		m.failWithRollback(err, fromVersion, backup)
+	m.setPhase(PhaseDraining, "停止 Web、Backend 与 Agent，等待后台任务优雅退出")
+	if err := m.compose(m.composePath(), fromVersion, m.config.StepTimeout, nil, "stop", "web", "backend", "yingce-agent"); err != nil {
+		m.failBeforeMigration(err, fromVersion)
 		return
 	}
+
+	// 最终备份必须包含旧服务退出前的全部写入；镜像下载不占用停服窗口。
+	m.setPhase(PhaseBackingUp, "创建停服后的 PostgreSQL 与数据目录 ZIP 备份")
+	backup, err := m.createBackup(fromVersion)
+	if err != nil {
+		m.failBeforeMigration(err, fromVersion)
+		return
+	}
+	if err := replaceFile(m.composePath(), m.previousComposePath(), 0o600); err != nil {
+		m.failBeforeMigration(fmt.Errorf("保存旧 Compose 配置：%w", err), fromVersion)
+		return
+	}
+	if err := replaceFile(m.envPath(), m.previousEnvPath(), 0o600); err != nil {
+		m.failBeforeMigration(fmt.Errorf("保存旧部署环境：%w", err), fromVersion)
+		return
+	}
+	m.mu.Lock()
+	m.state.LastBackup = &backup
+	m.state.RollbackVersion = fromVersion
+	_ = m.saveStateLocked()
+	m.mu.Unlock()
 
 	m.setPhase(PhaseMigrating, "执行目标版本数据库迁移")
 	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "run", "--rm", "migrate"); err != nil {
@@ -351,6 +352,19 @@ func (m *Manager) failWithoutRollback(phase Phase, err error) {
 	m.state.Operation.FinishedAt = &now
 	m.appendLogLocked(phase, "更新已中止，尚未修改运行版本")
 	_ = m.saveStateLocked()
+}
+
+// 迁移前只有容器被停止，恢复旧容器即可，不能恢复更早的数据库快照。
+func (m *Manager) failBeforeMigration(cause error, version string) {
+	err := m.compose(m.composePath(), version, m.config.StepTimeout, nil, "start", "backend", "yingce-agent", "web")
+	if err == nil {
+		err = m.verifyHealthy(version)
+	}
+	if err != nil {
+		m.failWithoutRollback(PhaseManualIntervention, errors.Join(cause, fmt.Errorf("恢复旧服务：%w", err)))
+		return
+	}
+	m.failWithoutRollback(PhaseFailed, cause)
 }
 
 func (m *Manager) failWithRollback(cause error, targetVersion string, backup Backup) {
