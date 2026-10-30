@@ -1,6 +1,8 @@
 import { saveAs } from "file-saver";
 import { readZip } from "@/lib/zip";
 import { MediaPackage } from "@/lib/media-package";
+import { createClientUUID } from "@/lib/client-id";
+import { isResourceUrl } from "@/services/api/resources";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
 import type { Asset } from "@/stores/use-asset-store";
@@ -64,6 +66,27 @@ export async function readAssetPackage(file: File): Promise<Asset[]> {
         if ("bytes" in entry && entry.bytes !== blob.size) throw new Error(`素材包文件大小不匹配：${entry.path}`);
         return { key: entry.storageKey, blob: blob.slice(0, blob.size, entry.mimeType) };
     });
-    for (const { key, blob } of writes) await (images.has(key) || key.startsWith("image:") ? setImageBlob(key, blob) : setMediaBlob(key, blob));
-    return manifest.assets as Asset[];
+    const importedMedia = new Map<string, { storageKey: string; url: string }>();
+    for (const { key, blob } of writes) {
+        const kind = images.has(key) || key.startsWith("image:") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
+        // 导出包里的 resource ID 属于来源账号；新本地键由现有同步流程上传到目标账号。
+        const storageKey = `${kind}:${createClientUUID()}`;
+        const url = await (kind === "image" ? setImageBlob(storageKey, blob) : setMediaBlob(storageKey, blob));
+        importedMedia.set(key, { storageKey, url });
+    }
+    const assets = structuredClone(manifest.assets) as Asset[];
+    for (const asset of assets) {
+        // 包里没有目标账号的文件夹与素材版本，导入记录从未分类的新素材开始。
+        delete asset.folderId;
+        delete asset.primaryVersionId;
+        if (asset.kind === "text" || asset.kind === "entity") continue;
+        const media = asset.data.storageKey ? importedMedia.get(asset.data.storageKey) : undefined;
+        if (!media) continue;
+        const previousURL = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+        asset.data.storageKey = media.storageKey;
+        if (asset.kind === "image") asset.data.dataUrl = media.url;
+        else asset.data.url = media.url;
+        if (asset.coverUrl === previousURL || isResourceUrl(asset.coverUrl)) asset.coverUrl = asset.kind === "image" ? media.url : "";
+    }
+    return assets;
 }
