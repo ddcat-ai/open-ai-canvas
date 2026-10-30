@@ -332,7 +332,7 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 		}
 		payload, _ := json.Marshal(dramaRevisionPayload{Revision: segment.Revision, Seconds: request.Seconds})
 		job.PayloadJSON = string(payload)
-		task, err := r.createTaskWith(segmentVideoChoice(*segment, r.settings.Models.Video), "video", request.Operation, prompt, map[string]any{"config": config, "referenceImages": refs, "metadata": metadata})
+		task, err := r.createTaskWith(job, segmentVideoChoice(*segment, r.settings.Models.Video), "video", request.Operation, prompt, map[string]any{"config": config, "referenceImages": refs, "metadata": metadata})
 		return task, false, err
 	}
 	return nil, false, errors.New("剧情段没有对应分镜")

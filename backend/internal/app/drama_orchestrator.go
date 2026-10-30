@@ -14,6 +14,7 @@ import (
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/production"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -211,15 +212,9 @@ func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 	}
 	switch task.Status {
 	case model.TaskStatusSucceeded:
-		cost, err := r.taskCost(task)
-		if err != nil {
-			return &dramaSyncDeferred{err: err}
+		if err := r.settleTaskAttempt(job, task, ""); err != nil {
+			return err
 		}
-		job.CostMicrocredits = cost
-		if !dramaAttemptRecorded(job, task.ID) {
-			r.production.SpentMicrocredits += job.CostMicrocredits
-		}
-		recordDramaAttempt(job, task.ID, string(task.Status), "", job.CostMicrocredits)
 		if applyErr := r.applyJob(job, task); applyErr != nil {
 			var next *dramaJobContinued
 			if errors.As(applyErr, &next) {
@@ -237,17 +232,31 @@ func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 		job.Status, job.FinishedAt, job.Error = model.DramaJobSucceeded, &now, ""
 		return r.s.repo.SaveDramaJob(job)
 	case model.TaskStatusFailed, model.TaskStatusCancelled:
-		cost, err := r.taskCost(task)
-		if err != nil {
-			return &dramaSyncDeferred{err: err}
+		if err := r.settleTaskAttempt(job, task, firstNonEmpty(task.Error, "生成失败")); err != nil {
+			return err
 		}
-		job.CostMicrocredits = cost
-		if !dramaAttemptRecorded(job, task.ID) {
-			r.production.SpentMicrocredits += job.CostMicrocredits
-		}
-		recordDramaAttempt(job, task.ID, string(task.Status), firstNonEmpty(task.Error, "生成失败"), job.CostMicrocredits)
 		return r.failJob(job, firstNonEmpty(task.Error, "生成失败"))
 	}
+	return nil
+}
+
+// settleTaskAttempt 将已结算账单计入作品一次，不依赖本轮后续步骤成功。
+func (r *dramaRun) settleTaskAttempt(job *model.DramaJob, task *model.Task, reason string) error {
+	if dramaAttemptRecorded(job, task.ID) {
+		return nil
+	}
+	cost, err := r.taskCost(task)
+	if err != nil {
+		return &dramaSyncDeferred{err: err}
+	}
+	previousAttempts := job.AttemptsJSON
+	job.CostMicrocredits = cost
+	recordDramaAttempt(job, task.ID, string(task.Status), reason, cost)
+	// 先原子保存去重记录与作品花费，再处理结果；中断恢复只重做结果应用。
+	if err := r.s.repo.RecordDramaJobCost(job, previousAttempts); err != nil {
+		return err
+	}
+	r.production.SpentMicrocredits += cost
 	return nil
 }
 
@@ -1080,7 +1089,7 @@ func (r *dramaRun) applyRender(job *model.DramaJob, task *model.Task) error {
 func (r *dramaRun) submit(job *model.DramaJob) (*model.Task, bool, error) {
 	switch job.Kind {
 	case model.DramaJobBible:
-		return r.submitBible()
+		return r.submitBible(job)
 	case model.DramaJobPlan:
 		return r.submitPlan(job)
 	case model.DramaJobScript:
@@ -1165,7 +1174,7 @@ func (r *dramaRun) submitSegmentPrompt(job *model.DramaJob) (*model.Task, bool, 
 			return nil, false, err
 		}
 		prompt := production.SegmentWriterPrompt(draft.input, production.SegmentVideoPrompt(draft.input), previous, skill)
-		task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepPrompt), "text", "text", prompt, r.textInput(job, production.SegmentWriterSystemPrompt()))
+		task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepPrompt), "text", "text", prompt, r.textInput(job, production.SegmentWriterSystemPrompt()))
 		return task, false, err
 	}
 	return nil, true, nil
@@ -1240,13 +1249,13 @@ func (r *dramaRun) condenseSegmentPrompt(job *model.DramaJob, payload dramaRevis
 		// 撰写期间镜头或参考图已改，这一版作废，调度会按新素材重写。
 		return nil
 	}
-	task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepPrompt), "text", "text", production.SegmentCondensePrompt(prompt, payload.MaxChars), r.textInput(job, production.SegmentCondenseSystemPrompt()))
-	if err != nil {
-		return &dramaResultIssue{message: fmt.Sprintf("视频提示词 %d 个字符，超过本段上限 %d 个字符，自动精简未能提交：%s", chars, payload.MaxChars, err.Error())}
-	}
 	payload.Condensed++
 	encoded, _ := json.Marshal(payload)
 	job.PayloadJSON = string(encoded)
+	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepPrompt), "text", "text", production.SegmentCondensePrompt(prompt, payload.MaxChars), r.textInput(job, production.SegmentCondenseSystemPrompt()))
+	if err != nil {
+		return &dramaResultIssue{message: fmt.Sprintf("视频提示词 %d 个字符，超过本段上限 %d 个字符，自动精简未能提交：%s", chars, payload.MaxChars, err.Error())}
+	}
 	return &dramaJobContinued{taskID: task.ID}
 }
 
@@ -1254,11 +1263,11 @@ func (r *dramaRun) metadata(job *model.DramaJob) map[string]any {
 	return map[string]any{"source": "drama_production", "dramaJobId": job.ID, "domainProjectId": r.project.ID, "episodeId": job.EpisodeID, "shotId": job.ShotID}
 }
 
-func (r *dramaRun) createTask(capability string, operation string, prompt string, input map[string]any) (*model.Task, error) {
-	return r.createTaskWith(r.settings.Models.choice(capability), capability, operation, prompt, input)
+func (r *dramaRun) createTask(job *model.DramaJob, capability string, operation string, prompt string, input map[string]any) (*model.Task, error) {
+	return r.createTaskWith(job, r.settings.Models.choice(capability), capability, operation, prompt, input)
 }
 
-func (r *dramaRun) createTaskWith(choice DramaModelChoice, capability string, operation string, prompt string, input map[string]any) (*model.Task, error) {
+func (r *dramaRun) createTaskWith(job *model.DramaJob, choice DramaModelChoice, capability string, operation string, prompt string, input map[string]any) (*model.Task, error) {
 	if choice.Empty() {
 		return nil, fmt.Errorf("没有可用的%s模型", map[string]string{"text": "文本", "image": "图片", "video": "视频"}[capability])
 	}
@@ -1271,7 +1280,7 @@ func (r *dramaRun) createTaskWith(choice DramaModelChoice, capability string, op
 	}
 	input["config"], input["mode"], input["prompt"] = config, capability, prompt
 	req := CreateTaskRequest{ProjectID: r.project.ID, Type: "canvas_" + capability, Operation: operation, Prompt: prompt, LogicalModelID: choice.LogicalModelID, Model: choice.ModelKey, Input: input}
-	task, err := r.s.submitDramaTask(r.project.UserID, req)
+	task, err := r.s.submitDramaTask(r.project.UserID, req, job)
 
 	return task, err
 }
@@ -1331,7 +1340,7 @@ func (r *dramaRun) loadChapters(ids []string) ([]production.Chapter, error) {
 	return chapters, nil
 }
 
-func (r *dramaRun) submitBible() (*model.Task, bool, error) {
+func (r *dramaRun) submitBible(job *model.DramaJob) (*model.Task, bool, error) {
 	chapters, err := r.loadChapters(nil)
 	if err != nil {
 		return nil, false, err
@@ -1342,7 +1351,7 @@ func (r *dramaRun) submitBible() (*model.Task, bool, error) {
 	}
 	prompt := production.BiblePrompt(r.project.Name, r.settings.Settings, chapters, dramaBibleSampleRunes, skill)
 	input := map[string]any{"config": map[string]any{"systemPrompt": production.BibleSystemPrompt()}, "textOptions": map[string]any{"stream": true}, "metadata": map[string]any{"source": "drama_production", "domainProjectId": r.project.ID}}
-	task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepBible), "text", "text", prompt, input)
+	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepBible), "text", "text", prompt, input)
 	return task, false, err
 }
 
@@ -1403,7 +1412,7 @@ func (r *dramaRun) submitPlan(job *model.DramaJob) (*model.Task, bool, error) {
 		previous = last.Cliffhanger
 	}
 	prompt := production.PlanPrompt(r.project.Name, r.settings.Settings, r.bibleSummary(), chapters[payload.Start:payload.End], next+1, previous)
-	task, err := r.createTask("text", "text", prompt, r.textInput(job, production.PlanSystemPrompt()))
+	task, err := r.createTask(job, "text", "text", prompt, r.textInput(job, production.PlanSystemPrompt()))
 	return task, false, err
 }
 
@@ -1434,7 +1443,7 @@ func (r *dramaRun) submitScript(job *model.DramaJob) (*model.Task, bool, error) 
 		CastSummary: r.castSummary("character", 30), PropSummary: r.castSummary("prop", 20), SceneSummary: r.castSummary("scene", 20), SourceChapters: chapters,
 		SourceFormat: episode.SourceFormat, Skill: skill,
 	})
-	task, err := r.createTaskWith(r.settings.Models.textFor(DramaStepScript), "text", "text", prompt, r.textInput(job, production.ScriptSystemPrompt()))
+	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepScript), "text", "text", prompt, r.textInput(job, production.ScriptSystemPrompt()))
 	return task, false, err
 }
 
@@ -1463,7 +1472,7 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 	config := map[string]any{"count": "1"}
 	request.apply(config)
 	input := map[string]any{"config": config, "metadata": metadata}
-	task, err := r.createTaskWith(r.settings.Models.imageFor(cast.Kind), "image", "text_to_image", prompt, input)
+	task, err := r.createTaskWith(job, r.settings.Models.imageFor(cast.Kind), "image", "text_to_image", prompt, input)
 	return task, false, err
 }
 
@@ -1537,29 +1546,83 @@ func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
-	return r.s.createDramaRenderTask(r.project, timeline)
+	return r.s.createDramaRenderTask(r.project, timeline, job)
 }
 
-func (s *Service) submitDramaTask(userID string, req CreateTaskRequest) (*model.Task, error) {
+func (s *Service) submitDramaTask(userID string, req CreateTaskRequest, job *model.DramaJob) (*model.Task, error) {
 	if s.dramaTaskHook != nil {
 		return s.dramaTaskHook(userID, req, nil)
 	}
+	prepare := &creationTaskPreparation{}
+	req.creationPrepare = prepare
 	task, err := s.CreateTask(userID, req)
-	if err == nil {
-		s.wakeTaskDispatcher()
+	if err != nil {
+		return nil, err
 	}
-	return task, err
+	var input map[string]any
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		return nil, err
+	}
+	if err := s.protectTaskSecrets(input); err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
+	}
+	task.InputJSON = string(encoded)
+	return s.persistDramaTask(job, task, prepare.Order)
 }
 
-func (s *Service) createDramaRenderTask(project *model.Project, timeline renderProject) (*model.Task, bool, error) {
+func (s *Service) createDramaRenderTask(project *model.Project, timeline renderProject, job *model.DramaJob) (*model.Task, bool, error) {
 	if s.dramaTaskHook != nil {
 		task, err := s.dramaTaskHook(project.UserID, CreateTaskRequest{Type: model.TaskTypeTimelineRender}, &timeline)
 		return task, false, err
 	}
-	task, err := s.CreateTimelineRenderTask(project.UserID, TimelineRenderCreateRequest{ProjectID: project.ID, Timeline: timeline})
+	task, err := s.CreateTimelineRenderTask(project.UserID, TimelineRenderCreateRequest{ProjectID: project.ID, Timeline: timeline, prepareOnly: true})
 	if err != nil {
 		return nil, false, err
 	}
+	task, err = s.persistDramaTask(job, task, nil)
+	return task, false, err
+}
+
+func (s *Service) persistDramaTask(job *model.DramaJob, task *model.Task, order *model.BillingOrder) (*model.Task, error) {
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	if order != nil {
+		task.BillingOrderID = order.ID
+	}
+	now := time.Now()
+	bound := *job
+	bound.Status, bound.TaskID, bound.StartedAt = model.DramaJobRunning, task.ID, &now
+	bound.CostMicrocredits = 0
+	// 任务与计费预留、作业绑定在同一事务中可见，提交前不会唤醒 dispatcher。
+	s.storageMu.Lock()
+	err = s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := createTaskWithStorageQuotaRepository(repo, task, order, policy); err != nil {
+			return err
+		}
+		return repo.SaveDramaJob(&bound)
+	})
+	s.storageMu.Unlock()
+	if errors.Is(err, repository.ErrActiveTaskLimit) {
+		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
+	}
+	if errors.Is(err, repository.ErrInsufficientCredits) {
+		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
+	}
+	if errors.Is(err, repository.ErrLogicalModelUnavailable) {
+		return nil, BadAuthRequest("所选模型已停用、归档或配置已更新，请重新选择")
+	}
+	if err != nil {
+		return nil, err
+	}
+	*job = bound
+	s.recordActivity(task.UserID, "task", 1)
+	_ = s.log(task.UserID, task.ID, "info", "短剧任务已进入队列并绑定作业", "")
 	s.wakeTaskDispatcher()
-	return task, false, nil
+	return taskForOutput(*task), nil
 }
