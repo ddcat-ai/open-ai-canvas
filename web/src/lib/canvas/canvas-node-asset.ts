@@ -107,7 +107,12 @@ export function findCanvasNodeAsset(assets: Asset[], node: CanvasNodeData, canva
     }
     const generationTaskId = taskId || node.metadata?.taskId;
     return assets.find((asset) => {
-        if (generationTaskId && asset.metadata?.taskId === generationTaskId && asset.metadata?.nodeId === node.id) return sameAssetResource(asset, node);
+        if (generationTaskId && asset.metadata?.taskId === generationTaskId) {
+            if (asset.metadata?.nodeId === node.id) return sameAssetResource(asset, node);
+            // 任务物化发生在节点绑定之前，旧任务记录可能只有 taskId，没有 nodeId。
+            // 生成任务的每个输出仍以不可变 resource 作为身份，按资源匹配可避免误绑同一任务的其他输出。
+            if (!asset.metadata?.nodeId && sameAssetResource(asset, node)) return true;
+        }
         if (asset.metadata?.nodeId !== node.id) return false;
         const sourceCanvasId = asset.metadata?.canvasId;
         if (sourceCanvasId !== canvasId && (sourceCanvasId || asset.metadata?.source !== "canvas-generation")) return false;

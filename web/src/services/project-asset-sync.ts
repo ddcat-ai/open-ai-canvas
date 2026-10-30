@@ -483,6 +483,7 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
         source: "generation-task",
         generationEffectKey: input.effectKey,
         taskId: input.task.id,
+        nodeId: input.task.clientContext?.nodeId,
         outputIndex: input.output.outputIndex,
         conversationId: input.task.clientContext?.conversationId,
         messageId: input.task.clientContext?.messageId,
