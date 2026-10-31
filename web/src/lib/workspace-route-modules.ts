@@ -6,6 +6,8 @@ const workspaceRouteLoaders = {
     projectDetail: () => import("@/pages/projects/detail"),
     projectCreate: () => import("@/pages/projects/create"),
     skillWorkbench: () => import("@/pages/skills/workbench"),
+    toolboxImage: () => import("@/pages/workbench/image-workbench-route"),
+    toolboxVideo: () => import("@/pages/workbench/video-workbench-page"),
 };
 
 export const loadAssetsPage = workspaceRouteLoaders.assets;
@@ -29,6 +31,11 @@ export function preloadWorkspaceRoute(pathnameOrSlug: string) {
     }
     if (slug === "skills" && segments[2] === "edit") {
         void workspaceRouteLoaders.skillWorkbench();
+        return;
+    }
+    // 创作影棚是图片 / 视频工作台的统一入口：按目标工作台预加载对应模块。
+    if (slug === "toolbox" && segments.length > 1) {
+        void (segments[1] === "video" ? workspaceRouteLoaders.toolboxVideo() : workspaceRouteLoaders.toolboxImage());
         return;
     }
     const load = workspaceRouteLoaders[slug as keyof typeof workspaceRouteLoaders];

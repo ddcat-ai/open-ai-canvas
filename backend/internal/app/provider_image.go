@@ -18,6 +18,21 @@ import (
 	"yingce/backend/internal/model"
 )
 
+func requestedImageOutputCount(raw string, profile *ImageCapabilityConfig) int {
+	count, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || count < 1 {
+		return 1
+	}
+	maxOutputs := 20
+	if profile != nil && profile.MaxOutputs > 0 {
+		maxOutputs = profile.MaxOutputs
+	}
+	if count > maxOutputs {
+		count = maxOutputs
+	}
+	return count
+}
+
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
 	if input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) {
 		if err := validateOpenAIImageInput(input); err != nil {
@@ -27,6 +42,29 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
 		return runDeclarativeProtocolTask(ctx, input)
 	}
+	targetCount := requestedImageOutputCount(input.Config.Count, input.ImageCapability)
+	if targetCount <= 1 {
+		return runSingleHandwrittenImageTask(ctx, input)
+	}
+	allImages := make([]map[string]string, 0, targetCount)
+	for attempt := 0; attempt < targetCount && len(allImages) < targetCount; attempt++ {
+		result, err := runSingleHandwrittenImageTask(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		batch, _ := result["images"].([]map[string]string)
+		if len(batch) == 0 {
+			break
+		}
+		allImages = append(allImages, batch...)
+	}
+	if len(allImages) > targetCount {
+		allImages = allImages[:targetCount]
+	}
+	return map[string]interface{}{"mode": "image", "images": allImages}, nil
+}
+
+func runSingleHandwrittenImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
 	if input.Config.InterfaceType == string(model.ChannelInterfaceGrokImage) {
 		return runGrokImageTask(ctx, input)
 	}

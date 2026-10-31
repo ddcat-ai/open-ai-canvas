@@ -1,0 +1,130 @@
+.workbench-count-picker {
+    display: grid;
+    gap: 6px;
+}
+.workbench-count-picker > span {
+    font-size: 12px;
+    font-weight: 560;
+    color: var(--wb-text-muted);
+}
+.workbench-count-picker > div {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    align-items: center;
+}
+.workbench-count-picker button {
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: var(--wb-muted);
+    color: var(--wb-text);
+    font-size: 12px;
+    font-weight: 550;
+    cursor: pointer;
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        border-color 140ms ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.workbench-count-picker button:hover {
+    background: var(--wb-hover);
+}
+.workbench-count-picker button.is-active {
+    border-color: var(--user-accent, var(--wb-button-bg, #242424));
+    background: var(--user-accent, var(--wb-button-bg, #242424));
+    color: var(--primary-foreground, var(--wb-button-ink, #ffffff));
+    font-weight: 650;
+}
+
+.workbench-count-stepper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: var(--wb-muted);
+    color: var(--wb-text);
+    overflow: hidden;
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        border-color 140ms ease;
+    cursor: pointer;
+}
+.workbench-count-stepper:hover {
+    background: var(--wb-hover);
+}
+.workbench-count-stepper.is-active {
+    border-color: var(--user-accent, var(--wb-button-bg, #242424));
+    background: var(--user-accent, var(--wb-button-bg, #242424));
+    color: var(--primary-foreground, var(--wb-button-ink, #ffffff));
+}
+.workbench-count-stepper input {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 0%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 560;
+    color: inherit;
+    padding: 0 2px 0 8px;
+    -moz-appearance: textfield;
+}
+.workbench-count-stepper input::-webkit-outer-spin-button,
+.workbench-count-stepper input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.workbench-count-stepper-controls {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 18px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--wb-edge);
+    justify-content: center;
+    align-items: center;
+}
+.workbench-count-stepper.is-active .workbench-count-stepper-controls {
+    border-left-color: color-mix(in srgb, currentColor 22%, transparent);
+}
+.workbench-count-stepper-btn {
+    display: flex;
+    flex: 1 1 0%;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 100ms ease;
+}
+.workbench-count-stepper-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+.workbench-count-stepper-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.workbench-count-stepper-btn svg {
+    width: 10px;
+    height: 10px;
+    opacity: 0.8;
+}

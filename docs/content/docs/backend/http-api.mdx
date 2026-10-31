@@ -26,7 +26,7 @@ description: 信封、错误码与 OpenAPI
 
 ## 工作台批量生成的批次标识
 
-一次生成多张图片或多条视频时，页面把请求拆成多个任务（视频每条一个任务，图片按模型单次张数拆分），逐个调用 `POST /api/workbench/tasks`，每个请求带上同一个批次：
+工作台页面生成多张图片时，在任务的图片选项 `count` 中传入数量，后端 `app/provider_image.go` 在单个任务内循环产出（1–20，按模型能力配置的 `MaxOutputs` 截断），图片按 `images` 数组返回。批次接口为跨任务分组保留：调用方也可以把请求拆成多个任务（视频每条一个任务），逐个调用 `POST /api/workbench/tasks`，每个请求带上同一个批次：
 
 ```json
 { "batch": { "id": "3f6c…", "index": 0, "count": 3 } }

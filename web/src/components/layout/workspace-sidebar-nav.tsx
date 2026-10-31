@@ -1,5 +1,5 @@
 import { Popover } from "antd";
-import { ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Plus, Video } from "lucide-react";
+import { Camera, ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, Image as ImageIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
@@ -42,29 +42,23 @@ function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
 }
 
 function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+    // 创作影棚：图片 / 视频生成统一为一个入口，落在可用的第一个工作台上。
+    const toolboxTo = features.imageWorkbenchEnabled ? "/toolbox/image" : features.videoWorkbenchEnabled ? "/toolbox/video" : "";
     const groups: WorkspaceNavGroup[] = [
         {
-            items: [
-                { ...toolItem("create", "/"), id: "home", title: "创作" },
-                ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: "短剧制作" }] : []),
-                { ...toolItem("canvas", "/canvas"), title: "自由画布" },
-            ],
+            items: [{ ...toolItem("create", "/"), id: "home", title: "创作" }, ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects"), title: "短剧制作" }] : []), { ...toolItem("canvas", "/canvas"), title: "自由画布" }],
         },
         {
             heading: "资源与工具",
             items: [
-                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: "图片生成", icon: ImageIcon, to: "/toolbox/image" }] : []),
-                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: "视频生成", icon: Video, to: "/toolbox/video" }] : []),
+                ...(toolboxTo ? [{ id: "toolbox", title: "创作影棚", icon: Camera, to: toolboxTo }] : []),
                 { ...toolItem("skills", "/skills"), title: "技能" },
                 ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : []),
             ],
         },
         {
             heading: "资产与历史",
-            items: [
-                { ...toolItem("assets", "/assets"), title: "资产" },
-                ...(features.taskCenterEnabled ? [{ id: "tasks", title: "创作历史", icon: ImageIcon, to: "/tasks" }] : []),
-            ],
+            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, ...(features.taskCenterEnabled ? [{ id: "tasks", title: "创作历史", icon: ImageIcon, to: "/tasks" }] : [])],
         },
     ];
 
@@ -106,7 +100,9 @@ function WorkspaceSidebarProfile({ collapsed, user, onExpand, onCollapse }: { co
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
                 <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" arrow={false} rootClassName="workspace-account-popover" content={content}>
                     <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" title={profileName}>
-                        <UserGroupAvatarRing><UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" /></UserGroupAvatarRing>
+                        <UserGroupAvatarRing>
+                            <UserAvatar user={user} className="app-workspace-sidebar-profile-avatar" />
+                        </UserGroupAvatarRing>
                         {!collapsed ? (
                             <span className="app-workspace-sidebar-profile-copy">
                                 <strong>{profileName}</strong>
@@ -199,7 +195,23 @@ function NavItem({
     const rowStyle = collapsed ? undefined : ({ paddingLeft: `${level * 12 + 10}px` } as CSSProperties);
 
     const collapsedTitle =
-        item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
+        item.id === "home"
+            ? "创作"
+            : item.id === "projects"
+              ? "短剧"
+              : item.id === "canvas"
+                ? "画布"
+                : item.id === "toolbox"
+                  ? "影棚"
+                  : item.id === "assets"
+                    ? "资产"
+                    : item.id === "skills"
+                      ? "技能"
+                      : item.id === "plugins"
+                        ? "插件"
+                        : item.id === "tasks"
+                          ? "历史"
+                          : item.title.slice(0, 2);
     const rowContent = (
         <>
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2">
@@ -332,11 +344,11 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
     );
 }
 
-// 菜单项 id 与实际路由不一定同名：/toolbox/image 和 /toolbox/video 共用 toolbox 前缀，
-// 只取首段会让两者都匹配不到任何菜单项，侧栏因此没有高亮。
+// 菜单项 id 与实际路由不一定同名：创作影棚是 /toolbox/image 与 /toolbox/video 的统一入口，
+// 两个路径都高亮同一个「创作影棚」菜单项。
 export function workspaceNavActiveId(pathname: string, section?: string | null) {
     const segments = pathname.split("/").filter(Boolean);
-    if (segments[0] === "toolbox" && segments[1]) return `toolbox-${segments[1]}`;
+    if (segments[0] === "toolbox") return "toolbox";
     const slug = segments[0] || "home";
     if (slug === "create") return "home";
     return slug === "settings" && section ? `settings:${section}` : slug;
