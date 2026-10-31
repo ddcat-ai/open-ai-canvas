@@ -1,7 +1,7 @@
 import { fetchFile } from "@ffmpeg/util";
 
 import { getMediaBlob } from "@/services/file-storage";
-import { buildExtractAudioArgs, buildSegmentTrimArgs, SEGMENT_INPUT_NAME, SEGMENT_OUTPUT_NAME } from "./canvas-video-segment-args";
+import { buildExtractAudioArgs, buildSegmentTrimArgs, isMp3Bytes, SEGMENT_AUDIO_OUTPUT_NAME, SEGMENT_INPUT_NAME, SEGMENT_OUTPUT_NAME } from "./canvas-video-segment-args";
 import { loadFFmpeg } from "./canvas-video-merge";
 
 export type VideoSegmentRange = {
@@ -74,7 +74,11 @@ export async function trimVideoSegment(source: VideoSegmentSource, range: VideoS
     return runSegmentJob(source, range, durationMs, (startSec, durationSec) => buildSegmentTrimArgs(startSec, durationSec), onProgress, "video/mp4");
 }
 
-/** 从视频片段提取声音为 MP3；优先 libmp3lame，内核不支持时回退默认 mp3 编码器。 */
+/**
+ * 从视频片段提取声音为 MP3；优先 libmp3lame，内核不支持时回退默认 mp3 编码器。
+ * 输出写到独立的 .mp3 文件并用 -f mp3 指定容器，返回前再核对字节确实是 MP3：
+ * 不能只把 Blob 标成 audio/mpeg，服务端按内容识别类型，MP4 容器会被存成视频。
+ */
 export async function extractVideoAudio(source: VideoSegmentSource, range: VideoSegmentRange, durationMs?: number, onProgress?: (progress: VideoSegmentProgress) => void) {
     const ffmpeg = await loadFFmpeg(({ phase, progress }) => onProgress?.({ phase: phase === "loading" ? "loading" : "reading", progress }));
     const blob = await readVideoSourceBlob(source);
@@ -89,10 +93,12 @@ export async function extractVideoAudio(source: VideoSegmentSource, range: Video
         let exitCode = await ffmpeg.exec(["-y", ...args("libmp3lame")]);
         if (exitCode !== 0) exitCode = await ffmpeg.exec(["-y", ...args("mp3")]);
         if (exitCode !== 0) throw new Error("音频提取失败：当前 FFmpeg 内核不支持 MP3 编码");
-        const output = await ffmpeg.readFile(OUTPUT_NAME);
+        const output = await ffmpeg.readFile(SEGMENT_AUDIO_OUTPUT_NAME);
+        const bytes = typeof output === "string" ? new TextEncoder().encode(output) : output;
+        if (!isMp3Bytes(bytes)) throw new Error("音频提取失败：输出不是 MP3 文件");
         onProgress?.({ phase: "encoding", progress: 100 });
-        return new Blob([output as BlobPart], { type: "audio/mpeg" });
+        return new Blob([bytes as BlobPart], { type: "audio/mpeg" });
     } finally {
-        await Promise.all([INPUT_NAME, OUTPUT_NAME].map((file) => ffmpeg.deleteFile(file).catch(() => undefined)));
+        await Promise.all([INPUT_NAME, SEGMENT_AUDIO_OUTPUT_NAME].map((file) => ffmpeg.deleteFile(file).catch(() => undefined)));
     }
 }
