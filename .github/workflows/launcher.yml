@@ -1,0 +1,62 @@
+name: Launcher checks and desktop builds
+
+on:
+  pull_request:
+    paths: ["launcher/**", ".github/workflows/launcher.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, macos-15-intel, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.8"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # build.rs compiles and embeds the native gateway; Go >=1.25 is an app build prerequisite.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: launcher/runtime/go.mod
+          cache: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux desktop prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install launcher dependencies
+        working-directory: launcher
+        run: bun install --frozen-lockfile
+      - name: Frontend build and tests
+        working-directory: launcher
+        run: |
+          bun run build
+          bun test src/
+          node --test scripts/*.test.mjs
+      - name: Runtime tests
+        working-directory: launcher/runtime
+        run: go test ./...
+      - name: Rust tests
+        working-directory: launcher/src-tauri
+        run: cargo test --locked --lib
+      - name: Compile desktop application
+        working-directory: launcher
+        run: bun run tauri build --no-bundle
+      # The native gateway is embedded by build.rs, not a separate downloaded resource.
+      # These are development executables only, not signed installers or end-to-end validation.
+      # This workflow does not publish upstream runtime assets or promote a release.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-dev-${{ matrix.os }}
+          path: |
+            launcher/src-tauri/target/release/yingce-launcher.exe
+            launcher/src-tauri/target/release/yingce-launcher
+          if-no-files-found: error

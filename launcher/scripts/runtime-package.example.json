@@ -1,0 +1,17 @@
+{
+  "exampleOnly": true,
+  "target": "windows-x64",
+  "version": "0.0.0-example-not-published",
+  "commit": "0000000000000000000000000000000000000000",
+  "nodeVersion": "22.19.0-example-verify-before-release",
+  "output": "./EXAMPLE-NOT-A-RELEASE",
+  "runtimeExecutable": "./prebuilt/yingce-runtime.exe",
+  "backendExecutable": "./prebuilt/yingce-backend.exe",
+  "nodeDirectory": "./prebuilt/node",
+  "webDist": "./prebuilt/web-dist",
+  "agentDirectory": "./prebuilt/agent-with-production-node_modules",
+  "pluginPackages": "./prebuilt/plugin-packages",
+  "license": "./prebuilt/LICENSE",
+  "notice": "./prebuilt/NOTICE",
+  "thirdPartyNotices": "./prebuilt/third-party-notices"
+}

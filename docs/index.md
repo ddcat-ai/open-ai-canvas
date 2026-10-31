@@ -10,6 +10,10 @@
 - [在线更新与安全回退](content/docs/backend/system-update.mdx)：受管部署条件、安装、备份、迁移和回退。
 - [本地开发](content/docs/backend/local-development.mdx)：宿主机与热更新开发环境。
 
+## 个人方案审阅（`docs/specs/`）
+
+- [Spec-001：影策跨平台本地启动与更新器](specs/feature-001-local-launcher.md)：独立代码、影策图标、默认浏览器启动、可信镜像下载、版本更新与数据恢复（源码安装开发版实施中，端到端未验收）。
+
 ## 设计沉淀
 
 - [资源访问与 OSS/CDN 分发架构重构](design/resource-delivery-architecture.md)：资源身份、场景授权与分发策略分离，统一访问合同、全入口迁移、旧实现退场及流量/安全验收门槛（核心代码已实施，待真实 OSS/CDN 链路验收）。

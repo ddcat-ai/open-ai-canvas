@@ -19,6 +19,15 @@ description: 从产品功能快速定位主要代码入口
 - 精修画布（后端）：`app/drama_canvas.go`（作品的精修画布、投送媒体的素材登记、版本记录与来源、段视频采用与尾帧补抽、画布花费计入预算 `dramaTotalSpent`、画布任务预算闸门 `ensureDramaCanvasBudget`）、`repository/repository_drama_canvas.go`（画布花费汇总、段视频采用事务、短剧持有资源的引用 `DramaResourceReferences`）；尾帧抽取与视频时长读取在 `drama_segment_video.go`（`saveDramaTailFrame`、`inspectDramaVideo`）。Agent 工具 `drama_get_context` / `drama_adopt_canvas_media` 在 `app/cloud_agent_drama.go`，只在 `Scope.Drama`（运行画布关联短剧）时暴露。
 - 精修画布（前端）：投送的纯函数在 `web/src/lib/canvas/drama-canvas-projection.ts`（节点、段框、时间线、过期判断、分镜转短剧原文），副作用在 `web/src/services/drama-canvas.ts`（找到或新建精修画布、跳转参数、素材登记、分镜画布关联到新短剧）；画布页编排 `pages/canvas/use-canvas-drama.ts`，侧栏 `components/canvas/canvas-drama-sidebar.tsx`，采用弹窗 `components/canvas/canvas-drama-adopt-modal.tsx`。查询键 `lib/drama/drama-query-keys.ts` 与文案 `lib/drama/drama-format.ts` 由制作台和画布共用；制作台入口 `studio/use-studio.ts` 的 `useOpenDramaCanvas`，版本记录 `studio/take-list.tsx`。
 
+## 本地启动与更新器
+
+- 桌面界面与调用合同：`launcher/src/App.tsx`、`launcher/src/bridge.ts`；Tauri 受控命令入口：`launcher/src-tauri/src/lib.rs`。
+- 固定公共 Release/标签提交解析：`launcher/src-tauri/src/public_release.rs`；源码归档、镜像、独立版本、数据克隆与指针提交、文件库存、精确就绪及进程管理：`launcher/src-tauri/src/core.rs`。
+- 增量源码（目录清单比较、变化文件下载与校验、缓存包生成）：`launcher/src-tauri/src/incremental.rs`；后台准备/切换拆分与定时检查：`core.rs` 的 `Prepare`、`prepare_in_background`、`switch_prepared`，调度线程在 `lib.rs`。
+- Go/Bun/Node/CC 检查与官方摘要工具缓存、CGO 后端/Vite/Agent/插件构建、仅下载源码的关闭适配：`launcher/src-tauri/src/source_install.rs`。
+- 本地静态托管、同源 API/流式代理、认证回环正常关闭与数据锁：`launcher/runtime/`（独立 Go 模块）；`launcher/src-tauri/build.rs` 用 Go >=1.25 将网关编译嵌入应用。`launcher/scripts/` 的预构建整理/签名工具为遗留路径，不是活动安装协议。
+- 桌面构建检查：`.github/workflows/launcher.yml`；产品限制及发布前置条件：`launcher/README.md`、`launcher/docs/`。不替代服务器 Host Updater，不接管开发仓库。
+
 ## 画布实时会话
 
 - 传输入口：`backend/internal/handler/canvas_realtime.go` 校验登录与 Origin、管理 WebSocket；`app/canvas_realtime.go` 校验画布归属，`internal/canvas/realtime.go` 负责临时 Presence、房间隔离与 Redis 分发，`realtime_devices.go` 管理跨实例统一窗口编号及临时租期。
