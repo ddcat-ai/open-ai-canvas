@@ -4,7 +4,8 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 // These fields describe local viewing / synchronization, not an edit to the document.
 export function canvasContentSnapshot(project: CanvasProject) {
     const { viewport: _viewport, updatedAt: _updatedAt, revision: _revision, remoteContentHash: _hash, ...content } = project;
-    return { ...content, projectId: content.projectId || undefined };
+    // 服务端会省略 null；未选中会话的两种表示不是内容变更。
+    return { ...content, projectId: content.projectId || undefined, activeChatId: content.activeChatId ?? undefined };
 }
 
 export function sameCanvasContent(left: CanvasProject | undefined, right: CanvasProject | undefined) {

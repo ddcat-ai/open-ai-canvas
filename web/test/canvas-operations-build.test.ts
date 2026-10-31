@@ -22,6 +22,13 @@ function canvas(patch: Partial<CanvasProject> = {}): CanvasProject {
 }
 
 describe("画布 operations 生成", () => {
+    test("服务端省略空会话字段后不会重复提交删除，真实会话切换仍然保存", () => {
+        const remote = canvas({ activeChatId: undefined });
+        const local = canvas({ activeChatId: null });
+        expect(buildCanvasOperations(remote, local)).toEqual([]);
+        expect(buildCanvasOperations(local, remote)).toEqual([]);
+        expect(buildCanvasOperations(canvas({ activeChatId: "chat-1" }), local)).toEqual([{ type: "set_field", field: "activeChatId", value: null, beforeValue: "chat-1" }]);
+    });
     test("生成任务时间戳更新携带taskId身份前置条件", () => {
         const before = canvas({ nodes: [{ id: "video", type: "video", metadata: { taskId: "task-1", taskUpdatedAt: "2026-04-01T00:00:00Z" } }] as CanvasProject["nodes"] });
         const after = canvas({ nodes: [{ id: "video", type: "video", metadata: { taskId: "task-1", taskUpdatedAt: "2026-04-01T00:00:01Z" } }] as CanvasProject["nodes"] });

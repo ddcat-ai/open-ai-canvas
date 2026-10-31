@@ -1186,7 +1186,7 @@ export function buildCanvasOperations(base: CanvasProject | undefined, next: Can
     for (const field of CANVAS_OPERATION_FIELDS) {
         // 服务端用 "" 表示未关联项目，本地可能是 undefined；两者语义相同，不能生成写操作。
         if (field === "projectId" && !base.projectId && !next.projectId) continue;
-        if (!canvasOperationValueEqual(base[field], next[field])) operations.push({ type: "set_field", field, value: canvasOperationValue(next[field]), beforeValue: canvasOperationValue(base[field]) });
+        if (!canvasOperationValueEqual(canvasOperationValue(base[field]), canvasOperationValue(next[field]))) operations.push({ type: "set_field", field, value: canvasOperationValue(next[field]), beforeValue: canvasOperationValue(base[field]) });
     }
     return operations;
 }
