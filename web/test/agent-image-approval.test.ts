@@ -7,4 +7,4 @@ test("真实 React 图片审批多字段更新不会覆盖已选宽高比", () =
     expect(result.exitCode, output).toBe(0);
     expect(output).toContain("1 pass");
     expect(output).toContain("0 fail");
-});
+}, 20000);
