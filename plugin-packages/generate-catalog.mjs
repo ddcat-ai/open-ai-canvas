@@ -236,6 +236,7 @@ for (const [id, name, vendor, baseUrl] of [
   ["openrouter-chat", "OpenRouter Chat", "OpenRouter", "https://openrouter.ai/api"],
   ["atlascloud-chat", "Atlas Cloud Chat", "Atlas Cloud", "https://api.atlascloud.ai"],
   ["cheaperinference-chat", "Cheaper Inference Chat", "Cheaper Inference", "https://api.cheaperinference.com"],
+  ["runcrate-chat", "Runcrate Chat", "Runcrate", "https://api.runcrate.ai"],
   ["litellm-proxy-chat", "LiteLLM Proxy Chat", "LiteLLM", "http://127.0.0.1:4000"],
   ["newapi-chat", "NewAPI Chat", "NewAPI", "http://127.0.0.1:3000"],
   ["vllm-chat", "vLLM OpenAI-Compatible", "vLLM", "http://127.0.0.1:8000"],
