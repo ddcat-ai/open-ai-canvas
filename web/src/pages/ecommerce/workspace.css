@@ -3110,3 +3110,19 @@
         transition: none;
     }
 }
+.commerce-advanced-settings {
+    margin: 12px 0;
+    color: var(--user-ink);
+    font-size: 12px;
+}
+.commerce-advanced-settings > summary {
+    cursor: pointer;
+    padding: 8px 0;
+}
+.commerce-advanced-settings-content {
+    display: grid;
+    gap: 16px;
+    max-height: 42vh;
+    overflow-y: auto;
+    padding: 8px 4px;
+}

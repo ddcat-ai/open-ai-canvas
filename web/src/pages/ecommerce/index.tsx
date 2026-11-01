@@ -25,6 +25,8 @@ import { useNavigate, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
 import { ApiError } from "@/services/api/request";
 import { CachedResourceImage } from "@/components/cached-resource-image";
+import { CreativeOptionsPanel } from "./creative-options-panel";
+import { ReferenceModePanel, ReferenceScreenSummary } from "./reference-mode-panel";
 
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { modelQuoteRequest } from "@/lib/model-pricing";
@@ -236,6 +238,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         return next;
     };
     const [draft, setDraft] = useState<EcommerceDraft>(emptyEcommerceDraft);
+    const [reviewHost, setReviewHost] = useState<HTMLDivElement | null>(null);
     const [composerHiddenRefs, setComposerHiddenRefs] = useState<Set<string>>(new Set());
     const [composerTextOverride, setComposerTextOverride] = useState<string | null>(null);
     /** 本次发送是否已被受理：发送时先清空输入框，未受理（校验未过、提交失败）再恢复。 */
@@ -342,13 +345,14 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         projectRef.current = sessionRef.current.project;
         setProject(projectRef.current);
     };
-    const update = <K extends keyof EcommerceDraft>(key: K, value: EcommerceDraft[K]) => {
+    const updateDraft = (patch: Partial<EcommerceDraft>) => {
         setCreativeDirections([]);
         setRecommendationId("");
         selectedDirectionRef.current = null;
         directionsInputSignatureRef.current = "";
-        setDraft((current) => ({ ...current, creativeRecommendationId: undefined, creativeDirectionId: undefined, [key]: value }));
+        setDraft((current) => ({ ...current, creativeRecommendationId: undefined, creativeDirectionId: undefined, ...patch }));
     };
+    const update = <K extends keyof EcommerceDraft>(key: K, value: EcommerceDraft[K]) => updateDraft({ [key]: value });
     const textModels = useMemo(() => selectableModelsByCapability(config, "text"), [config]);
     const imageModels = useMemo(() => selectableModelsByCapability(config, "image"), [config]);
     // Both analysis models are fixed by the administrator and are not shown here.
@@ -1696,7 +1700,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         const activeId = projectRef.current?.id || getEcommerceActiveProject(scope);
         if (all || (activeId && ids.includes(activeId))) newProject();
     };
-    const updateImage = (id: string, patch: Partial<EcommercePlanImage>) => setPlan((current) => (current ? { ...current, images: current.images.map((image) => (image.id === id ? { ...image, ...patch } : image)) } : null));
+    const updateImage = (id: string, patch: Partial<EcommercePlanImage>) =>
+        setPlan((current) => (current ? { ...current, images: current.images.map((image) => (image.id === id ? manuallyEditedCommerceImage(image, { ...image, ...patch }) : image)) } : null));
     const resizePlan = (images: EcommercePlanImage[]) => {
         if (!plan) return;
         if (draft.referenceMode === "detail") {
@@ -1970,7 +1975,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         <main className="ecommerce-page flylep-page">
             <div className="ecommerce-toolbar" aria-label="项目操作">
                 <div className="ecommerce-tagline">
-                    <span>MEIYE · COMMERCE STUDIO</span>
+                    <span>COMMERCE STUDIO</span>
                     <strong>让商品的价值，被一眼看见。</strong>
                     <small>以真实商品为起点，让每一张图都有清晰的表达。</small>
                 </div>
@@ -2003,98 +2008,120 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 </p>
             ) : null}
             <EcommerceProjectHistory open={historyOpen} tasks={tasks} activeProjectId={project?.id} deletionDisabled={busy || uploading || restoring} onClose={() => setHistoryOpen(false)} onOpen={openProject} onDeleted={onHistoryDeleted} />
-            {plan ? (
-                <details className="ecommerce-review">
-                    <summary>
-                        审阅与调整图片方案 · {plan.images.length} 张 {plan.uncertainFacts.length ? `· ${plan.uncertainFacts.length} 项待确认` : ""}
-                    </summary>
-                    <CommerceFactReview
-                        facts={plan.uncertainFacts}
-                        onApply={reviseFacts}
-                        onExclude={() => {
-                            setPlan(excludeCommerceFacts(plan));
-                            setStage("未核实主张已加入每张图的排除约束，请审阅提示词后生成");
-                        }}
-                    />
-                    {plan.qualityChecks.length ? (
-                        <div className="ecommerce-quality">
-                            <strong>生成后人工质检重点</strong>
-                            <ul>
-                                {plan.qualityChecks.map((item, index) => (
-                                    <li key={`${index}-${item}`}>{item}</li>
-                                ))}
-                            </ul>
-                            <small>这些是策划建议，尚未对实际图片执行自动质检。文案随完整指令提交给图片模型，生成后请核对文字、结构与 Logo；可从图片的“重新编辑”调整。</small>
-                        </div>
-                    ) : null}
-                    <div className="ecommerce-review-rows">
-                        {plan.images.map((image, index) => (
-                            <div key={image.id}>
-                                <span>{index + 1}</span>
-                                <Button
-                                    size="small"
-                                    type={selectedExportIds.has(image.id) ? "primary" : "default"}
-                                    onClick={() =>
-                                        setSelectedExportIds((current) => {
-                                            const next = new Set(current);
-                                            if (next.has(image.id)) next.delete(image.id);
-                                            else next.add(image.id);
-                                            return next;
-                                        })
-                                    }
-                                >
-                                    {selectedExportIds.has(image.id) ? "已选导出" : "选择导出"}
-                                </Button>
-                                {image.taskId && tasks[image.taskId]?.outputs?.[0]?.materializedAssetId ? (
-                                    <Button size="small" onClick={() => void downloadEcommerceImage({ image, index, assetId: tasks[image.taskId!].outputs![0].materializedAssetId! }).catch((cause) => message.error(errorText(cause)))}>
-                                        下载
-                                    </Button>
-                                ) : null}
-                                <Select size="small" value={image.imageType} options={options(imageTypes)} disabled={Boolean(image.taskId)} onChange={(value) => updateImage(image.id, { imageType: value })} />
-                                <Select
-                                    size="small"
-                                    value={image.imageModel}
-                                    options={imageModels.map((value) => ({ value, label: modelOptionName(value) }))}
-                                    disabled={Boolean(image.taskId)}
-                                    onChange={(value) => {
-                                        const profile = modelCapabilityConfigFor(config, value).image;
-                                        updateImage(image.id, { imageModel: value, ratio: profile?.size.default || image.ratio, resolution: profile?.resolution.supported ? profile.resolution.default : profile?.quality.default || image.resolution });
-                                    }}
-                                />
-                                <Button size="small" disabled={draft.referenceMode === "detail" || index === 0} onClick={() => moveImage(index, -1)}>
-                                    上移
-                                </Button>
-                                <Button size="small" disabled={draft.referenceMode === "detail" || index === plan.images.length - 1} onClick={() => moveImage(index, 1)}>
-                                    下移
-                                </Button>
-                                <Button size="small" disabled={submitted > 0 || draft.imageType === "sku" || plan.images.length <= 1} onClick={() => resizePlan(plan.images.filter((entry) => entry.id !== image.id))}>
-                                    删除
-                                </Button>
-                                {image.taskId && tasks[image.taskId] && !terminal(tasks[image.taskId].status) ? (
-                                    <Button size="small" onClick={() => void cancelImage(image)}>
-                                        取消任务
-                                    </Button>
-                                ) : null}
-                                {image.taskId && ["failed", "cancelled"].includes(tasks[image.taskId]?.status || "") ? (
-                                    <Button size="small" disabled={busy} onClick={() => void retryImage(image)}>
-                                        重试
-                                    </Button>
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                    <Button
-                        size="small"
-                        disabled={submitted > 0 || draft.imageType === "sku" || plan.images.length >= 30}
-                        onClick={() => {
-                            const template = plan.images.at(-1);
-                            if (template) resizePlan([...plan.images, { ...template, id: createClientUUID(), taskId: undefined, goal: "新增图片", theme: "待编辑", prompt: "请描述这张商品图片的视觉目标与保真约束" }]);
-                        }}
-                    >
-                        添加图片策划
-                    </Button>
-                </details>
-            ) : null}
+            {plan && reviewHost
+                ? createPortal(
+                      <details className="ecommerce-review">
+                          <summary>
+                              审阅与调整图片方案 · {plan.images.length} 张 {plan.uncertainFacts.length ? `· ${plan.uncertainFacts.length} 项待确认` : ""}
+                          </summary>
+                          <section aria-label="商品分析摘要">
+                              <strong>商品分析摘要</strong>
+                              <p>{plan.productSummary}</p>
+                          </section>
+                          {plan.referenceSummary ? (
+                              <section aria-label="参考图分析">
+                                  <strong>参考图分析</strong>
+                                  <p>{plan.referenceSummary}</p>
+                              </section>
+                          ) : null}
+                          <CommerceFactReview
+                              facts={plan.uncertainFacts}
+                              onApply={reviseFacts}
+                              onExclude={() => {
+                                  setPlan(excludeCommerceFacts(plan));
+                                  setStage("未核实主张已加入每张图的排除约束，请审阅提示词后生成");
+                              }}
+                          />
+                          {plan.qualityChecks.length ? (
+                              <div className="ecommerce-quality">
+                                  <strong>生成后人工质检重点</strong>
+                                  <ul>
+                                      {plan.qualityChecks.map((item, index) => (
+                                          <li key={`${index}-${item}`}>{item}</li>
+                                      ))}
+                                  </ul>
+                                  <small>这些是策划建议，尚未对实际图片执行自动质检。文案随完整指令提交给图片模型，生成后请核对文字、结构与 Logo；可从图片的“重新编辑”调整。</small>
+                              </div>
+                          ) : null}
+                          <div className="ecommerce-review-rows ecommerce-plan-list">
+                              {plan.images.map((image, index) => (
+                                  <section key={image.id} aria-label={`第 ${index + 1} 张图片方案`}>
+                                      <span>{index + 1}</span>
+                                      <Button
+                                          size="small"
+                                          type={selectedExportIds.has(image.id) ? "primary" : "default"}
+                                          onClick={() =>
+                                              setSelectedExportIds((current) => {
+                                                  const next = new Set(current);
+                                                  if (next.has(image.id)) next.delete(image.id);
+                                                  else next.add(image.id);
+                                                  return next;
+                                              })
+                                          }
+                                      >
+                                          {selectedExportIds.has(image.id) ? "已选导出" : "选择导出"}
+                                      </Button>
+                                      {image.taskId && tasks[image.taskId]?.outputs?.[0]?.materializedAssetId ? (
+                                          <Button size="small" onClick={() => void downloadEcommerceImage({ image, index, assetId: tasks[image.taskId!].outputs![0].materializedAssetId! }).catch((cause) => message.error(errorText(cause)))}>
+                                              下载
+                                          </Button>
+                                      ) : null}
+                                      <Select size="small" value={image.imageType} options={options(imageTypes)} disabled={Boolean(image.taskId)} onChange={(value) => updateImage(image.id, { imageType: value })} />
+                                      <Select
+                                          size="small"
+                                          value={image.imageModel}
+                                          options={imageModels.map((value) => ({ value, label: modelOptionName(value) }))}
+                                          disabled={Boolean(image.taskId)}
+                                          onChange={(value) => {
+                                              const profile = modelCapabilityConfigFor(config, value).image;
+                                              updateImage(image.id, { imageModel: value, ratio: profile?.size.default || image.ratio, resolution: profile?.resolution.supported ? profile.resolution.default : profile?.quality.default || image.resolution });
+                                          }}
+                                      />
+                                      <Button size="small" disabled={draft.referenceMode === "detail" || index === 0} onClick={() => moveImage(index, -1)}>
+                                          上移
+                                      </Button>
+                                      <Button size="small" disabled={draft.referenceMode === "detail" || index === plan.images.length - 1} onClick={() => moveImage(index, 1)}>
+                                          下移
+                                      </Button>
+                                      <Button size="small" disabled={submitted > 0 || draft.imageType === "sku" || plan.images.length <= 1} onClick={() => resizePlan(plan.images.filter((entry) => entry.id !== image.id))}>
+                                          删除
+                                      </Button>
+                                      {image.taskId && tasks[image.taskId] && !terminal(tasks[image.taskId].status) ? (
+                                          <Button size="small" onClick={() => void cancelImage(image)}>
+                                              取消任务
+                                          </Button>
+                                      ) : null}
+                                      {image.taskId && ["failed", "cancelled"].includes(tasks[image.taskId]?.status || "") ? (
+                                          <Button size="small" disabled={busy} onClick={() => void retryImage(image)}>
+                                              重试
+                                          </Button>
+                                      ) : null}
+                                      <ReferenceScreenSummary screen={image.referenceScreen} />
+                                      <label>
+                                          画面描述
+                                          <Input.TextArea value={image.prompt} disabled={Boolean(image.taskId)} onChange={(event) => updateImage(image.id, { prompt: event.target.value })} />
+                                      </label>
+                                      <label>
+                                          成品文案
+                                          <Input.TextArea value={image.copy} disabled={Boolean(image.taskId)} onChange={(event) => updateImage(image.id, { copy: event.target.value })} />
+                                      </label>
+                                  </section>
+                              ))}
+                          </div>
+                          <Button
+                              size="small"
+                              disabled={submitted > 0 || draft.imageType === "sku" || plan.images.length >= 30}
+                              onClick={() => {
+                                  const template = plan.images.at(-1);
+                                  if (template) resizePlan([...plan.images, { ...template, id: createClientUUID(), taskId: undefined, goal: "新增图片", theme: "待编辑", prompt: "请描述这张商品图片的视觉目标与保真约束" }]);
+                              }}
+                          >
+                              添加图片策划
+                          </Button>
+                      </details>,
+                      reviewHost,
+                  )
+                : null}
             <div className="flylep-shell commerce-canvas-shell">
                 <EcommerceResultCanvas
                     key={project?.id || "draft"}
@@ -2579,7 +2606,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 className={`flylep-prompt-box${composerDropping ? " is-dropping" : ""}`}
                                 ref={promptBox}
                                 onClick={(event) => {
-                                    if (!(event.target as HTMLElement).closest("button,label,input,textarea,.commerce-reference-item,.commerce-reference-add")) promptBox.current?.querySelector("textarea")?.focus();
+                                    if (!(event.target as HTMLElement).closest("button,label,input,textarea,.commerce-advanced-settings,.commerce-reference-item,.commerce-reference-add")) promptBox.current?.querySelector("textarea")?.focus();
                                 }}
                                 onDragEnter={composerDragEnter}
                                 onDragLeave={composerDragLeave}
@@ -2600,6 +2627,21 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                         <span>支持 PNG、JPEG、WebP 等格式，可一次拖入多张</span>
                                     </div>
                                 ) : null}
+                                <details className="commerce-advanced-settings" onDrop={(event) => event.stopPropagation()} onDragEnter={(event) => event.stopPropagation()} onDragOver={(event) => event.stopPropagation()}>
+                                    <summary>商品资料与创作设置</summary>
+                                    <div className="commerce-advanced-settings-content">
+                                        <label className="ecommerce-field">
+                                            <span>商品名称</span>
+                                            <Input value={draft.productName} placeholder="例如：便携式香薰机" disabled={busy || restoring || uploading} onChange={(event) => update("productName", event.target.value)} />
+                                        </label>
+                                        <ReferenceModePanel draft={draft} onChange={updateDraft} onUpload={uploadModeReference} uploading={uploading || restoring || busy} uploadProgress={uploadProgress} />
+                                        <CreativeOptionsPanel draft={draft} onChange={updateDraft} />
+                                        <div ref={setReviewHost} />
+                                        <Button className="ecommerce-plan-button" disabled={busy || restoring || uploading || planningPending || confirmingGeneration} onClick={() => void requestGenerationConfirmation("plan")}>
+                                            AI 一键策划
+                                        </Button>
+                                    </div>
+                                </details>
                                 <div className="flylep-composer-input">
                                     <div className={`flylep-product-slot${draft.references.some((ref) => ref.role !== "model" && !composerHiddenRefs.has(ref.resourceId)) ? " has-images" : ""}`}>
                                         <ReferenceUploader

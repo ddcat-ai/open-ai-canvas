@@ -75,6 +75,7 @@ const workbenchApi = await import("../src/services/api/workbench");
 const exportApi = await import("../src/pages/ecommerce/export");
 const { commerceInputSignature } = await import("../src/pages/ecommerce/planner");
 const { default: EcommercePage } = await import("../src/pages/ecommerce/index");
+const { mockEcommerceImageDelivery } = await import("./helpers/ecommerce-media-fixture");
 
 let root: ReturnType<typeof createRoot> | undefined;
 let host: HTMLDivElement;
@@ -188,6 +189,7 @@ async function uploadModeFile(name = "新参考图.png") {
 }
 
 beforeEach(async () => {
+    mockEcommerceImageDelivery();
     scope = crypto.randomUUID();
     setActiveUserScope(scope);
     useUserStore.setState({ user: { id: scope, username: "test", displayName: "测试", role: "user", status: "active" } });
@@ -1531,6 +1533,8 @@ describe("真实电商页面生命周期", () => {
                 language: draft.language,
                 goal: index ? "桌边听歌情境" : "产品主视觉",
                 theme: `日常音乐时刻 ${index + 1}`,
+                performanceAngle: index ? "场景体验｜桌边听歌的日常感受，不承诺未核实音质参数" : "可见设计｜蓝色头戴外观与佩戴造型，以参考图为依据",
+                informationComponent: index ? "场景注释｜场景旁排短说明，保留手机阅读留白" : "标题导语｜上方短标题与居中商品拉开间距",
                 composition: "上方标题，产品居中",
                 mainVisual: "蓝色头戴式耳机",
                 verifiedClaims: "",

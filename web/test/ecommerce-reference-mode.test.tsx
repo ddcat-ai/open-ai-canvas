@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { Dispatch, SetStateAction } from "react";
 import type { EcommerceDraft, EcommerceReferenceMode, EcommerceReferenceScreen } from "../src/services/api/ecommerce";
@@ -32,6 +32,8 @@ const { act, useState } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { emptyEcommerceDraft } = await import("../src/services/api/ecommerce");
 const { ReferenceModePanel, ReferenceScreenSummary } = await import("../src/pages/ecommerce/reference-mode-panel");
+const { mockEcommerceImageDelivery } = await import("./helpers/ecommerce-media-fixture");
+beforeEach(() => mockEcommerceImageDelivery());
 let root: ReturnType<typeof createRoot> | undefined;
 let host: HTMLDivElement;
 let current: EcommerceDraft;

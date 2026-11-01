@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -426,7 +427,7 @@ func TestEcommerceSelectedDirectionFlowsToPlanningAndImageTask(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := svc.ProcessNextTask(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("%v (cause: %v)", err, errors.Unwrap(err))
 	}
 	restarted := New(svc.repo, svc.dataDir)
 	t.Cleanup(func() { _ = restarted.Close() })
