@@ -118,7 +118,7 @@ func TestEnsureBuiltinEcommerceKnowledgeImportVersioningAndRollback(t *testing.T
 	}
 	total, byDomain := builtinRowCounts(t, db)
 	t.Logf("first import: shipped=%d inserted=%d sources=%d rows=%d byDomain=%v", first.Shipped, len(first.Inserted), len(first.SourcesCreated), total, byDomain)
-	if first.Shipped != len(shipped) || len(first.Inserted) != len(shipped) || total != int64(len(shipped)) || len(first.SourcesCreated) != 10 {
+	if first.Shipped != len(shipped) || len(first.Inserted) != len(shipped) || total != int64(len(shipped)) || len(first.SourcesCreated) != len(ecommerceBuiltinSourceSpecs) {
 		t.Fatalf("first import incomplete: report=%+v rows=%d", first, total)
 	}
 	for _, domain := range []string{"KB01", "KB02", "KB03", "KB04", "KB05", "KB06", "KB07", "KB08", "KB09", "KB10"} {
@@ -128,7 +128,7 @@ func TestEnsureBuiltinEcommerceKnowledgeImportVersioningAndRollback(t *testing.T
 	}
 	var ready int64
 	db.Model(&model.EcommerceKnowledgeSource{}).Where("id LIKE ? AND status = ?", "meiye-kb%", "ready").Count(&ready)
-	if ready != 10 {
+	if ready != int64(len(ecommerceBuiltinSourceSpecs)) {
 		t.Fatalf("ready builtin sources = %d", ready)
 	}
 

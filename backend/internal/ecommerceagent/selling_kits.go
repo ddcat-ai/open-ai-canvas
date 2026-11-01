@@ -42,11 +42,11 @@ func CategorySellingKit(product string) string {
 		}
 	}
 	if best < 0 {
-		return "【同类爆款卖点库】未匹配到具体品类：先识别品类，再按同类热销商品详情页常见的“功能｜买家价值”写 6–8 组卖点，并规划 5 种以上不同的商品状态（使用中、静置、拆解、收纳、对比、细节）。"
+		return "【同类爆款卖点库】未匹配到具体品类：先识别品类，再围绕真实设计、操作和场景组织购买利益。没有本商品依据的功能和参数不得从同类商品移植。" + ProductPlanningKnowledge(product)
 	}
 	kit := sellingKits[best]
 	var b strings.Builder
-	b.WriteString("【同类爆款卖点库：" + kit.name + "】以下是该品类热销详情页常用的卖点与展示方式，结合本商品可见外观选用 6–8 组写进各屏（不必全部使用，外观明显不符的不用）：\n")
+	b.WriteString("【同类爆款卖点库：" + kit.name + "】以下仅是品类购买问题候选，不是本商品事实。只有卖家资料或清晰可辨的商品证据支持时才写进文案，缺少依据改为真实可见设计或场景，不由外观推断材质、性能或内部结构：\n")
 	for _, point := range kit.points {
 		b.WriteString("- " + point + "\n")
 	}

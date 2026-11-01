@@ -40,7 +40,7 @@ func BuildCopyPrompt(brief Brief, p Platform, language, userSellingPoints string
 	if userSellingPoints != "" {
 		prompt += "\n【卖家自己强调的卖点（优先级最高，必须体现）】\n" + userSellingPoints
 	}
-	return prompt + "\n\n请输出 JSON。"
+	return prompt + "\n" + ProductPlanningKnowledge(brief.Category) + "\n\n请输出 JSON。"
 }
 
 func BuildRecommendPrompt(brief Brief, p Platform, language string, styles []Style) string {
@@ -56,6 +56,7 @@ func BuildRecommendPrompt(brief Brief, p Platform, language string, styles []Sty
 
 func BuildPlannerPrompt(copy any, pages []Page, p Platform, language string, brief Brief) string {
 	var lines []string
+	lines = append(lines, ProductPlanningKnowledge(brief.Category))
 	for i, page := range pages {
 		mustShow, avoid := strings.Join(page.MustShow, "、"), strings.Join(page.Avoid, "、")
 		if mustShow == "" {

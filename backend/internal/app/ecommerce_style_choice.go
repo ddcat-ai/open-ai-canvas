@@ -90,6 +90,7 @@ func (s *Service) SelectEcommerceCreativeStyle(ctx context.Context, userID, reco
 	mode, source := "creative", "custom"
 	switch {
 	case isPreset:
+		preset = ecommerceagent.AdaptStylePreset(preset, item.ProductCategory)
 		rec, mode, source = preset.Recommendation(), preset.Mode, "preset"
 		hint = &rec
 	case isCustom:

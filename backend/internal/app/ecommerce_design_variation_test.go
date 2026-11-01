@@ -158,11 +158,11 @@ func TestEcommercePlanningAppendsADifferentDesignVariationEachRun(t *testing.T) 
 			t.Fatalf("planning task lacks a nine-page variation: %+v", input["metadata"])
 		}
 		block := variation.PromptBlock("detail")
-		if !strings.HasSuffix(prompt, block) || strings.LastIndex(prompt, "【头部品牌详情页最终要求") > strings.Index(prompt, block) {
-			t.Fatal("the design variation is not the last block of the planning prompt")
+		if !strings.Contains(prompt, block) || strings.LastIndex(prompt, "【按商品选择叙事") < strings.Index(prompt, block) {
+			t.Fatal("product-specific planning must constrain the sampled layout kit")
 		}
-		if !strings.Contains(prompt, "【本轮版式方案】的人物设定") || !strings.Contains(prompt, "版式按【本轮版式方案】最后一屏执行") {
-			t.Fatal("premium override still fixes the persona or the closing layout")
+		if !strings.Contains(prompt, "不规定九屏人物数量") || !strings.Contains(prompt, "不强制参数表") || !strings.Contains(prompt, "已选 visualSystem 的字体家族") {
+			t.Fatal("planning lost product-specific casting, closing layout or confirmed typography")
 		}
 		signatures[variation.Signature] = true
 	}

@@ -28,16 +28,20 @@ type ecommerceBuiltinSourceSpec struct {
 }
 
 var ecommerceBuiltinSourceSpecs = []ecommerceBuiltinSourceSpec{
-	{"KB01", "电商 KB01 商品行业知识库", "builtin://meiyeai/kb01-product-industry"},
-	{"KB02", "电商 KB02 营销卖点知识库", "builtin://meiyeai/kb02-marketing-strategy"},
-	{"KB03", "电商 KB03 高级视觉设计知识库", "builtin://meiyeai/kb03-visual-design"},
-	{"KB04", "电商 KB04 主图与详情页排版知识库", "builtin://meiyeai/kb04-layout-composition"},
-	{"KB05", "电商 KB05 商业文案知识库", "builtin://meiyeai/kb05-copywriting"},
-	{"KB06", "电商 KB06 商业产品摄影知识库", "builtin://meiyeai/kb06-product-photography"},
-	{"KB07", "电商 KB07 模特与场景知识库", "builtin://meiyeai/kb07-model-scene"},
-	{"KB08", "电商 KB08 电商平台知识库", "builtin://meiyeai/kb08-platform-rules"},
-	{"KB09", "电商 KB09 设计趋势知识库", "builtin://meiyeai/kb09-design-trends"},
-	{"KB10", "电商 KB10 一致性与质量控制知识库", "builtin://meiyeai/kb10-quality-control"},
+	{"KB01", "魅夜 KB01 商品行业知识库", "builtin://meiyeai/kb01-product-industry"},
+	{"KB02", "魅夜 KB02 营销卖点知识库", "builtin://meiyeai/kb02-marketing-strategy"},
+	{"KB03", "魅夜 KB03 高级视觉设计知识库", "builtin://meiyeai/kb03-visual-design"},
+	{"KB04", "魅夜 KB04 主图与详情页排版知识库", "builtin://meiyeai/kb04-layout-composition"},
+	{"KB05", "魅夜 KB05 商业文案知识库", "builtin://meiyeai/kb05-copywriting"},
+	{"KB06", "魅夜 KB06 商业产品摄影知识库", "builtin://meiyeai/kb06-product-photography"},
+	{"KB07", "魅夜 KB07 模特与场景知识库", "builtin://meiyeai/kb07-model-scene"},
+	{"KB08", "魅夜 KB08 电商平台知识库", "builtin://meiyeai/kb08-platform-rules"},
+	{"KB09", "魅夜 KB09 设计趋势知识库", "builtin://meiyeai/kb09-design-trends"},
+	{"KB10", "魅夜 KB10 一致性与质量控制知识库", "builtin://meiyeai/kb10-quality-control"},
+	{"KB11", "品类专属叙事", "builtin://meiyeai/kb11-product-design"},
+	{"KB12", "字体与信息组件", "builtin://meiyeai/kb12-product-design"},
+	{"KB13", "人物摄影真实性", "builtin://meiyeai/kb13-product-design"},
+	{"KB14", "功能与规格表达", "builtin://meiyeai/kb14-product-design"},
 }
 
 func ecommerceBuiltinSourceID(domain string) string {
@@ -51,6 +55,7 @@ func ecommerceBuiltinKnowledgeEntries() []model.EcommerceKnowledgeEntry {
 		kb01ProductIndustryKnowledge(), kb02MarketingStrategyKnowledge(), kb03AdvancedVisualDesignKnowledge(),
 		kb04LayoutCompositionKnowledge(), kb05CommercialCopywritingKnowledge(), kb06ProductPhotographyKnowledge(),
 		kb07ModelSceneKnowledge(), kb08PlatformRulesKnowledge(), kb09DesignTrendsKnowledge(), kb10QualityControlKnowledge(),
+		ecommerceProductDesignKnowledge(),
 	}
 	entries := make([]model.EcommerceKnowledgeEntry, 0, 112)
 	for _, group := range groups {

@@ -375,6 +375,7 @@ func ecommerceImagePrompt(page ecommerceagent.Page, p ecommerceagent.Platform, b
 	if page.ImagePrompt != "" {
 		parts = append(parts, page.ImagePrompt)
 	}
+	parts = append(parts, ecommerceagent.HumanPhotographyKnowledge)
 	if selected != nil {
 		parts = append(parts, selected.Style, selected.PreviewPrompt)
 	}

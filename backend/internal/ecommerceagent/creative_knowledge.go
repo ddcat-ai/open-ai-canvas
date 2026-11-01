@@ -3,7 +3,7 @@ package ecommerceagent
 import "strings"
 
 // Original creative methods, never a source of product specifications.
-const CreativeKnowledgeVersion = "meiye-creative-20261030-marketing-v4"
+const CreativeKnowledgeVersion = "meiye-creative-20261101-product-design-v5"
 
 // ProductPhotographyKnowledge is the execution standard every direction and
 // every shot is measured against; it turns style names into buildable photos.

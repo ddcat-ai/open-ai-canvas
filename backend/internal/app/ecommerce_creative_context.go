@@ -95,7 +95,7 @@ func selectEcommerceKnowledge(ranked []model.EcommerceKnowledgeEntry, limit int)
 			}
 			continue
 		}
-		if domain := ecommerceEntryDomain(entry); !domains[domain] && len(selected) < 10 {
+		if domain := ecommerceEntryDomain(entry); !domains[domain] && len(selected) < limit-6 {
 			domains[domain] = true
 			selected = append(selected, entry)
 		}
