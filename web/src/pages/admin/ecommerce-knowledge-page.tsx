@@ -156,11 +156,14 @@ export default function EcommerceKnowledgePage() {
                                         {
                                             title: "知识源",
                                             dataIndex: "name",
-                                            render: (_: unknown, source) => (
-                                                <a href={`https://github.com/${source.repository}/tree/${source.commit}`} target="_blank" rel="noreferrer">
-                                                    {source.name}
-                                                </a>
-                                            ),
+                                            render: (_: unknown, source) =>
+                                                source.repository && source.commit ? (
+                                                    <a href={`https://github.com/${source.repository}/tree/${source.commit}`} target="_blank" rel="noreferrer">
+                                                        {source.name}
+                                                    </a>
+                                                ) : (
+                                                    <span>{source.name}</span>
+                                                ),
                                         },
                                         { title: "固定版本", dataIndex: "commit", render: (value: string) => value.slice(0, 12) },
                                         { title: "许可", dataIndex: "license" },

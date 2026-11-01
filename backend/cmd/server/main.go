@@ -92,6 +92,9 @@ func run(ctx context.Context) error {
 	if err := svc.EnsureDefaultPromptTemplates(); err != nil {
 		return err
 	}
+	if _, err := svc.EnsureBundledEcommerceKnowledge(); err != nil {
+		return err
+	}
 	if err := svc.EnsureBuiltinProjectWorkflowTemplate(); err != nil {
 		return err
 	}

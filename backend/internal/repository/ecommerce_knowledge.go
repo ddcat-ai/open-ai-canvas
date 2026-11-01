@@ -10,6 +10,14 @@ import (
 	"yingce/backend/internal/model"
 )
 
+func (r *Repository) InsertEcommerceKnowledgeSources(sources []model.EcommerceKnowledgeSource) (int64, error) {
+	if len(sources) == 0 {
+		return 0, nil
+	}
+	result := r.db.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(sources, 100)
+	return result.RowsAffected, result.Error
+}
+
 func (r *Repository) InsertEcommerceKnowledgeEntries(entries []model.EcommerceKnowledgeEntry) (int64, error) {
 	if len(entries) == 0 {
 		return 0, nil

@@ -11,6 +11,7 @@ description: 从产品功能快速定位主要代码入口
 - API：`web/src/services/api/ecommerce.ts`、`ecommerce-knowledge.ts`；会话恢复：`web/src/services/ecommerce-session.ts`。
 - 服务端：`backend/internal/handler/ecommerce*.go` → `app/ecommerce*.go` → `repository/ecommerce*.go`、`model/models_ecommerce*.go`；领域协议与知识方法在 `ecommerceagent/`、`ecommerceskills/`。
 - 数据迁移：`backend/internal/database/ecommerce_migration.go`；原件受限导出：`assets/access.go`、`app/resource_access.go`。详见 [电商 Agent 与知识库](./ecommerce-agent)。
+- 离线知识数据与校验清单：`backend/internal/ecommerceknowledge/bundle/`；解码与校验：`ecommerceknowledge/bundle.go`；首次启动初始化：`app/ecommerce_knowledge_bundle.go` 和 `cmd/server/main.go`；维护入口：`cmd/ecommerce-knowledge`。
 
 ## 短剧自动制作
 

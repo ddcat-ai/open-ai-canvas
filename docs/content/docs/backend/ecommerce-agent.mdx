@@ -1,0 +1,26 @@
+---
+title: 电商 Agent 与知识库
+description: 电商创作工作流、阶段模型和知识来源管理
+---
+
+电商 Agent 位于 `/ecommerce`，使用宿主现有登录、模型报价、任务系统和资源存储。用户上传商品图后，可配置平台、语言、图片类型、张数与视觉偏好，完成商品理解、方向选择和逐页策划，再确认报价并生成图片。详情图由 Agent 主动规划叙事与文案；未证实的参数、功效和认证不能作为商品事实。
+
+商品图与借鉴图分别保存。参考方式支持商品自主策划、风格排版参考和详情长图逐屏参考。项目及其版本、任务回执与生成结果按用户隔离；删除项目保留资源及运行任务。结果画布支持图片和文字图层、排列、撤销重做及导出。
+
+管理员在 `/admin/ecommerce-knowledge` 配置商品视觉理解、营销策划与文案、视觉设计总监、视觉质检四阶段的主模型和备用模型，查看 KB01–KB10 知识域覆盖，管理固定来源同步、来源启停与条目审核。来源、版本和许可证随知识记录保留；覆盖数量不能作为各行业规则全部齐备的证明。检索使用数据库、关键词与规则，没有向量数据库依赖。
+
+## 随程序交付的知识数据
+
+`backend/internal/ecommerceknowledge/bundle/knowledge.json.gz` 随 Go 二进制嵌入 23 个知识源和 14740 条知识，包括 14739 条已通过、1 条已拒绝；KB01 有 11 条，KB02–KB10 各 10 条。`manifest.json` 记录来源、固定 commit、许可、分来源数量和 SHA-256，完整许可证与版权声明保存在数据包的来源记录中。
+
+服务首次启动自动在一个事务内初始化离线数据，无需先访问 GitHub。安装摘要保存在 `system_settings` 的 `ecommerce_knowledge_bundle_receipt`；相同包再次启动直接跳过。版本变化时只合并缺失行，已有管理员修改、审核状态和停用设置保留。数据与安装记录一起提交或回滚，避免导入一半却被标记为完成。
+
+维护命令在显式配置数据库位置后执行：`go run ./cmd/ecommerce-knowledge -bootstrap-bundled -admin <已有管理员ID>`。内置 KB01–KB10 的升级使用 `-bootstrap-builtin`，第三方固定来源在线同步使用 `-sync`。这些写操作需要已有管理员。数据包不包含具体部署的模型渠道绑定或凭据；部署后在四阶段配置中选择自己的模型。
+
+HTTP 路由由 `backend/internal/handler/ecommerce.go` 和 `ecommerce_agent.go` 注册，业务在 `internal/app/ecommerce*`，持久化在 `internal/repository/ecommerce*`，领域契约与提示方法在 `internal/ecommerceagent` 和 `internal/ecommerceskills`。
+
+`/api/ecommerce` 下提供项目、创意方向与技能提示接口；`/api/ecommerce/knowledge` 下提供知识与阶段模型管理接口，由服务端执行管理员权限校验。`/api/agent/quote`、`/api/agent/analyze`、`/api/agent/generate` 等接口提供独立 Agent 协议；`/api/canvas`、`/api/task` 下提供对应画布版本及任务查询接口。具体请求与响应以 handler 和前端 API 类型为准。管理员权限与用户资源归属均在服务端校验。
+
+迁移 78 新增 `ecommerce_projects`、`ecommerce_knowledge_sources`、`ecommerce_knowledge_entries`、`ecommerce_creative_recommendations`、`ecommerce_agent_analyses`、`ecommerce_agent_runs`、`ecommerce_agent_pages`、`ecommerce_agent_canvas_versions`，包括知识域索引。保留上游 1–77 的迁移身份。电商图片读取使用 `ecommerce-export`，仅允许当前用户拥有的、32 MB 以内的 PNG、JPEG、WebP 原图，经受限同源流读取。
+
+本次功能未包含旧版通用画布的一键详情／复刻节点，也不引入品牌、登录注册、支付充值或部署定制。真实浏览器、付费生成和 PostgreSQL 迁移仍需验收。
