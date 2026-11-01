@@ -32,14 +32,205 @@ tags:
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
 paths:
+  /admin/ecommerce/skills:
+    get:
+      tags: [admin]
+      summary: 管理员读取已安装电商技能、来源、固定版本和启停状态
+      responses:
+        "200":
+          {
+            description: data.skills 为技能列表，包含 id、name、enabled、instructions、contentHash、sourceUrl 和 sourceCommit,
+          }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/ecommerce/skills/{id}:
+    patch:
+      tags: [admin]
+      summary: 管理员启停指定电商技能，对新策划及关联知识检索生效
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200": { description: data.enabled 为已保存状态 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /agent/quote:
+    post:
+      tags: [ecommerce-agent]
+      summary: 读取图像渠道定价并计算本次预留积分，不创建订单
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/EcommerceAgentRequest" },
+                },
+            },
+        }
+      responses:
+        "200":
+          {
+            description: data 含 pageCount、unitMicrocredits、totalMicrocredits、modelKey 和 channel,
+          }
+        "400": { $ref: "#/components/responses/Error" }
+  /agent/analyze:
+    post:
+      tags: [ecommerce-agent]
+      summary: 分析商品图并给出平台相关设计方向
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/EcommerceAgentRequest" },
+                },
+            },
+        }
+      responses:
+        "200": { description: data 含 brief、recommendations、styleLibrary }
+        "400": { $ref: "#/components/responses/Error" }
+  /agent/recommend:
+    post:
+      tags: [ecommerce-agent]
+      summary: 根据商品与平台重新推荐方向
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/EcommerceAgentRequest" },
+                },
+            },
+        }
+      responses:
+        "200": { description: data 含 4 至 6 个推荐方向 }
+  /agent/projects/{projectId}/task:
+    get:
+      tags: [ecommerce-agent]
+      summary: 按当前用户的项目读取最新 Agent 任务，供页面刷新恢复
+      parameters:
+        - {
+            in: path,
+            name: projectId,
+            required: true,
+            schema: { type: string },
+          }
+      responses:
+        "200": { description: data 含 task、pages、posterCanvas }
+        "404": { $ref: "#/components/responses/Error" }
+  /agent/generate:
+    post:
+      tags: [ecommerce-agent]
+      summary: 同步生成整套商品图片与可编辑画布
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/EcommerceAgentRequest" },
+                },
+            },
+        }
+      responses:
+        "200": { description: data 含 task、pages、posterCanvas }
+        "402": { $ref: "#/components/responses/Error" }
+  /agent/generate/stream:
+    post:
+      tags: [ecommerce-agent]
+      summary: 逐页流式生成，data 行包含 event 字段
+      description: 事件为 workflow_started、node_finished、iteration_completed、message、PING。断开连接取消上游，已成功页按实际页数结算。
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/EcommerceAgentRequest" },
+                },
+            },
+        }
+      responses:
+        "200": { description: text/event-stream }
+  /agent/help-write:
+    post:
+      tags: [ecommerce-agent]
+      summary: 优化商品出图需求
+      responses:
+        "200": { description: data 含 status、optimized、reason、alternatives }
+  /canvas/placeholder:
+    post:
+      tags: [ecommerce-agent]
+      summary: 返回 1 至 15 页灰格画布骨架
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /canvas/save:
+    post:
+      tags: [ecommerce-agent]
+      summary: 保存当前用户电商项目的画布版本
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /canvas/{projectId}:
+    get:
+      tags: [ecommerce-agent]
+      summary: 读取最新画布和最近 20 个版本的元数据
+      parameters:
+        [
+          {
+            in: path,
+            name: projectId,
+            required: true,
+            schema: { type: string },
+          },
+        ]
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /task/{taskId}:
+    get:
+      tags: [ecommerce-agent]
+      summary: 断线后读取电商出图任务及逐页结果
+      parameters:
+        [{ in: path, name: taskId, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /task/{taskId}/cancel:
+    post:
+      tags: [ecommerce-agent]
+      summary: 请求取消电商出图任务
+      parameters:
+        [{ in: path, name: taskId, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
   /projects/{id}/assets/{assetId}/image:
     put:
       tags: [projects, assets]
       summary: 为场景或道具绑定图片并创建新版本
       description: 校验项目归属、资产关联、版本归属与就绪图片资源；过期版本拒绝。旧版本与图片引用保留。
       parameters:
-        - {in: path, name: id, required: true, schema: {type: string}}
-        - {in: path, name: assetId, required: true, schema: {type: string}}
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: assetId, required: true, schema: { type: string } }
       requestBody:
         required: true
         content:
@@ -48,30 +239,74 @@ paths:
               type: object
               required: [resourceId, expectedVersionId]
               properties:
-                resourceId: {type: string, minLength: 1}
-                expectedVersionId: {type: string, minLength: 1}
+                resourceId: { type: string, minLength: 1 }
+                expectedVersionId: { type: string, minLength: 1 }
       responses:
         "200":
           description: 成功信封 data={asset}，包含 visual.definition/status 和新版本、图片资源定位
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /admin/login-logs:
     get:
       tags: [admin]
       summary: 管理员分页查询用户登录登出日志
       description: 按时间倒序，保留用户快照；失败账号脱敏，无密码、验证码或会话凭据。
       parameters:
-        - {in: query, name: keyword, schema: {type: string, maxLength: 160}, description: 用户名、昵称、脱敏账号或用户 ID}
-        - {in: query, name: event, schema: {type: string, enum: [login, logout]}}
-        - {in: query, name: method, schema: {type: string, enum: [password, email, sms, linuxdo, verification, unknown]}}
-        - {in: query, name: result, schema: {type: string, enum: [success, failed]}}
-        - {in: query, name: ip, schema: {type: string}, description: 精确匹配 IPv4 或 IPv6}
-        - {in: query, name: from, schema: {type: string, format: date-time}, description: 包含开始时刻，RFC3339}
-        - {in: query, name: to, schema: {type: string, format: date-time}, description: 包含结束时刻，RFC3339}
-        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
-        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, default: 20}}
+        - {
+            in: query,
+            name: keyword,
+            schema: { type: string, maxLength: 160 },
+            description: 用户名、昵称、脱敏账号或用户 ID,
+          }
+        - {
+            in: query,
+            name: event,
+            schema: { type: string, enum: [login, logout] },
+          }
+        - {
+            in: query,
+            name: method,
+            schema:
+              {
+                type: string,
+                enum: [password, email, sms, linuxdo, verification, unknown],
+              },
+          }
+        - {
+            in: query,
+            name: result,
+            schema: { type: string, enum: [success, failed] },
+          }
+        - {
+            in: query,
+            name: ip,
+            schema: { type: string },
+            description: 精确匹配 IPv4 或 IPv6,
+          }
+        - {
+            in: query,
+            name: from,
+            schema: { type: string, format: date-time },
+            description: 包含开始时刻，RFC3339,
+          }
+        - {
+            in: query,
+            name: to,
+            schema: { type: string, format: date-time },
+            description: 包含结束时刻，RFC3339,
+          }
+        - {
+            in: query,
+            name: page,
+            schema: { type: integer, minimum: 1, default: 1 },
+          }
+        - {
+            in: query,
+            name: pageSize,
+            schema: { type: integer, minimum: 1, default: 20 },
+          }
       responses:
         "200":
           description: 成功信封 data={logs,total,page,pageSize}
@@ -80,25 +315,29 @@ paths:
               schema:
                 type: object
                 properties:
-                  code: {type: integer, enum: [0]}
-                  msg: {type: string}
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
                   data:
                     type: object
                     properties:
-                      logs: {type: array, items: {$ref: "#/components/schemas/LoginLog"}}
-                      total: {type: integer}
-                      page: {type: integer}
-                      pageSize: {type: integer}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                      logs:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/LoginLog" },
+                        }
+                      total: { type: integer }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /admin/login-logs/{id}:
     get:
       tags: [admin]
       summary: 管理员读取单条登录日志详情
       parameters:
-        - {in: path, name: id, required: true, schema: {type: string}}
+        - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "200":
           description: 成功信封 data.log
@@ -107,16 +346,16 @@ paths:
               schema:
                 type: object
                 properties:
-                  code: {type: integer, enum: [0]}
-                  msg: {type: string}
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
                   data:
                     type: object
                     properties:
-                      log: {$ref: "#/components/schemas/LoginLog"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                      log: { $ref: "#/components/schemas/LoginLog" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /feedbacks:
     post:
       tags: [feedback]
@@ -125,7 +364,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: "#/components/schemas/FeedbackSubmission"}
+            schema: { $ref: "#/components/schemas/FeedbackSubmission" }
       responses:
         "200":
           description: 成功信封，data 为新建反馈
@@ -136,10 +375,10 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data: {$ref: "#/components/schemas/UserFeedback"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                      data: { $ref: "#/components/schemas/UserFeedback" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /feedbacks/my:
     get:
       tags: [feedback]
@@ -156,9 +395,9 @@ paths:
                     properties:
                       data:
                         type: array
-                        items: {$ref: "#/components/schemas/UserFeedback"}
-        "401": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                        items: { $ref: "#/components/schemas/UserFeedback" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /feedbacks/attachments:
     post:
       tags: [feedback]
@@ -172,7 +411,7 @@ paths:
               type: object
               required: [file]
               properties:
-                file: {type: string, format: binary}
+                file: { type: string, format: binary }
       responses:
         "200":
           description: 成功信封，data 为附件元数据
@@ -183,21 +422,48 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data: {$ref: "#/components/schemas/FeedbackAttachment"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                      data: { $ref: "#/components/schemas/FeedbackAttachment" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /admin/feedbacks:
     get:
       tags: [feedback, admin]
       summary: 管理员筛选和分页查询反馈
       parameters:
-        - {in: query, name: type, schema: {type: string, enum: [all, bug, feature, improvement, other]}}
-        - {in: query, name: status, schema: {type: string, enum: [all, pending, processing, resolved, closed, archived]}}
-        - {in: query, name: keyword, schema: {type: string}, description: 匹配标题、正文、用户名或联系方式}
-        - {in: query, name: archived, schema: {type: boolean}}
-        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
-        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, default: 20}, description: 大于 100 时服务端使用默认值 20}
+        - {
+            in: query,
+            name: type,
+            schema:
+              { type: string, enum: [all, bug, feature, improvement, other] },
+          }
+        - {
+            in: query,
+            name: status,
+            schema:
+              {
+                type: string,
+                enum: [all, pending, processing, resolved, closed, archived],
+              },
+          }
+        - {
+            in: query,
+            name: keyword,
+            schema: { type: string },
+            description: 匹配标题、正文、用户名或联系方式,
+          }
+        - { in: query, name: archived, schema: { type: boolean } }
+        - {
+            in: query,
+            name: page,
+            schema: { type: integer, minimum: 1, default: 1 },
+          }
+        - {
+            in: query,
+            name: pageSize,
+            schema: { type: integer, minimum: 1, default: 20 },
+            description: 大于 100 时服务端使用默认值 20,
+          }
       responses:
         "200":
           description: 成功信封，data 含 list、total、page、limit
@@ -208,14 +474,14 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data: {$ref: "#/components/schemas/FeedbackListResult"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                      data: { $ref: "#/components/schemas/FeedbackListResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /admin/feedbacks/{id}:
     parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
+      - { in: path, name: id, required: true, schema: { type: string } }
     patch:
       tags: [feedback, admin]
       summary: 更新反馈状态、答复或归档标志
@@ -223,7 +489,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: "#/components/schemas/FeedbackAdminUpdate"}
+            schema: { $ref: "#/components/schemas/FeedbackAdminUpdate" }
       responses:
         "200":
           description: 成功信封，data 为更新后的反馈
@@ -234,12 +500,12 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data: {$ref: "#/components/schemas/UserFeedback"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                      data: { $ref: "#/components/schemas/UserFeedback" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
     delete:
       tags: [feedback, admin]
       summary: 删除反馈记录
@@ -256,34 +522,34 @@ paths:
                       data:
                         type: object
                         properties:
-                          ok: {type: boolean, enum: [true]}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+                          ok: { type: boolean, enum: [true] }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /admin/feedbacks/{id}/archive:
     parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
+      - { in: path, name: id, required: true, schema: { type: string } }
     post:
       tags: [feedback, admin]
       summary: 归档反馈
       responses:
-        "200": {$ref: "#/components/responses/Envelope"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /admin/feedbacks/{id}/unarchive:
     parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
+      - { in: path, name: id, required: true, schema: { type: string } }
     post:
       tags: [feedback, admin]
       summary: 取消归档反馈
       responses:
-        "200": {$ref: "#/components/responses/Envelope"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "500": {$ref: "#/components/responses/Error"}
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
 
   /admin/settings/appearance/live2d:
     post:
@@ -298,7 +564,7 @@ paths:
               type: object
               required: [file]
               properties:
-                file: {type: string, format: binary}
+                file: { type: string, format: binary }
       responses:
         "200":
           description: 成功信封 data.model 包含 resourceId 和服务端确认的 entry
@@ -307,8 +573,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  code: {type: integer, enum: [0]}
-                  msg: {type: string}
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
                   data:
                     type: object
                     properties:
@@ -316,37 +582,52 @@ paths:
                         type: object
                         required: [resourceId, entry]
                         properties:
-                          resourceId: {type: string}
-                          entry: {type: string}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "429": {$ref: "#/components/responses/Error"}
+                          resourceId: { type: string }
+                          entry: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /admin/settings/appearance/live2d/{id}/{file}:
     get:
       tags: [admin]
       summary: 读取模型草稿文件（管理员所有者或当前配置引用）
       parameters:
-        - {in: path, name: id, required: true, schema: {type: string}}
-        - {in: path, name: file, required: true, description: ZIP 内相对路径，可包含多级目录, schema: {type: string}}
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - {
+            in: path,
+            name: file,
+            required: true,
+            description: ZIP 内相对路径，可包含多级目录,
+            schema: { type: string },
+          }
       responses:
-        "200": {description: JSON、PNG 或 MOC3 文件，非 JSON 信封}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
+        "200": { description: JSON、PNG 或 MOC3 文件，非 JSON 信封 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /public/appearance/live2d/{id}/{file}:
     get:
       tags: [meta]
       security: []
       summary: 读取当前启用的 Live2D 模型文件
       parameters:
-        - {in: path, name: id, required: true, schema: {type: string}}
-        - {in: path, name: file, required: true, description: ZIP 内相对路径，可包含多级目录, schema: {type: string}}
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - {
+            in: path,
+            name: file,
+            required: true,
+            description: ZIP 内相对路径，可包含多级目录,
+            schema: { type: string },
+          }
       responses:
-        "200": {description: JSON、PNG 或 MOC3 文件，非 JSON 信封；停用后拒绝公开读取}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: JSON、PNG 或 MOC3 文件，非 JSON 信封；停用后拒绝公开读取,
+          }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /admin/settings/appearance/avatar-bundles:
     post:
       tags: [admin]
@@ -360,7 +641,7 @@ paths:
               type: object
               required: [file]
               properties:
-                file: {type: string, format: binary}
+                file: { type: string, format: binary }
       responses:
         "200":
           description: 成功信封 data.bundle 包含 resourceId 和已校验 manifest
@@ -369,8 +650,8 @@ paths:
               schema:
                 type: object
                 properties:
-                  code: {type: integer, enum: [0]}
-                  msg: {type: string}
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
                   data:
                     type: object
                     properties:
@@ -378,57 +659,100 @@ paths:
                         type: object
                         required: [resourceId, manifest]
                         properties:
-                          resourceId: {type: string}
+                          resourceId: { type: string }
                           manifest:
                             type: object
                             required: [version, width, height, clips]
                             properties:
-                              version: {type: integer, enum: [1]}
-                              width: {type: integer, minimum: 1, maximum: 4096}
-                              height: {type: integer, minimum: 1, maximum: 4096}
-                              clips: {type: object, additionalProperties: {type: string}}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "429": {$ref: "#/components/responses/Error"}
+                              version: { type: integer, enum: [1] }
+                              width:
+                                { type: integer, minimum: 1, maximum: 4096 }
+                              height:
+                                { type: integer, minimum: 1, maximum: 4096 }
+                              clips:
+                                {
+                                  type: object,
+                                  additionalProperties: { type: string },
+                                }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /admin/settings/appearance/avatar/{id}/{file}:
     get:
       tags: [admin]
       summary: 预览动画包文件（上传者或当前配置引用的管理员）
       parameters:
-        - {in: path, name: id, required: true, schema: {type: string}}
-        - {in: path, name: file, required: true, description: avatar.json 或 manifest 引用的 MP4 文件名, schema: {type: string}}
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - {
+            in: path,
+            name: file,
+            required: true,
+            description: avatar.json 或 manifest 引用的 MP4 文件名,
+            schema: { type: string },
+          }
       responses:
-        "200": {description: JSON 或 MP4 原始内容，支持 MP4 Range 请求}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
+        "200": { description: JSON 或 MP4 原始内容，支持 MP4 Range 请求 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /public/appearance/avatar/{id}/{file}:
     get:
       tags: [meta]
       security: []
       summary: 读取当前启用的 Agent 动画包文件
       parameters:
-        - {in: path, name: id, required: true, schema: {type: string}}
-        - {in: path, name: file, required: true, description: avatar.json 或 manifest 引用的 MP4 文件名, schema: {type: string}}
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - {
+            in: path,
+            name: file,
+            required: true,
+            description: avatar.json 或 manifest 引用的 MP4 文件名,
+            schema: { type: string },
+          }
       responses:
-        "200": {description: JSON 或 MP4 原始内容，支持 Range；停用后拒绝公开读取}
-        "400": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
+        "200":
+          { description: JSON 或 MP4 原始内容，支持 Range；停用后拒绝公开读取 }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /tools:
     get:
       tags: [canvas]
       summary: 列出可见且启用的生成工具
       parameters:
-        - {in: query, name: scope, schema: {type: string, enum: [public, favorites, custom], default: public}}
-        - {in: query, name: type, schema: {type: string, enum: [style, motion, nine_grid, effect]}}
-        - {in: query, name: tag, schema: {type: string}}
-        - {in: query, name: search, schema: {type: string}}
-        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
-        - {in: query, name: pageSize, schema: {type: integer, minimum: 1, maximum: 80, default: 20}}
+        - {
+            in: query,
+            name: scope,
+            schema:
+              {
+                type: string,
+                enum: [public, favorites, custom],
+                default: public,
+              },
+          }
+        - {
+            in: query,
+            name: type,
+            schema: { type: string, enum: [style, motion, nine_grid, effect] },
+          }
+        - { in: query, name: tag, schema: { type: string } }
+        - { in: query, name: search, schema: { type: string } }
+        - {
+            in: query,
+            name: page,
+            schema: { type: integer, minimum: 1, default: 1 },
+          }
+        - {
+            in: query,
+            name: pageSize,
+            schema: { type: integer, minimum: 1, maximum: 80, default: 20 },
+          }
       responses:
-        "200": {description: "标准信封 data 为 tools（摘要不含 prompt/extraInfo）、totalCount、page、pageSize、hasMore"}
-        "401": {description: 未登录}
+        "200":
+          {
+            description: "标准信封 data 为 tools（摘要不含 prompt/extraInfo）、totalCount、page、pageSize、hasMore",
+          }
+        "401": { description: 未登录 }
     post:
       tags: [canvas]
       summary: 创建当前用户的工具
@@ -436,11 +760,11 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/ToolMutation'}
+            schema: { $ref: "#/components/schemas/ToolMutation" }
       responses:
-        "200": {description: 标准信封 data 为完整工具}
-        "400": {description: 参数无效或预览资源不符合要求}
-        "401": {description: 未登录}
+        "200": { description: 标准信封 data 为完整工具 }
+        "400": { description: 参数无效或预览资源不符合要求 }
+        "401": { description: 未登录 }
   /skills/presets:
     get:
       tags: [canvas]
@@ -449,17 +773,26 @@ paths:
       responses:
         "200":
           description: 标准信封 data 为 presets 数组；预设只引用公开且启用的种子技能
-        "500": {$ref: "#/components/responses/Error"}
+        "500": { $ref: "#/components/responses/Error" }
   /skills/recommendations:
     get:
       tags: [skills]
       summary: 按行业列出推荐安装的内置技能
       responses:
-        "200": {description: "标准信封 data 为 {industries, installedTotal}；每个行业含 industryId、name、description、icon、installedCount 和 skills（skillId、skillName、description、tag、reason、isAdded）。只读目录，不会自动安装"}
-        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: "标准信封 data 为 {industries, installedTotal}；每个行业含 industryId、name、description、icon、installedCount 和 skills（skillId、skillName、description、tag、reason、isAdded）。只读目录，不会自动安装",
+          }
+        "401": { $ref: "#/components/responses/Error" }
   /skills/recommendations/{industryId}/install:
     parameters:
-      - {in: path, name: industryId, required: true, description: 推荐行业 ID, schema: {type: string}}
+      - {
+          in: path,
+          name: industryId,
+          required: true,
+          description: 推荐行业 ID,
+          schema: { type: string },
+        }
     post:
       tags: [skills]
       summary: 把某个行业的推荐技能加入当前用户技能库
@@ -473,36 +806,68 @@ paths:
                 skillIds:
                   type: array
                   maxItems: 12
-                  items: {type: string}
+                  items: { type: string }
                   description: 只安装其中这些技能；传 {} 或空数组时安装该行业全部推荐
       responses:
-        "200": {description: "标准信封 data 为 {industryId, installed, skipped}；已安装、已删除或不在该行业推荐里的技能计入 skipped，不报错"}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: "标准信封 data 为 {industryId, installed, skipped}；已安装、已删除或不在该行业推荐里的技能计入 skipped，不报错",
+          }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /skills:
     get:
       tags: [skills]
       summary: 列出技能；在个人技能视图按技能库分类筛选
       parameters:
-        - {in: query, name: scope, schema: {type: string, enum: [public, mine, created, favorites], default: public}}
-        - {in: query, name: libraryCategoryId, description: 用户技能库分类 ID，仅支持 mine 或 created 视图；与 libraryUncategorized 互斥, schema: {type: string}}
-        - {in: query, name: libraryUncategorized, description: 仅列出未归类技能，仅支持 mine 或 created 视图；与 libraryCategoryId 互斥, schema: {type: boolean}}
+        - {
+            in: query,
+            name: scope,
+            schema:
+              {
+                type: string,
+                enum: [public, mine, created, favorites],
+                default: public,
+              },
+          }
+        - {
+            in: query,
+            name: libraryCategoryId,
+            description: 用户技能库分类 ID，仅支持 mine 或 created 视图；与 libraryUncategorized 互斥,
+            schema: { type: string },
+          }
+        - {
+            in: query,
+            name: libraryUncategorized,
+            description: 仅列出未归类技能，仅支持 mine 或 created 视图；与 libraryCategoryId 互斥,
+            schema: { type: boolean },
+          }
       responses:
-        "200": {description: 标准信封 data 为技能列表及分页信息；categories 含共享分类 value、label 和技能广场公开技能 count}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: 标准信封 data 为技能列表及分页信息；categories 含共享分类 value、label 和技能广场公开技能 count,
+          }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /skills/library-categories:
     get:
       tags: [skills]
       summary: 获取当前用户可见的技能库分类和数量
       parameters:
-        - {in: query, name: scope, schema: {type: string, enum: [mine, created], default: mine}}
+        - {
+            in: query,
+            name: scope,
+            schema: { type: string, enum: [mine, created], default: mine },
+          }
       responses:
-        "200": {description: 标准信封 data 为 categories、totalCount、uncategorizedCount；分类含 id、name、scope、count}
-        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: 标准信封 data 为 categories、totalCount、uncategorizedCount；分类含 id、name、scope、count,
+          }
+        "401": { $ref: "#/components/responses/Error" }
     post:
       tags: [skills]
       summary: 创建个人或平台技能库分类
@@ -514,27 +879,38 @@ paths:
               type: object
               required: [name]
               properties:
-                name: {type: string, minLength: 1, maxLength: 64}
-                scope: {type: string, enum: [personal, platform], default: personal}
+                name: { type: string, minLength: 1, maxLength: 64 }
+                scope:
+                  {
+                    type: string,
+                    enum: [personal, platform],
+                    default: personal,
+                  }
       responses:
-        "200": {description: 标准信封 data.category 为新分类}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
+        "200": { description: 标准信封 data.category 为新分类 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /skills/library-categories/{id}:
     parameters:
-      - {in: path, name: id, required: true, schema: {type: string}}
+      - { in: path, name: id, required: true, schema: { type: string } }
     delete:
       tags: [skills]
       summary: 删除技能库分类并解除相关技能归类，不删除技能
       responses:
-        "200": {description: "标准信封 data 为 {deleted: true}"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
+        "200": { description: "标准信封 data 为 {deleted: true}" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /skills/{id}/agent-mode:
     parameters:
-      - {in: path, name: id, required: true, description: 技能 ID, schema: {type: string}}
+      - {
+          in: path,
+          name: id,
+          required: true,
+          description: 技能 ID,
+          schema: { type: string },
+        }
     patch:
       tags: [skills]
       summary: 设置已安装技能是否进入 Agent 自动发现目录
@@ -546,15 +922,26 @@ paths:
               type: object
               required: [mode]
               properties:
-                mode: {type: string, enum: [auto, manual], description: auto 进入技能目录由 Agent 按任务自动发现；manual 只在用户固定或点名时使用}
+                mode:
+                  {
+                    type: string,
+                    enum: [auto, manual],
+                    description: auto 进入技能目录由 Agent 按任务自动发现；manual 只在用户固定或点名时使用,
+                  }
       responses:
-        "200": {description: 标准信封 data.skill 为更新后的技能}
-        "400": {description: mode 无效，或技能未安装（自建技能除外）}
-        "401": {$ref: "#/components/responses/Error"}
-        "404": {description: 技能不存在或对当前用户不可见}
+        "200": { description: 标准信封 data.skill 为更新后的技能 }
+        "400": { description: mode 无效，或技能未安装（自建技能除外） }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { description: 技能不存在或对当前用户不可见 }
   /skills/{id}/library-category:
     parameters:
-      - {in: path, name: id, required: true, description: 技能 ID, schema: {type: string}}
+      - {
+          in: path,
+          name: id,
+          required: true,
+          description: 技能 ID,
+          schema: { type: string },
+        }
     patch:
       tags: [skills]
       summary: 为当前用户已加入或自建的技能设置/清除技能库分类
@@ -566,16 +953,26 @@ paths:
               type: object
               required: [categoryId]
               properties:
-                categoryId: {type: string, description: 个人分类或可见平台分类 ID；空字符串表示取消归类}
+                categoryId:
+                  {
+                    type: string,
+                    description: 个人分类或可见平台分类 ID；空字符串表示取消归类,
+                  }
       responses:
-        "200": {description: 标准信封 data.skill 为更新后的技能}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
+        "200": { description: 标准信封 data.skill 为更新后的技能 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /skills/{id}/files:
     parameters:
-      - {in: path, name: id, required: true, description: 技能 ID, schema: {type: string}}
+      - {
+          in: path,
+          name: id,
+          required: true,
+          description: 技能 ID,
+          schema: { type: string },
+        }
     put:
       tags: [skills]
       summary: 作者批量写入、重命名或删除技能包文本文件，并生成新的技能版本
@@ -588,7 +985,8 @@ paths:
               type: object
               required: [baseVersionId, operations]
               properties:
-                baseVersionId: {type: string, description: 编辑开始时读取到的 versionId}
+                baseVersionId:
+                  { type: string, description: 编辑开始时读取到的 versionId }
                 operations:
                   type: array
                   minItems: 1
@@ -597,46 +995,68 @@ paths:
                     type: object
                     required: [op, path]
                     properties:
-                      op: {type: string, enum: [write, rename, delete]}
-                      path: {type: string, description: 规范化相对路径，最多 8 层，不允许 .. / 绝对路径 / .git / 控制字符}
-                      to: {type: string, description: rename 的目标路径}
-                      content: {type: string, description: write 的 UTF-8 文本，单文件不超过 512KB}
+                      op: { type: string, enum: [write, rename, delete] }
+                      path:
+                        {
+                          type: string,
+                          description: 规范化相对路径，最多 8 层，不允许 .. / 绝对路径 / .git / 控制字符,
+                        }
+                      to: { type: string, description: rename 的目标路径 }
+                      content:
+                        {
+                          type: string,
+                          description: write 的 UTF-8 文本，单文件不超过 512KB,
+                        }
       responses:
-        "200": {description: 标准信封 data 为 skill、files 与 changed；内容未变化时 changed=false 且不生成版本}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "403": {$ref: "#/components/responses/Error"}
-        "409": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: 标准信封 data 为 skill、files 与 changed；内容未变化时 changed=false 且不生成版本,
+          }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /tools/{id}:
     parameters:
-      - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: integer, format: int64, minimum: 1 },
+        }
     get:
       tags: [canvas]
       summary: 查询可见且启用工具的完整详情
       responses:
-        "200": {description: 标准信封 data 为完整工具，包含 prompt 和 extraInfo}
-        "404": {description: 工具不存在或不可见}
+        "200":
+          { description: 标准信封 data 为完整工具，包含 prompt 和 extraInfo }
+        "404": { description: 工具不存在或不可见 }
     delete:
       tags: [canvas]
       summary: 删除自己的用户工具及关联收藏，不删除预览文件
       responses:
-        "200": {description: "标准信封 data 为 {deleted: true}"}
-        "404": {description: 工具不存在或不能删除}
+        "200": { description: "标准信封 data 为 {deleted: true}" }
+        "404": { description: 工具不存在或不能删除 }
   /tools/{id}/favorite:
     parameters:
-      - {in: path, name: id, required: true, schema: {type: integer, format: int64, minimum: 1}}
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: integer, format: int64, minimum: 1 },
+        }
     post:
       tags: [canvas]
       summary: 幂等收藏可见工具
       responses:
-        "200": {description: 标准信封 data 为完整工具和收藏状态}
-        "404": {description: 工具不存在或不可见}
+        "200": { description: 标准信封 data 为完整工具和收藏状态 }
+        "404": { description: 工具不存在或不可见 }
     delete:
       tags: [canvas]
       summary: 幂等取消收藏可见工具
       responses:
-        "200": {description: 标准信封 data 为完整工具和收藏状态}
-        "404": {description: 工具不存在或不可见}
+        "200": { description: 标准信封 data 为完整工具和收藏状态 }
+        "404": { description: 工具不存在或不可见 }
   /model-catalog:
     get:
       tags: [models]
@@ -710,7 +1130,15 @@ paths:
                                           maxLength: 12
                                         color:
                                           type: string
-                                          enum: [purple, blue, green, gold, orange, pink]
+                                          enum:
+                                            [
+                                              purple,
+                                              blue,
+                                              green,
+                                              gold,
+                                              orange,
+                                              pink,
+                                            ]
                                   description:
                                     type: string
                                     maxLength: 500
@@ -1016,8 +1444,11 @@ paths:
       tags: [agent]
       summary: 读取当前用户的 Agent 记忆文件
       responses:
-        "200": {description: "标准信封 data 为 {mode, capacity, charCount, revision, entries, pendingCount, updatedAt}；entries 每条含 id、section（user|notes）、text"}
-        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: "标准信封 data 为 {mode, capacity, charCount, revision, entries, pendingCount, updatedAt}；entries 每条含 id、section（user|notes）、text",
+          }
+        "401": { $ref: "#/components/responses/Error" }
     put:
       tags: [agent]
       summary: 用户整体保存记忆文件（按 revision CAS）
@@ -1029,7 +1460,12 @@ paths:
               type: object
               required: [revision, entries]
               properties:
-                revision: {type: integer, format: int64, description: 读取时的 revision；不一致返回 409}
+                revision:
+                  {
+                    type: integer,
+                    format: int64,
+                    description: 读取时的 revision；不一致返回 409,
+                  }
                 entries:
                   type: array
                   maxItems: 80
@@ -1037,14 +1473,18 @@ paths:
                     type: object
                     required: [section, text]
                     properties:
-                      id: {type: string, description: 保留原条目 ID；新条目留空}
-                      section: {type: string, enum: [user, notes]}
-                      text: {type: string, description: 单条最多 400 字}
+                      id:
+                        { type: string, description: 保留原条目 ID；新条目留空 }
+                      section: { type: string, enum: [user, notes] }
+                      text: { type: string, description: 单条最多 400 字 }
       responses:
-        "200": {description: 返回保存后的记忆文件；总量不得超过 capacity（5000 字），疑似密钥或敏感内容返回 400}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
-        "409": {description: 记忆文件已被 Agent 或其他页面修改，须重新读取}
+        "200":
+          {
+            description: 返回保存后的记忆文件；总量不得超过 capacity（5000 字），疑似密钥或敏感内容返回 400,
+          }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { description: 记忆文件已被 Agent 或其他页面修改，须重新读取 }
   /agent/memory/settings:
     patch:
       tags: [agent]
@@ -1057,36 +1497,56 @@ paths:
               type: object
               required: [mode]
               properties:
-                mode: {type: string, enum: [auto, review, off], description: auto 直接写入并可撤销；review 先暂存待确认；off 不注入也不提供写入工具}
+                mode:
+                  {
+                    type: string,
+                    enum: [auto, review, off],
+                    description: auto 直接写入并可撤销；review 先暂存待确认；off 不注入也不提供写入工具,
+                  }
       responses:
-        "200": {description: 返回更新后的记忆文件}
-        "400": {$ref: "#/components/responses/Error"}
-        "401": {$ref: "#/components/responses/Error"}
+        "200": { description: 返回更新后的记忆文件 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
   /agent/memory/revisions:
     get:
       tags: [agent]
       summary: 列出记忆文件的修改记录
       parameters:
-        - {in: query, name: status, schema: {type: string, enum: [applied, pending, rejected]}}
-        - {in: query, name: limit, description: 默认 50, schema: {type: integer, minimum: 1, maximum: 200}}
+        - {
+            in: query,
+            name: status,
+            schema: { type: string, enum: [applied, pending, rejected] },
+          }
+        - {
+            in: query,
+            name: limit,
+            description: 默认 50,
+            schema: { type: integer, minimum: 1, maximum: 200 },
+          }
       responses:
-        "200": {description: "标准信封 data.revisions；每条含 id、actor（agent|user|restore|seed|admin）、runId、status、summary、baseRevision、revision、changes、canUndo、createdAt"}
-        "401": {$ref: "#/components/responses/Error"}
+        "200":
+          {
+            description: "标准信封 data.revisions；每条含 id、actor（agent|user|restore|seed|admin）、runId、status、summary、baseRevision、revision、changes、canUndo、createdAt",
+          }
+        "401": { $ref: "#/components/responses/Error" }
   /agent/memory/revisions/{revisionId}/undo:
     parameters:
-      - {in: path, name: revisionId, required: true, schema: {type: string}}
+      - { in: path, name: revisionId, required: true, schema: { type: string } }
     post:
       tags: [agent]
       summary: 撤销一次已生效的修改（恢复到修改前快照，并记一条 restore 修订）
       responses:
-        "200": {description: 返回撤销后的记忆文件}
-        "400": {description: 修订未生效、已撤销或本身就是撤销；或撤销后会超过记忆容量}
-        "401": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "409": {description: 这条修改涉及的条目之后又被改过，无法自动撤销}
+        "200": { description: 返回撤销后的记忆文件 }
+        "400":
+          {
+            description: 修订未生效、已撤销或本身就是撤销；或撤销后会超过记忆容量,
+          }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: 这条修改涉及的条目之后又被改过，无法自动撤销 }
   /agent/memory/revisions/{revisionId}/decide:
     parameters:
-      - {in: path, name: revisionId, required: true, schema: {type: string}}
+      - { in: path, name: revisionId, required: true, schema: { type: string } }
     post:
       tags: [agent]
       summary: 采纳或拒绝 review 模式下的待确认修改
@@ -1098,13 +1558,13 @@ paths:
               type: object
               required: [decision]
               properties:
-                decision: {type: string, enum: [approve, reject]}
+                decision: { type: string, enum: [approve, reject] }
       responses:
-        "200": {description: 返回处理后的记忆文件}
-        "400": {description: decision 无效，或这条修改已经处理过}
-        "401": {$ref: "#/components/responses/Error"}
-        "404": {$ref: "#/components/responses/Error"}
-        "409": {description: 记忆文件已在待确认修改之后变化，须重新查看}
+        "200": { description: 返回处理后的记忆文件 }
+        "400": { description: decision 无效，或这条修改已经处理过 }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: 记忆文件已在待确认修改之后变化，须重新查看 }
   /agent/memories:
     get:
       tags: [agent]
@@ -1215,7 +1675,8 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data: { $ref: "#/components/schemas/AgentMemoryCompactView" }
+                      data:
+                        { $ref: "#/components/schemas/AgentMemoryCompactView" }
         "401":
           $ref: "#/components/responses/Error"
     patch:
@@ -1268,7 +1729,8 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data: { $ref: "#/components/schemas/AgentMemoryCompactView" }
+                      data:
+                        { $ref: "#/components/schemas/AgentMemoryCompactView" }
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -1297,7 +1759,10 @@ paths:
                         properties:
                           proposals:
                             type: array
-                            items: { $ref: "#/components/schemas/AgentMemoryProposal" }
+                            items:
+                              {
+                                $ref: "#/components/schemas/AgentMemoryProposal",
+                              }
         "401":
           $ref: "#/components/responses/Error"
   /agent/memories/proposals/{proposalId}/decide:
@@ -1358,7 +1823,10 @@ paths:
                         properties:
                           revisions:
                             type: array
-                            items: { $ref: "#/components/schemas/AgentMemoryRevision" }
+                            items:
+                              {
+                                $ref: "#/components/schemas/AgentMemoryRevision",
+                              }
         "401":
           $ref: "#/components/responses/Error"
   /agent/memories/revisions/{revisionId}/restore:
@@ -1669,7 +2137,7 @@ paths:
                   type: string
                   minLength: 64
                   maxLength: 64
-                  pattern: '^[0-9a-fA-F]{64}$'
+                  pattern: "^[0-9a-fA-F]{64}$"
                 reason:
                   type: string
                   maxLength: 2000
@@ -1824,17 +2292,59 @@ paths:
                           required: [id, priceVersion, prices]
                           properties:
                             id: { type: string, minLength: 1 }
-                            priceVersion: { type: integer, format: int64, minimum: 1 }
+                            priceVersion:
+                              { type: integer, format: int64, minimum: 1 }
                             prices:
                               type: object
                               additionalProperties: false
                               description: 按次/秒仅unit字段；文本Token为输入、输出、缓存；视频Token仅输出。必须完整提交对应字段。
                               properties:
-                                unitPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
-                                inputTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
-                                outputTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
-                                cachedTokenPriceMicrocredits: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
-            example: { models: [{ modelId: MODEL001, priceVersion: 4, priceTiers: [{ id: TIER001, priceVersion: 8, prices: { unitPriceMicrocredits: 1370000 } }] }] }
+                                unitPriceMicrocredits:
+                                  {
+                                    type: integer,
+                                    format: int64,
+                                    minimum: 0,
+                                    maximum: 9007199254740991,
+                                  }
+                                inputTokenPriceMicrocredits:
+                                  {
+                                    type: integer,
+                                    format: int64,
+                                    minimum: 0,
+                                    maximum: 1000000000000,
+                                  }
+                                outputTokenPriceMicrocredits:
+                                  {
+                                    type: integer,
+                                    format: int64,
+                                    minimum: 0,
+                                    maximum: 1000000000000,
+                                  }
+                                cachedTokenPriceMicrocredits:
+                                  {
+                                    type: integer,
+                                    format: int64,
+                                    minimum: 0,
+                                    maximum: 1000000000000,
+                                  }
+            example:
+              {
+                models:
+                  [
+                    {
+                      modelId: MODEL001,
+                      priceVersion: 4,
+                      priceTiers:
+                        [
+                          {
+                            id: TIER001,
+                            priceVersion: 8,
+                            prices: { unitPriceMicrocredits: 1370000 },
+                          },
+                        ],
+                    },
+                  ],
+              }
       responses:
         "200":
           description: 更新成功，data.updated 为更新的模型数量
@@ -1860,10 +2370,22 @@ paths:
       tags: [admin]
       summary: 管理员只读查看用户的 Agent 记忆文件
       parameters:
-        - {in: query, name: userId, description: 只看某个用户；为空时按更新时间列出, schema: {type: string}}
-        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 200}}
+        - {
+            in: query,
+            name: userId,
+            description: 只看某个用户；为空时按更新时间列出,
+            schema: { type: string },
+          }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 200 },
+          }
       responses:
-        "200": {description: 标准信封 data.documents；每份含 userId、username、displayName 和记忆文件正文}
+        "200":
+          {
+            description: 标准信封 data.documents；每份含 userId、username、displayName 和记忆文件正文,
+          }
         "401":
           $ref: "#/components/responses/Error"
         "403":
@@ -1978,7 +2500,17 @@ paths:
               properties:
                 preset:
                   type: string
-                  enum: [person, director, camera, cat, rabbit, robot, rocket, sparkles]
+                  enum:
+                    [
+                      person,
+                      director,
+                      camera,
+                      cat,
+                      rabbit,
+                      robot,
+                      rocket,
+                      sparkles,
+                    ]
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2129,7 +2661,11 @@ paths:
       summary: 我邀请的用户（名称脱敏）
       parameters:
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
-        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100 },
+          }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2141,7 +2677,11 @@ paths:
       summary: 我的返佣记录
       parameters:
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
-        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100 },
+          }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2169,7 +2709,13 @@ paths:
               properties:
                 enabled: { type: boolean }
                 mode: { type: string, enum: [all, assigned] }
-                commissionRateBasisPoints: { type: integer, minimum: 0, maximum: 5000, description: 万分比，1000 表示 10% }
+                commissionRateBasisPoints:
+                  {
+                    type: integer,
+                    minimum: 0,
+                    maximum: 5000,
+                    description: 万分比，1000 表示 10%,
+                  }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2181,7 +2727,11 @@ paths:
       summary: 全站推广返佣记录
       parameters:
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
-        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100 },
+          }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2272,9 +2822,26 @@ paths:
                 type: object
                 required: [resourceId]
                 properties:
-                  resourceId: {type: string}
-                  purpose: {type: string, enum: [display, copy, download, browser-process, provider-input], default: display}
-                  variant: {type: string, enum: [original, playback], default: original}
+                  resourceId: { type: string }
+                  purpose:
+                    {
+                      type: string,
+                      enum:
+                        [
+                          display,
+                          copy,
+                          download,
+                          browser-process,
+                          provider-input,
+                        ],
+                      default: display,
+                    }
+                  variant:
+                    {
+                      type: string,
+                      enum: [original, playback],
+                      default: original,
+                    }
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -2297,10 +2864,16 @@ paths:
           description: 仅返回统一访问描述，不返回文件正文。
         - in: query
           name: variant
-          schema: { type: string, enum: [original, playback], default: original }
+          schema:
+            { type: string, enum: [original, playback], default: original }
         - in: query
           name: purpose
-          schema: { type: string, enum: [display, download, browser-process], default: display }
+          schema:
+            {
+              type: string,
+              enum: [display, download, browser-process],
+              default: display,
+            }
       responses:
         "200":
           description: 文件流
@@ -2365,7 +2938,11 @@ paths:
                 prompt: { type: string, minLength: 1, maxLength: 32000 }
                 model: { type: string }
                 logicalModelId: { type: string }
-                channelId: { type: string, description: 系统渠道模型没有 logicalModelId 时提交渠道 ID，二者至少一个 }
+                channelId:
+                  {
+                    type: string,
+                    description: 系统渠道模型没有 logicalModelId 时提交渠道 ID，二者至少一个,
+                  }
                 batch:
                   type: object
                   additionalProperties: false
@@ -2411,7 +2988,11 @@ paths:
                     properties:
                       resourceId: { type: string }
                       kind: { type: string, enum: [image, video, audio] }
-                      role: { type: string, enum: [reference, first_frame, last_frame] }
+                      role:
+                        {
+                          type: string,
+                          enum: [reference, first_frame, last_frame],
+                        }
                       slotKey: { type: string }
       responses:
         "200":
@@ -2563,90 +3144,140 @@ components:
       type: object
       required: [id, name, type, url, size, mimeType]
       properties:
-        id: {type: string}
-        name: {type: string}
-        type: {type: string, enum: [image, video]}
-        url: {type: string}
-        size: {type: integer, format: int64, minimum: 0}
-        mimeType: {type: string}
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [image, video] }
+        url: { type: string }
+        size: { type: integer, format: int64, minimum: 0 }
+        mimeType: { type: string }
     UserFeedback:
       type: object
-      required: [id, userId, userName, userEmail, contact, type, title, content, attachments, environment, status, adminReply, archived, createdAt, updatedAt]
+      required:
+        [
+          id,
+          userId,
+          userName,
+          userEmail,
+          contact,
+          type,
+          title,
+          content,
+          attachments,
+          environment,
+          status,
+          adminReply,
+          archived,
+          createdAt,
+          updatedAt,
+        ]
       properties:
-        id: {type: string}
-        userId: {type: string}
-        userName: {type: string}
-        userEmail: {type: string}
-        contact: {type: string}
-        type: {type: string, enum: [bug, feature, improvement, other]}
-        title: {type: string, description: 最多 200 个 UTF-8 字节}
-        content: {type: string, description: 最多 10000 个 UTF-8 字节}
-        attachments: {type: string, description: JSON-encoded array of FeedbackAttachment}
-        environment: {type: string, description: JSON-encoded client environment object}
-        status: {type: string, enum: [pending, processing, resolved, closed, archived]}
-        adminReply: {type: string}
-        repliedAt: {type: string, format: date-time, nullable: true}
-        archived: {type: boolean}
-        archivedAt: {type: string, format: date-time, nullable: true}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
+        id: { type: string }
+        userId: { type: string }
+        userName: { type: string }
+        userEmail: { type: string }
+        contact: { type: string }
+        type: { type: string, enum: [bug, feature, improvement, other] }
+        title: { type: string, description: 最多 200 个 UTF-8 字节 }
+        content: { type: string, description: 最多 10000 个 UTF-8 字节 }
+        attachments:
+          {
+            type: string,
+            description: JSON-encoded array of FeedbackAttachment,
+          }
+        environment:
+          { type: string, description: JSON-encoded client environment object }
+        status:
+          {
+            type: string,
+            enum: [pending, processing, resolved, closed, archived],
+          }
+        adminReply: { type: string }
+        repliedAt: { type: string, format: date-time, nullable: true }
+        archived: { type: boolean }
+        archivedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     FeedbackSubmission:
       type: object
       required: [title, content]
       properties:
-        type: {type: string, enum: [bug, feature, improvement, other]}
-        title: {type: string, minLength: 1, description: 最多 200 个 UTF-8 字节}
-        content: {type: string, minLength: 1, description: 最多 10000 个 UTF-8 字节}
-        contact: {type: string}
-        attachments: {type: string, description: JSON-encoded array of FeedbackAttachment}
-        environment: {type: string, description: JSON-encoded client environment object}
+        type: { type: string, enum: [bug, feature, improvement, other] }
+        title:
+          { type: string, minLength: 1, description: 最多 200 个 UTF-8 字节 }
+        content:
+          { type: string, minLength: 1, description: 最多 10000 个 UTF-8 字节 }
+        contact: { type: string }
+        attachments:
+          {
+            type: string,
+            description: JSON-encoded array of FeedbackAttachment,
+          }
+        environment:
+          { type: string, description: JSON-encoded client environment object }
     FeedbackAdminUpdate:
       type: object
       properties:
-        status: {type: string, enum: [pending, processing, resolved, closed]}
-        adminReply: {type: string}
-        archived: {type: boolean}
+        status: { type: string, enum: [pending, processing, resolved, closed] }
+        adminReply: { type: string }
+        archived: { type: boolean }
     FeedbackListResult:
       type: object
       required: [list, total, page, limit]
       properties:
-        list: {type: array, items: {$ref: "#/components/schemas/UserFeedback"}}
-        total: {type: integer, format: int64}
-        page: {type: integer, minimum: 1}
-        limit: {type: integer, minimum: 1, maximum: 100}
+        list:
+          { type: array, items: { $ref: "#/components/schemas/UserFeedback" } }
+        total: { type: integer, format: int64 }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
 
     LoginLog:
       type: object
       properties:
-        id: {type: string}
-        userId: {type: string, nullable: true}
-        username: {type: string, description: 事件时用户名快照}
-        displayName: {type: string}
-        account: {type: string, description: 用户名或脱敏的尝试账号}
-        event: {type: string, enum: [login, logout]}
-        method: {type: string, enum: [password, email, sms, linuxdo, verification, unknown]}
-        source: {type: string, enum: [login, registration, logout]}
-        result: {type: string, enum: [success, failed]}
-        ip: {type: string}
-        userAgent: {type: string, maxLength: 512, description: 客户端自报信息，不作为身份判断依据}
-        sessionRef: {type: string, description: 会话 ID 的单向哈希，仅关联历史事件，不含 Token}
-        reason: {type: string}
-        message: {type: string}
-        createdAt: {type: string, format: date-time}
+        id: { type: string }
+        userId: { type: string, nullable: true }
+        username: { type: string, description: 事件时用户名快照 }
+        displayName: { type: string }
+        account: { type: string, description: 用户名或脱敏的尝试账号 }
+        event: { type: string, enum: [login, logout] }
+        method:
+          {
+            type: string,
+            enum: [password, email, sms, linuxdo, verification, unknown],
+          }
+        source: { type: string, enum: [login, registration, logout] }
+        result: { type: string, enum: [success, failed] }
+        ip: { type: string }
+        userAgent:
+          {
+            type: string,
+            maxLength: 512,
+            description: 客户端自报信息，不作为身份判断依据,
+          }
+        sessionRef:
+          {
+            type: string,
+            description: 会话 ID 的单向哈希，仅关联历史事件，不含 Token,
+          }
+        reason: { type: string }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
     ToolMutation:
       type: object
       required: [type, label, prompt]
       properties:
-        type: {type: string, enum: [style, motion, nine_grid, effect]}
-        label: {type: string, description: 名称最多 120 字节}
-        prompt: {type: string, description: 最多 8000 字节，不允许嵌套工具标签}
-        visibility: {type: string, enum: [private, public], default: private}
-        desc: {type: string}
-        tag: {type: string}
-        cover: {type: string, description: 本人已上传完成的资源 URL，仅限私有工具}
-        mediaUrl: {type: string, description: 本人已上传完成的资源 URL，仅限私有工具}
-        extraInfo: {type: array, items: {type: string}}
-        ratio: {type: string}
+        type: { type: string, enum: [style, motion, nine_grid, effect] }
+        label: { type: string, description: 名称最多 120 字节 }
+        prompt:
+          { type: string, description: 最多 8000 字节，不允许嵌套工具标签 }
+        visibility: { type: string, enum: [private, public], default: private }
+        desc: { type: string }
+        tag: { type: string }
+        cover:
+          { type: string, description: 本人已上传完成的资源 URL，仅限私有工具 }
+        mediaUrl:
+          { type: string, description: 本人已上传完成的资源 URL，仅限私有工具 }
+        extraInfo: { type: array, items: { type: string } }
+        ratio: { type: string }
     ModelRequestIntent:
       type: object
       required: [capability]
@@ -2675,7 +3306,8 @@ components:
             videoGenerateAudio: true
     LogicalModelQuote:
       type: object
-      required: [logicalModelId, billingMode, quantity, amountMicrocredits, estimated]
+      required:
+        [logicalModelId, billingMode, quantity, amountMicrocredits, estimated]
       properties:
         logicalModelId:
           type: string
@@ -2701,7 +3333,19 @@ components:
     VideoTokenEstimate:
       type: object
       description: 仅视频 Token 报价返回；将火山公式用量和平台预留余量分开披露
-      required: [formulaTokens, reservedTokens, outputWidth, outputHeight, framesPerSecond, outputSeconds, referenceSeconds, referenceDurationEstimated, dimensionsEstimated, reservationMarginPercent]
+      required:
+        [
+          formulaTokens,
+          reservedTokens,
+          outputWidth,
+          outputHeight,
+          framesPerSecond,
+          outputSeconds,
+          referenceSeconds,
+          referenceDurationEstimated,
+          dimensionsEstimated,
+          reservationMarginPercent,
+        ]
       properties:
         formulaTokens:
           type: integer
@@ -2777,7 +3421,18 @@ components:
     AgentMemory:
       type: object
       description: 用户私有记忆；来源事件只说明产生依据，不证明经验已验证有效；计数不是效果评分
-      required: [id, topic, category, situation, status, hits, injected, createdAt, updatedAt]
+      required:
+        [
+          id,
+          topic,
+          category,
+          situation,
+          status,
+          hits,
+          injected,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string }
         topic: { type: string }
@@ -2794,9 +3449,26 @@ components:
           maxItems: 8
           items: { $ref: "#/components/schemas/AgentMemoryEvidence" }
         status: { type: string, enum: [pending, approved, rejected, expired] }
-        hits: { type: integer, format: int64, minimum: 0, description: 主动查阅次数，不等同成功次数 }
-        injected: { type: integer, format: int64, minimum: 0, description: 含该条目的模型任务实际入队次数 }
-        lastVerifiedAt: { type: string, format: date-time, description: 原始验证时间；新建、去重、压缩及批准不刷新 }
+        hits:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            description: 主动查阅次数，不等同成功次数,
+          }
+        injected:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            description: 含该条目的模型任务实际入队次数,
+          }
+        lastVerifiedAt:
+          {
+            type: string,
+            format: date-time,
+            description: 原始验证时间；新建、去重、压缩及批准不刷新,
+          }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     AgentMemoryCompactSummary:
@@ -2821,7 +3493,18 @@ components:
         lastCompactAt: { type: string, format: date-time }
         lastStatus:
           type: string
-          enum: [idle, queued, running, awaiting_review, applied, rejected, restored, succeeded, failed]
+          enum:
+            [
+              idle,
+              queued,
+              running,
+              awaiting_review,
+              applied,
+              rejected,
+              restored,
+              succeeded,
+              failed,
+            ]
           description: awaiting_review只表示提案生成；applied表示本人批准后已应用；succeeded表示本批无可应用修改
         lastError: { type: string }
         summary: { $ref: "#/components/schemas/AgentMemoryCompactSummary" }
@@ -2841,7 +3524,11 @@ components:
       required: [id, status, version, summary, changes, createdAt]
       properties:
         id: { type: string }
-        status: { type: string, enum: [generating, pending, approved, rejected, no_changes, failed] }
+        status:
+          {
+            type: string,
+            enum: [generating, pending, approved, rejected, no_changes, failed],
+          }
         version: { type: integer, format: int64, minimum: 1 }
         taskId: { type: string }
         summary: { $ref: "#/components/schemas/AgentMemoryCompactSummary" }
@@ -2857,7 +3544,13 @@ components:
       required: [decision, version]
       properties:
         decision: { type: string, enum: [approve, reject] }
-        version: { type: integer, format: int64, minimum: 1, description: 列表中读到的提案版本 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            description: 列表中读到的提案版本,
+          }
     AgentMemoryRevision:
       type: object
       required: [id, proposalId, version, before, after, createdAt]
@@ -2880,7 +3573,13 @@ components:
       additionalProperties: false
       required: [version]
       properties:
-        version: { type: integer, format: int64, minimum: 1, description: 列表中读到的恢复版本；当前内容也必须匹配应用后快照 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            description: 列表中读到的恢复版本；当前内容也必须匹配应用后快照,
+          }
     AgentCanvasUndoReceipt:
       type: object
       required: [runId, canvasId, stepId, expectedSnapshotHash]
@@ -2888,7 +3587,13 @@ components:
         runId: { type: string, description: 产生本次画布变更的原运行ID }
         canvasId: { type: string, description: 产生本次变更的画布 }
         stepId: { type: string }
-        expectedSnapshotHash: { type: string, minLength: 64, maxLength: 64, pattern: '^[0-9a-fA-F]{64}$' }
+        expectedSnapshotHash:
+          {
+            type: string,
+            minLength: 64,
+            maxLength: 64,
+            pattern: "^[0-9a-fA-F]{64}$",
+          }
     AgentCanvasUpdatedPayload:
       type: object
       required: [canvasId, operation, callId]
@@ -2898,7 +3603,8 @@ components:
         callId: { type: string }
         requiresRefresh: { type: boolean }
         canvasPatch: { type: object, additionalProperties: true }
-        actions: { type: array, items: { type: object, additionalProperties: true } }
+        actions:
+          { type: array, items: { type: object, additionalProperties: true } }
         undo:
           nullable: true
           allOf:
@@ -3022,7 +3728,23 @@ components:
           properties:
             code:
               type: integer
-              enum: [400, 401, 403, 404, 409, 429, 500, 502, 503, 504, 40301, 40302, 40901, 42901]
+              enum:
+                [
+                  400,
+                  401,
+                  403,
+                  404,
+                  409,
+                  429,
+                  500,
+                  502,
+                  503,
+                  504,
+                  40301,
+                  40302,
+                  40901,
+                  42901,
+                ]
             data:
               nullable: true
             reason:

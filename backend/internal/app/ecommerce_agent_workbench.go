@@ -513,6 +513,12 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 			}
 		}
 		prompt += "\n\n" + ecommerceagent.MarketingKnowledge(category) + "\n" + ecommerceagent.DetailPlanningKnowledge(draft.Platform, draft.Count) + "\n" + ecommerceagent.WorkbenchDetailPlanningMethod + "\n" + ecommerceagent.ProductPlanningKnowledge(category)
+		managed, calls, err := s.ecommerceManagedSkillBlock(draft, nil)
+		if err != nil {
+			return "", err
+		}
+		prompt += "\n" + managed
+		metadata["ecommerceManagedSkills"] = calls
 		input["prompt"] = prompt
 		return prompt, nil
 	}
@@ -638,6 +644,12 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 		// Product-specific narrative and the confirmed font system also constrain
 		// the sampled layout kit, which only supplies compositional variety.
 		prompt += "\n" + ecommerceagent.ProductPlanningKnowledge(knowledgeRequest.Category) + "\n已选 visualSystem 的字体家族、字重、配色和图形语言优先于随机版式示例；随机组件只在该美术系统内变化。不得把某品类常见配置当作当前商品规格。"
+		managed, calls, err := s.ecommerceManagedSkillBlock(draft, strategy)
+		if err != nil {
+			return "", err
+		}
+		prompt += "\n" + managed
+		metadata["ecommerceManagedSkills"] = calls
 		metadata["ecommerceDraft"] = draft
 		metadata["ecommerceKnowledgeVersion"] = ecommerceagent.CreativeKnowledgeVersion
 	}
@@ -727,6 +739,9 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 		}
 		if !strings.Contains(image.Prompt, ecommerceagent.HumanPhotographyKnowledge) {
 			image.Prompt += "\n" + ecommerceagent.HumanPhotographyKnowledge
+		}
+		if rules := ecommerceManagedImageRules(input.Metadata); rules != "" && !strings.Contains(image.Prompt, rules) {
+			image.Prompt += "\n" + rules
 		}
 		// The confirmed direction's visual lock is enforced server-side, so the
 		// image task always carries the selected palette, light and layout even

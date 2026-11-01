@@ -403,6 +403,9 @@ func TestEcommerceSelectedDirectionFlowsToPlanningAndImageTask(t *testing.T) {
 	if stringValue(metadata["ecommerceDirectionLock"]) != locks[chosen.ID] || metadata["ecommerceSkillTrace"] == nil {
 		t.Fatalf("planning task metadata = %+v", metadata)
 	}
+	if metadata["ecommerceManagedSkills"] == nil {
+		t.Fatal("managed skill routing receipt missing from planning task")
+	}
 	// The run's drawn layouts close the planning prompt and travel with the task.
 	if variation, _ := metadata["ecommerceDesignVariation"].(map[string]any); variation == nil || strings.LastIndex(planningPrompt, "【本轮版式方案·"+ecommerceagent.DesignPlaybookVersion+"】") < strings.Index(planningPrompt, "【视觉策略 Skill 输出") {
 		t.Fatalf("planning prompt or task lacks the design variation: %+v", metadata["ecommerceDesignVariation"])
@@ -422,6 +425,9 @@ func TestEcommerceSelectedDirectionFlowsToPlanningAndImageTask(t *testing.T) {
 	var account model.CreditAccount
 	db.First(&account, "user_id = ?", "user")
 	creditsBefore := account.AvailableMicrocredits
+	if !strings.Contains(plan.Images[0].Prompt, "本轮已选Skills图片执行约束") {
+		t.Fatal("managed skill execution rules did not reach image prompt")
+	}
 	imageTask, err := svc.CreateWorkbenchTask("user", WorkbenchTaskInput{Kind: WorkbenchKindImage, Prompt: plan.Images[0].Prompt, Model: "gpt-image-2", ChannelID: "image-channel", Parameters: map[string]any{"size": "1024x1024", "count": 1}}, "", "")
 	if err != nil {
 		t.Fatal(err)

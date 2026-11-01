@@ -11,6 +11,48 @@ import (
 )
 
 func RegisterEcommerceRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.GET("/admin/ecommerce/skills", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		items, err := svc.EcommerceManagedSkills(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		ok(c, gin.H{"skills": items})
+	})
+	r.PATCH("/admin/ecommerce/skills/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(user); err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024)
+		var req struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if req.Enabled == nil {
+			fail(c, http.StatusBadRequest, service.BadAuthRequest("请指定 enabled"))
+			return
+		}
+		if err := svc.SetEcommerceManagedSkillEnabled(user, c.Param("id"), *req.Enabled); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"enabled": *req.Enabled})
+	})
 	r.POST("/ecommerce/projects/:id/tasks", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

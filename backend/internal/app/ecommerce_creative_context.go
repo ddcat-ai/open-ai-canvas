@@ -16,7 +16,7 @@ func ecommerceDraftKnowledgeRequest(draft EcommerceDraft) EcommerceCreativeDirec
 
 // Search only reviewed, unexpired entries from enabled sources. Built-in methods
 // remain available without importing arbitrary content or inventing product facts.
-const ecommerceKnowledgeSelectionLimit = 20
+const ecommerceKnowledgeSelectionLimit = 23
 
 type ecommerceKnowledgeRetrieval struct {
 	Category string
@@ -31,6 +31,10 @@ type ecommerceKnowledgeRetrieval struct {
 // from enabled sources, adds shipped KB entries only for never-bootstrapped
 // domains, ranks them and keeps one entry per KB domain before filling up.
 func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequest) (*ecommerceKnowledgeRetrieval, error) {
+	skillPolicy, err := s.ecommerceManagedSkillPolicy()
+	if err != nil {
+		return nil, err
+	}
 	category := ecommerceProductCategory(req)
 	query := strings.Join([]string{req.ProductName, req.Category, req.Description, req.Instruction, req.Style, req.StylePrompt, req.MaterialPlan, ecommerceKnowledgeContentType(req), req.Platform}, " ")
 	platform := strings.TrimSpace(req.Platform)
@@ -51,7 +55,7 @@ func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequ
 		anyAvailable = anyAvailable || available[source.ID]
 	}
 	applicable := func(entry model.EcommerceKnowledgeEntry) bool {
-		return (entry.Category == "general" || entry.Category == category) && jsonArrayContains(entry.PlatformsJSON, platform) && jsonArrayContains(entry.LanguagesJSON, req.Language) && jsonArrayContains(entry.RegionsJSON, req.Region)
+		return ecommerceKnowledgeSkillEnabled(entry, skillPolicy, req) && (entry.Category == "general" || entry.Category == category) && jsonArrayContains(entry.PlatformsJSON, platform) && jsonArrayContains(entry.LanguagesJSON, req.Language) && jsonArrayContains(entry.RegionsJSON, req.Region)
 	}
 	matched := []model.EcommerceKnowledgeEntry{}
 	for _, entry := range entries {

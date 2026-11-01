@@ -42,6 +42,9 @@ var ecommerceBuiltinSourceSpecs = []ecommerceBuiltinSourceSpec{
 	{"KB12", "字体与信息组件", "builtin://meiyeai/kb12-product-design"},
 	{"KB13", "人物摄影真实性", "builtin://meiyeai/kb13-product-design"},
 	{"KB14", "功能与规格表达", "builtin://meiyeai/kb14-product-design"},
+	{"KB15", "可调用技能方法", "builtin://meiyeai/kb15-managed-skills"},
+	{"KB16", "图像执行策略", "builtin://meiyeai/kb16-managed-skills"},
+	{"KB17", "生成结果验收", "builtin://meiyeai/kb17-managed-skills"},
 }
 
 func ecommerceBuiltinSourceID(domain string) string {
@@ -56,6 +59,7 @@ func ecommerceBuiltinKnowledgeEntries() []model.EcommerceKnowledgeEntry {
 		kb04LayoutCompositionKnowledge(), kb05CommercialCopywritingKnowledge(), kb06ProductPhotographyKnowledge(),
 		kb07ModelSceneKnowledge(), kb08PlatformRulesKnowledge(), kb09DesignTrendsKnowledge(), kb10QualityControlKnowledge(),
 		ecommerceProductDesignKnowledge(),
+		ecommerceManagedSkillKnowledge(),
 	}
 	entries := make([]model.EcommerceKnowledgeEntry, 0, 112)
 	for _, group := range groups {
@@ -147,6 +151,9 @@ func (s *Service) ensureBuiltinEcommerceKnowledge(entries []model.EcommerceKnowl
 		for _, spec := range ecommerceBuiltinSourceSpecs {
 			id := ecommerceBuiltinSourceID(spec.Domain)
 			source := &model.EcommerceKnowledgeSource{ID: id, Name: spec.Name, URL: spec.URL, License: "MeiYeAI " + spec.Domain + " Original", Version: versions[id], Status: "ready", LastSyncedAt: &now}
+			if spec.Domain == "KB15" || spec.Domain == "KB16" || spec.Domain == "KB17" {
+				source.License = "MIT / MeiYeAI Original"
+			}
 			if _, err := tx.EcommerceKnowledgeSource(id); errors.Is(err, gorm.ErrRecordNotFound) {
 				if err := tx.CreateEcommerceKnowledgeSource(source); err != nil {
 					return fmt.Errorf("创建知识源 %s：%w", id, err)

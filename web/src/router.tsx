@@ -13,6 +13,7 @@ import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 const AdminPage = lazy(() => import("@/pages/admin"));
 const EcommercePage = lazy(() => import("@/pages/ecommerce"));
 const EcommerceKnowledgePage = lazyAdminPage(() => import("@/pages/admin/ecommerce-knowledge-page"));
+const EcommerceSkillsPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-skills-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
@@ -233,6 +234,7 @@ export const router = createBrowserRouter([
                     { path: "channels", element: <ChannelsPage /> },
                     // 关闭前台模型只影响用户端模型来源；后台仍可进入，便于开启前先配置。
                     { path: "models", element: <LogicalModelsPage /> },
+                    { path: "ecommerce-skills", element: <EcommerceSkillsPage /> },
                     { path: "plugins", element: <AdminPluginsPage /> },
                     { path: "workbench-tools", element: <WorkbenchToolsPage /> },
                     { path: "skill-curation", element: <SkillCurationPage /> },
