@@ -37,9 +37,7 @@ function clearCopiedMediaResultMetadata(metadata: CanvasNodeMetadata) {
 
 /** 剪贴板复制只携带媒体节点的生成配置和引用，不复制已生成的媒体结果。 */
 export function prepareCanvasNodeForClipboard(node: CanvasNodeData): CanvasNodeData {
-    const metadata = node.metadata
-        ? { ...node.metadata, frame: node.metadata.frame ? { ...node.metadata.frame } : undefined }
-        : undefined;
+    const metadata = node.metadata ? { ...node.metadata, frame: node.metadata.frame ? { ...node.metadata.frame } : undefined } : undefined;
     if (metadata && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio)) {
         const cleared = resetGenerationTaskMetadata(metadata, "idle");
         clearCopiedMediaResultMetadata(cleared);
