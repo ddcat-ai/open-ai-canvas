@@ -222,7 +222,7 @@ export function setAdminWorkbenchToolEnabled(id: string, enabled: boolean) {
 export type WorkbenchTaskIntent = CreateWorkbenchTaskInput;
 
 export async function createWorkbenchTask(input: WorkbenchTaskIntent) {
-    const result = await http.post<WorkbenchTaskReceipt | WorkbenchTaskReceipt["task"]>("/workbench/tasks", input);
+    const result = await http.post<WorkbenchTaskReceipt | GenerationTask>("/workbench/tasks", input);
     const task = result && "task" in result ? result.task : result;
     if (!task?.id) throw new Error("任务已提交，但没有返回任务编号");
     // 与 createGenerationTask 一致：创建时积分已被预占，钱包余额需要立即刷新。
@@ -231,9 +231,5 @@ export async function createWorkbenchTask(input: WorkbenchTaskIntent) {
 }
 
 export type WorkbenchTaskReceipt = {
-    task: {
-        id: string;
-        status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
-        createdAt?: string;
-    };
+    task: GenerationTask;
 };

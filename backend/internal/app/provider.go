@@ -262,7 +262,16 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 			}
 			return runAgentToolTask(ctx, input)
 		}
-		result, taskErr := runTextTask(ctx, input)
+		var result map[string]interface{}
+		var taskErr error
+		if draft, ok := ecommercePlanningBatchable(input); ok {
+			result, taskErr = runEcommercePlanningBatches(ctx, input, draft)
+		} else {
+			result, taskErr = runTextTask(ctx, input)
+		}
+		if taskErr == nil {
+			taskErr = s.validateEcommerceWorkbenchResult(userID, input, result)
+		}
 		if taskErr == nil && promptTemplateOperation != "" {
 			taskErr = validatePromptTemplateResult(promptTemplateOperation, result)
 		}

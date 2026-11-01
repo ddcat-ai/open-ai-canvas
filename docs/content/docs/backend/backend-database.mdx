@@ -493,6 +493,8 @@ Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`�
 
 ## 可选技能策展
 
+电商 Agent 的迁移 78 新增八张电商项目、知识与 Agent 执行表及知识域索引，详见 [电商 Agent 与知识库](./ecommerce-agent)。上游既有迁移编号与校验值保持不变。
+
 迁移 46 新增 skill_curation_settings、skill_curation_categories、skill_curation_assignments；默认关闭，不导入技能内容。表结构与事务规则见 [平台技能策展](./skill-curation)。
 
 迁移 47 依赖 46，新增 skill_curation_roots 与 skill_curation_root_assignments；保留原五个根 ID，根停用时使用派生默认桶，根表为空回落固定五类。

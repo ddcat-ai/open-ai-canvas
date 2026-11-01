@@ -11,6 +11,8 @@ import RouteErrorPage from "@/pages/route-error";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
+const EcommercePage = lazy(() => import("@/pages/ecommerce"));
+const EcommerceKnowledgePage = lazyAdminPage(() => import("@/pages/admin/ecommerce-knowledge-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
@@ -126,6 +128,7 @@ export const router = createBrowserRouter([
         children: [
             { path: "/", element: deferred(<CreatePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/ecommerce", element: <RequireAuth>{deferred(<EcommercePage />)}</RequireAuth> },
             {
                 path: "/toolbox/image",
                 element: (
@@ -240,6 +243,7 @@ export const router = createBrowserRouter([
                     { path: "banner-announcements", element: <BannerAnnouncementsPage /> },
                     { path: "agent-lessons", element: <AgentLessonsPage /> },
                     { path: "resources", element: <StorageResourcesPage /> },
+                    { path: "ecommerce-knowledge", element: <EcommerceKnowledgePage /> },
                     { path: "credit-operations", element: <CreditOperationsPage /> },
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },
                     { path: "referral", element: <AdminReferralPage /> },

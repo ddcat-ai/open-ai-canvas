@@ -1,0 +1,57 @@
+.rolling-credit-text {
+    display: inline;
+    white-space: inherit;
+    font-variant-numeric: tabular-nums;
+}
+
+.rolling-credit-text[hidden] {
+    display: none;
+}
+
+.rolling-credit-digit {
+    display: inline-grid;
+    height: 1em;
+    overflow: hidden;
+    line-height: 1;
+    vertical-align: -0.08em;
+}
+
+.rolling-credit-digit > span {
+    grid-area: 1 / 1;
+}
+
+.rolling-credit-digit-old {
+    animation: credit-digit-out 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rolling-credit-digit-new {
+    animation: credit-digit-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes credit-digit-out {
+    from {
+        transform: translateY(0);
+    }
+    to {
+        transform: translateY(-100%);
+    }
+}
+
+@keyframes credit-digit-in {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rolling-credit-digit-old {
+        display: none;
+        animation: none;
+    }
+    .rolling-credit-digit-new {
+        animation: none;
+    }
+}

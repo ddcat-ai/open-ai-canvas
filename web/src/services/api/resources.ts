@@ -111,7 +111,7 @@ export class ResourceUploadError extends Error {
 const resourceCache = new Map<string, RemoteResource>();
 const resourceRequests = new Map<string, Promise<RemoteResource>>();
 const missingResourceIds = new Set<string>();
-export type ResourceAccessPurpose = "display" | "copy" | "download" | "browser-process" | "provider-input";
+export type ResourceAccessPurpose = "display" | "copy" | "download" | "browser-process" | "provider-input" | "ecommerce-export";
 export type ResourceAccessVariant = "original" | "playback" | "thumbnail";
 export type ResourceAccess = {
     resourceId: string;
@@ -584,6 +584,11 @@ export function resolveResourceUrl(storageKey?: string, fallback = "") {
     return id ? resourceFileUrl(id) : fallback;
 }
 
+export function resolveResourceVariantUrl(storageKey: string | undefined, variant: ResourceAccessVariant, fallback = "") {
+    const id = resourceIdFromStorageKey(storageKey);
+    return id ? `${resourceFileUrl(id)}?variant=${encodeURIComponent(variant)}` : fallback;
+}
+
 // playbackVariantUrl 返回浏览器兼容播放副本 URL（H.265→H.264 转码结果）。
 // 副本就绪前由后端回退原件，调用方再按需降级。
 export function playbackVariantUrl(id: string) {
@@ -591,10 +596,10 @@ export function playbackVariantUrl(id: string) {
     return `${base}/resources/${encodeURIComponent(id)}/file?variant=playback`;
 }
 
-export async function getResourceBlob(storageKey: string) {
+export async function getResourceBlob(storageKey: string, purpose: ResourceAccessPurpose = "browser-process") {
     const id = resourceIdFromStorageKey(storageKey);
     if (!id) return null;
-    const access = await getResourceAccess(storageKey, "browser-process");
+    const access = await getResourceAccess(storageKey, purpose);
     // CDN/origin URLs carry their own authorization and must not receive the
     // application session cookie. Local/proxy delivery is intentionally
     // session-bound, so a Blob read must include it even when the URL is

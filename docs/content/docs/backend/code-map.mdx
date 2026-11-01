@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 电商 Agent 与后台知识库
+
+- 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-knowledge-page.tsx`、`ecommerce-stage-models.tsx`、`knowledge-domain-coverage.ts`。
+- API：`web/src/services/api/ecommerce.ts`、`ecommerce-knowledge.ts`；会话恢复：`web/src/services/ecommerce-session.ts`。
+- 服务端：`backend/internal/handler/ecommerce*.go` → `app/ecommerce*.go` → `repository/ecommerce*.go`、`model/models_ecommerce*.go`；领域协议与知识方法在 `ecommerceagent/`、`ecommerceskills/`。
+- 数据迁移：`backend/internal/database/ecommerce_migration.go`；原件受限导出：`assets/access.go`、`app/resource_access.go`。详见 [电商 Agent 与知识库](./ecommerce-agent)。
+
 ## 短剧自动制作
 
 - 纯逻辑：`backend/internal/production/`（作品圣经、分集与剧本提示词 `prompts.go`，模型输出解析 `parse.go`，分镜规则与时长 `storyboard.go` / `timing.go`，按视频模型上限切剧情段 `SegmentShotsForVideo`，段提示词素材稿 `segment_prompt.go` 与撰写要求 `segment_writer.go`，参考图方案 `assets.go`，用户分镜表直接导入 `storyboard_import.go`，原文台词逐句核对 `dialogue_check.go`）。
