@@ -32,6 +32,27 @@ tags:
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
 paths:
+  /ecommerce/download:
+    post:
+      tags: [ecommerce-agent]
+      summary: 通过浏览器原生下载流式导出当前用户的商品原图 ZIP
+      description: 先校验全部资源归属与就绪状态，再发送附件响应并流式读取原件；不创建生成任务。最多500张、总计2GB。
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [resourceId]
+              properties:
+                resourceId: {type: array, minItems: 1, maxItems: 500, items: {type: string}}
+            encoding:
+              resourceId: {style: form, explode: true}
+      responses:
+        "200": {description: 原始图片 ZIP 附件，application/zip}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /admin/ecommerce/categories:
     get:
       tags: [admin]

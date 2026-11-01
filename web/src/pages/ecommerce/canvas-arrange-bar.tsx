@@ -1,5 +1,5 @@
 import { Dropdown, type MenuProps } from "antd";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Crop, Download, Images, Maximize2, Scissors, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { commerceArrangeMinimum, type CommerceArrangeKind } from "./canvas-arrange";
 
@@ -48,14 +48,20 @@ export function CommerceArrangeMenu({
     bounds,
     frame,
     leftInset,
+    rightInset = 0,
     count,
     onArrange,
+    onDownload,
+    onClear,
 }: {
     bounds: { x: number; y: number; width: number; height: number };
     frame: { width: number; height: number };
     leftInset: number;
     count: number;
+    rightInset?: number;
     onArrange: (action: CommerceArrangeAction) => void;
+    onDownload?: () => void;
+    onClear?: () => void;
 }) {
     const bar = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 120, height: 34 });
@@ -65,8 +71,8 @@ export function CommerceArrangeMenu({
     });
     const half = size.width / 2;
     const minCenter = leftInset + EDGE + half;
-    const maxCenter = frame.width - EDGE - half;
-    const center = minCenter > maxCenter ? (leftInset + frame.width) / 2 : Math.min(maxCenter, Math.max(minCenter, bounds.x + bounds.width / 2));
+    const maxCenter = frame.width - rightInset - EDGE - half;
+    const center = minCenter > maxCenter ? (leftInset + frame.width - rightInset) / 2 : Math.min(maxCenter, Math.max(minCenter, bounds.x + bounds.width / 2));
     const above = bounds.y - GAP - size.height;
     const below = bounds.y + bounds.height + GAP;
     const top = above >= TOP_SAFE ? above : below + size.height <= frame.height - BOTTOM_SAFE ? below : TOP_SAFE;
@@ -83,14 +89,37 @@ export function CommerceArrangeMenu({
         { type: "divider" as const },
         { key: "reset", label: "恢复默认位置" },
     ];
+    const available = frame.width - leftInset - rightInset - EDGE * 2;
     return (
-        <div ref={bar} className="commerce-arrange-bar" data-canvas-no-zoom style={{ left: center, top }}>
+        <div ref={bar} className="commerce-arrange-bar" role="group" aria-label="多图操作" data-compact={available < 620 || undefined} data-canvas-no-zoom style={{ left: center, top, maxWidth: Math.max(180, available) }}>
+            <span className="commerce-selection-count">已选 {count} 张</span>
             <Dropdown trigger={["click"]} placement="bottom" menu={{ items, onClick: ({ key }) => onArrange(key as CommerceArrangeAction) }}>
                 <button type="button" aria-haspopup="menu" aria-label={`对齐排布已选的 ${count} 张图片`}>
                     对齐排布
                     <ChevronDown size={13} aria-hidden="true" />
                 </button>
             </Dropdown>
+            <button type="button" onClick={onDownload} disabled={!onDownload}>
+                <Download size={14} />
+                导出 ZIP
+            </button>
+            {[
+                ["裁剪", Crop],
+                ["多图融合", Images],
+                ["AI 抠图", Scissors],
+                ["智能延展", Maximize2],
+            ].map(([label, Icon]) => {
+                const ToolIcon = Icon as typeof Crop;
+                return (
+                    <button key={label as string} type="button" disabled title={`${label}功能即将开放`}>
+                        <ToolIcon size={14} />
+                        <span>{label as string}</span>
+                    </button>
+                );
+            })}
+            <button type="button" onClick={onClear} aria-label="取消选择" title="取消选择">
+                <X size={14} />
+            </button>
         </div>
     );
 }

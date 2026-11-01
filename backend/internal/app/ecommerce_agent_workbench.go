@@ -673,6 +673,7 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 	if stringValue(input.Metadata["stage"]) == "creative-directions" {
 		var analysis ecommerceagent.Analysis
 		text := stringValue(result["text"])
+		recovered := false
 		parseErr := ecommerceParseJSON(text, &analysis)
 		if parseErr != nil {
 			if repaired, ok := ecommerceRepairDirectionsTerminalObject(text); ok {
@@ -680,6 +681,17 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 				if parseErr == nil {
 					slog.Info("ecommerce directions terminal object repaired", "model", input.Config.Model)
 				}
+			}
+		}
+		if parseErr != nil {
+			if fallback, ok := ecommerceRecoverDirections(text, draft); ok {
+				analysis, parseErr, recovered = fallback, nil, true
+				slog.Info("ecommerce directions recovered from complete observations", "model", input.Config.Model)
+			}
+		}
+		if parseErr == nil && len(analysis.Recommendations) < 4 {
+			if completed, ok := ecommerceCompleteDirections(analysis, draft); ok {
+				analysis, recovered = completed, true
 			}
 		}
 		if parseErr != nil {
@@ -693,6 +705,10 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 		if err != nil {
 			slog.Warn("ecommerce directions rejected", "model", input.Config.Model, "reason", err.Error(), "category", analysis.Brief.Category, "directions", len(analysis.Recommendations), "head", ecommerceLogExcerpt(text, 600))
 			return err
+		}
+		if recovered {
+			response.RetrievalStatus = "degraded"
+			result["ecommerceDirectionsRecovered"] = true
 		}
 		raw, err := json.Marshal(response)
 		if err == nil {

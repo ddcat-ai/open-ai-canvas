@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // EcommerceProject stores versioned ecommerce drafts and execution snapshots.
 // Existing historical rows remain readable; new workflows do not rewrite them.
@@ -90,6 +93,7 @@ type EcommerceCreativeRecommendation struct {
 }
 
 type EcommercePlanTask struct {
+	SourceDraft          json.RawMessage           `json:"sourceDraft,omitempty"`
 	ID                   string                    `json:"id"`
 	ImageType            string                    `json:"imageType"`
 	Platform             string                    `json:"platform"`
@@ -135,5 +139,6 @@ type EcommercePlan struct {
 	VisualStrategy   string              `json:"visualStrategy"`
 	QualityChecks    []string            `json:"qualityChecks"`
 	Images           []EcommercePlanTask `json:"images"`
+	PreviousImages   []EcommercePlanTask `json:"previousImages,omitempty"`
 	ReferenceSummary string              `json:"referenceSummary,omitempty"`
 }

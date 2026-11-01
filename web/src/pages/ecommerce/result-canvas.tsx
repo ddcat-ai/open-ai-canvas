@@ -1,7 +1,7 @@
 import { createClientUUID } from "@/lib/client-id";
 import { Tooltip } from "antd";
 import { motion, useReducedMotion } from "motion/react";
-import { Crop, Eye, Images, Maximize2, Pencil, Scissors, Trash2 } from "lucide-react";
+import { Check, Eye, Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { CanvasViewport } from "@/components/canvas/canvas-viewport";
 import { HandIcon, ImagePlusIcon, LayersIcon, PointerIcon, RedoIcon, TextToolIcon, UndoIcon } from "@/components/ui/ecommerce-icons";
@@ -62,6 +62,8 @@ export function EcommerceResultCanvas({
     onSelectResult,
     onSelectResults,
     onSelectAll,
+    onExportSelection,
+    onInspectResult,
 }: {
     children: ReactNode;
     count: number;
@@ -74,6 +76,8 @@ export function EcommerceResultCanvas({
     onSelectResult?: (id: string) => void;
     onSelectResults?: (ids: string[]) => void;
     onSelectAll?: () => void;
+    onExportSelection?: () => void;
+    onInspectResult?: (id: string) => void;
 }) {
     const reducedMotion = useReducedMotion();
     const root = useRef<HTMLElement>(null);
@@ -114,7 +118,23 @@ export function EcommerceResultCanvas({
         },
         [],
     );
-    useEffect(() => {
+    const commit = useCallback((next: CanvasLayer[]) => setHistory((current) => ({ past: [...current.past.slice(-39), current.present], present: next, future: [] })), []);
+    const resultDrag = useResultNodeDrag({
+        content,
+        root,
+        enabled: tool === "select",
+        positions: history.present.filter((item) => item.type === "result"),
+        selected: selectedResults,
+        onSelect: (ids) => {
+            setSelectedId(null);
+            onSelectResults?.(ids);
+        },
+        onCommit: (positions) => {
+            const moved = new Set(positions.map((item) => item.id));
+            commit([...history.present.filter((item) => item.type !== "result" || !moved.has(item.id)), ...positions.map((item) => ({ ...item, type: "result" as const }))]);
+        },
+    });
+    useLayoutEffect(() => {
         if (selectedResults.size < 2) {
             setGroupBounds(null);
             return;
@@ -134,24 +154,10 @@ export function EcommerceResultCanvas({
         const right = Math.max(...bounds.map((item) => item.right));
         const bottom = Math.max(...bounds.map((item) => item.bottom));
         const inset = Number.parseFloat(root.current?.style.getPropertyValue("--commerce-sidebar-width") || "") || 0;
+        const outline = root.current?.querySelector<HTMLElement>(".commerce-canvas-group-outline");
+        if (outline) outline.style.translate = "";
         setGroupBounds({ x: left - frame.left, y: top - frame.top, width: right - left, height: bottom - top, frameWidth: frame.width, frameHeight: frame.height, inset });
     }, [selectedResults, viewport, history.present, arranging]);
-    const commit = useCallback((next: CanvasLayer[]) => setHistory((current) => ({ past: [...current.past.slice(-39), current.present], present: next, future: [] })), []);
-    const resultDrag = useResultNodeDrag({
-        content,
-        root,
-        enabled: tool === "select",
-        positions: history.present.filter((item) => item.type === "result"),
-        selected: selectedResults,
-        onSelect: (ids) => {
-            setSelectedId(null);
-            onSelectResults?.(ids);
-        },
-        onCommit: (positions) => {
-            const moved = new Set(positions.map((item) => item.id));
-            commit([...history.present.filter((item) => item.type !== "result" || !moved.has(item.id)), ...positions.map((item) => ({ ...item, type: "result" as const }))]);
-        },
-    });
     const undo = useCallback(() => setHistory((current) => (current.past.length ? { past: current.past.slice(0, -1), present: current.past.at(-1)!, future: [current.present, ...current.future] } : current)), []);
     const redo = useCallback(() => setHistory((current) => (current.future.length ? { past: [...current.past, current.present], present: current.future[0], future: current.future.slice(1) } : current)), []);
     useEffect(() => {
@@ -612,6 +618,7 @@ export function EcommerceResultCanvas({
         const frame = container.current?.getBoundingClientRect();
         if (!target || !frame) return;
         onSelectResults?.([id]);
+        onInspectResult?.(id);
         manuallyNavigated.current = true;
         const current = viewportRef.current;
         const rect = target.getBoundingClientRect();
@@ -757,34 +764,18 @@ export function EcommerceResultCanvas({
                 </div>
             ) : null}
             {groupBounds && selectedResults.size > 1 ? (
-                <CommerceArrangeMenu bounds={groupBounds} frame={{ width: groupBounds.frameWidth, height: groupBounds.frameHeight }} leftInset={groupBounds.inset} count={selectedResults.size} onArrange={arrangeSelection} />
+                <CommerceArrangeMenu
+                    bounds={groupBounds}
+                    frame={{ width: groupBounds.frameWidth, height: groupBounds.frameHeight }}
+                    leftInset={groupBounds.inset}
+                    rightInset={layersOpen ? 266 : 0}
+                    count={selectedResults.size}
+                    onArrange={arrangeSelection}
+                    onDownload={onExportSelection}
+                    onClear={() => onSelectResults?.([])}
+                />
             ) : null}
-            {selectedResults.size > 1 ? (
-                <aside className="commerce-multi-tools" aria-label="多图操作" data-canvas-no-zoom>
-                    <header>
-                        <strong>已选择 {selectedResults.size} 张图片</strong>
-                        <button type="button" onClick={() => onSelectResults?.([])}>
-                            取消选择
-                        </button>
-                    </header>
-                    <p>可对多张图片统一操作</p>
-                    {[
-                        ["裁剪", Crop],
-                        ["多图融合", Images],
-                        ["AI 抠图", Scissors],
-                        ["智能延展", Maximize2],
-                    ].map(([label, Icon]) => {
-                        const ToolIcon = Icon as typeof Crop;
-                        return (
-                            <button key={label as string} type="button" disabled title="API 接入后开放">
-                                <ToolIcon size={15} />
-                                {label as string}
-                                <small>99 积分</small>
-                            </button>
-                        );
-                    })}
-                </aside>
-            ) : null}
+
             {emptyState ? (
                 <div className="commerce-canvas-empty-overlay" aria-live="polite">
                     {emptyState}
@@ -813,7 +804,7 @@ export function EcommerceResultCanvas({
                         resultLayers.map((item) => (
                             <button type="button" key={item.id} className={selectedResults.has(item.id) ? "is-selected" : ""} onClick={() => focusResult(item.id)}>
                                 <span className="commerce-canvas-layer-check" aria-hidden="true">
-                                    {selectedResults.has(item.id) ? "✓" : ""}
+                                    {selectedResults.has(item.id) ? <Check size={11} strokeWidth={3} /> : null}
                                 </span>
                                 {item.src ? <img src={item.src} alt="" /> : <span className="commerce-canvas-layer-thumb" />}
                                 <span className="commerce-canvas-layer-name">{item.label}</span>

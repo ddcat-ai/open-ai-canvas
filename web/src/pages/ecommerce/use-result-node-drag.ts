@@ -13,6 +13,7 @@ export function useResultNodeDrag({
     positions,
     selected,
     onSelect,
+    onDragStart,
     onCommit,
 }: {
     content: RefObject<HTMLDivElement | null>;
@@ -21,6 +22,7 @@ export function useResultNodeDrag({
     positions: ResultPosition[];
     selected: Set<string>;
     onSelect?: (ids: string[]) => void;
+    onDragStart?: () => void;
     onCommit: (positions: ResultPosition[]) => void;
 }) {
     const gesture = useRef<Gesture | null>(null);
@@ -62,6 +64,7 @@ export function useResultNodeDrag({
                 frame.current = null;
             }
             paint(state, true);
+            root.current?.removeAttribute("data-result-dragging");
             suppressClick.current = state.moved;
             if (state.target.hasPointerCapture(state.pointerId)) state.target.releasePointerCapture(state.pointerId);
         };
@@ -81,6 +84,7 @@ export function useResultNodeDrag({
             window.removeEventListener("keyup", key, true);
             window.removeEventListener("blur", blur);
             if (frame.current !== null) cancelAnimationFrame(frame.current);
+            root.current?.removeAttribute("data-result-dragging");
         };
     }, []);
     const start = (event: PointerEvent<HTMLDivElement>) => {
@@ -110,6 +114,8 @@ export function useResultNodeDrag({
         event.stopPropagation();
         if (!state.moved) {
             state.moved = true;
+            root.current?.setAttribute("data-result-dragging", "true");
+            onDragStart?.();
             // 真正开始拖动时才测量其他元素的位置（单击不产生额外布局读取）。
             if (content.current)
                 state.snap = measureCommerceSnapScene(
@@ -139,7 +145,16 @@ export function useResultNodeDrag({
         }
         gesture.current = null;
         const cancelled = event.type === "pointercancel" || event.type === "lostpointercapture";
-        paint(state, true);
+        if (cancelled || !state.moved) paint(state, true);
+        else {
+            const final = resolve(state, event.clientX, event.clientY, event.ctrlKey || event.metaKey);
+            state.dx = final.dx;
+            state.dy = final.dy;
+            state.guides = [];
+            paint(state);
+            for (const node of state.nodes) node.element.removeAttribute("data-node-dragging");
+        }
+        root.current?.removeAttribute("data-result-dragging");
         suppressClick.current = state.moved;
         if (state.moved && !cancelled) {
             // The final pointerup can arrive before the next animation frame or pointermove.

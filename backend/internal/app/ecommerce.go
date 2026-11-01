@@ -327,6 +327,30 @@ func (s *Service) SaveEcommerceProject(userID, id string, req SaveEcommerceProje
 		}
 	}
 	if req.Plan != nil {
+		if len(req.Plan.Images) == 0 && len(req.Plan.PreviousImages) == 0 {
+			return nil, BadAuthRequest("策划图片不能为空")
+		}
+		if len(req.Plan.PreviousImages)+len(req.Plan.Images) > 500 {
+			return nil, BadAuthRequest("当前画布已达500张历史图片，请新建项目继续")
+		}
+		seen := map[string]bool{}
+		for _, image := range append(append([]model.EcommercePlanTask{}, req.Plan.PreviousImages...), req.Plan.Images...) {
+			if image.ID == "" || seen[image.ID] {
+				return nil, BadAuthRequest("画布图片ID重复或为空")
+			}
+			seen[image.ID] = true
+		}
+		for _, image := range req.Plan.PreviousImages {
+			if len(image.SourceDraft) > 128<<10 {
+				return nil, BadAuthRequest("历史图片参数快照过长")
+			}
+			task, err := s.repo.TaskForUser(userID, image.TaskID)
+			if image.TaskID == "" || err != nil || task.Type != "canvas_image" {
+				return nil, BadAuthRequest("历史生成任务不存在或不属于当前用户")
+			}
+		}
+	}
+	if req.Plan != nil && len(req.Plan.Images) > 0 {
 		if err := s.validateEcommercePlan(userID, req.Plan); err != nil {
 			return nil, err
 		}

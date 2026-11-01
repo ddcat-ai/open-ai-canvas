@@ -399,7 +399,17 @@ export function EcommerceResultGallery({
                                             trigger="click"
                                             placement="leftTop"
                                             destroyOnHidden
-                                            content={<SingleImageEditor key={`${image.id}:${image.taskId}`} config={config} draft={draft} image={image} imageModels={imageModels} onClose={() => setEditing(undefined)} onGenerate={onRegenerate} />}
+                                            content={
+                                                <SingleImageEditor
+                                                    key={`${image.id}:${image.taskId}`}
+                                                    config={config}
+                                                    draft={image.sourceDraft || draft}
+                                                    image={image}
+                                                    imageModels={imageModels}
+                                                    onClose={() => setEditing(undefined)}
+                                                    onGenerate={onRegenerate}
+                                                />
+                                            }
                                         >
                                             <button type="button" onClick={() => setEditing(image.id)}>
                                                 <RotateCcw size={15} />

@@ -103,6 +103,7 @@ export type EcommercePlanImage = {
     resourceId?: string;
     deliveryStatus?: "pending" | "delivered";
     referenceScreen?: EcommerceReferenceScreen;
+    sourceDraft?: EcommerceDraft;
 };
 export type EcommercePlan = {
     productSummary: string;
@@ -113,6 +114,7 @@ export type EcommercePlan = {
     images: EcommercePlanImage[];
     inputSignature?: string;
     referenceSummary?: string;
+    previousImages?: EcommercePlanImage[];
 };
 /** Reviewable execution details of a recommended style; absent on older recommendations. */
 export type EcommerceDirectionVisual = {

@@ -1,18 +1,51 @@
 import { saveAs } from "file-saver";
 
 import { createZip } from "@/lib/zip";
-import { getResourceBlob, resolveResourceUrl } from "@/services/api/resources";
+import { getResourceBlob, resolveResourceUrl, resourceFileUrl } from "@/services/api/resources";
+import { apiBaseURL } from "@/services/api/request";
+import { createClientUUID } from "@/lib/client-id";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { loadAssetsForUse } from "@/services/user-data-sync";
 import type { EcommercePlanImage } from "@/services/api/ecommerce";
 import { ecommerceOutputSize } from "./output-size";
 
-export type EcommerceExportItem = { image: EcommercePlanImage; assetId: string; index: number };
+export type EcommerceExportItem = { image: EcommercePlanImage; assetId: string; index: number; resourceId?: string };
 export type EcommerceDownload = { blob: Blob; fileName: string };
 
 function deliverDownload(blob: Blob, fileName: string): EcommerceDownload {
     saveAs(blob, fileName);
     return { blob, fileName };
+}
+
+/** Browser downloads start in the click handler; large ZIPs stream from storage. */
+export function startEcommerceDownload(items: EcommerceExportItem[]): boolean {
+    if (!items.length || items.some((item) => !item.resourceId)) return false;
+    if (items.length > 1) {
+        const owner = getActiveUserScope();
+        const frame = document.createElement("iframe");
+        frame.name = `commerce-download-${createClientUUID()}`; frame.hidden = true; frame.title = "图片 ZIP 下载";
+        frame.onload = () => {
+            try {
+                const raw = frame.contentDocument?.body?.textContent;
+                if (!raw) return;
+                const failure = JSON.parse(raw) as { code?: number; msg?: string };
+                if (failure.code && owner === getActiveUserScope()) window.dispatchEvent(new CustomEvent("commerce-download-error", { detail: { owner, message: failure.msg || "下载未完成，请重试" } }));
+                frame.remove();
+            } catch { /* Attachment responses are handled by the browser download manager. */ }
+        };
+        document.body.append(frame);
+        const form = document.createElement("form");
+        form.method = "post"; form.action = `${String(apiBaseURL).replace(/\/+$/, "")}/ecommerce/download`; form.hidden = true; form.target = frame.name;
+        for (const item of items) { const field = document.createElement("input"); field.type = "hidden"; field.name = "resourceId"; field.value = item.resourceId!; form.append(field); }
+        document.body.append(form); form.submit(); form.remove();
+        return true;
+    }
+    const url = `${resourceFileUrl(items[0].resourceId!)}?download=1`;
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "";
+    document.body.append(anchor); anchor.click(); anchor.remove();
+    return true;
 }
 
 async function imageBlob(assetId: string): Promise<Blob> {

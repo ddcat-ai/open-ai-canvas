@@ -1420,6 +1420,9 @@ html.dark :is(.ecommerce-page, .flylep-popover, .commerce-market-layer, .commerc
     background: var(--cm-track);
 }
 .commerce-canvas-layer-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
     border-color: var(--cm-line-strong);
     color: var(--cm-accent-ink);
 }
