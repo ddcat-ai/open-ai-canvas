@@ -166,7 +166,17 @@ func (s *Service) AdminLogicalModels(actor *model.User) ([]AdminLogicalModel, er
 		}
 		admin, buildErr := s.buildAdminLogicalModel(item, graph, systemChannelByID)
 		if buildErr != nil {
-			return nil, buildErr
+			// Keep invalid entries visible for repair without hiding healthy stage
+			// models from the ecommerce administrator's model catalog.
+			result = append(result, AdminLogicalModel{
+				PublicLogicalModel: PublicLogicalModel{ID: item.ID, Code: item.Code, Name: item.Name, Capability: item.Capability, Available: false},
+				Enabled:            item.Enabled,
+				ActiveRevisionID:   graph.Revision.ID,
+				RevisionVersion:    graph.Revision.Version,
+				ConfigurationError: buildErr.Error(),
+				Routes:             []AdminLogicalRoute{},
+			})
+			continue
 		}
 		result = append(result, *admin)
 	}
