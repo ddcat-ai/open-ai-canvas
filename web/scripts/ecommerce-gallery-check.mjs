@@ -27,4 +27,6 @@ try {
     assert.match(completed, /is-selected/);
     assert.ok(!completed.includes("ecommerce-result-info") && !completed.includes("ecommerce-result-copy"), "完成后仍展示图片下方的信息区");
     console.log("ecommerce gallery checks passed (queued/running/failed/completed and selection controls)");
-} finally { await vite.close(); }
+} finally {
+    await vite.close();
+}

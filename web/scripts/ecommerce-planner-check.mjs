@@ -14,12 +14,38 @@ try {
     const { commercePlanningReferenceCount } = await vite.ssrLoadModule("/src/pages/ecommerce/model-context.ts");
     const { suggestCommerceModel } = await vite.ssrLoadModule("/src/pages/ecommerce/model-catalog.ts");
     const draft = {
-        productName: "测试商品", platform: "taobao", imageType: "sku", count: 2, language: "zh-CN",
-        imageModel: "test-image", ratio: "1:1", resolution: "1k", style: "commercial", fidelity: "strict",
+        productName: "测试商品",
+        platform: "taobao",
+        imageType: "sku",
+        count: 2,
+        language: "zh-CN",
+        imageModel: "test-image",
+        ratio: "1:1",
+        resolution: "1k",
+        style: "commercial",
+        fidelity: "strict",
         skus: [{ id: "sku-a", name: "米白色", color: "米白色", spec: "标准款", count: 2, resourceId: "own-reference" }],
-        references: [{ role: "primary", resourceId: "product" }, { role: "sku", resourceId: "own-reference" }],
+        references: [
+            { role: "primary", resourceId: "product" },
+            { role: "sku", resourceId: "own-reference" },
+        ],
     };
-    const image = (id, skuId) => ({ id, skuId, imageType: "sku", platform: "taobao", language: "zh-CN", goal: "展示SKU", theme: "统一版式", composition: "居中", mainVisual: "商品", fidelity: "严格", prompt: "商品摄影", imageModel: "test-image", ratio: "1:1", resolution: "1k" });
+    const image = (id, skuId) => ({
+        id,
+        skuId,
+        imageType: "sku",
+        platform: "taobao",
+        language: "zh-CN",
+        goal: "展示SKU",
+        theme: "统一版式",
+        composition: "居中",
+        mainVisual: "商品",
+        fidelity: "严格",
+        prompt: "商品摄影",
+        imageModel: "test-image",
+        ratio: "1:1",
+        resolution: "1k",
+    });
     const plan = { productSummary: "真实商品", confirmedFacts: [], uncertainFacts: [], qualityChecks: [], visualStrategy: "统一品牌视觉", images: [image("one", "sku-a"), image("two", "sku-a")] };
     assert.equal(parsePlannerOutput(JSON.stringify(plan), draft).images.length, 2);
     assert.match(plannerPrompt(draft), /对应 skuId/);
@@ -29,16 +55,48 @@ try {
     assert.throws(() => parsePlannerOutput(JSON.stringify({ ...plan, images: [{ ...image("one", "sku-a"), imageType: "detail" }, image("two", "sku-a")] }), draft), /创作类型不一致/);
     assert.equal(parsePlannerOutput(JSON.stringify({ ...plan, images: [{ ...image("one", "sku-a"), imageType: "商品 SKU 图" }, image("two", "sku-a")] }), draft).images[0].imageType, "sku");
     assert.throws(() => parsePlannerOutput(JSON.stringify({ ...plan, images: [{ ...image("one", "sku-a"), imageType: "主图" }, image("two", "sku-a")] }), draft), /创作类型不一致/);
-    const detailedDraft = { ...draft, imageType: "detail", count: 2, category: "家用香氛", brand: "真实品牌", description: "便携香薰机", claims: "已确认的三档定时", materials: "已确认的 ABS 外壳", colors: "米白色", specifications: "额定电压 5V", packaging: "主机一台", dimensions: "12×8×15cm", audience: "居家用户", scene: "卧室床头", pricePosition: "199元", lockedDetails: "保持按钮与Logo", instruction: "强调实拍风格", references: [{ role: "primary", resourceId: "product-photo", name: "正面图" }, { role: "style", resourceId: "style-photo", name: "风格图" }], skus: [] };
+    const detailedDraft = {
+        ...draft,
+        imageType: "detail",
+        count: 2,
+        category: "家用香氛",
+        brand: "真实品牌",
+        description: "便携香薰机",
+        claims: "已确认的三档定时",
+        materials: "已确认的 ABS 外壳",
+        colors: "米白色",
+        specifications: "额定电压 5V",
+        packaging: "主机一台",
+        dimensions: "12×8×15cm",
+        audience: "居家用户",
+        scene: "卧室床头",
+        pricePosition: "199元",
+        lockedDetails: "保持按钮与Logo",
+        instruction: "强调实拍风格",
+        references: [
+            { role: "primary", resourceId: "product-photo", name: "正面图" },
+            { role: "style", resourceId: "style-photo", name: "风格图" },
+        ],
+        skus: [],
+    };
     const prompt = plannerPrompt(detailedDraft);
     for (const fact of ["便携香薰机", "已确认的三档定时", "米白色", "额定电压 5V", "主机一台", "12×8×15cm", "卧室床头", "保持按钮与Logo", "强调实拍风格", "product-photo", "style-photo"]) assert.ok(prompt.includes(fact), `策划遗漏参数: ${fact}`);
     const input = commercePlanningPayload(detailedDraft, 2);
     assert.equal(input.referenceImages.length, 2);
-    assert.deepEqual(input.referenceImages.map((ref) => ref.id), ["product-photo", "style-photo"]);
-    assert.ok(input.referenceImages.every((ref) => ref.storageKey), "上传图片没有进入模型参考图参数");
+    assert.deepEqual(
+        input.referenceImages.map((ref) => ref.id),
+        ["product-photo", "style-photo"],
+    );
+    assert.ok(
+        input.referenceImages.every((ref) => ref.storageKey),
+        "上传图片没有进入模型参考图参数",
+    );
     assert.match(prompt, /每张都必须写英文枚举值 detail/);
     assert.throws(() => commercePlanningPayload(detailedDraft, 1), /最多读取 1 张/);
-    assert.deepEqual(commerceImageReferences(detailedDraft, plan.images[0], 0, true).map((ref) => ref.resourceId), ["product-photo", "style-photo"]);
+    assert.deepEqual(
+        commerceImageReferences(detailedDraft, plan.images[0], 0, true).map((ref) => ref.resourceId),
+        ["product-photo", "style-photo"],
+    );
     assert.throws(() => commerceImageReferences({ ...detailedDraft, references: detailedDraft.references.filter((ref) => ref.role !== "style") }, plan.images[0], 0, true), /缺少版式模板/);
     for (const [type, settings] of Object.entries(ecommerceTypeConfig)) {
         const typeOptions = Object.fromEntries(creationOptions[type].map((item) => [item.key, item.choices?.[0] || `用户已确认的${item.label}`]));
@@ -66,8 +124,47 @@ try {
         }
     }
     const parsed = parsePlannerOutput(JSON.stringify(plan), draft);
-    assert.throws(() => parsePlannerOutput(JSON.stringify({ ...plan, images: [{ ...image("image-1"), imageType: "detail" }, { ...image("image-2"), imageType: "detail" }] }), { ...detailedDraft, count: 2, references: [detailedDraft.references[0]] }), /同一构图/);
-    for (const key of ["productName", "category", "brand", "description", "claims", "materials", "colors", "specifications", "packaging", "dimensions", "audience", "scene", "pricePosition", "lockedDetails", "platform", "imageType", "language", "agentModel", "imageModel", "ratio", "resolution", "style", "stylePrompt", "fidelity", "instruction"]) {
+    assert.throws(
+        () =>
+            parsePlannerOutput(
+                JSON.stringify({
+                    ...plan,
+                    images: [
+                        { ...image("image-1"), imageType: "detail" },
+                        { ...image("image-2"), imageType: "detail" },
+                    ],
+                }),
+                { ...detailedDraft, count: 2, references: [detailedDraft.references[0]] },
+            ),
+        /同一构图/,
+    );
+    for (const key of [
+        "productName",
+        "category",
+        "brand",
+        "description",
+        "claims",
+        "materials",
+        "colors",
+        "specifications",
+        "packaging",
+        "dimensions",
+        "audience",
+        "scene",
+        "pricePosition",
+        "lockedDetails",
+        "platform",
+        "imageType",
+        "language",
+        "agentModel",
+        "imageModel",
+        "ratio",
+        "resolution",
+        "style",
+        "stylePrompt",
+        "fidelity",
+        "instruction",
+    ]) {
         assert.throws(() => assertCommercePlanCurrent(parsed, { ...draft, [key]: "变更后的参数" }), /已变更/, `${key} 更改后仍可使用旧策划`);
     }
     assert.throws(() => assertCommercePlanCurrent(parsed, { ...draft, references: [{ role: "primary", resourceId: "other-product" }] }), /已变更/);
@@ -91,7 +188,10 @@ try {
     assertCommercePlanCurrent(reviewed, draft);
     const multipleSkus = { ...draft, skus: [...draft.skus, { ...draft.skus[0], id: "sku-b", resourceId: "sku-b-photo" }], references: [...draft.references, { role: "sku", resourceId: "sku-b-photo" }] };
     assert.equal(commerceRequiredImageReferenceCount(multipleSkus), 2);
-    assert.deepEqual(commerceImageReferences(multipleSkus, { ...plan.images[0], skuId: "sku-b" }, 0, false).map((ref) => ref.resourceId), ["product", "sku-b-photo"]);
+    assert.deepEqual(
+        commerceImageReferences(multipleSkus, { ...plan.images[0], skuId: "sku-b" }, 0, false).map((ref) => ref.resourceId),
+        ["product", "sku-b-photo"],
+    );
     assert.throws(() => assertCommerceClaimsGrounded({ ...parsed, images: [{ ...parsed.images[0], prompt: "Dark brown leather strap" }] }, draft), /皮革材质/);
     assert.throws(() => assertCommerceClaimsGrounded({ ...parsed, images: [{ ...parsed.images[0], prompt: "synthetic ruby bearings" }] }, draft), /红宝石材质/);
     assertCommerceClaimsGrounded({ ...parsed, images: [{ ...parsed.images[0], prompt: "Brown textured strap, visible red accents" }] }, draft);
@@ -117,12 +217,18 @@ try {
     const layout = commerceCopyLayout(richCopy, 1024, 1024, (text, size) => Array.from(text).length * size);
     assert.equal(layout.lines.map((line) => line.text).join(""), richCopy.replace(/\n/g, ""), "丰富文案在导出时被截断");
     assert.ok(layout.lines.length > 3, "排版仍被限制为三行");
-    assert.ok(layout.barHeight <= 1024 * .42);
+    assert.ok(layout.barHeight <= 1024 * 0.42);
     assert.throws(() => commerceCopyLayout("无法容纳的长文案".repeat(300), 1024, 1024, (text, size) => Array.from(text).length * size), /未被截断/);
     const supplemented = { ...detailedDraft, instruction: "最后一张展示尺寸，正面视角；原文案：让细节成为主角。" };
     assert.ok(plannerPrompt(supplemented).includes(supplemented.instruction));
     assert.match(plannerPrompt(supplemented), /主标题、解释文案/);
-    const photography = commerceImagePrompt(supplemented, { ...plan.images[0], copy: "让细节成为主角\n可见外观的真实说明", prompt: "正面摄影，完整保留右侧表冠。后期以文字图层排版，文案逐字使用：让细节成为主角。可见外观的真实说明。", negativePrompt: "禁止尺寸数字", fidelity: "保持商品结构" });
+    const photography = commerceImagePrompt(supplemented, {
+        ...plan.images[0],
+        copy: "让细节成为主角\n可见外观的真实说明",
+        prompt: "正面摄影，完整保留右侧表冠。后期以文字图层排版，文案逐字使用：让细节成为主角。可见外观的真实说明。",
+        negativePrompt: "禁止尺寸数字",
+        fidelity: "保持商品结构",
+    });
     assert.ok(photography.includes("让细节成为主角"), "已审阅文案未提交给图片模型");
     assert.ok(photography.startsWith("正面摄影，完整保留右侧表冠。后期以文字图层排版，文案逐字使用：让细节成为主角。可见外观的真实说明。"), "逐张提示词被静默改写或截断");
     assert.match(photography, /最终成品文字与版式/);
@@ -132,7 +238,24 @@ try {
     assert.equal(primaryOnly.referenceImages[0].id, "product-photo");
     const variedMains = plannerPrompt({ ...supplemented, imageType: "main", count: 5, references: [supplemented.references[0]] });
     for (const direction of ["图1：完整商品", "图2：左前方", "图3：右侧", "图4：局部可见细节", "图5：实际使用场景"]) assert.ok(variedMains.includes(direction), `主图候选缺少视角: ${direction}`);
-    const imageOnly = { ...detailedDraft, productName: "", category: "", description: "", claims: "", materials: "", colors: "", specifications: "", packaging: "", dimensions: "", audience: "", scene: "", references: [detailedDraft.references[0]], imageType: "detail", modelEnabled: true, skillIds: [] };
+    const imageOnly = {
+        ...detailedDraft,
+        productName: "",
+        category: "",
+        description: "",
+        claims: "",
+        materials: "",
+        colors: "",
+        specifications: "",
+        packaging: "",
+        dimensions: "",
+        audience: "",
+        scene: "",
+        references: [detailedDraft.references[0]],
+        imageType: "detail",
+        modelEnabled: true,
+        skillIds: [],
+    };
     assert.equal(commercePlanningPayload(imageOnly, 1).referenceImages.length, 1);
     assert.equal(commercePlanningReferenceCount(imageOnly), 1);
     assert.match(plannerPrompt(imageOnly), /本轮未选 Skills：自行完成商品图观察/);
@@ -141,9 +264,15 @@ try {
     assert.equal(suggestCommerceModel({ ...imageOnly, description: "图中是男士佩戴的头戴式耳机" }).id, "cn-man");
     const withMatchedModel = { ...imageOnly, references: [...imageOnly.references, { role: "model", resourceId: "matched-model", name: "中国男模" }], primaryModelResourceId: "matched-model" };
     const modeledDetail = { ...plan.images[0], imageType: "detail", prompt: "模特佩戴商品，侧面中景", composition: "模特与商品同框", mainVisual: "人物佩戴商品" };
-    assert.deepEqual(commerceImageReferences(withMatchedModel, modeledDetail, 0, false).map((ref) => ref.resourceId), ["product-photo", "matched-model"]);
+    assert.deepEqual(
+        commerceImageReferences(withMatchedModel, modeledDetail, 0, false).map((ref) => ref.resourceId),
+        ["product-photo", "matched-model"],
+    );
     assert.match(commerceImagePrompt(withMatchedModel, modeledDetail, "蓝色头戴耳机"), /保持已选主模特形象/);
-    assert.deepEqual(commerceImageReferences(withMatchedModel, { ...plan.images[0], imageType: "detail" }, 0, false).map((ref) => ref.resourceId), ["product-photo"]);
+    assert.deepEqual(
+        commerceImageReferences(withMatchedModel, { ...plan.images[0], imageType: "detail" }, 0, false).map((ref) => ref.resourceId),
+        ["product-photo"],
+    );
     assert.match(variedMains, /未见过的背面或侧面只能作为合理的视觉探索/);
     assert.match(commerceImagePrompt({ ...supplemented, imageType: "main", count: 5 }, { ...plan.images[0], imageType: "main" }), /不要求复制参考图的拍摄角度/);
     const manual = manuallyEditedCommerceImage({ ...plan.images[0], composition: "旧黑色背景居中", mainVisual: "黑色背景", lighting: "旧暗光" }, { ...plan.images[0], prompt: "新米白背景，右侧构图", copy: "新标题" });
