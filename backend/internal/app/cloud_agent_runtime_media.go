@@ -743,7 +743,7 @@ func (s *Service) resumeCloudAgentAfterApproval(userID, id string, state *cloudA
 	if err := s.saveCloudAgentPiResumePrompt(userID, id, state.PiResumePrompt); err != nil {
 		return err
 	}
-	s.resumeCloudAgentPi(userID, id)
+	s.agentRuntime().Resume(userID, id)
 	return nil
 }
 
@@ -783,7 +783,7 @@ func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error
 	if task.Operation != cloudAgentOperation {
 		return kernel.NotFound("Agent 运行不存在")
 	}
-	s.stopCloudAgentPi(id)
+	s.agentRuntime().Stop(id)
 	run, err := s.repo.CloudAgent(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Legacy root tasks may not have an execution row yet. The normal read

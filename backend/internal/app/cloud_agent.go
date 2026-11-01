@@ -411,7 +411,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		}
 		run, runErr := s.CloudAgentRun(userID, existing.ID)
 		if runErr == nil && !cloudAgentRunTerminal(run.Status) {
-			s.startCloudAgentPi(userID, existing.ID)
+			s.agentRuntime().Start(userID, existing.ID)
 		}
 		return run, runErr
 	} else {
@@ -581,7 +581,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			}
 			run, runErr := s.CloudAgentRun(userID, existing.ID)
 			if runErr == nil && !cloudAgentRunTerminal(run.Status) {
-				s.startCloudAgentPi(userID, existing.ID)
+				s.agentRuntime().Start(userID, existing.ID)
 			}
 			return run, runErr
 		}
@@ -599,7 +599,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if err != nil {
 		return nil, err
 	}
-	s.startCloudAgentPi(userID, task.ID)
+	s.agentRuntime().Start(userID, task.ID)
 	return run, nil
 }
 

@@ -155,5 +155,5 @@ func (s *Service) resumeCloudAgentAfterSupersede(userID, runID, nodeID, taskID s
 		slog.Warn("agent approval supersede resume prompt failed", "run", runID, "error", err)
 		return
 	}
-	s.resumeCloudAgentPi(userID, runID)
+	s.agentRuntime().Resume(userID, runID)
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"yingce/backend/internal/agent/session"
 	"yingce/backend/internal/auth"
 	"yingce/backend/internal/canvas"
 	"yingce/backend/internal/kernel"
@@ -115,6 +116,9 @@ type Service struct {
 	// dramaTaskHook 只在测试中替换短剧调度的任务提交，生产路径始终走 CreateTask 准入。
 	dramaTailFrameHook func(userID, resourceID string) (string, error)
 	dramaTaskHook      func(userID string, req CreateTaskRequest, timeline *renderProject) (*model.Task, error)
+	// agentRuntimeOverride 只在测试中替换云端 Agent 会话运行时控制面（seam），
+	// 生产路径始终走 piPushRuntime；nil 时 agentRuntime() 使用默认实现。
+	agentRuntimeOverride session.Runtime
 }
 
 const taskWorkerConcurrency = 3
@@ -206,7 +210,7 @@ func (s *Service) StartWorker() {
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 		for {
-			s.recoverCloudAgentPiRunners()
+			s.agentRuntime().Recover()
 			select {
 			case <-ctx.Done():
 				return
@@ -224,7 +228,7 @@ func (s *Service) syncAgentSessionLimit() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := s.applyAgentSessionLimit(ctx, policy.Task.AgentMaxSessions); err != nil {
+	if err := s.agentRuntime().SetSessionLimit(ctx, policy.Task.AgentMaxSessions); err != nil {
 		slog.Warn("agent session limit apply failed", "error", err)
 	}
 }

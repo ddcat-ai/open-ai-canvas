@@ -155,7 +155,7 @@ func (s *Service) Close() error {
 	if s == nil {
 		return nil
 	}
-	s.closeCloudAgentPiRunners()
+	s.agentRuntime().Close()
 	s.closeApprovedCloudAgentMediaWaiters()
 	if s.coordinator == nil {
 		return nil
