@@ -545,7 +545,17 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					return mutationErr
 				}
 			}
-			state.Approval = &cloudAgentApproval{ID: fmt.Sprintf("%s-%d-%d", run.ID, state.Step, state.CallIndex), Call: call, CallHash: cloudAgentApprovalCallHash(call), Preview: preview, ModelName: modelName, Prepared: preparedMedia}
+			canvasBeforeJSON := ""
+			if call.Function.Name == agenttool.CanvasApplyOps {
+				canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
+				if err != nil {
+					return err
+				}
+				if len(canvas.PayloadJSON) <= cloudAgentMutationSnapshotLimit {
+					canvasBeforeJSON = canvas.PayloadJSON
+				}
+			}
+			state.Approval = &cloudAgentApproval{ID: fmt.Sprintf("%s-%d-%d", run.ID, state.Step, state.CallIndex), Call: call, CallHash: cloudAgentApprovalCallHash(call), Preview: preview, ModelName: modelName, Prepared: preparedMedia, CanvasBeforeJSON: canvasBeforeJSON}
 			if preparedMedia != nil {
 				if err := pinCloudAgentPreparedMedia(repo, run.UserID, run.ID, state.Approval.ID, preparedMedia); err != nil {
 					return err
@@ -623,7 +633,11 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 				toolErr = BadAuthRequest("工具未获本轮权限授权")
 			}
 		case binding.Handler.Write != nil:
-			result, toolErr = binding.Handler.Write(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+			// 批准和执行是不同事务；写入前再次保护审批之后的用户编辑。
+			toolErr = validateCloudAgentCanvasApproval(repo, run.UserID, state.Request.CanvasID, state.Approval)
+			if toolErr == nil {
+				result, toolErr = binding.Handler.Write(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+			}
 		case binding.Handler.Pipeline == cloudAgentToolVision:
 			result, toolErr = inspectionResult, inspectionErr
 			if toolErr == nil && inspectionResult != nil {
