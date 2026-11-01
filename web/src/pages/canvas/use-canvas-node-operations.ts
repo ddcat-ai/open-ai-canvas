@@ -387,11 +387,18 @@ export function useCanvasNodeOperations({
         }
         const sources = isFrameNode(source) ? [source, ...getFrameChildren(source.id, nodesRef.current)] : copyImageLayerSources(source, nodesRef.current);
         const idMap = new Map(sources.map((node, index) => [node.id, `${node.type}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`]));
-        const versionRootId = duplicateMode === "variant" && !isFrameNode(source) ? source.metadata?.versionOfNodeId || source.id : undefined;
+        const independentVideoVariant = duplicateMode === "variant" && source.type === CanvasNodeType.Video;
+        const sourceParent = source.parentId ? nodesRef.current.find((node) => node.id === source.parentId) : undefined;
+        const detachIndependentVideoParent = independentVideoVariant && Boolean(source.metadata?.dramaRef || sourceParent?.metadata?.dramaRef);
+        const versionRootId = duplicateMode === "variant" && !isFrameNode(source) && !independentVideoVariant ? source.metadata?.versionOfNodeId || source.id : undefined;
         const versionLabel = versionRootId ? nextCanvasVersionLabel(versionRootId, nodesRef.current) : undefined;
         const copyTitle = duplicateMode !== "variant" ? nextCopiedNodeTitle(source.title, nodesRef.current.map((node) => node.title)) : undefined;
         const copiedNodes = sources.map((node) => {
-            const metadata = isolateCopiedNodeMetadata(node, idMap);
+            const metadata = isolateCopiedNodeMetadata(node, idMap, {
+                clearMediaResult: independentVideoVariant && node.type === CanvasNodeType.Video,
+                preserveExternalReferences: independentVideoVariant && node.type === CanvasNodeType.Video,
+                clearDramaBinding: independentVideoVariant && node.type === CanvasNodeType.Video,
+            });
             if (node.type === CanvasNodeType.Drawing) {
                 metadata.drawingId = `${idMap.get(node.id)}-document`;
                 metadata.drawingRevision = 0;
@@ -409,7 +416,7 @@ export function useCanvasNodeOperations({
                 id: idMap.get(node.id)!,
                 title: node.id === source.id ? copyTitle || `${node.title.replace(/ · [A-Z]$/, "")} · ${versionLabel || "副本"}` : node.title,
                 position: { x: node.position.x + 36, y: node.position.y + 36 },
-                parentId: node.parentId ? idMap.get(node.parentId) || node.parentId : undefined,
+                parentId: node.id === source.id && detachIndependentVideoParent ? undefined : node.parentId ? idMap.get(node.parentId) || node.parentId : undefined,
                 metadata,
             };
         });
