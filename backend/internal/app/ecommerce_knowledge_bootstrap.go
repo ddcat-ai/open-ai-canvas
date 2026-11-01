@@ -45,6 +45,7 @@ var ecommerceBuiltinSourceSpecs = []ecommerceBuiltinSourceSpec{
 	{"KB15", "可调用技能方法", "builtin://meiyeai/kb15-managed-skills"},
 	{"KB16", "图像执行策略", "builtin://meiyeai/kb16-managed-skills"},
 	{"KB17", "生成结果验收", "builtin://meiyeai/kb17-managed-skills"},
+	{"KB19", "行业与子品类创作路由", "builtin://meiyeai/kb19-industry-methods"},
 }
 
 func ecommerceBuiltinSourceID(domain string) string {
@@ -60,6 +61,7 @@ func ecommerceBuiltinKnowledgeEntries() []model.EcommerceKnowledgeEntry {
 		kb07ModelSceneKnowledge(), kb08PlatformRulesKnowledge(), kb09DesignTrendsKnowledge(), kb10QualityControlKnowledge(),
 		ecommerceProductDesignKnowledge(),
 		ecommerceManagedSkillKnowledge(),
+		industryBranchKnowledge(),
 	}
 	entries := make([]model.EcommerceKnowledgeEntry, 0, 112)
 	for _, group := range groups {

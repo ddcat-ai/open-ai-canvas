@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"yingce/backend/internal/ecommercecatalog"
 	"yingce/backend/internal/model"
 )
 
@@ -118,6 +119,9 @@ type ecommerceDirectionSeed struct {
 }
 
 func ecommerceProductCategory(req EcommerceCreativeDirectionsRequest) string {
+	if match := ecommercecatalog.ResolveProduct(req.Category, req.ProductName); match.Node.ID != "na" && match.Node.ID != "" {
+		return match.Group
+	}
 	groups := []struct {
 		name  string
 		words []string

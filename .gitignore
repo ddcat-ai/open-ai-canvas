@@ -36,6 +36,9 @@ docs/content/docs/overview/*
 .env*
 !.env.example
 data/
+# Versioned commerce classification dictionary, not runtime application data.
+!/backend/internal/ecommercecatalog/data/
+!/backend/internal/ecommercecatalog/data/*
 .local/
 /.local/docker-compose.postgres.yml
 coverage/

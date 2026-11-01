@@ -16,6 +16,8 @@ export const commerceKnowledgeDomains = [
     { id: "KB15", label: "可调用技能方法" },
     { id: "KB16", label: "图像执行策略" },
     { id: "KB17", label: "生成结果验收" },
+    { id: "KB18", label: "全行业分类字典" },
+    { id: "KB19", label: "行业与子品类路由" },
 ] as const;
 
 export function commerceKnowledgeDomainRows(coverage?: Record<string, number>) {

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+	"yingce/backend/internal/ecommercecatalog"
 )
 
 //go:embed catalog.json packages/*/SKILL.md licenses/*.txt
@@ -28,6 +30,7 @@ type ManagedSkill struct {
 	Origin       string   `json:"origin"`
 	Types        []string `json:"types"`
 	Categories   []string `json:"categories"`
+	RootIDs      []string `json:"rootIds"`
 	Platforms    []string `json:"platforms"`
 	Modes        []string `json:"modes"`
 	Terms        []string `json:"terms"`
@@ -44,7 +47,15 @@ type ManagedSkill struct {
 	Instructions string   `json:"instructions"`
 }
 
+var managedOnce sync.Once
+var managedCatalog []ManagedSkill
+
 func ManagedCatalog() []ManagedSkill {
+	managedOnce.Do(func() { managedCatalog = loadManagedCatalog() })
+	return append([]ManagedSkill(nil), managedCatalog...)
+}
+
+func loadManagedCatalog() []ManagedSkill {
 	raw, err := managedFiles.ReadFile("catalog.json")
 	if err != nil {
 		panic(err)
@@ -53,7 +64,29 @@ func ManagedCatalog() []ManagedSkill {
 	if err := json.Unmarshal(raw, &result); err != nil {
 		panic(err)
 	}
+	for _, book := range ecommercecatalog.RootPlaybooks {
+		node, _ := ecommercecatalog.Lookup(book.ID)
+		result = append(result, ManagedSkill{ID: "ecom-industry-" + book.ID, Name: node.Name + "行业方案", Description: "按完整分类路径为本行业及其子品类选择场景、信息结构和字体", Group: "行业方案", Domain: "KB19", Version: "1.0.0", SourceURL: "builtin://meiyeai/industry-methods/" + book.ID, SourceCommit: "meiye-industry-methods-v1-20261101", SourcePath: "SKILL.md", License: "MeiYeAI Original", Origin: "first-party", RootIDs: []string{book.ID}, PureProduct: true, Priority: 25, Method: "先定位本轮具体子品类，优先采用最近上级的专属方法。行业场景候选：" + book.Scene + "；观察重点：" + book.Focus + "；叙事候选：" + book.Story, ImageRule: "围绕当前子品类和本商品证据选用场景、动作与真实部件；信息结构参考：" + book.Layout + "；字体参考：" + book.Typography + "。已选风格、无字与无人物设置优先，不把父类的功能或部件推断成本商品事实。", Review: "核对分类、子品类、参考素材职责、真实部件、已知规格与行业使用关系；继承方法不代表当前叶级品类已经独立质检。"})
+	}
 	for i := range result {
+		if result[i].Types == nil {
+			result[i].Types = []string{}
+		}
+		if result[i].Terms == nil {
+			result[i].Terms = []string{}
+		}
+		if result[i].Categories == nil {
+			result[i].Categories = []string{}
+		}
+		if result[i].Platforms == nil {
+			result[i].Platforms = []string{}
+		}
+		if result[i].Modes == nil {
+			result[i].Modes = []string{}
+		}
+		if result[i].RootIDs == nil {
+			result[i].RootIDs = []string{}
+		}
 		body, err := managedFiles.ReadFile("packages/" + result[i].ID + "/SKILL.md")
 		if err != nil {
 			panic(err)
@@ -66,6 +99,7 @@ func ManagedCatalog() []ManagedSkill {
 
 type ManagedInput struct {
 	Category, Text, ImageType, Platform, ReferenceMode, Style string
+	RootID                                                    string
 	ReferenceRoles                                            []string
 	PeopleAllowed, NoText, HasSpecs                           bool
 }
@@ -115,6 +149,9 @@ func SelectManaged(input ManagedInput, enabled map[string]bool) ([]ManagedInvoca
 		if len(skill.Categories) > 0 && !includes(skill.Categories, input.Category) {
 			continue
 		}
+		if len(skill.RootIDs) > 0 && !includes(skill.RootIDs, input.RootID) {
+			continue
+		}
 		if len(skill.Platforms) > 0 && !includes(skill.Platforms, input.Platform) {
 			continue
 		}
@@ -143,6 +180,10 @@ func SelectManaged(input ManagedInput, enabled map[string]bool) ([]ManagedInvoca
 		if len(skill.Categories) > 0 {
 			score += 24
 			reasons = append(reasons, "商品品类匹配")
+		}
+		if len(skill.RootIDs) > 0 {
+			score += 24
+			reasons = append(reasons, "行业与子品类路径匹配")
 		}
 		if len(skill.Platforms) > 0 {
 			score += 24

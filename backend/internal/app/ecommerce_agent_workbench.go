@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"yingce/backend/internal/ecommerceagent"
+	"yingce/backend/internal/ecommercecatalog"
 	"yingce/backend/internal/model"
 )
 
@@ -519,6 +520,7 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 		}
 		prompt += "\n" + managed
 		metadata["ecommerceManagedSkills"] = calls
+		metadata["ecommerceTaxonomy"] = ecommercecatalog.ResolveProduct(category, draft.ProductName)
 		input["prompt"] = prompt
 		return prompt, nil
 	}
@@ -650,6 +652,7 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 		}
 		prompt += "\n" + managed
 		metadata["ecommerceManagedSkills"] = calls
+		metadata["ecommerceTaxonomy"] = ecommercecatalog.ResolveProduct(knowledgeRequest.Category, draft.ProductName)
 		metadata["ecommerceDraft"] = draft
 		metadata["ecommerceKnowledgeVersion"] = ecommerceagent.CreativeKnowledgeVersion
 	}

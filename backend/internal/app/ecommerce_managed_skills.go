@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"yingce/backend/internal/ecommercecatalog"
 	"yingce/backend/internal/ecommerceskills"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -117,8 +118,13 @@ func (s *Service) ecommerceManagedSkillBlock(draft EcommerceDraft, strategy map[
 		roles = append(roles, "layout")
 	}
 	noText := draft.NoText || draft.ImageType == "white" || draft.ImageType == "three-view" || (draft.CreativeOptions != nil && draft.CreativeOptions.TextMode == "none")
-	calls, block := ecommerceskills.SelectManaged(ecommerceskills.ManagedInput{Category: ecommerceProductCategory(query), Text: text, ImageType: draft.ImageType, Platform: draft.Platform, ReferenceMode: draft.ReferenceMode, ReferenceRoles: roles, Style: style, PeopleAllowed: ecommercePeopleAllowed(draft), NoText: noText, HasSpecs: strings.TrimSpace(draft.Specifications+draft.Dimensions) != ""}, policy)
-	return block, calls, nil
+	match := ecommercecatalog.ResolveProduct(category, draft.ProductName)
+	calls, block := ecommerceskills.SelectManaged(ecommerceskills.ManagedInput{RootID: match.Node.RootID, Category: ecommerceProductCategory(query), Text: text, ImageType: draft.ImageType, Platform: draft.Platform, ReferenceMode: draft.ReferenceMode, ReferenceRoles: roles, Style: style, PeopleAllowed: ecommercePeopleAllowed(draft), NoText: noText, HasSpecs: strings.TrimSpace(draft.Specifications+draft.Dimensions) != ""}, policy)
+	context := ecommercecatalog.Context(match)
+	if enabled, ok := policy["ecom-industry-"+match.Node.RootID]; ok && !enabled {
+		context = ecommercecatalog.RoutingContext(match)
+	}
+	return context + block, calls, nil
 }
 
 func ecommerceManagedImageRules(metadata map[string]any) string {

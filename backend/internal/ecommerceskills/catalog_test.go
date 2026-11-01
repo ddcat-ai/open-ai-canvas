@@ -69,7 +69,31 @@ func TestManagedCatalogHasCompleteVersionedPackages(t *testing.T) {
 			}
 		}
 	}
-	if len(seen) != 35 || github != 23 {
+	if len(seen) != 61 || github != 23 {
 		t.Fatalf("installed=%d github=%d", len(seen), github)
+	}
+}
+
+func TestManagedIndustryRoutesCoverEveryRootAndRespectSwitch(t *testing.T) {
+	for _, skill := range ManagedCatalog() {
+		if len(skill.RootIDs) == 0 {
+			continue
+		}
+		for _, kind := range []string{"detail", "white"} {
+			input := ManagedInput{RootID: skill.RootIDs[0], ImageType: kind, Platform: "general", PeopleAllowed: true}
+			calls, _ := SelectManaged(input, nil)
+			if !hasManaged(calls, skill.ID) {
+				t.Errorf("industry method missing: %s %s", skill.ID, kind)
+			}
+			for _, call := range calls {
+				if strings.HasPrefix(call.ID, "ecom-industry-") && call.ID != skill.ID {
+					t.Errorf("cross-industry method selected: %s", call.ID)
+				}
+			}
+			calls, _ = SelectManaged(input, map[string]bool{skill.ID: false})
+			if hasManaged(calls, skill.ID) {
+				t.Error("disabled industry method selected", skill.ID)
+			}
+		}
 	}
 }

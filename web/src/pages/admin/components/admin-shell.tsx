@@ -121,6 +121,7 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/resources", label: "存储资源", shortLabel: "资源", icon: <Database className="size-4" /> },
             { path: "/admin/ecommerce-knowledge", label: "电商知识库", shortLabel: "电商", icon: <Database className="size-4" /> },
             { path: "/admin/ecommerce-skills", label: "电商 Skills", shortLabel: "Skills", icon: <Sparkles className="size-4" /> },
+            { path: "/admin/ecommerce-categories", label: "行业与子品类", shortLabel: "品类", icon: <Database className="size-4" /> },
         ],
     },
     {

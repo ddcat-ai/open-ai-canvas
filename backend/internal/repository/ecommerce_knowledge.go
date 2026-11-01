@@ -50,6 +50,15 @@ func (r *Repository) EcommerceKnowledgeEntries() ([]model.EcommerceKnowledgeEntr
 	return entries, err
 }
 
+func (r *Repository) EcommerceKnowledgeByIDs(ids []string) ([]model.EcommerceKnowledgeEntry, error) {
+	var result []model.EcommerceKnowledgeEntry
+	if len(ids) == 0 {
+		return result, nil
+	}
+	err := r.db.Where("id IN ? AND review_status = ? AND (valid_until IS NULL OR valid_until > ?)", ids, "approved", time.Now().UTC()).Find(&result).Error
+	return result, err
+}
+
 func (r *Repository) SearchEcommerceKnowledgeEntries(category, query string) ([]model.EcommerceKnowledgeEntry, error) {
 	var entries []model.EcommerceKnowledgeEntry
 	now := time.Now().UTC()

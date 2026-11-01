@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"yingce/backend/internal/ecommercecatalog"
 	"yingce/backend/internal/ecommerceskills"
 	"yingce/backend/internal/model"
 )
@@ -43,6 +44,16 @@ func ecommerceKnowledgeSkillEnabled(entry model.EcommerceKnowledgeEntry, policy 
 	for _, skill := range ecommerceskills.ManagedCatalog() {
 		if skill.ID != data.SkillID {
 			continue
+		}
+		if len(skill.RootIDs) > 0 {
+			root := ecommercecatalog.ResolveProduct(req.Category, req.ProductName).Node.RootID
+			matched := false
+			for _, id := range skill.RootIDs {
+				matched = matched || id == root
+			}
+			if !matched {
+				return false
+			}
 		}
 		has := func(values []string, value string) bool {
 			for _, v := range values {

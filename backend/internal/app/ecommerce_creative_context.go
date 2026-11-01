@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"yingce/backend/internal/ecommerceagent"
+	"yingce/backend/internal/ecommercecatalog"
 	"yingce/backend/internal/model"
 )
 
@@ -16,7 +17,7 @@ func ecommerceDraftKnowledgeRequest(draft EcommerceDraft) EcommerceCreativeDirec
 
 // Search only reviewed, unexpired entries from enabled sources. Built-in methods
 // remain available without importing arbitrary content or inventing product facts.
-const ecommerceKnowledgeSelectionLimit = 23
+const ecommerceKnowledgeSelectionLimit = 24
 
 type ecommerceKnowledgeRetrieval struct {
 	Category string
@@ -45,6 +46,16 @@ func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequ
 	if err != nil {
 		return nil, fmt.Errorf("知识检索失败：%w", err)
 	}
+	match := ecommercecatalog.ResolveProduct(req.Category, req.ProductName)
+	var specificIDs []string
+	for _, node := range ecommercecatalog.Lineage(match.Node.ID) {
+		specificIDs = append(specificIDs, "industry-taxonomy-"+node.ID, "kb19-industry-"+node.ID)
+	}
+	specific, err := s.repo.EcommerceKnowledgeByIDs(specificIDs)
+	if err != nil {
+		return nil, err
+	}
+	entries = append(entries, specific...)
 	sources, err := s.repo.EcommerceKnowledgeSources()
 	if err != nil {
 		return nil, fmt.Errorf("知识来源查询失败：%w", err)
@@ -55,7 +66,7 @@ func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequ
 		anyAvailable = anyAvailable || available[source.ID]
 	}
 	applicable := func(entry model.EcommerceKnowledgeEntry) bool {
-		return ecommerceKnowledgeSkillEnabled(entry, skillPolicy, req) && (entry.Category == "general" || entry.Category == category) && jsonArrayContains(entry.PlatformsJSON, platform) && jsonArrayContains(entry.LanguagesJSON, req.Language) && jsonArrayContains(entry.RegionsJSON, req.Region)
+		return ecommerceKnowledgeSkillEnabled(entry, skillPolicy, req) && (entry.Category == "general" || entry.Category == category || entry.KnowledgeType == "category_taxonomy" || entry.KnowledgeType == "industry_method") && jsonArrayContains(entry.PlatformsJSON, platform) && jsonArrayContains(entry.LanguagesJSON, req.Language) && jsonArrayContains(entry.RegionsJSON, req.Region)
 	}
 	matched := []model.EcommerceKnowledgeEntry{}
 	for _, entry := range entries {
@@ -74,6 +85,9 @@ func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequ
 	scores := make(map[string]int, len(matched))
 	for _, entry := range matched {
 		scores[entry.ID] = commerceRelevance(entry, category, lowered)
+		if entry.ID == "industry-taxonomy-"+match.Node.ID {
+			scores[entry.ID] += 100
+		}
 	}
 	sort.SliceStable(matched, func(i, j int) bool { return scores[matched[i].ID] > scores[matched[j].ID] })
 	result.Selected = selectEcommerceKnowledge(matched, ecommerceKnowledgeSelectionLimit)
@@ -129,6 +143,16 @@ func (s *Service) ecommerceCreativeContext(req EcommerceCreativeDirectionsReques
 	kind := ecommerceKnowledgeContentType(req)
 	builtin := ecommerceagent.ProductCreativeKnowledge(product, kind)
 	builtin += "\n" + ecommerceagent.MarketingKnowledge(product)
+	industryMatch := ecommercecatalog.ResolveProduct(req.Category, req.ProductName)
+	policy, err := s.ecommerceManagedSkillPolicy()
+	if err != nil {
+		return "", nil, err
+	}
+	if enabled, ok := policy["ecom-industry-"+industryMatch.Node.RootID]; ok && !enabled {
+		builtin += "\n" + ecommercecatalog.RoutingContext(industryMatch)
+	} else {
+		builtin += "\n" + ecommercecatalog.Context(industryMatch)
+	}
 	if category == "general" {
 		// Image-only briefs have no text category yet. Supply the category index to
 		// the same vision task; after observation planning retrieves the exact category.

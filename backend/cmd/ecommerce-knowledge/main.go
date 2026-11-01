@@ -67,6 +67,13 @@ func main() {
 		if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"bootstrap": report}); err != nil {
 			log.Fatal(err)
 		}
+		industry, err := svc.EnsureIndustryTaxonomyKnowledge()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"industryTaxonomy": industry}); err != nil {
+			log.Fatal(err)
+		}
 	}
 	if *sync {
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)

@@ -32,6 +32,20 @@ tags:
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
 paths:
+  /admin/ecommerce/categories:
+    get:
+      tags: [admin]
+      summary: 按中英文路径浏览或搜索行业、品类和子品类及其有效创作方法
+      parameters:
+        - {in: query, name: parentId, schema: {type: string}, description: 留空浏览一级行业}
+        - {in: query, name: q, schema: {type: string, maxLength: 128}}
+        - {in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        "200": {description: data 含 nodes、lineage、total、page、limit 和 coverage；每个节点提供 methodScope、methodAncestorId 和有效 playbook，coverage 分别统计完整分类目录与方法覆盖}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/ecommerce/skills:
     get:
       tags: [admin]

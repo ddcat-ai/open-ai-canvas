@@ -36,7 +36,7 @@ func TestEcommerceManagedSkillsHTTPRequiresAdministratorAndPersistsSwitch(t *tes
 	if err := json.Unmarshal(githubSkillHTTPRequest(t, router, http.MethodGet, endpoint, "", true, http.StatusOK), &page); err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Data.Skills) != 35 {
+	if len(page.Data.Skills) != 61 {
 		t.Fatal("installed skill catalog missing")
 	}
 	githubSkillHTTPRequest(t, router, http.MethodPatch, endpoint+"/ecom-copywriting", `{}`, true, http.StatusBadRequest)

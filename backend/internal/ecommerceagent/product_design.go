@@ -1,6 +1,9 @@
 package ecommerceagent
 
-import "strings"
+import (
+	"strings"
+	"yingce/backend/internal/ecommercecatalog"
+)
 
 func init() { StyleLibrary = append(StyleLibrary, productStylePresets()...) }
 
@@ -24,6 +27,24 @@ var ProductDesignProfiles = []ProductDesignProfile{
 }
 
 func ProductDesignFor(category string) ProductDesignProfile {
+	match := ecommercecatalog.Resolve(category)
+	if match.Node.ID != "na" && match.Node.ID != "" {
+		var profile ProductDesignProfile
+		for _, p := range append(append([]ProductDesignProfile{}, ProductDesignProfiles...), industryDesignProfiles()...) {
+			if p.Key == match.Playbook.DesignKey {
+				profile = p
+				break
+			}
+		}
+		if profile.Key != "" {
+			profile.Subject = match.Node.Name
+			profile.Category = match.Group
+			profile.Scene = match.Playbook.Scene + "；围绕当前子品类「" + match.Node.Name + "」选用真实环境"
+			profile.Details = match.Playbook.Focus
+			profile.Story = match.Playbook.Story
+			return profile
+		}
+	}
 	category = strings.ToLower(category)
 	for _, profile := range ProductDesignProfiles {
 		for _, term := range profile.Terms {
@@ -40,7 +61,7 @@ func productStylePresets() []StylePreset {
 	types := []string{"思源黑体 Heavy 大标题 + 思源黑体 Regular 正文，数字用等宽体", "思源宋体 SemiBold 标题 + 思源黑体 Regular 正文", "窄体粗黑标题 + 常规黑体说明，数字对齐", "复古宋体 Bold 标题 + 黑体正文", "斜体粗黑短标题 + 中黑说明", "思源宋体 Light 标题 + 思源黑体 Medium 正文"}
 	layouts := []string{"全幅主视觉与左上大标题，底部短标签", "非对称三七分栏，标题在留白区", "严谨网格与侧栏信息，局部窗口错落", "编辑跨页，大小图交替与纵向导语", "斜切分区与编号步骤，产品不遮挡文字", "大留白居中与细节小窗，短句分层"}
 	graphics := []string{"锐角色签与细引线", "细线图标和页码", "方角信息条与编号放大窗", "纸本边框与编辑侧注", "箭头与场景短标签", "细线圆窗与短刻度；刻度只作图形，不暗示测量结果"}
-	for _, p := range ProductDesignProfiles {
+	for _, p := range append(append([]ProductDesignProfile{}, ProductDesignProfiles...), industryDesignProfiles()...) {
 		for i, name := range p.Names {
 			presets = append(presets, stylePreset(p.Key+"-"+[]string{"hero", "daylight", "grid", "editorial", "action", "object"}[i], "品类专属", name, p.Subject+"专属美术："+p.Scene+"；"+layouts[i], "围绕"+p.Subject+"的实际购买问题安排画面", "lifestyle", []string{name}, p.Palette, types[i], layouts[i], graphics[i], p.Scene+"；道具："+p.Props, []string{"暗场侧逆光，准确还原商品本色", "侧窗柔光与自然接触阴影", "冷白柔光，表面反射受控", "暖日光，适量胶片颗粒", "自然日光，凝固合理动作", "大柔光箱与窄条轮廓光"}[i], p.Story))
 		}
@@ -54,7 +75,7 @@ func ProductStyleLibrary(category string) []StylePreset {
 	var result []StylePreset
 	for _, preset := range StyleLibrary {
 		if strings.HasPrefix(preset.Key, p.Key+"-") {
-			result = append(result, preset)
+			result = append(result, AdaptStylePreset(preset, category))
 		}
 	}
 	preferences := map[string][]string{
@@ -95,10 +116,11 @@ func ProductStyleLibrary(category string) []StylePreset {
 
 func AdaptStylePreset(preset StylePreset, category string) StylePreset {
 	p := ProductDesignFor(category)
-	if preset.Group == "品类专属" {
-		return preset
+	subject := []rune(p.Subject)
+	if len(subject) > 10 {
+		subject = subject[:10]
 	}
-	preset.Label = p.Subject + "·" + preset.Label
+	preset.Label = string(subject) + "·" + preset.Label
 	preset.Style = p.Subject + "专属场景：" + p.Scene + "；美术语言：" + preset.Visual.Layout
 	preset.Why = "面向" + p.Subject + "买家的使用和选购需求"
 	preset.Visual.Scene, preset.Visual.Props, preset.Visual.Narrative = p.Scene, p.Props, p.Story

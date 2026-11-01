@@ -110,6 +110,18 @@ func run(ctx context.Context) error {
 	if err := ensureBuiltinWorkbenchCatalog(svc); err != nil {
 		return err
 	}
+	// Shipped KB01-KB10 knowledge is idempotent and transactional. A failure
+	// leaves the previous rows intact and must not block serving traffic.
+	if report, err := svc.EnsureBuiltinEcommerceKnowledge(); err != nil {
+		slog.Warn("builtin ecommerce knowledge bootstrap failed", "error", err)
+	} else {
+		slog.Info("builtin ecommerce knowledge ready", "shipped", report.Shipped, "inserted", len(report.Inserted), "updated", len(report.Updated), "unchanged", report.Unchanged, "preservedLocal", len(report.PreservedLocal))
+	}
+	if report, err := svc.EnsureIndustryTaxonomyKnowledge(); err != nil {
+		slog.Warn("industry taxonomy bootstrap failed", "error", err)
+	} else {
+		slog.Info("industry taxonomy ready", "shipped", report.Shipped, "inserted", report.Inserted, "installed", report.AlreadyInstalled)
+	}
 	if summary, err := svc.MigrateLegacyStorage(); err != nil {
 		slog.Warn("storage migration skipped after error", "error", err)
 	} else if summary.Backup != "" {

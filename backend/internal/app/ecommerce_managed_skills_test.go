@@ -22,7 +22,7 @@ func TestEcommerceManagedSkillSwitchPersistsAndControlsPromptAndKnowledge(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 35 {
+	if len(items) != 61 {
 		t.Fatal(len(items))
 	}
 	for _, item := range items {

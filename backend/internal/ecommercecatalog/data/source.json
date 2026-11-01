@@ -1,0 +1,12 @@
+{
+  "version": "2026-10",
+  "commit": "2ea72664167d1aeccbf32104af81c4aad081a40a",
+  "url": "https://github.com/Shopify/product-taxonomy/releases/tag/v2026-10",
+  "license": "MIT",
+  "nodes": 64292,
+  "roots": 26,
+  "leaves": 50427,
+  "level2": 220,
+  "sha256En": "11cbcd058013ab8a52c85598967bdf5226ef9e11e98bdc48a849562b7121924c",
+  "sha256Zh": "fd5fbb5e7ae44a39380fd367020167ecd63db52011c3d4e504d918ab3b39935b"
+}
