@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -144,5 +146,54 @@ func TestLeaseTimeColumnsAreUTC(t *testing.T) {
 	}
 	if !strings.Contains(text, "+00:00") && !strings.HasSuffix(strings.TrimSpace(text), "Z") {
 		t.Fatalf("lease timestamps must be stored in UTC form, got %q", text)
+	}
+}
+
+func TestAgentBridgeGrantLifecycle(t *testing.T) {
+	t.Setenv("CANVAS_AGENT_INTERNAL_TOKEN", strings.Repeat("t", 32))
+	t.Setenv("CANVAS_AGENT_WORKER_ID", "w")
+	t.Setenv("CANVAS_AGENT_WORKER_TOKEN", strings.Repeat("w", 32))
+	svc, db := newAgentWorkerTestService(t)
+	if err := svc.SeedAgentWorker(); err != nil {
+		t.Fatal(err)
+	}
+	seedLeasedRun(t, db, svc)
+	token, err := svc.IssueAgentRunGrant("w", "w:0", "user-a", "run-x", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, ok := svc.ValidateAgentBridgeGrant(token)
+	if !ok || claims.RunID != "run-x" || claims.Epoch != 1 || claims.Owner != "w:0" {
+		t.Fatalf("bridge grant claims wrong: %+v ok=%v", claims, ok)
+	}
+	// 吊销即时生效。
+	if err := svc.repo.RevokeAgentWorker("w"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := svc.ValidateAgentBridgeGrant(token); ok {
+		t.Fatal("revoked worker must lose bridge access")
+	}
+	if _, ok := svc.ValidateAgentBridgeGrant("run.mangled.mangled"); ok {
+		t.Fatal("mangled tokens must fail")
+	}
+}
+
+func TestPiAgentBridgeCallEnforcesLease(t *testing.T) {
+	t.Setenv("CANVAS_AGENT_INTERNAL_TOKEN", strings.Repeat("t", 32))
+	svc, db := newAgentWorkerTestService(t)
+	seedLeasedRun(t, db, svc)
+	// 错槽位拒绝。
+	if _, err := svc.PiAgentBridgeCall(context.Background(), "user-a", "run-x", "other:0@1", "tool", map[string]json.RawMessage{}); err == nil {
+		t.Fatal("foreign worker must not pass the lease gate")
+	}
+	// 正确槽位：调用把租约展宽到窗口（10 分钟），并转发到执行器（此处执行器
+	// 因 state 缺失而失败，但展宽已经落库）。
+	_, _ = svc.PiAgentBridgeCall(context.Background(), "user-a", "run-x", claimOwner("w:0", 1), "tool", map[string]json.RawMessage{})
+	var row model.CloudAgentExecution
+	if err := db.Where("id = ?", "run-x").First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.LeaseExpiresAt == nil || !row.LeaseExpiresAt.After(time.Now().UTC().Add(9*time.Minute)) {
+		t.Fatalf("bridge call must widen the lease window: %v", row.LeaseExpiresAt)
 	}
 }

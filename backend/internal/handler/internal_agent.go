@@ -48,8 +48,19 @@ func RegisterInternalAgentRoutes(r *gin.Engine, svc *service.Service) {
 func internalAgentAuth(svc *service.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		provided := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-		isRunLevel := c.Param("id") != "" || strings.HasPrefix(c.Request.URL.Path, "/internal-agent/runs/")
-		if isRunLevel {
+		isBridge := strings.Contains(c.Request.URL.Path, "/bridge") && strings.HasPrefix(c.Request.URL.Path, "/internal-agent/runs/")
+		isRunLevel := !isBridge && (c.Param("id") != "" || strings.HasPrefix(c.Request.URL.Path, "/internal-agent/runs/"))
+		if isBridge {
+			// 桥子路由以 grant 自证：pi runtime 只会带一枚 Authorization。
+			claims, ok := svc.ValidateAgentBridgeGrant(provided)
+			if !ok {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
+			c.Set("bridgeUserID", claims.UserID)
+			c.Set("bridgeRunID", claims.RunID)
+			c.Set("bridgeOwner", claims.Owner)
+		} else if isRunLevel {
 			epoch, parseErr := strconv.ParseInt(c.GetHeader("X-Agent-Session-Epoch"), 10, 64)
 			workerID, grantErr := svc.AgentRunGrantWorker(provided)
 			// 运行级三重校验：grant 签名/有效期与声明一致、身份头与 grant 一致、
@@ -69,6 +80,12 @@ func internalAgentAuth(svc *service.Service) gin.HandlerFunc {
 			c.Set("agentWorkerID", worker.ID)
 			// 非空 UserID 限定单租户领取；空 UserID 是显式的全局 Worker。
 			c.Set("agentWorkerUserID", worker.UserID)
+		}
+		if isBridge {
+			// 桥子路由免于协议三连：pi runtime 进程只带一枚 Authorization（mjs
+			// 无法配置额外头），grant 验证已经覆盖租约与吊销。
+			c.Next()
+			return
 		}
 		if c.GetHeader("X-Agent-Protocol-Version") != internalAgentWireVersion ||
 			c.GetHeader("X-Pi-SDK-Version") != internalAgentPiSDKVersion ||
@@ -232,6 +249,32 @@ func registerInternalAgentRunRoutes(group *gin.RouterGroup, svc *service.Service
 		}
 		ok(c, result)
 	})
+	group.POST("/runs/:id/bridge/request", func(c *gin.Context) {
+		envelope, err := svc.PiAgentBridgeRequest(c.Request.Context(), c.GetString("bridgeUserID"), c.GetString("bridgeRunID"), c.GetString("bridgeOwner"), strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "), c.Request.Host)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, envelope)
+	})
+	for _, kind := range []string{"model", "tool", "event"} {
+		kind := kind
+		group.POST("/runs/:id/bridge/"+kind, func(c *gin.Context) {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+			var payload map[string]json.RawMessage
+			decoder := json.NewDecoder(c.Request.Body)
+			if err := decoder.Decode(&payload); err != nil {
+				c.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+			result, err := svc.PiAgentBridgeCall(c.Request.Context(), c.GetString("bridgeUserID"), c.GetString("bridgeRunID"), c.GetString("bridgeOwner"), kind, payload)
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			ok(c, result)
+		})
+	}
 	group.POST("/runs/:id/fail", func(c *gin.Context) {
 		var input struct {
 			Reason string `json:"reason"`

@@ -88,7 +88,7 @@ func TestInternalAgentRoutePlacement(t *testing.T) {
 	for _, route := range router.Routes() {
 		found[route.Method+" "+route.Path] = true
 	}
-	for _, needed := range []string{"GET /internal-agent/health", "GET /internal-agent/config", "POST /internal-agent/capacity", "POST /internal-agent/claim", "POST /internal-agent/runs/:id/renew", "POST /internal-agent/runs/:id/release"} {
+	for _, needed := range []string{"GET /internal-agent/health", "GET /internal-agent/config", "POST /internal-agent/capacity", "POST /internal-agent/claim", "POST /internal-agent/runs/:id/renew", "POST /internal-agent/runs/:id/release", "POST /internal-agent/runs/:id/phase", "GET /internal-agent/runs/:id", "GET /internal-agent/runs/:id/control", "POST /internal-agent/runs/:id/fail", "POST /internal-agent/runs/:id/bridge/request", "POST /internal-agent/runs/:id/bridge/model", "POST /internal-agent/runs/:id/bridge/tool", "POST /internal-agent/runs/:id/bridge/event"} {
 		if !found[needed] {
 			t.Fatalf("internal-agent route missing: %s", needed)
 		}
