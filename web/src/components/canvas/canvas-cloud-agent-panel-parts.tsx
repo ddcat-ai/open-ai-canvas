@@ -11,13 +11,14 @@ import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { useAgentLauncherPosition } from "./use-agent-launcher-position";
 import { resolveAgentLauncherAvatarHeight } from "@/lib/canvas/agent-launcher-position";
 import { useMatch } from "react-router";
-import { motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Live2DAvatar } from "./live2d-avatar";
 import { agentAvatarBundleFileURL, live2DModelURL } from "@/services/api/appearance";
 import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
 import { FluidOrb } from "@/components/ui/fluid-orb";
-import { ArrowLeft, Check, CircleDot, Clock3, Download, History, LoaderCircle, Maximize2, MessageSquarePlus, Minus, PanelRight, PictureInPicture2, RotateCcw, Settings2, ShieldCheck, Trash2, X, Blocks } from "lucide-react";
+import { ArrowDown, ArrowLeft, Check, Clock3, Download, Ellipsis, History, LoaderCircle, Maximize2, MessageSquarePlus, Minus, PanelRight, PictureInPicture2, RefreshCw, Scaling, Settings2, ShieldCheck, Trash2, X, Blocks } from "lucide-react";
+import { agentModifierShortcut } from "@/lib/canvas/agent-outbox";
 import { Button, Input, Popover } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import type { AgentContextPhase, AgentContextUsageView } from "@/lib/canvas/agent-context-usage";
@@ -30,7 +31,8 @@ import type { AgentMediaSettings, AgentPermissionMode } from "@/services/api/age
 import { buildAgentFeedSegments } from "@/lib/canvas/agent-operation-feed";
 import { AgentWelcome } from "./canvas-agent-welcome";
 import { useEffectiveConfig } from "@/stores/use-config-store";
-import { agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual } from "./canvas-cloud-agent-settings";
+import { agentPermissionLabel, agentPermissionMenuItems, agentPermissionShortLabel, agentPermissionVisual } from "./canvas-cloud-agent-settings";
+import { Kbd } from "@/components/ui/base/kbd";
 import { ModelPicker } from "@/components/model-picker";
 import { agentImageApproval, agentVideoApproval } from "@/lib/canvas/agent-media-approval";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
@@ -227,6 +229,7 @@ export function AgentHeader({
     hasMessages,
     statusLabel,
     statusColor,
+    live = false,
     nodeCount,
     onNew,
     onHistory,
@@ -242,6 +245,8 @@ export function AgentHeader({
     hasMessages: boolean;
     statusLabel: string;
     statusColor: string;
+    /** 本轮正在运行：状态圆点呼吸。 */
+    live?: boolean;
     nodeCount: number | null;
     onNew: () => void;
     onHistory: () => void;
@@ -255,6 +260,41 @@ export function AgentHeader({
     exporting: boolean;
 }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
+    const modifierJ = agentModifierShortcut("J");
+    const modifierEnter = agentModifierShortcut("Enter");
+    const moreItems = [
+        { key: "settings", icon: <Settings2 className="size-3.5" />, label: "Agent 设置", onClick: onSettings },
+        { key: "layout", icon: <Scaling className="size-3.5" />, label: docked ? "恢复默认宽度" : "恢复默认大小和位置", onClick: onResetLayout },
+        { key: "export", icon: <Download className="size-3.5" />, label: exporting ? "正在导出调试记录…" : "导出调试记录（分享前请检查隐私）", disabled: exporting, onClick: onExport },
+        { type: "divider" as const },
+        {
+            key: "shortcuts",
+            type: "group" as const,
+            label: "快捷键",
+            // 只是说明，不可点：左边是动作，右边是按键。
+            children: [
+                ["toggle", "打开或收起 Agent", [modifierJ]],
+                ["send", "发送", ["Enter"]],
+                ["newline", "换行", ["Shift+Enter"]],
+                ["queue", "运行中排队", ["Enter"]],
+                ["interject", "运行中插话", [modifierEnter]],
+                ["stop", "停止本轮", ["Esc", "Esc"]],
+            ].map(([key, action, keys]) => ({
+                key: `shortcut-${key as string}`,
+                disabled: true,
+                label: (
+                    <span className="agent-menu-shortcut">
+                        <span>{action as string}</span>
+                        <span className="agent-menu-shortcut-keys">
+                            {(keys as string[]).map((item, index) => (
+                                <Kbd key={`${item}-${index}`}>{item}</Kbd>
+                            ))}
+                        </span>
+                    </span>
+                ),
+            })),
+        },
+    ];
     return (
         <header data-agent-drag-handle className="agent-panel-header flex shrink-0 items-center gap-3">
             <div className="min-w-0 flex-1">
@@ -263,8 +303,9 @@ export function AgentHeader({
                         {agentCopy(appearance.panelTitle, appearance.agentName)}
                         {hasMessages ? "" : " · 新对话"}
                     </span>
-                    <span className="agent-panel-status flex items-center gap-1" style={{ color: statusColor }}>
-                        <CircleDot className="size-3" />
+                    {/* 状态用圆点表示：运行中缓慢呼吸，减少动效时静止；颜色只是辅助，文字始终在。 */}
+                    <span className="agent-panel-status flex items-center gap-1.5" style={{ color: statusColor }} role="status">
+                        <span className="agent-panel-status-dot" data-live={live ? "" : undefined} aria-hidden="true" />
                         {statusLabel}
                     </span>
                 </div>
@@ -284,20 +325,13 @@ export function AgentHeader({
                         title={docked ? "改为浮动窗口" : "停靠到画布右侧，画布让出位置不被遮挡"}
                     />
                 ) : null}
-                <Button
-                    type="text"
-                    shape="circle"
-                    icon={<RotateCcw className="size-4" />}
-                    onClick={onResetLayout}
-                    aria-label={docked ? "恢复 Agent 默认宽度" : "恢复 Agent 紧凑窗口"}
-                    title={docked ? "恢复默认宽度" : "恢复默认窗口大小和位置"}
-                    className="hidden sm:inline-flex"
-                />
-                <Button type="text" shape="circle" icon={<Download className="size-4" />} loading={exporting} onClick={onExport} aria-label="导出 Agent 调试记录" title="导出对话、工具参数、审批和错误（分享前请检查隐私）" />
-                <Button type="text" shape="circle" icon={<MessageSquarePlus className="size-4" />} onClick={onNew} aria-label="新建对话" title="新建对话" />
                 <Button type="text" shape="circle" icon={<History className="size-4" />} onClick={onHistory} aria-label="历史对话" title="历史对话" />
-                <Button type="text" shape="circle" icon={<Settings2 className="size-4" />} onClick={onSettings} aria-label="Agent 设置" title="Agent 设置" />
-                <Button type="text" shape="circle" icon={<X className="size-4" />} onClick={onCollapse} aria-label="收起 Agent" title="收起" />
+                <Button type="text" shape="circle" icon={<MessageSquarePlus className="size-4" />} onClick={onNew} aria-label="新建对话" title="新建对话" />
+                {/* 不常用的入口收进「更多」：设置、恢复默认大小、导出调试记录，以及快捷键说明。 */}
+                <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: moreItems }}>
+                    <Button type="text" shape="circle" icon={exporting ? <LoaderCircle className="size-4 animate-spin" /> : <Ellipsis className="size-4" />} aria-label="更多" title="更多：Agent 设置、恢复默认大小、导出调试记录、快捷键" />
+                </Dropdown>
+                <Button type="text" shape="circle" icon={<X className="size-4" />} onClick={onCollapse} aria-label="收起 Agent" title={`收起（${modifierJ}）`} />
             </div>
         </header>
     );
@@ -461,6 +495,7 @@ export function AgentHistory({
     error,
     openingId,
     onRefresh,
+    onCollapse,
 }: {
     conversations: CloudAgentConversation[];
     activeConversationId: string;
@@ -473,6 +508,8 @@ export function AgentHistory({
     error?: string;
     openingId?: string;
     onRefresh?: () => void;
+    /** 历史页也能直接收起 Agent，不必先返回对话。 */
+    onCollapse?: () => void;
 }) {
     return (
         <div className="canvas-agent-history-root flex min-h-0 min-w-0 flex-1 flex-col">
@@ -482,8 +519,9 @@ export function AgentHistory({
                     <div className="text-sm font-semibold">历史对话</div>
                     <div className="mt-0.5 text-[var(--fs-label)] opacity-40">当前画布云端对话与本机历史</div>
                 </div>
-                {onRefresh ? <Button type="text" shape="circle" loading={loading} icon={<RotateCcw className="size-4" />} onClick={onRefresh} aria-label="刷新云端对话" /> : null}
+                {onRefresh ? <Button type="text" shape="circle" loading={loading} icon={<RefreshCw className="size-4" />} onClick={onRefresh} aria-label="刷新云端对话" title="刷新云端对话" /> : null}
                 <Button type="text" shape="circle" icon={<MessageSquarePlus className="size-4" />} onClick={onNew} aria-label="新建对话" title="新建对话" />
+                {onCollapse ? <Button type="text" shape="circle" icon={<X className="size-4" />} onClick={onCollapse} aria-label="收起 Agent" title="收起" /> : null}
             </header>
             <div className="canvas-agent-history-scroll thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-3">
                 {error ? (
@@ -615,8 +653,12 @@ export function AgentConversation({
     onReject,
     onWithdrawInterjection,
     withdrawingInterjectionId,
+    onRequeueInterjection,
     onReplyOption,
     replyOptionsDisabled = false,
+    retryableErrorId = null,
+    onRetryRun,
+    retryingRun = false,
 }: {
     theme: CanvasTheme;
     messages: CloudAgentChatMessage[];
@@ -639,14 +681,24 @@ export function AgentConversation({
     onReject: () => void;
     onWithdrawInterjection?: (messageId: string) => void;
     withdrawingInterjectionId?: string | null;
+    /** 未送达的插话转为下一轮发送，或放回队列编辑。 */
+    onRequeueInterjection?: (messageId: string, mode: "send" | "edit") => void;
     /** 不传表示当前不该出现选项卡片（例如 ask_user 提问条已在展示）。 */
     onReplyOption?: (text: string) => void;
     replyOptionsDisabled?: boolean;
+    /** 可以重试的失败卡片（本轮失败且空闲时）；重试用新的幂等键重新发起一轮，会重新计费。 */
+    retryableErrorId?: string | null;
+    onRetryRun?: () => void;
+    retryingRun?: boolean;
 }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
+    const reducedMotion = useReducedMotion();
     const scrollRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const followRef = useRef(true);
+    // 离底部超过 48px 时显示「回到底部」，期间新到的消息计数。
+    const [awayFromBottom, setAwayFromBottom] = useState(false);
+    const [unseenCount, setUnseenCount] = useState(0);
     const lastUserId = messages.findLast((item) => item.role === "user")?.id;
     // 连续的工具记录折成一行（只报最新一步），计划/提问载体由输入区上方的固定条渲染。
     const segments = useMemo(() => buildAgentFeedSegments(messages), [messages]);
@@ -655,12 +707,27 @@ export function AgentConversation({
     const replyTarget = useMemo(() => (replyOptionsEnabled ? agentReplyOptionsTarget(messages) : null), [messages, replyOptionsEnabled]);
     // 父组件每次渲染（例如输入框每敲一个字）都会传入新的回调和引用表。消息组件已 memo，
     // 这里换成稳定的回调和“只看链接字段”的引用表，消息才能跳过与它无关的重渲染。
-    const handlersRef = useRef({ onUndo, onWithdrawInterjection, onReplyOption });
+    const handlersRef = useRef({ onUndo, onWithdrawInterjection, onRequeueInterjection, onReplyOption, onRetryRun });
     useLayoutEffect(() => {
-        handlersRef.current = { onUndo, onWithdrawInterjection, onReplyOption };
+        handlersRef.current = { onUndo, onWithdrawInterjection, onRequeueInterjection, onReplyOption, onRetryRun };
     });
+    const stableRetry = useCallback(() => handlersRef.current.onRetryRun?.(), []);
+    const seenSegmentsRef = useRef(segments.length);
+    useEffect(() => {
+        const added = segments.length - seenSegmentsRef.current;
+        seenSegmentsRef.current = segments.length;
+        if (!followRef.current && added > 0) setUnseenCount((count) => count + added);
+    }, [segments.length]);
+    const scrollToLatest = () => {
+        const element = scrollRef.current;
+        if (!element) return;
+        followRef.current = true;
+        setUnseenCount(0);
+        element.scrollTo({ top: element.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
+    };
     const stableUndo = useCallback((target: AgentCanvasUndoTarget) => handlersRef.current.onUndo?.(target), []);
     const stableWithdraw = useCallback((messageId: string) => handlersRef.current.onWithdrawInterjection?.(messageId), []);
+    const stableRequeue = useCallback((messageId: string, mode: "send" | "edit") => handlersRef.current.onRequeueInterjection?.(messageId, mode), []);
     const stableReply = useCallback((text: string) => handlersRef.current.onReplyOption?.(text), []);
     const linkReferences = useLinkStableReferences(references);
 
@@ -685,67 +752,94 @@ export function AgentConversation({
     }, []);
 
     return (
-        <div
-            ref={scrollRef}
-            data-agent-conversation
-            className="agent-conversation thin-scrollbar min-h-0 flex-1 overflow-y-auto"
-            onScroll={(event) => {
-                const element = event.currentTarget;
-                followRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
-            }}
-        >
-            {!messages.length ? (
-                <AgentWelcome appearance={appearance} nodeCount={nodeCount} installedSkillCount={installedSkillCount} onChooseSkill={onChooseSkill} onOpenSkillRecommendations={onOpenSkillRecommendations} onDraftPrompt={onDraftPrompt} />
-            ) : null}
-            <div ref={contentRef} className="agent-conversation-messages">
-                {segments.map((segment, index) =>
-                    segment.kind === "operations" ? (
-                        // 只有"对话末尾那一段 + 还在跑"才流光：历史段落留在静态态，任务完成即停。
-                        <AgentOperationFeed
-                            key={segment.key}
-                            items={segment.items}
-                            theme={theme}
-                            references={linkReferences}
-                            onFocusNode={onFocusNode}
-                            onUndo={onUndo ? stableUndo : undefined}
-                            undoStates={undoStates}
-                            live={busy && index === segments.length - 1}
-                        />
-                    ) : segment.kind === "reasoning" ? (
-                        <AgentReasoningFeed key={segment.key} items={segment.items} theme={theme} />
-                    ) : (
-                        <AgentChatMessage
-                            key={segment.key}
-                            item={segment.item}
-                            theme={theme}
-                            references={linkReferences}
-                            onFocusNode={onFocusNode}
-                            onUndo={onUndo ? stableUndo : undefined}
-                            undoStates={undoStates}
-                            onWithdrawInterjection={onWithdrawInterjection ? stableWithdraw : undefined}
-                            withdrawing={withdrawingInterjectionId === segment.item.id}
-                            isStreaming={busy && !approval && segment.item.streaming === true && segment.item === lastMessage}
-                            replyOptions={replyTarget?.id === segment.item.id ? replyTarget.options : null}
-                            onReplyOption={replyTarget?.id === segment.item.id && onReplyOption ? stableReply : undefined}
-                            replyOptionsDisabled={replyOptionsDisabled}
-                        />
-                    ),
-                )}
-                {approval ? (
-                    <ApprovalCard
-                        key={approval.approvalId}
-                        approval={approval}
-                        theme={theme}
-                        submitting={approvalSubmitting}
-                        targetGenerating={approvalTargetGenerating}
-                        onFocusNode={onFocusNode}
-                        onReasonChange={onApprovalReasonChange}
-                        onApprove={onApprove}
-                        onReject={onReject}
-                    />
+        <div className="agent-conversation-frame">
+            <div
+                ref={scrollRef}
+                data-agent-conversation
+                className="agent-conversation thin-scrollbar min-h-0 flex-1 overflow-y-auto"
+                onScroll={(event) => {
+                    const element = event.currentTarget;
+                    const following = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+                    followRef.current = following;
+                    setAwayFromBottom(!following);
+                    if (following) setUnseenCount(0);
+                }}
+            >
+                {!messages.length ? (
+                    <AgentWelcome appearance={appearance} nodeCount={nodeCount} installedSkillCount={installedSkillCount} onChooseSkill={onChooseSkill} onOpenSkillRecommendations={onOpenSkillRecommendations} onDraftPrompt={onDraftPrompt} />
                 ) : null}
-                {busy && !approval ? <AgentWorkingMessage theme={theme} label="正在思考" /> : null}
+                <div ref={contentRef} className="agent-conversation-messages">
+                    {segments.map((segment, index) =>
+                        segment.kind === "operations" ? (
+                            // 只有"对话末尾那一段 + 还在跑"才流光：历史段落留在静态态，任务完成即停。
+                            <AgentOperationFeed
+                                key={segment.key}
+                                items={segment.items}
+                                theme={theme}
+                                references={linkReferences}
+                                onFocusNode={onFocusNode}
+                                onUndo={onUndo ? stableUndo : undefined}
+                                undoStates={undoStates}
+                                live={busy && index === segments.length - 1}
+                            />
+                        ) : segment.kind === "reasoning" ? (
+                            <AgentReasoningFeed key={segment.key} items={segment.items} theme={theme} />
+                        ) : (
+                            <AgentChatMessage
+                                key={segment.key}
+                                item={segment.item}
+                                theme={theme}
+                                references={linkReferences}
+                                onFocusNode={onFocusNode}
+                                onUndo={onUndo ? stableUndo : undefined}
+                                undoStates={undoStates}
+                                onWithdrawInterjection={onWithdrawInterjection ? stableWithdraw : undefined}
+                                withdrawing={withdrawingInterjectionId === segment.item.id}
+                                onRequeueInterjection={onRequeueInterjection ? stableRequeue : undefined}
+                                isStreaming={busy && !approval && segment.item.streaming === true && segment.item === lastMessage}
+                                replyOptions={replyTarget?.id === segment.item.id ? replyTarget.options : null}
+                                onReplyOption={replyTarget?.id === segment.item.id && onReplyOption ? stableReply : undefined}
+                                replyOptionsDisabled={replyOptionsDisabled}
+                                onRetry={onRetryRun && retryableErrorId === segment.item.id ? stableRetry : undefined}
+                                retrying={retryingRun && retryableErrorId === segment.item.id}
+                            />
+                        ),
+                    )}
+                    {approval ? (
+                        <ApprovalCard
+                            key={approval.approvalId}
+                            approval={approval}
+                            theme={theme}
+                            submitting={approvalSubmitting}
+                            targetGenerating={approvalTargetGenerating}
+                            onFocusNode={onFocusNode}
+                            onReasonChange={onApprovalReasonChange}
+                            onApprove={onApprove}
+                            onReject={onReject}
+                        />
+                    ) : null}
+                    <AnimatePresence initial={false}>
+                        {busy && !approval ? (
+                            <motion.div
+                                key="working"
+                                className="agent-working-reveal"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
+                            >
+                                <AgentWorkingMessage theme={theme} label="正在思考" />
+                            </motion.div>
+                        ) : null}
+                    </AnimatePresence>
+                </div>
             </div>
+            {awayFromBottom ? (
+                <button type="button" className="agent-scroll-latest" onClick={scrollToLatest} aria-label={unseenCount > 0 ? `有 ${unseenCount} 条新消息，回到底部` : "回到底部"}>
+                    <ArrowDown className="size-3.5" aria-hidden="true" />
+                    {unseenCount > 0 ? `${unseenCount} 条新消息` : "回到底部"}
+                </button>
+            ) : null}
         </div>
     );
 }
@@ -788,15 +882,17 @@ export function ComposerControls({
                 showOptionPrices
                 placeholder="选择文本模型"
             />
+            {/* 权限常显文字：只读 / 审批 / 自动，面板窄时只留图标。图标形状和颜色同时区分三种权限。 */}
             <Dropdown trigger={["click"]} placement="topLeft" menu={{ items: agentPermissionMenuItems(permissionMode, onPermissionChange) }}>
                 <button
                     type="button"
-                    className="grid size-8 shrink-0 place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
-                    style={{ color: theme.node.muted, background: "transparent" }}
+                    className="agent-permission-trigger"
+                    style={{ "--agent-permission-color": permissionVisual.color } as CSSProperties}
                     aria-label={`执行权限：${agentPermissionLabel(permissionMode)}，点击切换`}
                     title={`执行权限：${agentPermissionLabel(permissionMode)}，点击切换`}
                 >
-                    <PermissionIcon className="size-3.5" style={{ color: permissionVisual.color }} aria-hidden="true" />
+                    <PermissionIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="agent-permission-label">{agentPermissionShortLabel(permissionMode)}</span>
                 </button>
             </Dropdown>
             <button
@@ -809,8 +905,10 @@ export function ComposerControls({
                 title={selectedSkillCount ? `本对话已固定 ${selectedSkillCount} 个技能；其他已安装技能 Agent 会按任务自动查找` : "已安装的技能 Agent 会按任务自动查找"}
                 onClick={() => onSkillsOpenChange(true)}
             >
-                <Blocks className="size-3.5" />
-                <span className="max-w-28 truncate">Skills({selectedSkillCount})</span>
+                <Blocks className="size-3.5" aria-hidden="true" />
+                {/* 面板窄时只留图标和数量，把位置让给模型名。 */}
+                <span className="agent-skills-label">技能</span>
+                {selectedSkillCount ? <span className="tabular-nums">{selectedSkillCount}</span> : null}
             </button>
         </div>
     );

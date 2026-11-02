@@ -2,6 +2,7 @@ package app
 
 // 自研（2026-09-17）：运行中插话。见 cloud_agent_interjection.go。
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -142,14 +143,16 @@ func TestCloudAgentInterjectionIsIdempotentByMessageID(t *testing.T) {
 	}
 }
 
-// 运行已经结束就不再收插话 —— 前端据此回落成「新一轮」。
+// 运行已经结束就不再收插话 —— 前端按原因码把这条留在本机队列，作为下一轮发送。
 func TestCloudAgentInterjectionRejectedOnFinishedRun(t *testing.T) {
 	s, db, root := reliableAgentRoot(t)
 	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", root.ID).Update("status", "completed").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.InterjectCloudAgent("user", root.ID, "msg-done", "太晚了"); err == nil {
-		t.Fatal("已结束的运行仍然收下了插话")
+	_, err := s.InterjectCloudAgent("user", root.ID, "msg-done", "太晚了")
+	var appErr *AppError
+	if !errors.As(err, &appErr) || appErr.Status != 409 || appErr.Reason != ReasonAgentInterjectionRunFinished || appErr.Retryable {
+		t.Fatalf("已结束的运行应返回不可重试的 409 %s，实际 %#v", ReasonAgentInterjectionRunFinished, err)
 	}
 }
 
@@ -228,8 +231,10 @@ func TestCloudAgentWithdrawInterjectionKeepsRunAlive(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.WithdrawCloudAgentInterjection("user", root.ID, "msg-b"); err == nil {
-		t.Fatal("delivered interjection was withdrawn")
+	err := s.WithdrawCloudAgentInterjection("user", root.ID, "msg-b")
+	var appErr *AppError
+	if !errors.As(err, &appErr) || appErr.Status != 409 || appErr.Reason != ReasonAgentInterjectionDelivered {
+		t.Fatalf("delivered interjection must be rejected with %s, got %#v", ReasonAgentInterjectionDelivered, err)
 	}
 	if err := s.WithdrawCloudAgentInterjection("user", root.ID, "missing"); err == nil {
 		t.Fatal("unknown interjection was withdrawn")

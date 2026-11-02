@@ -113,7 +113,8 @@ const AGENT_CONNECTORS: AgentConnector[] = [
 ];
 
 /** 输入框底部的连接器条，流光溢彩背景，紧凑图标阵列。 */
-export function AgentConnectorsBar({ onClose }: { onClose: () => void }) {
+/** 连接器入口（研发中）。放在 Agent 设置「工具与连接」里，不再常驻输入框下方；不传 onClose 时不显示收起按钮。 */
+export function AgentConnectorsBar({ onClose }: { onClose?: () => void }) {
     const { message } = App.useApp();
     return (
         <div className="agent-connectors" role="group" aria-label="连接器">
@@ -130,9 +131,11 @@ export function AgentConnectorsBar({ onClose }: { onClose: () => void }) {
                     </Tooltip>
                 ))}
             </div>
-            <button type="button" className="agent-connectors-close" aria-label="收起连接器" onClick={onClose}>
-                <X />
-            </button>
+            {onClose ? (
+                <button type="button" className="agent-connectors-close" aria-label="收起连接器" onClick={onClose}>
+                    <X />
+                </button>
+            ) : null}
         </div>
     );
 }

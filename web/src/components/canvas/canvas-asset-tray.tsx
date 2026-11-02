@@ -14,7 +14,8 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { ImageAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
-export const CANVAS_IMAGE_ASSET_DND_TYPE = "application/x-yingce-image-asset";
+import { CANVAS_IMAGE_ASSET_DND_TYPE } from "@/lib/canvas/canvas-asset-dnd";
+export { CANVAS_IMAGE_ASSET_DND_TYPE };
 
 type TrayTab = "library" | "canvas";
 
@@ -56,7 +57,7 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
     const { bringToFront, zIndex } = useCanvasOverlayLayer("asset-tray", "var(--z-panel)");
     const rootRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
-    const [tab, setTab] = useState<TrayTab>(() => showLibrary ? "library" : "canvas");
+    const [tab, setTab] = useState<TrayTab>(() => (showLibrary ? "library" : "canvas"));
     const [keyword, setKeyword] = useState("");
     const [trayHeight, setTrayHeight] = useState(() => clampTrayHeight(TRAY_DEFAULT_HEIGHT));
     const panelRef = useRef<HTMLElement>(null);
@@ -107,39 +108,45 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
         setTrayHeight(finalHeight);
     }, []);
 
-    const startResize = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        stopResize();
-        const session: ResizeSession = { pointerId: event.pointerId, startY: event.clientY, startHeight: safeTrayHeight, nextHeight: safeTrayHeight, frameId: null };
-        const updateHeight = (moveEvent: PointerEvent) => {
-            if (moveEvent.pointerId !== session.pointerId) return;
-            session.nextHeight = clampTrayHeight(session.startHeight + session.startY - moveEvent.clientY);
-            paintResize();
-        };
-        const finish = (endEvent: PointerEvent) => {
-            if (endEvent.pointerId === session.pointerId) stopResize();
-        };
-        resizeRef.current = session;
-        resizeHandleRef.current = { element: event.currentTarget, pointerId: event.pointerId };
-        panelRef.current?.classList.add("is-resizing");
-        event.currentTarget.setPointerCapture(event.pointerId);
-        window.addEventListener("pointermove", updateHeight);
-        window.addEventListener("pointerup", finish);
-        window.addEventListener("pointercancel", finish);
-        resizeCleanupRef.current = () => {
-            window.removeEventListener("pointermove", updateHeight);
-            window.removeEventListener("pointerup", finish);
-            window.removeEventListener("pointercancel", finish);
-        };
-    }, [paintResize, safeTrayHeight, stopResize]);
+    const startResize = useCallback(
+        (event: ReactPointerEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            stopResize();
+            const session: ResizeSession = { pointerId: event.pointerId, startY: event.clientY, startHeight: safeTrayHeight, nextHeight: safeTrayHeight, frameId: null };
+            const updateHeight = (moveEvent: PointerEvent) => {
+                if (moveEvent.pointerId !== session.pointerId) return;
+                session.nextHeight = clampTrayHeight(session.startHeight + session.startY - moveEvent.clientY);
+                paintResize();
+            };
+            const finish = (endEvent: PointerEvent) => {
+                if (endEvent.pointerId === session.pointerId) stopResize();
+            };
+            resizeRef.current = session;
+            resizeHandleRef.current = { element: event.currentTarget, pointerId: event.pointerId };
+            panelRef.current?.classList.add("is-resizing");
+            event.currentTarget.setPointerCapture(event.pointerId);
+            window.addEventListener("pointermove", updateHeight);
+            window.addEventListener("pointerup", finish);
+            window.addEventListener("pointercancel", finish);
+            resizeCleanupRef.current = () => {
+                window.removeEventListener("pointermove", updateHeight);
+                window.removeEventListener("pointerup", finish);
+                window.removeEventListener("pointercancel", finish);
+            };
+        },
+        [paintResize, safeTrayHeight, stopResize],
+    );
 
-    useEffect(() => () => {
-        resizeCleanupRef.current?.();
-        const session = resizeRef.current;
-        if (session && session.frameId !== null) window.cancelAnimationFrame(session.frameId);
-        resizeRef.current = null;
-    }, []);
+    useEffect(
+        () => () => {
+            resizeCleanupRef.current?.();
+            const session = resizeRef.current;
+            if (session && session.frameId !== null) window.cancelAnimationFrame(session.frameId);
+            resizeRef.current = null;
+        },
+        [],
+    );
 
     useEffect(() => {
         const syncHeight = () => setTrayHeight((height) => clampTrayHeight(height));
@@ -178,7 +185,17 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative" style={{ zIndex }} onPointerDownCapture={bringToFront} onFocusCapture={bringToFront} onPointerDown={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div
+            ref={rootRef}
+            data-canvas-no-zoom
+            className="relative"
+            style={{ zIndex }}
+            onPointerDownCapture={bringToFront}
+            onFocusCapture={bringToFront}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onWheel={(event) => event.stopPropagation()}
+        >
             <AnimatePresence>
                 {open ? (
                     <motion.aside
@@ -188,9 +205,22 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                         transition={aceternityMotion.spring.panel}
                         ref={panelRef}
                         className="canvas-asset-tray-panel aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 flex w-[min(88vw,312px)] origin-bottom-left flex-col overflow-hidden rounded-[var(--r-2xl)] p-2 backdrop-blur-2xl"
-                        style={{ background: theme.spatial.elevated, color: theme.node.text, height: safeTrayHeight, minHeight: Math.min(TRAY_MIN_HEIGHT, getMaxTrayHeight()), maxHeight: "calc(100vh - 6rem)", boxShadow: `0 32px 100px ${theme.spatial.shadow}` }}
+                        style={{
+                            background: theme.spatial.elevated,
+                            color: theme.node.text,
+                            height: safeTrayHeight,
+                            minHeight: Math.min(TRAY_MIN_HEIGHT, getMaxTrayHeight()),
+                            maxHeight: "calc(100vh - 6rem)",
+                            boxShadow: `0 32px 100px ${theme.spatial.shadow}`,
+                        }}
                     >
-                        <button type="button" className="canvas-asset-tray-resize-handle absolute left-1/2 top-1 z-10 flex h-5 w-28 -translate-x-1/2 items-center justify-center rounded-full opacity-35 transition-opacity hover:opacity-75" onPointerDown={startResize} aria-label="从顶部调整素材托盘高度" title="拖动调整高度">
+                        <button
+                            type="button"
+                            className="canvas-asset-tray-resize-handle absolute left-1/2 top-1 z-10 flex h-5 w-28 -translate-x-1/2 items-center justify-center rounded-full opacity-35 transition-opacity hover:opacity-75"
+                            onPointerDown={startResize}
+                            aria-label="从顶部调整素材托盘高度"
+                            title="拖动调整高度"
+                        >
                             <span className="h-1 w-12 rounded-full bg-current" />
                         </button>
 
@@ -201,10 +231,20 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                                 </span>
                                 <span className="min-w-0">
                                     <span className="block text-xs font-semibold">素材空间</span>
-                                    <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>拖入画布，或定位已经使用的图片</span>
+                                    <span className="mt-0.5 block truncate text-[var(--fs-micro)]" style={{ color: theme.node.muted }}>
+                                        拖入画布，或定位已经使用的图片
+                                    </span>
                                 </span>
                             </div>
-                            <motion.button type="button" whileHover={motionEnabled ? { rotate: -5, scale: 1.05 } : undefined} whileTap={motionEnabled ? { scale: 0.92 } : undefined} className="grid size-7 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2" style={{ background: theme.spatial.surface, color: theme.node.muted }} onClick={() => setOpen(false)} aria-label="收起素材空间">
+                            <motion.button
+                                type="button"
+                                whileHover={motionEnabled ? { rotate: -5, scale: 1.05 } : undefined}
+                                whileTap={motionEnabled ? { scale: 0.92 } : undefined}
+                                className="grid size-7 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2"
+                                style={{ background: theme.spatial.surface, color: theme.node.muted }}
+                                onClick={() => setOpen(false)}
+                                aria-label="收起素材空间"
+                            >
                                 <PanelLeftClose className="size-3" />
                             </motion.button>
                         </div>
@@ -216,8 +256,19 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
 
                         <label className="mt-2 flex h-8 items-center gap-2 rounded-[12px] px-2 focus-within:ring-2" style={{ background: theme.spatial.surface }}>
                             <Search className="size-3.5 shrink-0" style={{ color: theme.node.muted }} />
-                            <input type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索图片素材..." className="min-w-0 flex-1 bg-transparent text-[var(--fs-tiny)] outline-none placeholder:opacity-55" aria-label="搜索图片素材" />
-                            {keyword ? <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full opacity-55 hover:opacity-100" onClick={() => setKeyword("")} aria-label="清空搜索"><X className="size-3" /></button> : null}
+                            <input
+                                type="search"
+                                value={keyword}
+                                onChange={(event) => setKeyword(event.target.value)}
+                                placeholder="搜索图片素材..."
+                                className="min-w-0 flex-1 bg-transparent text-[var(--fs-tiny)] outline-none placeholder:opacity-55"
+                                aria-label="搜索图片素材"
+                            />
+                            {keyword ? (
+                                <button type="button" className="grid size-6 shrink-0 place-items-center rounded-full opacity-55 hover:opacity-100" onClick={() => setKeyword("")} aria-label="清空搜索">
+                                    <X className="size-3" />
+                                </button>
+                            ) : null}
                         </label>
 
                         <div className="thin-scrollbar mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -225,7 +276,17 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                                 filteredAssets.length ? (
                                     <div className="space-y-2">
                                         {filteredAssets.map((asset) => (
-                                            <AssetTrayRow key={asset.id} title={asset.title} imageUrl={asset.coverUrl || asset.data.dataUrl} storageKey={asset.data.storageKey} draggable motionEnabled={motionEnabled} onDragStart={(event) => startAssetDrag(event, asset)} onClick={() => onInsertAssetImage(asset)} icon={<Plus className="size-3.5" />} />
+                                            <AssetTrayRow
+                                                key={asset.id}
+                                                title={asset.title}
+                                                imageUrl={asset.coverUrl || asset.data.dataUrl}
+                                                storageKey={asset.data.storageKey}
+                                                draggable
+                                                motionEnabled={motionEnabled}
+                                                onDragStart={(event) => startAssetDrag(event, asset)}
+                                                onClick={() => onInsertAssetImage(asset)}
+                                                icon={<Plus className="size-3.5" />}
+                                            />
                                         ))}
                                     </div>
                                 ) : (
@@ -234,7 +295,16 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
                             ) : filteredNodes.length ? (
                                 <div className="space-y-2">
                                     {filteredNodes.map((node) => (
-                                        <AssetTrayRow key={node.id} title={canvasImageTitle(node)} imageUrl={node.metadata?.content || ""} storageKey={node.metadata?.storageKey} active={activeNodeId === node.id} motionEnabled={motionEnabled} onClick={() => onFocusCanvasImage(node.id)} icon={<Crosshair className="size-3.5" />} />
+                                        <AssetTrayRow
+                                            key={node.id}
+                                            title={canvasImageTitle(node)}
+                                            imageUrl={node.metadata?.content || ""}
+                                            storageKey={node.metadata?.storageKey}
+                                            active={activeNodeId === node.id}
+                                            motionEnabled={motionEnabled}
+                                            onClick={() => onFocusCanvasImage(node.id)}
+                                            icon={<Crosshair className="size-3.5" />}
+                                        />
                                     ))}
                                 </div>
                             ) : (
@@ -244,7 +314,9 @@ export function CanvasAssetTray({ assetImages, canvasImages, showLibrary = true,
 
                         <div className="flex items-center justify-between px-1 pt-2 text-[var(--fs-tiny)]" style={{ color: theme.node.muted }}>
                             <span>{showLibrary && tab === "library" ? "点击插入 · 拖拽定位" : "点击回到节点"}</span>
-                            <span className="rounded-full px-2 py-0.5 tabular-nums" style={{ background: theme.spatial.surface }}>{activeItems.length} 项</span>
+                            <span className="rounded-full px-2 py-0.5 tabular-nums" style={{ background: theme.spatial.surface }}>
+                                {activeItems.length} 项
+                            </span>
                         </div>
                     </motion.aside>
                 ) : null}
@@ -259,14 +331,46 @@ type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 function TrayTabButton({ active, label, theme, onClick }: { active: boolean; label: string; theme: CanvasTheme; onClick: () => void }) {
     return (
-        <button type="button" className={cn("relative z-10 h-7 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-tiny)] font-semibold outline-none transition-colors focus-visible:ring-2", active ? "" : "opacity-55 hover:opacity-90")} style={{ color: active ? theme.node.text : theme.node.muted }} onClick={onClick}>
-            {active ? <motion.span layoutId="canvas-asset-tray-active-tab" className="absolute inset-0 -z-10 rounded-[var(--dock-item-radius)]" style={{ background: theme.node.panel, boxShadow: `0 6px 16px ${theme.spatial.shadow}` }} transition={aceternityMotion.spring.dock} /> : null}
+        <button
+            type="button"
+            className={cn("relative z-10 h-7 rounded-[var(--dock-item-radius)] px-2 text-[var(--fs-tiny)] font-semibold outline-none transition-colors focus-visible:ring-2", active ? "" : "opacity-55 hover:opacity-90")}
+            style={{ color: active ? theme.node.text : theme.node.muted }}
+            onClick={onClick}
+        >
+            {active ? (
+                <motion.span
+                    layoutId="canvas-asset-tray-active-tab"
+                    className="absolute inset-0 -z-10 rounded-[var(--dock-item-radius)]"
+                    style={{ background: theme.node.panel, boxShadow: `0 6px 16px ${theme.spatial.shadow}` }}
+                    transition={aceternityMotion.spring.dock}
+                />
+            ) : null}
             {label}
         </button>
     );
 }
 
-function AssetTrayRow({ title, imageUrl, storageKey, icon, active = false, draggable = false, motionEnabled, onClick, onDragStart }: { title: string; imageUrl: string; storageKey?: string; icon: ReactNode; active?: boolean; draggable?: boolean; motionEnabled: boolean; onClick: () => void; onDragStart?: (event: DragEvent<HTMLElement>) => void }) {
+function AssetTrayRow({
+    title,
+    imageUrl,
+    storageKey,
+    icon,
+    active = false,
+    draggable = false,
+    motionEnabled,
+    onClick,
+    onDragStart,
+}: {
+    title: string;
+    imageUrl: string;
+    storageKey?: string;
+    icon: ReactNode;
+    active?: boolean;
+    draggable?: boolean;
+    motionEnabled: boolean;
+    onClick: () => void;
+    onDragStart?: (event: DragEvent<HTMLElement>) => void;
+}) {
     const theme = canvasThemes[useActiveTheme()];
     const location = resourceStorageLocation(storageKey);
     return (
@@ -282,16 +386,28 @@ function AssetTrayRow({ title, imageUrl, storageKey, icon, active = false, dragg
             onDragStartCapture={onDragStart}
         >
             <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-[var(--dock-item-radius)]" style={{ background: theme.node.fill }}>
-                {imageUrl || storageKey ? <CachedResourceImage storageKey={storageKey} src={imageUrl} variant="thumbnail" alt="" width={36} height={36} className="size-full object-cover" draggable={false} fallback={<ImageIcon className="size-3.5 opacity-55" />} /> : <ImageIcon className="size-3.5 opacity-55" />}
+                {imageUrl || storageKey ? (
+                    <CachedResourceImage storageKey={storageKey} src={imageUrl} variant="thumbnail" alt="" width={36} height={36} className="size-full object-cover" draggable={false} fallback={<ImageIcon className="size-3.5 opacity-55" />} />
+                ) : (
+                    <ImageIcon className="size-3.5 opacity-55" />
+                )}
             </span>
             <span className="min-w-0">
                 <span className="block truncate text-[var(--fs-tiny)] font-semibold">{title}</span>
                 <span className="mt-0.5 block text-[var(--fs-micro)] opacity-45">{active ? "当前已选择" : draggable ? "拖入画布或点击插入" : "点击定位到画布"}</span>
             </span>
-            <span className={cn("rounded-full px-2 py-0.5 text-[var(--fs-micro)] font-semibold", location === "oss" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : location === "local" ? "bg-amber-500/12 text-amber-700 dark:text-amber-300" : "bg-black/5 text-stone-400 dark:bg-white/8 dark:text-stone-500")} title={resourceStorageTitle(storageKey)}>
+            <span
+                className={cn(
+                    "rounded-full px-2 py-0.5 text-[var(--fs-micro)] font-semibold",
+                    location === "oss" ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : location === "local" ? "bg-amber-500/12 text-amber-700 dark:text-amber-300" : "bg-black/5 text-stone-400 dark:bg-white/8 dark:text-stone-500",
+                )}
+                title={resourceStorageTitle(storageKey)}
+            >
                 {resourceStorageLabel(storageKey)}
             </span>
-            <span className="grid size-6 place-items-center rounded-full opacity-45 transition-opacity group-hover:opacity-90" style={{ background: theme.node.panel }}>{icon}</span>
+            <span className="grid size-6 place-items-center rounded-full opacity-45 transition-opacity group-hover:opacity-90" style={{ background: theme.node.panel }}>
+                {icon}
+            </span>
         </motion.button>
     );
 }
@@ -299,7 +415,10 @@ function AssetTrayRow({ title, imageUrl, storageKey, icon, active = false, dragg
 function TrayEmpty({ text, theme }: { text: string; theme: CanvasTheme }) {
     return (
         <div className="grid h-full min-h-[200px] place-items-center rounded-[var(--dock-radius)] text-center" style={{ background: theme.spatial.surface, color: theme.node.muted }}>
-            <span><Images className="mx-auto size-5 opacity-35" /><span className="mt-2 block text-xs opacity-55">{text}</span></span>
+            <span>
+                <Images className="mx-auto size-5 opacity-35" />
+                <span className="mt-2 block text-xs opacity-55">{text}</span>
+            </span>
         </div>
     );
 }

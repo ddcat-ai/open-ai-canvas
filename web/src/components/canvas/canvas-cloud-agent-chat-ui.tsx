@@ -3,7 +3,9 @@ import { Button } from "antd";
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, HelpCircle, ListChecks, LoaderCircle, RotateCcw, Undo2, XCircle, Blocks, FoldVertical, Info } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Copy, CornerUpLeft, HelpCircle, ListChecks, LoaderCircle, RotateCcw, Undo2, XCircle, Blocks, FoldVertical, Info } from "lucide-react";
+import { agentCopyText } from "@/lib/canvas/agent-composer-attachments";
+import type { CloudAgentInterjectionState } from "@/services/cloud-agent-conversations";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -91,7 +93,7 @@ export type CloudAgentChatMessage = {
     detail?: unknown;
     attachments?: CloudAgentChatAttachment[];
     canvasReferenceNodeId?: string;
-    interjection?: "sent" | "delivered" | "undelivered" | "withdrawn";
+    interjection?: CloudAgentInterjectionState;
     /** Agent 修改了长期记忆：applied 可撤销，pending 等用户在设置里确认。 */
     memoryUpdate?: CloudAgentMemoryUpdate;
     /** Agent 推荐安装的技能市场技能；安装与否由用户决定。 */
@@ -410,6 +412,7 @@ export const AgentChatMessage = memo(function AgentChatMessage({
     undoStates,
     onWithdrawInterjection,
     withdrawing = false,
+    onRequeueInterjection,
     replyOptions,
     onReplyOption,
     replyOptionsDisabled = false,
@@ -427,12 +430,15 @@ export const AgentChatMessage = memo(function AgentChatMessage({
     undoStates?: Record<string, AgentCanvasUndoState>;
     onWithdrawInterjection?: (messageId: string) => void;
     withdrawing?: boolean;
+    /** 未送达的插话：作为下一轮发送，或放回队列后编辑。 */
+    onRequeueInterjection?: (messageId: string, mode: "send" | "edit") => void;
     /** 只给最后一条、还没被回复的 Agent 消息：末尾编号选项改为可点击卡片。 */
     replyOptions?: AgentReplyOptions | null;
     onReplyOption?: (text: string) => void;
     replyOptionsDisabled?: boolean;
 }) {
     const isUser = item.role === "user";
+    const reducedMotion = useReducedMotion();
     const isSystem = item.role === "system";
     const displayedText = useTypewriterText(item.text, item.role === "assistant" && isStreaming);
     const formAnswer = item.formAnswer ?? (isUser ? parseCloudAgentFormAnswer(item.text) : undefined);
@@ -500,91 +506,184 @@ export const AgentChatMessage = memo(function AgentChatMessage({
         const title = item.title || (errorTone === "warning" ? "Agent 正在重试" : "Agent 暂时无法继续");
         const { description, diagnosticId } = agentErrorContent(item.text, title);
         return (
-            <div className={`agent-status-message agent-status-message--${errorTone} agent-error-message`}>
-                <span className="agent-error-icon" aria-hidden="true">
-                    <CircleAlert className="size-3.5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                    <div role="status">
-                        <div className="agent-error-title">{title}</div>
+            <motion.div className="agent-error-reveal" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}>
+                <div className={`agent-status-message agent-status-message--${errorTone} agent-error-message`}>
+                    <span className="agent-error-icon" aria-hidden="true">
+                        <CircleAlert className="size-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <div className="agent-error-header" role="status">
+                            <span className="agent-error-title">{title}</span>
+                            {onRetry ? (
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    className="agent-error-retry"
+                                    icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+                                    disabled={retrying}
+                                    onClick={onRetry}
+                                    title="用同样的内容重新发起一轮（会重新计费）"
+                                >
+                                    {retrying ? "重试中" : "重试本轮"}
+                                </Button>
+                            ) : null}
+                        </div>
                         {description ? <p className="agent-error-detail">{description}</p> : null}
+                        {item.meta ? <p className="agent-error-meta">{item.meta}</p> : null}
+                        {diagnosticId ? (
+                            <details className="agent-error-diagnostics">
+                                <summary>
+                                    <ChevronDown className="size-3" aria-hidden="true" />
+                                    诊断信息
+                                </summary>
+                                <div className="agent-error-diagnostics-body">
+                                    <p>如反复出现，请将诊断号反馈给管理员。</p>
+                                    <code>{diagnosticId}</code>
+                                </div>
+                            </details>
+                        ) : null}
                     </div>
-                    {item.meta ? <p className="agent-error-meta">{item.meta}</p> : null}
-                    {diagnosticId ? (
-                        <details className="agent-error-diagnostics">
-                            <summary>
-                                <ChevronDown className="size-3" aria-hidden="true" />
-                                诊断信息
-                            </summary>
-                            <div className="agent-error-diagnostics-body">
-                                <p>如反复出现，请将诊断号反馈给管理员。</p>
-                                <code>{diagnosticId}</code>
-                            </div>
-                        </details>
-                    ) : null}
-                    {onRetry ? (
-                        <Button type="text" size="small" className="agent-error-retry" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
-                            {retrying ? "重试中" : "重试本轮"}
-                        </Button>
-                    ) : null}
                 </div>
-            </div>
+            </motion.div>
         );
     }
+    const copyable = !isStreaming && !formAnswer && Boolean(item.text.trim()) && (isUser || item.role === "assistant");
     return (
-        <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-            <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user max-w-[82%] px-4 py-3 text-right" : "max-w-full flex-1 text-left"}`} style={{ color }}>
-                {item.interjection ? (
-                    <span className="mb-1 inline-flex items-center gap-2">
-                        <span
-                            className="inline-flex items-center rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4"
-                            style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
-                        >
-                            {item.interjection === "undelivered" ? "插话未送达" : item.interjection === "withdrawn" ? "插话已撤回" : item.interjection === "delivered" ? "插话已送达" : "插话 · 等待送达"}
-                        </span>
-                        {item.interjection === "sent" && onWithdrawInterjection ? (
-                            // 只撤回这句插话：不会停止本轮，也不会取消已提交的生成任务。
-                            <button
-                                type="button"
-                                className="inline-flex items-center gap-0.5 rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 disabled:cursor-not-allowed disabled:opacity-40"
-                                style={{ background: "rgba(255,255,255,0.12)", color: "inherit" }}
-                                disabled={withdrawing}
-                                title="撤回这句插话，本轮继续运行，已提交的生成任务不受影响"
-                                aria-label="撤回这句插话"
-                                onClick={() => onWithdrawInterjection(item.id)}
+        <div className={`agent-message-row flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+            <div className={`flex min-w-0 flex-col ${isUser ? "max-w-[82%] items-end" : "max-w-full flex-1 items-stretch"}`}>
+                <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user px-4 py-3 text-right" : "max-w-full text-left"}`} style={{ color }}>
+                    {item.interjection ? (
+                        <span className="mb-1 inline-flex flex-wrap items-center justify-end gap-2">
+                            <span
+                                className="inline-flex items-center rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4"
+                                style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
                             >
-                                {withdrawing ? <LoaderCircle className="size-3 animate-spin" /> : <Undo2 className="size-3" />}
-                                撤回
-                            </button>
-                        ) : null}
-                    </span>
-                ) : null}
-                {item.role === "assistant" ? (
-                    <>
-                        {agentMarkdownText ? (
-                            <AIMessageMarkdown className="text-left" isStreaming={isStreaming} streamingAnimation="none" components={markdownComponents}>
-                                {agentMarkdownText}
-                            </AIMessageMarkdown>
-                        ) : null}
-                        {showReplyOptions && replyOptions && onReplyOption ? <AgentReplyOptionCards options={replyOptions.options} disabled={replyOptionsDisabled} onSelect={(option) => onReplyOption(option.text)} /> : null}
-                    </>
-                ) : isUser && canvasReference ? (
-                    <AIMessageMarkdown className="text-left" components={markdownComponents}>
-                        {userCanvasMarkdown}
-                    </AIMessageMarkdown>
-                ) : formAnswer ? (
-                    <AgentFormAnswerCard answer={formAnswer} theme={theme} />
-                ) : (
-                    <AgentMessageText text={item.text} references={references} />
-                )}
-                {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
-                {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
+                                {agentInterjectionLabel(item.interjection)}
+                            </span>
+                            {item.interjection === "sent" && onWithdrawInterjection ? (
+                                // 只撤回这句插话：不会停止本轮，也不会取消已提交的生成任务；原话回到排队队首。
+                                <button
+                                    type="button"
+                                    className="agent-interjection-action"
+                                    disabled={withdrawing}
+                                    title="撤回到队列：这句不再送给本轮，回到排队队首；本轮继续运行，已提交的生成任务不受影响"
+                                    aria-label="撤回这句插话"
+                                    onClick={() => onWithdrawInterjection(item.id)}
+                                >
+                                    {withdrawing ? <LoaderCircle className="size-3 animate-spin" aria-hidden="true" /> : <CornerUpLeft className="size-3" aria-hidden="true" />}
+                                    撤回到队列
+                                </button>
+                            ) : null}
+                            {item.interjection === "undelivered" && onRequeueInterjection ? (
+                                <>
+                                    <button type="button" className="agent-interjection-action" title="把这句作为下一轮发送" aria-label="把这句未送达的插话作为下一轮发送" onClick={() => onRequeueInterjection(item.id, "send")}>
+                                        作为下一轮发送
+                                    </button>
+                                    <button type="button" className="agent-interjection-action" title="放回队列并编辑" aria-label="编辑这句未送达的插话" onClick={() => onRequeueInterjection(item.id, "edit")}>
+                                        编辑
+                                    </button>
+                                </>
+                            ) : null}
+                        </span>
+                    ) : null}
+                    {item.role === "assistant" ? (
+                        <>
+                            {agentMarkdownText ? (
+                                <AIMessageMarkdown className="text-left" isStreaming={isStreaming} streamingAnimation="none" components={markdownComponents}>
+                                    {agentMarkdownText}
+                                </AIMessageMarkdown>
+                            ) : null}
+                            {showReplyOptions && replyOptions && onReplyOption ? <AgentReplyOptionCards options={replyOptions.options} disabled={replyOptionsDisabled} onSelect={(option) => onReplyOption(option.text)} /> : null}
+                        </>
+                    ) : isUser && canvasReference ? (
+                        <AIMessageMarkdown className="text-left" components={markdownComponents}>
+                            {userCanvasMarkdown}
+                        </AIMessageMarkdown>
+                    ) : formAnswer ? (
+                        <AgentFormAnswerCard answer={formAnswer} theme={theme} />
+                    ) : (
+                        <AgentMessageText text={item.text} references={references} />
+                    )}
+                    {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
+                    {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
+                </div>
+                {copyable ? <AgentMessageCopyButton text={agentCopyText(item.text, references)} align={isUser ? "end" : "start"} /> : null}
             </div>
         </div>
     );
 });
+/** 写入剪贴板：优先用异步剪贴板接口；非 HTTPS 或权限被拒时退回隐藏文本框加 execCommand。 */
+async function writeClipboardText(text: string) {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            // 继续尝试旧方法。
+        }
+    }
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none";
+    document.body.append(area);
+    area.select();
+    try {
+        return document.execCommand("copy");
+    } catch {
+        return false;
+    } finally {
+        area.remove();
+    }
+}
+/** 消息下方的「复制」：悬停或键盘聚焦时出现，触屏常显；复制后按钮上显示「已复制」，不弹全局提示。 */
+function AgentMessageCopyButton({ text, align }: { text: string; align: "start" | "end" }) {
+    const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+    useEffect(() => {
+        if (state === "idle") return;
+        const timer = window.setTimeout(() => setState("idle"), 1600);
+        return () => window.clearTimeout(timer);
+    }, [state]);
+    return (
+        <div className={`agent-message-actions ${align === "end" ? "self-end" : "self-start"}`}>
+            <button
+                type="button"
+                className="agent-message-action"
+                aria-label="复制这条消息"
+                onClick={(event) => {
+                    const trigger = event.currentTarget;
+                    void writeClipboardText(text).then((copied) => {
+                        setState(copied ? "copied" : "failed");
+                        // 旧方法会把焦点移到临时文本框，复制完放回按钮，键盘用户不丢位置。
+                        if (document.activeElement !== trigger) trigger.focus({ preventScroll: true });
+                    });
+                }}
+            >
+                {state === "copied" ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
+                <span aria-live="polite">{state === "copied" ? "已复制" : state === "failed" ? "复制失败" : "复制"}</span>
+            </button>
+        </div>
+    );
+}
 
 const EMPTY_REFERENCES: CanvasResourceReference[] = [];
+
+function agentInterjectionLabel(state: CloudAgentInterjectionState) {
+    switch (state) {
+        case "undelivered":
+            return "插话未送达";
+        case "withdrawn":
+            return "插话已撤回";
+        case "delivered":
+            return "插话已送达";
+        case "requeued":
+            return "已转为下一轮";
+        case "sending":
+            return "插话 · 发送中";
+        default:
+            return "插话 · 等待送达";
+    }
+}
 
 /** 操作段与推理段每次都由消息列表重新切出新数组；元素都没变就视为同一段，不重渲染。 */
 function sameFeedProps<P extends { items: readonly CloudAgentChatMessage[] }>(previous: P, next: P) {
@@ -979,8 +1078,7 @@ export function AgentToolCard({
  * 语义要点：折叠态整段只有这一行可见，所以**类别徽标必须在折叠行上**（清单 / 查看画面 /
  * 修改画布），否则默认状态看不出刚才到底是读了清单还是真看了画面。
  *
- * 展开状态用「用户覆盖 + 失败时默认展开」两段决定 —— 失败的操作不能被折进一行里看不见，
- * 但用户手动收起之后就不再自动弹开（跑动中新步骤只会追加，不会重置状态）。
+ * 展开状态由用户控制；失败直接显示在摘要行，恢复与失败都不会自动展开历史记录。
  * `live` 由面板按"这一段是不是对话末尾且在跑"给出：只有还在推进时才流光。
  */
 export const AgentOperationFeed = memo(function AgentOperationFeed({
@@ -1013,10 +1111,9 @@ export const AgentOperationFeed = memo(function AgentOperationFeed({
     const categoryIcon = agentToolCategoryIcon(latestToolName, category, Boolean(latestRetry));
     const label = agentOperationSegmentLabel(items);
     const visibleLabel = latestRetry ? `${latestRetry.status === "recovered" ? "已恢复" : "未完成"} · ${latestRetry.attempt}/${latestRetry.maxAttempts} 次尝试` : label;
-    // 只看最新一步的状态。前面的参数错误如果已被自动纠正，不应让整段
-    // 操作流继续保持红色并默认展开，否则用户会误以为最终动作仍然失败。
+    // 错误摘要始终可见；详情只由用户展开，状态变化不挤走正在阅读的正文。
     const failed = agentOperationFailed(latest);
-    const expanded = userExpanded ?? failed;
+    const expanded = userExpanded ?? false;
     const shimmering = live && !failed;
     return (
         <div
@@ -1054,13 +1151,24 @@ export const AgentOperationFeed = memo(function AgentOperationFeed({
                 {items.length > 1 ? <span className="agent-activity-meta">{items.length} 步</span> : null}
                 <AgentChevronGlyph className="agent-activity-chevron" />
             </button>
-            {expanded ? (
-                <div id={listId} className="agent-activity-body agent-operation-list">
-                    {items.map((item) => (
-                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
-                    ))}
-                </div>
-            ) : null}
+            <AnimatePresence initial={false}>
+                {expanded ? (
+                    <motion.div
+                        key="operations"
+                        className="agent-operation-reveal"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
+                    >
+                        <div id={listId} className="agent-activity-body agent-operation-list">
+                            {items.map((item) => (
+                                <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
+                            ))}
+                        </div>
+                    </motion.div>
+                ) : null}
+            </AnimatePresence>
         </div>
     );
 }, sameFeedProps);

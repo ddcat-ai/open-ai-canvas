@@ -21,8 +21,14 @@ export type CloudAgentConversationMessage = {
     meta?: string;
     detail?: unknown;
     attachments?: Array<{ id: string; name: string; url: string }>;
-    interjection?: "sent" | "delivered" | "undelivered" | "withdrawn";
+    interjection?: CloudAgentInterjectionState;
 };
+
+/**
+ * 插话气泡状态。sending：请求还没返回（只在内存里，不写入本机快照）；
+ * requeued：未送达后已转为下一轮（重新进入队列），不再提供转发入口。
+ */
+export type CloudAgentInterjectionState = "sending" | "sent" | "delivered" | "undelivered" | "withdrawn" | "requeued";
 
 export type CloudAgentConversation = {
     id: string;
@@ -78,14 +84,19 @@ const documentWrites = new Map<string, Promise<unknown>>();
 export async function saveCloudAgentConversations(activeId: string | null, conversations: CloudAgentConversation[], scope = getActiveUserScope()) {
     // 流式标记只属于内存中的观察状态。若网络在最后一个 delta 后断开，
     // 也不能让下次恢复把思考卡片误判为仍在实时展开。
+    // 发送中的插话气泡同理：结果未知，刷新后由事件回放补回已被接收的那条，原文仍在本机队列里。
     const persistedConversations = conversations.map((conversation) => ({
         ...conversation,
-        messages: conversation.messages.map((message) => ({ ...message, streaming: false })),
+        messages: conversation.messages.filter((message) => message.interjection !== "sending").map((message) => ({ ...message, streaming: false })),
     }));
     const document: CloudAgentConversationDocument = { version: 1, activeId, conversations: persistedConversations };
     const write = (documentWrites.get(scope) || Promise.resolve()).catch(() => undefined).then(() => localForageStorageForScope(scope).setItem(storageKey(), JSON.stringify(document)));
     documentWrites.set(scope, write);
-    try { await write; } finally { if (documentWrites.get(scope) === write) documentWrites.delete(scope); }
+    try {
+        await write;
+    } finally {
+        if (documentWrites.get(scope) === write) documentWrites.delete(scope);
+    }
 }
 
 // Keep the retry key outside the chat snapshot. If the response is lost, a
@@ -103,7 +114,15 @@ export async function loadCloudAgentPendingSubmission(conversationId: string, sc
         if (parsed.request !== undefined && (!parsed.request || parsed.request.idempotencyKey !== parsed.key || typeof parsed.request.canvasId !== "string" || typeof parsed.request.prompt !== "string")) throw new Error("invalid request");
         if (parsed.parentRunId !== undefined && typeof parsed.parentRunId !== "string") throw new Error("invalid parent");
         if (parsed.messageId !== undefined && typeof parsed.messageId !== "string") throw new Error("invalid message");
-        return { fingerprint: parsed.fingerprint, key: parsed.key, request: renameLegacySkillIds(parsed.request), parentRunId: parsed.parentRunId, messageId: parsed.messageId, displayText: parsed.displayText, canvasReferenceNodeId: parsed.canvasReferenceNodeId } satisfies CloudAgentPendingSubmission;
+        return {
+            fingerprint: parsed.fingerprint,
+            key: parsed.key,
+            request: renameLegacySkillIds(parsed.request),
+            parentRunId: parsed.parentRunId,
+            messageId: parsed.messageId,
+            displayText: parsed.displayText,
+            canvasReferenceNodeId: parsed.canvasReferenceNodeId,
+        } satisfies CloudAgentPendingSubmission;
     } catch {
         throw new Error("待确认请求记录损坏，已暂停本对话发送；请先在任务中心核对原运行，不要直接重复生成");
     }
@@ -163,11 +182,13 @@ function isConversationDocument(value: unknown): value is CloudAgentConversation
     return document.conversations.every((conversation) => {
         if (!conversation || typeof conversation !== "object") return false;
         const candidate = conversation as Partial<CloudAgentConversation>;
-        return typeof candidate.id === "string"
-            && typeof candidate.title === "string"
-            && Array.isArray(candidate.messages)
-            && typeof candidate.createdAt === "string"
-            && typeof candidate.updatedAt === "string"
-            && ["read_only", "auto", "request_approval"].includes(candidate.permissionMode || "");
+        return (
+            typeof candidate.id === "string" &&
+            typeof candidate.title === "string" &&
+            Array.isArray(candidate.messages) &&
+            typeof candidate.createdAt === "string" &&
+            typeof candidate.updatedAt === "string" &&
+            ["read_only", "auto", "request_approval"].includes(candidate.permissionMode || "")
+        );
     });
 }

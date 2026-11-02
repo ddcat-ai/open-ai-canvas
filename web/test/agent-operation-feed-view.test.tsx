@@ -79,17 +79,14 @@ test("the folded line names the tier it is reporting", () => {
     expect(operate).toContain('data-agent-category="operate"');
 });
 
-test("a failed step is marked and expanded instead of hidden behind the folded line", () => {
+test("a failed step remains visible in the summary without automatically expanding history", () => {
     const failed = [...steps, step("t3", "canvas_apply_ops", "", { eventType: "tool_failed", result: { taskId: "task-1" } })];
     const html = renderToStaticMarkup(<AgentOperationFeed items={failed} theme={canvasThemes.light} />);
     expect(html).toContain("is-failed");
-    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("更新画布内容失败");
-    expect(html).toContain("agent-operation-list");
-    // 展开的完整记录仍然是原样的工具卡（含任务 ID 与历史步骤）
-    expect(html).toContain("已读取画布清单（未查看画面）");
-    expect(html).toContain("任务 ID：task-1");
-    // 失败态由 data-agent-tone="error" 与 CSS 的 --status-error 取色，不内联字面色值；展开后的每一步也不渲染状态勾/叉
+    expect(html).not.toContain("agent-operation-list");
+    expect(html).not.toContain("已读取画布清单（未查看画面）");
     expect(html).toContain('data-agent-tone="error"');
     expect(html).not.toContain("#dc2626");
     expect(html).not.toContain("agent-tool-status");

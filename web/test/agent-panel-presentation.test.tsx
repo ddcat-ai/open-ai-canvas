@@ -47,7 +47,7 @@ test("compact send button preserves empty-draft and sending guards", () => {
         const html = renderToStaticMarkup(<AgentChatComposer prompt={prompt} sending={sending} placeholder="聊聊想法" theme={canvasThemes.dark} onPromptChange={noop} onSubmit={noop} />);
         const button = html.match(/<button\b[^>]*class="agent-composer-send [^"]*"[^>]*>/)?.[0];
         expect(button).toBeDefined();
-        expect(button).toContain("size-7");
+        expect(button).toContain("h-7");
         expect(button?.includes('disabled=""')).toBe(disabled);
         expect(button).not.toContain("box-shadow:");
     }

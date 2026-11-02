@@ -480,29 +480,42 @@
     --agent-error-accent: var(--palette-status-error);
 }
 
+.agent-error-reveal,
+.agent-operation-reveal,
+.agent-working-reveal {
+    overflow: hidden;
+}
+
 .agent-error-message {
     display: flex;
     align-items: flex-start;
     gap: var(--space-2);
-    padding: var(--space-3);
-    border-radius: var(--agent-radius-surface);
+    padding: var(--space-2);
+    border-radius: var(--r-md);
     background: var(--agent-surface-soft);
     color: var(--agent-ink);
 }
 
 .agent-error-icon {
     display: grid;
-    flex: 0 0 var(--space-6);
-    width: var(--space-6);
+    flex: 0 0 var(--space-5);
+    width: var(--space-5);
     height: var(--space-6);
     place-items: center;
-    border-radius: var(--r-full);
-    background: color-mix(in srgb, var(--agent-error-accent) 10%, transparent);
     color: var(--agent-error-accent);
 }
 
+.agent-error-header {
+    display: flex;
+    min-height: var(--space-6);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
 .agent-error-title {
-    font-size: var(--fs-body);
+    min-width: 0;
+    font-size: var(--fs-ui);
     font-weight: 500;
     line-height: var(--space-6);
 }
@@ -575,9 +588,10 @@
 }
 
 .agent-error-retry.ant-btn {
-    height: auto;
-    margin-top: var(--space-2);
-    padding: var(--space-1) var(--space-2);
+    height: var(--space-6);
+    flex: none;
+    margin: 0;
+    padding: 0 var(--space-2);
     font-size: var(--fs-label);
 }
 
@@ -780,19 +794,10 @@
     background: var(--agent-surface-raised, var(--background));
 }
 
-.agent-composer-surface:focus-within {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent-accent, var(--foreground)) 35%, transparent);
-}
-
 /* 底部托盘：外壳与输入卡片同为一张卡，输入卡片嵌在上方，底部条直接落在托盘里；无分隔线、无间距。 */
 .agent-composer-shell[data-has-footer] {
     border-radius: var(--agent-radius-surface, var(--radius-xl));
     background: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-material-solid, var(--background)));
-}
-
-/* 整卡模式下输入区焦点环会落在输入区与连接器之间形成一条线，不画焦点环。 */
-.agent-composer-shell[data-has-footer] > .agent-composer-surface:focus-within {
-    box-shadow: none;
 }
 
 .agent-plan-bar {
@@ -1181,6 +1186,17 @@
     }
 }
 
+/* 面板不够宽时上下文只显示环，把位置让给模型名、停止和主按钮；百分比点开明细可见。 */
+@container (max-width: 519px) {
+    .agent-context-ring {
+        min-width: 30px;
+        padding: 2px 4px;
+        gap: 0;
+    }
+    .agent-context-meter-copy {
+        display: none;
+    }
+}
 @container (max-width: 400px) {
     .agent-panel-header {
         gap: var(--space-2);
@@ -1191,14 +1207,6 @@
     }
     .agent-conversation {
         padding-inline: var(--space-4);
-    }
-    .agent-context-ring {
-        min-width: 32px;
-        padding-right: 4px;
-        gap: 0;
-    }
-    .agent-context-meter-copy {
-        display: none;
     }
     .agent-context-panel-foot {
         display: grid;
@@ -1884,6 +1892,17 @@ summary.agent-tool-step:hover {
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
+    transition: height 180ms ease-out;
+}
+
+.agent-composer-surface:has(.agent-composer-resize-handle:active) .agent-composer-prompt-scroll {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-composer-prompt-scroll {
+        transition: none;
+    }
 }
 
 .agent-composer-prompt-scroll > [data-canvas-no-zoom] {
@@ -1964,6 +1983,282 @@ summary.agent-tool-step:hover {
     flex: 0 0 auto;
     align-items: center;
     justify-content: flex-end;
+}
+
+/* 停止是次要操作：描边圆形，红色只用在图标；悬浮只换底色，按压交给全局 0.97。 */
+.agent-composer-stop {
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 16%, transparent);
+    background: transparent;
+    color: var(--status-error);
+    outline: none;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease;
+}
+
+.agent-composer-stop:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--status-error) 45%, transparent);
+    background: color-mix(in srgb, var(--status-error) 8%, transparent);
+}
+
+.agent-composer-stop:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.agent-composer-stop:disabled {
+    color: var(--agent-caption);
+}
+
+.agent-composer-stop-slot {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: none;
+}
+
+.agent-composer-stop-slot > button {
+    grid-area: 1 / 1;
+}
+
+.agent-composer-send {
+    width: calc(var(--space-8) * 2);
+    border: 0;
+}
+
+.agent-composer-send-content {
+    display: inline-flex;
+    grid-area: 1 / 1;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.agent-composer-tray {
+    overflow: hidden;
+}
+
+/* 插话气泡上的小操作（撤回到队列、作为下一轮发送、编辑）。 */
+.agent-interjection-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 8px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: inherit;
+    font-size: var(--fs-label);
+    line-height: 16px;
+    opacity: 0.8;
+    cursor: pointer;
+    transition: opacity 150ms ease;
+}
+
+.agent-interjection-action:not(:disabled):hover {
+    opacity: 1;
+}
+
+.agent-interjection-action:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+}
+
+.agent-interjection-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+/* 排队消息条：放在输入区外壳顶部，与输入卡片同一张卡；逐条可插话、编辑、移出。 */
+.agent-outbox {
+    border-radius: var(--agent-radius-surface) var(--agent-radius-surface) 0 0;
+    background: transparent;
+    color: var(--agent-ink);
+}
+
+.agent-outbox.is-paused {
+    background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+}
+
+.agent-outbox-head {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--fs-label);
+}
+
+.agent-outbox-title {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-outbox-subtitle {
+    color: var(--agent-caption);
+    font-weight: 400;
+}
+
+.agent-outbox-list {
+    display: grid;
+    max-height: 132px;
+    gap: 2px;
+    margin: 0;
+    padding: 0 var(--space-1) var(--space-1);
+    overflow-y: auto;
+    list-style: none;
+}
+
+.agent-outbox-row {
+    display: flex;
+    overflow: hidden;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 34px;
+    padding: 4px var(--space-2);
+    border-radius: calc(var(--radius) * 1.5);
+    background: var(--agent-surface-soft);
+}
+
+.agent-outbox-row.is-failed {
+    background: color-mix(in srgb, var(--status-error) 9%, transparent);
+}
+
+.agent-outbox-index {
+    flex: none;
+    width: 14px;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.agent-outbox-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.agent-outbox-text {
+    overflow: hidden;
+    font-size: var(--fs-ui);
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-outbox-meta {
+    min-height: 1.4em;
+    overflow: hidden;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agent-outbox-row.is-failed .agent-outbox-meta {
+    color: var(--status-error);
+}
+
+.agent-outbox-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+}
+
+.agent-outbox-action,
+.agent-outbox-icon-action,
+.agent-outbox-head-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    outline: none;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease;
+}
+
+.agent-outbox-action {
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 14%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-surface-base) 70%, transparent);
+    font-size: var(--fs-label);
+    white-space: nowrap;
+}
+
+.agent-outbox-icon-action {
+    width: 24px;
+    height: 24px;
+    border-radius: calc(var(--radius) * 1.5);
+    color: var(--agent-caption);
+}
+
+.agent-outbox-head-action {
+    height: 24px;
+    padding: 0 8px;
+    border-radius: calc(var(--radius) * 1.5);
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    white-space: nowrap;
+}
+
+.agent-outbox-head-action.is-primary {
+    background: var(--agent-ink);
+    color: var(--agent-surface-base);
+}
+
+.agent-outbox-head-action.is-danger {
+    color: var(--status-error);
+}
+
+.agent-outbox-action:not(:disabled):hover,
+.agent-outbox-icon-action:not(:disabled):hover,
+.agent-outbox-head-action:not(:disabled):not(.is-primary):hover {
+    background: var(--agent-surface-hover);
+    color: var(--agent-ink);
+}
+
+.agent-outbox-action:focus-visible,
+.agent-outbox-icon-action:focus-visible,
+.agent-outbox-head-action:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 1px;
+}
+
+.agent-outbox-action:disabled,
+.agent-outbox-icon-action:disabled,
+.agent-outbox-head-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-composer-stop,
+    .agent-interjection-action,
+    .agent-outbox-action,
+    .agent-outbox-icon-action,
+    .agent-outbox-head-action {
+        transition: none;
+    }
 }
 
 .canvas-agent-launcher {
@@ -2504,7 +2799,7 @@ summary.agent-tool-step:hover {
 
 .canvas-agent-approval-actions button:focus-visible,
 .canvas-agent-approval-reason-toggle:focus-visible {
-    outline: 2px solid var(--agent-approval-blue);
+    outline: 2px solid var(--agent-focus-ring, var(--ring));
     outline-offset: 2px;
 }
 
@@ -2524,17 +2819,17 @@ summary.agent-tool-step:hover {
     background: color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
+/* 「同意执行」是这张卡的主要命令：与发送按钮同为墨色反白，不用彩色和投影。 */
 .canvas-agent-approval-approve {
     min-width: 116px;
-    border: 1px solid var(--agent-approval-blue);
-    background: var(--agent-approval-blue);
-    color: #fff;
+    border: 1px solid var(--agent-ink, var(--foreground));
+    background: var(--agent-ink, var(--foreground));
+    color: var(--agent-surface-base, var(--background));
 }
 
 .canvas-agent-approval-approve:not(:disabled):hover {
-    border-color: var(--agent-approval-blue-hover);
-    background: var(--agent-approval-blue-hover);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--agent-approval-blue) 25%, transparent);
+    border-color: color-mix(in srgb, var(--agent-ink, var(--foreground)) 86%, var(--agent-surface-base, var(--background)));
+    background: color-mix(in srgb, var(--agent-ink, var(--foreground)) 86%, var(--agent-surface-base, var(--background)));
 }
 
 @media (max-width: 420px) {
@@ -3173,5 +3468,472 @@ summary.agent-tool-step:hover {
     .canvas-agent-panel [data-agent-drag-handle] {
         cursor: default;
         touch-action: auto;
+    }
+}
+
+/* ---- 输入框「+」、上下文行、附件状态与字数（P0-2） ---- */
+.agent-composer-add {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--agent-surface-soft);
+    color: var(--agent-caption);
+    cursor: pointer;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
+}
+
+.agent-composer-add:not(:disabled):hover,
+.agent-composer-add[aria-expanded="true"] {
+    background: var(--agent-surface-hover);
+    color: var(--agent-ink);
+}
+
+.agent-composer-add:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.agent-composer-add:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.agent-composer-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+}
+
+.agent-context-chip {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 4px 0 8px;
+    border-radius: 999px;
+    background: var(--agent-surface-soft);
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    line-height: 1;
+}
+
+.agent-context-chip.is-off {
+    opacity: 0.72;
+}
+
+.agent-context-chip.is-warning {
+    background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+    color: var(--agent-ink);
+}
+
+.agent-context-chip-action {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    height: 20px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--agent-ink);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+}
+
+.agent-context-chip-action:hover {
+    background: var(--agent-surface-hover);
+}
+
+.agent-context-chip-action:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 1px;
+}
+
+.agent-attachments {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    padding-bottom: 2px;
+    overflow-x: auto;
+}
+
+.agent-attachment {
+    position: relative;
+    display: flex;
+    width: 80px;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.agent-attachment-thumb {
+    position: relative;
+    display: block;
+    width: 80px;
+    height: 80px;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: var(--agent-surface-soft);
+    color: var(--agent-caption);
+    cursor: zoom-in;
+}
+
+.agent-attachment-thumb:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+/* 失败描边画在图片上面：内阴影会被图片盖住。 */
+.agent-attachment.is-failed .agent-attachment-thumb::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--status-error) 75%, transparent);
+    content: "";
+    pointer-events: none;
+}
+
+/* 移除按钮叠在缩略图右上角：悬停或键盘聚焦时出现；失败时和触屏上常显。 */
+.agent-attachment-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 12%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-surface-base) 86%, transparent);
+    color: var(--agent-ink);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+        opacity 150ms ease,
+        background-color 150ms ease;
+}
+
+.agent-attachment:hover .agent-attachment-remove,
+.agent-attachment:focus-within .agent-attachment-remove,
+.agent-attachment.is-failed .agent-attachment-remove {
+    opacity: 1;
+}
+
+.agent-attachment-remove:hover {
+    background: var(--agent-surface-base);
+}
+
+.agent-attachment-remove:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 1px;
+}
+
+@media (hover: none) {
+    .agent-attachment-remove {
+        opacity: 1;
+    }
+}
+
+.agent-attachment-label {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--agent-caption);
+    font-size: var(--fs-tiny);
+    line-height: 1.3;
+    cursor: pointer;
+}
+
+.agent-attachment-label:hover {
+    color: var(--agent-ink);
+}
+
+.agent-attachment-label:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 1px;
+}
+
+.agent-attachment-veil {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 2px;
+    background: color-mix(in srgb, var(--agent-surface-base) 62%, transparent);
+    color: var(--agent-ink);
+    font-size: var(--fs-tiny);
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-attachment-veil.is-failed {
+    color: var(--status-error);
+}
+
+/* 失败原因最多两行，完整原因在悬停提示里；有原文件时下面给「重试」。 */
+.agent-attachment-error {
+    display: grid;
+    justify-items: start;
+    gap: 2px;
+    color: var(--status-error);
+    font-size: var(--fs-tiny);
+    line-height: 1.3;
+}
+
+.agent-attachment-error > span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.agent-attachment-retry {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--agent-ink);
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.agent-attachment-retry:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 1px;
+}
+
+.agent-composer-count {
+    flex: none;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.agent-composer-count.is-over {
+    color: var(--status-error);
+    font-weight: 600;
+}
+
+/* 拖入面板时的落点层：只换背景和描边，不做位移动画。 */
+.agent-drop-overlay {
+    position: absolute;
+    inset: 8px;
+    z-index: 30;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: 1.5px dashed color-mix(in srgb, var(--agent-accent) 70%, transparent);
+    border-radius: var(--agent-radius-surface);
+    background: color-mix(in srgb, var(--agent-surface-base) 88%, transparent);
+    color: var(--agent-ink);
+    font-size: var(--fs-ui);
+    text-align: center;
+    pointer-events: none;
+}
+
+/* ---- 时间线：回到底部与消息复制 ---- */
+.agent-conversation-frame {
+    position: relative;
+    display: flex;
+    min-height: 0;
+    flex: 1 1 0%;
+    flex-direction: column;
+}
+
+.agent-scroll-latest {
+    position: absolute;
+    bottom: var(--space-3);
+    left: 50%;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 10%, transparent);
+    border-radius: 999px;
+    background: var(--agent-material-solid);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--agent-shadow-color) 60%, transparent);
+    color: var(--agent-ink);
+    font-size: var(--fs-label);
+    cursor: pointer;
+    transform: translateX(-50%);
+    transition: background-color 150ms ease;
+}
+
+.agent-scroll-latest:hover {
+    background: var(--agent-surface-raised);
+}
+
+.agent-scroll-latest:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.agent-message-actions {
+    display: flex;
+    margin-top: 2px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
+.agent-message-row:hover .agent-message-actions,
+.agent-message-actions:focus-within {
+    opacity: 1;
+}
+
+/* 触屏没有悬停：操作常显。 */
+@media (hover: none) {
+    .agent-message-actions {
+        opacity: 1;
+    }
+}
+
+.agent-message-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    cursor: pointer;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
+}
+
+.agent-message-action:hover {
+    background: var(--agent-surface-hover);
+    color: var(--agent-ink);
+}
+
+.agent-message-action:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 1px;
+}
+
+/* ---- 权限胶囊、状态圆点、「更多」里的快捷键 ---- */
+.agent-permission-trigger {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--agent-permission-color, var(--agent-ink)) 12%, transparent);
+    color: var(--agent-ink);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+}
+
+.agent-permission-trigger > svg {
+    color: var(--agent-permission-color, currentColor);
+}
+
+.agent-permission-trigger:hover,
+.agent-permission-trigger[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--agent-permission-color, var(--agent-ink)) 20%, transparent);
+}
+
+.agent-permission-trigger:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+/* 面板窄于 420px 时权限只留图标，文字在悬停提示里。 */
+@container (max-width: 419px) {
+    .agent-permission-trigger {
+        width: 28px;
+        justify-content: center;
+        padding: 0;
+    }
+    .agent-permission-label,
+    .agent-skills-label {
+        display: none;
+    }
+}
+
+.agent-panel-status-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+.agent-panel-status-dot[data-live] {
+    animation: agent-status-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes agent-status-breathe {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.agent-menu-shortcut {
+    display: flex;
+    min-width: 200px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.agent-menu-shortcut-keys {
+    display: inline-flex;
+    gap: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-message-actions,
+    .agent-composer-add,
+    .agent-scroll-latest,
+    .agent-message-action,
+    .agent-attachment-remove,
+    .agent-permission-trigger {
+        transition: none;
+    }
+    .agent-panel-status-dot[data-live] {
+        animation: none;
     }
 }

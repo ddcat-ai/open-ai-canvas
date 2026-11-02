@@ -45,9 +45,15 @@ type cloudAgentInterjection struct {
 }
 
 // cloudAgentAcceptsInterjection 只有还在推进的运行收插话：running / queued / waiting_approval。
-// 终态（completed / failed / rejected / cancelled）一律拒绝，由前端回落成新一轮发送。
+// 终态（completed / failed / rejected / cancelled）一律拒绝，前端把这条留在本机队列作为下一轮发送。
 func cloudAgentAcceptsInterjection(status string) bool {
 	return status == "running" || status == "queued" || status == "waiting_approval"
+}
+
+// cloudAgentInterjectionConflict 插话与撤回的 409 都带机器可读原因：前端据此区分「本轮已结束（转下一轮）」
+// 「已送达（不能撤回）」和「并发写冲突（可重试）」，不解析文案。
+func cloudAgentInterjectionConflict(reason ErrorReason, message string) error {
+	return &AppError{Status: 409, Code: 409, Reason: reason, Message: message, Retryable: reason == ReasonAgentRunStateBusy}
 }
 
 // cloudAgentInterjectionSeen 幂等判据：待送队列里有，或最近送过/丢过同一个 id。
@@ -118,7 +124,7 @@ func (s *Service) InterjectCloudAgent(userID, id, messageID, text string) (int, 
 			return len(state.PendingInterjections), nil
 		}
 		if !cloudAgentAcceptsInterjection(run.Status) {
-			return 0, creationConflict("本轮已经结束，这条消息将作为新一轮发送")
+			return 0, cloudAgentInterjectionConflict(ReasonAgentInterjectionRunFinished, "本轮已经结束，这条消息会作为下一轮发送")
 		}
 		err = s.repo.MutateCloudAgent(userID, id, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 			state.PendingInterjections = append(state.PendingInterjections, cloudAgentInterjection{ID: messageID, Text: text, CreatedAt: time.Now()})
@@ -135,7 +141,7 @@ func (s *Service) InterjectCloudAgent(userID, id, messageID, text string) (int, 
 		}
 		return len(state.PendingInterjections), nil
 	}
-	return 0, creationConflict("Agent 正在写入运行状态，请重试")
+	return 0, cloudAgentInterjectionConflict(ReasonAgentRunStateBusy, "Agent 正在写入运行状态，请重试")
 }
 
 // WithdrawCloudAgentInterjection 撤回一条尚未送达模型的插话。只动待送队列，
@@ -167,7 +173,7 @@ func (s *Service) WithdrawCloudAgentInterjection(userID, id, messageID string) e
 		if index < 0 {
 			for _, seen := range state.InterjectionIDs {
 				if seen == messageID {
-					return creationConflict("插话已送达或已结束，无法撤回")
+					return cloudAgentInterjectionConflict(ReasonAgentInterjectionDelivered, "插话已送达或已结束，无法撤回")
 				}
 			}
 			return kernel.NotFound("插话不存在")
@@ -184,7 +190,7 @@ func (s *Service) WithdrawCloudAgentInterjection(userID, id, messageID string) e
 		}
 		return err
 	}
-	return creationConflict("Agent 正在写入运行状态，请重试")
+	return cloudAgentInterjectionConflict(ReasonAgentRunStateBusy, "Agent 正在写入运行状态，请重试")
 }
 
 // cloudAgentDrainInterjections 把待送插话注入本轮对话。
@@ -216,7 +222,7 @@ func cloudAgentDrainInterjections(runID string, state *cloudAgentRuntime) bool {
 // 如实把它们退回给用户，而不是静默吞掉。
 //
 // 刻意不自动替用户开新一轮：那会产生用户没点过的扣费。前端收到这个事件后把消息标成
-// 「未送达」并给一个「作为新一轮发送」的按钮。
+// 「未送达」，并在消息上给出「作为下一轮发送」「编辑」（放回本机队列）。
 func cloudAgentDropInterjections(runID, reason string, state *cloudAgentRuntime) bool {
 	if state == nil || len(state.PendingInterjections) == 0 {
 		return false

@@ -56,7 +56,7 @@ export function agentOperationLabel(item: AgentFeedRecord): string {
     return friendlyAgentToolSummary(name, item.text, item.detail, agentToolStatus(name, item.text, item.detail) === "pending");
 }
 
-/** 失败/被拒的操作默认展开：错误不该被折进一行里看不见。 */
+/** 失败/被拒的操作在摘要中明确标记，详情仍由用户展开。 */
 export function agentOperationFailed(item: AgentFeedRecord): boolean {
     const status = agentToolStatus(agentToolName(item.title || "工具执行", item.detail), item.text, item.detail);
     return status === "failed" || status === "rejected";

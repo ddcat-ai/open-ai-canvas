@@ -62,7 +62,8 @@ const MotionBox = ({ children, className, style }: any) => (
 );
 mock.module("motion/react", () => ({ AnimatePresence: ({ children }: any) => children, motion: { aside: MotionBox, div: MotionBox }, useReducedMotion: () => true }));
 mock.module("antd", () => ({
-    App: { useApp: () => ({ message: { info: silent, error: silent } }) },
+    App: { useApp: () => ({ message: { info: silent, error: silent, warning: silent, success: silent } }) },
+    Dropdown: ({ children }: any) => children,
     Button: ({ children, loading: _loading, icon, size: _size, ...props }: any) => (
         <button {...props}>
             {icon}
@@ -181,7 +182,9 @@ mock.module("@/components/canvas/canvas-cloud-agent-panel-parts", () => ({
 }));
 mock.module("@/components/canvas/canvas-agent-skill-library-modal", () => ({ CanvasAgentSkillLibraryModal: () => null }));
 mock.module("@/components/skills/skill-recommendations-modal", () => ({ SkillRecommendationsModal: () => null }));
-mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null }));
+mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null, agentPermissionLabel: (mode: string) => mode }));
+mock.module("@/components/canvas/canvas-cloud-agent-composer", () => ({ AgentContextChip: () => null }));
+mock.module("@/services/cloud-agent-outbox", () => ({ loadCloudAgentOutbox: async () => null, saveCloudAgentOutbox: async () => {}, clearCloudAgentOutbox: async () => {} }));
 mock.module("@/components/canvas/canvas-cloud-agent-connectors", () => ({ AgentConnectorsBar: () => null }));
 mock.module("@/components/canvas/use-agent-panel-layout", () => ({ useAgentPanelLayout: () => ({ style: {}, pointerHandlers: {}, reset: silent, onResizeKeyDown: silent }) }));
 

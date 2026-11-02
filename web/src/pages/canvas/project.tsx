@@ -28,7 +28,7 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { filterCanvasDisplayConnections, persistCanvasHideNodeConnections, readCanvasHideNodeConnections } from "@/lib/canvas/canvas-connection-visibility";
 import { summarizeCanvasContext } from "@/lib/canvas/canvas-context-summary";
 import { refreshCanvasCharacterReferenceNodes } from "@/lib/canvas/canvas-character-reference";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
 import { flushCanvasStorePersistence } from "@/stores/canvas/use-canvas-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useCanvasThemeStore, useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
@@ -75,7 +75,7 @@ import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/componen
 import { handleListGenerate } from "./list-mode-generator";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
 import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
-import { AssetPickerModal } from "@/components/canvas/asset-picker-modal";
+import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { getProject, listCharacters, type ProjectAsset } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
@@ -112,7 +112,15 @@ import type { CloudAgentMessagePresentation } from "@/services/cloud-agent-conve
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
-import { CanvasDramaEmptyState, CanvasFreeformEmptyState, CanvasLinkedProjectEmptyState, CanvasShortDramaEmptyState, CanvasShortDramaGuide, CanvasStoryInputNodeContent, CanvasStylePlaceholderNodeContent } from "@/components/canvas/canvas-short-drama-entry";
+import {
+    CanvasDramaEmptyState,
+    CanvasFreeformEmptyState,
+    CanvasLinkedProjectEmptyState,
+    CanvasShortDramaEmptyState,
+    CanvasShortDramaGuide,
+    CanvasStoryInputNodeContent,
+    CanvasStylePlaceholderNodeContent,
+} from "@/components/canvas/canvas-short-drama-entry";
 import { resolveCanvasEmptyStateKind } from "@/lib/canvas/canvas-starter";
 import { failedImageBatchChildren, markImageBatchRetrying, reconcileImageBatchRoot, restoreUnsubmittedImageBatchChild } from "@/lib/canvas/canvas-image-batch-retry";
 import { cinematicStoryboardColumns, createCanvasNode, getInputSummary, isHiddenBatchChild } from "@/lib/canvas/canvas-project-domain";
@@ -150,7 +158,7 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { useCanvasConnectionController } from "./use-canvas-connection-controller";
 import { useCanvasOperationHistory } from "./use-canvas-operation-history";
 import { useCanvasAssistantVisibility } from "./use-canvas-assistant-visibility";
-import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
+import { useGlobalAgentStore, type AgentInsertedNode } from "@/stores/use-global-agent-store";
 import { useCanvasActiveTasks } from "./use-canvas-active-tasks";
 import { useCanvasStyleWorkflow } from "./use-canvas-style-workflow";
 import { useCanvasPrevis } from "./use-canvas-previs";
@@ -574,14 +582,15 @@ function CanvasViewportPage() {
     // 每帧新对象会让所有节点跟着重渲染，错题本里多条崩溃都出在画布高频更新。
     const nodeGraphContext = useMemo<CanvasNodeGraphContextValue>(() => ({ getUpstreamNodes: (nodeId: string) => getContextResourceNodes(nodeId, nodes, connections) }), [connections, nodes]);
 
-    const { applyGenerationTaskResult, bindGenerationTask, finishGenerationRequest, openNodeTaskDetails, resyncGenerationTaskNode, runningNodeId, setRunningNodeId, setTaskDetail, startGenerationRequest, taskDetail, taskDetailLoading, taskDetailLogs } = useCanvasGeneration({
-        projectId,
-        domainProjectId: linkedProjectId,
-        projectLoaded,
-        nodes,
-        nodesRef,
-        setNodes,
-    });
+    const { applyGenerationTaskResult, bindGenerationTask, finishGenerationRequest, openNodeTaskDetails, resyncGenerationTaskNode, runningNodeId, setRunningNodeId, setTaskDetail, startGenerationRequest, taskDetail, taskDetailLoading, taskDetailLogs } =
+        useCanvasGeneration({
+            projectId,
+            domainProjectId: linkedProjectId,
+            projectLoaded,
+            nodes,
+            nodesRef,
+            setNodes,
+        });
 
     const cancelCanvasTask = useCallback(
         (task: import("@/services/api/task-center").GenerationTask) => {
@@ -776,6 +785,7 @@ function CanvasViewportPage() {
         closeAssetPicker,
         createVideoNodeFromBlob,
         createAssetPayloadNode,
+        createImageAssetNode,
         fileDropActive,
         handleAssetsInsert,
         handleDrop,
@@ -1658,7 +1668,21 @@ function CanvasViewportPage() {
             dramaStaleNodeIds: drama.staleNodeIds,
             refreshFromDrama: drama.active ? drama.refreshNode : undefined,
         }),
-        [addPanoramaCaptureNode, deleteNodeFromContent, downloadNodeImage, drama.active, drama.refreshNode, drama.staleNodeIds, duplicateNodeFromContent, extractLayerMaterials, openArtCritique, replaceCanvasNodeMedia, updateMediaNodeFromContent, updateNodeFromContent, updateNodeMetadataFromContent],
+        [
+            addPanoramaCaptureNode,
+            deleteNodeFromContent,
+            downloadNodeImage,
+            drama.active,
+            drama.refreshNode,
+            drama.staleNodeIds,
+            duplicateNodeFromContent,
+            extractLayerMaterials,
+            openArtCritique,
+            replaceCanvasNodeMedia,
+            updateMediaNodeFromContent,
+            updateNodeFromContent,
+            updateNodeMetadataFromContent,
+        ],
     );
     const { dismissLastAgentChange, lastAgentChange, undoAgentOps, viewLastAgentChange } = useCanvasOperationHistory({
         projectId,
@@ -2657,28 +2681,37 @@ function CanvasViewportPage() {
         focusCanvasNode(nodeId);
     };
     const handleAgentFocusNode = useCallback((nodeId: string) => agentFocusNodeRef.current(nodeId), []);
-    const changeCanvasView = useCallback((view: CanvasProjectView) => {
-        setSearchParams((current) => {
-            const next = new URLSearchParams(current);
-            if (view === "assets") next.set("view", "assets");
-            else next.delete("view");
-            return next;
-        }, { replace: true });
-        if (view !== "assets") return;
-        // 资产视图覆盖画布，节点浮层和菜单不能悬在它上面。
-        setContextMenu(null);
-        setDialogNodeId(null);
-        setToolbarNodeId(null);
-        setHoveredNodeId(null);
-    }, [setDialogNodeId, setSearchParams]);
-    const locateAssetNode = useCallback((nodeId: string) => {
-        changeCanvasView("canvas");
-        const selection = new Set([nodeId]);
-        selectedNodeIdsRef.current = selection;
-        setSelectedNodeIds(selection);
-        setSelectedConnectionId(null);
-        agentFocusNodeRef.current(nodeId);
-    }, [changeCanvasView]);
+    const changeCanvasView = useCallback(
+        (view: CanvasProjectView) => {
+            setSearchParams(
+                (current) => {
+                    const next = new URLSearchParams(current);
+                    if (view === "assets") next.set("view", "assets");
+                    else next.delete("view");
+                    return next;
+                },
+                { replace: true },
+            );
+            if (view !== "assets") return;
+            // 资产视图覆盖画布，节点浮层和菜单不能悬在它上面。
+            setContextMenu(null);
+            setDialogNodeId(null);
+            setToolbarNodeId(null);
+            setHoveredNodeId(null);
+        },
+        [setDialogNodeId, setSearchParams],
+    );
+    const locateAssetNode = useCallback(
+        (nodeId: string) => {
+            changeCanvasView("canvas");
+            const selection = new Set([nodeId]);
+            selectedNodeIdsRef.current = selection;
+            setSelectedNodeIds(selection);
+            setSelectedConnectionId(null);
+            agentFocusNodeRef.current(nodeId);
+        },
+        [changeCanvasView],
+    );
     // 短剧投送或定位后：切回画布视图，选中这些节点并把视口移过去。
     dramaFocusRef.current = (nodeIds: string[]) => {
         const ids = nodeIds.filter((id) => nodesRef.current.some((node) => node.id === id));
@@ -2703,24 +2736,79 @@ function CanvasViewportPage() {
         },
         [currentProject?.projectId, currentProject?.title, message, navigate, projectId],
     );
-    const renameAssetNodes = useCallback((updates: Array<{ nodeId: string; title: string }>) => {
-        updates.forEach(({ nodeId, title }) => handleNodeTitleChange(nodeId, title));
-    }, [handleNodeTitleChange]);
-    const promoteAssetVersion = useCallback((version: CanvasAssetVersion) => {
-        const node = nodesRef.current.find((item) => item.id === version.nodeId);
-        if (!node) {
-            message.info("该节点已删除或尚未同步到画布");
-            return;
-        }
-        if (version.source === "batch") {
-            setBatchPrimary(node);
-            message.success(`已将${version.label}设为主图`);
-            return;
-        }
-        if (version.mediaVersionId && !adoptNodeMediaVersion(node.id, version.mediaVersionId)) return;
-        // 跨节点版本组里，节点内历史版本成为主版本时，承载节点也要成为组内主版本。
-        if (node.metadata?.versionOfNodeId && !node.metadata.versionPrimary) setPrimaryVersion(node.id);
-    }, [adoptNodeMediaVersion, message, nodesRef, setBatchPrimary, setPrimaryVersion]);
+    const renameAssetNodes = useCallback(
+        (updates: Array<{ nodeId: string; title: string }>) => {
+            updates.forEach(({ nodeId, title }) => handleNodeTitleChange(nodeId, title));
+        },
+        [handleNodeTitleChange],
+    );
+    const promoteAssetVersion = useCallback(
+        (version: CanvasAssetVersion) => {
+            const node = nodesRef.current.find((item) => item.id === version.nodeId);
+            if (!node) {
+                message.info("该节点已删除或尚未同步到画布");
+                return;
+            }
+            if (version.source === "batch") {
+                setBatchPrimary(node);
+                message.success(`已将${version.label}设为主图`);
+                return;
+            }
+            if (version.mediaVersionId && !adoptNodeMediaVersion(node.id, version.mediaVersionId)) return;
+            // 跨节点版本组里，节点内历史版本成为主版本时，承载节点也要成为组内主版本。
+            if (node.metadata?.versionOfNodeId && !node.metadata.versionPrimary) setPrimaryVersion(node.id);
+        },
+        [adoptNodeMediaVersion, message, nodesRef, setBatchPrimary, setPrimaryVersion],
+    );
+    // Agent 输入框的附件放到画布中心附近（按 3 列网格排开），不改选区、不弹全局进度；上传状态写在节点上。
+    const insertAgentFiles = useCallback(
+        (files: File[], onError?: (nodeId: string, details: string) => void) => {
+            const center = getCanvasCenter();
+            const columns = Math.min(files.length, 3);
+            return files.map((file, index) => {
+                const nodeId = `upload-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                const position = { x: center.x + ((index % 3) - (columns - 1) / 2) * 380, y: center.y + Math.floor(index / 3) * 300 };
+                void createFileNode(file, position, undefined, { quiet: { nodeId, onError: onError ? (details) => onError(nodeId, details) : undefined } });
+                return nodeId;
+            });
+        },
+        [createFileNode, getCanvasCenter],
+    );
+    const insertAgentText = useCallback(
+        (text: string, title: string) => {
+            const node = { ...createCanvasNode(CanvasNodeType.Text, getCanvasCenter(), { content: text, prompt: text, status: "success" }), title };
+            setNodes((current) => [...current, node]);
+            return node.id;
+        },
+        [getCanvasCenter, setNodes],
+    );
+    const insertAgentAssets = useCallback(
+        async (payloads: InsertAssetPayload[]): Promise<AgentInsertedNode[]> =>
+            (await handleAssetsInsert(payloads)).map((node) => ({
+                nodeId: node.id,
+                title: node.title || "素材",
+                kind: node.type === CanvasNodeType.Image ? "image" : node.type === CanvasNodeType.Video ? "video" : node.type === CanvasNodeType.Audio ? "audio" : "text",
+                previewUrl: node.type === CanvasNodeType.Image ? node.metadata?.content : undefined,
+            })),
+        [handleAssetsInsert],
+    );
+    const insertAgentImageAsset = useCallback(
+        async (assetId: string) => {
+            const asset = useAssetStore.getState().assets.find((item): item is ImageAsset => item.kind === "image" && item.id === assetId);
+            if (!asset) return null;
+            return createImageAssetNode(asset, undefined, { quiet: true });
+        },
+        [createImageAssetNode],
+    );
+    // 只删除没有连线的节点：用户已经把它接到别的节点上，说明它不再只是这条消息的附件。
+    const discardAgentNodes = useCallback(
+        (nodeIds: string[]) => {
+            const linked = new Set(connectionsRef.current.flatMap((connection) => [connection.fromNodeId, connection.toNodeId]));
+            const removable = nodeIds.filter((id) => !linked.has(id) && nodesRef.current.some((node) => node.id === id));
+            if (removable.length) deleteNodes(new Set(removable));
+        },
+        [deleteNodes, nodesRef],
+    );
     // 平台唯一的 Agent 面板挂在布局上；画布只发布自己的上下文。画布加载完成前不发布，避免以未保存画布绑定运行。
     const publishAgentCanvas = useGlobalAgentStore((state) => state.setCanvas);
     useEffect(() => {
@@ -2735,8 +2823,29 @@ function CanvasViewportPage() {
             references: agentMentionReferences,
             prefillRequest: agentPrefillRequest,
             onFocusNode: handleAgentFocusNode,
+            insertAgentFiles,
+            insertAgentText,
+            insertAgentAssets,
+            insertAgentImageAsset,
+            discardAgentNodes,
         });
-    }, [projectLoaded, projectId, currentProject?.projectId, nodes, runningNodeId, agentSelectedNodeIds, agentMentionReferences, agentPrefillRequest, handleAgentFocusNode, publishAgentCanvas]);
+    }, [
+        projectLoaded,
+        projectId,
+        currentProject?.projectId,
+        nodes,
+        runningNodeId,
+        agentSelectedNodeIds,
+        agentMentionReferences,
+        agentPrefillRequest,
+        handleAgentFocusNode,
+        publishAgentCanvas,
+        insertAgentFiles,
+        insertAgentText,
+        insertAgentAssets,
+        insertAgentImageAsset,
+        discardAgentNodes,
+    ]);
     // 离开画布（卸载或切换到另一个画布）时撤回上下文：之后的对话轮次不再绑定这个画布。
     useEffect(() => {
         return () => {
@@ -3056,7 +3165,6 @@ function CanvasViewportPage() {
                                         />
                                     ) : null}
                                 </div>
-
                             </div>
 
                             {angleNode?.metadata?.content ? (
@@ -3386,13 +3494,7 @@ function CanvasViewportPage() {
                             ) : null}
 
                             {enhanceNode ? (
-                                <CanvasVideoEnhanceDialog
-                                    node={enhanceNode}
-                                    open={Boolean(enhanceNode)}
-                                    config={effectiveConfig}
-                                    onClose={() => setEnhanceDialogNodeId(null)}
-                                    onConfirm={(params) => void enhanceVideoNode(enhanceNode, params)}
-                                />
+                                <CanvasVideoEnhanceDialog node={enhanceNode} open={Boolean(enhanceNode)} config={effectiveConfig} onClose={() => setEnhanceDialogNodeId(null)} onConfirm={(params) => void enhanceVideoNode(enhanceNode, params)} />
                             ) : null}
 
                             {timelineNode ? (

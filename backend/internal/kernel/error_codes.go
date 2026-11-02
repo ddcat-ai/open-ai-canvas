@@ -45,12 +45,18 @@ const (
 	ReasonDramaBudgetExhausted ErrorReason = "drama_budget_exhausted"
 	// 采用到剧情段时段版本已变（调度或其他页面刚改过），客户端需刷新后重新确认。
 	ReasonDramaSegmentChanged ErrorReason = "drama_segment_changed"
-	ReasonRateLimited         ErrorReason = "rate_limited"
-	ReasonUnavailable         ErrorReason = "unavailable"
-	ReasonTimeout             ErrorReason = "timeout"
-	ReasonInternal            ErrorReason = "internal"
-	ReasonBadGateway          ErrorReason = "bad_gateway"
-	ReasonUpstreamDNSFailed   ErrorReason = "upstream_dns_failed"
+	// 插话时本轮已经结束：客户端把这条留在本机队列，作为下一轮发送。
+	ReasonAgentInterjectionRunFinished ErrorReason = "agent_interjection_run_finished"
+	// 撤回时插话已送达模型或已结束，不能再撤回。
+	ReasonAgentInterjectionDelivered ErrorReason = "agent_interjection_already_delivered"
+	// Agent 运行状态被并发写入，多次重读重试仍冲突；可稍后原样重试。
+	ReasonAgentRunStateBusy ErrorReason = "agent_run_state_busy"
+	ReasonRateLimited       ErrorReason = "rate_limited"
+	ReasonUnavailable       ErrorReason = "unavailable"
+	ReasonTimeout           ErrorReason = "timeout"
+	ReasonInternal          ErrorReason = "internal"
+	ReasonBadGateway        ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

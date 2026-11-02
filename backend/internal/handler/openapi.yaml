@@ -1591,7 +1591,7 @@ paths:
     post:
       tags: [agent]
       summary: 向正在运行的 Agent 轮次插入一句话
-      description: 不新建轮次、不产生新的扣费身份。插话排进当前运行，在下一次模型调用前送达；运行已结束返回 409。
+      description: 不新建轮次、不产生新的扣费身份。插话排进当前运行，在下一次模型调用前送达；同一 messageId 幂等。运行已结束返回 409（reason=agent_interjection_run_finished），客户端把这条留在本机队列作为下一轮发送。
       requestBody:
         required: true
         content:
@@ -1611,7 +1611,7 @@ paths:
         "200":
           description: 信封 data.accepted 与 data.pending
         "409":
-          description: 本轮已结束，应改为新一轮发送
+          description: reason=agent_interjection_run_finished 表示本轮已结束，改为下一轮发送；reason=agent_run_state_busy 表示运行状态并发写入冲突，可用同一 messageId 重试
   /agent/runs/{id}/interjections/{messageId}:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -1631,7 +1631,7 @@ paths:
         "404":
           description: 插话不存在
         "409":
-          description: 插话已送达模型或本轮已结束，无法撤回
+          description: reason=agent_interjection_already_delivered 表示已送达模型或本轮已结束，不能撤回；reason=agent_run_state_busy 表示并发写入冲突，可重试
   /agent/runs/{id}/cancel:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
