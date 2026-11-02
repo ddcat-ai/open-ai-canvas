@@ -10,7 +10,7 @@ import (
 )
 
 func TestEcommerceConversationMemoryKeepsSameProductCopyOnly(t *testing.T) {
-	draft := EcommerceDraft{Instruction: "继续生成九张详情页", References: []EcommerceReference{{ResourceID: "product-a", Role: "primary"}}}
+	draft := EcommerceDraft{Instruction: "继续生成九张详情页", References: []EcommerceReference{{ResourceID: "product-a", Role: "primary"}, {ResourceID: "shared-brand-logo", Role: "logo"}}}
 	source, _ := json.Marshal(EcommerceDraft{Instruction: "五张主副图", References: draft.References})
 	plan, _ := json.Marshal(model.EcommercePlan{ProductSummary: "紫色蝴蝶宠物玩具", PreviousImages: []model.EcommercePlanTask{
 		{ID: "sent-1", TaskID: "paid-1", SourceDraft: source, Copy: "拍一拍，陪它玩一会儿", Composition: "左前方主视角"},

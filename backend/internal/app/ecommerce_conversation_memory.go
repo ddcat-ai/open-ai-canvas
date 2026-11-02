@@ -16,7 +16,7 @@ func ecommerceConversationMemory(project *model.EcommerceProject, draft Ecommerc
 	}
 	ids := map[string]bool{}
 	for _, ref := range draft.References {
-		if ref.Role != "model" && ref.Role != "style" && ref.Role != "competitor" {
+		if ref.Role == "primary" || ref.Role == "detail" || ref.Role == "sku" {
 			ids[ref.ResourceID] = true
 		}
 	}
@@ -31,7 +31,7 @@ func ecommerceConversationMemory(project *model.EcommerceProject, draft Ecommerc
 		}
 		matched := false
 		for _, ref := range source.References {
-			if ids[ref.ResourceID] && ref.Role != "model" && ref.Role != "style" && ref.Role != "competitor" {
+			if ids[ref.ResourceID] && (ref.Role == "primary" || ref.Role == "detail" || ref.Role == "sku") {
 				matched = true
 			}
 		}
