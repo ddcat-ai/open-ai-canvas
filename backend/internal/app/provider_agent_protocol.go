@@ -206,7 +206,6 @@ func canonicalAgentResponsesBody(source *canonicalAgentRequest) (map[string]inte
 			}
 			if itemID != "" {
 				item["id"] = itemID
-				item["item_reference"] = itemID
 			}
 			messages = append(messages, item)
 		case stringField(message, "role") == "tool":
@@ -236,7 +235,6 @@ func canonicalAgentResponsesBody(source *canonicalAgentRequest) (map[string]inte
 				item := map[string]interface{}{"type": "function_call", "call_id": callID, "name": function["name"], "arguments": function["arguments"]}
 				if itemID != "" {
 					item["id"] = itemID
-					item["item_reference"] = itemID
 				}
 				messages = append(messages, item)
 			}
