@@ -169,6 +169,7 @@ func PlatformFor(name string) (Platform, bool) {
 	if !legacy {
 		p = Platform{Label: k.Label, Ratio: k.RecommendedRatio, DetailRatio: k.RecommendedRatio, TitleMax: 120, BulletMax: 5}
 	}
+	p.Label = k.Label
 	p.WhiteBG, p.ForbidTextOnMain = k.WhiteMain, k.MainNoText || k.AllListingNoText
 	p.Tone = k.Style
 	// Legacy marketing defaults (e.g. TikTok video covers) are not listing rules.

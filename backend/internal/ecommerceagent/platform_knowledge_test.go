@@ -21,8 +21,8 @@ func TestPlatformKnowledgeCoverageAndProvenance(t *testing.T) {
 		if p.ReviewStatus == "pending" && len(p.OfficialRules) != 0 {
 			t.Fatalf("unverified rules: %s", p.ID)
 		}
-		if _, ok := PlatformFor(p.ID); !ok {
-			t.Fatalf("missing runtime platform %s", p.ID)
+		if runtime, ok := PlatformFor(p.ID); !ok || runtime.Label != p.Label {
+			t.Fatalf("runtime platform %s does not match shared profile: %+v", p.ID, runtime)
 		}
 	}
 	if _, ok := PlatformFor("unknown-market"); ok {
