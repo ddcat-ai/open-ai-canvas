@@ -137,7 +137,7 @@ describe("commerce creative controls reach every execution path", () => {
         const parsed = parsePlannerOutput(JSON.stringify(result), draft);
         expect(parsed.images[0].copy).toBe(result.images[0].copy);
         const prompt = commerceImagePrompt(draft, parsed.images[0]);
-        expect(prompt).toContain("四边各内缩至少 7%");
+        expect(prompt).toContain("四边各内缩至少 8%");
         expect(prompt).toContain("长标题主动分为两行");
         expect(prompt).toContain("绝不能作为可见文字");
     });
