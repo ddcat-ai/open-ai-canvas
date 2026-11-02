@@ -72,7 +72,7 @@ description: 从产品功能快速定位主要代码入口
 
 | 职责 | 入口与边界 |
 | --- | --- |
-| 运行创建与可恢复编排 | `backend/internal/app/cloud_agent.go` 负责权限、幂等和可信历史，`cloud_agent_runtime.go` / `cloud_agent_pi_coordinator.go` 负责编排；Pi 进程与回调桥在 `internal/agent/runtime/`、`internal/agent/yingceagent/`、`agent-runtime/pi/agent-runtime.mjs`，生产远程失败不回退为内嵌重放 |
+| 运行创建与可恢复编排 | `backend/internal/app/cloud_agent.go` 负责权限、幂等和可信历史，`cloud_agent_runtime.go` / `cloud_agent_pi_coordinator.go` 负责编排；Pi 进程与回调桥在 `internal/agent/runtime/`、`internal/agent/yingceagent/`、`agent-runtime/pi/agent-runtime.mjs`，生产远程失败不回退为内嵌重放；`internal/agent/session/` 是会话运行时托管（启动/恢复/停止/排空/限额/观测）的控制面契约，`app/cloud_agent_runtime_seam.go` 的 `piPushRuntime` 把推送实现接入，`app/cloud_agent_runtime_seam_test.go` 锁定调用点路由与映射行为 |
 | 工具注册与执行绑定 | `internal/agent/tool/{policy,registry}.go` 是分类与可见性的单一来源；`app/cloud_agent_tool_registry.go` 和 `cloud_agent_tool_bindings.go` 将全部 29 个定义绑定到读、写、预览、媒体或视觉管线；未知/遗漏绑定在初始化与契约测试中拒绝，执行器不再维护第二套名称分派表 |
 | 参数结构与 schema | `internal/agent/tool/{read_args,schema}.go` 由 8 个读取参数类型生成 schema，实际解码使用同一类型；其余工具保留相邻契约。`app/cloud_agent_tools.go` 输出供应商 schema，golden 测试守工具顺序和字段语义 |
 | 画布事实与节点能力 | `internal/canvas/capability/` 注册能力，`app/cloud_agent_canvas_state.go` 提供分页/定向读取；`cloud_agent.go` 只给焦点节点有界摘要及一跳邻居。旧 CanvasIntelligence、平行 CanvasToolRegistry 与无执行器的标准工具代码已移除 |

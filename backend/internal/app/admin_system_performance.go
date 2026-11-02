@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/agent/session"
 	"yingce/backend/internal/buildinfo"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/platform"
@@ -211,23 +212,27 @@ func (s *Service) collectAgentServices(ctx context.Context) []SystemPerformanceA
 	if policy, err := s.RuntimePolicy(); err == nil && policy.Task.AgentMaxSessions > 0 {
 		configured = policy.Task.AgentMaxSessions
 	}
-	status := s.agentRuntime().Inspect(ctx)
+	return []SystemPerformanceAgent{agentServiceStatusFromSession(s.agentRuntime().Inspect(ctx), configured)}
+}
+
+// agentServiceStatusFromSession 把运行时观测映射成管理台响应。原行为逐字段
+// 保留：embedded 固定文案与 remote 不可达的降级文案由 Status.Message 原样带出；
+// 「运行上限与已保存配置不一致」只在实现申报 LimitMismatch（可达的 remote）且
+// 数值确实不一致时出现——未来的 Worker 模式是否参与比对由其实现申报决定，
+// 不会被误标成本实现语义。ID 由 Status.ID 自报，不按 Mode 字面量推导。
+func agentServiceStatusFromSession(status session.Status, configured int) SystemPerformanceAgent {
 	service := SystemPerformanceAgent{
-		Name: "画布 Agent", Mode: status.Mode, Endpoint: status.Endpoint,
+		ID: status.ID, Name: "画布 Agent", Mode: string(status.Mode), Endpoint: status.Endpoint,
 		Healthy: status.Healthy, Active: status.Active, Limit: status.Limit, Queued: status.Queued,
 		ConfiguredLimit: configured, StatusMessage: status.Message,
 	}
-	// ID 沿用既有取值：embedded → "embedded"，remote → "yingce-agent"。
-	service.ID = "yingce-agent"
-	if status.Mode == "embedded" {
-		service.ID = "embedded"
+	if !status.LimitMismatch {
+		return service
 	}
-	// 原行为：只有 remote 可达时才提示「运行上限与已保存配置不一致」；embedded
-	// 固定文案与 remote 不可达的降级文案都由 seam 的 Status.Message 原样带出。
-	if status.Mode != "embedded" && status.Healthy && status.Limit != configured {
+	if status.Limit != configured {
 		service.StatusMessage = "运行中的上限与已保存配置不一致，重新保存一次即可应用。"
 	}
-	return []SystemPerformanceAgent{service}
+	return service
 }
 
 func agentServicesDegraded(agents []SystemPerformanceAgent) bool {

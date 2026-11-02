@@ -47,17 +47,19 @@ func (r piPushRuntime) SetSessionLimit(ctx context.Context, limit int) error {
 
 // Inspect 保持既有怪癖：embedded 分支不读 yingceagent 健康数据，remote 分支不读
 // ProcessUsage；remote 不可达不是 error，而是 Healthy=false 且计数全零的降级快照。
+// ID 与「限额不一致候选」由实现申报（Status.ID / Status.LimitMismatch），消费方
+// 不按 Mode 字面量推导，避免新增托管方式时被误标成既有服务。
 func (r piPushRuntime) Inspect(ctx context.Context) session.Status {
 	endpoint := strings.TrimSpace(os.Getenv("YINGCE_AGENT_URL"))
 	if endpoint == "" {
 		active, limit := agentruntime.ProcessUsage()
-		return session.Status{Mode: "embedded", Endpoint: "本进程", Healthy: true, Active: active, Limit: limit, Message: "本地开发由后端进程直接启动，不单独占用容器。"}
+		return session.Status{ID: "embedded", Mode: session.ModeEmbedded, Endpoint: "本进程", Healthy: true, Active: active, Limit: limit, Message: "本地开发由后端进程直接启动，不单独占用容器。"}
 	}
 	status, err := yingceagent.Inspect(ctx, endpoint)
 	if err != nil {
-		return session.Status{Mode: "remote", Endpoint: endpoint, Healthy: false, Message: "独立 Agent 服务不可达。正在进行的对话会失败，不会自动改回本进程执行。"}
+		return session.Status{ID: "yingce-agent", Mode: session.ModeRemote, Endpoint: endpoint, Healthy: false, Message: "独立 Agent 服务不可达。正在进行的对话会失败，不会自动改回本进程执行。"}
 	}
-	return session.Status{Mode: "remote", Endpoint: endpoint, Healthy: status.OK, Active: status.Active, Limit: status.Limit, Queued: status.Queued}
+	return session.Status{ID: "yingce-agent", Mode: session.ModeRemote, Endpoint: endpoint, Healthy: status.OK, LimitMismatch: true, Active: status.Active, Limit: status.Limit, Queued: status.Queued}
 }
 
 var _ session.Runtime = piPushRuntime{}
