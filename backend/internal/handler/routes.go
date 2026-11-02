@@ -189,6 +189,37 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		streamTaskTextEvents(c, svc, user.ID, c.Param("id"), after, initial)
 	})
+	r.GET("/tasks/:id/retry-routes", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		routes, err := svc.TaskRetryRoutes(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, routes)
+	})
+	r.POST("/tasks/:id/retry-route", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.TaskRetryRouteRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		task, err := svc.RetryTaskOnRoute(user.ID, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, task)
+	})
 	r.POST("/tasks/:id/retry", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -10,6 +10,8 @@ import (
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 // taskLifecycleCoordinator 负责任务重试与取消这类会改变任务状态的写命令。
@@ -32,10 +34,23 @@ func (s *Service) taskLifecycle() *taskLifecycleCoordinator {
 
 func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.Task, error) {
 	s := w.service
+	task, err := s.loadRetryableTask(userID, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.submitTaskRetry(userID, task, nil)
+}
+
+func (s *Service) loadRetryableTask(userID, id string) (*model.Task, error) {
 	if s.IsDraining() {
 		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受任务重试", Retryable: true}
 	}
 	task, err := s.repo.TaskForUser(userID, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		notFound := NotFound("任务不存在或无权访问")
+		notFound.Cause = err
+		return nil, notFound
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +64,7 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 		return nil, BadAuthRequest("Agent 重试需要新的幂等键和预算校验，请回到 Agent 对话重新发送")
 	}
 	if task.Status != model.TaskStatusFailed && task.Status != model.TaskStatusCancelled {
-		return nil, errors.New("only failed or cancelled tasks can be retried")
+		return nil, BadAuthRequest("仅失败或已取消的任务可以重试")
 	}
 	if task.ProviderCancelStatus == model.ProviderCancelStatusRequested {
 		return nil, BadAuthRequest("上游取消状态仍在确认中，请确认费用结果后再重试")
@@ -63,6 +78,10 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	if isContentModerationFailure(task.Error) {
 		return nil, BadAuthRequest(contentModerationRetryMessage)
 	}
+	return task, nil
+}
+
+func (s *Service) submitTaskRetry(userID string, task *model.Task, route *TaskRetryRouteRequest) (*model.Task, error) {
 	decryptedInput, err := s.decryptTaskInputJSON(task.InputJSON)
 	if err != nil {
 		return nil, err
@@ -70,6 +89,14 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	var billingInput map[string]any
 	if err := json.Unmarshal([]byte(decryptedInput), &billingInput); err != nil {
 		return nil, err
+	}
+	if route != nil {
+		if task.RouteRun != route.RouteRun {
+			return nil, BadAuthRequest("任务已变化，请重新选择线路")
+		}
+		if err := s.prepareTaskRetryRoute(userID, task, billingInput, route.ChannelID, route.ModelKey); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.prepareLogicalTaskRetry(task, billingInput); err != nil {
 		return nil, err
@@ -80,6 +107,24 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	billingOrder, err := s.taskBillingOrder(userID, task, billingInput)
 	if err != nil {
 		return nil, err
+	}
+	if route != nil {
+		amount, version := retryRoutePrice(billingOrder)
+		if route.ApprovedAmountMicrocredits == nil || *route.ApprovedAmountMicrocredits != amount || route.PriceVersion != version {
+			return nil, BadAuthRequest("线路价格已变化，请重新查看价格并确认")
+		}
+		if billingOrder != nil {
+			billingOrder.ChargeLimitSet = true
+			billingOrder.ChargeLimitMicrocredits = amount
+		}
+		if err := s.protectTaskSecrets(billingInput); err != nil {
+			return nil, err
+		}
+		encoded, err := json.Marshal(billingInput)
+		if err != nil {
+			return nil, err
+		}
+		task.InputJSON = string(encoded)
 	}
 	policy, err := s.RuntimePolicy()
 	if err != nil {

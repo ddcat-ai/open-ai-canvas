@@ -1252,6 +1252,10 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         makeVideo: kind === "image" && features.videoWorkbenchEnabled ? makeVideo : undefined,
         cancelTask: (task) => void cancelTask(task),
         retryTask: (task) => void retryTask(task),
+        routeRetried: (task) => {
+            applyTaskUpdate(task);
+            pollKickRef.current();
+        },
         reuse: (batch) => void restoreBatch(batch),
         copyPrompt: (batch) => void copyText(batch.prompt),
         downloadAll: (batch) =>
@@ -1307,6 +1311,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
             makeVideo: kind === "image" && features.videoWorkbenchEnabled ? (...args) => handlersRef.current!.makeVideo?.(...args) : undefined,
             cancelTask: (...args) => handlersRef.current!.cancelTask(...args),
             retryTask: (...args) => handlersRef.current!.retryTask(...args),
+            routeRetried: (task) => handlersRef.current!.routeRetried?.(task),
             reuse: (...args) => handlersRef.current!.reuse(...args),
             copyPrompt: (...args) => handlersRef.current!.copyPrompt(...args),
             downloadAll: (...args) => handlersRef.current!.downloadAll(...args),

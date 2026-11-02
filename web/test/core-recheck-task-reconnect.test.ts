@@ -17,6 +17,30 @@ const running: GenerationTask = {
 const terminal: GenerationTask = { ...running, status: "succeeded" };
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
+test("explicit route retry clears a cached terminal state and observes the same task again", async () => {
+    const failed: GenerationTask = { ...running, status: "failed" };
+    let current = failed;
+    let queries = 0;
+    const service = createGenerationTaskSubscriptionService({
+        queryTask: async () => {
+            queries += 1;
+            return current;
+        },
+        waitTask: async () => terminal,
+    });
+    const seen: string[] = [];
+    const stop = service.subscribe([running.id], (task) => seen.push(task.status));
+    await tick();
+    expect(seen).toEqual(["failed"]);
+    current = running;
+    await service.acceptRetry(running);
+    await tick();
+    expect(queries).toBe(2);
+    expect(seen).toContain("running");
+    expect(seen.at(-1)).toBe("succeeded");
+    stop();
+});
+
 beforeEach(() => {
     Object.defineProperty(globalThis, "window", {
         configurable: true,

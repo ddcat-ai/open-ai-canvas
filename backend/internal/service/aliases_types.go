@@ -4,6 +4,8 @@ import "yingce/backend/internal/app"
 
 type AgentAvatarBundleManifest = app.AgentAvatarBundleManifest
 type AgentAvatarBundleImport = app.AgentAvatarBundleImport
+type ChannelKeyGroupRequest = app.ChannelKeyGroupRequest
+type TaskRetryRouteRequest = app.TaskRetryRouteRequest
 
 const (
 	WorkbenchKindImage = app.WorkbenchKindImage

@@ -279,6 +279,17 @@ export function createGenerationTaskSubscriptionService(dependencies: Generation
     };
     let listening = false;
     return {
+        async acceptRetry(task: GenerationTask) {
+            const entry = entries.get(task.id);
+            if (!entry || entry.scope !== getActiveUserScope()) return;
+            entry.controller?.abort();
+            if (entry.retry) clearTimeout(entry.retry);
+            await entry.observation;
+            if (entries.get(task.id) !== entry) return;
+            entry.failures = 0;
+            publish(entry, task);
+            observe(task.id, entry);
+        },
         subscribe(ids: readonly string[], listener: (task: GenerationTask) => void) {
             if (!listening && typeof window !== "undefined") {
                 window.addEventListener("online", reconnect);
@@ -341,6 +352,25 @@ export function queryTaskTextReplay(id: string, after = 0) {
 
 export function retryGenerationTask(id: string) {
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`);
+}
+
+export type TaskRetryRoute = { channelId: string; modelKey: string; label: string; modelName: string; amountMicrocredits: number; priceVersion: string; routeRun: number };
+export function listTaskRetryRoutes(id: string) {
+    return http.get<TaskRetryRoute[]>(`/tasks/${encodeURIComponent(id)}/retry-routes`);
+}
+export async function retryGenerationTaskOnRoute(id: string, route: TaskRetryRoute) {
+    const task = await http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry-route`, {
+        channelId: route.channelId,
+        modelKey: route.modelKey,
+        routeRun: route.routeRun,
+        priceVersion: route.priceVersion,
+        approvedAmountMicrocredits: route.amountMicrocredits,
+    });
+    await generationTaskSubscriptionService.acceptRetry(task);
+    window.dispatchEvent(new CustomEvent("canvas:task-retried", { detail: { task, route } }));
+    window.dispatchEvent(new CustomEvent("canvas:task-created", { detail: { task } }));
+    window.dispatchEvent(new CustomEvent("wallet:updated"));
+    return task;
 }
 
 export function recoverGenerationTaskMedia(id: string) {
