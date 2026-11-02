@@ -34,6 +34,7 @@ func TestCompleteHierarchyHasBilingualPathsAndAnApplicableMethod(t *testing.T) {
 func TestProductMatchingDistinguishesIndustriesAndSubcategories(t *testing.T) {
 	for _, tc := range []struct{ name, root, group string }{
 		{"白色智能马桶", "ha", "bathroom"}, {"玻璃精华液", "hb", "beauty"}, {"清透洗面奶", "hb", "beauty"},
+		{"智能家电", "hg", "appliance"}, {"智能扫地机器人", "hg", "appliance"},
 		{"便携榨汁机", "hg", "appliance"}, {"实验室搅拌机", "bi", "industrial"}, {"混凝土搅拌机", "bi", "industrial"}, {"面包", "fb", "food"}, {"宠物牙刷", "ap", "pet"}, {"牙刷", "hb", "health"}, {"轮胎", "vp", "automotive"}, {"软件", "so", "software"}, {"汽车维修服务", "se", "service"}, {"办公文具", "os", "office"}, {"连衣裙", "aa", "apparel"},
 	} {
 		m := Resolve(tc.name)
