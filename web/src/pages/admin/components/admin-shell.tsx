@@ -119,6 +119,12 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/plugins", label: "插件管理", shortLabel: "插件", icon: <PlugZap className="size-4" /> },
             { path: "/admin/skill-curation", label: "技能分类", shortLabel: "技能", icon: <Sparkles className="size-4" /> },
             { path: "/admin/resources", label: "存储资源", shortLabel: "资源", icon: <Database className="size-4" /> },
+        ],
+    },
+    {
+        key: "ecommerce-agent",
+        label: "电商 Agent",
+        items: [
             { path: "/admin/ecommerce-knowledge", label: "电商知识库", shortLabel: "电商", icon: <Database className="size-4" /> },
             { path: "/admin/ecommerce-skills", label: "电商 Skills", shortLabel: "Skills", icon: <Sparkles className="size-4" /> },
             { path: "/admin/ecommerce-categories", label: "行业与子品类", shortLabel: "品类", icon: <Database className="size-4" /> },

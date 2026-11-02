@@ -126,6 +126,10 @@ func includes(list []string, value string) bool {
 // SelectManaged loads only enabled, applicable methods. A setting changes new
 // planning requests; an admitted task keeps its versioned execution snapshot.
 func SelectManaged(input ManagedInput, enabled map[string]bool) ([]ManagedInvocation, string) {
+	return SelectCatalog(input, enabled, ManagedCatalog())
+}
+
+func SelectCatalog(input ManagedInput, enabled map[string]bool, catalog []ManagedSkill) ([]ManagedInvocation, string) {
 	type candidate struct {
 		skill  ManagedSkill
 		score  int
@@ -133,7 +137,7 @@ func SelectManaged(input ManagedInput, enabled map[string]bool) ([]ManagedInvoca
 	}
 	var candidates []candidate
 	text := strings.ToLower(input.Text + " " + input.Style)
-	for _, skill := range ManagedCatalog() {
+	for _, skill := range catalog {
 		if value, set := enabled[skill.ID]; set && !value {
 			continue
 		}
@@ -213,6 +217,9 @@ func SelectManaged(input ManagedInput, enabled map[string]bool) ([]ManagedInvoca
 	var blocks []string
 	for _, c := range candidates {
 		limit := 1
+		if c.skill.Origin == "user-installed" {
+			limit = 8
+		}
 		if c.skill.Group == "参考理解" || c.skill.Group == "商品摄影" {
 			limit = 2
 		}

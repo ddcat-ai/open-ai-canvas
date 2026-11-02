@@ -32,6 +32,64 @@ tags:
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
 paths:
+  /admin/ecommerce/skills/install:
+    post:
+      tags: [admin]
+      summary: 安装或更新本站电商 Skill（管理员）
+      description: ZIP或Markdown，最大1GiB，允许超过500MiB；同本地文件名覆盖更新，保留别名及开关。正文和引用合计32KB/12文件。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        "200": {description: 安装完成，默认启用}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/ecommerce/skills/install/github:
+    post:
+      tags: [admin]
+      summary: 从GitHub安装电商Skill并跟随来源分支自动更新
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: {type: string}
+                subdir: {type: string}
+      responses:
+        "200": {description: 安装完成，自动更新默认开启}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/ecommerce/skills/{id}/name:
+    patch:
+      tags: [admin]
+      summary: 修改用户安装的电商Skill显示名称
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 80}
+      responses:
+        "200": {description: 名称已保存，上游更新后保留}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /ecommerce/download:
     post:
       tags: [ecommerce-agent]

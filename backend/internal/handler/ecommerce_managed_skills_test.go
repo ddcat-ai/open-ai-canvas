@@ -21,6 +21,10 @@ func TestEcommerceManagedSkillsHTTPRequiresAdministratorAndPersistsSwitch(t *tes
 	const endpoint = "/api/admin/ecommerce/skills"
 	githubSkillHTTPRequest(t, router, http.MethodGet, endpoint, "", false, http.StatusUnauthorized)
 	githubSkillHTTPRequest(t, router, http.MethodGet, endpoint, "", true, http.StatusForbidden)
+	githubSkillHTTPRequest(t, router, http.MethodPost, endpoint+"/install", "", false, http.StatusUnauthorized)
+	githubSkillHTTPRequest(t, router, http.MethodPost, endpoint+"/install", "", true, http.StatusForbidden)
+	githubSkillHTTPRequest(t, router, http.MethodPost, endpoint+"/install/github", `{"url":"https://github.com/example/repo"}`, true, http.StatusForbidden)
+	githubSkillHTTPRequest(t, router, http.MethodPatch, endpoint+"/unknown/name", `{"name":"test"}`, true, http.StatusForbidden)
 	githubSkillHTTPRequest(t, router, http.MethodPatch, endpoint+"/ecom-copywriting", `{"enabled":false}`, true, http.StatusForbidden)
 	if err := db.Model(&model.User{}).Where("id = ?", "github-owner").Update("role", model.UserRoleAdmin).Error; err != nil {
 		t.Fatal(err)

@@ -15,7 +15,10 @@ const ecommerceManagedSkillSettingPrefix = "ecommerce_managed_skill."
 
 type EcommerceManagedSkill struct {
 	ecommerceskills.ManagedSkill
-	Enabled bool `json:"enabled"`
+	Enabled       bool   `json:"enabled"`
+	AutoUpdate    bool   `json:"autoUpdate"`
+	LastCheckedAt string `json:"lastCheckedAt"`
+	SyncError     string `json:"syncError"`
 }
 
 func (s *Service) ecommerceManagedSkillPolicy() (map[string]bool, error) {
@@ -44,13 +47,24 @@ func (s *Service) EcommerceManagedSkills(actor *model.User) ([]EcommerceManagedS
 	if err != nil {
 		return nil, err
 	}
+	installed, err := s.ecommerceInstalledSkills()
+	if err != nil {
+		return nil, err
+	}
 	result := []EcommerceManagedSkill{}
 	for _, skill := range ecommerceskills.ManagedCatalog() {
 		enabled, exists := policy[skill.ID]
 		if !exists {
 			enabled = true
 		}
-		result = append(result, EcommerceManagedSkill{skill, enabled})
+		result = append(result, EcommerceManagedSkill{ManagedSkill: skill, Enabled: enabled})
+	}
+	for _, item := range installed {
+		enabled, exists := policy[item.ID]
+		if !exists {
+			enabled = true
+		}
+		result = append(result, EcommerceManagedSkill{ManagedSkill: item.ManagedSkill, Enabled: enabled, AutoUpdate: item.AutoUpdate, LastCheckedAt: item.LastCheckedAt.Format("2006-01-02 15:04 UTC"), SyncError: item.SyncError})
 	}
 	return result, nil
 }
@@ -60,6 +74,13 @@ func (s *Service) SetEcommerceManagedSkillEnabled(actor *model.User, id string, 
 		return err
 	}
 	found := false
+	installed, err := s.ecommerceInstalledSkills()
+	if err != nil {
+		return err
+	}
+	for _, skill := range installed {
+		found = found || skill.ID == id
+	}
 	for _, skill := range ecommerceskills.ManagedCatalog() {
 		found = found || skill.ID == id
 	}
@@ -119,7 +140,15 @@ func (s *Service) ecommerceManagedSkillBlock(draft EcommerceDraft, strategy map[
 	}
 	noText := draft.NoText || draft.ImageType == "white" || draft.ImageType == "three-view" || (draft.CreativeOptions != nil && draft.CreativeOptions.TextMode == "none")
 	match := ecommercecatalog.ResolveProduct(category, draft.ProductName)
-	calls, block := ecommerceskills.SelectManaged(ecommerceskills.ManagedInput{RootID: match.Node.RootID, Category: ecommerceProductCategory(query), Text: text, ImageType: draft.ImageType, Platform: draft.Platform, ReferenceMode: draft.ReferenceMode, ReferenceRoles: roles, Style: style, PeopleAllowed: ecommercePeopleAllowed(draft), NoText: noText, HasSpecs: strings.TrimSpace(draft.Specifications+draft.Dimensions) != ""}, policy)
+	installed, err := s.ecommerceInstalledSkills()
+	if err != nil {
+		return "", nil, err
+	}
+	catalog := ecommerceskills.ManagedCatalog()
+	for _, item := range installed {
+		catalog = append(catalog, item.ManagedSkill)
+	}
+	calls, block := ecommerceskills.SelectCatalog(ecommerceskills.ManagedInput{RootID: match.Node.RootID, Category: ecommerceProductCategory(query), Text: text, ImageType: draft.ImageType, Platform: draft.Platform, ReferenceMode: draft.ReferenceMode, ReferenceRoles: roles, Style: style, PeopleAllowed: ecommercePeopleAllowed(draft), NoText: noText, HasSpecs: strings.TrimSpace(draft.Specifications+draft.Dimensions) != ""}, policy, catalog)
 	context := ecommercecatalog.Context(match)
 	if enabled, ok := policy["ecom-industry-"+match.Node.RootID]; ok && !enabled {
 		context = ecommercecatalog.RoutingContext(match)
