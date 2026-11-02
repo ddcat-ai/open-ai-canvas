@@ -9,4 +9,5 @@ export const dramaKeys = {
     jobs: (projectId: string) => ["drama", projectId, "jobs"] as const,
     takes: (projectId: string, kind: DramaTakeKind, ownerId: string) => ["drama", projectId, "takes", kind, ownerId] as const,
     canvas: (projectId: string) => ["drama", projectId, "canvas"] as const,
+    chapters: (projectId: string) => ["drama", projectId, "chapters"] as const,
 };

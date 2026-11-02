@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"yingce/backend/internal/model"
@@ -378,6 +379,187 @@ func (s *Service) UpdateDramaCast(userID string, projectID string, castID string
 		return model.DramaCast{}, err
 	}
 	return *updated, nil
+}
+
+// AddDramaCastLook 为角色新增一套造型：造型是角色的子行，只承载这套造型的名称、外观与默认适用章节；
+// 名称、别名与声音沿用所属角色。随后调度循环以角色本体参考图为底图生成这套造型的参考图（保持同一张脸）。
+func (s *Service) AddDramaCastLook(userID, projectID, castID string, req DramaCastLookRequest) (map[string]any, error) {
+	project, productionRow, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	character, err := s.repo.DramaCast(project.ID, castID)
+	if err != nil {
+		return nil, err
+	}
+	if character.Kind != "character" || character.ParentID != "" {
+		return nil, BadAuthRequest("只能为角色添加造型")
+	}
+	name := strings.TrimSpace(req.LookName)
+	appearance := strings.TrimSpace(req.Appearance)
+	if name == "" || utf8.RuneCountInString(name) > 60 {
+		return nil, BadAuthRequest("造型名需为 1 到 60 字")
+	}
+	if production.IsBaseLookName(name) {
+		return nil, BadAuthRequest("造型名不能与基础造型重名")
+	}
+	if appearance == "" {
+		return nil, BadAuthRequest("请填写这套造型的外观描述")
+	}
+	existing, err := s.repo.DramaCasts(project.ID)
+	if err != nil {
+		return nil, err
+	}
+	looks := dramaLooksForCharacter(existing, character.ID)
+	if len(looks) >= production.MaxCharacterLooks {
+		return nil, BadAuthRequest(fmt.Sprintf("每个角色最多 %d 套造型", production.MaxCharacterLooks))
+	}
+	from, to := dramaNormalizeLookRange(req.FromChapter, req.ToChapter)
+	look := model.DramaCast{ID: newID(), ProjectID: project.ID, Kind: "character", ParentID: character.ID, Name: character.Name, LookName: truncateRunes(name, 60), Appearance: truncateRunes(appearance, 1000), LookFromChapter: from, LookToChapter: to, Position: character.Position*100 + len(looks) + 1, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := s.repo.CreateDramaCasts([]model.DramaCast{look}); err != nil {
+		return nil, err
+	}
+	if err := s.requestDramaWork(productionRow); err != nil {
+		return nil, err
+	}
+	return map[string]any{"look": look}, nil
+}
+
+// UpdateDramaCastLook 修改一套造型的造型名、外观或默认适用章节；外观变化会让引用它的剧情段参考图与视频过期。
+func (s *Service) UpdateDramaCastLook(userID, projectID, lookID string, req DramaCastLookRequest) (map[string]any, error) {
+	project, _, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	look, err := s.repo.DramaCast(project.ID, lookID)
+	if err != nil {
+		return nil, err
+	}
+	if look.ParentID == "" {
+		return nil, BadAuthRequest("只能修改造型")
+	}
+	fields := map[string]any{}
+	if strings.TrimSpace(req.LookName) != "" {
+		name := strings.TrimSpace(req.LookName)
+		if utf8.RuneCountInString(name) > 60 || production.IsBaseLookName(name) {
+			return nil, BadAuthRequest("造型名无效")
+		}
+		fields["look_name"] = name
+	}
+	if req.Appearance != "" {
+		fields["appearance"] = truncateRunes(strings.TrimSpace(req.Appearance), 1000)
+	}
+	if req.FromChapter != nil || req.ToChapter != nil {
+		from, to := dramaNormalizeLookRange(req.FromChapter, req.ToChapter)
+		fields["look_from_chapter"], fields["look_to_chapter"] = from, to
+	}
+	if len(fields) == 0 {
+		return map[string]any{"look": look}, nil
+	}
+	// 外观变化影响参考图与下游视频；仅改章节范围或造型名不动媒体。
+	if _, ok := fields["appearance"]; ok {
+		fields["image_status"] = model.DramaMediaQueued
+	}
+	if err := s.repo.UpdateDramaCastFields(look.ID, fields); err != nil {
+		return nil, err
+	}
+	affected := 0
+	if _, ok := fields["appearance"]; ok && req.RestyleSegments {
+		if affected, err = s.restyleDramaCastSegments(project.ID, look.ID); err != nil {
+			return nil, err
+		}
+	}
+	updated, err := s.repo.DramaCast(project.ID, lookID)
+	if err != nil {
+		return nil, err
+	}
+	s.wakeDramaScheduler()
+	return map[string]any{"look": updated, "affectedSegments": affected}, nil
+}
+
+// DeleteDramaCastLook 删除一套造型；引用它的镜头回退到角色本体，受影响的剧情段视频过期需重做。
+func (s *Service) DeleteDramaCastLook(userID, projectID, lookID string, restyleSegments bool) (map[string]any, error) {
+	project, _, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	look, err := s.repo.DramaCast(project.ID, lookID)
+	if err != nil {
+		return nil, err
+	}
+	if look.ParentID == "" {
+		return nil, BadAuthRequest("只能删除造型")
+	}
+	affected := 0
+	if restyleSegments {
+		if affected, err = s.restyleDramaCastSegments(project.ID, look.ID); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.repo.DeleteDramaCastLook(project.ID, lookID); err != nil {
+		return nil, err
+	}
+	s.wakeDramaScheduler()
+	return map[string]any{"affectedSegments": affected}, nil
+}
+
+// dramaNormalizeLookRange 归一造型的默认适用章节：负数按 0（不限），起止颠倒时交换。
+func dramaNormalizeLookRange(from, to *int) (int, int) {
+	fromValue, toValue := 0, 0
+	if from != nil {
+		fromValue = max(*from, 0)
+	}
+	if to != nil {
+		toValue = max(*to, 0)
+	}
+	if fromValue > 0 && toValue > 0 && fromValue > toValue {
+		fromValue, toValue = toValue, fromValue
+	}
+	return fromValue, toValue
+}
+
+// SetDramaCastVoice 为角色指定声音：从声音库选一条带样本音频的声音，或用刚上传 / 录制的样本（自动登记到声音库）。
+// clear=true 时清除，只按声线描述生成。视频模型支持参考音频时，该角色说话的剧情段会带上这段样本；
+// restyleSegments=true 时让引用该角色的剧情段视频过期，需重新生成。造型沿用所属角色的声音，不能单独指定。
+func (s *Service) SetDramaCastVoice(userID, projectID, castID string, req SetDramaCastVoiceRequest, clear bool) (map[string]any, error) {
+	project, _, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	cast, err := s.repo.DramaCast(project.ID, castID)
+	if err != nil {
+		return nil, err
+	}
+	if cast.Kind != "character" || cast.ParentID != "" {
+		return nil, BadAuthRequest("只能为角色指定声音，造型沿用所属角色的声音")
+	}
+	fields := map[string]any{"voice_profile_id": "", "voice_sample_resource_id": ""}
+	if !clear {
+		profile, err := s.resolveVoiceProfile(userID, req.VoiceProfileID, req.SampleResourceID, firstNonEmpty(req.VoiceName, cast.Name+"的声音"))
+		if err != nil {
+			return nil, err
+		}
+		// 视频模型只能参考真实音频；声音库里只有音色名、没有样本的内置声音无法随视频请求发送。
+		if strings.TrimSpace(profile.SampleResourceID) == "" {
+			return nil, BadAuthRequest("这个声音没有样本音频，视频模型无法参考；请上传或录制一段角色的声音")
+		}
+		fields["voice_profile_id"], fields["voice_sample_resource_id"] = profile.ID, profile.SampleResourceID
+	}
+	if err := s.repo.UpdateDramaCastFields(cast.ID, fields); err != nil {
+		return nil, err
+	}
+	affected := 0
+	if req.RestyleSegments {
+		if affected, err = s.restyleDramaCastSegments(project.ID, cast.ID); err != nil {
+			return nil, err
+		}
+	}
+	updated, err := s.repo.DramaCast(project.ID, castID)
+	if err != nil {
+		return nil, err
+	}
+	s.wakeDramaScheduler()
+	return map[string]any{"cast": updated, "affectedSegments": affected}, nil
 }
 
 // RegenerateDramaCast 重做参考图；restyleSegments=true 时让引用该设定的剧情段视频过期，需重新生成。

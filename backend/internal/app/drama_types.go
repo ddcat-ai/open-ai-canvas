@@ -257,6 +257,21 @@ type CreateDramaRequest struct {
 	// SourceFormat 是素材类型：novel 小说、script 剧本、storyboard 分镜；剧本与分镜总是每章一集。
 	SourceFormat string `json:"sourceFormat"`
 	EpisodeMode  string `json:"episodeMode"`
+	// SelectedChapters 是先加入制作的章节下标（从 0 起，对应 Chapters）；为空表示全部章节。
+	// 没选中的章节原文照常保存为预留章节，不参与资产提取、分集与改编，之后可在制作台加入。
+	SelectedChapters []int `json:"selectedChapters"`
+}
+
+// ProduceDramaChaptersRequest 把预留的原著章节加入制作：按章节顺序每 ChaptersPerEpisode 章建成一集（不连续的章节不合并），
+// 追加在现有分集之后。ChaptersPerEpisode 为 0 时沿用作品的按章分集设置，没有设置按每章一集。
+type ProduceDramaChaptersRequest struct {
+	ChapterIDs         []string `json:"chapterIds"`
+	ChaptersPerEpisode int      `json:"chaptersPerEpisode"`
+}
+
+// ProduceDramaChaptersResult 是加入制作后新建的集，按集号排列。
+type ProduceDramaChaptersResult struct {
+	EpisodeIDs []string `json:"episodeIds"`
 }
 
 // AddDramaEpisodeRequest 在作品末尾追加一集：原文直接成为这一集，不经过分集规划。
@@ -359,8 +374,11 @@ type DramaProductionView struct {
 	AssetsReleased          bool   `json:"assetsReleased"`
 	Logline                 string `json:"logline"`
 	Tone                    string `json:"tone"`
-	ChapterCount            int    `json:"chapterCount"`
-	WordCount               int    `json:"wordCount"`
+	// ChapterCount / WordCount 只统计已加入制作的章节；Reserved* 是导入时未选中、尚未加入制作的原著章节。
+	ChapterCount         int `json:"chapterCount"`
+	WordCount            int `json:"wordCount"`
+	ReservedChapterCount int `json:"reservedChapterCount"`
+	ReservedWordCount    int `json:"reservedWordCount"`
 }
 
 // DramaEpisodeStats 按剧情段统计进度：视频提示词写好几段、视频生成几段、失败几段。
@@ -480,6 +498,9 @@ type DramaChapterRef struct {
 	Title     string `json:"title"`
 	Position  int    `json:"position"`
 	WordCount int    `json:"wordCount"`
+	// Reserved 表示原著章节尚未加入制作；EpisodeNumber 是使用这一章的第一集（未分到集时为 0）。只在章节目录里给出。
+	Reserved      bool `json:"reserved,omitempty"`
+	EpisodeNumber int  `json:"episodeNumber,omitempty"`
 }
 
 type DramaEpisodeDetail struct {
@@ -561,6 +582,20 @@ type DramaSegmentRequest struct {
 	Warning string `json:"warning,omitempty"`
 	// UnknownReferences 是提示词正文里不属于本段的“参考图N”（编号超出本段参考图数量），存在时不能提交视频。
 	UnknownReferences []string `json:"unknownReferences,omitempty"`
+	// AudioReferences 是本段说话、且指定了声音样本的角色（按开口顺序）；Sent 的作为“参考音频N”随请求发送。
+	// ModelMaxAudios 是视频模型声明的参考音频上限，0 表示不支持参考音频。
+	AudioReferences []DramaSegmentAudioReference `json:"audioReferences"`
+	ModelMaxAudios  int                          `json:"modelMaxAudios,omitempty"`
+}
+
+// DramaSegmentAudioReference 是一个说话角色的声音样本；没有随请求发送时 Note 说明原因，本段按声线描述生成该角色的对白。
+type DramaSegmentAudioReference struct {
+	CastID     string `json:"castId"`
+	Name       string `json:"name"`
+	Label      string `json:"label,omitempty"`
+	ResourceID string `json:"resourceId"`
+	Sent       bool   `json:"sent"`
+	Note       string `json:"note,omitempty"`
 }
 
 type DramaSegmentReference struct {
@@ -593,6 +628,25 @@ type UpdateDramaShotRequest struct {
 	// Transition 是进入本镜头的转场；DurationSeconds 手动设置镜头时长。
 	Transition      *string  `json:"transition"`
 	DurationSeconds *float64 `json:"durationSeconds"`
+}
+
+// SetDramaCastVoiceRequest 为角色指定声音：VoiceProfileID 从声音库选，SampleResourceID 是刚上传或录制的样本音频
+// （按 VoiceName 登记到声音库，同一样本重复使用同一条）。RestyleSegments 让引用该角色的剧情段视频重新生成。
+type SetDramaCastVoiceRequest struct {
+	VoiceProfileID   string `json:"voiceProfileId"`
+	SampleResourceID string `json:"sampleResourceId"`
+	VoiceName        string `json:"voiceName"`
+	RestyleSegments  bool   `json:"restyleSegments"`
+}
+
+// DramaCastLookRequest 新增或修改一套角色造型：LookName 造型名，Appearance 这套造型的外观，
+// FromChapter / ToChapter 默认适用的原著章节号（从 1 起，0 或 nil 表示该端不限）。
+type DramaCastLookRequest struct {
+	LookName        string `json:"lookName"`
+	Appearance      string `json:"appearance"`
+	FromChapter     *int   `json:"fromChapter"`
+	ToChapter       *int   `json:"toChapter"`
+	RestyleSegments bool   `json:"restyleSegments"`
 }
 
 type UpdateDramaCastRequest struct {

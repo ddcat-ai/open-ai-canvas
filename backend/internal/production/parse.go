@@ -16,6 +16,101 @@ type BibleCharacter struct {
 	Description string   `json:"description"`
 	Appearance  string   `json:"appearance"`
 	Voice       string   `json:"voice"`
+	// Looks 是角色在不同时期、身份或场合明显不同的其他造型（Appearance 是第一次登场时的造型）。
+	Looks BibleLooks `json:"looks"`
+}
+
+// BibleLook 是角色的一套造型：FromChapter / ToChapter 是默认适用的原著章节序号（从 1 起，0 表示不限）。
+type BibleLook struct {
+	Name        string  `json:"name"`
+	Appearance  string  `json:"appearance"`
+	FromChapter FlexInt `json:"fromChapter"`
+	ToChapter   FlexInt `json:"toChapter"`
+}
+
+// MaxCharacterLooks 是每个角色最多的造型数（不含角色本身的基础造型）。
+const MaxCharacterLooks = 6
+
+// BibleLooks 容忍模型把造型写成非数组或夹杂错误条目：读不懂的部分直接忽略，不让整份作品圣经解析失败。
+type BibleLooks []BibleLook
+
+func (l *BibleLooks) UnmarshalJSON(data []byte) error {
+	var items []json.RawMessage
+	if json.Unmarshal(data, &items) != nil {
+		*l = nil
+		return nil
+	}
+	looks := make(BibleLooks, 0, len(items))
+	for _, item := range items {
+		var look BibleLook
+		if json.Unmarshal(item, &look) == nil {
+			looks = append(looks, look)
+		}
+	}
+	*l = looks
+	return nil
+}
+
+// FlexInt 接受数字或数字字符串（模型常把章节序号写成 "21"），其他写法按 0 处理。
+type FlexInt int
+
+func (n *FlexInt) UnmarshalJSON(data []byte) error {
+	var number float64
+	if json.Unmarshal(data, &number) == nil {
+		*n = FlexInt(number)
+		return nil
+	}
+	var text string
+	if json.Unmarshal(data, &text) == nil {
+		if value, err := strconv.Atoi(strings.TrimSpace(text)); err == nil {
+			*n = FlexInt(value)
+			return nil
+		}
+	}
+	*n = 0
+	return nil
+}
+
+// LookChoices 是镜头里出镜角色选用的造型：键为角色名（或别名），值为造型名。
+// 模型也可能写成 [{"name":"角色","look":"造型"}]，两种写法都接受；读不懂时为空，按本集默认造型。
+type LookChoices map[string]string
+
+func (l *LookChoices) UnmarshalJSON(data []byte) error {
+	choices := LookChoices{}
+	var object map[string]any
+	if json.Unmarshal(data, &object) == nil {
+		for key, value := range object {
+			if text, ok := value.(string); ok && strings.TrimSpace(key) != "" && strings.TrimSpace(text) != "" {
+				choices[strings.TrimSpace(key)] = strings.TrimSpace(text)
+			}
+		}
+		*l = choices
+		return nil
+	}
+	var items []struct {
+		Name      string `json:"name"`
+		Character string `json:"character"`
+		Look      string `json:"look"`
+	}
+	if json.Unmarshal(data, &items) == nil {
+		for _, item := range items {
+			name := strings.TrimSpace(firstNonEmpty(item.Character, item.Name))
+			if name != "" && strings.TrimSpace(item.Look) != "" {
+				choices[name] = strings.TrimSpace(item.Look)
+			}
+		}
+	}
+	*l = choices
+	return nil
+}
+
+// IsBaseLookName 判断造型名是否指角色本身的基础造型（模型常写“基础造型”“默认”）。
+func IsBaseLookName(name string) bool {
+	switch NormalizeName(name) {
+	case "", "基础", "基础造型", "默认", "默认造型", "原始造型", "本体", "无":
+		return true
+	}
+	return false
 }
 
 // BibleProp 是反复出现、需要保持外观一致的关键道具（法器、信物、兵器等）。
@@ -61,6 +156,8 @@ type ScriptShot struct {
 	VideoPrompt     string   `json:"videoPrompt"`
 	SourceQuote     string   `json:"sourceQuote"`
 	Transition      string   `json:"transition"`
+	// Looks 是本镜出镜角色选用的造型（角色名 → 造型名）；没写的角色用本集默认造型。
+	Looks LookChoices `json:"looks"`
 }
 
 // MaxScriptShots 是单集镜头数上限；长集（如 10 分钟）按 3 秒一镜也在范围内。
@@ -104,6 +201,7 @@ func ParseBible(raw string) (Bible, error) {
 			continue
 		}
 		seen[key] = true
+		character.Looks = normalizeBibleLooks(character.Looks)
 		characters = append(characters, character)
 		if len(characters) >= 24 {
 			break
@@ -144,6 +242,29 @@ func ParseBible(raw string) (Bible, error) {
 		return bible, errors.New("作品圣经没有识别到角色")
 	}
 	return bible, nil
+}
+
+// normalizeBibleLooks 去掉没有名称或外观、与基础造型同名或重复的造型，章节序号不为负、起止颠倒时交换，最多保留 MaxCharacterLooks 套。
+func normalizeBibleLooks(looks BibleLooks) BibleLooks {
+	result := BibleLooks{}
+	seen := map[string]bool{}
+	for _, look := range looks {
+		look.Name, look.Appearance = strings.TrimSpace(look.Name), strings.TrimSpace(look.Appearance)
+		key := NormalizeName(look.Name)
+		if look.Name == "" || look.Appearance == "" || IsBaseLookName(look.Name) || seen[key] {
+			continue
+		}
+		seen[key] = true
+		look.FromChapter, look.ToChapter = max(look.FromChapter, 0), max(look.ToChapter, 0)
+		if look.FromChapter > 0 && look.ToChapter > 0 && look.FromChapter > look.ToChapter {
+			look.FromChapter, look.ToChapter = look.ToChapter, look.FromChapter
+		}
+		result = append(result, look)
+		if len(result) >= MaxCharacterLooks {
+			break
+		}
+	}
+	return result
 }
 
 // ParsePlan 只接受本批章节内的序号，并补齐模型漏掉的章节，保证原文全部被覆盖。
@@ -244,10 +365,12 @@ func normalizeScriptShots(items []ScriptShot) ([]ScriptShot, error) {
 	return shots, nil
 }
 
-// ScriptCast 是剧本里新出现、设定表还没有的角色、道具或场景，用于即时建档时补全外观与声线。
+// ScriptCast 是剧本里新出现、设定表还没有的角色、道具、场景或造型，用于即时建档时补全外观与声线。
+// Kind 为 look 时 Name 是角色名、Look 是新造型名、Appearance 是这套造型的外观。
 type ScriptCast struct {
 	Kind       string `json:"kind"`
 	Name       string `json:"name"`
+	Look       string `json:"look"`
 	Appearance string `json:"appearance"`
 	Voice      string `json:"voice"`
 }
@@ -286,11 +409,15 @@ func ParseScriptCast(raw string) []ScriptCast {
 	}
 	result := make([]ScriptCast, 0, len(payload.Cast))
 	for _, item := range payload.Cast {
-		item.Kind, item.Name = strings.TrimSpace(item.Kind), strings.TrimSpace(item.Name)
-		if item.Name == "" || (item.Kind != "character" && item.Kind != "prop" && item.Kind != "scene") {
+		item.Kind, item.Name, item.Look = strings.TrimSpace(item.Kind), strings.TrimSpace(item.Name), strings.TrimSpace(item.Look)
+		if item.Name == "" || (item.Kind != "character" && item.Kind != "prop" && item.Kind != "scene" && item.Kind != "look") {
 			continue
 		}
 		item.Appearance, item.Voice = strings.TrimSpace(item.Appearance), strings.TrimSpace(item.Voice)
+		// 新造型必须有造型名与外观，否则建出来的参考图没有依据。
+		if item.Kind == "look" && (item.Look == "" || IsBaseLookName(item.Look) || item.Appearance == "") {
+			continue
+		}
 		result = append(result, item)
 	}
 	return result

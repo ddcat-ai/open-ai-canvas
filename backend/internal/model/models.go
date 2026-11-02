@@ -144,6 +144,9 @@ const (
 	ProjectUnitStatusDraft     ProjectUnitStatus = "draft"
 	ProjectUnitStatusReady     ProjectUnitStatus = "ready"
 	ProjectUnitStatusCompleted ProjectUnitStatus = "completed"
+	// ProjectUnitStatusReserved 是短剧导入时没有选中的原著章节：原文已保存，但不参与资产提取、分集与改编，
+	// 用户在制作台把它加入制作后变为 ready。
+	ProjectUnitStatusReserved ProjectUnitStatus = "reserved"
 
 	AssetCategoryCharacter   AssetCategory = "character"
 	AssetCategoryEnvironment AssetCategory = "environment"

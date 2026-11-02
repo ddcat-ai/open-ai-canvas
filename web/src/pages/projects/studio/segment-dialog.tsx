@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { App, Button, Input, InputNumber, Select } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { AlertTriangle, ArrowLeft, Brush, Check, ChevronLeft, ChevronRight, Copy, Info, Loader2, Pencil, Play, Plus, RotateCcw, Trash2, X, PenLine } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Brush, Check, ChevronLeft, ChevronRight, Copy, Info, Loader2, Mic, Pencil, Play, Plus, RotateCcw, Trash2, X, PenLine } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { TRANSITION_LABEL } from "@/lib/drama/storyboard";
@@ -421,6 +421,18 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                     />
                 ))}
             </div>
+            {request.audioReferences?.length ? (
+                <div className="drama-sdx-voices" aria-label="本段参考音频">
+                    {request.audioReferences.map((voice) => (
+                        <span key={voice.castId} className={`drama-sdx-voice ${voice.sent ? "" : "is-missing"}`} title={voice.sent ? `${voice.label}：${voice.name}的声音，随请求发送` : voice.note}>
+                            <Mic className="size-3" />
+                            <b>{voice.sent ? voice.label?.replace("参考音频", "音") : "未发"}</b>
+                            {voice.name}
+                            {voice.sent ? null : <small>{voice.note}</small>}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
             <div className="drama-sdx-assets-foot">
                 <Select
                     className="drama-sdx-add"

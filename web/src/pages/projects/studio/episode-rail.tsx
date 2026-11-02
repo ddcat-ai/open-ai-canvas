@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { Grid3x3, List, Plus, Search, X } from "lucide-react";
+import { BookOpenText, Grid3x3, List, Plus, Search, X } from "lucide-react";
 
 import type { DramaEpisodeRow } from "@/services/api/drama";
 
@@ -26,7 +26,24 @@ function matchesFilter(episode: DramaEpisodeRow, filter: Filter) {
     return true;
 }
 
-export function EpisodeRail({ episodes, currentId, planning, onSelect, onAdd }: { episodes: DramaEpisodeRow[]; currentId: string; planning: boolean; onSelect: (id: string) => void; onAdd: () => void }) {
+export function EpisodeRail({
+    episodes,
+    currentId,
+    planning,
+    reservedChapters = 0,
+    onSelect,
+    onAdd,
+    onPickChapters,
+}: {
+    episodes: DramaEpisodeRow[];
+    currentId: string;
+    planning: boolean;
+    /** 导入时未加入制作的原著章节数；大于 0 时提供“继续选章”入口。 */
+    reservedChapters?: number;
+    onSelect: (id: string) => void;
+    onAdd: () => void;
+    onPickChapters?: () => void;
+}) {
     const nextNumber = (episodes[episodes.length - 1]?.number || 0) + 1;
     const [filter, setFilter] = useState<Filter>("all");
     const [query, setQuery] = useState("");
@@ -81,6 +98,13 @@ export function EpisodeRail({ episodes, currentId, planning, onSelect, onAdd }: 
                             <Plus className="size-4" />
                         </button>
                     </Tooltip>
+                    {onPickChapters ? (
+                        <Tooltip title={reservedChapters > 0 ? `原著章节：还有 ${reservedChapters} 章未加入制作，勾选后建成新的集` : "原著章节：查看全部章节与所在集"}>
+                            <button type="button" className="drama-title-edit !h-8 !w-8" aria-label="原著章节" onClick={onPickChapters}>
+                                <BookOpenText className="size-4" />
+                            </button>
+                        </Tooltip>
+                    ) : null}
                     <Tooltip title={matrix ? "列表视图" : "矩阵视图：一屏看清全剧进度"}>
                         <button type="button" className="drama-title-edit !h-8 !w-8" aria-pressed={matrix} aria-label="切换矩阵视图" onClick={() => setMatrix((value) => !value)}>
                             {matrix ? <List className="size-4" /> : <Grid3x3 className="size-4" />}
@@ -167,6 +191,12 @@ export function EpisodeRail({ episodes, currentId, planning, onSelect, onAdd }: 
                         <div className="px-3 py-10 text-center text-[var(--fs-tiny)] text-foreground/40">没有符合条件的分集</div>
                     )}
                     {planning ? <div className="px-3 py-3 text-center text-[var(--fs-micro)] text-foreground/40">后续章节正在分集…</div> : null}
+                    {!planning && filter === "all" && !deferredQuery && reservedChapters > 0 && onPickChapters ? (
+                        <button type="button" className="drama-rail-add is-accent" onClick={onPickChapters}>
+                            <BookOpenText className="size-3.5" />
+                            原著还有 {reservedChapters} 章 · 继续选章
+                        </button>
+                    ) : null}
                     {!planning && filter === "all" && !deferredQuery ? (
                         <button type="button" className="drama-rail-add" onClick={onAdd}>
                             <Plus className="size-3.5" />

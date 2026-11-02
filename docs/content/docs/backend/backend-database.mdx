@@ -47,6 +47,10 @@ description: 影策后端核心持久化表与状态边界
 
 逐集追加（`POST /dramas/:id/episodes`）在同一事务内写入一行 `project_units`（`kind=chapter`，`position` 为末尾）和一行 `drama_episodes`（`number` 为当前最大值 + 1），并把 `drama_productions.plan_cursor` 推过这一章、保持 `plan_done=true`，调度循环不会再把这一章交给分集规划；`plan_done=false` 时拒绝追加。
 
+导入长篇时只选部分章节：没选中的章节同样写入 `project_units`，`status=reserved`（预留，未加入制作）。资产提取、分集规划与规划游标 `plan_cursor` 只看 `status<>reserved` 的章节；加入制作（`POST /dramas/:id/chapters/produce`）在同一事务内把章节改为 `ready`、追加对应的 `drama_episodes`，并把 `plan_cursor` 设为已加入制作的章节数，只在 `plan_done=true` 时允许。
+
+版本 78 `drama_cast_voice_looks` 为 `drama_casts` 增加角色声音与造型列，为 `drama_shots` 增加镜头造型选择：`voice_profile_id` / `voice_sample_resource_id` 是角色指定的声音（声音库条目与样本音频），支持参考音频的视频模型在该角色开口的剧情段里随请求发送样本；`parent_id` 非空表示这一行是所属角色的一套造型（妆造），`look_name` 造型名、`appearance` 是这套造型的外观、`look_from_chapter` / `look_to_chapter` 是默认适用的原著章节号（从 1 起，0 不限），名称、别名与声音沿用角色本体；造型参考图以角色本体参考图为底图 `image_to_image` 生成，保持同一张脸。`drama_shots.look_cast_ids_json` 是本镜出镜角色选用的造型行 ID 列表，空表示用本集默认造型或角色本体；取参考图时用造型行的外观与参考图替换角色本体。旧数据这些列为零值（角色本身、无指定声音、各镜用本体）。资产提取（作品圣经）为角色输出 `looks`，剧本为每镜输出 `looks`（角色名 → 造型名）并可在 `cast` 里用 `kind=look` 即时建新造型。
+
 ## 推广中心（Schema 72）
 
 版本 72 `referral_center` 为 `users` 增加 `is_promoter`（非空布尔，默认 `false`，带索引），并新增三张表。开放方式保存在 `system_settings` 的 `referral` 键：`enabled`、`mode`（`all` 全民推广 / `assigned` 指定推广人）、`commissionRateBasisPoints`（万分比，0–5000）。默认关闭。

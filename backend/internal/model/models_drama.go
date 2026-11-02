@@ -89,15 +89,26 @@ type DramaCast struct {
 	Description string `json:"description" gorm:"type:text"`
 	Appearance  string `json:"appearance" gorm:"type:text"`
 	// VoiceInstructions 是声线描述（音色、语速、情绪），写进视频提示词，由视频模型同步生成对白。
-	VoiceInstructions string    `json:"voiceInstructions" gorm:"type:text"`
-	Importance        int       `json:"importance"`
-	ImageResourceID   string    `json:"imageResourceId,omitempty" gorm:"size:36"`
-	ImageStatus       string    `json:"imageStatus" gorm:"size:16"`
-	ImageVersion      int       `json:"imageVersion"`
-	Locked            bool      `json:"locked"`
-	Position          int       `json:"position"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	VoiceInstructions string `json:"voiceInstructions" gorm:"type:text"`
+	// VoiceProfileID 是用户为角色指定的声音（声音库条目）；VoiceSampleResourceID 是它的样本音频，
+	// 视频模型支持参考音频时随该角色说话的剧情段一起发送。空串表示只按声线描述生成。
+	VoiceProfileID        string `json:"voiceProfileId,omitempty" gorm:"size:36"`
+	VoiceSampleResourceID string `json:"voiceSampleResourceId,omitempty" gorm:"size:36"`
+	// ParentID 非空表示这一行是 ParentID 角色的一套造型（妆造）：LookName 是造型名，Appearance 与参考图是这套造型的外观，
+	// 名称、别名与声音沿用所属角色。LookFromChapter / LookToChapter 是默认适用的原著章节号（从 1 起，0 表示不限），
+	// 写剧本时按本集章节选默认造型，镜头可按剧情另选。
+	ParentID        string    `json:"parentId,omitempty" gorm:"index;size:36"`
+	LookName        string    `json:"lookName,omitempty" gorm:"size:60"`
+	LookFromChapter int       `json:"lookFromChapter,omitempty"`
+	LookToChapter   int       `json:"lookToChapter,omitempty"`
+	Importance      int       `json:"importance"`
+	ImageResourceID string    `json:"imageResourceId,omitempty" gorm:"size:36"`
+	ImageStatus     string    `json:"imageStatus" gorm:"size:16"`
+	ImageVersion    int       `json:"imageVersion"`
+	Locked          bool      `json:"locked"`
+	Position        int       `json:"position"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type DramaEpisode struct {
@@ -141,11 +152,14 @@ type DramaShot struct {
 	CastIDsJSON  string `json:"castIdsJson" gorm:"type:text"`
 	// PropIDsJSON 是画面里出现的关键道具设定（DramaCast kind=prop）。
 	PropIDsJSON string `json:"propIdsJson" gorm:"type:text"`
-	Speaker     string `json:"speaker" gorm:"size:120"`
-	Dialogue    string `json:"dialogue" gorm:"type:text"`
-	Action      string `json:"action" gorm:"type:text"`
-	ShotSize    string `json:"shotSize" gorm:"size:40"`
-	Camera      string `json:"camera" gorm:"size:80"`
+	// LookCastIDsJSON 是本镜出镜角色选用的造型行 ID 列表（DramaCast kind=character 且 ParentID 非空）；
+	// 空表示各角色用本集默认造型或本体。取参考图时用这里的造型行外观与参考图替换角色本体。
+	LookCastIDsJSON string `json:"lookCastIdsJson" gorm:"type:text"`
+	Speaker         string `json:"speaker" gorm:"size:120"`
+	Dialogue        string `json:"dialogue" gorm:"type:text"`
+	Action          string `json:"action" gorm:"type:text"`
+	ShotSize        string `json:"shotSize" gorm:"size:40"`
+	Camera          string `json:"camera" gorm:"size:80"`
 	// Transition 是进入本镜头的转场：cut / fadeblack / fadewhite；作品统一指定时以作品设置为准。
 	Transition string `json:"transition" gorm:"size:16"`
 	DurationMs int64  `json:"durationMs"`

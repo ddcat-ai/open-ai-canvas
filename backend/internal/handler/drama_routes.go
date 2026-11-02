@@ -116,6 +116,18 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		return svc.RegenerateDramaCasts(userID, c.Param("id"), req)
 	}))
+	r.GET("/dramas/:id/chapters", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
+		chapters, err := svc.DramaChapterOutline(userID, c.Param("id"))
+		return gin.H{"chapters": chapters}, err
+	}))
+	// 章节 ID 列表上限 3000 个，每个 36 字符加 JSON 引号与逗号。
+	r.POST("/dramas/:id/chapters/produce", dramaRoute(svc, 256<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.ProduceDramaChaptersRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.ProduceDramaChapters(userID, c.Param("id"), req)
+	}))
 	r.GET("/dramas/:id/chapters/:chapterId", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
 		chapter, err := svc.DramaChapter(userID, c.Param("id"), c.Param("chapterId"))
 		return gin.H{"chapter": chapter}, err
@@ -250,6 +262,34 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return nil, err
 		}
 		return svc.SetDramaCastImage(userID, c.Param("id"), c.Param("castId"), req)
+	}))
+	r.POST("/dramas/:id/cast/:castId/looks", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.DramaCastLookRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.AddDramaCastLook(userID, c.Param("id"), c.Param("castId"), req)
+	}))
+	r.PATCH("/dramas/:id/looks/:lookId", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.DramaCastLookRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.UpdateDramaCastLook(userID, c.Param("id"), c.Param("lookId"), req)
+	}))
+	r.DELETE("/dramas/:id/looks/:lookId", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
+		return svc.DeleteDramaCastLook(userID, c.Param("id"), c.Param("lookId"), c.Query("restyleSegments") == "true")
+	}))
+	r.PUT("/dramas/:id/cast/:castId/voice", dramaRoute(svc, 4<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.SetDramaCastVoiceRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.SetDramaCastVoice(userID, c.Param("id"), c.Param("castId"), req, false)
+	}))
+	r.DELETE("/dramas/:id/cast/:castId/voice", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
+		req := service.SetDramaCastVoiceRequest{RestyleSegments: c.Query("restyleSegments") == "true"}
+		return svc.SetDramaCastVoice(userID, c.Param("id"), c.Param("castId"), req, true)
 	}))
 	r.GET("/dramas/:id/cast/:castId/impact", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
 		return svc.DramaCastImpact(userID, c.Param("id"), c.Param("castId"))

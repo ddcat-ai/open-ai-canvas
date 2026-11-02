@@ -145,8 +145,11 @@ export type DramaProductionView = {
     assetsReleased: boolean;
     logline: string;
     tone: string;
+    /** 只统计已加入制作的章节；reserved* 是导入时未选中、尚未加入制作的原著章节。 */
     chapterCount: number;
     wordCount: number;
+    reservedChapterCount: number;
+    reservedWordCount: number;
 };
 
 /** 按剧情段统计的单集进度。 */
@@ -280,7 +283,8 @@ export type DramaJobAttempt = { taskId?: string; status: string; error?: string;
 
 export type DramaJobDetail = { job: DramaJob; target: string; attempts: DramaJobAttempt[] };
 
-export type DramaChapterRef = { id: string; title: string; position: number; wordCount: number };
+/** reserved / episodeNumber 只在原著目录（listDramaChapters）里给出：尚未加入制作、以及使用这一章的第一集。 */
+export type DramaChapterRef = { id: string; title: string; position: number; wordCount: number; reserved?: boolean; episodeNumber?: number };
 
 export type DramaEpisodeDetail = {
     episode: DramaEpisode;
@@ -364,7 +368,12 @@ export type DramaSegmentRequest = {
     warning?: string;
     /** 提示词正文里不属于本段的“参考图N”；存在时服务端拒绝生成视频。 */
     unknownReferences?: string[];
+    /** 本段开口说话、且指定了声音样本的角色；sent 的作为“参考音频N”随请求发送，否则 note 说明原因。 */
+    audioReferences?: DramaSegmentAudioReference[];
+    /** 视频模型声明的参考音频上限，0 或缺省表示不支持参考音频。 */
+    modelMaxAudios?: number;
 };
+export type DramaSegmentAudioReference = { castId: string; name: string; label?: string; resourceId: string; sent: boolean; note?: string };
 
 export type DramaCastKind = "character" | "prop" | "scene";
 
@@ -384,6 +393,14 @@ export type DramaCast = {
     imageVersion: number;
     locked: boolean;
     position: number;
+    /** 角色指定的声音（声音库条目）与样本音频；支持参考音频的视频模型在该角色开口的剧情段带上样本。 */
+    voiceProfileId?: string;
+    voiceSampleResourceId?: string;
+    /** 非空表示这是 parentId 角色的一套造型：lookName 造型名，lookFromChapter / lookToChapter 默认适用的原著章节（从 1 起，0 不限）。 */
+    parentId?: string;
+    lookName?: string;
+    lookFromChapter?: number;
+    lookToChapter?: number;
 };
 
 export type DramaListItem = {
@@ -457,6 +474,8 @@ export type CreateDramaInput = {
     sourceFormat: DramaSourceFormat;
     /** 剧本与分镜总是每章一集，服务端忽略 auto。 */
     episodeMode: DramaEpisodeMode;
+    /** 先加入制作的章节下标（从 0 起）；不传表示全部。其余章节保存为预留章节，之后可在制作台加入。 */
+    selectedChapters?: number[];
 };
 
 const base = (projectId: string) => `/dramas/${encodeURIComponent(projectId)}`;
@@ -535,6 +554,16 @@ export function addDramaEpisode(projectId: string, input: { title: string; text:
 }
 
 /** 修改原文；已写好的剧本不会自动重写，需要再点重新改编。 */
+/** 原著目录：全部章节（含导入时未选中的预留章节），不含原文。 */
+export function listDramaChapters(projectId: string, signal?: AbortSignal) {
+    return http.get<{ chapters: DramaChapterRef[] }>(`${base(projectId)}/chapters`, { signal });
+}
+
+/** 把预留章节加入制作：按章节顺序建成新的集追加在末尾；chaptersPerEpisode 不传沿用作品设置。 */
+export function produceDramaChapters(projectId: string, input: { chapterIds: string[]; chaptersPerEpisode?: number }) {
+    return http.post<{ episodeIds: string[] }>(`${base(projectId)}/chapters/produce`, input);
+}
+
 export function updateDramaChapter(projectId: string, chapterId: string, patch: { title?: string; text?: string }) {
     return http.patch<{ chapter: { id: string; title: string; sourceText: string; wordCount: number; position: number } }>(`${base(projectId)}/chapters/${encodeURIComponent(chapterId)}`, patch);
 }
@@ -597,6 +626,28 @@ export function setDramaCastImage(projectId: string, castId: string, resourceId:
         restyleSegments,
         ...(origin ? { source: origin.source, taskId: origin.taskId || "" } : {}),
     });
+}
+
+/** 为角色指定声音：voiceProfileId 从声音库选，sampleResourceId 是刚上传或录制的样本（自动登记到声音库）。 */
+export function setDramaCastVoice(projectId: string, castId: string, input: { voiceProfileId?: string; sampleResourceId?: string; voiceName?: string; restyleSegments: boolean }) {
+    return http.put<{ cast: DramaCast; affectedSegments: number }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/voice`, input);
+}
+
+export function clearDramaCastVoice(projectId: string, castId: string, restyleSegments: boolean) {
+    return http.delete<{ cast: DramaCast; affectedSegments: number }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/voice`, { params: compactApiParams({ restyleSegments: restyleSegments ? "true" : undefined }) });
+}
+
+/** 为角色新增一套造型（妆造）：lookName 造型名，appearance 外观，fromChapter / toChapter 默认适用的原著章节（从 1 起，0 不限）。 */
+export function addDramaCastLook(projectId: string, castId: string, input: { lookName: string; appearance: string; fromChapter?: number; toChapter?: number }) {
+    return http.post<{ look: DramaCast }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/looks`, input);
+}
+
+export function updateDramaCastLook(projectId: string, lookId: string, input: { lookName?: string; appearance?: string; fromChapter?: number; toChapter?: number; restyleSegments?: boolean }) {
+    return http.patch<{ look: DramaCast; affectedSegments: number }>(`${base(projectId)}/looks/${encodeURIComponent(lookId)}`, input);
+}
+
+export function deleteDramaCastLook(projectId: string, lookId: string, restyleSegments: boolean) {
+    return http.delete<{ affectedSegments: number }>(`${base(projectId)}/looks/${encodeURIComponent(lookId)}`, { params: compactApiParams({ restyleSegments: restyleSegments ? "true" : undefined }) });
 }
 
 export function getDramaCastImpact(projectId: string, castId: string, signal?: AbortSignal) {
