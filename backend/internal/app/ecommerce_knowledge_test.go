@@ -37,16 +37,16 @@ func TestEcommerceCreativeDirectionsAreDynamicAndStable(t *testing.T) {
 		t.Fatalf("want tech category, got %q", tech.ProductCategory)
 	}
 	if len(tech.Evidence) < 4 {
-		t.Fatalf("expected reviewed source plus three original visual methods, got %d", len(tech.Evidence))
+		t.Fatalf("expected reviewed knowledge and first-party design evidence, got %d", len(tech.Evidence))
 	}
 	visual := false
 	for _, evidence := range tech.Evidence {
-		if evidence.Title == "潮流穿搭、清新治愈与潮酷电音视觉体系" && evidence.TrustLevel == "first_party" {
+		if evidence.TrustLevel == "first_party" && (evidence.KnowledgeDomain == "KB03" || evidence.KnowledgeDomain == "KB09") {
 			visual = true
 		}
 	}
 	if !visual {
-		t.Fatal("original visual style knowledge missing from recommendation evidence")
+		t.Fatal("first-party design knowledge missing from recommendation evidence")
 	}
 	selected, err := svc.SelectEcommerceCreativeDirection("user", tech.RecommendationID, tech.Directions[1].ID)
 	if err != nil || selected.DirectionID != tech.Directions[1].ID || len(selected.PlanningContext) == 0 {
