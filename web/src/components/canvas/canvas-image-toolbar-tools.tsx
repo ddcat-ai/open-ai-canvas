@@ -1,10 +1,71 @@
 import { isValidElement, type ReactNode } from "react";
-import { Brush, Camera, Clapperboard, Contrast, Copy, FastForward, FileText, Globe2, Grid2x2, Grid3x3, Layers3, Lock, LockOpen, Maximize2, Package, PencilLine, PersonStanding, Crop, Rewind, ScanFace, SlidersHorizontal, Smile, SquareDashed, Sun, Upload, Scaling, Eraser } from "lucide-react";
+import {
+    Brush,
+    Camera,
+    Clapperboard,
+    Contrast,
+    Copy,
+    FastForward,
+    FileText,
+    Globe2,
+    Grid2x2,
+    Grid3x3,
+    Layers3,
+    Lock,
+    LockOpen,
+    Maximize2,
+    Package,
+    PencilLine,
+    PersonStanding,
+    Crop,
+    Rewind,
+    Route,
+    ScanFace,
+    SlidersHorizontal,
+    Smile,
+    SquareDashed,
+    Sun,
+    Upload,
+    Scaling,
+    Eraser,
+} from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 import type { NodeToolbarGroup } from "@/lib/canvas/tool-registry";
 
-type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "annotationEdit" | "textEdit" | "regionEdit" | "removeBackground" | "layerDecomposition" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "lighting" | "panorama" | "view" | "previs" | "multi_camera_nine_grid" | "story_pitch_four_grid" | "character_face_three_view" | "product_three_view" | "storyboard_25_grid" | "character_three_view_generation" | "cinematic_light_correction" | "image_projection_after_3s" | "image_projection_before_5s";
+type ImageNodeActionToolId =
+    | "copyPrompt"
+    | "reversePrompt"
+    | "replace"
+    | "resize"
+    | "annotation"
+    | "annotationEdit"
+    | "textEdit"
+    | "regionEdit"
+    | "removeBackground"
+    | "layerDecomposition"
+    | "emotion"
+    | "portraitTexture"
+    | "crop"
+    | "split"
+    | "upscale"
+    | "superResolve"
+    | "angle"
+    | "lighting"
+    | "panorama"
+    | "view"
+    | "previs"
+    | "multi_camera_nine_grid"
+    | "story_pitch_four_grid"
+    | "short_storyboard"
+    | "blocking_storyboard"
+    | "character_face_three_view"
+    | "product_three_view"
+    | "storyboard_25_grid"
+    | "character_three_view_generation"
+    | "cinematic_light_correction"
+    | "image_projection_after_3s"
+    | "image_projection_before_5s";
 
 type ImageToolHandlers = {
     onUpload: (node: CanvasNodeData) => void;
@@ -38,6 +99,7 @@ type ImageToolDefinition = {
     order: number;
     section?: string;
     description?: string;
+    placeholder?: string;
     active?: (node: CanvasNodeData) => boolean;
     run: (node: CanvasNodeData, handlers: ImageToolHandlers, tool: ImageToolDefinition) => void;
     /** 后端 nine_grid 类型提示词工具 ID；工具条分组按用途决定，与后端类型无关。 */
@@ -194,6 +256,30 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         run: (node, handlers) => handlers.onPrevis(node),
     },
     // 宫格与设定图：输出多格联系表
+    {
+        id: "short_storyboard",
+        label: "故事板",
+        section: "分镜宫格",
+        description: "默认 15 秒、6 镜头，生成带镜外说明的连续剧情画格",
+        placeholder: "描述一个 10–15 秒内能演完的小剧情片段，系统会整理为 4–8 个连续分镜，内容过长时会自动提炼关键剧情。提供角色三视图、美术设定图及准确的需求描述，生成效果会更好。",
+        icon: () => <Clapperboard className="size-3.5" />,
+        group: "sheet",
+        order: 1,
+        toolId: 90,
+        run: nineGridRun,
+    },
+    {
+        id: "blocking_storyboard",
+        label: "调度故事板",
+        section: "分镜宫格",
+        description: "逐镜搭配俯视调度图，标注人物走位、机位和运动路径",
+        placeholder: "描述一个 10–15 秒内能演完的小剧情片段。可补充角色、场景、道具、动作过程、走位、对白或参考图，系统会保留参考画风，生成 4–6 个连续分镜，每镜配人物走位与摄影机位置示意。",
+        icon: () => <Route className="size-3.5" />,
+        group: "sheet",
+        order: 2,
+        toolId: 91,
+        run: nineGridRun,
+    },
     {
         id: "multi_camera_nine_grid",
         label: "多机位九宫格",
@@ -381,6 +467,7 @@ export type NineGridMenuItem = {
     label: string;
     section: string;
     description: string;
+    placeholder?: string;
     toolId: number;
     toolIconName: string;
 };
@@ -397,6 +484,7 @@ export function getNineGridMenuItems(): NineGridMenuItem[] {
             label: typeof tool.label === "function" ? tool.label({} as CanvasNodeData) : tool.label,
             section: tool.section || "常用操作",
             description: tool.description || "",
+            placeholder: tool.placeholder,
             toolId: tool.toolId!,
             toolIconName: resolveToolIconName(tool, {} as CanvasNodeData),
         }));
