@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { emptyEcommerceDraft } from "@/services/api/ecommerce";
 import { suggestCommerceModel } from "@/pages/ecommerce/model-catalog";
 import { activeCommerceReferences, commerceModelInstruction } from "@/pages/ecommerce/model-context";
-import { commerceImageReferences, commerceImagePrompt, commerceRequiredImageReferenceCount, commercePlanningPayload } from "@/pages/ecommerce/workflow";
+import { commerceImageReferences, commerceImagePrompt, commerceRequiredImageReferenceCount, commercePlanningPayload, commerceRegenerationVariation } from "@/pages/ecommerce/workflow";
 import { commerceInputSignature, plannerPrompt } from "@/pages/ecommerce/planner";
 
 describe("ecommerce model references", () => {
@@ -63,6 +63,33 @@ describe("ecommerce model references", () => {
         const white = { ...image, imageType: "white", prompt: "纯白背景商品", composition: "完整商品居中", mainVisual: "商品" };
         expect(commerceImageReferences(draft, white, 0, false)).toEqual([product]);
         expect(commerceImagePrompt(draft, white)).toContain("不添加模特或路人");
+    });
+
+    test("market and real skin direction reach automatic, selected and edited image prompts", () => {
+        for (const settings of [
+            { modelEnabled: false, references: [product] },
+            { modelEnabled: true, references: [product, model] },
+        ]) {
+            const draft = { ...emptyEcommerceDraft(), ...settings, platform: "amazon", region: "日本", language: "ja-JP" };
+            for (const manualPrompt of [false, true]) {
+                const prompt = commerceImagePrompt(draft, { ...image, manualPrompt });
+                expect(prompt).toContain('"region":"日本"');
+                expect(prompt).toContain("毛孔、细小肤纹");
+                expect(prompt).toContain("禁止美容滤镜");
+                expect(prompt).toContain("每轮重新策划要换面貌识别点");
+            }
+            const white = commerceImagePrompt(draft, { ...image, imageType: "white" });
+            expect(white).not.toContain("【人物实拍质感】");
+            expect(white).toContain("不添加模特或路人");
+        }
+    });
+
+    test("single automatic retries recast while references and series keep identity", () => {
+        const draft = { ...emptyEcommerceDraft(), count: 1, references: [product] };
+        expect(commerceRegenerationVariation(draft, image, () => 0)).toContain("单张自动选角重新选人");
+        expect(commerceRegenerationVariation(draft, image, () => 0)).not.toBe(commerceRegenerationVariation(draft, image, () => 0.9));
+        expect(commerceRegenerationVariation({ ...draft, count: 9 }, image, () => 0)).toContain("人物设定（同一人物）");
+        expect(commerceRegenerationVariation({ ...draft, modelEnabled: true, references: [product, model] }, image, () => 0)).toContain("人物设定（同一人物）");
     });
 
     test("a chosen creative direction may place an original model without a model reference", () => {

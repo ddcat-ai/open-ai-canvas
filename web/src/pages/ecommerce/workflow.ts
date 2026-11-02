@@ -40,6 +40,7 @@ const commerceRegenerationShifts = [
 ];
 const commerceRegenerationLayoutShift = "换版式：在本套 UI 套件内换一种信息组织方式（例如卡片改为编号列表、气泡改为角标或手写批注），文字块整体换到新的位置";
 const commerceRegenerationPersonShift = "换人物表现：同一位人物换姿态、视线与使用商品的动作，机位随之调整";
+const commerceRegenerationFaces = ["偏椭圆脸、自然平眉与柔和下颌", "偏方脸、较浓眉毛与清楚下颌转折", "略长脸、弧眉与清楚唇峰", "偏圆脸、柔和面颊与自然眉峰", "清楚颧骨、平缓唇线与自然眉毛", "宽额、略圆下颌与自然眉间距"];
 const commerceFixedRegenerationShifts = ["微调商品的摆放角度与朝向（在本类型允许的视角内），背景与尺度规范不变", "重新布光：调整主光柔和度与高光位置，让轮廓、材质和接触阴影更干净", "按同一规范重新拍摄：提升边缘清晰度与色彩准确度，去除上一版的瑕疵"];
 
 /**
@@ -52,6 +53,10 @@ export function commerceRegenerationVariation(draft: EcommerceDraft, image: Ecom
     const hasCopy = commerceAllowsText(draft, image.imageType) && Boolean((image.copy || "").trim());
     const pool = fixed ? commerceFixedRegenerationShifts : [...commerceRegenerationShifts, ...(hasCopy ? [commerceRegenerationLayoutShift] : []), ...(commerceImageUsesModel(draft, image) ? [commerceRegenerationPersonShift] : [])];
     const shift = pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
+    if (draft.count === 1 && commerceImageUsesModel(draft, image) && !draft.references.some((ref) => draft.modelEnabled && ref.role === "model")) {
+        const face = commerceRegenerationFaces[Math.min(commerceRegenerationFaces.length - 1, Math.floor(random() * commerceRegenerationFaces.length))];
+        return `【重新生成·换一版】单张自动选角重新选人：${shift}；在商品适用人群和目标市场内换一位人物，面貌方向为${face}，肤质真实、表情自然。此轮换人优先于旧分镜中的自动人物面貌；不复用上一版默认面孔，不只换衣服。保留本张已审阅文案、真实商品、所选风格与平台类型规则。明确指定人物身份时仍以用户要求为准。`;
+    }
     return `【重新生成·换一版】用户要求在同一方案下换一版，成品要与上一版明显不同：${shift}。保持不变：${hasCopy ? "本张文案逐字不变，" : ""}商品外观与事实、本套色板与字体、人物设定（同一人物）以及平台与类型硬性规则${fixed ? "（统一背景、尺度、视角与参考版式）" : ""}。`;
 }
 

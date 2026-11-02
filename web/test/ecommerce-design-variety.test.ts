@@ -244,7 +244,7 @@ describe("ecommerce design variety", () => {
     });
 
     test("smart casting follows the run's persona and changes it between runs", () => {
-        for (const term of ["【本轮版式方案】", "每次重新策划都主动换一种人设", "同一套图内人物始终一致", "九屏中至少 3 屏出现人物", "不得模仿真人或名人", "成人在旁看护", "白底、尺寸、SKU、三视图"]) {
+        for (const term of ["【本轮版式方案】", "每次重新策划都主动换一种人设", "同一套图内人物始终一致", "人物数量服从商品用途", "不得模仿真人或名人", "成人在旁看护", "白底、尺寸、SKU、三视图"]) {
             expect(commerceSmartModelInstruction).toContain(term);
         }
         expect(commerceSmartModelInstruction).not.toContain("自己双手抱奶瓶");

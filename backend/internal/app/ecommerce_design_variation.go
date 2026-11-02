@@ -271,6 +271,7 @@ func ecommerceDesignVariationFor(userID, projectID string, draft EcommerceDraft,
 	noText := draft.NoText || draft.ImageType == "white" || draft.ImageType == "three-view" || draft.CloneOptions["copyMode"] == "none" || (draft.CreativeOptions != nil && draft.CreativeOptions.TextMode == "none")
 	variation := ecommerceagent.PickDesignVariation(ecommerceDesignRand(), ecommerceagent.VariationInput{
 		ImageType: draft.ImageType, Platform: draft.Platform, Category: category, Style: style,
+		Region: draft.Region, Language: draft.Language,
 		Distribution: draft.TypeOptions["distribution"], Purpose: draft.TypeOptions["purpose"],
 		Count: draft.Count, NoText: noText, PeopleAllowed: ecommercePeopleAllowed(draft),
 		MultiVariant: ecommerceDraftMultiVariant(draft),
