@@ -133,11 +133,20 @@ func (s *Service) PublicYoruSettings(actor *model.User) (YoruSettings, error) {
 }
 
 func (s *Service) yoruModelPublishedForUser(userID, logicalModelID string) (bool, error) {
-	item, err := s.repo.LogicalModel(logicalModelID)
+	actor, err := s.repo.User(userID)
 	if err != nil {
 		return false, err
 	}
-	return s.publicationVisibleForUser(userID, *item)
+	items, err := s.PublicLogicalModelsForUser(actor, &ModelRequestIntent{Capability: "text"})
+	if err != nil {
+		return false, err
+	}
+	for _, item := range items {
+		if item.ID == logicalModelID && item.Available {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func yoruAudienceAllows(audience string, actor *model.User) bool {

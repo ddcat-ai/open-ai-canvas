@@ -48,8 +48,10 @@ func TestYoruCreatesRepeatedBillableRoutedTextTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope := "all"
-	logical, err := svc.SaveAdminLogicalModel(admin, "", LogicalModelRequest{Code: "yoru-text", Name: "小夜测试文本", Capability: "text", Enabled: true, PublicationScope: &scope, PricePolicy: "channel", BillingMode: "fixed_request", CapabilitySpec: spec, DefaultOptions: map[string]any{}, Routes: []LogicalRouteRequest{{ChannelModelID: "cm", Enabled: true, Priority: 100, Weight: 1}}})
+	if err := db.Create(admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	logical, err := svc.SaveAdminLogicalModel(admin, "", LogicalModelRequest{Code: "yoru-text", Name: "小夜测试文本", Capability: "text", Enabled: true, PricePolicy: "channel", BillingMode: "fixed_request", CapabilitySpec: spec, DefaultOptions: map[string]any{}, Routes: []LogicalRouteRequest{{ChannelModelID: "cm", Enabled: true, Priority: 100, Weight: 1}}})
 	if err != nil {
 		t.Fatal(err)
 	}
