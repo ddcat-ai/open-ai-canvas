@@ -1200,6 +1200,11 @@ html:not(.dark) .commerce-platform-logo[data-monochrome="true"] {
     gap: 7px;
     width: 100%;
 }
+.commerce-request-references > .cached-resource-image-shell {
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+}
 .commerce-request-references img {
     width: 58px;
     height: 58px;
