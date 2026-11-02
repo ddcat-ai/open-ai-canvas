@@ -22,6 +22,8 @@ import (
 const mediaStagingBudget int64 = 512 << 20
 const mediaStagingTTL = 24 * time.Hour
 
+var errMediaStagingFull = errors.New("作品暂存空间不足")
+
 // 单次结果下载的时限：上游慢但一直在传输时允许跑完，长时间收不到任何字节才判定卡住。
 // 原来的固定 3 分钟总时限会让慢速结果服务器上的大图永远下载不完——每次重试都从零开始，
 // 又在差不多同一位置超时。总时限仍有上限，避免一个下载长期占住有限的保存并发槽位。
@@ -111,8 +113,11 @@ func (s *Service) newMediaTemp(limit int64) (*os.File, error) {
 		}
 		used += info.Size()
 	}
-	if limit <= 0 || limit > mediaStagingBudget || used > mediaStagingBudget-limit {
+	if limit <= 0 || limit > mediaStagingBudget {
 		return nil, errors.New("作品暂存空间不足，请稍后重试保存")
+	}
+	if used > mediaStagingBudget-limit {
+		return nil, errMediaStagingFull
 	}
 	file, err := os.CreateTemp(dir, "result-*")
 	if err != nil {
@@ -398,22 +403,28 @@ func (s *Service) cleanupMediaCheckpointFiles(task *model.Task) {
 // referencedMediaStagingNames 判断暂存文件是否仍被未完成的作品检查点引用。查询失败时
 // 把所有文件都视为仍被引用：宁可多占暂存空间，也不删掉可能是唯一副本的作品。
 func (s *Service) referencedMediaStagingNames() func(string) bool {
-	tasks, err := s.repo.TasksWithPendingMediaCheckpoint(time.Now().Add(-mediaStagingRetainedTTL))
-	if err != nil {
-		slog.Warn("media staging reference query failed", "error", err)
-		return func(string) bool { return true }
-	}
 	names := map[string]bool{}
-	for index := range tasks {
-		checkpoint, err := s.decodeMediaCheckpoint(&tasks[index])
+	afterID := ""
+	for {
+		tasks, err := s.repo.TasksWithPendingMediaCheckpoint(time.Now().Add(-mediaStagingRetainedTTL), afterID, 500)
 		if err != nil {
-			continue
+			slog.Warn("media staging reference query failed", "error", err)
+			return func(string) bool { return true }
 		}
-		for _, item := range checkpoint.Items {
-			if item.TempName != "" {
-				names[item.TempName] = true
+		for index := range tasks {
+			checkpoint, err := s.decodeMediaCheckpoint(&tasks[index])
+			if err == nil {
+				for _, item := range checkpoint.Items {
+					if item.TempName != "" {
+						names[item.TempName] = true
+					}
+				}
 			}
 		}
+		if len(tasks) < 500 {
+			break
+		}
+		afterID = tasks[len(tasks)-1].ID
 	}
 	return func(name string) bool { return names[name] }
 }
