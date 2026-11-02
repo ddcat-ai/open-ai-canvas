@@ -85,11 +85,13 @@ func TestEcommerceDirectionsContentTypeAndPlatformAliases(t *testing.T) {
 	if got := ecommerceDirectionsContentType(pair); got != "set" {
 		t.Fatalf("product set content type = %s", got)
 	}
-	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "pdd"}); p.Label != "拼多多" || !p.ForbidTextOnMain {
-		t.Fatalf("pdd lost the 拼多多 rules: %+v", p)
+	for _, alias := range []string{"pdd", "pinduoduo", "拼多多"} {
+		if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: alias}); p.Label != "拼多多" || p.ForbidTextOnMain || !strings.Contains(strings.Join(p.Rules, "\n"), "待核实") {
+			t.Fatalf("%s lost the scoped, unverified 拼多多 profile: %+v", alias, p)
+		}
 	}
-	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "tmall"}); p.Label != "淘宝 / 天猫" {
-		t.Fatalf("tmall lost the 淘宝 / 天猫 rules: %+v", p)
+	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "tmall"}); p.Label != "天猫" {
+		t.Fatalf("tmall lost its independent platform profile: %+v", p)
 	}
 }
 
