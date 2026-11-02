@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"yingce/backend/internal/ecommerceagent"
+	"yingce/backend/internal/ecommercecatalog"
 	"yingce/backend/internal/model"
 )
 
@@ -121,7 +122,20 @@ func TestEcommerceKnowledgeDrivesDirectionsForFiveProducts(t *testing.T) {
 		if response.ProductCategory != product.Category || ids[product.KB01] != "KB01" || ids["kb08-taobao-tmall-rules"] != "KB08" {
 			t.Fatalf("%s: category=%s evidence=%v", product.Name, response.ProductCategory, ids)
 		}
+		hierarchy := map[string]bool{}
+		for _, node := range ecommercecatalog.Lineage(ecommercecatalog.ResolveProduct(product.Request.Category, product.Request.ProductName).Node.ID) {
+			hierarchy["industry-taxonomy-"+node.ID] = true
+			hierarchy["kb19-industry-"+node.ID] = true
+		}
 		for _, item := range response.Evidence {
+			// A correct appliance path includes its broader home/garden parent.
+			// Check hierarchy identity rather than treating ancestor names as leaks.
+			if item.KnowledgeType == "industry_method" || item.KnowledgeType == "category_taxonomy" {
+				if !hierarchy[item.ID] {
+					t.Fatalf("%s: unrelated industry hierarchy %s", product.Name, item.ID)
+				}
+				continue
+			}
 			for other, labels := range ecommerceCategoryTitleLabels {
 				for _, label := range labels {
 					if other != product.Category && strings.HasPrefix(item.ID, "kb") && strings.Contains(item.Title, label) {
