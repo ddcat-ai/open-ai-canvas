@@ -97,6 +97,19 @@ test("internal images are rechecked for ownership and rejected failures are prop
     await expect(importCommerceImageTransfer({ files: [], resourceId: "foreign" })).rejects.toThrow("无权访问");
 });
 
+test("typed original resource wins over native thumbnail files and remains ownership checked", async () => {
+    const requests: string[] = [];
+    apiClient.defaults.adapter = async (config) => {
+        requests.push(config.url || "");
+        return { data: { code: 0, data: { resource: resource("owned-original") } }, status: 200, statusText: "OK", headers: {}, config };
+    };
+    const source = { files: [new File(["thumbnail"], "preview.png", { type: "image/png" })], resourceId: "owned-original", url: "blob:https://commerce.example.com/expired" };
+    expect((await importCommerceImageTransfer(source)).references[0].resourceId).toBe("owned-original");
+    expect(requests).toEqual(["/resources/owned-original"]);
+    apiClient.defaults.adapter = async (config) => ({ data: { code: 403, msg: "无权访问" }, status: 403, statusText: "Forbidden", headers: {}, config });
+    await expect(importCommerceImageTransfer({ ...source, resourceId: "foreign-original" })).rejects.toThrow("无权访问");
+});
+
 test("same-app resource URL reuses the ownership-checked resource; external URL uses import API", async () => {
     const requests: Array<{ url?: string; data: unknown }> = [];
     apiClient.defaults.adapter = async (config) => {

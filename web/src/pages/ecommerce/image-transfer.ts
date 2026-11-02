@@ -125,7 +125,10 @@ export async function importCommerceImageTransfer(
         seen.add(resource.id);
         references.push({ resourceId: resource.id, role, name, ...(resource.width && resource.height ? { width: resource.width, height: resource.height } : {}) });
     };
-    if (source.files.length) {
+    const resourceId = source.resourceId || sameOriginResourceId(source.url || "");
+    // Native image drags can include a File as well as our typed identity.
+    // Reuse the owned original first; never re-upload its thumbnail/blob copy.
+    if (source.files.length && !resourceId) {
         const files = source.files.filter((file, index, all) => all.findIndex((entry) => entry === file || (entry.name === file.name && entry.size === file.size && entry.type === file.type && entry.lastModified === file.lastModified)) === index);
         for (const [index, original] of files.entries()) {
             assertScope();
@@ -145,7 +148,6 @@ export async function importCommerceImageTransfer(
         }
         return { references, errors };
     }
-    const resourceId = source.resourceId || sameOriginResourceId(source.url || "");
     if (resourceId && seen.has(resourceId)) return { references, errors };
     if (capacity === 0) throw new Error("参考图片已达上限，请先移除部分图片");
     if (resourceId) {

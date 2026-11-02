@@ -25,6 +25,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { createPortal } from "react-dom";
 import { ApiError } from "@/services/api/request";
 import { archiveCommercePlan, commerceCanvasImages, continueCommercePlan, updateCommerceCanvasImage } from "./continuation";
+import { CommerceSubmittedRequest, restoreSubmittedCommerceRequest } from "./submitted-request";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CreativeOptionsPanel } from "./creative-options-panel";
 import { ReferenceModePanel, ReferenceScreenSummary } from "./reference-mode-panel";
@@ -196,6 +197,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const [cacheError, setCacheError] = useState("");
     const isCurrent = (owner: EcommerceSession) => mounted.current && sessionRef.current === owner && getActiveUserScope() === scope;
     const activateSession = (owner: EcommerceSession) => {
+        if (sessionRef.current !== owner) {
+            uploadLock.current = false;
+            setUploading(false);
+        }
         sessionRef.current = owner;
         setSession(owner);
     };
@@ -242,6 +247,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const [reviewHost, setReviewHost] = useState<HTMLDivElement | null>(null);
     const [composerHiddenRefs, setComposerHiddenRefs] = useState<Set<string>>(new Set());
     const [composerTextOverride, setComposerTextOverride] = useState<string | null>(null);
+    const composerHiddenRefsRef = useRef(composerHiddenRefs);
+    const composerTextOverrideRef = useRef(composerTextOverride);
+    composerHiddenRefsRef.current = composerHiddenRefs;
+    composerTextOverrideRef.current = composerTextOverride;
+    const [submittedDraft, setSubmittedDraft] = useState<EcommerceDraft | null>(null);
     /** 本次发送是否已被受理：发送时先清空输入框，未受理（校验未过、提交失败）再恢复。 */
     const composerSubmissionRef = useRef<{ accepted: boolean } | null>(null);
     const draftRef = useRef(draft);
@@ -337,6 +347,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState("");
     const uploadLock = useRef(false);
+    const imageImportQueue = useRef<{ owner: EcommerceSession; tail: Promise<void>; pending: number } | null>(null);
     const [localBusy, setBusy] = useState(false);
     const busy = localBusy || session.submitting;
     const draftDiffersFromPlan = Boolean(plan && plan.inputSignature !== commerceInputSignature(draft));
@@ -546,6 +557,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             setDraft(mergeCanvasModels(mergeReferences(nextDraft)));
             setPlan(nextPlan);
             setTasks({});
+            setSubmittedDraft(restoreSubmittedCommerceRequest(saved, nextPlan, useCache ? compatibleCache.submittedDraft : undefined));
             const submittedFingerprint = saved && sessionStorage.getItem(`ecommerce-composer-submitted:${scope}:${saved.id}`);
             if (submittedFingerprint && submittedFingerprint === composerFingerprint(nextDraft)) clearSubmittedComposer(nextDraft, true);
             else {
@@ -585,10 +597,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
 
     useEffect(() => {
         if (!hydrated.current || restoring || !isCurrent(session)) return;
-        void writeEcommerceWorkspace(scope, { sessionId: session.id, project, draft, plan, creationMode, autoGenerate }).catch(() => {
+        void writeEcommerceWorkspace(scope, { sessionId: session.id, project, draft, plan, creationMode, autoGenerate, submittedDraft }).catch(() => {
             if (isCurrent(session)) setCacheError("本机草稿缓存失败，请点击保存草稿；已提交任务仍在服务端运行");
         });
-    }, [scope, session, project, draft, plan, creationMode, autoGenerate, restoring]);
+    }, [scope, session, project, draft, plan, creationMode, autoGenerate, submittedDraft, restoring]);
     useEffect(
         () =>
             subscribeEcommerceWorkspace(scope, () => {
@@ -607,6 +619,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 setProject(session.project);
                 setDraft({ ...cached.draft, creativeOptions: normalizeCreativeOptions(cached.draft) });
                 setPlan(cached.plan);
+                setSubmittedDraft(restoreSubmittedCommerceRequest(cached.project, cached.plan, cached.submittedDraft));
             }),
         [scope, session],
     );
@@ -614,7 +627,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const canvasImages = useMemo(() => commerceCanvasImages(plan), [plan]);
     const taskIds = useMemo(() => canvasImages.map((image) => image.taskId).filter((id): id is string => Boolean(id)), [canvasImages]);
     useEffect(() => {
-        if (plan?.images.every((image) => image.id.startsWith("direct-"))) setCreationMode("direct");
+        if (plan?.images.length && plan.images.every((image) => image.id.startsWith("direct-"))) setCreationMode("direct");
     }, [plan]);
     useEffect(() => {
         if (!taskIds.length) return;
@@ -927,57 +940,80 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     }
     /** 只清空输入框的显示：隐藏本轮提交的提示词和参考图，草稿本身保留给这一轮生成使用。 */
     function hideComposerInput(source: EcommerceDraft) {
-        setComposerHiddenRefs(new Set([...source.references.filter((ref) => ref.role !== "model"), ...(source.layoutReferences || [])].map((ref) => ref.resourceId)));
+        const hidden = new Set([...source.references.filter((ref) => ref.role !== "model"), ...(source.layoutReferences || [])].map((ref) => ref.resourceId));
+        composerHiddenRefsRef.current = hidden;
+        composerTextOverrideRef.current = "";
+        setComposerHiddenRefs(hidden);
         setComposerTextOverride("");
     }
     function clearSubmittedComposer(source: EcommerceDraft, restoringComposer = false) {
         if (composerSubmissionRef.current) composerSubmissionRef.current.accepted = true;
+        if (!restoringComposer) setSubmittedDraft(structuredClone(source));
         if (!restoringComposer && composerFingerprint(draftRef.current) !== composerFingerprint(source)) return;
         hideComposerInput(source);
         if (projectRef.current?.id) sessionStorage.setItem(`ecommerce-composer-submitted:${scope}:${projectRef.current.id}`, composerFingerprint(source));
     }
 
-    const importImages = async (source: CommerceImageTransfer, role: EcommerceReferenceRole = "primary") => {
-        if (uploadLock.current) throw new Error("图片仍在上传，请稍候再添加");
-        uploadLock.current = true;
+    const importImages = (source: CommerceImageTransfer, role: EcommerceReferenceRole = "primary") => {
+        const owner = session;
+        if (!isCurrent(owner)) return Promise.resolve();
+        if (imageImportQueue.current?.owner !== owner) imageImportQueue.current = { owner, tail: Promise.resolve(), pending: 0 };
+        const queue = imageImportQueue.current!;
+        queue.pending += 1;
         setUploading(true);
-        setUploadProgress("正在读取图片…");
-        try {
-            const current = draftRef.current;
-            const replacingSubmittedReferences = composerHiddenRefs.size > 0;
-            const retained = replacingSubmittedReferences ? current.references.filter((ref) => ref.role === "model") : current.references;
-            const result = await importCommerceImageTransfer(source, role, {
-                existingResourceIds: retained.map((ref) => ref.resourceId),
-                maxReferences: 24 - retained.length - (current.layoutReferences?.length || 0),
-                onProgress: (value) => {
-                    if (isCurrent(session)) setUploadProgress(value);
-                },
-            });
-            if (!isCurrent(session)) return;
-            if (result.references.length) {
-                const latest = draftRef.current;
-                const base = replacingSubmittedReferences ? latest.references.filter((ref) => ref.role === "model") : latest.references;
-                const next = { ...latest, instruction: replacingSubmittedReferences ? composerTextOverride || "" : latest.instruction, references: [...base, ...result.references.filter((ref) => !base.some((item) => item.resourceId === ref.resourceId))] };
-                draftRef.current = next;
-                setDraft(next);
-                setCreativeDirections([]);
-                setRecommendationId("");
-                selectedDirectionRef.current = null;
-                directionsInputSignatureRef.current = "";
-                if (replacingSubmittedReferences) {
-                    setComposerHiddenRefs(new Set((latest.layoutReferences || []).filter((ref) => composerHiddenRefs.has(ref.resourceId)).map((ref) => ref.resourceId)));
-                    setComposerTextOverride(null);
+        const operation = queue.tail
+            .catch(() => undefined)
+            .then(async () => {
+                let ownsUpload = false;
+                try {
+                    if (!isCurrent(owner)) return;
+                    if (uploadLock.current) throw new Error("参考风格图片仍在上传，请稍后添加商品图");
+                    uploadLock.current = true;
+                    ownsUpload = true;
+                    setUploadProgress("正在读取图片…");
+                    // Read live composer state after the previous queued import finishes.
+                    const current = draftRef.current;
+                    const replacing = current.references.some((ref) => ref.role !== "model" && composerHiddenRefsRef.current.has(ref.resourceId));
+                    const retained = replacing ? current.references.filter((ref) => ref.role === "model") : current.references;
+                    const result = await importCommerceImageTransfer(source, role, {
+                        existingResourceIds: retained.map((ref) => ref.resourceId),
+                        maxReferences: 24 - retained.length - (current.layoutReferences?.length || 0),
+                        onProgress: (value) => {
+                            if (isCurrent(owner)) setUploadProgress(value);
+                        },
+                    });
+                    if (!isCurrent(owner)) return;
+                    if (result.references.length) {
+                        const latest = draftRef.current;
+                        const base = replacing ? latest.references.filter((ref) => ref.role === "model") : latest.references;
+                        const references = [...base, ...result.references.filter((ref) => !base.some((item) => item.resourceId === ref.resourceId))];
+                        const next = { ...latest, instruction: composerTextOverrideRef.current ?? latest.instruction, references, creativeDirectionId: undefined, creativeRecommendationId: undefined };
+                        draftRef.current = next;
+                        setDraft(next);
+                        selectedDirectionRef.current = null;
+                        directionsInputSignatureRef.current = "";
+                        const active = new Set(references.filter((ref) => ref.role !== "model").map((ref) => ref.resourceId));
+                        const hidden = new Set([...composerHiddenRefsRef.current].filter((id) => !active.has(id)));
+                        composerHiddenRefsRef.current = hidden;
+                        composerTextOverrideRef.current = null;
+                        setComposerHiddenRefs(hidden);
+                        setComposerTextOverride(null);
+                        message.success(`已添加 ${result.references.length} 张商品图片`);
+                    }
+                    if (result.errors.length) throw new Error(result.errors.join("；"));
+                } finally {
+                    queue.pending -= 1;
+                    if (isCurrent(owner) && imageImportQueue.current === queue) {
+                        if (ownsUpload) uploadLock.current = false;
+                        if (!uploadLock.current) {
+                            setUploading(queue.pending > 0);
+                            if (!queue.pending) setUploadProgress("");
+                        }
+                    }
                 }
-                message.success(`已添加 ${result.references.length} 张商品图片`);
-            }
-            if (result.errors.length) throw new Error(result.errors.join("；"));
-        } finally {
-            if (isCurrent(session)) {
-                uploadLock.current = false;
-                setUploading(false);
-                setUploadProgress("");
-            }
-        }
+            });
+        queue.tail = operation.catch(() => undefined);
+        return operation;
     };
 
     const uploadModeReference = async (source: CommerceImageTransfer, mode: EcommerceReferenceMode) => {
@@ -1123,7 +1159,15 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             if (!followup) sessionStorage.setItem(`ecommerce-composer-submitted:${scope}:${destination.id}`, composerFingerprint(snapshot));
             const cached = peekEcommerceWorkspace(scope);
             if (cached?.project?.id === destination.id || cached?.sessionId === owner.id || isCurrent(owner)) {
-                await writeEcommerceWorkspace(scope, { sessionId: cached?.project?.id === destination.id ? cached.sessionId : owner.id, project: destination, draft: nextDraft, plan: existingPlan, creationMode, autoGenerate }).catch(() => {
+                await writeEcommerceWorkspace(scope, {
+                    sessionId: cached?.project?.id === destination.id ? cached.sessionId : owner.id,
+                    project: destination,
+                    draft: nextDraft,
+                    plan: existingPlan,
+                    creationMode,
+                    autoGenerate,
+                    submittedDraft: snapshot,
+                }).catch(() => {
                     if (isCurrent(owner)) setCacheError("本机缓存失败，服务端任务回执已保留");
                 });
             }
@@ -1317,9 +1361,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             setEcommercePlanningReceipt(scope, destination.id, task.id);
             sessionStorage.setItem(`ecommerce-composer-submitted:${scope}:${destination.id}`, composerFingerprint(resolvedDraft));
             if (peekEcommerceWorkspace(scope)?.sessionId === owner.id || isCurrent(owner)) {
-                void writeEcommerceWorkspace(scope, { sessionId: owner.id, project: destination, draft: nextDraft, plan: previousPlan, creationMode: "ai", autoGenerate: Boolean(selectedDirection) || autoGenerate }).catch(() => {
-                    if (isCurrent(owner)) setCacheError("本机缓存失败，任务回执已保留，请保存草稿");
-                });
+                void writeEcommerceWorkspace(scope, { sessionId: owner.id, project: destination, draft: nextDraft, plan: previousPlan, creationMode: "ai", autoGenerate: Boolean(selectedDirection) || autoGenerate, submittedDraft: resolvedDraft }).catch(
+                    () => {
+                        if (isCurrent(owner)) setCacheError("本机缓存失败，任务回执已保留，请保存草稿");
+                    },
+                );
             }
             await save(nextDraft, previousPlan, owner);
             if (isCurrent(owner)) {
@@ -1693,6 +1739,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setCompactHistoryOpen(false);
         setComposerHiddenRefs(new Set());
         setComposerTextOverride(null);
+        setSubmittedDraft(null);
         selectedDirectionRef.current = null;
         directionsInputSignatureRef.current = "";
         setChosenDirection(null);
@@ -1725,6 +1772,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setStage("");
         setComposerHiddenRefs(new Set());
         setComposerTextOverride(null);
+        setSubmittedDraft(null);
         selectedDirectionRef.current = null;
         directionsInputSignatureRef.current = "";
         setChosenDirection(null);
@@ -1956,6 +2004,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         }
     };
     const composerText = composerTextOverride ?? draft.instruction;
+    const directionsOutdated = Boolean(creativeDirections.length && directionsInputSignatureRef.current !== commerceInputSignature(draft));
     const submitDisabled = restoring || uploading || busy || planningPending || (directionsPending && !draftDiffersFromPlan) || (Boolean(activeImages) && !draftDiffersFromPlan) || confirmingGeneration || !composerText.trim();
     /** Enter 发送，Shift+Enter 换行；输入法组字期间的回车只用于上屏。 */
     const submitComposerOnEnter = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -1965,9 +2014,13 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     };
     const importComposerImages = (source: CommerceImageTransfer) => {
         if (!source.files.length && !source.resourceId && !source.url) return false;
-        void importImages(source).catch((cause) => message.error(errorText(cause)));
+        const owner = session;
+        void importImages(source).catch((cause) => {
+            if (isCurrent(owner) && !(cause instanceof Error && cause.name === "AbortError")) message.error(errorText(cause));
+        });
         return true;
     };
+    const hasQueuedProductImport = () => imageImportQueue.current?.owner === session && imageImportQueue.current.pending > 0;
     /** 输入框内粘贴：剪贴板有文字时按文字粘贴；只有图片（截图、复制图片）时作为商品图上传。 */
     const pasteComposerImages = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
         if (event.clipboardData.getData("text/plain").trim()) return;
@@ -1989,7 +2042,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         const source = readCommerceImageTransfer(event.dataTransfer);
         if (!source.files.length && !source.resourceId && !source.url) return;
         event.preventDefault();
-        if (uploading || restoring) {
+        event.stopPropagation();
+        if (restoring || (uploadLock.current && !hasQueuedProductImport())) {
             message.warning("图片正在上传，请完成后再添加");
             return;
         }
@@ -2312,23 +2366,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 图片导出未完成：{downloadError}。可以重新点击导出图片。
                             </p>
                         ) : null}
-                        {project && (draft.instruction || draft.references.length) ? (
-                            <div className="commerce-request-message">
-                                <small>
-                                    特惠通道 · {labelOf(languages, draft.language)} · {labelOf(platforms, draft.platform)} · {modelOptionName(draft.imageModel)} · {draft.resolution.toUpperCase()} · {ratioLabel(draft.ratio)} · {requestedCount} 张
-                                </small>
-                                {draft.instruction ? <div className="commerce-request-bubble">{draft.instruction}</div> : null}
-                                {draft.references.some((ref) => ref.role !== "model") ? (
-                                    <div className="commerce-request-references">
-                                        {draft.references
-                                            .filter((ref) => ref.role !== "model")
-                                            .map((ref, index) => (
-                                                <CachedResourceImage key={`${ref.resourceId}-${index}`} storageKey={resourceStorageKey(ref.resourceId)} alt={`第 ${index + 1} 张商品参考图`} loading="lazy" decoding="async" />
-                                            ))}
-                                    </div>
-                                ) : null}
-                            </div>
-                        ) : null}
+                        <CommerceSubmittedRequest draft={submittedDraft} />
                         {chosenDirection || plan ? (
                             <EcommerceAgentFeed
                                 direction={chosenDirection}
@@ -2349,6 +2387,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                         ) : null}
                         {creativeDirections.length ? (
                             <CommerceDirectionCards
+                                outdated={directionsOutdated}
                                 directions={creativeDirections}
                                 followup={Boolean(plan && completed === total)}
                                 degraded={directionsStatus === "degraded"}
@@ -2640,11 +2679,12 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 onDragOver={(event) => {
                                     if (!mightContainCommerceImage(event.dataTransfer)) return;
                                     event.preventDefault();
-                                    event.dataTransfer.dropEffect = uploading || restoring ? "none" : "copy";
+                                    event.dataTransfer.dropEffect = restoring || (uploadLock.current && !hasQueuedProductImport()) ? "none" : "copy";
                                 }}
-                                onDropCapture={() => {
+                                onDropCapture={(event) => {
                                     composerDropDepth.current = 0;
                                     setComposerDropping(false);
+                                    if (hasQueuedProductImport()) dropComposerImages(event);
                                 }}
                                 onDrop={dropComposerImages}
                             >
@@ -2672,6 +2712,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 <div className="flylep-composer-input">
                                     <div className={`flylep-product-slot${draft.references.some((ref) => ref.role !== "model" && !composerHiddenRefs.has(ref.resourceId)) ? " has-images" : ""}`}>
                                         <ReferenceUploader
+                                            key={session.id}
                                             compact
                                             references={draft.references.filter((ref) => ref.role !== "model" && !composerHiddenRefs.has(ref.resourceId))}
                                             uploading={uploading || restoring}
@@ -2849,7 +2890,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 </section>
             </div>
             <CommerceStylePicker
-                open={stylePickerOpen && creativeDirections.length > 0}
+                open={stylePickerOpen && creativeDirections.length > 0 && !directionsOutdated}
                 directions={creativeDirections}
                 library={styleLibrary}
                 degraded={directionsStatus === "degraded"}

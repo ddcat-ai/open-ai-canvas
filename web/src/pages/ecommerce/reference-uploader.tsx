@@ -1,11 +1,11 @@
 import { Plus, X } from "lucide-react";
 import { Popover, Select } from "antd";
 import { useRef, useState } from "react";
-import { resourceStorageKey } from "@/services/api/resources";
+import { resourceFileUrl, resourceStorageKey } from "@/services/api/resources";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import type { EcommerceReference, EcommerceReferenceRole } from "@/services/api/ecommerce";
 import { CommerceHint } from "./commerce-hint";
-import { COMMERCE_IMAGE_ACCEPT, mightContainCommerceImage, readCommerceImageTransfer, type CommerceImageTransfer } from "./image-transfer";
+import { COMMERCE_IMAGE_ACCEPT, mightContainCommerceImage, readCommerceImageTransfer, writeCommerceImageTransfer, type CommerceImageTransfer } from "./image-transfer";
 import "./reference-uploader.css";
 
 export const referenceRoleOptions = [
@@ -75,6 +75,8 @@ export function ReferenceUploader({
                 alt={ref.name || "商品参考图"}
                 loading="lazy"
                 decoding="async"
+                draggable
+                onDragStart={(event) => writeCommerceImageTransfer(event.dataTransfer, { resourceId: ref.resourceId, name: ref.name || "商品参考图", url: resourceFileUrl(ref.resourceId) })}
                 fallback={<span className="commerce-reference-item-image-fallback" aria-label="图片暂不可用" />}
                 loadingFallback={<span className="commerce-reference-item-image-fallback" aria-label="正在读取图片" />}
             />

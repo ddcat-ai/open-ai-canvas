@@ -116,6 +116,7 @@ export function CommerceDirectionCards({
     followup,
     disabled,
     degraded,
+    outdated = false,
     libraryCount = 0,
     onChoose,
     onRefresh,
@@ -125,6 +126,7 @@ export function CommerceDirectionCards({
     followup: boolean;
     disabled: boolean;
     degraded: boolean;
+    outdated?: boolean;
     libraryCount?: number;
     onChoose: (direction: EcommerceCreativeDirection) => void;
     onRefresh: () => void;
@@ -161,7 +163,7 @@ export function CommerceDirectionCards({
                     )}
                 </h2>
                 {onOpenLibrary ? (
-                    <button type="button" className="commerce-direction-library" aria-label="打开风格库" title="按分类挑选更多风格，或写下你自己的风格" disabled={disabled || degraded} onClick={onOpenLibrary}>
+                    <button type="button" className="commerce-direction-library" aria-label="打开风格库" title="按分类挑选更多风格，或写下你自己的风格" disabled={disabled || degraded || outdated} onClick={onOpenLibrary}>
                         <StyleLibraryIcon size={15} />
                         <span>风格库</span>
                         {libraryCount ? <span className="commerce-count-badge is-neutral">{libraryCount + items.length}</span> : null}
@@ -169,7 +171,13 @@ export function CommerceDirectionCards({
                 ) : null}
             </header>
             <p className="commerce-direction-intro">
-                {degraded ? "知识检索暂不可用，请稍后重新推荐。" : followup ? "这一套已完成。换一种视觉语言，继续探索商品的另一面。" : "根据商品外观与品类，准备了四套反差鲜明的视觉方案。点右上角铅笔可以改写风格，选定后配色、布景与光线将贯穿整套图片。"}
+                {outdated
+                    ? "这是上一轮的推荐。商品资料已更新，可发送新需求或换一组方向。"
+                    : degraded
+                      ? "知识检索暂不可用，请稍后重新推荐。"
+                      : followup
+                        ? "这一套已完成。换一种视觉语言，继续探索商品的另一面。"
+                        : "根据商品外观与品类，准备了四套反差鲜明的视觉方案。点右上角铅笔可以改写风格，选定后配色、布景与光线将贯穿整套图片。"}
             </p>
             <div className="flylep-directions-grid">
                 {items.map((direction, index) =>
@@ -185,13 +193,13 @@ export function CommerceDirectionCards({
                         />
                     ) : (
                         <div className="commerce-direction-item" key={direction.id}>
-                            <DirectionCard direction={direction} index={index} chosen={selectedId === direction.id} disabled={disabled || degraded} onSelect={() => setSelectedId(direction.id)} />
+                            <DirectionCard direction={direction} index={index} chosen={selectedId === direction.id} disabled={disabled || degraded || outdated} onSelect={() => setSelectedId(direction.id)} />
                             <button
                                 type="button"
                                 className="commerce-direction-edit"
                                 aria-label={`编辑第 ${index + 1} 个风格`}
                                 title="改写这个风格"
-                                disabled={disabled || degraded}
+                                disabled={disabled || degraded || outdated}
                                 onClick={() => setEditing({ id: direction.id, value: { name: direction.name, description: directionDescription(direction) } })}
                             >
                                 <PencilLine size={13} />
@@ -208,7 +216,7 @@ export function CommerceDirectionCards({
                 <button
                     type="button"
                     className="commerce-direction-confirm"
-                    disabled={disabled || degraded || !selectedId || Boolean(editing)}
+                    disabled={disabled || degraded || outdated || !selectedId || Boolean(editing)}
                     onClick={() => {
                         const item = items.find((entry) => entry.id === selectedId);
                         if (item) onChoose(item);

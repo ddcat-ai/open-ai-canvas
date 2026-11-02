@@ -55,6 +55,23 @@ function dependencies(scope: string, initial = project()) {
 }
 
 describe("电商项目跨页面恢复", () => {
+    test("已发送消息快照与下一轮输入独立，保存草稿后保留且不串项目", async () => {
+        const scope = crypto.randomUUID();
+        const sent = { ...emptyEcommerceDraft(), instruction: "已经发送的原需求", references: [{ resourceId: "original", role: "primary" as const }] };
+        const checkpoint: EcommerceWorkspaceCheckpoint = { sessionId: "snapshot-session", project: project("snapshot-a"), draft: sent, plan: null, creationMode: "ai", autoGenerate: false, submittedDraft: sent };
+        try {
+            await writeEcommerceWorkspace(scope, checkpoint);
+            const { submittedDraft: _, ...next } = checkpoint;
+            await writeEcommerceWorkspace(scope, { ...next, draft: { ...sent, instruction: "新的输入", references: [] } });
+            expect(peekEcommerceWorkspace(scope)?.submittedDraft?.instruction).toBe("已经发送的原需求");
+            const cached = peekEcommerceWorkspace(scope)!;
+            cached.submittedDraft!.references.length = 0;
+            expect(peekEcommerceWorkspace(scope)?.submittedDraft?.references).toHaveLength(1);
+            await writeEcommerceWorkspace(scope, { ...next, project: project("snapshot-b"), draft: emptyEcommerceDraft() });
+            expect(peekEcommerceWorkspace(scope)?.submittedDraft).toBeUndefined();
+            expect(peekEcommerceWorkspace("different-scope")).toBeNull();
+        } finally { await clearEcommerceWorkspace(scope); }
+    });
     test("离开再进入时共享尚未完成的新建，连续保存只创建一个项目并使用最新版本", async () => {
         const scope = crypto.randomUUID();
         const opening = deferred<EcommerceProject>();

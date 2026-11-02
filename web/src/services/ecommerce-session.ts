@@ -10,6 +10,7 @@ export type EcommerceWorkspaceCheckpoint = {
     project: EcommerceProject | null;
     creationMode: "ai" | "direct";
     autoGenerate: boolean;
+    submittedDraft?: EcommerceDraft | null;
 };
 
 const WORKSPACE_KEY = "ecommerce-workspace";
@@ -57,7 +58,8 @@ export async function readEcommerceWorkspace(scope: string): Promise<EcommerceWo
                 (candidate.plan === null || Array.isArray(candidate.plan?.images)) &&
                 (candidate.project === null || typeof candidate.project?.id === "string") &&
                 (candidate.creationMode === "ai" || candidate.creationMode === "direct") &&
-                typeof candidate.autoGenerate === "boolean"
+                typeof candidate.autoGenerate === "boolean" &&
+                (candidate.submittedDraft == null || (Array.isArray(candidate.submittedDraft.references) && Array.isArray(candidate.submittedDraft.skus) && typeof candidate.submittedDraft.instruction === "string"))
             )
                 value = candidate;
         } catch {
@@ -84,7 +86,10 @@ function queueWorkspaceWrite(scope: string, operation: () => Promise<unknown> | 
 }
 
 export function writeEcommerceWorkspace(scope: string, checkpoint: EcommerceWorkspaceCheckpoint): Promise<void> {
+    const previous = workspaces.get(scope);
+    const sameOwner = previous && (previous.project && checkpoint.project ? previous.project.id === checkpoint.project.id : previous.sessionId === checkpoint.sessionId);
     const snapshot = copy(checkpoint);
+    if (snapshot.submittedDraft === undefined && sameOwner && previous.submittedDraft !== undefined) snapshot.submittedDraft = copy(previous.submittedDraft);
     workspaces.set(scope, snapshot);
     workspaceVersions.set(scope, (workspaceVersions.get(scope) || 0) + 1);
     const pending = queueWorkspaceWrite(scope, () => localForageStorageForScope(scope).setItem(WORKSPACE_KEY, JSON.stringify(snapshot)));
