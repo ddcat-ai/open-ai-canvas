@@ -46,8 +46,11 @@ func TestEcommerceWorkbenchDirectionsWithBuiltinKnowledge(t *testing.T) {
 	if _, err := svc.SelectEcommerceCreativeDirection("other", response.RecommendationID, response.Directions[2].ID); err == nil {
 		t.Fatal("cross-owner selection accepted")
 	}
-	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "douyin", Ratio: "9:16"}); p.Label != "douyin" || p.ForbidTextOnMain {
+	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "unknown-market", Ratio: "9:16"}); p.Label != "unknown-market" || p.ForbidTextOnMain {
 		t.Fatalf("unknown platform borrowed other rules: %+v", p)
+	}
+	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "douyin"}); p.Label != "抖音电商" || p.ForbidTextOnMain {
+		t.Fatalf("Douyin did not use its own platform profile: %+v", p)
 	}
 	if p := ecommerceWorkbenchPlatform(EcommerceDraft{Platform: "amazon"}); !p.ForbidTextOnMain {
 		t.Fatal("Amazon rules were lost")
