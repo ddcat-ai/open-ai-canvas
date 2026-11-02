@@ -127,6 +127,12 @@ func run(ctx context.Context) error {
 	registerSystemStatusRoutes(api, status)
 	handler.RegisterOAuthCallbackRoutes(r, svc)
 	handler.RegisterCanvasAPI(api, svc)
+	// 由 RFC #943 引入：/internal-agent 是 Worker 协议面，挂在 /api 之外，
+	// 公网代代理不转发。仅在提供足够强度的内部 token 时挂载（默认关闭）。
+	if len(strings.TrimSpace(os.Getenv("CANVAS_AGENT_INTERNAL_TOKEN"))) < 32 {
+		slog.Warn("CANVAS_AGENT_INTERNAL_TOKEN is unset or shorter than 32 characters; internal Agent worker API not mounted")
+	}
+	handler.RegisterInternalAgentRoutes(r, svc)
 	r.NoRoute(handler.SystemProxyNoRouteHandler(svc))
 
 	listener, err := net.Listen("tcp", addr)
