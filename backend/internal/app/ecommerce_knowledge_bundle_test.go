@@ -11,7 +11,12 @@ import (
 )
 
 func TestEcommerceUpgradeShipsKnowledgeSkillsAndIndustryWithoutModels(t *testing.T) {
-	svc, _ := knowledgeTestService(t)
+	svc, db := knowledgeTestService(t)
+	for _, record := range []any{&model.ChannelModelPriceTier{}, &model.ChannelModel{}, &model.ModelChannel{}} {
+		if err := db.Unscoped().Where("1 = 1").Delete(record).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := svc.EnsureBundledEcommerceKnowledge(); err != nil {
 		t.Fatal(err)
 	}
