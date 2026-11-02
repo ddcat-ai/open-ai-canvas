@@ -11,6 +11,10 @@ const (
 )
 
 type (
+	PiRuntimePhaseRequest                  = app.PiRuntimePhaseRequest
+	PiRunInspection                        = app.PiRunInspection
+	PiPendingInterjection                  = app.PiPendingInterjection
+	PiPendingContextCompaction             = app.PiPendingContextCompaction
 	BindProjectAssetImageRequest           = app.BindProjectAssetImageRequest
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery

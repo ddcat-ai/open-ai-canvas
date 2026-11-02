@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -206,5 +208,96 @@ func TestSweepStalledAndUnclaimed(t *testing.T) {
 	}
 	if blocked.Status != "queued" {
 		t.Fatalf("waiting_resource runs must stay queued: %+v", blocked)
+	}
+}
+
+func TestAgentRunPhaseAndInspection(t *testing.T) {
+	svc, db := newAgentWorkerTestService(t)
+	leased := seedLeasedRun(t, db, svc)
+	// 合法相位写入。
+	if err := svc.PiRuntimePhase("user-a", leased.ID, claimOwner("w:0", 1), PiRuntimePhaseRequest{Phase: "waiting_model", Kind: "model", WaitID: "task-1", Reason: "模型步进行中"}); err != nil {
+		t.Fatalf("phase write failed: %v", err)
+	}
+	var row model.CloudAgentExecution
+	if err := db.Where("id = ?", leased.ID).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.RuntimePhase != "waiting_model" {
+		t.Fatalf("phase must persist, got %q", row.RuntimePhase)
+	}
+
+	// 相位白名单与字界。
+	if err := svc.PiRuntimePhase("user-a", leased.ID, claimOwner("w:0", 1), PiRuntimePhaseRequest{Phase: "warping"}); err == nil {
+		t.Fatal("unknown phase must be rejected")
+	}
+	if err := svc.PiRuntimePhase("user-a", leased.ID, claimOwner("w:0", 1), PiRuntimePhaseRequest{Phase: "ready", Reason: stringsRepeat("r", 200)}); err == nil {
+		t.Fatal("over-long wait reference must be rejected")
+	}
+	// 审批等待期：waiting_tool 归一。
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", leased.ID).Update("status", "waiting_approval").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.PiRuntimePhase("user-a", leased.ID, claimOwner("w:0", 1), PiRuntimePhaseRequest{Phase: "waiting_tool"}); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.First(&row, "id = ?", leased.ID).Error
+	if row.RuntimePhase != "waiting_approval" {
+		t.Fatalf("tool phase must normalize under approval, got %q", row.RuntimePhase)
+	}
+
+	// 旧 epoch 或错 worker 不能改写相位。
+	if err := svc.PiRuntimePhase("user-a", leased.ID, claimOwner("w:0", 999), PiRuntimePhaseRequest{Phase: "ready"}); err == nil {
+		t.Fatal("stale epoch must fail closed")
+	}
+	if err := svc.PiRuntimePhase("user-a", leased.ID, "other:0@1", PiRuntimePhaseRequest{Phase: "ready"}); err == nil {
+		t.Fatal("foreign worker must fail closed")
+	}
+
+	// 快照：Approval 与 pending interjections。
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", leased.ID).UpdateColumn("state_json", `{"approval":{"approvalId":"ap1"},"pendingInterjections":[{"id":"i1","text":"Hi","createdAt":"2026-11-02T01:02:03Z"}]}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := svc.PiAgentInspection("user-a", leased.ID, claimOwner("w:0", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.ApprovalID != "ap1" || len(inspection.PendingInterjections) != 1 || inspection.PendingInterjections[0].ID != "i1" {
+		t.Fatalf("inspection fields wrong: %+v", inspection)
+	}
+	if inspection.LeaseEpoch != 1 || inspection.Status != "waiting_approval" {
+		t.Fatalf("inspection lease fields wrong: %+v", inspection)
+	}
+}
+
+func TestPiFailRunTerminalizesHeldRun(t *testing.T) {
+	svc, db := newAgentWorkerTestService(t)
+	leased := seedLeasedRun(t, db, svc)
+	if err := svc.PiFailRun("user-a", leased.ID, claimOwner("w:0", 1), "工具合同不一致，无法重试"); err != nil {
+		t.Fatalf("fail report failed: %v", err)
+	}
+	var row model.CloudAgentExecution
+	if err := db.Where("id = ?", leased.ID).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.Status != "failed" || !row.CleanupPending || row.FailureMessage == "" {
+		t.Fatalf("worker fatal must terminalize with cleanup: %+v", row)
+	}
+	// 幂等：终态重复上报无害。
+	if err := svc.PiFailRun("user-a", leased.ID, claimOwner("w:0", 1), "再次上报"); err != nil {
+		t.Fatalf("repeat fail must be a no-op: %v", err)
+	}
+	// 相等 owner 且终态：依旧 no-op（terminal fallback 语义）。
+}
+
+func TestPiToolAdvanceSyncRejectsForeignWorker(t *testing.T) {
+	svc, db := newAgentWorkerTestService(t)
+	seedLeasedRun(t, db, svc)
+	// 错槽位拒绝——工具推进必须来自租约持有者（无论审批与计费路径在 Go 侧如何治理）。
+	if _, err := svc.PiToolAdvanceSync(context.Background(), "user-a", "run-x", "other:0@1", map[string]json.RawMessage{"callId": json.RawMessage(`"c1"`), "name": json.RawMessage(`"canvas_get_state"`), "arguments": json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("foreign worker tool advance must be rejected")
+	}
+	// 正确槽位但调用未声明 → 由执行器拒绝（行为不在本测试深度）。
+	if _, err := svc.PiToolAdvanceSync(context.Background(), "user-a", "run-x", claimOwner("w:0", 1), map[string]json.RawMessage{"callId": json.RawMessage(`"c1"`), "name": json.RawMessage(`"canvas_get_state"`), "arguments": json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("undeclared call without state must fail in the executor; here state is empty so executor rejects too")
 	}
 }

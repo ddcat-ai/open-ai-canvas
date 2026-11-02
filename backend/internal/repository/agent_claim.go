@@ -202,3 +202,22 @@ func (r *Repository) ClaimablePiAgentRunCount() int {
 	}
 	return int(count)
 }
+
+// SetAgentRunPhase CAS-updates the worker-reported runtime phase. Lease
+// ownership, fencing epoch and liveness all revalidate in one UPDATE so a
+// stale worker cannot reclassify a run it no longer holds. Phase names are
+// the fork wire contract's; wait-kind subrows are restored with the fork's
+// batch migration (v78–v82) and are not persisted here.
+func (r *Repository) SetAgentRunPhase(userID, runID, owner string, epoch int64, phase string) error {
+	result := r.db.Model(&model.CloudAgentExecution{}).
+		Where("id = ? AND user_id = ? AND engine = ? AND lease_owner = ? AND lease_epoch = ? AND lease_expires_at > ? AND status IN ?",
+			runID, userID, "pi", owner, epoch, time.Now().UTC(), []string{"running", "waiting_approval"}).
+		Updates(map[string]any{"runtime_phase": phase, "revision": gorm.Expr("revision + 1")})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrCreationConflict
+	}
+	return nil
+}

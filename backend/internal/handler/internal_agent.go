@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -176,6 +178,74 @@ func registerInternalAgentRunRoutes(group *gin.RouterGroup, svc *service.Service
 		}
 		c.Header("Cache-Control", "no-store")
 		ok(c, gin.H{"renewed": true, "runAuthorization": token})
+	})
+	group.POST("/runs/:id/phase", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		var input service.PiRuntimePhaseRequest
+		decoder := json.NewDecoder(c.Request.Body)
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&input) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+		if err := svc.PiRuntimePhase(c.GetHeader("X-Agent-User-ID"), c.Param("id"), internalAgentOwner(c), input); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"updated": true})
+	})
+	group.GET("/runs/:id/control", func(c *gin.Context) {
+		control, err := svc.PiAgentInspection(c.GetHeader("X-Agent-User-ID"), c.Param("id"), internalAgentOwner(c))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, control)
+	})
+	group.GET("/runs/:id", func(c *gin.Context) {
+		inspection, err := svc.PiAgentInspection(c.GetHeader("X-Agent-User-ID"), c.Param("id"), internalAgentOwner(c))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"run": inspection})
+	})
+	group.POST("/runs/:id/tool-calls/:callId/advance", func(c *gin.Context) {
+		// 同步推进：复用 push 桥同一执行器（权限/审批/计费/画布写入治理都在那里）。
+		// worker 的请求体重用 push 桥 /tool 形态；pause/终态语义原样传回。
+		// fork 的异步操作台账（op queue + SSE 唤醒 + 重放）随会话条目树迁移进入
+		// 下一阶段 —— 在那之前本端点提供同步推进语义（与 fork 桥等价）。
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		var payload map[string]json.RawMessage
+		decoder := json.NewDecoder(c.Request.Body)
+		if decoder.Decode(&payload) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+		if _, ok := payload["callId"]; !ok {
+			payload["callId"] = json.RawMessage(`"` + c.Param("callId") + `"`)
+		}
+		result, err := svc.PiToolAdvanceSync(c.Request.Context(), c.GetHeader("X-Agent-User-ID"), c.Param("id"), internalAgentOwner(c), payload)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+	group.POST("/runs/:id/fail", func(c *gin.Context) {
+		var input struct {
+			Reason string `json:"reason"`
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+		if err := svc.PiFailRun(c.GetHeader("X-Agent-User-ID"), c.Param("id"), internalAgentOwner(c), input.Reason); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"failed": true})
 	})
 	group.POST("/runs/:id/release", func(c *gin.Context) {
 		if err := svc.PiRelease(c.GetHeader("X-Agent-User-ID"), c.Param("id"), internalAgentOwner(c)); err != nil {
