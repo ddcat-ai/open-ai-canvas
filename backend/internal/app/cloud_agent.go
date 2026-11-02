@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"yingce/backend/internal/agent/session"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -561,10 +562,15 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		"agentRequests": map[string]any{"canonical": canonical},
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
 	input["piSessionJSONL"] = ""
+	// Worker 拉取模式（RFC #943 P3）：新运行标记 engine='pi'，创建后即可被
+	// Worker 经 /internal-agent 领取；push 模式不写该字段，行为保持不变。
+	if s.agentRuntimeMode() == session.ModeWorker {
+		input["agentEngine"] = "pi"
+	}
 	if parentID != "" {
-		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
-			inherited := cloudAgentInheritablePiSession(parentStatus, session.SessionJSONL)
-			if inherited == "" && session.SessionJSONL != "" {
+		if parentSession, parentSessionErr := s.repo.CloudAgentPiSession(userID, parentID); parentSessionErr == nil {
+			inherited := cloudAgentInheritablePiSession(parentStatus, parentSession.SessionJSONL)
+			if inherited == "" && parentSession.SessionJSONL != "" {
 				slog.Info("agent continuation starts a fresh runtime session", "parent", parentID, "parentStatus", parentStatus)
 			}
 			input["piSessionJSONL"] = inherited

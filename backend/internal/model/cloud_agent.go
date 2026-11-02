@@ -17,14 +17,28 @@ type CloudAgentExecution struct {
 	Journal           []CloudAgentEventRecord   `gorm:"foreignKey:RunID;references:ID" json:"-"`
 	Transcript        []CloudAgentMessageRecord `gorm:"foreignKey:RunID;references:ID" json:"-"`
 	// Control fields remain writable even when the transcript cannot be decoded or saved.
-	CanvasID       string `gorm:"size:80"`
-	ActiveTaskID   string `gorm:"size:80"`
-	MediaTaskID    string `gorm:"size:80"`
-	CleanupPending bool   `gorm:"not null;default:false;index"`
-	FailureMessage string `gorm:"size:1000"`
-	StateJSON      string `gorm:"type:text"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	CanvasID string `gorm:"size:80"`
+	// Engine is empty for runs created before the external Pi worker was
+	// introduced; engine='pi' marks runs a worker claims through /internal-agent.
+	// 租约/恢复列全部按 UTC 写入与比较（SQLite 文本比较混入本地时区会把未来
+	// 租约误判为已过期）。Engine/Lease columns were added by migration v83.
+	Engine            string     `gorm:"index;size:24"`
+	LeaseOwner        string     `gorm:"size:80"`
+	LeaseExpiresAt    *time.Time `gorm:"index"`
+	LeaseEpoch        int64      `gorm:"not null;default:0"`
+	RuntimePhase      string     `gorm:"not null;default:ready;size:32"`
+	NextRecoveryAt    *time.Time `gorm:"index"`
+	RecoveryAttempts  int        `gorm:"not null;default:0"`
+	RecoveryStartedAt *time.Time
+	RecoveryStatus    string `gorm:"size:32"`
+	RecoveryLastEpoch int64  `gorm:"not null;default:0"`
+	ActiveTaskID      string `gorm:"size:80"`
+	MediaTaskID       string `gorm:"size:80"`
+	CleanupPending    bool   `gorm:"not null;default:false;index"`
+	FailureMessage    string `gorm:"size:1000"`
+	StateJSON         string `gorm:"type:text"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // CloudAgentPiSession stores Pi's native JSONL session independently from the

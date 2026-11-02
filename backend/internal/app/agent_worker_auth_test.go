@@ -1,11 +1,7 @@
 package app
 
 import (
-	"errors"
-	"os"
 	"testing"
-
-	"gorm.io/gorm"
 )
 
 func TestAgentWorkerIDPatternEdges(t *testing.T) {
@@ -46,40 +42,6 @@ func TestAgentWorkerOwnsOwner(t *testing.T) {
 	}
 	if s.AgentWorkerOwnsOwner("compose", stringsRepeat("o", 81)) {
 		t.Fatal("owner beyond 80 chars must be rejected")
-	}
-}
-
-func TestAuthenticateAgentWorkerEnvIdentity(t *testing.T) {
-	t.Setenv("CANVAS_AGENT_WORKER_ID", "compose")
-	t.Setenv("CANVAS_AGENT_WORKER_TOKEN", "expected-secret-long-enough-32-ch")
-	t.Setenv("CANVAS_AGENT_WORKER_USER_ID", "user-1")
-	s := &Service{}
-
-	worker, err := s.AuthenticateAgentWorker("compose", "expected-secret-long-enough-32-ch")
-	if err != nil || worker.ID != "compose" || worker.UserID != "user-1" {
-		t.Fatalf("matching identity failed: worker=%+v err=%v", worker, err)
-	}
-	if _, err := s.AuthenticateAgentWorker("compose", "mismatch-secret-long-enough-32"); !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("wrong secret must return record-not-found, got %v", err)
-	}
-	if _, err := s.AuthenticateAgentWorker("compose", "short"); !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("weak secret must be rejected before comparison, got %v", err)
-	}
-	if _, err := s.AuthenticateAgentWorker("other", "expected-secret-long-enough-32-ch"); !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("other identity must not match, got %v", err)
-	}
-
-	t.Setenv("CANVAS_AGENT_WORKER_TOKEN", "short")
-	if _, err := s.AuthenticateAgentWorker("compose", "expected-secret-long-enough-32-ch"); !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatal("weak expected token must disable identity entirely")
-	}
-	t.Setenv("CANVAS_AGENT_WORKER_ID", "")
-	t.Setenv("CANVAS_AGENT_WORKER_TOKEN", "expected-secret-long-enough-32-ch")
-	if _, err := s.AuthenticateAgentWorker("compose", "expected-secret-long-enough-32-ch"); !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatal("missing worker id env must disable identity entirely")
-	}
-	if os.Getenv("CANVAS_AGENT_WORKER_USER_ID") != "user-1" {
-		t.Fatal("unexpected env interference between subtests")
 	}
 }
 

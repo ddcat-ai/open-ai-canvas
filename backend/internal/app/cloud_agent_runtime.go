@@ -243,6 +243,7 @@ type cloudAgentTransientReference struct {
 
 func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgentState) error {
 	var input struct {
+		AgentEngine string                `json:"agentEngine"`
 		TextHistory []providerTextMessage `json:"textHistory"`
 		Config      map[string]any        `json:"config"`
 		Requests    struct {
@@ -290,7 +291,7 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	if carrier {
 		// The carrier is deliberately not a model call. Pi will create the first
 		// governed cloud_agent_step through the model bridge below.
-		run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
+		run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Engine: input.AgentEngine, Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
 		if err := cloudAgentSave(run, &state); err != nil {
 			return err
 		}
@@ -298,7 +299,7 @@ func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgent
 	}
 	// 非 Pi 的旧入口仍保留运行状态初始化，但上下文占用统一由 Pi SDK
 	// 在实际模型调用前上报；这里不再生成 Go 侧估算读数。
-	run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
+	run := &model.CloudAgentExecution{ID: task.ID, UserID: task.UserID, Status: "running", Engine: input.AgentEngine, Revision: 1, CreatedAt: task.CreatedAt, UpdatedAt: time.Now()}
 	if err := cloudAgentSave(run, &state); err != nil {
 		return err
 	}

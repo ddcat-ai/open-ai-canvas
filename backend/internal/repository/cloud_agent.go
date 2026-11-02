@@ -183,7 +183,9 @@ func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.Cl
 		limit = 50
 	}
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("(status IN ? OR cleanup_pending = ?) AND id > ?", []string{"running", "queued"}, true, after).Order("id").Limit(limit).Find(&runs).Error; err != nil {
+		// engine='pi' 的运行由 Worker 经 /internal-agent 领取与推进；旧调度器
+		// 与卡死终结器都不再做服务端驱动（RFC #943）。
+		if err := tx.Where("(status IN ? OR cleanup_pending = ?) AND id > ? AND (engine IS NULL OR engine <> ?)", []string{"running", "queued"}, true, after, "pi").Order("id").Limit(limit).Find(&runs).Error; err != nil {
 			return err
 		}
 		scoped := New(tx)
@@ -459,4 +461,98 @@ func (r *Repository) DeleteGeminiCache(userID, cacheKey string) error {
 func (r *Repository) DeleteGeminiCacheIfResourceMatches(userID, cacheKey, resourceName string) (bool, error) {
 	result := r.db.Where("user_id = ? AND cache_key = ? AND resource_name = ?", userID, cacheKey, resourceName).Delete(&model.CloudAgentGeminiCache{})
 	return result.RowsAffected == 1, result.Error
+}
+
+// RenewPiAgentLease extends an in-date run lease with constant-time fencing:
+// the epoch and ownership must match the row the worker still holds. A missed
+// window returns (false, nil) so the caller reports agent_lease_lost.
+func (r *Repository) RenewPiAgentLease(userID, id, owner string, epoch int64, until time.Time) (bool, error) {
+	// 租约列按 UTC 写入与比较（SQLite 文本比较混入本地时区会把未来租约误判为已过期）。
+	now := time.Now().UTC()
+	result := r.db.Model(&model.CloudAgentExecution{}).
+		Where("id = ? AND user_id = ? AND engine = ? AND lease_owner = ? AND lease_epoch = ? AND lease_expires_at > ?",
+			id, userID, "pi", owner, epoch, now).
+		Updates(map[string]any{"lease_expires_at": until})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+// ReleasePiAgentLease clears the lease by owner+epoch. Status is untouched:
+// release is not termination, the run stays claimable (or is swept if no
+// worker returns). The epoch is not reset — the next claim advances it, so a
+// released-then-reclaimed run always yields a new fencing epoch to workers.
+// ReleasePiAgentLeaseAny clears any lease on the run from the control plane
+// (worker Start/Resume/Stop). Not reachable from user HTTP input; it needs no
+// fencing epoch because instant reclaimability is the point and billed side
+// effects live on billed tasks, not on the run row.
+func (r *Repository) ReleasePiAgentLeaseAny(id string) error {
+	result := r.db.Model(&model.CloudAgentExecution{}).
+		Where("id = ? AND engine = ? AND lease_owner <> ''", id, "pi").
+		Updates(map[string]any{"lease_owner": "", "lease_expires_at": nil})
+	return result.Error
+}
+
+func (r *Repository) ReleasePiAgentLease(userID, id, owner string, epoch int64) error {
+	result := r.db.Model(&model.CloudAgentExecution{}).
+		Where("id = ? AND user_id = ? AND engine = ? AND lease_owner = ? AND lease_epoch = ?",
+			id, userID, "pi", owner, epoch).
+		Updates(map[string]any{"lease_owner": "", "lease_expires_at": nil})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrCreationConflict
+	}
+	return nil
+}
+
+// StalledPiAgentRuns returns engine=pi runs that were leased and whose lease expired long
+// ago and that nobody has advanced. Claiming alone never terminates these: a crashed or
+// misconfigured worker keeps re-claiming every lease period and failing before its first
+// request, so the run stays "running" forever and the UI shows "Agent 正在运行" indefinitely.
+//
+// The `lease_expires_at IS NOT NULL` predicate matters: only runs that were actually
+// claimed qualify. A run that no worker ever picked up has a NULL lease and belongs to
+// UnclaimedPiAgentRuns, which uses a much longer threshold and a different failure reason.
+// Without the predicate, a deployment with no agent worker at all would have every new run
+// reported as "worker stalled" after ~4.5 minutes — an inaccurate cause that also destroys
+// the queued semantics.
+func (r *Repository) StalledPiAgentRuns(expiredBefore time.Time, limit int) ([]model.CloudAgentExecution, error) {
+	var runs []model.CloudAgentExecution
+	// 全 UTC。
+	err := r.db.Where("engine = ? AND status IN ? AND lease_expires_at IS NOT NULL AND lease_expires_at < ?",
+		"pi", []string{"queued", "running", "waiting_approval"}, expiredBefore).
+		Order("updated_at").Limit(limit).Find(&runs).Error
+	return runs, err
+}
+
+// UnclaimedPiAgentRuns returns engine=pi runs that no worker has ever leased and that have
+// been waiting longer than the caller's threshold.
+//
+// This is a deployment-availability condition, not a worker crash, so it is reported with
+// its own reason. Claiming deliberately still matches NULL leases — removing that would
+// make the first claim impossible — so these runs stay claimable until they are swept.
+func (r *Repository) UnclaimedPiAgentRuns(createdBefore time.Time, limit int) ([]model.CloudAgentExecution, error) {
+	var runs []model.CloudAgentExecution
+	if r.db.Migrator().HasTable(&model.AgentRuntimeInstance{}) {
+		var alive, available int64
+		query := r.db.Model(&model.AgentRuntimeInstance{}).Where("updated_at > ? AND readiness = ? AND draining = ?", time.Now().UTC().Add(-45*time.Second), "ready", false)
+		if err := query.Count(&alive).Error; err != nil {
+			return nil, err
+		}
+		if err := query.Where("active + claim_reservations < capacity").Count(&available).Error; err != nil {
+			return nil, err
+		}
+		// 有 worker 在线但没有空闲常驻位：等着，别判死。
+		if alive > 0 && available == 0 {
+			return runs, nil
+		}
+	}
+	// 全 UTC。capacity 阻塞（waiting_resource）的运行是排队语义，不死于无领取。
+	query := r.db.Where("engine = ? AND status IN ? AND lease_expires_at IS NULL AND created_at < ? AND (runtime_phase IS NULL OR runtime_phase <> ?)",
+		"pi", []string{"queued", "running", "waiting_approval"}, createdBefore, "waiting_resource")
+	err := query.Order("created_at").Limit(limit).Find(&runs).Error
+	return runs, err
 }

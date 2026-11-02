@@ -12,7 +12,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 77
+// CurrentSchemaVersion: v78–v82 are reserved for the fork's cloud Agent
+// subsystem batch (merged at their original numbers later, RFC #943); new
+// upstream migrations start at v83.
+const CurrentSchemaVersion int64 = 83
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -274,6 +277,8 @@ var schemaMigrations = []migration{
 	{version: 75, name: "user_groups_pricing_currency", checksum: "sha256:user-groups-pricing-currency-v75-20261028", apply: migrateUserGroupsPricingCurrency},
 	{version: 76, name: "agent_memory_document_skill_discovery", checksum: "sha256:agent-memory-document-skill-discovery-v76-20261028", apply: migrateAgentMemoryDocumentSkillDiscovery},
 	{version: 77, name: "agent_memory_document_columns", checksum: "sha256:agent-memory-document-columns-v77-20261028", apply: migrateAgentMemoryDocumentColumns},
+	// v78–v82: reserved (fork cloud Agent runtime batch merges here later, RFC #943).
+	{version: 83, name: "internal_agent_worker", checksum: "sha256:internal-agent-worker-v83-20261102", apply: migrateInternalAgentWorker},
 }
 
 // migrateAgentMemoryDocumentColumns 补齐记忆文件的条目序号与修订的工具调用 ID。

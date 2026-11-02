@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	agentruntime "yingce/backend/internal/agent/runtime"
 	"yingce/backend/internal/agent/session"
@@ -16,6 +17,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type recordingAgentRuntime struct {
@@ -307,4 +309,65 @@ func TestAgentRuntimeSetSessionLimit(t *testing.T) {
 			t.Fatalf("want network error, got %v", err)
 		}
 	})
+}
+
+// RFC #943 P3 的三分支选择：显式远程 push 最先（两执行面并存时 push 赢），
+// 其次 worker（强内部 token），最后内嵌 push。
+func TestAgentRuntimeSeamThreeBranchSelection(t *testing.T) {
+	t.Setenv("YINGCE_AGENT_URL", "")
+	t.Setenv("CANVAS_AGENT_INTERNAL_TOKEN", "")
+	s := &Service{}
+	if _, ok := s.agentRuntime().(piPushRuntime); !ok {
+		t.Fatalf("default must be push, got %T", s.agentRuntime())
+	}
+
+	t.Setenv("CANVAS_AGENT_INTERNAL_TOKEN", strings.Repeat("t", 32))
+	if _, ok := s.agentRuntime().(piWorkerRuntime); !ok {
+		t.Fatalf("strong internal token must select worker runtime, got %T", s.agentRuntime())
+	}
+
+	t.Setenv("YINGCE_AGENT_URL", "http://push-endpoint")
+	if _, ok := s.agentRuntime().(piPushRuntime); !ok {
+		t.Fatalf("explicit remote push must win over worker config, got %T", s.agentRuntime())
+	}
+
+	if s.agentRuntimeMode() != session.ModeRemote {
+		t.Fatalf("mode must be remote under push url, got %q", s.agentRuntimeMode())
+	}
+	t.Setenv("YINGCE_AGENT_URL", "")
+	if s.agentRuntimeMode() != session.ModeWorker {
+		t.Fatalf("mode must be worker under token, got %q", s.agentRuntimeMode())
+	}
+	t.Setenv("CANVAS_AGENT_INTERNAL_TOKEN", "")
+	if s.agentRuntimeMode() != session.ModeEmbedded {
+		t.Fatalf("mode must be embedded by default, got %q", s.agentRuntimeMode())
+	}
+}
+
+// Worker 模式的 Inspect：离线 worker 降级为 worker_offline 文案，健康 worker
+// 汇报可用上限与队列。
+func TestAgentRuntimeWorkerInspect(t *testing.T) {
+	t.Setenv("CANVAS_AGENT_INTERNAL_TOKEN", strings.Repeat("t", 32))
+	svc, db := newAgentWorkerTestService(t)
+	if err := db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&model.AgentRuntimeInstance{ID: "compose:0", Active: 1, Capacity: 4, Readiness: "ready", UpdatedAt: time.Now().UTC().Add(-5 * time.Second)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	status := svc.agentRuntime().Inspect(context.Background())
+	if status.Mode != session.ModeWorker || status.ID != "agent-worker" || status.Endpoint != "/internal-agent" || !status.Healthy {
+		t.Fatalf("ready worker inspect wrong: %+v", status)
+	}
+	if status.Active != 1 || status.Limit != model.DefaultAgentSchedulerSetting().MaxResidentSessions {
+		t.Fatalf("capacity numbers wrong: %+v", status)
+	}
+	if status.Message != "" {
+		t.Fatalf("ready worker should have no queue warning: %q", status.Message)
+	}
+
+	if err := db.Model(&model.AgentRuntimeInstance{}).Where("id = ?", "compose:0").Update("updated_at", time.Now().UTC().Add(-time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	status = svc.agentRuntime().Inspect(context.Background())
+	if status.Healthy || status.Message != "Agent Worker 离线；请检查容器、令牌和后端连接，任务将在限定时间内等待" {
+		t.Fatalf("offline worker must degrade verbatim: %+v", status)
+	}
 }
