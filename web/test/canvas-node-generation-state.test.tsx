@@ -7,7 +7,7 @@ import { canvasNodeCanResyncTask } from "../src/lib/canvas/canvas-task-state";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
 const noop = () => {};
-const createdAt = new Date(Date.now() - 103_000).toISOString();
+const createdAt = () => new Date(Date.now() - 103_000).toISOString();
 
 function renderNode(metadata: CanvasNodeData["metadata"], type: CanvasNodeData["type"] = CanvasNodeType.Image) {
     return renderToStaticMarkup(
@@ -37,7 +37,7 @@ const occurrences = (markup: string, text: string) => markup.split(text).length 
 
 describe("画布节点生成中", () => {
     test("保存阶段只说一次正在保存，不再重复后端阶段原文，也不叠加“生成中”徽章", () => {
-        const markup = renderNode({ status: "loading", taskId: "3897c08303cb-task", taskStatus: "running", taskStage: "作品已生成，正在保存", taskMediaStage: "upload", taskCreatedAt: createdAt });
+        const markup = renderNode({ status: "loading", taskId: "3897c08303cb-task", taskStatus: "running", taskStage: "作品已生成，正在保存", taskMediaStage: "upload", taskCreatedAt: createdAt() });
         expect(markup).toContain('data-phase="saving"');
         expect(occurrences(markup, "正在保存图片")).toBe(1);
         expect(markup).not.toContain("作品已生成，正在保存");
@@ -50,7 +50,7 @@ describe("画布节点生成中", () => {
     });
 
     test("保存失败后自动重试时如实显示，不再显示成正常保存", () => {
-        const markup = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "作品已生成，保存遇到问题，正在自动恢复", taskMediaStage: "download", taskCreatedAt: createdAt });
+        const markup = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "作品已生成，保存遇到问题，正在自动恢复", taskMediaStage: "download", taskCreatedAt: createdAt() });
         expect(markup).toContain('data-saving="retrying"');
         expect(markup).toContain("保存遇到问题，正在重试");
         expect(markup).toContain("不会重新生成");
@@ -58,28 +58,28 @@ describe("画布节点生成中", () => {
     });
 
     test("排队、提交和供应商英文阶段都翻译成用户能懂的阶段", () => {
-        const queued = renderNode({ status: "loading", taskId: "task", taskStatus: "queued", taskStage: "等待队列调度", taskCreatedAt: createdAt });
+        const queued = renderNode({ status: "loading", taskId: "task", taskStatus: "queued", taskStage: "等待队列调度", taskCreatedAt: createdAt() });
         expect(queued).toContain("排队中");
         expect(queued).toContain("轮到后自动开始");
 
-        const submitting = renderNode({ status: "loading", taskStage: "正在准备生成任务", taskCreatedAt: createdAt });
+        const submitting = renderNode({ status: "loading", taskStage: "正在准备生成任务", taskCreatedAt: createdAt() });
         expect(submitting).toContain("正在提交");
         expect(submitting).not.toContain("正在准备生成任务");
         expect(submitting).not.toContain("查看详情");
 
-        const provider = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "provider_processing", taskCreatedAt: createdAt });
+        const provider = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "provider_processing", taskCreatedAt: createdAt() });
         expect(provider).toContain("正在生成图片");
         expect(provider).not.toContain("provider_processing");
     });
 
     test("恢复监听留下的诊断在生成中节点上可见", () => {
-        const markup = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "上游生成中", taskCreatedAt: createdAt, errorDetails: "任务恢复暂不可用，请到任务中心核对。" });
+        const markup = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "上游生成中", taskCreatedAt: createdAt(), errorDetails: "任务恢复暂不可用，请到任务中心核对。" });
         expect(markup).toContain("canvas-gen-diagnostic");
         expect(markup).toContain("任务恢复暂不可用，请到任务中心核对。");
     });
 
     test("视频有真实进度时显示百分比并提示离开页面也会继续", () => {
-        const markup = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "上游生成中", taskProgress: 42, taskCreatedAt: createdAt }, CanvasNodeType.Video);
+        const markup = renderNode({ status: "loading", taskId: "task", taskStatus: "running", taskStage: "上游生成中", taskProgress: 42, taskCreatedAt: createdAt() }, CanvasNodeType.Video);
         expect(markup).toContain("正在生成视频");
         expect(markup).toContain("42%");
         expect(markup).toContain("离开页面也会继续生成");
