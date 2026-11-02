@@ -20,7 +20,7 @@ test("拖放区真正接收拖入的图片，与点击选择走同一过滤", ()
 
 test("拖入时高亮拖放区", () => {
     expect(dropzone()).toContain('className={dragging ? "batch-upload-dropzone is-dragging" : "batch-upload-dropzone"}');
-    expect(css).toContain(".batch-upload-dropzone:hover, .batch-upload-dropzone.is-dragging {");
+    expect(css).toMatch(/\.batch-upload-dropzone:hover,\s*\.batch-upload-dropzone\.is-dragging\s*\{/);
 });
 
 test("失败行直接显示后端返回的原因（截断，悬停看全文）", () => {
