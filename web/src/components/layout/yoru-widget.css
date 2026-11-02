@@ -150,6 +150,8 @@
 }
 .yoru-resize {
     pointer-events: auto;
+    display: grid;
+    place-items: center;
     position: absolute;
     z-index: 4;
     top: 0;
@@ -163,17 +165,6 @@
     color: #586aa3;
     touch-action: none;
     cursor: nwse-resize !important;
-}
-.yoru-resize::before {
-    content: "";
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    width: 10px;
-    height: 10px;
-    border-left: 2px solid currentColor;
-    border-top: 2px solid currentColor;
-    border-radius: 2px 0 0 0;
 }
 .yoru-resize:hover {
     background: #d6e3ff;

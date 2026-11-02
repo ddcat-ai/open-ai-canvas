@@ -1,4 +1,4 @@
-import { ArrowRight, EyeOff, MessageCircleMore, RotateCcw, Send, Sparkles, X } from "lucide-react";
+import { ArrowRight, EyeOff, MessageCircleMore, MoveDiagonal2, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { getPublicYoru, sendYoruMessage, type YoruMessage, type YoruSettings } from "@/services/api/yoru";
@@ -273,14 +273,16 @@ export function YoruWidget() {
                             setPanelSize({ width: 420, height: 540 });
                             localStorage.removeItem(`${preferenceKey}:panel-size`);
                         }}
-                    />
+                    >
+                        <MoveDiagonal2 size={14} aria-hidden="true" />
+                    </button>
                     <header className="yoru-header">
                         <div className="yoru-header-portrait">
                             <img src={yoruBody} alt="小夜头像" />
                         </div>
                         <div className="yoru-header-identity">
                             <strong>{settings.name || "小夜"}</strong>
-                            <small>魅夜AI · 创作向导</small>
+                            <small>创作向导</small>
                         </div>
                         <span className="yoru-header-status">创作陪伴中</span>
                         <button type="button" className="yoru-icon-button" onClick={() => setOpen(false)} aria-label="关闭对话">

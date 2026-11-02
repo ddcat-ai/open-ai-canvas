@@ -1,6 +1,5 @@
-.ecommerce-skill-installed > td:first-child {
-    box-shadow: inset 3px 0 10px color-mix(in srgb, var(--ant-color-primary) 45%, transparent);
-    border-inline-start: 3px solid var(--ant-color-primary);
+.ecommerce-skill-installed > td {
+    background: color-mix(in srgb, var(--ant-color-primary) 8%, var(--ant-color-bg-container));
 }
 .ecommerce-skill-installed .ant-typography strong {
     text-shadow: 0 0 12px color-mix(in srgb, var(--ant-color-primary) 50%, transparent);
