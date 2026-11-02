@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"yingce/backend/internal/ecommerceagent"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -531,6 +532,14 @@ func (s *Service) validateEcommercePlan(userID string, plan *model.EcommercePlan
 		}
 		if len(image.Prompt) > 32000 {
 			return BadAuthRequest("图片提示词过长")
+		}
+		if image.TaskID == "" {
+			if ecommerceagent.PlatformNoText(image.Platform, image.ImageType, "") && strings.TrimSpace(image.Copy) != "" {
+				return BadAuthRequest(fmt.Sprintf("第%d张按所选平台采用无新增文字方案，请清空文案后再生成", index+1))
+			}
+			if phrase := ecommerceagent.RestrictedListingPhrase(image.Copy); phrase != "" {
+				return BadAuthRequest(fmt.Sprintf("第%d张文案含高风险宣传词「%s」，请改为有依据的具体描述", index+1, phrase))
+			}
 		}
 		if image.TaskID != "" {
 			if seenTasks[image.TaskID] {

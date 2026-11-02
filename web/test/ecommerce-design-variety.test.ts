@@ -62,7 +62,7 @@ describe("ecommerce design variety", () => {
         expect(commercePlatformStrategy("pdd", "main")).toContain("高饱和");
         expect(commercePlatformStrategy("1688", "main")).toContain("多 SKU");
         expect(commercePlatformStrategy("shopify", "main")).toContain("大留白");
-        expect(commercePlatformStrategy("temu", "main")).toContain("目标语言短标题");
+        expect(commercePlatformStrategy("temu", "main")).toContain("copy为空");
         expect(commercePlatformStrategy("wechat-shop", "main")).toContain("熟人");
         expect(commercePlatformStrategy("amazon", "amazon-a-plus")).toContain("不写价格、促销");
     });
@@ -80,14 +80,16 @@ describe("ecommerce design variety", () => {
         expect(commercePlatformFamily("unknown-shop").id).toBe("general");
     });
 
-    test("Amazon-family main images are pure white without text and get no Tmall UI", () => {
-        for (const platform of ["amazon", "ebay", "walmart", "aliexpress"]) {
+    test("white main images obey their platform policy and eBay uses no-text photography", () => {
+        for (const platform of ["amazon", "walmart", "aliexpress"]) {
             const rule = commercePlatformImageRule(platform, "main");
             expect(rule).toContain("纯白");
             expect(rule).toContain("无文字");
-            expect(rule).toContain("85%");
             expect(commercePlatformListingMain(platform, "main")).toBe(true);
         }
+        expect(commercePlatformImageRule("amazon", "main")).toContain("85%");
+        expect(commercePlatformListingMain("ebay", "main")).toBe(false);
+        expect(commerceAllowsText({ ...draft, platform: "ebay", imageType: "secondary" })).toBe(false);
         expect(commercePlatformImageRule("amazon", "single", "商品主图")).toContain("无文字");
         expect(commercePlatformListingMain("amazon", "secondary")).toBe(false);
         expect(commercePlatformListingMain("taobao", "main")).toBe(false);
@@ -109,6 +111,16 @@ describe("ecommerce design variety", () => {
         const edited = commerceImagePrompt(amazonMain, { ...mainImage, manualPrompt: true, prompt: "换成俯拍角度" });
         expect(edited.startsWith("换成俯拍角度")).toBe(true);
         expect(edited).toContain("【平台主图硬性规则·Amazon】");
+    });
+
+    test("manual SHEIN main images retain platform constraints without restoring old copy", () => {
+        const shein = { ...draft, platform: "shein", imageType: "main" };
+        const main = { ...image, imageType: "main", platform: "shein", manualPrompt: true, prompt: "时尚目录的柔光构图", copy: "OLD_UNREVIEWED_COPY" };
+        const prompt = commerceImagePrompt(shein, main);
+        expect(prompt.startsWith(main.prompt)).toBe(true);
+        expect(prompt).toContain("本张不添加文字");
+        expect(prompt).toContain("SHEIN");
+        expect(prompt).not.toContain(main.copy);
     });
 
     test("an Amazon main + secondary set clears copy only on the listing main image", () => {

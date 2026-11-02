@@ -156,7 +156,28 @@ var Platforms = map[string]Platform{
 	"OZON":        {Label: "OZON", MainSize: [2]int{1200, 1600}, Ratio: "3:4", ProductOccupancy: .75, WhiteBG: true, ForbidTextOnMain: true, TitleMax: 200, BulletMax: 6, AplusSize: [2]int{1200, 1600}, DetailRatio: "3:4", Tone: "俄语市场：参数详尽、规格表、耐用性强调", Rules: []string{"3:4 竖版", "俄语长单词需留字号余量", "强调耐寒、用料、保修"}},
 }
 
-func PlatformFor(name string) (Platform, bool) { p, ok := Platforms[name]; return p, ok }
+func PlatformFor(name string) (Platform, bool) {
+	p, legacy := Platforms[name]
+	k, known := PlatformKnowledgeFor(name)
+	if !known {
+		return p, legacy
+	}
+	if !legacy {
+		legacyName := map[string]string{"taobao": "淘宝", "tmall": "淘宝", "1688": "1688", "pdd": "拼多多", "amazon": "Amazon", "temu": "Temu", "shopee": "Shopee", "tiktok": "TikTok Shop", "aliexpress": "AliExpress", "ozon": "OZON"}[k.ID]
+		p, legacy = Platforms[legacyName]
+	}
+	if !legacy {
+		p = Platform{Label: k.Label, Ratio: k.RecommendedRatio, DetailRatio: k.RecommendedRatio, TitleMax: 120, BulletMax: 5}
+	}
+	p.WhiteBG, p.ForbidTextOnMain = k.WhiteMain, k.MainNoText || k.AllListingNoText
+	p.Tone = k.Style
+	// Legacy marketing defaults (e.g. TikTok video covers) are not listing rules.
+	p.Rules = []string{PlatformKnowledgePrompt(k.ID, "", "set", "")}
+	if k.ID == "tiktok" {
+		p.Ratio, p.DetailRatio = "1:1", "1:1"
+	}
+	return p, true
+}
 
 func MockBrief(query string) Brief {
 	category := "待确认商品"

@@ -17,6 +17,7 @@ import { commerceLayoutReferences, commerceReferenceImageInstruction, normalizeR
 import { prepareCommerceReferencePlan, prepareCommerceReferenceViews } from "./long-reference-media";
 import { assertCommerceConsumerCopy, commerceTypographyInstruction } from "./consumer-copy";
 import { commercePlatformImageRule, commercePlatformListingMain } from "./platform-style";
+import { commerceRestrictedPhrase } from "./platform-knowledge";
 
 export function manuallyEditedCommerceImage(original: EcommercePlan["images"][number], edited: EcommercePlan["images"][number]) {
     if (original.prompt === edited.prompt) return edited;
@@ -146,7 +147,7 @@ function baseCommerceImagePrompt(draft: EcommerceDraft, image: EcommercePlan["im
             `【全局创作设置】\n${commerceCreativeBrief(imageDraft)}`,
             typeConstraint,
             // A hand-edited prompt owns composition and tone, but a listing main image stays compliant.
-            listingMain ? platformRule : "",
+            platformRule,
             `【人物】${modelPlacement}\n模特执行要求：${modelInstruction}`,
             summary ? `【商品保真】商品图可见外观参考：${summary}` : "",
             `以本张用户手动编辑的提示词为最终构图、视角、场景和文案要求；不恢复旧方案文案，不擅自增写未审阅的主张。${commerceAllowsText(draft, image.imageType) ? "" : "纯图规则仍优先：不添加新文字、文字标签或营销标题。"}保留真实商品主体及参考图中可辨认的 Logo、颜色与结构；未提供的背面、接口、材质和功能只可做合理视觉探索，不得标作已验证事实。`,
@@ -334,6 +335,11 @@ export const commerceImageSubmissionConcurrency = 3;
 
 export async function submitCommerceImages(config: Config, draft: EcommerceDraft, plan: EcommercePlan, project: EcommerceProject, onSaved: (project: EcommerceProject, plan: EcommercePlan) => void, clone = false) {
     assertCommercePlanCurrent(plan, draft);
+    for (const [index, image] of plan.images.entries()) {
+        if (image.taskId || !commerceAllowsText(draft, image.imageType)) continue;
+        const phrase = commerceRestrictedPhrase(image.copy || "");
+        if (phrase) throw new Error(`第${index + 1}张含高风险宣传词「${phrase}」，请改为有依据的具体描述后再生成`);
+    }
     plan = groundCommerceClaims(plan, draft);
     assertCommerceDetailRhythm(plan, draft);
     validateCommerceReferencePlan(plan, draft);

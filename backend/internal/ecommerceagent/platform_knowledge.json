@@ -1,0 +1,624 @@
+{
+  "version": "commerce-platform-20261102-v1",
+  "boundary": "以下为规则资料与生成约束，不是平台审核结果。未核实的条目仅为保守设计策略。发布前须核对站点、类目、图片文件、商品资质和知识产权。",
+  "commonRules": [
+    "商品身份、颜色、比例、数量、材质外观与包装须忠于参考实物，不隐藏缺陷或添加非随附配件。",
+    "不虚构价格、折扣、库存、销量、评分、好评、平台徽章或认证；卖家提供文字也不自动等于已获授权或可合法宣传。",
+    "不生成侵权图案、未授权人物肖像、仇恨暴力或性剥削内容，不以场景图暗示医疗、塑形或安全功效。",
+    "禁限售商品、儿童、食品、美妆、医疗、电子电器等受监管类目须另核对资质；图片合规不能替代商品准入。"
+  ],
+  "restrictedPhrases": [
+    "Best Seller",
+    "Amazon's Choice",
+    "No.1",
+    "FDA Approved",
+    "100% safe",
+    "guaranteed cure",
+    "全网最低",
+    "国家级",
+    "绝对安全",
+    "包治百病"
+  ],
+  "profiles": [
+    {
+      "id": "taobao",
+      "label": "淘宝",
+      "style": "生活化商品陈列，突出可见设计与使用场景",
+      "risk": "促销角标与活动信息需核实，避免绝对化承诺",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "tmall",
+      "label": "天猫",
+      "style": "品牌色与留白贯穿全套，旗舰店摄影与细节质感",
+      "risk": "品牌授权、旗舰店身份与认证不可伪造",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "jd",
+      "label": "京东",
+      "style": "理性对比、清楚参数与工艺微距",
+      "risk": "服务时效、质保和平台自营标识须有依据",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "pdd",
+      "label": "拼多多",
+      "style": "明亮背景，件数与套装组成一眼看清",
+      "risk": "补贴、低价、包邮和拼单权益不可臆造",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "douyin",
+      "label": "抖音电商",
+      "style": "商品演示与内容封面分开，真实上手、短句聚焦",
+      "risk": "商品主图和直播封面分别核对规则",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "kuaishou",
+      "label": "快手电商",
+      "style": "朴素真实的生活场景与实际操作",
+      "risk": "不伪造体验、销量或用户见证",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "1688",
+      "label": "1688",
+      "style": "多规格矩阵、细节工艺、真实包装与装箱",
+      "risk": "起订量、产能、工厂和资质需卖家资料",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "xiaohongshu",
+      "label": "小红书电商",
+      "style": "自然光生活方式、笔记语气，商品清楚",
+      "risk": "区分笔记封面与店铺商品图；不虚构亲测、点赞与医疗功效",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "amazon",
+      "label": "Amazon",
+      "style": "主图纯白商品摄影；副图按功能、场景、尺寸分工",
+      "risk": "平台徽章、排名与认证不能作为装饰",
+      "scope": "Amazon Seller Central en_US；类目存在例外",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://sellercentral.amazon.com/help/hub/reference/external/G1881?locale=en_us"
+      ],
+      "officialRules": [
+        "主图使用纯白背景，不外加文字、水印、边框或促销图形；按类目规则核对商品占比与展示方式。",
+        "含逼真AI人物的图片，上传前须按Amazon要求添加相应元数据。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": true,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "temu",
+      "label": "Temu",
+      "style": "清晰明亮的商品大图、组合内容和可见细节",
+      "risk": "主图先采用无新增文字的保守方案，具体规格按站点类目核验",
+      "scope": "Temu Partner Platform发布指引；图片硬参数仍需商家后台核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://partner.temu.com/documentation?menu_code=38e79b35d2cb463d85619c1c786dd303&sub_menu_code=d7943785ff2e4185976170f07924256e"
+      ],
+      "officialRules": [
+        "发布和尺码相关规则按类目查询；不能把常见推荐图片尺寸当作全平台统一硬指标。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "shein",
+      "label": "SHEIN（希音）",
+      "style": "时尚目录摄影：服饰展示真实版型、垂坠、正背面与面料微距；非服饰按真实用途做干净生活方式摄影，整套统一光线与色彩",
+      "risk": "不改变身材比例来夸大塑形效果，不改变商品颜色、面料纹理与随附件；品牌图案、模特肖像与设计须有使用权",
+      "scope": "SHEIN公开治理与开放平台资料；图片细则须按站点、类目、合作模式核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://safe.shein.com/systematic-approach?lang=en",
+        "https://open.sheincorp.com/zh/documents/faq-detail/4",
+        "https://open.sheincorp.com/zh/documents/apidoc/detail/3001352-1000001"
+      ],
+      "officialRules": [
+        "公开治理资料要求商品及刊登内容符合适用规范；图像尺寸、数量、比例及禁限售细则需在卖家后台核实。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "3:4"
+    },
+    {
+      "id": "shopee",
+      "label": "Shopee",
+      "style": "热带自然光、明快商品陈列，移动端清楚",
+      "risk": "不可默认首图允许促销贴；Mall、活动与站点要求单独核实",
+      "scope": "Shopee越南站刊登规则；其他站点、Mall及活动图规则待核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": ["https://help.shopee.vn/portal/4/article/77246"],
+      "officialRules": [
+        "刊登须遵守该站点禁售及限售商品清单；该资料不能证明其他站点首图允许促销角标。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "lazada",
+      "label": "Lazada",
+      "style": "清爽棚拍、清楚套装内容和细节图",
+      "risk": "LazMall、促销边框、平台徽章与站点要求需核实",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "tiktok",
+      "label": "TikTok Shop",
+      "style": "商品图以客观实物展示为主；开箱演示留给视频或独立社媒素材",
+      "risk": "美国站商品图与短视频封面规则不同，不能套用大字爆炸贴",
+      "scope": "TikTok Shop 美国站；其他站点待核实；未指定站点采用美国站无字保守方案",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://seller-us.tiktok.com/university/essay?knowledge_id=3196690250417921"
+      ],
+      "officialRules": [
+        "美国站主图须纯白背景；所有商品图不得外加文字、Logo、边框、水印和图形，商品图至少600×600像素。",
+        "美国站最多9张方形商品图；短视频和社媒广告单独处理，不能混作商品图规则。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": true,
+      "whiteMain": true,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "shopify",
+      "label": "Shopify",
+      "style": "品牌编辑摄影、产品页留白与生活场景",
+      "risk": "独立站、支付渠道与广告投放规则分别核实",
+      "scope": "Shopify产品媒体功能；各投放渠道政策另行核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": ["https://help.shopify.com/en/manual/products/product-media"],
+      "officialRules": [
+        "产品媒体上传要求与主题展示效果需分别核对；不代表Google、Meta等广告渠道已审核通过。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "ebay",
+      "label": "eBay",
+      "style": "真实商品多角度摄影，二手品保留磨损细节",
+      "risk": "副图也不能外加营销文字、水印、插画和边框",
+      "scope": "eBay公开Picture policy；特殊类目另核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://www.ebay.com/help/policies/selling-policies/listing-policy?id=4370"
+      ],
+      "officialRules": [
+        "刊登图片须真实反映商品，不得外加文字、营销图案、边框或水印，最长边至少500像素。",
+        "二手、损坏或有瑕疵商品不得使用库存照片掩盖真实状况。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": true,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "aliexpress",
+      "label": "AliExpress",
+      "style": "清楚完整的首图、目标语言规格与细节副图",
+      "risk": "避免跨SKU误导、未随附配件与平台活动标识",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": true,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "wechat-shop",
+      "label": "微信小店",
+      "style": "亲切自然的商品实拍，朋友圈可读",
+      "risk": "不伪造聊天、成交记录与推荐背书",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "video-shop",
+      "label": "视频号小店",
+      "style": "真实上手场景，分享语气克制",
+      "risk": "区分商品图与直播封面，不虚构熟人评价",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "etsy",
+      "label": "Etsy",
+      "style": "手作材质、自然光、制作细节与原创设计",
+      "risk": "AI图片不能替代多数实体商品必需的未编辑实物照",
+      "scope": "Etsy Listing Image Requirements；商品类型例外须单独核对",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://www.etsy.com/legal/policy/listing-image-requirements/253962679005"
+      ],
+      "officialRules": [
+        "多数商品须至少包含一张真实背景下未经编辑的实物照片；其他图片可用AI编辑，但须准确反映实物。",
+        "个性化商品与数字商品按对应类型的例外规则处理；生成图不能冒充必需的原始实拍。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "walmart",
+      "label": "Walmart",
+      "style": "干净完整的商品摄影，副图有序说明功能与用途",
+      "risk": "站点和类目图片要求需核实，不能混用加拿大与美国规范",
+      "scope": "Walmart加拿大站图片指南；美国站及类目例外另核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://marketplacelearn.walmart.com/ca/guides/Item%20setup/Item%20content%2C%20imagery%2C%20and%20media/item-image-guidelines?locale=en-CA"
+      ],
+      "officialRules": [
+        "不可通过放大低分辨率图片来满足尺寸要求；需按站点核对主图与类目特例。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": true,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "mercado-libre",
+      "label": "Mercado Libre",
+      "style": "西语或葡语的本地生活场景，清晰商品主体",
+      "risk": "按类目选择背景；配饰等类目不要机械使用数字白底",
+      "scope": "Mercado Libre配饰类目官方学习资料；其他类目待核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://sellers.mercadolibre.com/learning-center/news/photo-requirements-to-sell-accessories?suScope=prod"
+      ],
+      "officialRules": [
+        "配饰图片指南建议避免数字生成的白色或纯色背景，强调商品主体与简洁真实环境；不能把Amazon白底规则泛化到所有类目。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "coupang",
+      "label": "Coupang",
+      "style": "韩语短句与清楚的规格层级，干净商品摄影",
+      "risk": "不伪造Rocket等物流标识、时效和平台背书",
+      "scope": "Coupang全球卖家主图指南；韩国后台最新细则另核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://globalsellers.coupang.com/en/seller-university/product-main-image/"
+      ],
+      "officialRules": [
+        "标准主图为白底方图，商品清楚；副图展示使用状态、细节和不同角度。",
+        "不得加入非随附商品；图片须原创或有明确授权。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": true,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "rakuten",
+      "label": "Rakuten",
+      "style": "日式细致陈列，规格信息有秩序、主图留白",
+      "risk": "主图文字面积、边框、活动素材须按日本站后台核实",
+      "scope": "Rakuten公开商品图片注册指南；后台版本及特定商品例外另核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://www.rakuten.co.jp/ec/open/attention/pdf/disclosure/03_tempounei_guideline.pdf"
+      ],
+      "officialRules": [
+        "指南对象为第一张商品图及SKU图，文字元素占比不超过20%；商品Logo、名称、规格和宣传文案均计入文字元素。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "ozon",
+      "label": "Ozon",
+      "style": "俄语移动端信息图，竖版构图，长单词留字号空间",
+      "risk": "信息图不能覆盖商品或虚构耐寒、质保与性能",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "3:4"
+    },
+    {
+      "id": "alibaba",
+      "label": "阿里巴巴国际站",
+      "style": "采购导向的规格、工艺与包装展示",
+      "risk": "工厂、OEM/ODM、产能与检测报告需证据",
+      "scope": "Alibaba.com官方商品照片指南；当前类目细则另核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": ["https://activity.alibaba.com/ggs/Product_photo.html"],
+      "officialRules": [
+        "产品照片应清楚展示特性，使用自己或受托人创作且有权使用的图片。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "dhgate",
+      "label": "DHgate",
+      "style": "小批量采购的款式与规格陈列",
+      "risk": "不使用仿牌、未授权Logo与虚构批发价",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "11street",
+      "label": "11Street",
+      "style": "韩语移动端阅读，主商品与款式信息清楚",
+      "risk": "销售国家与站点先核实，不默认所有站点规则一致",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "wayfair",
+      "label": "Wayfair",
+      "style": "真实比例的家居空间摄影、材质特写与尺寸关系",
+      "risk": "不改家具比例、隐藏随附件边界或臆造承重",
+      "scope": "Wayfair官方Imagery 101；当前供货商细则另核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": ["https://sell.wayfair.com/blog/learn-the-basics/imagery-101"],
+      "officialRules": [
+        "官方指南列出至少1000×1000像素，并推荐2000×2000以展示细节；不能由此推定所有类目首图都必须白底。"
+      ],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "noon",
+      "label": "Noon",
+      "style": "中东居家场景，阿拉伯语从右到左排版",
+      "risk": "各国文化、禁限售与服饰展示要求需逐站核实",
+      "scope": "noon Seller SKU指南；类目例外须核实",
+      "reviewStatus": "partial",
+      "checkedAt": "2026-11-02",
+      "sources": [
+        "https://helpcenter.noon.partners/en/category/product-listing/image-requirements-and-rejection-reasons-for-the-seller-sku"
+      ],
+      "officialRules": [
+        "首图一般纯白，时尚类推荐浅灰；不使用生活场景作首图，不展示非随附配件。",
+        "JPEG/JPG，宽至少660像素，文件不超过10MB；主副图都不得加入价格、水印或虚构质保信息。"
+      ],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "wildberries",
+      "label": "WBPartners",
+      "style": "俄语竖版商品图与克制的信息层级",
+      "risk": "不加联系方式、二维码和虚构折扣；保持商品真实",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "3:4"
+    },
+    {
+      "id": "emag",
+      "label": "eMAG",
+      "style": "当地语言的干净商品摄影、理性规格说明",
+      "risk": "罗马尼亚等站点语言、类目和质保资料分别核实",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": true,
+      "allListingNoText": false,
+      "whiteMain": true,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "vipshop",
+      "label": "唯品会",
+      "style": "品牌画册、服饰上身和多角度细节",
+      "risk": "原价、折扣、授权与限时权益需核实",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "dewu",
+      "label": "得物",
+      "style": "潮流棚拍、上脚效果、标签与做工细节",
+      "risk": "不得虚构鉴别结论、联名、限量与平台鉴定标",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "aikucun",
+      "label": "爱库存",
+      "style": "便于分销转发的清楚商品与组合图",
+      "risk": "价格、佣金、库存与品牌授权须核实",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    },
+    {
+      "id": "railway",
+      "label": "国铁商城",
+      "style": "规范完整的采购商品图，礼赠和地方特色克制呈现",
+      "risk": "不伪造铁路官方合作、路徽、地理标志与获奖",
+      "scope": "站点、类目及销售模式待核实",
+      "reviewStatus": "pending",
+      "checkedAt": "",
+      "sources": [],
+      "officialRules": [],
+      "mainNoText": false,
+      "allListingNoText": false,
+      "whiteMain": false,
+      "recommendedRatio": "1:1"
+    }
+  ]
+}

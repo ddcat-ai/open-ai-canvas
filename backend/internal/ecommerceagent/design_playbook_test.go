@@ -478,7 +478,7 @@ func TestDesignVariationPromptBlockListsTheDraw(t *testing.T) {
 
 // webListingPlatformIDs is the "listing" family of web/src/pages/ecommerce/
 // platform-style.ts familyOf; ListingMainImage must agree with it exactly.
-var webListingPlatformIDs = []string{"amazon", "ebay", "walmart", "aliexpress", "mercado-libre", "wayfair", "noon", "emag", "coupang"}
+var webListingPlatformIDs = []string{"amazon", "walmart", "aliexpress", "emag", "coupang", "tiktok"}
 
 func TestListingMainImageMirrorsTheWebRule(t *testing.T) {
 	for _, id := range webPlatformIDs {
@@ -489,9 +489,7 @@ func TestListingMainImageMirrorsTheWebRule(t *testing.T) {
 		if got := ListingMainImage(id, "single", "商品主图"); got != listing {
 			t.Errorf("%s single main: listing main = %v, want %v", id, got, listing)
 		}
-		if listing != (PlatformGuideFor(id).Key == "listing") {
-			t.Errorf("%s: the listing family differs from PlatformGuideFor", id)
-		}
+		// The visual family does not determine background policy.
 		for _, other := range [][2]string{{"single", "Banner"}, {"secondary", ""}, {"set", ""}, {"detail", ""}, {"white", ""}} {
 			if ListingMainImage(id, other[0], other[1]) {
 				t.Errorf("%s %s/%s counted as a listing main image", id, other[0], other[1])

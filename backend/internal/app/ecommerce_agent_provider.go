@@ -379,7 +379,7 @@ func ecommerceImagePrompt(page ecommerceagent.Page, p ecommerceagent.Platform, b
 	if selected != nil {
 		parts = append(parts, selected.Style, selected.PreviewPrompt)
 	}
-	if page.Role == "hero" && p.ForbidTextOnMain {
+	if page.Role == "hero" && p.WhiteBG {
 		parts = append(parts, fmt.Sprintf("pure white seamless background #FFFFFF, product occupies at least %.0f%% of frame, no text, no watermark, no border, no badge, even studio lighting", p.ProductOccupancy*100))
 	}
 	parts = append(parts, "aspect ratio "+page.AspectRatio, "commercial product photography, ultra sharp, high detail, 2K, color accurate, no distortion", "no text, no watermark, no invented product features")
@@ -392,5 +392,10 @@ func ecommerceImagePrompt(page ecommerceagent.Page, p ecommerceagent.Platform, b
 	if brand.ThemeColors != "" {
 		parts = append(parts, "brand palette: "+brand.ThemeColors)
 	}
+	kind := "secondary"
+	if page.Role == "hero" {
+		kind = "main"
+	}
+	parts = append(parts, ecommerceagent.PlatformKnowledgePrompt(p.Label, "", kind, ""))
 	return strings.Join(parts, ", ")
 }

@@ -9,6 +9,7 @@ export const platforms = [
     ["xiaohongshu", "小红书电商"],
     ["amazon", "Amazon"],
     ["temu", "Temu"],
+    ["shein", "SHEIN（希音）"],
     ["shopee", "Shopee"],
     ["lazada", "Lazada"],
     ["tiktok", "TikTok Shop"],
@@ -37,7 +38,30 @@ export const platforms = [
 ] as const;
 
 export const commercePlatformGroups = {
-    crossBorder: ["amazon", "temu", "shopee", "tiktok", "aliexpress", "alibaba", "ozon", "lazada", "dhgate", "coupang", "11street", "wayfair", "etsy", "noon", "ebay", "wildberries", "mercado-libre", "emag", "shopify", "walmart", "rakuten"] as const,
+    crossBorder: [
+        "amazon",
+        "temu",
+        "shein",
+        "shopee",
+        "tiktok",
+        "aliexpress",
+        "alibaba",
+        "ozon",
+        "lazada",
+        "dhgate",
+        "coupang",
+        "11street",
+        "wayfair",
+        "etsy",
+        "noon",
+        "ebay",
+        "wildberries",
+        "mercado-libre",
+        "emag",
+        "shopify",
+        "walmart",
+        "rakuten",
+    ] as const,
     domestic: ["taobao", "jd", "pdd", "1688", "xiaohongshu", "douyin", "vipshop", "dewu", "aikucun", "railway", "tmall", "kuaishou", "wechat-shop", "video-shop"] as const,
 };
 
@@ -199,6 +223,7 @@ export function displayImageSizeChoices(values: string[], current?: string) {
  */
 export function commerceAutoRatio(platform: string, imageType: string, purpose = ""): string | undefined {
     if (imageType === "marketing" || (imageType === "single" && purpose.includes("Banner"))) return undefined;
+    if (platform === "shein") return "3:4";
     if (["xiaohongshu", "douyin", "kuaishou"].includes(platform)) return "3:4";
     if (["taobao", "tmall", "jd", "pdd", "1688"].includes(platform)) return imageType === "detail" ? "3:4" : ["main", "set", "single", "white", "sku"].includes(imageType) ? "1:1" : undefined;
     if (["amazon", "ebay", "walmart", "aliexpress"].includes(platform)) return ["detail", "amazon-a-plus"].includes(imageType) ? undefined : "1:1";

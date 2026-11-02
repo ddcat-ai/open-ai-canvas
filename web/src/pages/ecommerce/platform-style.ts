@@ -1,4 +1,5 @@
 import { commercePlatformGroups, labelOf, platforms } from "./catalog";
+import { commerceKnowledgeFor, commerceKnowledgePrompt } from "./platform-knowledge";
 
 /**
  * Platform design language shared by the planner prompt and the image prompt.
@@ -35,6 +36,7 @@ const familyOf: Record<string, CommercePlatformFamilyId> = {
     emag: "listing",
     coupang: "listing",
     shopify: "brand-site",
+    shein: "brand-site",
     etsy: "brand-site",
     tiktok: "mobile-global",
     temu: "mobile-global",
@@ -210,6 +212,8 @@ export function commercePlatformFamily(platform: string): CommercePlatformFamily
 
 /** Amazon-style listing main images: pure white, product about 85% of the frame, no text at all. */
 export function commercePlatformListingMain(platform: string, imageType: string, purpose = ""): boolean {
+    const profile = commerceKnowledgeFor(platform);
+    if (profile) return profile.whiteMain && (imageType === "main" || (imageType === "single" && purpose.includes("主图")));
     return familyOf[platform] === "listing" && (imageType === "main" || (imageType === "single" && purpose.includes("主图")));
 }
 
@@ -217,11 +221,14 @@ export function commercePlatformListingMain(platform: string, imageType: string,
 export function commercePlatformStrategy(platform: string, imageType: string): string {
     const family = commercePlatformFamily(platform);
     const profile = familyProfiles[family.id];
+    const knowledge = commerceKnowledgeFor(platform);
     const notes = typeNotes[imageType];
+    const useFamily = !knowledge || (!knowledge.allListingNoText && !["shein", "temu"].includes(platform) && (family.id !== "listing" || knowledge.whiteMain));
     return [
-        `${family.market === "domestic" ? "国内平台" : "跨境平台"}·${family.label}（${profile.name}）：${profile.strategy}`,
-        platformNotes[platform] || "",
-        notes?.[family.id] ?? notes?.default ?? "",
+        `${family.market === "domestic" ? "国内平台" : "跨境平台"}·${family.label}（${profile.name}）：${useFamily ? profile.strategy : knowledge?.style}`,
+        knowledge ? knowledge.risk : platformNotes[platform] || "",
+        commerceKnowledgePrompt(platform, imageType),
+        family.id === "listing" && knowledge && !knowledge.whiteMain ? "" : (notes?.[family.id] ?? notes?.default ?? ""),
         family.market === "domestic" ? "文案适合手机快速浏览，中文标题与卖点层级清晰。" : "文案使用目标市场的自然语言，不机械直译中文口号。",
         "平台当期上架规范以官方为准；以上是视觉与版式取向，不改变事实边界，不得伪造评价、价格、销量、功效、认证或平台合规结论。",
     ]
@@ -232,6 +239,17 @@ export function commercePlatformStrategy(platform: string, imageType: string): s
 /** Image-model rule: hard for listing main and white images, a tone hint otherwise. */
 export function commercePlatformImageRule(platform: string, imageType: string, purpose = ""): string {
     const family = commercePlatformFamily(platform);
+    const knowledge = commerceKnowledgePrompt(platform, imageType, purpose);
+    const profile = commerceKnowledgeFor(platform);
+    if (profile) {
+        const main = imageType === "main" || (imageType === "single" && purpose.includes("主图"));
+        return (
+            knowledge +
+            `\n【平台画面取向·${family.label}】${!profile.allListingNoText && !["shein", "temu"].includes(platform) && family.id !== "listing" ? familyProfiles[family.id].image : profile.style}配色、字体与 UI 套件以本套美术系统为准，平台约束优先。` +
+            (main && profile.whiteMain ? `\n【平台主图硬性规则·${family.label}】本张主图使用纯白背景 RGB 255,255,255，商品完整居中，不添加非随附道具，无文字与营销UI。${platform === "amazon" ? "商品约占画面85%，类目例外按官方核实。" : ""}` : "") +
+            (imageType === "white" ? `\n本张白底图使用纯白 #FFFFFF 背景${family.id === "listing" ? "，商品约占画面80%–84%" : ""}，商品完整，四边各留不少于画幅 8% 的白边，不贴边、不裁切，无文字，不叠加气泡、标签、角标、引线或其他UI。` : "")
+        );
+    }
     if (commercePlatformListingMain(platform, imageType, purpose)) {
         return `【平台主图硬性规则·${family.label}】优先于本套美术系统、本张分镜与版式方案：纯白背景 RGB 255,255,255，无渐变、无场景、无台座或非随附道具；商品完整清晰、居中，约占画面 85%；无文字：画面内不加任何文字、外加 Logo 图形、水印、边框、色块、徽章或卖点 UI，只保留商品本身真实的 Logo 与包装原文；可保留极轻的自然接触阴影。`;
     }

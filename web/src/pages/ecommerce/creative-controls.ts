@@ -1,5 +1,6 @@
 import { defaultEcommerceCreativeOptions, type EcommerceCreativeOptions, type EcommerceDraft } from "@/services/api/ecommerce";
 import { commercePlatformListingMain } from "./platform-style";
+import { commercePlatformNoText } from "./platform-knowledge";
 
 export const defaultCreativeOptions = defaultEcommerceCreativeOptions;
 type CreativeField = { [K in keyof EcommerceCreativeOptions]: { key: K; label: string; options: { value: EcommerceCreativeOptions[K]; label: string; instruction: string }[] } }[keyof EcommerceCreativeOptions];
@@ -90,7 +91,8 @@ export function commerceAllowsText(draft: Pick<EcommerceDraft, "noText" | "creat
         draft.cloneOptions?.copyMode !== "none" &&
         !["white", "three-view"].includes(imageType) &&
         // Amazon-style listing main images must be pure white without any text.
-        !commercePlatformListingMain(draft.platform || "", imageType, draft.typeOptions?.purpose)
+        !commercePlatformListingMain(draft.platform || "", imageType, draft.typeOptions?.purpose) &&
+        !commercePlatformNoText(draft.platform || "", imageType, draft.typeOptions?.purpose)
     );
 }
 

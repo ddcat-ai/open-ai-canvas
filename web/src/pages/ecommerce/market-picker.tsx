@@ -3,6 +3,7 @@ import { GlobeIcon } from "@/components/ui/ecommerce-icons";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { commercePlatformGroups, labelOf, languageVisuals, languages, platforms } from "./catalog";
+import { commerceKnowledgeFor, commercePlatformKnowledge } from "./platform-knowledge";
 
 export function PlatformMark({ platform }: { platform: string }) {
     return <img className="commerce-platform-logo" data-monochrome={["amazon", "tiktok", "douyin", "ozon", "dewu"].includes(platform)} src={`/commerce/platforms/${platform}.svg`} alt="" width={28} height={28} />;
@@ -143,6 +144,35 @@ export function CommerceMarketPicker({
                         <span>目标国家或地区（可选）</span>
                         <input aria-label="目标国家或地区" value={region} maxLength={80} placeholder="例如：中国、美国、日本" onChange={(event) => onRegion(event.target.value)} />
                     </label>
+                    <section className="commerce-market-language" aria-label="所选平台图片规则">
+                        <h3>{labelOf(platforms, platform)} · 图片与内容要求</h3>
+                        <p>{commerceKnowledgeFor(platform)?.style}</p>
+                        <p>{commerceKnowledgeFor(platform)?.risk}</p>
+                        <p>{commerceKnowledgeFor(platform)?.scope}</p>
+                        <ul>
+                            {commerceKnowledgeFor(platform)?.officialRules.map((rule) => (
+                                <li key={rule}>{rule}</li>
+                            ))}
+                        </ul>
+                        <p>{commerceKnowledgeFor(platform)?.reviewStatus === "pending" ? "详细规则待官方后台核实" : `已核对部分公开资料 · ${commerceKnowledgeFor(platform)?.checkedAt}`}</p>
+                        {commerceKnowledgeFor(platform)?.sources.map((url, index) => (
+                            <p key={url}>
+                                <a href={url} target="_blank" rel="noopener noreferrer">
+                                    官方资料 {index + 1}
+                                </a>
+                            </p>
+                        ))}
+                        <details>
+                            <summary>通用风险与高风险词示例</summary>
+                            <ul>
+                                {commercePlatformKnowledge.commonRules.map((rule) => (
+                                    <li key={rule}>{rule}</li>
+                                ))}
+                            </ul>
+                            <p>{commercePlatformKnowledge.restrictedPhrases.join("、")}（非完整官方禁词表）</p>
+                        </details>
+                        <p>{commercePlatformKnowledge.boundary}</p>
+                    </section>
                 </div>
             </section>
         </div>,

@@ -57,6 +57,7 @@ func BuildRecommendPrompt(brief Brief, p Platform, language string, styles []Sty
 func BuildPlannerPrompt(copy any, pages []Page, p Platform, language string, brief Brief) string {
 	var lines []string
 	lines = append(lines, ProductPlanningKnowledge(brief.Category))
+	lines = append(lines, platformRuleLines(p))
 	for i, page := range pages {
 		mustShow, avoid := strings.Join(page.MustShow, "、"), strings.Join(page.Avoid, "、")
 		if mustShow == "" {

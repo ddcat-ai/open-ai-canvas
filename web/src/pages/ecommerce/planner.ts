@@ -9,6 +9,7 @@ import { commerceAllowsText, commerceCreativeDirection, normalizeCreativeOptions
 import { commerceLayoutReference, commerceLayoutReferences, commerceReferenceInstruction, normalizeReferenceDraft, validateCommerceReferencePlan } from "./reference-plan";
 import { assertCommerceConsumerCopy, commerceTypographyInstruction } from "./consumer-copy";
 import { commerceDisplayAssignment, commerceDisplaySlotsApply } from "./display-slots";
+import { commerceRestrictedPhrase } from "./platform-knowledge";
 
 export function commerceInputSignature(draft: EcommerceDraft): string {
     draft = normalizeEcommerceReferenceGroups(draft);
@@ -541,6 +542,7 @@ export function parsePlannerOutput(text: string, draft: EcommerceDraft): Ecommer
         if (!commerceAllowsText(draft, image.imageType)) image.copy = "";
         else if (!(image.copy || "").trim()) throw new Error(`第${index + 1}张缺少可直接上图的文案，请重新策划；不能用内部画面说明代替文案`);
         if (commerceAllowsText(draft, image.imageType)) assertCommerceConsumerCopy(image.copy || "");
+        if (commerceAllowsText(draft, image.imageType) && commerceRestrictedPhrase(image.copy || "")) throw new Error(`第${index + 1}张含高风险宣传词，请修改文案后重新策划`);
         image.verifiedClaims = [draft.claims, draft.skus.find((sku) => sku.id === image.skuId)?.claims].filter(Boolean).join("；");
         image.performanceAngle = (image.performanceAngle || "").trim();
         if (draft.imageType === "detail" && !image.performanceAngle) throw new Error(`第${index + 1}张缺少 Agent 策划的性能/体验角度，请重新策划`);

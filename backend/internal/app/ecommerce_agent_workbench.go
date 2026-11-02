@@ -362,6 +362,9 @@ func ecommerceWorkbenchEnabled() bool {
 func ecommerceWorkbenchPlatform(draft EcommerceDraft) ecommerceagent.Platform {
 	aliases := map[string]string{"taobao": "淘宝", "tmall": "淘宝", "1688": "1688", "pdd": "拼多多", "pinduoduo": "拼多多", "amazon": "Amazon", "temu": "Temu", "shopee": "Shopee", "tiktok": "TikTok Shop", "tiktok-shop": "TikTok Shop", "aliexpress": "AliExpress", "ozon": "OZON"}
 	name := draft.Platform
+	if p, ok := ecommerceagent.PlatformFor(name); ok {
+		return p
+	}
 	if alias := aliases[strings.ToLower(name)]; alias != "" {
 		name = alias
 	}
@@ -503,6 +506,8 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 		if err := json.Unmarshal([]byte(project.DraftJSON), &draft); err != nil {
 			return "", BadAuthRequest("商品草稿数据损坏")
 		}
+		prompt += "\n" + ecommerceagent.PlatformKnowledgePrompt(draft.Platform, draft.Region, draft.ImageType, draft.TypeOptions["purpose"])
+		input["prompt"] = prompt
 		if draft.ImageType != "detail" {
 			return prompt, nil
 		}
@@ -660,6 +665,7 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 	if stage == "planning" {
 		prompt += "\n\n" + ecommerceagent.LayoutSafetyRule
 	}
+	prompt += "\n" + ecommerceagent.PlatformKnowledgePrompt(draft.Platform, draft.Region, draft.ImageType, draft.TypeOptions["purpose"])
 	input["prompt"] = prompt
 	return prompt, nil
 }
@@ -796,7 +802,7 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 		// copy stays empty; this mirrors the web's commerceAllowsText.
 		purpose := draft.TypeOptions["purpose"]
 		listingMain := ecommerceagent.ListingMainImage(draft.Platform, image.ImageType, purpose) || ecommerceagent.ListingMainImage(draft.Platform, draft.ImageType, purpose)
-		noText := draft.NoText || listingMain || image.ImageType == "white" || image.ImageType == "three-view" || draft.CloneOptions["copyMode"] == "none" || (draft.CreativeOptions != nil && draft.CreativeOptions.TextMode == "none")
+		noText := draft.NoText || listingMain || ecommerceagent.PlatformNoText(draft.Platform, image.ImageType, purpose) || image.ImageType == "white" || image.ImageType == "three-view" || draft.CloneOptions["copyMode"] == "none" || (draft.CreativeOptions != nil && draft.CreativeOptions.TextMode == "none")
 		if noText {
 			image.Copy = ""
 		} else if strings.TrimSpace(image.Copy) == "" {
@@ -849,6 +855,12 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 	}
 	if inferred = ecommerceUniqueStrings(inferred); len(inferred) > 0 {
 		plan.QualityChecks = append(plan.QualityChecks, "发布前请商家核对 Agent 推断的商品信息（与实物不符请修改该页文案后重新生成）："+strings.Join(inferred, "、"))
+	}
+	if policy, ok := ecommerceagent.PlatformKnowledgeFor(draft.Platform); ok {
+		plan.QualityChecks = append(plan.QualityChecks, "发布前核对站点、类目、成片文字与实物、图片文件规格及商品资质；平台资料适用范围："+policy.Scope)
+		if policy.ID == "etsy" && len(policy.OfficialRules) > 0 {
+			plan.QualityChecks = append(plan.QualityChecks, policy.OfficialRules[0])
+		}
 	}
 	if err := s.validateEcommercePlan(userID, &plan); err != nil {
 		return err
