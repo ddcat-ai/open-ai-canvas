@@ -5,8 +5,46 @@ import (
 	"testing"
 
 	"gorm.io/gorm"
+	"yingce/backend/internal/ecommercecatalog"
+	"yingce/backend/internal/ecommerceskills"
 	"yingce/backend/internal/model"
 )
+
+func TestEcommerceUpgradeShipsKnowledgeSkillsAndIndustryWithoutModels(t *testing.T) {
+	svc, _ := knowledgeTestService(t)
+	if _, err := svc.EnsureBundledEcommerceKnowledge(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.EnsureBuiltinEcommerceKnowledge(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.EnsureIndustryTaxonomyKnowledge(); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := svc.EcommerceKnowledgeStats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	domains := stats["domainCoverage"].(map[string]int64)
+	for _, domain := range []string{"KB01", "KB10", "KB11", "KB12", "KB13", "KB14", "KB15", "KB16", "KB17", "KB18", "KB19"} {
+		if domains[domain] == 0 {
+			t.Fatalf("upgrade omitted %s", domain)
+		}
+	}
+	coverage, err := svc.EcommerceIndustryCoverage()
+	if err != nil || coverage["indexedNodes"] != int64(ecommercecatalog.Metadata().Nodes) {
+		t.Fatalf("industry data incomplete: %+v %v", coverage, err)
+	}
+	items, err := svc.EcommerceManagedSkills(&model.User{ID: "admin", Role: model.UserRoleAdmin})
+	if err != nil || len(items) != len(ecommerceskills.ManagedCatalog()) {
+		t.Fatalf("skills missing: %d, %v", len(items), err)
+	}
+	for _, item := range items {
+		if !item.Enabled || item.Instructions == "" {
+			t.Fatalf("skill not ready: %s", item.ID)
+		}
+	}
+}
 
 func TestBundledEcommerceKnowledgeInitializesAndPreservesAdministratorEdits(t *testing.T) {
 	svc, db := knowledgeTestService(t)

@@ -15,6 +15,7 @@ const EcommercePage = lazy(() => import("@/pages/ecommerce"));
 const EcommerceKnowledgePage = lazyAdminPage(() => import("@/pages/admin/ecommerce-knowledge-page"));
 const EcommerceSkillsPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-skills-page"));
 const EcommerceCategoriesPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-categories-page"));
+const YoruSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/yoru-settings-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
@@ -252,6 +253,7 @@ export const router = createBrowserRouter([
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },
                     { path: "referral", element: <AdminReferralPage /> },
                     { path: "logs", element: <LogsPage /> },
+                    { path: "settings/yoru", element: <YoruSettingsPage /> },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
                     { path: "settings/appearance", element: <AppearanceSettingsPage /> },
                     { path: "settings/drawing-engine", element: <DrawingEngineSettingsPage /> },

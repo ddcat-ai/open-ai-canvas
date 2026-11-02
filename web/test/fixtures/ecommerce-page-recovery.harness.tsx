@@ -61,6 +61,7 @@ const generationApi = await import("../../src/services/api/generation-task");
 const pricing = await import("../../src/lib/model-pricing");
 const quotes = await import("../../src/services/api/logical-models");
 const capabilities = await import("../../src/lib/model-capabilities");
+const imageLoader = await import("../../src/services/canvas-image-loader");
 const configStore = await import("../../src/stores/use-config-store");
 const { useUserStore } = await import("../../src/stores/use-user-store");
 const { setActiveUserScope } = await import("../../src/lib/user-scope");
@@ -179,8 +180,8 @@ function uploadedImage(id: string, userId = scope): RemoteResource {
         updatedAt: new Date().toISOString(),
     };
 }
-async function uploadModeFile(name = "新参考图.png") {
-    const input = host.querySelector<HTMLInputElement>('[aria-label="参考方式设置"] input[type="file"]');
+async function uploadModeFile(name = "新参考图.png", selector = '[aria-label="参考方式设置"] input[type="file"]') {
+    const input = host.querySelector<HTMLInputElement>(selector);
     expect(input).not.toBeNull();
     Object.defineProperty(input, "files", { configurable: true, value: [new File(["image-test-data"], name, { type: "image/png" })] });
     await act(async () => {
@@ -328,6 +329,100 @@ afterAll(() => {
 });
 
 describe("真实电商页面生命周期", () => {
+    test("发送后从对话反复拖图复用原资源，连续导入不清空对话且刷新保留已发送快照", async () => {
+        const observer = Object.getOwnPropertyDescriptor(globalThis, "IntersectionObserver");
+        Object.defineProperty(globalThis, "IntersectionObserver", { value: undefined, configurable: true });
+        try {
+            draft.instruction = "原来已经发送的商品需求";
+            await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+            spyOn(resourceApi, "getResourceAccess").mockResolvedValue({ url: "/original-reference.png" } as Awaited<ReturnType<typeof resourceApi.getResourceAccess>>);
+            spyOn(imageLoader, "prepareCanvasImage").mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof imageLoader.prepareCanvasImage>>);
+            const upload = spyOn(resourceApi, "uploadResourceFile").mockRejectedValue(new Error("不应重新上传站内缩略图"));
+            let resolveFirst!: (resource: RemoteResource) => void;
+            const refreshed: string[] = [];
+            spyOn(resourceApi, "refreshResource").mockImplementation(async (id) => {
+                refreshed.push(id);
+                return id === "queued-one"
+                    ? new Promise<RemoteResource>((resolve) => {
+                          resolveFirst = resolve;
+                      })
+                    : uploadedImage(id);
+            });
+            await render();
+            await act(async () => {
+                host.querySelector<HTMLButtonElement>(".flylep-submit")!.click();
+            });
+            const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+            await act(async () => {
+                confirm!.click();
+            });
+            expect(paidSubmissions).toHaveLength(1);
+            const previousMessage = host.querySelector(".commerce-request-message")!.textContent;
+            const drop = (id: string, fromMessage = false) => {
+                const data: Record<string, string> = {};
+                const transfer = {
+                    files: [new File(["thumbnail"], "preview.png", { type: "image/png" })],
+                    items: [],
+                    types: ["Files", "application/x-yingce-image-resource"],
+                    getData: (type: string) => data[type] || "",
+                    setData: (type: string, value: string) => {
+                        data[type] = value;
+                    },
+                };
+                if (fromMessage) {
+                    const start = new Event("dragstart", { bubbles: true });
+                    Object.defineProperty(start, "dataTransfer", { value: transfer });
+                    host.querySelector(".commerce-request-references img")!.dispatchEvent(start);
+                    expect(JSON.parse(data["application/x-yingce-image-resource"]).resourceId).toBe("owned-product");
+                } else transfer.setData("application/x-yingce-image-resource", JSON.stringify({ resourceId: id }));
+                const event = new Event("drop", { bubbles: true, cancelable: true });
+                Object.defineProperty(event, "dataTransfer", { value: transfer });
+                host.querySelector(".flylep-prompt-box textarea")!.dispatchEvent(event);
+            };
+            await act(async () => {
+                drop("owned-product", true);
+            });
+            expect(host.querySelector(".commerce-request-message")!.textContent).toBe(previousMessage);
+            await act(async () => {
+                drop("queued-one");
+                drop("queued-two");
+            });
+            expect(refreshed).toEqual(["owned-product", "queued-one"]);
+            await act(async () => {
+                resolveFirst(uploadedImage("queued-one"));
+            });
+            expect(refreshed).toEqual(["owned-product", "queued-one", "queued-two"]);
+            await act(async () => {
+                drop("queued-two");
+            });
+            expect(sessions.peekEcommerceWorkspace(scope)?.draft.references.map((ref) => ref.resourceId)).toEqual(["owned-product", "queued-one", "queued-two"]);
+            expect(host.querySelector(".commerce-request-message")!.textContent).toBe(previousMessage);
+            expect(host.querySelector<HTMLTextAreaElement>('[aria-label="电商创作输入"]')!.value).toBe("");
+            expect(upload).not.toHaveBeenCalled();
+            expect(errors.filter((error) => !error.startsWith("已添加"))).toEqual([]);
+            await act(async () => {
+                Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+                    .find((button) => button.textContent?.trim() === "保存草稿")!
+                    .click();
+            });
+            expect(paidSubmissions).toHaveLength(1);
+            expect(sessions.peekEcommerceWorkspace(scope)?.draft.references).toHaveLength(3);
+            const id = sessions.peekEcommerceWorkspace(scope)!.project!.id;
+            await act(async () => {
+                navigate("/other");
+            });
+            await act(async () => {
+                navigate(`/ecommerce?project=${id}`);
+            });
+            expect(host.querySelector(".commerce-request-message")!.textContent).toBe(previousMessage);
+            expect(sessions.peekEcommerceWorkspace(scope)?.draft.references).toHaveLength(3);
+            expect(paidSubmissions).toHaveLength(1);
+        } finally {
+            if (observer) Object.defineProperty(globalThis, "IntersectionObserver", observer);
+            else Reflect.deleteProperty(globalThis, "IntersectionObserver");
+        }
+    });
+
     test("风格分析提交后立刻切页，返回恢复同一任务与四个方向，不重复付费", async () => {
         draft.instruction = "按真实商品推荐详情页风格";
         await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
@@ -447,9 +542,10 @@ describe("真实电商页面生命周期", () => {
         });
         const nextSubmission = paidSubmissions.at(-1) as { projectId: string; metadata: { stage: string; ecommerceDraft: EcommerceDraft } };
         expect(nextSubmission.metadata.stage).toBe("creative-directions");
-        expect(nextSubmission.projectId).not.toBe(saved.id);
+        expect(nextSubmission.projectId).toBe(saved.id);
         expect(nextSubmission.metadata.ecommerceDraft.instruction).toBe("换一款商品继续生成");
-        expect(projects.get(saved.id)?.planJson).toBe(saved.planJson);
+        expect(JSON.parse(projects.get(saved.id)!.planJson).previousImages.map((image: { id: string }) => image.id)).toEqual([first.id, second.id]);
+        expect(host.querySelectorAll("[data-ecommerce-image-id]")).toHaveLength(2);
     });
 
     test("已完成图片的后台风格推荐不占用发送状态，新商品与旧作品隔离", async () => {
@@ -487,13 +583,13 @@ describe("真实电商页面生命周期", () => {
         expect(send().getAttribute("aria-busy")).toBe("false");
         expect(send().querySelector(".commerce-planning-spin")).toBeNull();
         expect(host.querySelector<HTMLInputElement>('[aria-label="添加商品参考图"]')?.disabled).toBe(false);
-        const exporting = spyOn(exportApi, "exportEcommerceZip")
-            .mockResolvedValue({ blob: new Blob(["zip-test"], { type: "application/zip" }), fileName: "耳机-电商图片.zip" })
+        const exporting = spyOn(exportApi, "downloadEcommerceImage")
+            .mockResolvedValue({ blob: new Blob(["image-test"], { type: "image/png" }), fileName: "耳机.png" })
             .mockRejectedValueOnce(new Error("下载连接暂时中断"));
         await press("导出图片");
         expect(host.querySelector('[role="alert"]')?.textContent).toContain("下载连接暂时中断");
         await press("导出图片");
-        const download = host.querySelector<HTMLAnchorElement>('a[download="耳机-电商图片.zip"]');
+        const download = host.querySelector<HTMLAnchorElement>('a[download="耳机.png"]');
         expect(download?.href.startsWith("blob:")).toBe(true);
         expect(download?.textContent).toContain("下载已打包文件");
         expect(host.querySelector('[role="alert"]')).toBeNull();
@@ -514,10 +610,10 @@ describe("真实电商页面生命周期", () => {
         });
         expect(paidSubmissions).toHaveLength(1);
         const submission = paidSubmissions[0] as { projectId: string; metadata: { stage: string; ecommerceDraft: EcommerceDraft } };
-        expect(submission.projectId).not.toBe(saved.id);
+        expect(submission.projectId).toBe(saved.id);
         expect(submission.metadata.stage).toBe("creative-directions");
         expect(submission.metadata.ecommerceDraft.directionsTaskId).toBeUndefined();
-        expect(projects.get(saved.id)?.planJson).toBe(saved.planJson);
+        expect(JSON.parse(projects.get(saved.id)!.planJson).previousImages[0].taskId).toBe(image.taskId);
         expect(tasks.get("followup-task")?.status).toBe("running");
     });
 
@@ -570,7 +666,7 @@ describe("真实电商页面生命周期", () => {
         });
         expect(paidSubmissions).toHaveLength(0);
         expect(imageTasks).not.toHaveBeenCalled();
-        expect(post.mock.calls.map(([path]) => path)).toEqual([]);
+        expect(post.mock.calls.map(([path]) => path).filter((path) => path !== "/resources/access")).toEqual([]);
         expect(projects.size).toBe(1);
         expect(route).toContain(saved.id);
         expect(projects.get(saved.id)?.planJson).toBe(saved.planJson);
@@ -752,7 +848,9 @@ describe("真实电商页面生命周期", () => {
         await act(async () => {
             control().click();
         }); // A drag must not toggle off its selection.
-        expect(node().classList.contains("is-focused")).toBe(true);
+        expect(node().classList.contains("is-selected")).toBe(true);
+        expect(node().classList.contains("is-focused")).toBe(false);
+        expect(host.querySelector(".commerce-selected-tools")).toBeNull();
         await act(async () => {
             host.querySelector<HTMLButtonElement>('[aria-label="撤回画布操作"]')!.click();
         });
@@ -950,13 +1048,12 @@ describe("真实电商页面生命周期", () => {
             host.querySelector<HTMLButtonElement>(".commerce-canvas-layers header button")!.click();
         });
         expect(host.querySelector(".commerce-canvas-layer-list > button.is-selected")).not.toBeNull();
-        // Finishing a set in this session starts exactly one follow-up recommendation.
-        expect(paidSubmissions).toHaveLength(3);
-        expect((paidSubmissions[2] as { metadata: { stage: string } }).metadata.stage).toBe("creative-directions");
+        // Finishing a set never starts another paid analysis without a click.
+        expect(paidSubmissions).toHaveLength(2);
         expect(host.querySelector(".commerce-direction-message.is-followup")).toBeNull();
-        expect(planningProgress()?.textContent).toContain("小夜正在分析商品并推荐视觉风格");
+        expect(planningProgress()).toBeNull();
         expect(host.querySelector(".commerce-result-canvas .ecommerce-result")).not.toBeNull();
-        expect(paidSubmissions).toHaveLength(3);
+        expect(paidSubmissions).toHaveLength(2);
         expect(images).toHaveBeenCalledTimes(1);
         expect(sessions.peekEcommerceWorkspace(scope)?.plan?.images[0]?.taskId).toBe("generated-image");
     });
@@ -1310,7 +1407,7 @@ describe("真实电商页面生命周期", () => {
         expect(paidSubmissions).toHaveLength(0);
     });
 
-    test.each(["追加", "移除"] as const)("逐屏方案%s借鉴来源后保存新草稿，旧方案与任务仍留在历史", async (change) => {
+    test.each(["追加", "移除"] as const)("逐屏结果%s借鉴来源后保存，旧图与任务保留在同一项目", async (change) => {
         draft = {
             ...draft,
             referenceMode: "detail",
@@ -1356,25 +1453,26 @@ describe("真实电商页面生命周期", () => {
         projects.set(original.id, original);
         spyOn(resourceApi, "uploadResourceFile").mockResolvedValue(uploadedImage("third-layout"));
         await render(`/ecommerce?project=${original.id}`);
-        if (change === "追加") await uploadModeFile("参考三.png");
+        if (change === "追加") await uploadModeFile("参考三.png", '[aria-label="上传本地参考风格图片"]');
         else
             await act(async () => {
-                host.querySelector<HTMLButtonElement>('[aria-label="移除参考一.png"]')!.click();
+                host.querySelector<HTMLButtonElement>('[aria-label="移除第 1 张风格参考图片"]')!.click();
             });
         expect(host.textContent).toContain("配置已更新");
         const expectedIds = change === "追加" ? ["first-layout", "second-layout", "third-layout"] : ["second-layout"];
         await press("保存草稿");
-        expect(projects.get(original.id)).toEqual(snapshot);
-        expect(projects.size).toBe(2);
-        const fresh = [...projects.values()].find((entry) => entry.id !== original.id)!;
+        expect(projects.get(original.id)?.revision).toBeGreaterThan(snapshot.revision);
+        expect(projects.size).toBe(1);
+        const fresh = projects.get(original.id)!;
         const savedDraft = JSON.parse(fresh.draftJson) as EcommerceDraft;
         expect(savedDraft.layoutReferences!.map((source) => source.resourceId)).toEqual(expectedIds);
         expect(savedDraft.references).toEqual(draft.references);
         expect(savedDraft.planningTaskId).toBeUndefined();
-        expect(JSON.parse(fresh.planJson)).toEqual({});
+        expect(JSON.parse(fresh.planJson).images).toEqual([]);
+        expect(JSON.parse(fresh.planJson).previousImages.map((image: EcommercePlan["images"][number]) => image.taskId)).toEqual(originalPlan.images.map((image) => image.taskId));
         expect(route).toBe(`/ecommerce?project=${fresh.id}`);
-        expect(sessions.peekEcommerceWorkspace(scope)?.plan).toBeNull();
-        expect(host.textContent).toContain("原方案和成品保留在历史项目");
+        expect(sessions.peekEcommerceWorkspace(scope)?.plan?.previousImages).toHaveLength(originalPlan.images.length);
+        expect(host.textContent).toContain("原有图片保留在当前画布");
         await act(async () => {
             navigate("/other");
         });
@@ -1382,12 +1480,12 @@ describe("真实电商页面生命周期", () => {
             navigate(`/ecommerce?project=${fresh.id}`);
         });
         expect(sessions.peekEcommerceWorkspace(scope)?.draft.layoutReferences!.map((source) => source.resourceId)).toEqual(expectedIds);
-        expect(sessions.peekEcommerceWorkspace(scope)?.plan).toBeNull();
+        expect(sessions.peekEcommerceWorkspace(scope)?.plan?.previousImages).toHaveLength(originalPlan.images.length);
         await act(async () => {
             navigate(`/ecommerce?project=${original.id}`);
         });
-        expect(sessions.peekEcommerceWorkspace(scope)?.plan).toEqual(originalPlan);
-        expect(sessions.peekEcommerceWorkspace(scope)?.draft.layoutReferences).toEqual(draft.layoutReferences);
+        expect(sessions.peekEcommerceWorkspace(scope)?.plan?.previousImages?.map((image) => image.taskId)).toEqual(originalPlan.images.map((image) => image.taskId));
+        expect(sessions.peekEcommerceWorkspace(scope)?.draft.layoutReferences!.map((source) => source.resourceId)).toEqual(expectedIds);
         expect(paidSubmissions).toHaveLength(0);
     });
 

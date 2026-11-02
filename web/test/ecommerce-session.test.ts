@@ -70,7 +70,9 @@ describe("电商项目跨页面恢复", () => {
             await writeEcommerceWorkspace(scope, { ...next, project: project("snapshot-b"), draft: emptyEcommerceDraft() });
             expect(peekEcommerceWorkspace(scope)?.submittedDraft).toBeUndefined();
             expect(peekEcommerceWorkspace("different-scope")).toBeNull();
-        } finally { await clearEcommerceWorkspace(scope); }
+        } finally {
+            await clearEcommerceWorkspace(scope);
+        }
     });
     test("离开再进入时共享尚未完成的新建，连续保存只创建一个项目并使用最新版本", async () => {
         const scope = crypto.randomUUID();

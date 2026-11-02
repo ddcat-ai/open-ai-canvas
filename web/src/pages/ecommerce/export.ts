@@ -24,7 +24,9 @@ export function startEcommerceDownload(items: EcommerceExportItem[]): boolean {
     if (items.length > 1) {
         const owner = getActiveUserScope();
         const frame = document.createElement("iframe");
-        frame.name = `commerce-download-${createClientUUID()}`; frame.hidden = true; frame.title = "图片 ZIP 下载";
+        frame.name = `commerce-download-${createClientUUID()}`;
+        frame.hidden = true;
+        frame.title = "图片 ZIP 下载";
         frame.onload = () => {
             try {
                 const raw = frame.contentDocument?.body?.textContent;
@@ -32,19 +34,35 @@ export function startEcommerceDownload(items: EcommerceExportItem[]): boolean {
                 const failure = JSON.parse(raw) as { code?: number; msg?: string };
                 if (failure.code && owner === getActiveUserScope()) window.dispatchEvent(new CustomEvent("commerce-download-error", { detail: { owner, message: failure.msg || "下载未完成，请重试" } }));
                 frame.remove();
-            } catch { /* Attachment responses are handled by the browser download manager. */ }
+            } catch {
+                /* Attachment responses are handled by the browser download manager. */
+            }
         };
         document.body.append(frame);
         const form = document.createElement("form");
-        form.method = "post"; form.action = `${String(apiBaseURL).replace(/\/+$/, "")}/ecommerce/download`; form.hidden = true; form.target = frame.name;
-        for (const item of items) { const field = document.createElement("input"); field.type = "hidden"; field.name = "resourceId"; field.value = item.resourceId!; form.append(field); }
-        document.body.append(form); form.submit(); form.remove();
+        form.method = "post";
+        form.action = `${String(apiBaseURL).replace(/\/+$/, "")}/ecommerce/download`;
+        form.hidden = true;
+        form.target = frame.name;
+        for (const item of items) {
+            const field = document.createElement("input");
+            field.type = "hidden";
+            field.name = "resourceId";
+            field.value = item.resourceId!;
+            form.append(field);
+        }
+        document.body.append(form);
+        form.submit();
+        form.remove();
         return true;
     }
     const url = `${resourceFileUrl(items[0].resourceId!)}?download=1`;
     const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = "";
-    document.body.append(anchor); anchor.click(); anchor.remove();
+    anchor.href = url;
+    anchor.download = "";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
     return true;
 }
 

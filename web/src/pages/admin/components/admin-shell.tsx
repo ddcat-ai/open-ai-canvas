@@ -135,6 +135,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "系统设置",
         items: [
             { path: "/admin/settings/appearance", label: "站点及外观", shortLabel: "外观", icon: <Palette className="size-4" /> },
+            { path: "/admin/settings/yoru", label: "小夜助手", shortLabel: "小夜", icon: <Sparkles className="size-4" /> },
             { path: "/admin/settings/features", label: "功能开放", shortLabel: "功能", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/access", label: "登录与注册", shortLabel: "注册", icon: <ShieldCheck className="size-4" /> },
             { path: "/admin/settings/email", label: "邮件服务", shortLabel: "邮件", icon: <Mail className="size-4" /> },
