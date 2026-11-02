@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,11 +29,37 @@ func TestToolsVisibilityTokensSeedAndReferences(t *testing.T) {
 		}
 	}
 	list, err := svc.List("alice", tools.ToolListRequest{PageSize: 80})
-	if err != nil || list.TotalCount != 87 || !list.HasMore {
+	if err != nil || list.TotalCount != 89 || !list.HasMore {
 		t.Fatalf("seed/pagination: %+v %v", list, err)
 	}
+	for _, preset := range []struct {
+		id      int64
+		key     string
+		label   string
+		feature string
+	}{
+		{90, "short_storyboard", "故事板", "4–8 sequential shots"},
+		{91, "blocking_storyboard", "调度故事板", "top-down blocking diagram"},
+	} {
+		tool, err := svc.Detail("alice", preset.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tool.LabelEn != preset.key || tool.Label != preset.label || tool.Type != tools.ToolTypeNineGrid || tool.Ratio != "16:9" || !strings.Contains(tool.Prompt, preset.feature) {
+			t.Fatalf("storyboard preset: %+v", tool)
+		}
+		token := fmt.Sprintf("@[tool:nine_grid:%d:label:Clapperboard]", preset.id)
+		brief := "小女孩走到门口，回头看向猫。"
+		expanded, err := svc.ResolveToolMentionTokens("alice", "image", token+"\n"+brief)
+		if err != nil || expanded != tool.Prompt+"\n"+brief {
+			t.Fatalf("storyboard expansion: %q %v", expanded, err)
+		}
+		if _, err := svc.ResolveToolMentionTokens("alice", "video", token); err == nil {
+			t.Fatal("storyboard image preset accepted for video")
+		}
+	}
 	custom, err := svc.Create("alice", tools.ToolMutationRequest{Type: "style", Label: "private", Prompt: "private style"})
-	if err != nil || custom.ID <= 87 {
+	if err != nil || custom.ID <= 91 {
 		t.Fatalf("custom: %+v %v", custom, err)
 	}
 	if _, err := svc.Detail("bob", custom.ID); err == nil {
