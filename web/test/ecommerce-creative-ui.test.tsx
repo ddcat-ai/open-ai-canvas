@@ -1,5 +1,6 @@
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
+import { readFileSync } from "node:fs";
 import { emptyEcommerceDraft, type EcommercePlan } from "@/services/api/ecommerce";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -83,6 +84,25 @@ test("image loading reveals on load, stops on failure, and resets for a new resu
     await act(async () => host.querySelector("img")!.dispatchEvent(new Event("error")));
     expect(host.textContent).toContain("图片加载失败");
     expect(host.querySelector(".commerce-progress-orbit")).toBeNull();
+});
+
+test("resized and rotated result frames keep the entire artwork visible", async () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync(new URL("../src/pages/ecommerce/result-image.css", import.meta.url), "utf8");
+    document.head.append(style);
+    try {
+        for (const rotation of [0, 90, 180, 270]) {
+            await render(<CommerceResultImage src="/wide.png" ratio={9 / 16} frameRatio={1 / 2} rotation={rotation} alt="作品" />);
+            const img = host.querySelector("img")!;
+            Object.defineProperties(img, { naturalWidth: { configurable: true, value: 1536 }, naturalHeight: { configurable: true, value: 1024 } });
+            await act(async () => img.dispatchEvent(new Event("load")));
+            expect(getComputedStyle(img).objectFit).toBe("contain");
+            expect(parseFloat((host.querySelector(".commerce-result-image-shell") as HTMLElement).style.aspectRatio)).toBe(0.5);
+            expect(img.style.transform).toContain(`rotate(${rotation}deg)`);
+        }
+    } finally {
+        style.remove();
+    }
 });
 
 test("all nine slots animate before submission and while task receipts recover", async () => {

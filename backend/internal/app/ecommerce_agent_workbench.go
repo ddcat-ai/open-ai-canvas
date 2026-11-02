@@ -657,6 +657,9 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 		metadata["ecommerceKnowledgeVersion"] = ecommerceagent.CreativeKnowledgeVersion
 	}
 	metadata["ecommerceAgentAdapter"] = "workbench-v1"
+	if stage == "planning" {
+		prompt += "\n\n" + ecommerceagent.LayoutSafetyRule
+	}
 	input["prompt"] = prompt
 	return prompt, nil
 }
@@ -758,6 +761,9 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 		}
 		if !strings.Contains(image.Prompt, ecommerceagent.HumanPhotographyKnowledge) {
 			image.Prompt += "\n" + ecommerceagent.HumanPhotographyKnowledge
+		}
+		if !strings.Contains(image.Prompt, ecommerceagent.LayoutSafetyRule) {
+			image.Prompt += "\n" + ecommerceagent.LayoutSafetyRule
 		}
 		if rules := ecommerceManagedImageRules(input.Metadata); rules != "" && !strings.Contains(image.Prompt, rules) {
 			image.Prompt += "\n" + rules

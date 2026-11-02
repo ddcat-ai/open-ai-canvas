@@ -98,12 +98,10 @@ function commerceExtendedCanvasNote(ratio: string) {
 }
 
 /**
- * Some image relays render tall canvases at 2:3 and the server crop-fills the
- * result to the requested ratio, trimming the left and right edges. Keep text
- * and product inside the central area so nothing important is cut.
+ * Background bleed must never be interpreted as permission to bleed copy or UI.
  */
 export function commerceTallCanvasSafeArea(_ratio: string) {
-    return "\n\n【防溢出安全区，所有比例适用】每一个文字块、标签、胶囊条、图标气泡、放大窗和卡片的完整外框都必须在画幅四边各内缩 8% 以内，任何元素不得贴边、出界或被裁切；两侧气泡与卡片宁可缩小、换行或减少数量，也不能伸出画面。画面四边只延续背景或场景。";
+    return "\n\n【防溢出安全区，所有比例适用】每一个文字块、标签、胶囊条、图标气泡、放大窗和卡片的完整外框（含描边、阴影及旋转后的四角）都必须在画幅四边各内缩至少 8% 的安全区内，即横纵坐标均在 8%–92% 内；任何元素不得贴边、出界或被裁切。背景满版不等于文字满版：画面四边只延续背景或场景，保留约 20%–30% 干净呼吸空间，不添加外部白框。两侧气泡与卡片要换行、向内移动或重新分栏，不能横向撑出画面；不能以裁切文字、标签或卡片制造设计感。";
 }
 
 /**

@@ -59,6 +59,9 @@ describe("ecommerce series art direction", () => {
         expect(prompt).toContain("full bleed edge-to-edge");
         expect(prompt).toContain("禁止上下黑条");
         expect(prompt).toContain("接触阴影");
+        expect(prompt).toContain("8%–92%");
+        expect(prompt).toContain("20%–30%");
+        expect(prompt).toContain("生成阶段保留已审阅文案全文");
         expect(prompt).toContain("没有内部结构资料时，不绘制写实爆炸图");
         // 多张套图先写程序分配的本张展示，紧接着才是策划给出的本张提示词。
         expect(prompt.startsWith("【本张展示·强制】本套共 9 张，这是第 1 张。")).toBe(true);
@@ -70,6 +73,7 @@ describe("ecommerce series art direction", () => {
         expect(prompt).toContain("改为冷灰背景和右侧标题");
         expect(prompt).not.toContain("旧金色背景");
         expect(prompt).not.toContain(image.copy);
+        expect(prompt).toContain("8%–92%");
     });
 
     test("no-text mode preserves the shared palette while suppressing marketing copy", () => {

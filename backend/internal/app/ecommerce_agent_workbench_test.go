@@ -419,6 +419,9 @@ func TestEcommerceWorkbenchPlanKeepsSpecializedContracts(t *testing.T) {
 			if got.Images[0].ImageModel != draft.ImageModel || got.Images[0].Ratio != draft.Ratio || got.Images[0].Resolution != draft.Resolution {
 				t.Fatal("selected generation settings changed")
 			}
+			if !strings.Contains(got.Images[0].Prompt, ecommerceagent.LayoutSafetyRule) {
+				t.Fatal("image plan lost layout safety after server normalization")
+			}
 			if (kind == "white" || kind == "three-view") && got.Images[0].Copy != "" {
 				t.Fatal("pure product image kept copy")
 			}
