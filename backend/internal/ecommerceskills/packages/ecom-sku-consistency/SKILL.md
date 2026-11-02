@@ -20,4 +20,3 @@ description: 多SKU款式锁定；逐一建立SKU与商品参考、颜色、规�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/sku-consistency
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

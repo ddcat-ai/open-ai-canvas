@@ -113,6 +113,12 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 
 	if !workflowProviderTask {
+		// The configured assistant uses its server-side model selection even when
+		// the general frontend model picker is disabled. Public task requests
+		// cannot supply the internal admission marker.
+		if req.Operation == "yoru_assistant" && req.admission != nil && logicalModelID != "" {
+			frontendEnabled = true
+		}
 		routed, normalizedInput, err = s.resolveTaskModelSelection(userID, normalizedInput, logicalModelID, taskType, req.Operation, frontendEnabled)
 		if err != nil {
 			return nil, err

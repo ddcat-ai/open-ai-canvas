@@ -20,4 +20,3 @@ description: 成品文案校订；分别检查清晰度、语气、卖点关联�
 ## 来源与适配
 https://github.com/coreyhaines31/marketingskills/blob/88c79f6528a9347420e57ceb1fff9a60de651768/skills/copy-editing/SKILL.md
 版本：88c79f6528a9347420e57ceb1fff9a60de651768。按 MIT 许可改编；仅保留适合本工作台的创意方法，不导入来源脚本、指定供应商、固定页数或平台示例阈值。
-

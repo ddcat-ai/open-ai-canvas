@@ -20,4 +20,3 @@ description: 服饰织纹与剪裁；选择图中有证据的织纹、缝线、�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/fabric-detail
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

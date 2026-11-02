@@ -20,4 +20,3 @@ description: 风格参考转译；从参考抽取色温、明度、材质、光�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/style-reference
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

@@ -20,4 +20,3 @@ description: 商业广告视觉简报；依次锁定投放位置、用户目标�
 ## 来源与适配
 https://github.com/motiful/product-shots/blob/063c508b0b7f4db5cda89f10bdf20df25026dfc5/skills/product-shots-ad-creative/SKILL.md
 版本：063c508b0b7f4db5cda89f10bdf20df25026dfc5。按 MIT 许可改编；仅保留适合本工作台的创意方法，不导入来源脚本、指定供应商、固定页数或平台示例阈值。
-

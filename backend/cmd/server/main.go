@@ -110,8 +110,8 @@ func run(ctx context.Context) error {
 	if err := ensureBuiltinWorkbenchCatalog(svc); err != nil {
 		return err
 	}
-	// Shipped KB01-KB10 knowledge is idempotent and transactional. A failure
-	// leaves the previous rows intact and must not block serving traffic.
+	// Initialize the shipped domains and industry dictionary before accepting
+	// requests so a failed upgrade cannot serve an incomplete knowledge catalog.
 	if report, err := svc.EnsureBuiltinEcommerceKnowledge(); err != nil {
 		return fmt.Errorf("initialize builtin ecommerce knowledge: %w", err)
 	} else {

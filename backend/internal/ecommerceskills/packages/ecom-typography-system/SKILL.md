@@ -20,4 +20,3 @@ description: 中文字体与组件系统；从已选视觉方向确定中文字�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/typography-system
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

@@ -20,4 +20,3 @@ description: 参考素材职责分离；先区分商品、风格、版式、竞�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/reference-roles
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

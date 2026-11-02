@@ -20,4 +20,3 @@ description: 卖点信息图；把本页已确认卖点转为一个标题和2–
 ## 来源与适配
 https://github.com/xianyu110/ecommerce-image-skills/blob/f4566fdc812584425728862ad8e08c90883d81ee/skills/selling-point-infographic/SKILL.md
 版本：f4566fdc812584425728862ad8e08c90883d81ee。按 MIT 许可改编；仅保留适合本工作台的创意方法，不导入来源脚本、指定供应商、固定页数或平台示例阈值。
-

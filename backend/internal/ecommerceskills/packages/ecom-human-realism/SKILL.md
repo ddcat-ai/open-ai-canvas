@@ -20,4 +20,3 @@ description: 自然人物商业摄影；按商品目标人群与用途安排自�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/human-realism
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

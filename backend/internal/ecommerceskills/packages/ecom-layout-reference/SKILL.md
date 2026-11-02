@@ -20,4 +20,3 @@ description: 版式参考拆解；读取参考中的真实屏数、阅读路径�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/layout-reference
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

@@ -20,4 +20,3 @@ description: 广告角度策划；根据真实商品、人群、购买意图与�
 ## 来源与适配
 https://github.com/coreyhaines31/marketingskills/blob/88c79f6528a9347420e57ceb1fff9a60de651768/skills/ad-creative/SKILL.md
 版本：88c79f6528a9347420e57ceb1fff9a60de651768。按 MIT 许可改编；仅保留适合本工作台的创意方法，不导入来源脚本、指定供应商、固定页数或平台示例阈值。
-

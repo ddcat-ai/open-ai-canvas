@@ -20,4 +20,3 @@ description: 服饰真人试穿；锁定服装款式、纹理、图案和已有�
 ## 来源与适配
 https://github.com/xianyu110/ecommerce-image-skills/blob/f4566fdc812584425728862ad8e08c90883d81ee/skills/model-try-on/SKILL.md
 版本：f4566fdc812584425728862ad8e08c90883d81ee。按 MIT 许可改编；仅保留适合本工作台的创意方法，不导入来源脚本、指定供应商、固定页数或平台示例阈值。
-

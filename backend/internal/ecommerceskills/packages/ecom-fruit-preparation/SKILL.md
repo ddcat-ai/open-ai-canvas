@@ -20,4 +20,3 @@ description: 榨汁鲜果制作叙事；先确认商品是否为榨汁或搅拌�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/fruit-preparation
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

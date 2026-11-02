@@ -20,4 +20,3 @@ description: 品牌与原有印字保留；识别商品表面的原有商标、�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/brand-fidelity
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

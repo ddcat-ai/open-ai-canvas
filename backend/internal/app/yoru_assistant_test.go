@@ -62,6 +62,9 @@ func TestYoruCreatesRepeatedBillableRoutedTextTasks(t *testing.T) {
 	if _, err := svc.UpdateYoruSettings(admin, settings); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.CreateTask(actor.ID, CreateTaskRequest{Type: "canvas_text", Operation: "yoru_assistant", Prompt: "untrusted request", LogicalModelID: logical.ID, Input: map[string]any{"mode": "text", "config": map[string]any{}}}); err == nil {
+		t.Fatal("public task request bypassed the frontend model gate")
+	}
 	task, err := svc.CreateYoruChatTask(actor, YoruChatRequest{Message: "怎么生成图片？", History: []YoruMessage{{Role: "user", Content: "你好"}, {Role: "assistant", Content: "你好呀"}}, Page: "/create"})
 	if err != nil {
 		t.Fatal(err)

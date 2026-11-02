@@ -20,4 +20,3 @@ description: 美妆真实质地展示；按包装和已知使用方式选择瓶�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/beauty-texture
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-

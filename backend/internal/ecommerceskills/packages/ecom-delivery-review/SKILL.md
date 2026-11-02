@@ -20,4 +20,3 @@ description: 逐图交付检查计划；依据本轮参考和用户要求列出�
 ## 来源与适配
 builtin://meiyeai/ecommerce-skills/delivery-review
 版本：meiye-ecommerce-skills-20261101-v1。魅夜原创方法。
-
