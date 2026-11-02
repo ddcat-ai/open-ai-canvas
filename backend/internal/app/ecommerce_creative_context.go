@@ -48,8 +48,11 @@ func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequ
 	}
 	match := ecommercecatalog.ResolveProduct(req.Category, req.ProductName)
 	var specificIDs []string
+	industryIDs := map[string]bool{}
 	for _, node := range ecommercecatalog.Lineage(match.Node.ID) {
 		specificIDs = append(specificIDs, "industry-taxonomy-"+node.ID, "kb19-industry-"+node.ID)
+		industryIDs["industry-taxonomy-"+node.ID] = true
+		industryIDs["kb19-industry-"+node.ID] = true
 	}
 	specific, err := s.repo.EcommerceKnowledgeByIDs(specificIDs)
 	if err != nil {
@@ -66,6 +69,12 @@ func (s *Service) retrieveEcommerceKnowledge(req EcommerceCreativeDirectionsRequ
 		anyAvailable = anyAvailable || available[source.ID]
 	}
 	applicable := func(entry model.EcommerceKnowledgeEntry) bool {
+		// Broad groups such as tech contain several unrelated branches. Only
+		// the selected category and its ancestors may supply shipped routing
+		// knowledge; a shared group name alone is not a matching industry.
+		if (entry.SourceID == industryTaxonomySourceID || entry.SourceID == ecommerceBuiltinSourceID("KB19")) && !industryIDs[entry.ID] {
+			return false
+		}
 		return ecommerceKnowledgeSkillEnabled(entry, skillPolicy, req) && (entry.Category == "general" || entry.Category == category || entry.KnowledgeType == "category_taxonomy" || entry.KnowledgeType == "industry_method") && jsonArrayContains(entry.PlatformsJSON, platform) && jsonArrayContains(entry.LanguagesJSON, req.Language) && jsonArrayContains(entry.RegionsJSON, req.Region)
 	}
 	matched := []model.EcommerceKnowledgeEntry{}
