@@ -548,6 +548,58 @@ describe("真实电商页面生命周期", () => {
         expect(host.querySelectorAll("[data-ecommerce-image-id]")).toHaveLength(2);
     });
 
+    test("三张参考图完成五张后，续写详情继承商品且普通输入不会反复报价或替换结果按钮", async () => {
+        draft = { ...draft, imageType: "set", count: 5, instruction: "五张主副图", references: ["product-a", "product-b", "product-c"].map((resourceId) => ({ resourceId, role: "primary" as const })) };
+        const images = Array.from({ length: 5 }, (_, index) => ({
+            id: `memory-${index}`,
+            taskId: `memory-task-${index}`,
+            imageType: "main",
+            platform: draft.platform,
+            language: draft.language,
+            goal: "主视觉",
+            theme: "商品",
+            composition: "居中",
+            mainVisual: "商品",
+            verifiedClaims: "",
+            copy: `第${index}张文案`,
+            lighting: "柔光",
+            fidelity: "保持真实外观",
+            prompt: "保持商品外观",
+            negativePrompt: "黑边",
+            imageModel: draft.imageModel,
+            ratio: draft.ratio,
+            resolution: draft.resolution,
+        }));
+        const saved = project(draft);
+        saved.planJson = JSON.stringify({ inputSignature: commerceInputSignature(draft), productSummary: "真实商品", confirmedFacts: [], uncertainFacts: [], qualityChecks: [], visualStrategy: "自然生活", images });
+        projects.set(saved.id, saved);
+        for (const image of images)
+            tasks.set(image.taskId, { ...runningTask(image.taskId), status: "succeeded", outputs: [{ outputIndex: 0, materializedAssetId: `asset-${image.id}` }], resultJson: JSON.stringify({ images: [{ dataUrl: "/completed.png" }] }) });
+        await render(`/ecommerce?project=${saved.id}`);
+        await act(async () => {
+            for (const image of images) observers.get(image.taskId)?.forEach((listener) => listener(tasks.get(image.taskId)!));
+        });
+        const editor = host.querySelector<HTMLTextAreaElement>('[aria-label="电商创作输入"]')!;
+        const button = host.querySelector(".commerce-generated-card footer button");
+        expect(button).not.toBeNull();
+        const quoteCount = (quotes.quoteModel as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+        for (const text of ["继", "继续", "继续生成"])
+            await act(async () => {
+                Object.getOwnPropertyDescriptor(dom.HTMLTextAreaElement.prototype, "value")!.set!.call(editor, text);
+                editor.dispatchEvent(new Event("input", { bubbles: true }));
+            });
+        expect((quotes.quoteModel as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(quoteCount);
+        expect(host.querySelector(".commerce-generated-card footer button")).toBe(button);
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(dom.HTMLTextAreaElement.prototype, "value")!.set!.call(editor, "继续生成九张详情页，最后一张介绍产品");
+            editor.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        const next = sessions.peekEcommerceWorkspace(scope)?.draft;
+        expect(next).toMatchObject({ imageType: "detail", count: 9 });
+        expect(next?.references).toEqual(draft.references);
+        expect(host.querySelectorAll(".commerce-generated-card")).toHaveLength(5);
+        expect(paidSubmissions).toHaveLength(0);
+    });
     test("已完成图片的后台风格推荐不占用发送状态，新商品与旧作品隔离", async () => {
         draft.instruction = "生成详情页";
         const image = {

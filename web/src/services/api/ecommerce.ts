@@ -84,6 +84,7 @@ export type EcommercePlanImage = {
     goal: string;
     theme: string;
     composition: string;
+    displayAssignment?: string;
     mainVisual: string;
     verifiedClaims: string;
     performanceAngle?: string;

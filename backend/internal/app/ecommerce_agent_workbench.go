@@ -663,6 +663,12 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 	}
 	metadata["ecommerceAgentAdapter"] = "workbench-v1"
 	if stage == "planning" {
+		if draft.ReferenceMode != "detail" && len(draft.CloneOptions) == 0 {
+			assignments := ecommerceagent.ShotAssignments(draft.Count, draft.ImageType, draft.Category+" "+draft.ProductName+" "+draft.Description+" "+draft.Instruction)
+			metadata["ecommerceShotAssignments"] = assignments
+			prompt += "\n【逐屏拍摄与购买叙事·必须执行】按实际张数建立完整叙事，每屏回答不同购买问题、使用独立机位，不可循环同一机位；每页 copy 必须独立创作，禁止重复完整标题或正文。下列机位优先于前面的随机版式示例，视觉风格仍继承已选方向。\n" + strings.Join(assignments, "\n")
+		}
+		prompt += "\n" + ecommerceConversationMemory(project, draft)
 		prompt += "\n\n" + ecommerceagent.LayoutSafetyRule
 	}
 	prompt += "\n" + ecommerceagent.PlatformKnowledgePrompt(draft.Platform, draft.Region, draft.ImageType, draft.TypeOptions["purpose"])
@@ -860,6 +866,29 @@ func (s *Service) validateEcommerceWorkbenchResult(userID string, input canvasGe
 		plan.QualityChecks = append(plan.QualityChecks, "发布前核对站点、类目、成片文字与实物、图片文件规格及商品资质；平台资料适用范围："+policy.Scope)
 		if policy.ID == "etsy" && len(policy.OfficialRules) > 0 {
 			plan.QualityChecks = append(plan.QualityChecks, policy.OfficialRules[0])
+		}
+	}
+	if raw, err := json.Marshal(input.Metadata["ecommerceShotAssignments"]); err == nil {
+		var assignments []string
+		if json.Unmarshal(raw, &assignments) == nil && len(assignments) == len(plan.Images) {
+			copies := map[string]bool{}
+			titles := map[string]bool{}
+			for i := range plan.Images {
+				image := &plan.Images[i]
+				copyKey := strings.Join(strings.Fields(image.Copy), "")
+				if len([]rune(copyKey)) >= 8 && copies[copyKey] {
+					return BadAuthRequest("逐屏文案出现重复，请重新策划；未提交重复图片生成")
+				}
+				copies[copyKey] = true
+				title := strings.TrimSpace(strings.Split(strings.TrimSpace(image.Copy), "\n")[0])
+				brandLine := title == strings.TrimSpace(draft.Brand) || title == strings.TrimSpace(draft.ProductName)
+				if !brandLine && len([]rune(title)) >= 4 && titles[title] {
+					return BadAuthRequest("逐屏标题出现重复，请重新策划；未提交重复图片生成")
+				}
+				titles[title] = true
+				image.DisplayAssignment = assignments[i]
+				image.Prompt = "【本屏唯一拍摄要求】" + assignments[i] + "\n【本屏具体内容】" + image.Prompt
+			}
 		}
 	}
 	if err := s.validateEcommercePlan(userID, &plan); err != nil {

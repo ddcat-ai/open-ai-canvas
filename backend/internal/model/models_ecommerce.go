@@ -101,6 +101,7 @@ type EcommercePlanTask struct {
 	Goal                 string                    `json:"goal"`
 	Theme                string                    `json:"theme"`
 	Composition          string                    `json:"composition"`
+	DisplayAssignment    string                    `json:"displayAssignment,omitempty"`
 	MainVisual           string                    `json:"mainVisual"`
 	VerifiedClaims       string                    `json:"verifiedClaims"`
 	PerformanceAngle     string                    `json:"performanceAngle,omitempty"`

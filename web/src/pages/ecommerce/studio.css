@@ -1205,6 +1205,12 @@ html:not(.dark) .commerce-platform-logo[data-monochrome="true"] {
     width: 58px;
     height: 58px;
 }
+.commerce-memory-note {
+    margin: 0 4px 8px;
+    color: var(--user-ink-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
 .commerce-request-references img {
     width: 58px;
     height: 58px;

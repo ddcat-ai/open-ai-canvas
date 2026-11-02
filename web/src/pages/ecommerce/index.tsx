@@ -26,6 +26,7 @@ import { createPortal } from "react-dom";
 import { ApiError } from "@/services/api/request";
 import { archiveCommercePlan, commerceCanvasImages, continueCommercePlan, updateCommerceCanvasImage } from "./continuation";
 import { CommerceSubmittedRequest, restoreSubmittedCommerceRequest } from "./submitted-request";
+import { commerceFollowupDraft, commerceQuoteSignature } from "./conversation-context";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CreativeOptionsPanel } from "./creative-options-panel";
 import { ReferenceModePanel, ReferenceScreenSummary } from "./reference-mode-panel";
@@ -930,7 +931,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             setQuote({ image: costs.length === 1 ? costs[0] : imageTotal === null ? null : imageTotal / costs.length, imageTotal, agent: agentCost, vision: visionCost });
         });
         return () => controller.abort();
-    }, [config, creationMode, planningModel, directionsModel, commerceInputSignature(draft), plan?.images.map((image) => `${image.imageModel}:${image.ratio}:${image.resolution}:${image.skuId}`).join("|")]);
+    }, [config, creationMode, planningModel, directionsModel, commerceQuoteSignature(draft, plan, requestedCount)]);
 
     function composerFingerprint(source: EcommerceDraft) {
         const input = JSON.stringify([source.instruction, source.references.filter((ref) => ref.role !== "model").map((ref) => ref.resourceId), (source.layoutReferences || []).map((ref) => ref.resourceId)]);
@@ -2004,6 +2005,14 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         }
     };
     const composerText = composerTextOverride ?? draft.instruction;
+    const changeComposerInstruction = (instruction: string) => {
+        setComposerTextOverride(instruction);
+        setCreativeDirections([]);
+        setRecommendationId("");
+        selectedDirectionRef.current = null;
+        directionsInputSignatureRef.current = "";
+        setDraft((current) => commerceFollowupDraft({ ...current, creativeDirectionId: undefined, creativeRecommendationId: undefined }, instruction));
+    };
     const directionsOutdated = Boolean(creativeDirections.length && directionsInputSignatureRef.current !== commerceInputSignature(draft));
     const submitDisabled = restoring || uploading || busy || planningPending || (directionsPending && !draftDiffersFromPlan) || (Boolean(activeImages) && !draftDiffersFromPlan) || confirmingGeneration || !composerText.trim();
     /** Enter 发送，Shift+Enter 换行；输入法组字期间的回车只用于上屏。 */
@@ -2459,6 +2468,9 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                         ) : null}
                     </div>
                     <div className="flylep-composer-area" ref={composerAnchor}>
+                        {composerHiddenRefs.size > 0 && draft.references.some((ref) => ref.role !== "model" && composerHiddenRefs.has(ref.resourceId)) ? (
+                            <p className="commerce-memory-note">沿用本商品的 {draft.references.filter((ref) => ref.role !== "model" && composerHiddenRefs.has(ref.resourceId)).length} 张参考图与已完成文案，可直接输入下一轮需求</p>
+                        ) : null}
                         {flyPanel === "platform" ? (
                             <CommerceMarketPicker
                                 anchor={composerAnchor}
@@ -2749,10 +2761,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                         value={composerText}
                                         autoSize={{ minRows: 3, maxRows: 7 }}
                                         enterKeyHint="send"
-                                        onChange={(event) => {
-                                            setComposerTextOverride(event.target.value);
-                                            update("instruction", event.target.value);
-                                        }}
+                                        onChange={(event) => changeComposerInstruction(event.target.value)}
                                         onKeyDown={submitComposerOnEnter}
                                         onPaste={pasteComposerImages}
                                         placeholder={"描述商品、场景或创意要求，可直接粘贴或拖入产品图\nEnter 发送 · Shift + Enter 换行"}

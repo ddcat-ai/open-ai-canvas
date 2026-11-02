@@ -5,6 +5,7 @@ import { selectedCreationRequirements, typeValidation } from "./type-config";
 import { commerceSeriesDirection, commerceShotDirection } from "./art-direction";
 import { commerceAllowsText, commerceCreativeDirection, normalizeCreativeOptions } from "./creative-controls";
 import { marketingPlanSlots } from "./marketing-materials";
+import { commerceDisplaySlots } from "./display-slots";
 
 /** User-authored execution specification. No text model or invented analysis. */
 export function directCommercePlan(draft: EcommerceDraft): EcommercePlan {
@@ -16,6 +17,7 @@ export function directCommercePlan(draft: EcommerceDraft): EcommercePlan {
     if (draft.imageType === "sku" && draft.skus.some((sku) => !sku.name.trim() || !Number.isInteger(sku.count) || sku.count < 0)) throw new Error("请填写真实 SKU 名称及整数数量");
     const slots = draft.imageType === "sku" ? draft.skus.flatMap((sku) => Array.from({ length: sku.count }, () => sku)) : Array.from({ length: draft.count }, () => undefined);
     const materials = draft.imageType === "marketing" ? marketingPlanSlots(draft) : [];
+    const displayAssignments = commerceDisplaySlots(draft);
     if (!slots.length || slots.length > 30 || slots.length !== draft.count) throw new Error("生成数量须为 1–30 张，并与 SKU 数量一致");
     const facts = {
         name: draft.productName,
@@ -45,6 +47,7 @@ export function directCommercePlan(draft: EcommerceDraft): EcommercePlan {
             imageType: draft.imageType,
             platform: draft.platform,
             language: draft.language,
+            displayAssignment: displayAssignments[index],
             goal: materials[index] ? `${materials[index].category} · ${materials[index].name}` : labelOf(imageTypes, draft.imageType),
             theme: `${sku?.name || draft.productName} · ${index + 1}`,
             composition: `${draft.instruction ? `用户指定构图：${draft.instruction}\n` : ""}${commerceShotDirection(draft, index)}`,
