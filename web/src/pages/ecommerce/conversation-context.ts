@@ -20,11 +20,22 @@ export function commerceFollowupDraft(draft: EcommerceDraft, instruction: string
 
 /** Only inputs that affect quoted quantities or model parameters belong here. */
 export function commerceQuoteSignature(draft: EcommerceDraft, plan: EcommercePlan | null, count: number): string {
-    const rows = plan?.inputSignature === commerceInputSignature(draft) && plan.images.length ? plan.images
-        : draft.imageType === "sku" ? draft.skus.flatMap((sku) => Array.from({ length: sku.count }, () => ({ ...draft, skuId: sku.id })))
-        : draft.imageType === "marketing" ? marketingPlanSlots(draft).map((slot) => ({ ...draft, ratio: slot.ratio }))
-        : Array.from({ length: count }, () => draft);
-    return JSON.stringify([draft.platform, draft.imageType, draft.typeOptions?.purpose, draft.referenceMode,
-        draft.references, draft.layoutReferences, draft.skus,
-        rows.map((row) => [row.imageModel, row.ratio, row.resolution, "skuId" in row ? row.skuId : undefined, ["自动", "auto"].includes(row.ratio) ? row.imageType : undefined])]);
+    const rows =
+        plan?.inputSignature === commerceInputSignature(draft) && plan.images.length
+            ? plan.images
+            : draft.imageType === "sku"
+              ? draft.skus.flatMap((sku) => Array.from({ length: sku.count }, () => ({ ...draft, skuId: sku.id })))
+              : draft.imageType === "marketing"
+                ? marketingPlanSlots(draft).map((slot) => ({ ...draft, ratio: slot.ratio }))
+                : Array.from({ length: count }, () => draft);
+    return JSON.stringify([
+        draft.platform,
+        draft.imageType,
+        draft.typeOptions?.purpose,
+        draft.referenceMode,
+        draft.references,
+        draft.layoutReferences,
+        draft.skus,
+        rows.map((row) => [row.imageModel, row.ratio, row.resolution, "skuId" in row ? row.skuId : undefined, ["自动", "auto"].includes(row.ratio) ? row.imageType : undefined]),
+    ]);
 }

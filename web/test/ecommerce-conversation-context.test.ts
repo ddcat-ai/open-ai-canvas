@@ -7,7 +7,12 @@ import type { EcommercePlan } from "../src/services/api/ecommerce";
 
 test("follow-ups inherit references and verified product data and parse explicit 1–20 page requests", () => {
     const draft = { ...emptyEcommerceDraft(), imageType: "set", count: 5, description: "已核实资料", references: ["a", "b", "c"].map((resourceId) => ({ resourceId, role: "primary" as const })) };
-    for (const [instruction, count] of [["继续生成九张详情页", 9], ["继续做20张详情图", 20], ["制作一张详情页", 1], ["再来十二张主副图", 12]] as const) {
+    for (const [instruction, count] of [
+        ["继续生成九张详情页", 9],
+        ["继续做20张详情图", 20],
+        ["制作一张详情页", 1],
+        ["再来十二张主副图", 12],
+    ] as const) {
         const next = commerceFollowupDraft(draft, instruction);
         expect(next.count).toBe(count);
         expect(next.references).toEqual(draft.references);
