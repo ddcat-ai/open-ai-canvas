@@ -15,9 +15,11 @@ import {
     createCanvasNode,
     createStoryboardRow,
     expandStoryboardTextMentions,
+    storyboardRowVideoPrompt,
     storyboardRowsFromTask,
     storyboardPromptTemplateMetadata,
     stripProjectStyleExecutionBlocks,
+    syncStoryboardVideoNode,
     withStoryboardOutputContract,
 } from "@/lib/canvas/canvas-project-domain";
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
@@ -357,7 +359,7 @@ export function useCanvasStoryboard({
         const videoNodeByRowId = new Map<string, string>();
         let createdCount = 0;
         rows.forEach((row, index) => {
-            const prompt = (row.videoMotionPrompt || row.plotDescription).trim();
+            const prompt = storyboardRowVideoPrompt(row);
             const existingIndex = row.videoNodeId ? nextNodes.findIndex((node) => node.id === row.videoNodeId && node.type === CanvasNodeType.Video) : -1;
             const existing = existingIndex >= 0 ? nextNodes[existingIndex] : undefined;
             const referenceIds = storyboardRowReferenceNodeIds(scriptNode, row, nextNodes, nextConnections, false, existing?.id);
@@ -365,7 +367,7 @@ export function useCanvasStoryboard({
             if (existingIndex >= 0) {
                 const existing = nextNodes[existingIndex];
                 const existingMetadata = existing.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing.metadata);
-                nextNodes[existingIndex] = { ...existing, metadata: { ...existingMetadata, prompt, composerContent, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), seconds: String(row.durationSeconds), shotIndex: row.shotNumber, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, generationMode: "video", videoEditOperation: existing.metadata?.videoEditOperation || "text_to_video" } };
+                nextNodes[existingIndex] = syncStoryboardVideoNode(existing, { ...existingMetadata, prompt, composerContent, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), seconds: String(row.durationSeconds), shotIndex: row.shotNumber, workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, generationMode: "video", videoEditOperation: existing.metadata?.videoEditOperation || "text_to_video" });
                 nextConnections = reconcileStoryboardTargetConnections(nextConnections, scriptNode, row, existing.id, referenceIds);
                 videoNodeByRowId.set(row.id, existing.id);
                 return;
@@ -405,7 +407,7 @@ export function useCanvasStoryboard({
         let scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
         const allRows = scriptNode?.metadata?.storyboard?.rows || [];
         const rows = rowIds?.length ? allRows.filter((row) => rowIds.includes(row.id)) : allRows;
-        const describedRows = rows.filter((row) => Boolean((row.videoMotionPrompt || row.plotDescription).trim()));
+        const describedRows = rows.filter((row) => Boolean(storyboardRowVideoPrompt(row)));
         const activeNodeIds = scriptNode ? activeGenerationBatchNodeIds(scriptNode, "storyboard_video") : new Set<string>();
         const targetRows = describedRows.filter((row) => {
             const videoNode = row.videoNodeId ? nodesRef.current.find((node) => node.id === row.videoNodeId && node.type === CanvasNodeType.Video) : undefined;
@@ -425,14 +427,14 @@ export function useCanvasStoryboard({
             const currentRow = scriptNode?.metadata?.storyboard?.rows.find((item) => item.id === row.id) || row;
             const videoNode = currentRow.videoNodeId ? nodesRef.current.find((node) => node.id === currentRow.videoNodeId && node.type === CanvasNodeType.Video) : undefined;
             if (!videoNode || videoNode.metadata?.content) return [];
-            const prompt = (currentRow.videoMotionPrompt || currentRow.plotDescription).trim();
+            const prompt = storyboardRowVideoPrompt(currentRow);
             if (!prompt) return [];
             return [{ row: currentRow, videoNode, prompt }];
         });
         const targetById = new Map(targets.map((target) => [target.videoNode.id, target]));
         const nextNodes = nodesRef.current.map((node) => {
             const target = targetById.get(node.id);
-            return target ? { ...node, metadata: { ...node.metadata, prompt: target.prompt, composerContent: target.videoNode.metadata?.composerContent || target.prompt, model: videoModel, ...storyboardPromptTemplateMetadata(target.row, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, videoStartFrameNodeId: undefined } } : node;
+            return target ? syncStoryboardVideoNode(node, { ...node.metadata, prompt: target.prompt, composerContent: target.videoNode.metadata?.composerContent || target.prompt, model: videoModel, ...storyboardPromptTemplateMetadata(target.row, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, videoStartFrameNodeId: undefined }) : node;
         });
         const nextConnections = connectionsRef.current;
         nodesRef.current = nextNodes;
@@ -520,13 +522,13 @@ export function useCanvasStoryboard({
         let nextConnections = [...connectionsRef.current];
         const targets: Array<{ row: StoryboardRow; node: CanvasNodeData; prompt: string }> = [];
         currentRows.forEach((row, index) => {
-            const prompt = (row.videoMotionPrompt || row.plotDescription).trim();
+            const prompt = storyboardRowVideoPrompt(row);
             const existing = row.videoNodeId ? nextNodes.find((node) => node.id === row.videoNodeId && node.type === CanvasNodeType.Video) : undefined;
             const referenceIds = storyboardRowReferenceNodeIds(currentScriptNode, row, nextNodes, nextConnections, true, existing?.id);
             const composerContent = storyboardComposerContent(prompt, referenceIds, nextNodes);
             const existingMetadata = existing?.metadata?.content ? existing.metadata : resetGenerationTaskMetadata(existing?.metadata);
             const videoNode = existing
-                ? { ...existing, metadata: { ...existingMetadata, prompt, composerContent, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: "image_to_video" as const, videoStartFrameNodeId: row.imageNodeId, seconds: String(row.durationSeconds) } }
+                ? syncStoryboardVideoNode(existing, { ...existingMetadata, prompt, composerContent, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: "image_to_video" as const, videoStartFrameNodeId: row.imageNodeId, seconds: String(row.durationSeconds) })
                 : createCanvasNode(CanvasNodeType.Video, { x: startX, y: currentScriptNode.position.y + index * (videoSpec.height + 36) + videoSpec.height / 2 }, { prompt, composerContent, model: videoModel, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot", workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video", videoEditOperation: "image_to_video", videoStartFrameNodeId: row.imageNodeId, status: NODE_STATUS_IDLE, seconds: String(row.durationSeconds) });
             if (!existing) {
                 videoNode.title = `镜头 ${row.shotNumber} · 视频`;
@@ -566,7 +568,7 @@ function invalidateEditedPromptVariables(previous: StoryboardRow | undefined, ne
     return {
         ...next,
         imagePromptTemplateVariables: next.imageGenerationPrompt === previous.imageGenerationPrompt ? next.imagePromptTemplateVariables : undefined,
-        videoPromptTemplateVariables: next.videoMotionPrompt === previous.videoMotionPrompt ? next.videoPromptTemplateVariables : undefined,
+        videoPromptTemplateVariables: next.videoMotionPrompt === previous.videoMotionPrompt && next.dialogue === previous.dialogue && next.audioEffects === previous.audioEffects ? next.videoPromptTemplateVariables : undefined,
     };
 }
 

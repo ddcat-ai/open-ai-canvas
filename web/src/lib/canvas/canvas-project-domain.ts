@@ -81,6 +81,48 @@ export function storyboardPromptTemplateMetadata(row: StoryboardRow, kind: "imag
         : { promptTemplateOperation: undefined, promptTemplateVariables: undefined };
 }
 
+const EMPTY_STORYBOARD_SOUND_FIELD = /^(?:[-—/]|无|暂无|无台词|无旁白|无对白|无音效|（无）|\(无\))$/;
+
+function cleanStoryboardSoundField(value: string | undefined) {
+    const trimmed = (value || "").trim();
+    return trimmed && !EMPTY_STORYBOARD_SOUND_FIELD.test(trimmed) ? trimmed : "";
+}
+
+// 视频节点的最终发送文本只取输入框可见提示词（不静默追加隐藏上游文本），
+// 因此从分镜行创建或同步视频节点时需将台词/旁白与音效显式编入镜头提示词。
+export function storyboardRowVideoPrompt(row: Pick<StoryboardRow, "videoMotionPrompt" | "plotDescription" | "dialogue" | "audioEffects">) {
+    const base = (row.videoMotionPrompt || row.plotDescription || "").trim();
+    if (!base) return "";
+    const dialogue = cleanStoryboardSoundField(row.dialogue);
+    const audioEffects = cleanStoryboardSoundField(row.audioEffects);
+    return [
+        base,
+        dialogue && !base.includes(dialogue) ? `台词/旁白：${dialogue}` : "",
+        audioEffects && !base.includes(audioEffects) ? `音效：${audioEffects}` : "",
+    ].filter(Boolean).join("\n");
+}
+
+export function syncStoryboardVideoNode(node: CanvasNodeData, metadata: CanvasNodeMetadata): CanvasNodeData {
+    const hasCommittedMedia = Boolean(node.metadata?.content || node.metadata?.storageKey);
+    const nextMetadata: CanvasNodeMetadata = hasCommittedMedia && node.metadata?.prompt !== undefined ? { ...metadata, prompt: node.metadata.prompt } : metadata;
+    if (!node.metadata?.generationSpec) return { ...node, metadata: nextMetadata };
+    const synced = synchronizeGenerationSpec(
+        { ...node, metadata: nextMetadata },
+        {
+            ...(hasCommittedMedia ? {} : { prompt: nextMetadata.prompt }),
+            composerContent: nextMetadata.composerContent,
+            seconds: nextMetadata.seconds,
+        },
+    );
+    return {
+        ...synced,
+        metadata: {
+            ...synced.metadata,
+            ...(synced.metadata?.model === undefined && nextMetadata.model !== undefined ? { model: nextMetadata.model } : {}),
+        },
+    };
+}
+
 export function cinematicStoryboardColumns(columns?: StoryboardColumn[]): StoryboardColumn[] {
     return Array.from(new Set([
         "shotNumber",
@@ -339,12 +381,13 @@ export function attachNodeToStoryboardRow(nodes: CanvasNodeData[], connection: P
     const scriptNode = nodes.find((node) => node.id === scriptNodeId && node.type === CanvasNodeType.Script);
     if (!scriptNodeId || !linkedNode || !scriptNode) return nodes;
     const row = rowId ? scriptNode.metadata?.storyboard?.rows.find((item) => item.id === rowId) : undefined;
-    const videoPrompt = row ? (row.videoMotionPrompt || row.plotDescription).trim() : "";
+    const videoPrompt = row ? storyboardRowVideoPrompt(row) : "";
     const videoComposerContent = row ? storyboardComposerContent(videoPrompt, storyboardRowReferenceNodeIds(scriptNode, row, nodes, [], false), nodes) : "";
 
     return nodes.map((node) => {
         if (row && node.id === linkedNode.id && scriptNodeId === connection.fromNodeId && node.type === CanvasNodeType.Video) {
-            return { ...node, title: `镜头 ${row.shotNumber} · 视频`, metadata: { ...node.metadata, prompt: videoPrompt, composerContent: videoComposerContent, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: node.metadata?.videoEditOperation || "text_to_video", seconds: String(row.durationSeconds) } };
+            const synced = syncStoryboardVideoNode(node, { ...node.metadata, prompt: videoPrompt, composerContent: videoComposerContent, ...storyboardPromptTemplateMetadata(row, "video"), workflowKind: "shot" as const, workflowTitle: `镜头 ${row.shotNumber} 视频`, shotIndex: row.shotNumber, generationMode: "video" as const, videoEditOperation: node.metadata?.videoEditOperation || "text_to_video", seconds: String(row.durationSeconds) });
+            return { ...synced, title: `镜头 ${row.shotNumber} · 视频` };
         }
         if (node.id !== scriptNodeId || node.type !== CanvasNodeType.Script) return node;
         const storyboard = node.metadata?.storyboard;

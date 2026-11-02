@@ -108,7 +108,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
 
     const isStoryboardMedia = sourceNode?.type === CanvasNodeType.Image || sourceNode?.type === CanvasNodeType.Video;
     const basePrompt = isStoryboardMedia && storyboardInputs.length ? removeTrailingInputBlocks(prompt, storyboardInputs) : prompt;
-    const textInputs = connectedInputs.filter((input) => input.type === "text");
+    const textInputs = isStoryboardMedia ? connectedInputs.filter((input) => input.type === "text") : [...connectedInputs.filter((input) => input.type === "text"), ...storyboardInputs];
     const characterReferences = connectedInputs.map((input) => input.character).filter((item): item is CharacterGenerationReference => Boolean(item));
     const upstreamText = textInputs
         .map((input) => input.text)
