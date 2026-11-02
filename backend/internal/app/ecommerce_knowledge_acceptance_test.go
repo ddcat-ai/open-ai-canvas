@@ -136,11 +136,15 @@ func TestEcommerceKnowledgeDrivesDirectionsForFiveProducts(t *testing.T) {
 				}
 				continue
 			}
-			for other, labels := range ecommerceCategoryTitleLabels {
-				for _, label := range labels {
-					if other != product.Category && strings.HasPrefix(item.ID, "kb") && strings.Contains(item.Title, label) {
-						t.Fatalf("%s: retrieved knowledge for another category: %s %s", product.Name, item.ID, item.Title)
-					}
+			// Shared editorial titles can mention both home and appliances. The
+			// stored scope, not words in a display title, defines applicability.
+			if strings.HasPrefix(item.ID, "kb") {
+				stored, err := svc.repo.EcommerceKnowledgeEntryByID(item.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if stored.Category != "general" && stored.Category != product.Category {
+					t.Fatalf("%s: retrieved knowledge from %s: %s", product.Name, stored.Category, item.ID)
 				}
 			}
 		}
