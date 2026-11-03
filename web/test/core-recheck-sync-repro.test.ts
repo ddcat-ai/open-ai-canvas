@@ -7,6 +7,10 @@ import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from 
 import { flushAssetStorePersistence, useAssetStore } from "../src/stores/use-asset-store";
 import type { CanvasOperationsRequest } from "../src/services/api/user-data";
 import { CanvasNodeType } from "../src/types/canvas";
+import { applyCanvasImport } from "../src/pages/canvas/canvas-import-save";
+import { CanvasSyncPendingError } from "../src/lib/canvas/sync-recovery";
+import type { Asset } from "../src/stores/use-asset-store";
+import type { AxiosAdapter } from "axios";
 
 const originalWindow = globalThis.window;
 const originalAdapter = apiClient.defaults.adapter;
@@ -132,6 +136,61 @@ afterEach(async () => {
             value: originalWindow,
         });
 });
+
+for (const withCopy of [false, true]) {
+    test(`reopening a pending third-party import${withCopy ? " with a copied node" : ""} uploads its cached assets before confirming canvas operations`, async () => {
+        const assets = new Map<string, Asset>();
+        const requests: string[] = [];
+        const canvasAdapter = apiClient.defaults.adapter as AxiosAdapter;
+        apiClient.defaults.adapter = async (config) => {
+            const url = String(config.url);
+            if (url.startsWith("/assets/")) {
+                requests.push(`${config.method} ${url}`);
+                const id = url.slice("/assets/".length);
+                if (config.method === "put") assets.set(id, JSON.parse(config.data).asset);
+                const asset = assets.get(id);
+                return { config, status: asset ? 200 : 404, statusText: "", headers: {}, data: asset ? { code: 0, data: { asset } } : { code: 404, msg: "not found" } };
+            }
+            if (url.endsWith("/operations")) requests.push("canvas operations");
+            return canvasAdapter(config);
+        };
+        let content: Pick<CanvasProject, "nodes" | "connections"> = { nodes: [...remote.nodes], connections: [] };
+        const imported = {
+            ...node("libtv-node"),
+            type: CanvasNodeType.Image,
+            metadata: { content: "https://libtv-res.liblib.art/fixture.png", importSource: { provider: "libtv" as const, projectUuid: "fixture", nodeKey: "fixture", batchId: "fixture" } },
+        };
+        expect(
+            await applyCanvasImport([imported], [], {
+                canvasId: "canvas",
+                read: () => content,
+                write: (next) => {
+                    content = next;
+                },
+                persistLocal: async () => {
+                    useCanvasStore.getState().updateProject("canvas", content);
+                    await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+                },
+                syncRemote: async () => {
+                    throw new CanvasSyncPendingError();
+                },
+            }),
+        ).toBe("pending");
+        const assetId = content.nodes[1].metadata?.assetId;
+        expect(assetId).toBeTruthy();
+        if (withCopy) {
+            content = { ...content, nodes: [...content.nodes, { ...content.nodes[1], id: "copy" }] };
+            useCanvasStore.getState().updateProject("canvas", content);
+            await flushCanvasStorePersistence();
+        }
+        await initializeRemoteUserDataSession(scope);
+        await loadCanvasProjectForEditing("canvas");
+        await saveRemoteUserDataNow("canvas");
+        expect(assets.has(assetId!)).toBe(true);
+        expect(requests.indexOf(`put /assets/${assetId}`)).toBeLessThan(requests.indexOf("canvas operations"));
+        expect(remote.nodes.map((item) => item.id)).toEqual(withCopy ? ["original", "libtv-node", "copy"] : ["original", "libtv-node"]);
+    });
+}
 
 test("reopening a dirty local draft preserves a node added remotely", async () => {
     useCanvasStore.getState().renameProject("canvas", "local edit");
