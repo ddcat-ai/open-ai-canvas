@@ -112,6 +112,29 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 }
 
 func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicModelChannel, error) {
+	return s.copySystemChannel(actor, id, nil)
+}
+
+type ChannelKeyGroupRequest struct {
+	Name       string `json:"name"`
+	APIKey     string `json:"apiKey"`
+	SecretKey  string `json:"secretKey"`
+	CopyModels bool   `json:"copyModels"`
+}
+
+// Key groups retain independent channel IDs so existing billing and history remain valid.
+func (s *Service) CreateChannelKeyGroup(actor *model.User, id string, req ChannelKeyGroupRequest) (*PublicModelChannel, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	req.Name, req.APIKey = strings.TrimSpace(req.Name), strings.TrimSpace(req.APIKey)
+	if req.Name == "" || len([]rune(req.Name)) > 80 || req.APIKey == "" {
+		return nil, BadAuthRequest("请填写分组名称（最多80字）和该分组的 API Key")
+	}
+	return s.copySystemChannel(actor, id, &req)
+}
+
+func (s *Service) copySystemChannel(actor *model.User, id string, group *ChannelKeyGroupRequest) (*PublicModelChannel, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
@@ -128,6 +151,9 @@ func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicM
 			sourceModels = append(sourceModels, model.ChannelModel{ModelKey: name, ProviderModelKey: name, DisplayName: name, BillingMode: "fixed_request", Enabled: false, PriceVersion: 1})
 		}
 	}
+	if group != nil && !group.CopyModels {
+		sourceModels = nil
+	}
 	channelID, err := s.repo.NextPrefixedID("CHANNEL")
 	if err != nil {
 		return nil, err
@@ -137,6 +163,13 @@ func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicM
 	channel.UserID = actor.ID
 	channel.Scope = model.ChannelScopeSystem
 	channel.Name = duplicateChannelName(source.Name)
+	if group != nil {
+		channel.Name, channel.APIKey, channel.SecretKey = group.Name, group.APIKey, strings.TrimSpace(group.SecretKey)
+		channel.Enabled = true
+		if !group.CopyModels {
+			channel.ModelsJSON, channel.RetiredModelsJSON = "[]", "[]"
+		}
+	}
 	channel.CreatedAt = time.Time{}
 	channel.UpdatedAt = time.Time{}
 	channel.DeletedAt = gorm.DeletedAt{}
@@ -158,6 +191,10 @@ func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicM
 		channelModel.UpdatedAt = time.Time{}
 		channelModel.DeletedAt = gorm.DeletedAt{}
 		channelModel.PriceTiers = nil
+		if group != nil {
+			channelModel.Enabled = false
+			channelModel.ChannelLabel = group.Name
+		}
 		channelModels = append(channelModels, channelModel)
 		for _, sourceTier := range sourceModel.PriceTiers {
 			tierID, tierErr := s.repo.NextPrefixedID("PTIER")

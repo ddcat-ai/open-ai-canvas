@@ -460,7 +460,22 @@ export function getAdminFeatureAvailability() {
 }
 
 export function updateAdminFeatureAvailability(
-    features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "inspirationSourcesVisible" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled">>,
+    features: Partial<
+        Pick<
+            FeatureAvailability,
+            | "welcomeEnabled"
+            | "shortDramaEnabled"
+            | "taskCenterEnabled"
+            | "creditsEnabled"
+            | "customChannelsEnabled"
+            | "frontendModelsEnabled"
+            | "pluginCenterEnabled"
+            | "systemPluginsVisibleToUsers"
+            | "inspirationSourcesVisible"
+            | "imageWorkbenchEnabled"
+            | "videoWorkbenchEnabled"
+        >
+    >,
 ) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
@@ -548,6 +563,10 @@ export function createAdminChannel(input: Partial<ModelChannel> & { useGlobalCon
 
 export function duplicateAdminChannel(id: string) {
     return http.post<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}/duplicate`);
+}
+
+export function createAdminChannelKeyGroup(id: string, input: { name: string; apiKey: string; secretKey?: string; copyModels: boolean }) {
+    return http.post<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}/key-groups`, input);
 }
 
 /** 系统渠道导出文件：不含 API Key、Secret Key、自定义请求头和代理地址。 */
@@ -642,8 +661,7 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams &
-    Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
+export type AdminApiLogParams = AdminListParams & Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });

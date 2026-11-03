@@ -11,6 +11,8 @@ import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncA
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { selectRetriedNodeRoute } from "@/lib/canvas/canvas-route-retry";
+import type { TaskRetryRoute } from "@/services/api/task-center";
 import { cinematicStoryboardColumns, storyboardRowsFromTask } from "@/lib/canvas/canvas-project-domain";
 import { generationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
@@ -577,6 +579,21 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
             void coordinator.abortAndDrain();
         };
     }, [message, projectId, projectLoaded, recoverInterruptedGenerationTasks]);
+
+    useEffect(() => {
+        const handleRetry = (event: Event) => {
+            const { task, route } = (event as CustomEvent<{ task?: GenerationTask; route?: TaskRetryRoute }>).detail || {};
+            if (!task || task.projectId !== projectId) return;
+            if (route) setNodes((nodes) => nodes.map((node) => (node.metadata?.taskId === task.id && !node.metadata.isBatchRoot ? selectRetriedNodeRoute(node, route) : node)));
+            for (const node of nodesRef.current) {
+                if (node.metadata?.taskId !== task.id || node.metadata.isBatchRoot) continue;
+                bindGenerationTask(node.id, task);
+                void resyncGenerationTaskNode(node);
+            }
+        };
+        window.addEventListener("canvas:task-retried", handleRetry);
+        return () => window.removeEventListener("canvas:task-retried", handleRetry);
+    }, [projectId, nodesRef, bindGenerationTask, resyncGenerationTaskNode, setNodes]);
 
     useEffect(
         () => () => {

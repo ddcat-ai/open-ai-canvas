@@ -14,8 +14,21 @@ import { formatTaskKind, generationTaskStatusLabel, mediaDeliverySummary, operat
 import { buildVideoOperationPrompt } from "@/lib/prompts";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
-import { createGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, recoverGenerationTaskMedia, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import {
+    createGenerationTask,
+    formatTaskLog,
+    listGenerationTasks,
+    listTaskLogs,
+    queryFailedVideoProviderTask,
+    queryGenerationTask,
+    retryGenerationTask,
+    recoverGenerationTaskMedia,
+    type CreateTaskInput,
+    type GenerationTask,
+    type TaskLog,
+} from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
+import { TaskRouteRetryButton } from "@/components/task-route-retry-button";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -97,25 +110,35 @@ export default function TasksPage() {
     const tasksRef = useRef<GenerationTask[]>([]);
     const canvasById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const domainProjectNameById = useMemo(() => new Map(domainProjects.map((item) => [item.project.id, item.project.name])), [domainProjects]);
-    const projectOptions = useMemo(() => projects.map((project) => {
-        const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
-        return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
-    }), [domainProjectNameById, projects]);
+    const projectOptions = useMemo(
+        () =>
+            projects.map((project) => {
+                const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
+                return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
+            }),
+        [domainProjectNameById, projects],
+    );
     const modelOptions = useMemo(() => Array.from(new Set(tasks.map((task) => formatModelName(effectiveConfig, task)).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")), [effectiveConfig, tasks]);
-    const filteredTasks = useMemo(() => tasks.filter((task) => {
-        if (statusFilter === "all") return true;
-        if (statusFilter === "active") return task.status === "queued" || task.status === "running";
-        if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
-        if (statusFilter === "succeeded") return task.status === "succeeded";
-        return false;
-    }).filter((task) => {
-        if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
-        if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
-        if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
-        const query = keyword.trim().toLowerCase();
-        const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
-        return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
-    }), [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks]);
+    const filteredTasks = useMemo(
+        () =>
+            tasks
+                .filter((task) => {
+                    if (statusFilter === "all") return true;
+                    if (statusFilter === "active") return task.status === "queued" || task.status === "running";
+                    if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
+                    if (statusFilter === "succeeded") return task.status === "succeeded";
+                    return false;
+                })
+                .filter((task) => {
+                    if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
+                    if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
+                    if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
+                    const query = keyword.trim().toLowerCase();
+                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
+                    return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
+                }),
+        [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks],
+    );
     const visibleTasks = useMemo(() => filteredTasks.slice((page - 1) * pageSize, page * pageSize), [filteredTasks, page, pageSize]);
     const taskStats = useMemo(() => {
         let today = 0;
@@ -135,10 +158,7 @@ export default function TasksPage() {
         return { total: tasks.length, today, active, succeeded, failed };
     }, [tasks]);
     const groupingActive = viewMode === "list" && groupEnabled;
-    const visibleTaskGroups = useMemo(
-        () => (groupingActive ? groupTasksByCanvas(filteredTasks, canvasById, domainProjectNameById) : []),
-        [canvasById, domainProjectNameById, filteredTasks, groupingActive],
-    );
+    const visibleTaskGroups = useMemo(() => (groupingActive ? groupTasksByCanvas(filteredTasks, canvasById, domainProjectNameById) : []), [canvasById, domainProjectNameById, filteredTasks, groupingActive]);
 
     const changeViewMode = (mode: TaskViewMode) => {
         setViewMode(mode);
@@ -163,6 +183,12 @@ export default function TasksPage() {
         }
     };
 
+    const routeRetried = (next: GenerationTask) => {
+        setTasks((items) => items.map((item) => (item.id === next.id ? next : item)));
+        setDetailTask((current) => (current?.id === next.id ? next : current));
+        setStatusFilter("active");
+        setPage(1);
+    };
     const renderTaskRow = (task: GenerationTask) => (
         <TaskListRow
             key={task.id}
@@ -174,19 +200,12 @@ export default function TasksPage() {
             actingId={actingId}
             onOpen={() => void openTaskDetail(task)}
             onRetry={() => void runAction(task.id)}
+            onRouteRetried={routeRetried}
             onPreview={() => task.previewUrl && setMediaPreview({ url: task.previewUrl, kind: task.previewKind === "video" ? "video" : "image", title: task.prompt || formatTaskKind(task) })}
         />
     );
 
-    const renderTaskGridCard = (task: GenerationTask) => (
-        <TaskGridCard
-            key={task.id}
-            task={task}
-            actingId={actingId}
-            onOpen={() => void openTaskDetail(task)}
-            onRetry={() => void runAction(task.id)}
-        />
-    );
+    const renderTaskGridCard = (task: GenerationTask) => <TaskGridCard key={task.id} task={task} actingId={actingId} onOpen={() => void openTaskDetail(task)} onRetry={() => void runAction(task.id)} onRouteRetried={routeRetried} />;
 
     useEffect(() => {
         if (!shortDramaEnabled) {
@@ -236,20 +255,23 @@ export default function TasksPage() {
         );
     }, []);
 
-    const loadTasks = useCallback(async (showLoading = false) => {
-        if (showLoading) setLoading(true);
-        try {
-            const next = await listGenerationTasks();
-            setTasks((current) => reconcileTaskSummaries(current, next));
-            void syncCompletedCanvasTasks(next);
-            return next;
-        } catch (error) {
-            if (showLoading) message.error(error instanceof Error ? error.message : "任务加载失败");
-            return undefined;
-        } finally {
-            if (showLoading) setLoading(false);
-        }
-    }, [message, syncCompletedCanvasTasks]);
+    const loadTasks = useCallback(
+        async (showLoading = false) => {
+            if (showLoading) setLoading(true);
+            try {
+                const next = await listGenerationTasks();
+                setTasks((current) => reconcileTaskSummaries(current, next));
+                void syncCompletedCanvasTasks(next);
+                return next;
+            } catch (error) {
+                if (showLoading) message.error(error instanceof Error ? error.message : "任务加载失败");
+                return undefined;
+            } finally {
+                if (showLoading) setLoading(false);
+            }
+        },
+        [message, syncCompletedCanvasTasks],
+    );
 
     const openTaskDetail = useCallback(
         async (task: GenerationTask) => {
@@ -304,9 +326,7 @@ export default function TasksPage() {
         try {
             const currentTask = await queryGenerationTask(id);
             const savingMedia = Boolean(currentTask.mediaStage);
-            const next = currentTask.status === "queued" || currentTask.status === "running" || currentTask.status === "succeeded"
-                ? currentTask
-                : savingMedia ? await recoverGenerationTaskMedia(id) : await retryGenerationTask(id);
+            const next = currentTask.status === "queued" || currentTask.status === "running" || currentTask.status === "succeeded" ? currentTask : savingMedia ? await recoverGenerationTaskMedia(id) : await retryGenerationTask(id);
             setTasks((items) => items.map((item) => (item.id === id ? next : item)));
             setDetailTask((current) => (current?.id === id ? { ...current, ...next } : current));
             setStatusFilter("active");
@@ -361,7 +381,7 @@ export default function TasksPage() {
                     prompt: values.prompt,
                     provider: values.operation === "compare_versions" ? "internal-agent" : "openai-compatible",
                     model: values.operation === "compare_versions" ? "version-router" : requestConfig.model,
-					...(values.operation !== "compare_versions" && logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}),
+                    ...(values.operation !== "compare_versions" && logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}),
                     input: {
                         source: "tasks-page",
                         mode: values.operation === "compare_versions" ? "workflow" : "video",
@@ -400,8 +420,15 @@ export default function TasksPage() {
                     />
                     <CollectionToolbar
                         active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")}
-                        onReset={() => { setKeyword(""); setProjectFilter("all"); setKindFilter("all"); setModelFilter("all"); setStatusFilter("all"); setPage(1); }}
-                        trailing={(
+                        onReset={() => {
+                            setKeyword("");
+                            setProjectFilter("all");
+                            setKindFilter("all");
+                            setModelFilter("all");
+                            setStatusFilter("all");
+                            setPage(1);
+                        }}
+                        trailing={
                             <div className="flex flex-wrap items-center gap-2">
                                 {viewMode === "list" ? (
                                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
@@ -422,32 +449,82 @@ export default function TasksPage() {
                                     />
                                 </div>
                             </div>
-                        )}
+                        }
                     >
-                        <TaskStatusFilterBar stats={taskStats} value={statusFilter} onChange={(value) => { setStatusFilter(value); setPage(1); }} />
-                        <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索任务、模型或画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                        <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
-                        <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: "全部类型", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }]} />
-                        <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
+                        <TaskStatusFilterBar
+                            stats={taskStats}
+                            value={statusFilter}
+                            onChange={(value) => {
+                                setStatusFilter(value);
+                                setPage(1);
+                            }}
+                        />
+                        <Input
+                            id="task-search"
+                            name="taskSearch"
+                            allowClear
+                            className="app-list-search"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder="搜索任务、模型或画布"
+                            onChange={(event) => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                        />
+                        <Select
+                            className="w-full sm:w-48"
+                            value={projectFilter}
+                            onChange={(value) => {
+                                setProjectFilter(value);
+                                setPage(1);
+                            }}
+                            options={[{ label: "全部画布", value: "all" }, ...projectOptions]}
+                        />
+                        <Select
+                            className="w-full sm:w-32"
+                            value={kindFilter}
+                            onChange={(value) => {
+                                setKindFilter(value as TaskKindFilter);
+                                setPage(1);
+                            }}
+                            options={[
+                                { label: "全部类型", value: "all" },
+                                { label: "文本", value: "text" },
+                                { label: "图片", value: "image" },
+                                { label: "视频", value: "video" },
+                            ]}
+                        />
+                        <Select
+                            className="w-full sm:w-44"
+                            value={modelFilter}
+                            onChange={(value) => {
+                                setModelFilter(value);
+                                setPage(1);
+                            }}
+                            options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]}
+                        />
                     </CollectionToolbar>
                 </div>
 
                 <div className="collection-content task-collection-content">
-                    {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
+                    {loading && !tasks.length ? (
+                        <div className="library-loading-grid" aria-label="正在加载任务">
+                            {Array.from({ length: 8 }, (_, index) => (
+                                <div key={index} className="library-skeleton" />
+                            ))}
+                        </div>
+                    ) : null}
                     {!loading || tasks.length ? (
                         visibleTasks.length ? (
                             viewMode === "grid" ? (
-                                <div className="task-grid-view">
-                                    {visibleTasks.map(renderTaskGridCard)}
-                                </div>
+                                <div className="task-grid-view">{visibleTasks.map(renderTaskGridCard)}</div>
                             ) : groupingActive ? (
                                 <div className="task-group-list">
                                     {visibleTaskGroups.map((group) => (
                                         <section key={group.key} className="task-group">
                                             <TaskGroupHeader group={group} retrying={retryingGroup === group.key} onRetryFailed={() => void retryGroupTasks(group.key, group.tasks)} />
-                                            <div className="task-record-list">
-                                                {group.tasks.map(renderTaskRow)}
-                                            </div>
+                                            <div className="task-record-list">{group.tasks.map(renderTaskRow)}</div>
                                         </section>
                                     ))}
                                 </div>
@@ -459,11 +536,26 @@ export default function TasksPage() {
                                 compact
                                 title={taskEmptyState(statusFilter).title}
                                 description={taskEmptyState(statusFilter).description}
-                                action={<Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>}
+                                action={
+                                    <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
+                                        新建任务
+                                    </Button>
+                                }
                             />
                         )
                     ) : null}
-                    {!groupingActive ? <PaginationBar current={page} pageSize={pageSize} total={filteredTasks.length} pageSizeOptions={[20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} /> : null}
+                    {!groupingActive ? (
+                        <PaginationBar
+                            current={page}
+                            pageSize={pageSize}
+                            total={filteredTasks.length}
+                            pageSizeOptions={[20, 50, 100]}
+                            onChange={(nextPage, nextPageSize) => {
+                                setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                                setPageSize(nextPageSize);
+                            }}
+                        />
+                    ) : null}
                 </div>
             </WorkspacePage>
             <Modal className="library-modal" title="新建异步生成任务" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText="创建任务">
@@ -500,9 +592,27 @@ export default function TasksPage() {
                             {detailTask.providerCancelRequestedAt ? <InfoItem label="请求取消时间" value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
                         </div>
                         <div className="flex flex-wrap justify-end gap-2">
-                            {detailTask.canRecoverMedia ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id)}>重试保存</Button> : null}
-                            {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button> : null}
-                            {isTaskFailed(detailTask) ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>导出诊断包</Button> : null}
+                            {isTaskFailed(detailTask) && !detailTask.canRecoverMedia && (detailTask.type === "canvas_image" || detailTask.type === "canvas_video") && (
+                                <TaskRouteRetryButton taskId={detailTask.id} disabled={actingId === detailTask.id} onRetried={routeRetried} />
+                            )}
+                            {detailTask.canRecoverMedia ? (
+                                <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id)}>
+                                    重试保存
+                                </Button>
+                            ) : null}
+                            {canQueryProviderTask(detailTask) ? (
+                                <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>
+                                    手动查询任务
+                                </Button>
+                            ) : null}
+                            {isTaskFailed(detailTask) ? (
+                                <Button
+                                    icon={<Bug className="size-4" />}
+                                    onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}
+                                >
+                                    导出诊断包
+                                </Button>
+                            ) : null}
                         </div>
                         {detailTask.error ? <pre className="task-detail-error max-h-28 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{generationErrorMessage(detailTask.error)}</pre> : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
@@ -553,7 +663,16 @@ function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[
     let changed = false;
     const reconciled = next.map((task) => {
         const previous = currentById.get(task.id);
-        if (previous?.updatedAt === task.updatedAt && previous.previewUrl === task.previewUrl && previous.previewPosterUrl === task.previewPosterUrl && previous.billing?.status === task.billing?.status && previous.billing?.amountMicrocredits === task.billing?.amountMicrocredits && previous.billing?.chargedMicrocredits === task.billing?.chargedMicrocredits && previous.billing?.refundedMicrocredits === task.billing?.refundedMicrocredits) return previous;
+        if (
+            previous?.updatedAt === task.updatedAt &&
+            previous.previewUrl === task.previewUrl &&
+            previous.previewPosterUrl === task.previewPosterUrl &&
+            previous.billing?.status === task.billing?.status &&
+            previous.billing?.amountMicrocredits === task.billing?.amountMicrocredits &&
+            previous.billing?.chargedMicrocredits === task.billing?.chargedMicrocredits &&
+            previous.billing?.refundedMicrocredits === task.billing?.refundedMicrocredits
+        )
+            return previous;
         changed = true;
         return task;
     });
@@ -684,7 +803,9 @@ function TaskParameters({ inputJson }: { inputJson?: string }) {
             <Typography.Text strong>参数</Typography.Text>
             {fields.length ? (
                 <div className="task-detail-facts mt-2 grid text-sm sm:grid-cols-2">
-                    {fields.map((field) => <InfoItem key={field.label} label={field.label} value={field.value} wrap />)}
+                    {fields.map((field) => (
+                        <InfoItem key={field.label} label={field.label} value={field.value} wrap />
+                    ))}
                 </div>
             ) : (
                 <div className="mt-2 rounded-md bg-foreground/[.04] px-3 py-3 text-sm text-foreground/50">暂无参数记录</div>
@@ -732,7 +853,7 @@ function parseTaskInput(value?: string): Record<string, unknown> | null {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function formatParameterValue(value: unknown) {
@@ -750,14 +871,16 @@ function booleanParameter(value: unknown) {
 
 function formatReferenceList(value: unknown, kind: string) {
     if (!Array.isArray(value) || !value.length) return "无";
-    return value.map((item, index) => {
-        const reference = asRecord(item);
-        const name = typeof reference.name === "string" && reference.name.trim() && !/^https?:|^data:|^blob:/i.test(reference.name) ? reference.name.trim() : `${kind}${index + 1}`;
-        const dimensions = typeof reference.width === "number" && typeof reference.height === "number" ? `${reference.width}×${reference.height}` : "";
-        const duration = typeof reference.durationMs === "number" && reference.durationMs > 0 ? `${Math.round(reference.durationMs / 100) / 10}s` : "";
-        const details = [dimensions, duration].filter(Boolean).join("，");
-        return details ? `${name}（${details}）` : name;
-    }).join("、");
+    return value
+        .map((item, index) => {
+            const reference = asRecord(item);
+            const name = typeof reference.name === "string" && reference.name.trim() && !/^https?:|^data:|^blob:/i.test(reference.name) ? reference.name.trim() : `${kind}${index + 1}`;
+            const dimensions = typeof reference.width === "number" && typeof reference.height === "number" ? `${reference.width}×${reference.height}` : "";
+            const duration = typeof reference.durationMs === "number" && reference.durationMs > 0 ? `${Math.round(reference.durationMs / 100) / 10}s` : "";
+            const details = [dimensions, duration].filter(Boolean).join("，");
+            return details ? `${name}（${details}）` : name;
+        })
+        .join("、");
 }
 
 function formatTaskJson(value?: string) {

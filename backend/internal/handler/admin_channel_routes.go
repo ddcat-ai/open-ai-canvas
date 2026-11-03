@@ -11,6 +11,24 @@ import (
 )
 
 func registerAdminChannelRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.POST("/admin/channels/:id/key-groups", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.ChannelKeyGroupRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		channel, err := svc.CreateChannelKeyGroup(user, c.Param("id"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"channel": channel})
+	})
 	r.GET("/admin/channels", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

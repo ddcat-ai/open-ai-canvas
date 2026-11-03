@@ -200,7 +200,7 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 			updates["billing_order_id"] = ""
 		}
 		updated := tx.Model(&model.Task{}).
-			Where("id = ? AND user_id = ? AND status IN ?", taskID, userID, []model.TaskStatus{model.TaskStatusFailed, model.TaskStatusCancelled}).
+			Where("id = ? AND user_id = ? AND route_run = ? AND status IN ?", taskID, userID, prepared.RouteRun, []model.TaskStatus{model.TaskStatusFailed, model.TaskStatusCancelled}).
 			Updates(updates)
 		if updated.Error != nil {
 			return updated.Error

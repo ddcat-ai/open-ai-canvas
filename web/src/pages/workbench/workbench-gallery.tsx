@@ -1,4 +1,5 @@
 import { Button, Dropdown, Input } from "antd";
+import { TaskRouteRetryButton } from "@/components/task-route-retry-button";
 import { ArrowUpRight, CircleAlert, Clapperboard, Copy, Download, Ellipsis, ImageOff, ImagePlus, LoaderCircle, Maximize2, Play, RefreshCw, RotateCcw, Search, SquarePen, X } from "lucide-react";
 import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
@@ -49,6 +50,7 @@ export type GalleryActions = {
     makeVideo?: (output: WorkbenchOutput) => void;
     cancelTask: (task: GenerationTask) => void;
     retryTask: (task: GenerationTask) => void;
+    routeRetried?: (task: GenerationTask) => void;
     reuse: (batch: GalleryBatch) => void;
     copyPrompt: (batch: GalleryBatch) => void;
     downloadAll: (batch: GalleryBatch) => void;
@@ -233,6 +235,7 @@ function FailedTile({ task, actions, busy }: { task: GenerationTask; actions: Ga
                 <Button size="small" icon={busy ? <LoaderCircle className="wb-spin" /> : <RotateCcw />} disabled={busy} onClick={() => actions.retryTask(task)}>
                     重新生成
                 </Button>
+                {!task.canRecoverMedia && <TaskRouteRetryButton taskId={task.id} disabled={busy} onRetried={actions.routeRetried} />}
             </span>
         </div>
     );

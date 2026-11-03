@@ -5,6 +5,15 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 上游分组 Key 与失败任务切换线路
+
+`POST /admin/channels/:id/key-groups` 仅管理员可调用，输入 `name`、`apiKey`、可选 `secretKey` 和 `copyModels`。新分组继承源渠道的上游地址及连接设置，密钥单独加密保存；不继承源 Secret Key。复制模型时保留展示名和价格作为草稿，线路名称设为新分组名，模型默认停用，管理员检查独立价格后启用。响应不返回密钥。后台按规范化上游地址归组，不合并不同 API 路径；每个 Key 保留独立渠道 ID，历史任务、账单和并发设置仍可追溯，不改变数据库结构。
+
+`GET /tasks/:id/retry-routes` 针对本人失败或取消的普通图片/视频任务返回同展示名、同能力的兼容线路，包括 `channelId`、`modelKey`、`label`、`modelName`、`amountMicrocredits`、`priceVersion`、`routeRun`。只显示当前用户有权访问且启用、参数与参考素材兼容、价格有效的线路。查询只报价，不预占积分，不返回上游地址或凭证。
+
+`POST /tasks/:id/retry-route` 输入所选 `channelId`、`modelKey`、`routeRun`、`priceVersion` 和必填 `approvedAmountMicrocredits`。服务端重查权限、能力与价格；报价或任务世代已变则拒绝。保留原提示词、参考素材、任务 ID，重建目标线路配置并将任务重新入队；预授权与更新状态在同一事务中完成。每次主动重试递增 `routeRun`，并以旧值作条件更新，重复或迟到请求不能重复预占积分。结算上限为本次批准金额。
+
+媒体已经生成但保存失败、内容审核失败、费用待核对、上游取消仍待确认、Agent 或智能创作任务，不进入这个换线路流程，应使用其原有保存、核对或审批入口。此功能不自动切换，也不会在用户未确认新价格时提交更贵的线路。
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。
