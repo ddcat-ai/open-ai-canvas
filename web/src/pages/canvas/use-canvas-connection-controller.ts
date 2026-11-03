@@ -11,7 +11,7 @@ import { connectedNodeCenterFromEdgeDrop } from "@/lib/canvas/canvas-connected-n
 import { canvasConnectionError, connectionInputSummary } from "@/lib/canvas/canvas-connection-policy";
 import { resolveCanvasConnectionTarget, type CanvasConnectionDropTarget as ConnectionDropTarget } from "@/lib/canvas/canvas-connection-hit";
 import { audioModelForConnectionInput } from "@/lib/model-selection";
-import { attachNodeToStoryboardRow, createCanvasNode, normalizeConnection, storyboardPromptTemplateMetadata, storyboardRowFromHandle } from "@/lib/canvas/canvas-project-domain";
+import { attachNodeToStoryboardRow, createCanvasNode, normalizeConnection, storyboardPromptTemplateMetadata, storyboardRowFromHandle, storyboardRowVideoPrompt } from "@/lib/canvas/canvas-project-domain";
 import { canvasImageNodeDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { imageNodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
 import { createCanvasDrawingFromImage } from "@/lib/canvas/canvas-drawing-storage";
@@ -254,7 +254,7 @@ export function useCanvasConnectionController({
             .map((nodeId) => nodesRef.current.find((node) => node.id === nodeId))
             .filter((node): node is CanvasNodeData => Boolean(node));
         const storyboardRow = batchSourceNodeIds.length ? undefined : nodeType === CanvasNodeType.Video ? storyboardRowFromHandle(nodesRef.current, pending.connection.nodeId, pending.connection.handleId) : undefined;
-        const videoPrompt = storyboardRow ? (storyboardRow.videoMotionPrompt || storyboardRow.plotDescription).trim() : "";
+        const videoPrompt = storyboardRow ? storyboardRowVideoPrompt(storyboardRow) : "";
         const sourceNode = pending.connection.handleType === "source" ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
         const batchScriptPrompt = batchSourceNodes
             .filter((node) => node.type === CanvasNodeType.Text)
