@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"strings"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -35,7 +34,7 @@ func cloudAgentTruncatedToolArguments(task *model.Task) bool {
 	if task == nil {
 		return false
 	}
-	return strings.Contains(task.Error, "工具参数不是完整 JSON")
+	return agentModelTaskReason(task) == agentModelFailureArguments
 }
 
 func (s *Service) correctCloudAgentTruncatedCalls(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
