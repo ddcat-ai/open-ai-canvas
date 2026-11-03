@@ -458,8 +458,31 @@
     min-width: 0;
 }
 
+.agent-conversation-messages > * {
+    /* 长对话会累积上千条消息：让浏览器跳过视口外消息的布局与绘制。 */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 160px;
+}
+
 .agent-conversation-messages > * + * {
     margin-top: 8px;
+}
+
+.agent-load-earlier {
+    display: block;
+    width: 100%;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 8px;
+    background: var(--agent-surface-soft);
+    color: var(--agent-ink);
+    font-size: 12px;
+    line-height: 18px;
+    cursor: pointer;
+}
+
+.agent-load-earlier:hover {
+    background: var(--agent-surface-hover);
 }
 
 /* 状态行的图标只是语义标记，不应把正文向右推成另一条内容轴。 */
