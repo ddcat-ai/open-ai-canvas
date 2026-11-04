@@ -104,7 +104,7 @@ func providerBusinessFailure(payload map[string]any) (string, string, bool) {
 	code := strings.ToLower(strings.TrimSpace(fmt.Sprint(payload["code"])))
 	if code != "" && code != "0" &&
 		code != "success" && code != "succeeded" &&
-		code != "ok" && code != "<nil>" {
+		code != "ok" && code != "<nil>" && !volcengineVisualSuccessEnvelope(code, payload) {
 		code, message := providerFailureDetails(payload)
 		return code, message, true
 	}
@@ -120,6 +120,12 @@ func providerBusinessFailure(payload map[string]any) (string, string, bool) {
 	}
 
 	return "", "", false
+}
+
+// volcengineVisualSuccessEnvelope 识别火山视觉 OpenAPI（即梦等）的成功信封：code=10000 且 message=Success。
+// 只放行这一组合，其他协议里的 10000 仍按业务失败处理。
+func volcengineVisualSuccessEnvelope(code string, payload map[string]any) bool {
+	return code == "10000" && strings.EqualFold(strings.TrimSpace(stringField(payload, "message")), "success")
 }
 
 func normalizedProviderErrorCode(value any) string {

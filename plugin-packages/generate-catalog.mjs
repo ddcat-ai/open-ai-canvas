@@ -550,6 +550,18 @@ add({
 
 const jimengSizeParts = split(lower(trim(ref("request.aspectRatio"))), "x");
 const jimengHasPixelSize = and(eq(len(jimengSizeParts), 2), gt(toFloat(at(jimengSizeParts, 0)), 0), gt(toFloat(at(jimengSizeParts, 1)), 0));
+// 火山视觉 OpenAPI 的成功码是 code=10000，其余 code 都是业务失败，不能按“非零即失败”的 errorPaths 处理。
+// data.status=done 只表示处理结束，成败仍看 code；not_found / expired 是任务失效的终态。
+const volcVisualBusinessFailed = and(ref("response.code"), ne({ $toString: ref("response.code") }, "10000"));
+const jimengTaskGone = { $in: [lower(ref("response.data.status")), ["not_found", "expired"]] };
+const jimengResponse = (kind, results) => asyncResponse(kind, {
+  taskId: coalesce(ref("response.data.task_id"), ref("response.task_id"), ref("taskId")),
+  status: { $switch: { cases: [{ when: volcVisualBusinessFailed, then: "failed" }, { when: jimengTaskGone, then: "failed" }], default: coalesce(ref("response.data.status"), "pending") } },
+  message: conditional(and({ $not: volcVisualBusinessFailed }, jimengTaskGone), "即梦任务不存在或已过期，请重新生成", coalesce(ref("response.message"), ref("response.error.message"))),
+  [kind + "s"]: results,
+  errorPaths: undefined,
+  messagePaths: ["message"]
+});
 
 add({
   id: "volcengine-jimeng-image", providerId: "volcengine-jimeng-image", name: "Volcengine Jimeng Image", vendor: "Volcengine", capability: "image",
@@ -566,7 +578,7 @@ add({
     req_json: omit(ref("request.providerOptions.volcengine-jimeng-image.req_json"))
   }, { originPath: true, query: { Action: "CVSync2AsyncSubmitTask", Version: "2022-08-31" } }),
   poll: { method: "POST", path: "/", originPath: true, contentType: "application/json", query: { Action: "CVSync2AsyncGetResult", Version: "2022-08-31" }, body: { req_key: ref("request.model"), task_id: ref("taskId"), req_json: "{\"return_url\":true}" } },
-  response: asyncResponse("image", { taskId: coalesce(ref("response.data.task_id"), ref("response.task_id"), ref("taskId")), status: coalesce(ref("response.data.status"), ref("response.status"), "pending"), images: coalesce(ref("response.data.image_urls"), ref("response.data.binary_data_base64")), errorPaths: ["code"], messagePaths: ["message"] })
+  response: jimengResponse("image", coalesce(ref("response.data.image_urls"), ref("response.data.binary_data_base64")))
 });
 
 add({
@@ -676,6 +688,12 @@ add({
   response: asyncResponse("video", { videos: coalesce(ref("response.url"), ref("response.video_url"), ref("response.output.url")), errorPaths: ["error.code"], messagePaths: ["error.message"] })
 });
 
+// NewAPI 任务查询的失败原因在 data.fail_reason（外层 message 为空），兼容直接返回的扁平结构。
+const newAPITaskMessage = coalesce(
+  ref("response.error.message"), ref("response.message"), ref("response.fail_reason"),
+  ref("response.data.fail_reason"), ref("response.data.error.message")
+);
+
 add({
   id: "newapi-media-task-v1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
@@ -695,7 +713,7 @@ add({
       prompt_extend: coalesce(ref("request.providerOptions.newapi-channel-1.prompt_extend"), false)
     }
   }),
-  poll: { method: "GET", path: "/v1/videos/{{taskId}}" }, response: asyncResponse("video")
+  poll: { method: "GET", path: "/v1/videos/{{taskId}}" }, response: asyncResponse("video", { message: newAPITaskMessage })
 });
 
 add({
@@ -711,7 +729,9 @@ add({
   poll: { method: "GET", path: "/v1/video/generations/{{taskId}}" },
   response: asyncResponse("video", {
     taskId: coalesce(ref("response.data.task_id"), ref("response.data.taskId"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("response.id"), ref("taskId")),
+    message: newAPITaskMessage,
     videos: coalesce(
+      map(ref("response.data"), "item", coalesce(ref("item.url"), ref("item.video_url"), ref("item.videoUrl"), ref("item.output_url"), ref("item.outputUrl"))),
       ref("response.data.result_url"), ref("response.data.video_url"), ref("response.data.output_url"), ref("response.data.url"), ref("response.data.metadata.url"),
       ref("response.data.data.video_url"), ref("response.data.data.output_url"), ref("response.data.data.result_url"), ref("response.data.data.url"), ref("response.data.data.metadata.url"),
       ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.output_url"), ref("response.url"), ref("response.metadata.url"), ref("response.output.url")
@@ -786,7 +806,14 @@ add({
     aspect_ratio: coalesce(ref("request.aspectRatio"), "16:9"), image_url: omit(firstMediaFieldWithRoles("request.images", ["first_frame", ""], "value")),
     seed: omit(ref("request.providerOptions.novita-video.seed")), negative_prompt: omit(ref("request.providerOptions.novita-video.negative_prompt"))
   }),
-  poll: { method: "GET", path: "/v3/async/task-result", query: { task_id: ref("taskId") } }, response: asyncResponse("video")
+  poll: { method: "GET", path: "/v3/async/task-result", query: { task_id: ref("taskId") } },
+  // Novita 统一任务查询把状态和失败原因放在 task.status / task.reason（TASK_STATUS_* 枚举），结果在 videos[].video_url。
+  response: asyncResponse("video", {
+    taskId: coalesce(ref("response.task.task_id"), ref("response.id"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("taskId")),
+    status: coalesce(ref("response.task.status"), ref("response.status"), ref("response.state"), ref("response.data.status"), "pending"),
+    message: coalesce(ref("response.task.reason"), ref("response.error.message"), ref("response.message"), ref("response.fail_reason")),
+    videos: coalesce(ref("response.videos"), ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.url"), ref("response.data.video_url"), ref("response.output.url"))
+  })
 });
 
 add({
@@ -799,7 +826,7 @@ add({
     req_json: omit(ref("request.providerOptions.volcengine-jimeng-video.req_json"))
   }, { originPath: true, query: { Action: "CVSync2AsyncSubmitTask", Version: "2022-08-31" } }),
   poll: { method: "POST", path: "/", originPath: true, contentType: "application/json", query: { Action: "CVSync2AsyncGetResult", Version: "2022-08-31" }, body: { req_key: ref("request.model"), task_id: ref("taskId") } },
-  response: asyncResponse("video", { taskId: coalesce(ref("response.data.task_id"), ref("response.task_id"), ref("taskId")), status: coalesce(ref("response.data.status"), ref("response.status"), "pending"), videos: coalesce(ref("response.data.video_urls"), ref("response.data.video_url")), errorPaths: ["code"], messagePaths: ["message"] })
+  response: jimengResponse("video", coalesce(ref("response.data.video_urls"), ref("response.data.video_url")))
 });
 
 const agnesFrameImages = mediaWithRoles("request.images", ["first_frame", "last_frame"]);

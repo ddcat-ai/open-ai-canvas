@@ -71,10 +71,9 @@
 | 映射位置 | 上游路径或转换表达式 |
 | --- | --- |
 | `response.taskId` | `{"$coalesce":[{"$ref":"response.data.task_id"},{"$ref":"response.task_id"},{"$ref":"taskId"}]}` |
-| `response.status` | `{"$coalesce":[{"$ref":"response.data.status"},{"$ref":"response.status"},"pending"]}` |
-| `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
+| `response.status` | `{"$switch":{"cases":[{"when":{"$and":[{"$ref":"response.code"},{"$ne":[{"$toString":{"$ref":"response.code"}},"10000"]}]},"then":"failed"},{"when":{"$in":[{"$lower":{"$ref":"response.data.status"}},["not_found","expired"]]},"then":"failed"}],"default":{"$coalesce":[{"$ref":"response.data.status"},"pending"]}}}` |
+| `response.message` | `{"$if":{"condition":{"$and":[{"$not":{"$and":[{"$ref":"response.code"},{"$ne":[{"$toString":{"$ref":"response.code"}},"10000"]}]}},{"$in":[{"$lower":{"$ref":"response.data.status"}},["not_found","expired"]]}]},"then":"即梦任务不存在或已过期，请重新生成","else":{"$coalesce":[{"$ref":"response.message"},{"$ref":"response.error.message"}]}}}` |
 | `response.images` | `{"$coalesce":[{"$ref":"response.data.image_urls"},{"$ref":"response.data.binary_data_base64"}]}` |
-| `response.errorPaths[0]` | `"code"` |
 | `response.resultEphemeral` | `true` |
 | `response.messagePaths[0]` | `"message"` |
 
@@ -516,28 +515,105 @@
             ]
           },
           "status": {
-            "$coalesce": [
-              {
-                "$ref": "response.data.status"
-              },
-              {
-                "$ref": "response.status"
-              },
-              "pending"
-            ]
+            "$switch": {
+              "cases": [
+                {
+                  "when": {
+                    "$and": [
+                      {
+                        "$ref": "response.code"
+                      },
+                      {
+                        "$ne": [
+                          {
+                            "$toString": {
+                              "$ref": "response.code"
+                            }
+                          },
+                          "10000"
+                        ]
+                      }
+                    ]
+                  },
+                  "then": "failed"
+                },
+                {
+                  "when": {
+                    "$in": [
+                      {
+                        "$lower": {
+                          "$ref": "response.data.status"
+                        }
+                      },
+                      [
+                        "not_found",
+                        "expired"
+                      ]
+                    ]
+                  },
+                  "then": "failed"
+                }
+              ],
+              "default": {
+                "$coalesce": [
+                  {
+                    "$ref": "response.data.status"
+                  },
+                  "pending"
+                ]
+              }
+            }
           },
           "message": {
-            "$coalesce": [
-              {
-                "$ref": "response.error.message"
+            "$if": {
+              "condition": {
+                "$and": [
+                  {
+                    "$not": {
+                      "$and": [
+                        {
+                          "$ref": "response.code"
+                        },
+                        {
+                          "$ne": [
+                            {
+                              "$toString": {
+                                "$ref": "response.code"
+                              }
+                            },
+                            "10000"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "$in": [
+                      {
+                        "$lower": {
+                          "$ref": "response.data.status"
+                        }
+                      },
+                      [
+                        "not_found",
+                        "expired"
+                      ]
+                    ]
+                  }
+                ]
               },
-              {
-                "$ref": "response.message"
-              },
-              {
-                "$ref": "response.fail_reason"
+              "then": "即梦任务不存在或已过期，请重新生成",
+              "else": {
+                "$coalesce": [
+                  {
+                    "$ref": "response.message"
+                  },
+                  {
+                    "$ref": "response.error.message"
+                  }
+                ]
               }
-            ]
+            }
           },
           "images": {
             "$coalesce": [
@@ -549,9 +625,6 @@
               }
             ]
           },
-          "errorPaths": [
-            "code"
-          ],
           "resultEphemeral": true,
           "messagePaths": [
             "message"

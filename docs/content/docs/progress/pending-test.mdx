@@ -5,6 +5,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 官方插件：即梦成功码、Novita 任务结果、NewAPI 失败原因
+
+- 问题：官方即梦图片 / 视频插件用 `errorPaths: ["code"]` 判失败，火山视觉 OpenAPI 的成功码 `code=10000` 被当成失败，提交成功后任务立即显示“声明式协议任务失败：Success”。官方 Novita 插件读取顶层 `status` / `video_url`，Novita 实际返回 `task.status`（`TASK_STATUS_*`）、`task.reason` 与 `videos[].video_url`，任务停在 pending 直到超时。官方 NewAPI 两个视频插件不读 `data.fail_reason`，失败只显示“上游返回失败状态”。
+- 已修复：生成器 `plugin-packages/generate-catalog.mjs` 中即梦改为 `code≠10000` 或 `data.status` 为 `not_found` / `expired` 时失败，`done` 仍按 code 判成败；Novita 优先读 `task.*` 与 `videos`，保留旧的扁平字段；NewAPI 失败原因补读 `data.fail_reason` / `data.error.message`，并把 Channel 2 已手改进清单的 `data[]` 结果映射同步回生成器。五个插件包已重新生成并打包。调用日志对 `code=10000 且 message=Success` 不再记为业务失败。
+- 本地验证：用官方插件包解析即梦成功 / 排队 / 完成 / 业务失败 / 任务失效、Novita 四种状态、NewAPI `data.fail_reason` 的单测；`go test ./internal/protocol ./internal/app`。未连接真实即梦、Novita、NewAPI 账号。
+- [ ] 即梦图片与视频：提交后进入排队并最终出图 / 出片；触发内容审核失败时任务显示上游原因，订单退款。
+- [ ] Novita 视频：成功任务能取回视频；失败任务显示 `task.reason`。
+- [ ] NewAPI 中转站失败的视频任务：任务卡片显示中转站返回的失败原因。
+
 ## 电商生图：提交报「生成参数包含不支持字段: canvasSize」
 - 问题：电商页三处生图入口（页面 `startGeneration`、`workflow.ts` 的 `submitCommerceImages`、单张 `regenerateImage`）都把 `commerceImageParameters` 的结果原样作为 `parameters` 提交到 `POST /api/workbench/tasks`，其中带了 `canvasSize`。后端 `normalizeTaskParameters` 对图片只接受 `size`、`quality`、`imageResolution`、`count`，遇到其他字段直接拒绝，所以任何一张都提交不出去。
 - 已修复：`canvasSize` 一直等于 `size`，只用于前端判断提示词画幅，后端从不读取。`commerceImageParameters` 不再返回该字段，`commerceImagePrompt` 改用 `size` 做同样的判断，提示词内容不变。

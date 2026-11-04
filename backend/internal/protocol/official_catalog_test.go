@@ -533,6 +533,89 @@ func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
 	}
 }
 
+func TestNewAPITaskFailureKeepsUpstreamReason(t *testing.T) {
+	// NewAPI 失败任务的外层是 code=success、message 为空，原因只在 data.fail_reason。
+	payload := `{"code":"success","message":"","data":{"task_id":"task-upstream","status":"FAILURE","fail_reason":"内容审核未通过","progress":"100%"}}`
+	for _, profile := range []struct{ packageName, providerID string }{
+		{"newapi-video-generations-v1.yingce-plugin", "newapi-channel-2"},
+		{"newapi-media-task-v1.yingce-plugin", "newapi-channel-1"},
+	} {
+		t.Run(profile.providerID, func(t *testing.T) {
+			state, err := officialPackageAdapter(t, profile.packageName, profile.providerID).ParsePoll(context.Background(), PollContext{TaskID: "task-upstream"}, []byte(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Status != StatusFailed || state.Message != "内容审核未通过" {
+				t.Fatalf("state = %#v, want failed with upstream reason", state)
+			}
+		})
+	}
+}
+
+func TestOfficialNovitaVideoParsesTaskResultEnvelope(t *testing.T) {
+	adapter := officialPackageAdapter(t, "novita-video.yingce-plugin", "novita-video")
+	tests := []struct {
+		name, payload, wantURL, wantMessage string
+		wantStatus                          Status
+	}{
+		{name: "queued", payload: `{"extra":{},"task":{"task_id":"novita-1","status":"TASK_STATUS_QUEUED","reason":""},"videos":[]}`, wantStatus: StatusPending},
+		{name: "processing", payload: `{"task":{"task_id":"novita-1","status":"TASK_STATUS_PROCESSING","progress_percent":40},"videos":[]}`, wantStatus: StatusProcessing},
+		{name: "succeeded", payload: `{"task":{"task_id":"novita-1","status":"TASK_STATUS_SUCCEED"},"videos":[{"video_url":"https://cdn.example/novita.mp4","video_url_ttl":"3600","video_type":"mp4"}]}`, wantStatus: StatusSucceeded, wantURL: "https://cdn.example/novita.mp4"},
+		{name: "failed", payload: `{"task":{"task_id":"novita-1","status":"TASK_STATUS_FAILED","reason":"image is not accessible"},"videos":[]}`, wantStatus: StatusFailed, wantMessage: "image is not accessible"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "novita-1"}, []byte(test.payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Status != test.wantStatus || state.TaskID != "novita-1" || state.Message != test.wantMessage {
+				t.Fatalf("state = %#v, want %s with message %q", state, test.wantStatus, test.wantMessage)
+			}
+			if test.wantURL != "" && (state.Result == nil || len(state.Result.Videos) != 1 || state.Result.Videos[0].URL != test.wantURL) {
+				t.Fatalf("result = %#v, want %s", state.Result, test.wantURL)
+			}
+		})
+	}
+}
+
+func TestOfficialJimengTreatsVolcengineSuccessCodeAsSuccess(t *testing.T) {
+	for _, profile := range []struct{ packageName, providerID, results string }{
+		{"volcengine-jimeng-video.yingce-plugin", "volcengine-jimeng-video", `"video_url":"https://cdn.example/jimeng.mp4"`},
+		{"volcengine-jimeng-image.yingce-plugin", "volcengine-jimeng-image", `"image_urls":["https://cdn.example/jimeng.png"]`},
+	} {
+		t.Run(profile.providerID, func(t *testing.T) {
+			adapter := officialPackageAdapter(t, profile.packageName, profile.providerID)
+			// 火山视觉 OpenAPI 成功信封：code=10000、顶层 status 也是 10000。
+			created, err := adapter.ParseCreate(context.Background(), []byte(`{"code":10000,"data":{"task_id":"jimeng-1"},"message":"Success","request_id":"req-1","status":10000,"time_elapsed":"20ms"}`))
+			if err != nil || created.Status != StatusPending || created.TaskID != "jimeng-1" {
+				t.Fatalf("created = %#v err=%v, want pending jimeng-1", created, err)
+			}
+			for _, test := range []struct {
+				name, payload, wantMessage string
+				wantStatus                 Status
+			}{
+				{name: "in queue", payload: `{"code":10000,"data":{"status":"in_queue"},"message":"Success","status":10000}`, wantStatus: StatusPending},
+				{name: "done", payload: `{"code":10000,"data":{"status":"done",` + profile.results + `},"message":"Success","status":10000}`, wantStatus: StatusSucceeded},
+				{name: "business failure", payload: `{"code":50411,"data":null,"message":"Pre Img Risk Not Pass","status":50411}`, wantStatus: StatusFailed, wantMessage: "Pre Img Risk Not Pass"},
+				{name: "done with failure code", payload: `{"code":50413,"data":{"status":"done"},"message":"Post Text Risk Not Pass","status":50413}`, wantStatus: StatusFailed, wantMessage: "Post Text Risk Not Pass"},
+				{name: "task gone", payload: `{"code":10000,"data":{"status":"not_found"},"message":"Success","status":10000}`, wantStatus: StatusFailed, wantMessage: "即梦任务不存在或已过期，请重新生成"},
+			} {
+				state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "jimeng-1"}, []byte(test.payload))
+				if err != nil {
+					t.Fatalf("%s: %v", test.name, err)
+				}
+				if state.Status != test.wantStatus || (test.wantMessage != "" && state.Message != test.wantMessage) {
+					t.Fatalf("%s: state = %#v, want %s %q", test.name, state, test.wantStatus, test.wantMessage)
+				}
+				if test.wantStatus == StatusSucceeded && (state.Result == nil || len(state.Result.Videos)+len(state.Result.Images) != 1) {
+					t.Fatalf("%s: result = %#v, want one media", test.name, state.Result)
+				}
+			}
+		})
+	}
+}
+
 func TestOfficialMaxForAIVideoProfilesUseDocumentedFields(t *testing.T) {
 	profiles := []struct {
 		id, createPath, pollPath string
