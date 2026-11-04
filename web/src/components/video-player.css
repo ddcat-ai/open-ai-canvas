@@ -472,7 +472,7 @@
     pointer-events: none;
 }
 
-.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) > :not(.vds-volume) {
+.canvas-video-player[data-player-variant="compact"]:is([data-fullscreen], :fullscreen, :-webkit-full-screen) .vds-video-layout[data-sm] .vds-controls-group:has(.vds-volume) > :is(.vds-button, .vds-controls-spacer) {
     display: none !important;
 }
 
