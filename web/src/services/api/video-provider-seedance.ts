@@ -14,7 +14,7 @@ import type { VideoProviderDeps } from "./video-provider-deps";
 import { hasExplicitVideoFrames, resolveVideoImageReferences } from "./video-reference-roles";
 
 export function isSeedanceConfig(config: ResolvedAiConfig) {
-    // 按协议判定是否使用作者内置 Seedance 实现，不再按模型名判断（插件渠道走插件声明）
+    // 按协议判定是否使用内置 Seedance 实现，不再按模型名判断（插件渠道走插件声明）
     return isVolcengineArkVideoProtocol(config.interfaceType);
 }
 

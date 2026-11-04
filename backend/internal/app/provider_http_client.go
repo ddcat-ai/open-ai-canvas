@@ -566,7 +566,7 @@ func ChannelAPIURL(baseURL string, path string) string {
 // ChannelAPIURLForProtocol 把协议默认版本收敛在传输边界：Gemini 默认 v1beta，
 // OpenAI 兼容协议默认 v1；baseURL 或 path 中显式出现的版本始终优先。
 // 声明式插件的地址版本完全由插件声明的 create/poll 路径决定（apiURLWithDefaultPrefix
-// 先看路径里的版本前缀），这里两个协议名分支只服务作者手写内置实现。
+// 先看路径里的版本前缀），这里两个协议名分支只服务手写内置实现。
 func ChannelAPIURLForProtocol(baseURL string, path string, interfaceType model.ChannelInterfaceType) string {
 	if interfaceType == model.ChannelInterfaceAgnesVideo && strings.HasPrefix(strings.TrimSpace(path), "/agnesapi") {
 		base, err := url.Parse(strings.TrimSpace(baseURL))
@@ -580,7 +580,7 @@ func ChannelAPIURLForProtocol(baseURL string, path string, interfaceType model.C
 		}
 	}
 	// 插件声明的路径自带版本前缀（如 /v1beta/models/...:generateContent），
-	// 会在 apiURLWithDefaultPrefix 里优先命中；这里只给没有版本前缀的作者内置协议垫默认值。
+	// 会在 apiURLWithDefaultPrefix 里优先命中；这里只给没有版本前缀的内置协议垫默认值。
 	defaultPrefix := "/v1"
 	if interfaceType == model.ChannelInterfaceGeminiVeo || interfaceType == model.ChannelInterfaceGeminiImage {
 		defaultPrefix = "/v1beta"

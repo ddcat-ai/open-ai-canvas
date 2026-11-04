@@ -39,17 +39,17 @@ export type ModelCapabilityConfig = {
      * 取值如 gemini-image / openai-image / grok-image / seedream-image / flux-image /
      * stable-diffusion-image / midjourney-image / design-image / seedance-video / veo-video /
      * kling-video / general-video-family / generic-image / generic-video。
-     * 未声明时前端才回落到作者原有的模型名关键词判断。
+     * 未声明时前端才回落到原有的模型名关键词判断。
      */
     promptFamily?: string;
     text?: TextCapabilityConfig;
     image?: ImageCapabilityConfig;
     video?: VideoCapabilityConfig;
-    /** 音频模型能力；未声明时沿用作者内置音频协议（豆包 / OpenAI）的写法。 */
+    /** 音频模型能力；未声明时沿用内置音频协议（豆包 / OpenAI）的写法。 */
     audio?: AudioCapabilityConfig;
 };
 
-/** 音频参数值域，与作者内置音色/格式表同结构。 */
+/** 音频参数值域，与内置音色/格式表同结构。 */
 export type AudioCapabilityOption = { value: string; label: string };
 
 export type AudioCapabilityConfig = {
@@ -136,7 +136,7 @@ export type VideoCapabilityConfig = {
         maxVideoDurationSeconds: number;
         /**
          * 单段参考视频最短秒数；未声明（或 0）表示不限。
-         * 作者原来把「至少 2 秒」写死在 Seedance 的模型名前缀判断里。
+         * 原来把「至少 2 秒」写死在 Seedance 的模型名前缀判断里。
          */
         minVideoDurationSeconds?: number;
         maxAudios: number;

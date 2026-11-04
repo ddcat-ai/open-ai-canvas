@@ -48,7 +48,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		"audio": "Model test.",
 	}[capability]
 	// 测试时长读模型能力的 video.duration.default（插件/模型声明优先）；
-	// 没有声明时才用作者的 6 秒默认，即梦保留 5 秒内置分支，但声明了能力时以能力为准。
+	// 没有声明时才用的 6 秒默认，即梦保留 5 秒内置分支，但声明了能力时以能力为准。
 	videoSecondsValue := 6
 	if protocol == model.ChannelInterfaceVolcengineJiMengVideo {
 		videoSecondsValue = 5
@@ -149,7 +149,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 }
 
 // videoTestSeconds 决定管理端「测试模型」用的视频时长：模型能力声明的默认值优先，
-// 其次保留作者的即梦 5 秒 / 其余 6 秒内置行为。
+// 其次保留即梦 5 秒 / 其余 6 秒内置行为。
 func videoTestSeconds(defaultSeconds int, profile *VideoCapabilityConfig) (string, int) {
 	seconds := defaultSeconds
 	if profile != nil && profile.Duration.Default > 0 {

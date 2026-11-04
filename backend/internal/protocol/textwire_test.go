@@ -12,13 +12,13 @@ func TestTextWireForCreatePath(t *testing.T) {
 		create string
 		want   TextWire
 	}{
-		// 作者官方 chat 类插件：协议 ID 不叫 chat-completion，但地址是 chat 格式。
+		// 官方 chat 类插件：协议 ID 不叫 chat-completion，但地址是 chat 格式。
 		{name: "official deepseek-chat", create: "POST /v1/chat/completions", want: TextWireChatCompletion},
 		{name: "official kimi-chat", create: "/v1/chat/completions", want: TextWireChatCompletion},
 		{name: "official a6api-chat", create: "POST /chat/completions", want: TextWireChatCompletion},
 		{name: "azure deployment path", create: "POST /openai/deployments/{{model}}/chat/completions", want: TextWireChatCompletion},
 		{name: "vendor-chat", create: "POST /chat/completions", want: TextWireChatCompletion},
-		// 作者内置的三个协议 ID 对应的地址。
+		// 内置的三个协议 ID 对应的地址。
 		{name: "builtin chat-completion", create: "POST /chat/completions", want: TextWireChatCompletion},
 		{name: "builtin openai-response", create: "POST /responses", want: TextWireResponses},
 		{name: "builtin claude-api", create: "POST /v1/messages", want: TextWireClaudeAPI},
@@ -60,7 +60,7 @@ func TestTextWireFieldNames(t *testing.T) {
 	}
 }
 
-// 作者官方 chat 类插件必须能从已安装的插件包里推出 chat 格式。
+// 官方 chat 类插件必须能从已安装的插件包里推出 chat 格式。
 func TestOfficialChatPluginsDeriveChatWire(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
 	if err != nil || len(paths) == 0 {
@@ -82,7 +82,7 @@ func TestOfficialChatPluginsDeriveChatWire(t *testing.T) {
 	}
 
 	cases := map[string]TextWire{
-		// 作者官方 chat 类插件：地址是 chat 格式，协议 ID 不是 chat-completion。
+		// 官方 chat 类插件：地址是 chat 格式，协议 ID 不是 chat-completion。
 		"deepseek-chat":   TextWireChatCompletion,
 		"kimi-chat":       TextWireChatCompletion,
 		"openrouter-chat": TextWireChatCompletion,
@@ -90,7 +90,7 @@ func TestOfficialChatPluginsDeriveChatWire(t *testing.T) {
 		"zhipu-glm-chat":  TextWireChatCompletion,
 		"baichuan-chat":   TextWireChatCompletion,
 		"azure-openai":    TextWireChatCompletion,
-		// 作者内置三个协议 ID 对应的地址。
+		// 内置三个协议 ID 对应的地址。
 		"chat-completion": TextWireChatCompletion,
 		"openai-response": TextWireResponses,
 		"claude-api":      TextWireClaudeAPI,

@@ -109,7 +109,7 @@ function containsAny(value: string, keywords: string[]) {
 }
 
 /**
- * 模型能力声明的 promptFamily → 作者现有策略分支的关键词，
+ * 模型能力声明的 promptFamily → 现有策略分支的关键词，
  * 只为复用已有策略文案，不再靠模型名猜模型族。值留空表示直接用通用画像。
  */
 const promptFamilyKeywords: Record<string, string> = {
@@ -140,7 +140,7 @@ function declaredPromptFamily(input: PromptOptimizationInput) {
 }
 
 export function resolveModelAdaptationProfile(input: PromptOptimizationInput): ModelAdaptationProfile {
-    // 先读模型能力声明的 promptFamily；读不到才回退作者原来的模型名关键词推断
+    // 先读模型能力声明的 promptFamily；读不到才回退原来的模型名关键词推断
     const family = declaredPromptFamily(input);
     const declaredKeyword = family ? (promptFamilyKeywords[family] ?? "") : undefined;
     const model = `${declaredKeyword ?? `${input.targetModel || ""} ${input.targetProtocol || ""}`}`.toLowerCase();

@@ -190,13 +190,13 @@ func TestDeclaredProxyOperationMatchUsesPluginDeclarations(t *testing.T) {
 	if !declared || !create || !matched {
 		t.Fatalf("vendor-image-banana 匹配 = declared:%v create:%v matched:%v", declared, create, matched)
 	}
-	// 没装的协议：declared=false，调用方走作者内置分支。
+	// 没装的协议：declared=false，调用方走内置分支。
 	if declared, _, _ = svc.DeclaredProxyOperationMatch("vendor-unknown", http.MethodPost, "/chat/completions"); declared {
 		t.Fatal("未安装插件时不应声明命中")
 	}
 }
 
-// 作者官方 chat 类插件声明 POST /v1/chat/completions，系统代理收到 /chat/completions。
+// 官方 chat 类插件声明 POST /v1/chat/completions，系统代理收到 /chat/completions。
 func TestDeclaredProxyOperationMatchCoversOfficialChatPlugins(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
 	if err != nil || len(paths) == 0 {

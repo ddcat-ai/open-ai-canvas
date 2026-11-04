@@ -43,7 +43,7 @@ export function editorSectionForField(name: (string | number)[]): EditorSection 
 
 export function initialChannelModelValues(item: ChannelModel | null, protocols: ModelProtocolDefinition[], channelBaseUrl = ""): ChannelModelFormValues {
     // 新增模型时默认能力 / 协议改读已安装插件声明（capabilities / baseUrl），
-    // 读不到声明（没装插件，或渠道地址对应多个能力）才用作者原来的第一个可启用协议。
+    // 读不到声明（没装插件，或渠道地址对应多个能力）才用原来的第一个可启用协议。
     const declared = item ? {} : declaredChannelDefaults(protocols, channelBaseUrl);
     const capability = item?.capability || declared.capability || "text";
     const protocol =

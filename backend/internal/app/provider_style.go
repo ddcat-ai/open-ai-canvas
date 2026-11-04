@@ -212,7 +212,7 @@ func styleAssetSupportsModel(baseModels []string, generationModel string) bool {
 	return styleAssetSupportsDeclaration(baseModels, generationModel, styleModelDeclaration{})
 }
 
-// styleAssetSupportsDeclaration 先按模型名匹配（作者原有行为），再按模型声明的能力匹配：
+// styleAssetSupportsDeclaration 先按模型名匹配（原有行为），再按模型声明的能力匹配：
 // 资产声明里写能力（image / video / text）、协议名或 promptFamily 时，同样表示兼容。
 func styleAssetSupportsDeclaration(baseModels []string, generationModel string, declaration styleModelDeclaration) bool {
 	candidates := make([]string, 0, 3)

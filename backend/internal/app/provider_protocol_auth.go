@@ -270,7 +270,7 @@ func protocolRequestURL(baseURL string, spec protocol.RequestSpec) (string, erro
 
 // ApplyDeclaredProtocolAuthHeaders 按插件声明的鉴权方式给上游请求写鉴权头，复用声明式协议同一套实现。
 // handled=false 表示没装该协议的插件、声明里没有 auth.type，或声明的是需要按最终请求重算的
-// 签名 / 查询参数鉴权（aws-sigv4 / tc3 / volcengine-v4 / query），调用方应保留作者原来的分支。
+// 签名 / 查询参数鉴权（aws-sigv4 / tc3 / volcengine-v4 / query），调用方应保留原来的分支。
 // 系统代理不再自己写一份鉴权 switch，避免两份实现以后不一致。
 func (s *Service) ApplyDeclaredProtocolAuthHeaders(req *http.Request, protocolID string, apiKey string, secretKey string) (bool, error) {
 	auth, ok := s.declaredProviderAuth(protocolID)

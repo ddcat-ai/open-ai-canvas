@@ -74,7 +74,7 @@ function imageLayerBackgroundValue(parameter: ImageParameter, transparent: boole
 /** OpenAI Images 的 false 默认可能仍是 auto；拆层底图明确请求 opaque。 */
 export function imageLayerProviderMetadata(config: AiConfig, index: number) {
     const protocol = resolveModelRequestConfig(config, config.model).interfaceType;
-    // 作者内置 openai-image 的行为保持不变：仍由 providerOptions.background 控制透明底。
+    // 内置 openai-image 的行为保持不变：仍由 providerOptions.background 控制透明底。
     if (protocol === "openai-image") return { providerOptions: { [protocol]: { background: index === 0 ? "opaque" : "transparent" } } };
     // 声明式插件模型改读能力声明的透明底参数绑定，不再只给 openai-image 写 providerOptions
     if (!imageLayerBackgroundParameter(modelCapabilityConfigFor(config, config.model).image)) return {};

@@ -239,7 +239,7 @@ export function emotionGenerationSize(region: CanvasEmotionEditRegion) {
 
 /**
  * 表情编辑的请求尺寸按模型能力选：能力声明用比例（size.parameter=aspect_ratio）时
- * 传最接近的比例字符串，不传像素；其余模型保持作者原来的像素尺寸（OpenAI Images 的 size 语义）。
+ * 传最接近的比例字符串，不传像素；其余模型保持原来的像素尺寸（OpenAI Images 的 size 语义）。
  */
 export function emotionGenerationSizeForProfile(region: CanvasEmotionEditRegion, profile?: { size: { parameter: string; values: string[] } }) {
     const pixelSize = emotionGenerationSize(region);

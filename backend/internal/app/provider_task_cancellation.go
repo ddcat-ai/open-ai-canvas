@@ -194,7 +194,7 @@ func (s *Service) providerCancellationInput(task *model.Task) (canvasGenerationI
 	return input, nil
 }
 
-// supportsProviderCancellation 只覆盖作者内置的手写取消实现（Gemini Veo 与火山方舟视频）。
+// supportsProviderCancellation 只覆盖内置的手写取消实现（Gemini Veo 与火山方舟视频）。
 // 这里不再是“按协议名判断能不能取消”的通用判断；声明式插件的取消能力由
 // declarativeCancellationAdapter 按 manifest（detachedPolling + cancel + poll）决定，且优先于本名单。
 func supportsProviderCancellation(interfaceType string) bool {
@@ -223,7 +223,7 @@ func (s *Service) declarativeCancellationAdapter(ctx context.Context, interfaceT
 }
 
 func (s *Service) cancelProviderTask(ctx context.Context, input canvasGenerationInput, providerRequestID string) error {
-	// 先看插件声明的 cancel，没声明才回落到作者内置的 Veo / 方舟手写取消实现。
+	// 先看插件声明的 cancel，没声明才回落到内置的 Veo / 方舟手写取消实现。
 	if pluginCtx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType); ok {
 		request := protocolRequestFromInput(input)
 		spec, err := adapter.BuildCancel(pluginCtx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID})
@@ -240,7 +240,7 @@ func (s *Service) cancelProviderTask(ctx context.Context, input canvasGeneration
 }
 
 func (s *Service) queryProviderCancellation(ctx context.Context, input canvasGenerationInput, providerRequestID string) (providerCancellationOutcome, string, error) {
-	// 先看插件声明的 poll 状态映射，没声明才回落到作者内置的 Veo / 方舟对账实现。
+	// 先看插件声明的 poll 状态映射，没声明才回落到内置的 Veo / 方舟对账实现。
 	pluginCtx, adapter, pluginOK := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
 	if !pluginOK {
 		if supportsProviderCancellation(input.Config.InterfaceType) {

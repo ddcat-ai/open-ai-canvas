@@ -38,7 +38,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const configuredResolutions = profile.resolutions.map((value) => ({ value, label: formatVideoResolutionLabel(value) }));
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
     const watermark = boolConfig(config.videoWatermark, profile.watermark.default);
-    // 「可信素材同步」开关只给作者内置火山方舟视频协议；插件视频上游由插件声明决定
+    // 「可信素材同步」开关只给内置火山方舟视频协议；插件视频上游由插件声明决定
     const arkPrivateAssets = boolConfig(config.videoArkPrivateAssetUpload, true);
     const isArkVideoProtocol = isVolcengineArkVideoProtocol(resolveModelRequestConfig(config, config.model).interfaceType);
 

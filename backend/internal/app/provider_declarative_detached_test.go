@@ -209,7 +209,7 @@ func TestDetachedVideoTokenOrderSettlesFromFormulaSnapshot(t *testing.T) {
 }
 
 // TestImageCapabilityDefaultsFollowPluginDeclaration 验证图片能力默认值读插件 imageParameters 声明，
-// 未声明时保留作者按协议名的内置画像。
+// 未声明时保留按协议名的内置画像。
 func TestImageCapabilityDefaultsFollowPluginDeclaration(t *testing.T) {
 	defaults := DefaultImageCapabilityConfig("agnes-image", "agnes-image")
 	if defaults == nil {
@@ -232,7 +232,7 @@ func TestImageCapabilityDefaultsFollowPluginDeclaration(t *testing.T) {
 	if wantOutputs == 0 || defaults.MaxOutputs != wantOutputs {
 		t.Fatalf("declared imageCount max not applied: maxOutputs=%d, want %d", defaults.MaxOutputs, wantOutputs)
 	}
-	// 没有插件声明的协议保持作者内置画像（gemini-image 的 aspect_ratio + 最多 4 张）。
+	// 没有插件声明的协议保持内置画像（gemini-image 的 aspect_ratio + 最多 4 张）。
 	builtin := DefaultImageCapabilityConfig(string(model.ChannelInterfaceGeminiImage), "gemini-2.5-flash-image")
 	if builtin.Size.Parameter != "aspect_ratio" || builtin.MaxOutputs != 4 || !builtin.ResolutionUsesQuality {
 		t.Fatalf("builtin gemini image defaults changed: %#v", builtin)
@@ -246,17 +246,17 @@ func TestImageCapabilityDefaultsFollowPluginDeclaration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	secure, ok := pluginDeclaredImageCapabilityDefaults("vendor-image-banana", vendorRegistry)
-	if !ok || !secure.Resolution.Supported || !containsCapabilityString(secure.Resolution.Values, "1K") {
-		t.Fatalf("vendor declared resolution missing: %#v", secure)
+	declared, ok := pluginDeclaredImageCapabilityDefaults("vendor-image-banana", vendorRegistry)
+	if !ok || !declared.Resolution.Supported || !containsCapabilityString(declared.Resolution.Values, "1K") {
+		t.Fatalf("vendor declared resolution missing: %#v", declared)
 	}
-	if secure.Size.Parameter != "size" || secure.MaxOutputs != 1 || !secure.TransparentBackground.Supported {
-		t.Fatalf("vendor declared parameters not projected: %#v", secure)
+	if declared.Size.Parameter != "size" || declared.MaxOutputs != 1 || !declared.TransparentBackground.Supported {
+		t.Fatalf("vendor declared parameters not projected: %#v", declared)
 	}
 }
 
 // TestDeclaredImageDefaultsPassAuthorValidation 用真实插件 manifest 验证：插件只声明 aspectRatio 绑定、
-// 没有 values / default 时，生成的默认图片画像不能留下空 size.default，必须通过作者自己的能力校验。
+// 没有 values / default 时，生成的默认图片画像不能留下空 size.default，必须通过已有的能力校验。
 func TestDeclaredImageDefaultsPassAuthorValidation(t *testing.T) {
 	for _, protocolID := range []string{"agnes-image", "cangyuan-midjourney-v7"} {
 		profile, ok := pluginDeclaredImageCapabilityDefaults(protocolID)
@@ -279,7 +279,7 @@ func TestDeclaredImageDefaultsPassAuthorValidation(t *testing.T) {
 }
 
 // TestLegacyImageResolutionTiersFollowPluginDeclaration 验证旧 quality→分辨率投影先读插件声明的分辨率档，
-// 未安装插件时仍用作者写死的名单（grok-image = 1k/2k）。
+// 未安装插件时仍用写死的名单（grok-image = 1k/2k）。
 func TestLegacyImageResolutionTiersFollowPluginDeclaration(t *testing.T) {
 	declared := legacyImageResolutionTiers("km-kemei-seedream")
 	if !declared["1k"] || !declared["1.5k"] || !declared["2k"] || declared["4k"] {
@@ -295,7 +295,7 @@ func TestLegacyImageResolutionTiersFollowPluginDeclaration(t *testing.T) {
 }
 
 // TestAdminModelTestVideoSecondsFollowsCapability 验证后台测试时长读 video.duration.default（Veo 8 秒），
-// 没有声明时保持作者的 6 秒 / 即梦 5 秒内置行为。
+// 没有声明时保持 6 秒 / 即梦 5 秒内置行为。
 func TestAdminModelTestVideoSecondsFollowsCapability(t *testing.T) {
 	veo := &VideoCapabilityConfig{Duration: VideoDurationConfig{Selection: "enum", Values: []int{4, 6, 8}, Default: 8}}
 	if text, value := videoTestSeconds(6, veo); text != "8" || value != 8 {
@@ -350,7 +350,7 @@ func TestProtocolRequiresSecretKeyFollowsManifest(t *testing.T) {
 }
 
 // TestWorkflowPluginDetectionFollowsDeclarations 验证工作流插件按 contributes.workflows 声明识别，
-// 并保留作者内置的 RunningHub 映射。
+// 并保留内置的 RunningHub 映射。
 func TestWorkflowPluginDetectionFollowsDeclarations(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -373,7 +373,7 @@ func TestWorkflowPluginDetectionFollowsDeclarations(t *testing.T) {
 	}
 }
 
-// TestProviderCancellationFollowsDeclarations 验证取消能力：作者内置的 Veo / 方舟行为不变；
+// TestProviderCancellationFollowsDeclarations 验证取消能力：内置的 Veo / 方舟行为不变；
 // 协议名不再作为通用判断；声明式视频插件声明 detachedPolling + poll 但没有 cancel，
 // 因此取消行为不变；同时声明 cancel 的插件才满足可取消条件。
 func TestProviderCancellationFollowsDeclarations(t *testing.T) {
@@ -425,7 +425,7 @@ func cancellationTestAdapter(t *testing.T, manifest string) protocol.Adapter {
 }
 
 // TestImageResumeFollowsPluginPollDeclaration 验证图片任务可续跑先看插件声明的 poll，
-// 没装插件时保留作者的即梦 / RunningHub 内置名单。
+// 没装插件时保留即梦 / RunningHub 内置名单。
 func TestImageResumeFollowsPluginPollDeclaration(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -444,7 +444,7 @@ func TestImageResumeFollowsPluginPollDeclaration(t *testing.T) {
 }
 
 // TestVideoDefaultMinReferenceDurationFollowsProtocol 验证方舟视频与 newapi-channel-1/2 的默认视频能力里
-// 参考视频最短 2 秒：作者原来按 Seedance 模型名判断，改成读能力字段后默认值必须补上，行为才不变。
+// 参考视频最短 2 秒：原来按 Seedance 模型名判断，改成读能力字段后默认值必须补上，行为才不变。
 func TestVideoDefaultMinReferenceDurationFollowsProtocol(t *testing.T) {
 	for _, protocol := range []model.ChannelInterfaceType{
 		model.ChannelInterfaceVolcengineArkVideo,
@@ -545,7 +545,7 @@ func TestCapabilityConfigKeepsAudioAndPromptFamily(t *testing.T) {
 		t.Fatalf("undeclared audio must not be serialized: %s", plainJSON)
 	}
 
-	// 音频能力：声明了 audio 就保存，没声明仍返回 nil（与作者原来的“音频无能力合同”一致）。
+	// 音频能力：声明了 audio 就保存，没声明仍返回 nil（与原来的“音频无能力合同”一致）。
 	audioOnly := &ModelCapabilityConfig{Version: 1, Audio: &AudioCapabilityConfig{References: AudioReferenceConfig{MaxAudios: 3, MaxImages: 1}}}
 	normalizedAudio, err := NormalizeModelCapabilityConfigForModel("audio", "doubao-streaming-tts", "", audioOnly)
 	if err != nil || normalizedAudio == nil || normalizedAudio.Audio == nil || normalizedAudio.Audio.References.MaxAudios != 3 {

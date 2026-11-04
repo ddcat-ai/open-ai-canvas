@@ -392,7 +392,7 @@ function requiresSecretKey(channel: ModelChannel, declaredProtocols: ModelProtoc
             const declared = declaredProtocols.find((definition) => definition.value === protocol);
             if (declared) return Boolean(declared.auth?.secretField?.trim());
             // 目录里没有这个协议的声明（还没加载完 / 请求失败 / 没装插件）时，
-            // 保留作者原来的即梦前缀兜底，与后端 protocolRequiresSecretKey 保持一致；
+            // 保留原来的即梦前缀兜底，与后端 protocolRequiresSecretKey 保持一致；
             // 有声明时一律以声明为准，不再看协议名。
             return protocol.startsWith("volcengine-jimeng-");
         }) === true

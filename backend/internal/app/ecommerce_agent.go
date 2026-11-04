@@ -366,8 +366,8 @@ func (s *Service) ecommerceLiveImageConfig(req ecommerceagent.Request, cfg ecomm
 		return cfg, ecommerceErr("INVALID_INPUT", "图像模型未启用")
 	}
 	// 不再按协议名（必须等于 openai-image）卡出图；改成看插件是否声明了图片编辑操作，
-	// 作者内置 openai-image 仍保留（未装插件的内置实现）。模型能力里没有「支持编辑」这个字段，
-	// 所以这里只能用插件声明；插件没声明时保持作者原来的拒绝行为。
+	// 内置 openai-image 仍保留（未装插件的内置实现）。模型能力里没有「支持编辑」这个字段，
+	// 所以这里只能用插件声明；插件没声明时保持原来的拒绝行为。
 	if !protocolDeclaresImageEdit(s.DeclaredProtocolOperations(string(configuredModel.Protocol)), configuredModel.Protocol) {
 		return cfg, ecommerceErr("INVALID_INPUT", "电商 Agent 当前只支持 OpenAI Images 编辑协议的图像渠道")
 	}
@@ -391,7 +391,7 @@ func (s *Service) ecommerceLiveImageConfig(req ecommerceagent.Request, cfg ecomm
 }
 
 // protocolDeclaresImageEdit 判定该协议能否做图片编辑：
-// 作者内置 openai-image 保留（未装插件的内置实现），插件则看它声明的 create/result 路径里是否包含 images/edits。
+// 内置 openai-image 保留（未装插件的内置实现），插件则看它声明的 create/result 路径里是否包含 images/edits。
 // 电商 Agent 出图不再按协议名硬卡，改读插件声明。
 func protocolDeclaresImageEdit(operations DeclaredProtocolOperations, protocol model.ChannelInterfaceType) bool {
 	if protocol == model.ChannelInterfaceOpenAIImage {

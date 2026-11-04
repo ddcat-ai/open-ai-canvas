@@ -81,7 +81,7 @@ func (s *Service) workflowPluginIDForInterfaceDeclared(interfaceType string) (st
 	return "", false
 }
 
-// workflowPluginIDForInterfaceFor 先读插件声明，没装声明式工作流插件时回到作者内置的 RunningHub 映射。
+// workflowPluginIDForInterfaceFor 先读插件声明，没装声明式工作流插件时回到内置的 RunningHub 映射。
 func (s *Service) workflowPluginIDForInterfaceFor(interfaceType string) (string, bool) {
 	if pluginID, ok := s.workflowPluginIDForInterfaceDeclared(interfaceType); ok {
 		return pluginID, true
@@ -141,7 +141,7 @@ func (s *Service) WorkflowPluginStatusesForUser(userID string) (map[string]strin
 }
 
 func (s *Service) RequireWorkflowPluginForInterface(interfaceType string) error {
-	// 按插件声明识别工作流插件，没装插件时才用作者的 RunningHub 内置映射。
+	// 按插件声明识别工作流插件，没装插件时才用的 RunningHub 内置映射。
 	pluginID, ok := s.workflowPluginIDForInterfaceFor(interfaceType)
 	if !ok {
 		return Forbidden("未知工作流插件")

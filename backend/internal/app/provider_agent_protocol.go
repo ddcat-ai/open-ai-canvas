@@ -130,7 +130,7 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 }
 
 // Agent 请求形状改读插件声明的请求格式（RequestFormat 由 resolveProviderConfig 从 create 路径推出）；
-// 没有声明时（未装插件的内置实现）保留作者原来的 openai-response 判断。
+// 没有声明时（未装插件的内置实现）保留原来的 openai-response 判断。
 func agentRequestUsesFunctionCallItemID(config providerConfig, declarative bool) bool {
 	if format := strings.TrimSpace(config.RequestFormat); format != "" {
 		return protocol.TextWire(format) == protocol.TextWireResponses

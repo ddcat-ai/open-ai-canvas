@@ -290,7 +290,7 @@ func (s *Service) normalizeChannelModelContract(channel *model.ModelChannel, req
 	if err != nil {
 		return "", "", "", "", err
 	}
-	// 是否需要第二把密钥读插件声明的 auth.secretField，没装插件时保留作者的即梦内置判断。
+	// 是否需要第二把密钥读插件声明的 auth.secretField，没装插件时保留即梦内置判断。
 	if s.protocolRequiresSecretKey(string(protocol)) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
 		return "", "", "", "", BadAuthRequest("当前协议需要先在渠道中配置 Access Key 和 Secret Key")
 	}
@@ -318,7 +318,7 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}
-	// 这里保留作者原有的即梦协议判断，供没有 Service 的调用方使用；
+	// 这里保留原有的即梦协议判断，供没有 Service 的调用方使用；
 	// 读插件声明 auth.secretField 的判断在 (*Service).normalizeChannelModelContract 里。
 	if (protocol == model.ChannelInterfaceVolcengineJiMengImage || protocol == model.ChannelInterfaceVolcengineJiMengVideo) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
 		return "", "", "", "", BadAuthRequest("即梦官方协议需要先在渠道中配置 Access Key 和 Secret Key")

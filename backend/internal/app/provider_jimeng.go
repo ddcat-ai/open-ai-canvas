@@ -42,7 +42,7 @@ func isVolcengineJiMengProtocol(protocol string) bool {
 }
 
 // protocolRequiresSecretKey 判断该协议是否需要第二把密钥（AK/SK）。
-// 先读插件 manifest 已声明的 auth.secretField；未安装声明式插件时才用作者的即梦内置实现。
+// 先读插件 manifest 已声明的 auth.secretField；未安装声明式插件时才用即梦内置实现。
 func (s *Service) protocolRequiresSecretKey(interfaceType string) bool {
 	if provider, ok := s.pluginProviderDeclaration(interfaceType); ok {
 		return strings.TrimSpace(provider.Auth.SecretField) != ""

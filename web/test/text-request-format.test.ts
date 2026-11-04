@@ -69,7 +69,7 @@ describe("text request format", () => {
         expect(upstreamPath(requests)).toBe("/v1/chat/completions");
     });
 
-    // 作者内置协议 ID 的映射与行为不变。
+    // 内置协议 ID 的映射与行为不变。
     test("author builtin protocols keep their endpoints", async () => {
         const chatRequests = captureRequests([{ choices: [{ delta: { content: "ok" } }] }]);
         await requestToolResponse(textConfig("chat-completion"), [{ role: "user", content: "写一句" }], []);
@@ -80,7 +80,7 @@ describe("text request format", () => {
         expect(upstreamPath(responsesRequests)).toBe("/v1/responses");
     });
 
-    // 没有 requestFormat 的未知协议保持作者原来的 responses 行为（不新增兜底）。
+    // 没有 requestFormat 的未知协议保持原来的 responses 行为（不新增兜底）。
     test("unknown protocol without requestFormat keeps author fallback", async () => {
         const requests = captureRequests([{ type: "response.completed", response: { output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }] } }]);
         await requestToolResponse(textConfig("legacy-custom-text"), [{ role: "user", content: "写一句" }], []);
@@ -114,9 +114,9 @@ describe("system channel catalog plumbing", () => {
                 models: [
                     {
                         id: "cm-1",
-                        modelKey: "secure-model",
-                        displayName: "Secure Model",
-                        channelLabel: "Secure",
+                        modelKey: "vendor-model",
+                        displayName: "Vendor Model",
+                        channelLabel: "Vendor",
                         tags: [],
                         description: "",
                         icon: "",
@@ -131,8 +131,8 @@ describe("system channel catalog plumbing", () => {
                 ],
             },
         ]);
-        const config: AiConfig = { ...defaultConfig, channels, model: "sys-1::secure-model", textModel: "sys-1::secure-model" };
-        expect(resolveModelRequestConfig(config, "sys-1::secure-model").requestFormat).toBe("chat-completion");
+        const config: AiConfig = { ...defaultConfig, channels, model: "sys-1::vendor-model", textModel: "sys-1::vendor-model" };
+        expect(resolveModelRequestConfig(config, "sys-1::vendor-model").requestFormat).toBe("chat-completion");
 
         const requests = captureRequests([{ choices: [{ delta: { content: "ok" } }] }]);
         const result = await requestToolResponse(config, [{ role: "user", content: "写一句" }], []);

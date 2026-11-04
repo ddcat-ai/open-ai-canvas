@@ -37,7 +37,7 @@ export type ModelReferenceLimits = {
 
 /**
  * 普通音频模型只接受文本或音色 ID。参考素材容量优先读模型能力声明，
- * 未声明时沿用作者内置豆包音频合同（最多 3 段参考音频，或 1 张参考图片，两者不能同时使用）。
+ * 未声明时沿用内置豆包音频合同（最多 3 段参考音频，或 1 张参考图片，两者不能同时使用）。
  */
 export function audioReferenceCapacity(config: AiConfig, model: string) {
     // 参考音频容量改读 capabilityConfig.audio.references，不再只按豆包协议判断
@@ -57,7 +57,7 @@ export function audioModelForConnection(config: AiConfig, explicit = "") {
     const selected = String(explicit || "").trim();
     if (selected) return selected;
     if (String(config.audioModel || "").trim()) return config.audioModel;
-    // 默认音频模型先找声明了音频能力的模型，再回退作者内置豆包音频
+    // 默认音频模型先找声明了音频能力的模型，再回退内置豆包音频
     return (config.audioModels || []).find((item) => audioCapabilityForConfig(config, item)?.references || isDoubaoAudioModel(config, item)) || "";
 }
 

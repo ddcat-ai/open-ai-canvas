@@ -209,12 +209,12 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
 }
 
 // 默认能力先读插件声明（渠道地址对应的 providers[].capabilities），
-// 读不到声明时才走作者原来的模型名启发式（作者内置实现保留）。
+// 读不到声明时才走原来的模型名启发式（内置实现保留）。
 export function resolveDeclaredCapability(model: string, availableProtocols: ModelProtocolDefinition[] = [], baseUrl = ""): ModelCapabilityChoice {
     return declaredChannelDefaults(availableProtocols, baseUrl).capability || inferCapabilityFromModel(model);
 }
 
-// 保留作者原来的模型名启发式，仅在没有插件声明时兜底。
+// 保留原来的模型名启发式，仅在没有插件声明时兜底。
 function inferCapabilityFromModel(model: string): ModelCapabilityChoice {
     const lower = model.toLowerCase();
     if (
@@ -264,7 +264,7 @@ function defaultProtocolForCapability(capability: ModelCapabilityChoice, availab
     // 插件声明了该能力下的协议且地址与渠道一致就直接用插件声明，不再先查写死的协议名表。
     const declaredProtocol = declaredProtocolForCapability(availableProtocols, capability, baseUrl);
     if (declaredProtocol) return declaredProtocol;
-    // 以下为作者原来的内置模板：没装插件、或插件都没声明这个地址时使用。
+    // 以下为原来的内置模板：没装插件、或插件都没声明这个地址时使用。
     const standardProtocols: Record<string, string[]> = {
         text: ["chat-completion", "openai-response"],
         image: ["openai-image"],

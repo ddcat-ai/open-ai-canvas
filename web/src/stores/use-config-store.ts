@@ -336,7 +336,7 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
         if (configuredCapability) return configuredCapability === capability;
         // 模型名启发式：最后回退。
         // 上面三层（协议 / 渠道接口 / 模型显式能力）已覆盖声明式插件（插件自定义协议），
-        // 名字判断只在模型完全没有任何声明时才走到，保持作者原行为。
+        // 名字判断只在模型完全没有任何声明时才走到，保持原行为。
         return modelMatchesCapability(model, capability);
     });
 }
@@ -558,7 +558,7 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const modelProtocol = costEntry?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
     // 文字请求格式先读后端随模型目录下发的 requestFormat（由插件声明的 create 路径推出），
-    // 读不到才按作者内置协议 ID 判断。声明式插件（插件自定义协议）不再因为协议名不认识而被当成 responses。
+    // 读不到才按内置协议 ID 判断。声明式插件（插件自定义协议）不再因为协议名不认识而被当成 responses。
     const requestFormat = normalizedTextRequestFormat(costEntry?.requestFormat) || textRequestFormatForInterface(interfaceType);
     return {
         ...config,
@@ -587,7 +587,7 @@ function normalizedTextRequestFormat(value: unknown): TextRequestFormat | undefi
     return undefined;
 }
 
-/** textRequestFormatForInterface 是作者内置协议 ID 到文字请求格式的映射（内置实现，不是新增兜底）。 */
+/** textRequestFormatForInterface 是内置协议 ID 到文字请求格式的映射（内置实现，不是新增兜底）。 */
 function textRequestFormatForInterface(interfaceType?: ChannelInterfaceType): TextRequestFormat | undefined {
     if (interfaceType === "chat-completion") return "chat-completion";
     if (interfaceType === "openai-response") return "responses";
@@ -599,7 +599,7 @@ function textRequestFormatApiFormat(requestFormat: TextRequestFormat): ApiCallFo
     return requestFormat === "claude-api" ? "claude" : "openai";
 }
 
-/** resolvedTextWire 供文字请求选端点：优先后端下发的 requestFormat，读不到才用作者内置协议名判断。 */
+/** resolvedTextWire 供文字请求选端点：优先后端下发的 requestFormat，读不到才用内置协议名判断。 */
 export function resolvedTextWire(config: { requestFormat?: TextRequestFormat; interfaceType?: ChannelInterfaceType }): TextRequestFormat | undefined {
     return normalizedTextRequestFormat(config.requestFormat) || textRequestFormatForInterface(config.interfaceType);
 }

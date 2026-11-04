@@ -29,7 +29,7 @@ export type ChannelModelCatalogItem = {
 type ChannelModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
 
 // 默认能力 / 默认协议 / 默认地址改读已安装插件的声明（capabilities / baseUrl），
-// 作者的写死模板只在读不到插件声明时使用（没装插件，或插件没声明该地址/能力）。
+// 写死的模板只在读不到插件声明时使用（没装插件，或插件没声明该地址/能力）。
 export type DeclaredChannelDefaults = { capability?: ProtocolCapability; protocol?: ModelProtocol; baseUrl?: string };
 
 function normalizeDeclaredBaseUrl(value: string | undefined) {
@@ -53,7 +53,7 @@ export function declaredProtocolForCapability(protocols: readonly ModelProtocolD
     return declaredProtocolsForAddress(protocols, baseUrl).find((item) => item.capability === capability)?.value;
 }
 
-/** 渠道地址对应的插件声明：能力唯一时才给出默认能力/协议，否则留空交给调用方的作者内置逻辑。 */
+/** 渠道地址对应的插件声明：能力唯一时才给出默认能力/协议，否则留空交给调用方的内置逻辑。 */
 export function declaredChannelDefaults(protocols: readonly ModelProtocolDefinition[] | undefined, baseUrl = ""): DeclaredChannelDefaults {
     const declared = declaredProtocolsForAddress(protocols, baseUrl);
     const capabilities = Array.from(new Set(declared.map((item) => item.capability)));
@@ -64,7 +64,7 @@ export function declaredChannelDefaults(protocols: readonly ModelProtocolDefinit
     return { capability, ...(protocol ? { protocol } : {}), ...(address ? { baseUrl: address } : {}) };
 }
 
-/** 能力配置优先套用插件声明（imageParameters / workflows）；插件没声明时保持作者按协议名生成的默认画像。 */
+/** 能力配置优先套用插件声明（imageParameters / workflows）；插件没声明时保持按协议名生成的默认画像。 */
 export function declaredCapabilityConfig(config: ModelCapabilityConfig, options: { capability: ProtocolCapability; model?: string; protocol?: ModelProtocol; protocols?: readonly ModelProtocolDefinition[] }): ModelCapabilityConfig {
     const definition = options.protocols?.find((item) => item.value === options.protocol);
     if (!definition) return config;
@@ -143,7 +143,7 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
         }
 
         const capability = inferredCapability || modelProtocolCapability(channel.interfaceType);
-        // 新模型的默认协议改读已安装插件声明，读不到才用作者写死的协议模板。
+        // 新模型的默认协议改读已安装插件声明，读不到才用写死的协议模板。
         const protocol = inferredProtocol || declaredProtocolForCapability(declaredProtocols, capability, channel.baseUrl) || protocolTemplateForNewCatalogModel(capability, channel.interfaceType);
         if (!protocol || !capability) continue;
         const capabilityConfig = capability === "image" || capability === "video" ? catalogCapabilityConfig(item, protocol, capability, undefined, true) : undefined;
@@ -160,7 +160,7 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
     return next;
 }
 
-// 作者的写死协议模板：只在读不到插件声明（没装插件 / 插件没声明该能力）时使用。
+// 写死的协议模板：只在读不到插件声明（没装插件 / 插件没声明该能力）时使用。
 // 有插件声明时优先用 providers[].capabilities，见 declaredProtocolForCapability。
 function protocolTemplateForNewCatalogModel(capability: ChannelModelCost["capability"] | undefined, channelProtocol: ModelProtocol | undefined): ModelProtocol | undefined {
     if (!capability) return channelProtocol;

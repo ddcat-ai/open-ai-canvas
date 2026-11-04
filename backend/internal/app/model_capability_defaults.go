@@ -28,7 +28,7 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		OutputFormat:          ParameterSupport{Supported: true},
 		MaxOutputs:            15,
 	}
-	// builtinProfile 标记作者为该协议写死的内置画像；内置画像保持作者原值，不参与声明覆盖。
+	// builtinProfile 标记为该协议写死的内置画像；内置画像保持原值，不参与声明覆盖。
 	builtinProfile := true
 	switch model.ChannelInterfaceType(protocol) {
 	case model.ChannelInterfaceOpenAIImage:
@@ -99,7 +99,7 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.MaxOutputs = 1
 	}
 	if !builtinProfile {
-		// 作者没有内置画像的协议（含插件自定义协议）读插件声明的 imageParameters
+		// 没有内置画像的协议（含插件自定义协议）读插件声明的 imageParameters
 		// 生成默认值（比例 / 分辨率 / 质量 / 透明底 / 张数）；插件未声明时保留上面的通用默认。
 		if declared, ok := pluginDeclaredImageCapabilityDefaults(protocol); ok {
 			return declared
@@ -150,7 +150,7 @@ func pluginDeclaredImageCapabilityDefaults(protocol string, registries ...*proto
 		switch parameter.Binding {
 		case "aspectRatio":
 			// 插件只声明了比例绑定、没有 values / default 时，保留通用画像的档位与默认值，
-			// 不能生成空的 size.default（作者自己的 validateImageCapabilityConfig 会拒绝“请配置默认图片尺寸或比例”）。
+			// 不能生成空的 size.default（已有的 validateImageCapabilityConfig 会拒绝“请配置默认图片尺寸或比例”）。
 			values := imageParameterStringValues(parameter.Values)
 			allowCustom := len(values) == 0
 			if allowCustom {
@@ -295,7 +295,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.References.MaxVideos, video.References.MaxAudios = 3, 3
 		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024
 		video.References.MaxVideoDuration, video.References.MaxAudioDuration = 15, 15
-		// 作者原来按模型名判「Seedance 参考视频至少 2 秒」，改成读能力字段后默认值要补上。
+		// 原来按模型名判「Seedance 参考视频至少 2 秒」，改成读能力字段后默认值要补上。
 		video.References.MinVideoDuration = 2
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}

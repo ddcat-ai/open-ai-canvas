@@ -25,7 +25,7 @@ function withSystemPrompt(config: AiConfig, prompt: string) {
 
 /**
  * usesChatCompletionsWire 判定是否走 /chat/completions。
- * requestFormat 已知时按它判断；读不到时保留作者原来的判断（协议 ID 为空才算 chat，其余落到 Responses）。
+ * requestFormat 已知时按它判断；读不到时保留原来的判断（协议 ID 为空才算 chat，其余落到 Responses）。
  * 声明式文字插件（requestFormat=chat-completion）不再落到 /responses。
  */
 function usesChatCompletionsWire(config: { requestFormat?: TextRequestFormat; interfaceType?: string }, textWire: TextRequestFormat | undefined) {
@@ -66,7 +66,7 @@ async function requestGeminiImagesOnce(config: AiConfig, prompt: string, referen
 }
 
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
-    // 下面的 gemini-image / grok-image / 方舟分支是作者手写内置直连实现（未装插件的路由），
+    // 下面的 gemini-image / grok-image / 方舟分支是手写内置直连实现（未装插件的路由），
     // 声明式插件（插件自定义协议）不走这些分支，继续走通用 OpenAI JSON（/images/generations）。
     const selectedModel = config.model || config.imageModel;
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
@@ -247,7 +247,7 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
     try {
         // 文字请求格式先读后端随模型目录下发的 requestFormat（从插件 create 路径推出），
-        // 读不到才按作者内置协议 ID 判断。
+        // 读不到才按内置协议 ID 判断。
         if (requestConfig.apiFormat === "gemini") {
             const answer = (await requestGeminiStreamingResponse(requestConfig, toGeminiBody(requestConfig, messages), onDelta, options)).content || "没有返回内容";
             if (answer === "没有返回内容") onDelta(answer);

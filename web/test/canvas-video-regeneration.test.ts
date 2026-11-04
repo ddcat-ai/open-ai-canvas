@@ -101,7 +101,7 @@ describe("videoReferenceSegmentError", () => {
     });
 
     // 最短参考视频时长改为读 capabilityConfig.video.references.minVideoDurationSeconds（默认画像：
-    // volcengine-ark-* / newapi-channel-1/2 为 2 秒），不再按 Seedance 模型名写死 2 秒；作者原断言保持不变。
+    // volcengine-ark-* / newapi-channel-1/2 为 2 秒），不再按 Seedance 模型名写死 2 秒；原断言保持不变。
     test("Seedance 单段少于 2 秒时返回提示", () => {
         const config = supportedVideoConfig({ model: "seedance-1.0-pro" });
         expect(videoReferenceSegmentError(config, 1500)).toContain("至少 2 秒");

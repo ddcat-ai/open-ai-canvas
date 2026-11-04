@@ -24,7 +24,7 @@ const vendorChatManifest = `{
 	"auth":{"type":"bearer","field":"apiKey"}}]}
 }`
 
-// 作者官方 chat 类插件：请求地址是 /v1/chat/completions，协议 ID 不是 chat-completion。
+// 官方 chat 类插件：请求地址是 /v1/chat/completions，协议 ID 不是 chat-completion。
 const officialVendorChatManifest = `{
 	"apiVersion":"yingce.plugin/v1",
 	"id":"vendor-official-chat","version":"1.0.0","name":"Vendor Official Chat","author":"Test","documentation":"# Test",
@@ -73,7 +73,7 @@ func TestTextWireForConfigFollowsDeclaredCreatePath(t *testing.T) {
 		{"vendor-official-chat", protocol.TextWireChatCompletion},
 		{"vendor-chat", protocol.TextWireChatCompletion},
 		{"cohere-like", protocol.TextWireUnknown},
-		// 作者内置协议 ID 照旧映射。
+		// 内置协议 ID 照旧映射。
 		{"chat-completion", protocol.TextWireChatCompletion},
 		{"openai-response", protocol.TextWireResponses},
 		{"claude-api", protocol.TextWireClaudeAPI},
@@ -99,7 +99,7 @@ func readJSONBody(t *testing.T, r *http.Request) map[string]interface{} {
 	return body
 }
 
-// 作者官方 chat 类插件（协议 ID 不是 chat-completion）现在能流式、能带思考参数。
+// 官方 chat 类插件（协议 ID 不是 chat-completion）现在能流式、能带思考参数。
 func TestDeclarativeTextTaskStreamsForOfficialChatStylePlugin(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	var seen map[string]interface{}
@@ -263,7 +263,7 @@ func TestDeclarativeTextTaskKeepsPluginParsingForUnknownShape(t *testing.T) {
 	}
 }
 
-// 作者内置三个协议的请求地址与参数不变。
+// 内置三个协议的请求地址与参数不变。
 func TestBuiltinTextProtocolsKeepAuthorBehavior(t *testing.T) {
 	cases := []struct {
 		interfaceType string
@@ -359,7 +359,7 @@ func TestDeclaredOperationMatchesDeclaredPaths(t *testing.T) {
 	}
 }
 
-// 内置 Agent 请求是否强制 function_call item id：有声明看声明，没声明保留作者内置判断。
+// 内置 Agent 请求是否强制 function_call item id：有声明看声明，没声明保留内置判断。
 func TestAgentRequestUsesFunctionCallItemID(t *testing.T) {
 	if !agentRequestUsesFunctionCallItemID(providerConfig{InterfaceType: "openai-response"}, false) {
 		t.Fatal("内置 openai-response 仍应要求 item id")

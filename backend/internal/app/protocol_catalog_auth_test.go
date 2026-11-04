@@ -9,7 +9,7 @@ import (
 )
 
 // 目录只下发表格里的 auth 字段名（type / field / secretField），
-// 用作者真实的即梦插件 manifest（auth 里还有 service / region）验证不会带出其它属性或密钥值。
+// 用官方即梦插件 manifest（auth 里还有 service / region）验证不会带出其它属性或密钥值。
 func TestPluginProviderCatalogProjectsDeclaredAuthFieldNames(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {

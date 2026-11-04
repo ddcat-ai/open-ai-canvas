@@ -10,7 +10,7 @@ type AudioSettingsPanelProps = { config: AiConfig; onConfigChange: (key: CanvasA
 
 export function AudioSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[var(--panel-width-compact)] space-y-4" }: AudioSettingsPanelProps) {
     const listId = useId();
-    // 音色/格式/参考素材容量改读模型能力声明，未声明时保持作者豆包/OpenAI 原有写法
+    // 音色/格式/参考素材容量改读模型能力声明，未声明时保持豆包/OpenAI 原有写法
     const freeform = audioVoiceIsFreeform(config);
     const doubao = isDoubaoAudioConfig(config);
     const providerNotes = audioProviderNotesVisible(config);

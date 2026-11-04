@@ -81,7 +81,7 @@ describe("installed plugin declarations feed admin model defaults", () => {
 
     test("several declared capabilities behind one address fall back to the author heuristic only for the capability", () => {
         expect(declaredChannelDefaults(vendorPlugins, VENDOR_BASE_URL)).toEqual({});
-        // 能力不唯一 → 保留作者原来的模型名启发式；协议仍然读插件声明。
+        // 能力不唯一 → 保留原来的模型名启发式；协议仍然读插件声明。
         expect(resolveDeclaredCapability("kling-video-v4-tencent", vendorPlugins, VENDOR_BASE_URL)).toBe("video");
         expect(defaultProtocolForModel("kling-video-v4-tencent", vendorPlugins, VENDOR_BASE_URL)).toBe("vendor-video");
         expect(declaredProtocolForCapability(vendorPlugins, "text", VENDOR_BASE_URL)).toBe("vendor-chat");
@@ -90,13 +90,13 @@ describe("installed plugin declarations feed admin model defaults", () => {
 
 describe("author built-in behaviour is unchanged", () => {
     test("official plugins keep the same capability and protocol defaults", () => {
-        // 地址一致但能力不唯一：默认能力仍是作者原来的 text，协议仍是作者的第一顺位协议。
+        // 地址一致但能力不唯一：默认能力仍是原来的 text，协议仍是的第一顺位协议。
         expect(declaredChannelDefaults(officialPlugins, "https://api.openai.com")).toEqual({});
         const draft = initialChannelModelValues(null, officialPlugins, "https://api.openai.com");
         expect(draft.capability).toBe("text");
         expect(draft.protocol).toBe("chat-completion");
 
-        // 拉取模型：图片模型的默认协议仍是作者的 openai-image 模板（插件声明与模板一致）。
+        // 拉取模型：图片模型的默认协议仍是的 openai-image 模板（插件声明与模板一致）。
         const channel = catalogChannel({ baseUrl: "https://api.openai.com", models: ["gpt-image-1"] });
         const costs = mergeFetchedChannelModelCosts(channel, [{ id: "gpt-image-1", modelType: "image" }], officialPlugins);
         expect(costs[0]!.protocol).toBe("openai-image");
@@ -122,7 +122,7 @@ describe("author built-in behaviour is unchanged", () => {
         expect(video[0]!.protocol).toBe("newapi");
         expect(audio[0]!.protocol).toBe("openai-audio");
         expect(declaredChannelDefaults([], "https://relay.example")).toEqual({});
-        // 没有插件声明时，设置页仍用作者原来的模型名启发式。
+        // 没有插件声明时，设置页仍用原来的模型名启发式。
         expect(defaultProtocolForModel("veo-lite-flow", [], "https://relay.example")).toBe("newapi-channel-2");
     });
 });
@@ -204,7 +204,7 @@ describe("declared capability profiles and workflow screen specs", () => {
 });
 
 describe("secret key requirement follows the declared plugin auth", () => {
-    // 用作者真实的即梦插件 manifest（auth 里还带 service / region）做数据。
+    // 用官方即梦插件 manifest（auth 里还带 service / region）做数据。
     const jimengManifest = JSON.parse(readFileSync(new URL("../../plugin-packages/volcengine-jimeng-image/manifest.json", import.meta.url), "utf8")) as {
         contributes: { providers: unknown[] };
     };
@@ -230,14 +230,14 @@ describe("secret key requirement follows the declared plugin auth", () => {
         expect(jimengProvider.auth.secretField).toBe("secretKey");
         expect(channelValidationError({ ...channelWith("volcengine-jimeng-image"), secretKey: "" }, [jimengDeclaration])).toContain("Secret Key");
         expect(channelValidationError({ ...channelWith("volcengine-jimeng-image"), secretKey: "secret" }, [jimengDeclaration])).toBe("");
-        // 目录里没有该协议的声明（尚未加载完 / 请求失败 / 没装插件）时保留作者的即梦前缀兜底，与后端一致。
+        // 目录里没有该协议的声明（尚未加载完 / 请求失败 / 没装插件）时保留即梦前缀兜底，与后端一致。
         expect(channelValidationError({ ...channelWith("volcengine-jimeng-image"), secretKey: "" }, [])).toContain("Secret Key");
     });
 
     test("an empty declaration catalog keeps the builtin JiMeng secret key requirement", () => {
         const channel = { ...channelWith("volcengine-jimeng-image"), secretKey: "" };
 
-        // 目录为空时按作者的即梦前缀兜底（后端 protocolRequiresSecretKey 保留的内置实现）
+        // 目录为空时按即梦协议前缀兜底（与后端 protocolRequiresSecretKey 的内置实现一致）
         expect(channelValidationError(channel, [])).toContain("Secret Key");
         expect(channelValidationError({ ...channel, secretKey: "secret" }, [])).toBe("");
         // 兜底只覆盖即梦协议，其他协议仍然不要求第二把密钥

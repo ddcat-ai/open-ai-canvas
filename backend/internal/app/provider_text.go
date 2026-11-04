@@ -28,7 +28,7 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 	return runLegacyTextTask(ctx, input)
 }
 
-// 文字请求格式从插件已声明的 create 路径推出（作者内置协议 ID 照旧映射），
+// 文字请求格式从插件已声明的 create 路径推出（内置协议 ID 照旧映射），
 // 不再只认 chat-completion / openai-response / claude-api 三个协议名。
 func textWireForConfig(ctx context.Context, config providerConfig) protocol.TextWire {
 	switch strings.TrimSpace(config.InterfaceType) {
@@ -53,7 +53,7 @@ func textWireForConfig(ctx context.Context, config providerConfig) protocol.Text
 // while sharing the SSE parser used by text generation and Agent requests.
 func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, *protocol.Result, error) {
 	// wire 由插件声明的 create 路径推出；已知 wire 时宿主按 wire 补思考参数与输出上限，
-	// 和 Agent 路径一致，不再因为协议 ID 不是作者内置名字而整段跳过。
+	// 和 Agent 路径一致，不再因为协议 ID 不是内置名字而整段跳过。
 	wire := textWireForConfig(ctx, input.Config)
 	if input.Mode == "text" && wire != protocol.TextWireUnknown {
 		if body := protocolBodyObject(spec.Body); body != nil {
@@ -182,7 +182,7 @@ func runClaudeTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 	return providerTextTaskResult(result), nil
 }
 
-// 入参是推出来的文字格式（wire），不再要求协议 ID 恰好叫作者内置名字；
+// 入参是推出来的文字格式（wire），不再要求协议 ID 恰好叫内置名字；
 // 插件声明的 create 路径是 chat / responses / claude 时同样写对应思考字段。
 func applyTextThinking(body map[string]interface{}, input canvasGenerationInput, protocol string) {
 	if !input.TextOptions.Thinking {

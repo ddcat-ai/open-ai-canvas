@@ -574,7 +574,7 @@ function applyWorkflowParameterValues(fields: WorkflowFieldMapping[] | undefined
 export function supportsVideoReferenceAudio(config: AiConfig) {
     // 能不能带参考音频改读模型能力（references.maxAudios），不再按 Seedance 模型名判断
     if ((modelCapabilityConfigFor(config, config.model).video?.references.maxAudios || 0) > 0) return true;
-    // 作者内置的 NewAPI 视频协议（未装插件时的内置实现）保留原有分支，不作为通用兜底。
+    // 内置的 NewAPI 视频协议（未装插件时的内置实现）保留原有分支，不作为通用兜底。
     const interfaceType = resolveModelRequestConfig(config, config.model).interfaceType;
     return interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2";
 }

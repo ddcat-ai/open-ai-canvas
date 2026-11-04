@@ -90,7 +90,7 @@ export function isDoubaoAudioConfig(config: AiConfig, model = config.model || co
 
 /**
  * 音色/格式/参考素材容量优先读模型能力声明（插件 parameters 落成的 capabilityConfig.audio），
- * 未声明时才回退作者内置的音频协议写法（豆包 / OpenAI）。
+ * 未声明时才回退内置的音频协议写法（豆包 / OpenAI）。
  */
 export function audioCapabilityForConfig(config: AiConfig, model = config.model || config.audioModel) {
     return modelCapabilityConfigFor(config, model).audio;

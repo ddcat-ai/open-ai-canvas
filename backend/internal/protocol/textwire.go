@@ -5,7 +5,7 @@ import "strings"
 // TextWire 是宿主认识的三家文字请求/事件形状。
 //
 // 插件不声明 wire：宿主只看插件已经声明的 create 请求地址，地址形状决定请求体字段名、
-// SSE 事件解析方式和流式用量字段。作者内置协议（chat-completion / openai-response /
+// SSE 事件解析方式和流式用量字段。内置协议（chat-completion / openai-response /
 // claude-api）的协议 ID 与 wire 同名，仍按协议 ID 直接映射。
 type TextWire string
 

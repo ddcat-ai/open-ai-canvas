@@ -365,9 +365,9 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	var channelModel *model.ChannelModel
 	if !(c.Request.Method == http.MethodGet && path == "/models") {
 		// 不带 model 的 GET 轮询路径改为按插件声明的 poll/cancel/result 判定；
-		// 作者内置的 MiniMax 视频协议分支保留给未装插件的渠道。
+		// 内置的 MiniMax 视频协议分支保留给未装插件的渠道。
 		if c.Request.Method == http.MethodGet && modelName == "" {
-			// 声明命中但协议是作者内置实现时视为没命中，继续走作者原分支
+			// 声明命中但协议是内置实现时视为没命中，继续走原分支
 			// （内置协议的系统代理行为必须与 HEAD 一致）。
 			if declaredProtocol, declaredCapability, ok := svc.SystemChannelDeclaredOperationProtocol(channel.ID, path); ok && !isBuiltinProxyProtocol(declaredProtocol) {
 				protocol = declaredProtocol
@@ -403,7 +403,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		fail(c, http.StatusForbidden, err)
 		return
 	}
-	// 补 include_usage 改为看插件声明的请求格式（作者内置 chat-completion 照旧），
+	// 补 include_usage 改为看插件声明的请求格式（内置 chat-completion 照旧），
 	// token 计费的插件文字模型才能拿到上游用量结算。
 	if channelModel != nil && channelModel.BillingMode == "token" && (protocol == model.ChannelInterfaceChatCompletion || svc.ProtocolRequestsChatStreamUsage(string(protocol))) {
 		body, err = service.EnsureChatCompletionStreamUsageRequest(body)
@@ -473,7 +473,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
 	service.ApplyDefaultOutboundHeaders(upstreamReq)
 	// 出站鉴权头由插件声明决定，直接复用声明式协议同一套鉴权实现；
-	// 没装插件、或插件声明的是签名 / query 鉴权时，才走作者原来的 Gemini / Claude / Bearer 分支。
+	// 没装插件、或插件声明的是签名 / query 鉴权时，才走原来的 Gemini / Claude / Bearer 分支。
 	declaredAuth, declaredAuthErr := svc.ApplyDeclaredProtocolAuthHeaders(upstreamReq, string(protocol), channel.APIKey, channel.SecretKey)
 	if declaredAuthErr != nil {
 		refundSystemProxyBilling(svc, billingOrderID, "系统渠道鉴权头构造失败")

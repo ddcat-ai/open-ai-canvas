@@ -256,7 +256,7 @@ func normalizedChannelModelCapability(channelModel *model.ChannelModel, registri
 	}
 	capability := normalizeCapability(channelModel.Capability)
 	// 音频模型现在可以声明 capabilityConfig.audio，读路径按同一套归一化恢复；
-	// 未声明时归一化仍返回 nil，与作者原来的“音频无能力合同”行为一致。
+	// 未声明时归一化仍返回 nil，与原来的“音频无能力合同”行为一致。
 	if capability != "text" && capability != "image" && capability != "video" && capability != "audio" {
 		return nil, fmt.Errorf("不支持的渠道模型能力：%s", channelModel.Capability)
 	}
@@ -285,7 +285,7 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 	}
 	if capability == "audio" {
 		// 音频模型此前直接返回 nil，保存时能力配置会被清空。
-		// 没有任何声明时仍返回 nil，保持作者原来的“音频无能力合同”行为。
+		// 没有任何声明时仍返回 nil，保持原来的“音频无能力合同”行为。
 		if audio == nil && promptFamily == "" {
 			return nil, nil
 		}
@@ -398,7 +398,7 @@ func legacyImageResolutionProtocol(protocol string, registries ...*protocolcontr
 
 // imageResolutionRidesQualityField 判定该线路的 quality 字段实际承载分辨率档。
 // 先读插件声明的分辨率档（quality 取值全在档位声明内），
-// 插件未声明时保留作者的 Gemini 图片内置判断。
+// 插件未声明时保留 Gemini 图片内置判断。
 func imageResolutionRidesQualityField(protocol string, image *ImageCapabilityConfig, registries ...*protocolcontract.Registry) bool {
 	if strings.TrimSpace(protocol) == string(model.ChannelInterfaceGeminiImage) {
 		return true
@@ -417,7 +417,7 @@ func imageResolutionRidesQualityField(protocol string, image *ImageCapabilityCon
 
 func legacyImageResolutionTiers(protocol string, registries ...*protocolcontract.Registry) map[string]bool {
 	// 旧线路的 quality→分辨率投影改为先读插件声明的分辨率参数档；
-	// 未安装声明式插件时保留作者按协议名写死的内置名单。
+	// 未安装声明式插件时保留按协议名写死的内置名单。
 	if tiers := pluginDeclaredImageResolutionTiers(protocol, registries...); len(tiers) > 0 {
 		return tiers
 	}
@@ -434,7 +434,7 @@ func legacyImageResolutionTiers(protocol string, registries ...*protocolcontract
 }
 
 // pluginDeclaredImageResolutionTiers 读出插件 imageParameters 里 binding=resolution 的取值档位。
-// 没有任何声明时返回 nil，调用方据此回到作者原有的内置行为。
+// 没有任何声明时返回 nil，调用方据此回到原有的内置行为。
 func pluginDeclaredImageResolutionTiers(protocol string, registries ...*protocolcontract.Registry) map[string]bool {
 	id := strings.TrimSpace(protocol)
 	if id == "" {

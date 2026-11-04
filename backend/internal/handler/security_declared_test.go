@@ -7,7 +7,7 @@ import (
 	"yingce/backend/internal/model"
 )
 
-// 内置协议名单：作者内置实现覆盖的全部协议都算内置，作者的官方插件复用这些 ID 时保持原行为。
+// 内置协议名单：内置实现覆盖的全部协议都算内置，官方插件复用这些 ID 时保持原行为。
 func TestIsBuiltinProxyProtocol(t *testing.T) {
 	builtin := []model.ChannelInterfaceType{
 		model.ChannelInterfaceChatCompletion,
@@ -36,17 +36,17 @@ func TestIsBuiltinProxyProtocol(t *testing.T) {
 	}
 	for _, protocol := range builtin {
 		if !isBuiltinProxyProtocol(protocol) {
-			t.Fatalf("%q 应判为作者内置协议", protocol)
+			t.Fatalf("%q 应判为内置协议", protocol)
 		}
 	}
 	for _, protocol := range []model.ChannelInterfaceType{"vendor-chat", "vendor-image-banana", "vendor-video", ""} {
 		if isBuiltinProxyProtocol(protocol) {
-			t.Fatalf("%q 不应判为作者内置协议", protocol)
+			t.Fatalf("%q 不应判为内置协议", protocol)
 		}
 	}
 }
 
-// 作者内置协议的路径白名单行为不变（含官方插件复用内置 ID 的那些）。
+// 内置协议的路径白名单行为不变（含官方插件复用内置 ID 的那些）。
 func TestInterfaceAllowsProxyPathKeepsBuiltinRules(t *testing.T) {
 	cases := []struct {
 		interfaceType model.ChannelInterfaceType
@@ -73,7 +73,7 @@ func TestInterfaceAllowsProxyPathKeepsBuiltinRules(t *testing.T) {
 	}
 }
 
-// 作者内置协议的系统代理判定不走声明分支：openai-image 的 /images/edits 仍放行，方舟视频仍拒绝。
+// 内置协议的系统代理判定不走声明分支：openai-image 的 /images/edits 仍放行，方舟视频仍拒绝。
 func TestAuthorizeSystemProxyKeepsBuiltinProtocolBehavior(t *testing.T) {
 	channel := &model.ModelChannel{ModelsJSON: `["gpt-image-2"]`}
 	body := []byte(`{"model":"gpt-image-2"}`)
@@ -93,8 +93,8 @@ func TestAuthorizeSystemProxyKeepsBuiltinProtocolBehavior(t *testing.T) {
 
 // 声明式插件协议：create 的 POST 需要模型授权，非 create 只允许 GET（DELETE 取消不走系统代理）。
 func TestAuthorizeDeclaredProxyRequest(t *testing.T) {
-	channel := &model.ModelChannel{ModelsJSON: `["secure-model"]`}
-	body := []byte(`{"model":"secure-model"}`)
+	channel := &model.ModelChannel{ModelsJSON: `["vendor-model"]`}
+	body := []byte(`{"model":"vendor-model"}`)
 
 	if err := authorizeDeclaredProxyRequest(true, true, true, channel, http.MethodPost, "application/json", body); err != nil {
 		t.Fatalf("声明的 create POST 应放行：%v", err)

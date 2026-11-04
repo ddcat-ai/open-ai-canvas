@@ -168,9 +168,9 @@ func loadRuntimePolicy(c *gin.Context, svc *service.Service) (service.RuntimePol
 	return policy, true
 }
 
-// 本函数里的 Agnes / MiniMax / Gemini 协议名分支是作者手写内置实现（未装插件时的路由）；
+// 本函数里的 Agnes / MiniMax / Gemini 协议名分支是手写内置实现（未装插件时的路由）；
 // 只有 isBuiltinProxyProtocol 不认识的协议（插件自定义协议等）才改走插件声明的
-// create/poll/cancel/result 路径判定，作者内置协议的判定一行未改。
+// create/poll/cancel/result 路径判定，内置协议的判定一行未改。
 func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInterfaceType, method string, requestPath string, contentType string, body []byte) error {
 	requestPath, err := normalizedProxyPath(requestPath)
 	if err != nil {
@@ -225,13 +225,13 @@ func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInt
 		return nil
 	}
 	// 只有内置名单不认识的协议（插件自定义协议等）才改走插件声明。
-	// 作者内置协议（包括官方插件复用内置协议 ID 的那些）一律保持下面的原逻辑。
+	// 内置协议（包括官方插件复用内置协议 ID 的那些）一律保持下面的原逻辑。
 	if protocol != "" && !isBuiltinProxyProtocol(protocol) && runtimeService != nil {
 		if declared, create, matched := runtimeService.DeclaredProxyOperationMatch(string(protocol), method, requestPath); declared {
 			return authorizeDeclaredProxyRequest(declared, create, matched, channel, method, contentType, body)
 		}
 	}
-	// 以下是未装插件的作者内置协议：openAIPostEndpoints + 协议名白名单 + 模型授权，保持原样。
+	// 以下是未装插件的内置协议：openAIPostEndpoints + 协议名白名单 + 模型授权，保持原样。
 	if method != http.MethodPost || !openAIPostEndpoints[requestPath] {
 		return errors.New("系统渠道不允许访问该上游接口")
 	}
@@ -245,8 +245,8 @@ func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInt
 	return nil
 }
 
-// builtinProxyPathRules 是作者内置协议在系统代理里的路径白名单，是这份名单的唯一定义处：
-// interfaceAllowsProxyPath（是否放行某路径）与 isBuiltinProxyProtocol（是否属于作者内置实现）共用它。
+// builtinProxyPathRules 是内置协议在系统代理里的路径白名单，是这份名单的唯一定义处：
+// interfaceAllowsProxyPath（是否放行某路径）与 isBuiltinProxyProtocol（是否属于内置实现）共用它。
 // 规则为 nil 表示该协议在系统代理里一律不允许访问上游路径。
 // 声明式插件协议不在这张表里，改由插件声明的 create/poll/cancel/result 判定。
 var builtinProxyPathRules = map[model.ChannelInterfaceType]func(string) bool{
@@ -275,9 +275,9 @@ var builtinProxyPathRules = map[model.ChannelInterfaceType]func(string) bool{
 	model.ChannelInterfaceMiniMaxVideo:                nil,
 }
 
-// authorDefaultProxyProtocols 是上面规则表之外、但仍由作者手写实现负责的协议：
+// authorDefaultProxyProtocols 是上面规则表之外、但仍由手写内置实现负责的协议：
 // Agnes / MiniMax / Gemini Veo·Image 在 authorizeSystemProxy 里有独立分支，
-// doubao-streaming-tts 与工作流协议走作者原来的 default:true（通用 OpenAI 端点）。
+// doubao-streaming-tts 与工作流协议走原来的 default:true（通用 OpenAI 端点）。
 // 这些协议的系统代理行为必须与改动前完全一致，不能落到声明式分支。
 var authorDefaultProxyProtocols = map[model.ChannelInterfaceType]struct{}{
 	model.ChannelInterfaceAgnesVideo:         {},
@@ -290,8 +290,8 @@ var authorDefaultProxyProtocols = map[model.ChannelInterfaceType]struct{}{
 	model.ChannelInterfaceRunningHubAudio:    {},
 }
 
-// isBuiltinProxyProtocol 判定该协议是否属于作者手写内置实现（名单与 builtinProxyPathRules 同源）。
-// 内置协议的系统代理判定完全保持作者原逻辑；空协议返回 false，但调用方不走声明分支。
+// isBuiltinProxyProtocol 判定该协议是否属于手写内置实现（名单与 builtinProxyPathRules 同源）。
+// 内置协议的系统代理判定完全保持原逻辑；空协议返回 false，但调用方不走声明分支。
 func isBuiltinProxyProtocol(protocol model.ChannelInterfaceType) bool {
 	if _, ok := builtinProxyPathRules[protocol]; ok {
 		return true
@@ -300,8 +300,8 @@ func isBuiltinProxyProtocol(protocol model.ChannelInterfaceType) bool {
 	return ok
 }
 
-// interfaceAllowsProxyPath 是未装插件时的内置实现：按作者内置协议名限制可访问的上游路径。
-// 声明式插件已在上游按插件声明判定，这个协议名白名单只服务作者手写内置实现。
+// interfaceAllowsProxyPath 是未装插件时的内置实现：按内置协议名限制可访问的上游路径。
+// 声明式插件已在上游按插件声明判定，这个协议名白名单只服务手写内置实现。
 func interfaceAllowsProxyPath(interfaceType model.ChannelInterfaceType, requestPath string) bool {
 	rule, ok := builtinProxyPathRules[interfaceType]
 	if !ok {
@@ -314,11 +314,11 @@ func interfaceAllowsProxyPath(interfaceType model.ChannelInterfaceType, requestP
 }
 
 // authorizeDeclaredProxyRequest 只按插件声明的路径放行请求。
-// 非 create 操作只允许 GET：取消是 DELETE，但作者的取消由后端任务内部发起，不走系统代理。
+// 非 create 操作只允许 GET：取消是 DELETE，但取消由后端任务内部发起，不走系统代理。
 // 命中 create 的 POST 请求仍要校验请求体里的 model 已授权；命中 poll/cancel/result 的请求本身不带 model，
 // 授权来自 SystemChannelDeclaredOperationProtocol（它只承认渠道里启用且使用该协议的模型）。
-// 对作者不认识的插件协议，POST 只放行声明的 create 路径（比原来可访问 6 个
-// openAI 端点更严），并新增声明的 GET 轮询；作者内置协议的判定完全不变。
+// 对内置名单之外的插件协议，POST 只放行声明的 create 路径（比原来可访问 6 个
+// openAI 端点更严），并新增声明的 GET 轮询；内置协议的判定完全不变。
 func authorizeDeclaredProxyRequest(declared bool, create bool, matched bool, channel *model.ModelChannel, method string, contentType string, body []byte) error {
 	if !declared || !matched {
 		return errors.New("当前接口类型不允许访问该上游接口")

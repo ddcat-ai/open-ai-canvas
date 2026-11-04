@@ -122,7 +122,7 @@ func applyAgentOutputLimit(body map[string]interface{}, limit int, wire string) 
 
 func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, adapter protocol.AgentAdapter) (map[string]interface{}, error) {
 	// Agent 请求体加工与流式解析的开关改为看推出来的 wire（插件声明的 create 路径），
-	// 不再只认作者内置的三个协议 ID。
+	// 不再只认内置的三个协议 ID。
 	wire := textWireForConfig(ctx, input.Config)
 	knownWire := wire != protocol.TextWireUnknown
 	if input.TextOptions.Thinking && !knownWire {

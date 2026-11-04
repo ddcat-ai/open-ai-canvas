@@ -59,7 +59,7 @@ func prepareOfficialGeminiAgentCacheMode(ctx context.Context, input canvasGenera
 		return spec, false, err
 	}
 	// 显式缓存改为看插件声明（create 指向 Gemini 原生 generateContent），
-	// 不再只认作者内置的 gemini-generate-content 协议 ID；走 chat 格式的 Gemini 插件不开启缓存。
+	// 不再只认内置的 gemini-generate-content 协议 ID；走 chat 格式的 Gemini 插件不开启缓存。
 	if !geminiCachedContentDeclared(ctx, input.Config.InterfaceType) {
 		return baseSpec, false, nil
 	}
@@ -240,7 +240,7 @@ func (s *Service) releaseGeminiCacheLock(cacheKey string, lock *geminiCacheKeyLo
 
 // geminiCachedContentDeclared 判定该协议是否声明了 Gemini 原生 generateContent 形状，
 // 只有原生形状才能用 CachedContent 前缀缓存。
-// 改读插件声明的 create 路径，不再只认作者内置协议 ID。
+// 改读插件声明的 create 路径，不再只认内置协议 ID。
 func geminiCachedContentDeclared(ctx context.Context, interfaceType string) bool {
 	if strings.TrimSpace(interfaceType) == officialGeminiAgentInterface {
 		return true
@@ -355,7 +355,7 @@ func cloneProtocolRequestSpec(spec protocol.RequestSpec) (protocol.RequestSpec, 
 }
 
 // geminiAgentCacheMinimumTokens 取显式缓存的最少上下文 token 数。
-// 只有作者内置 Gemini 协议才按模型名区分门槛；插件声明的 Gemini 协议
+// 只有内置 Gemini 协议才按模型名区分门槛；插件声明的 Gemini 协议
 // 没有该字段，一律用保守值 4096（缓存开小会被上游拒，跳过缓存是安全的）。
 func geminiAgentCacheMinimumTokens(input canvasGenerationInput) int {
 	// Keep the gate conservative for unknown model revisions. Skipping an

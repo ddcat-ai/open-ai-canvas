@@ -14,7 +14,7 @@ func isPublicMediaURL(value string) bool {
 	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
-// 下面三个判定只服务作者手写内置分发（未装插件的实现）；
+// 下面三个判定只服务手写内置分发（未装插件的实现）；
 // 装了声明式插件时素材策略由插件声明的 requiresPublicMediaUrls 决定（provider.go 已优先读声明）。
 func isSeedanceVideoConfig(config providerConfig) bool {
 	modelName := strings.ToLower(config.Model)

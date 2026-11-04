@@ -117,7 +117,7 @@ describe("G18 视频重试带参考音频按能力判断", () => {
         expect(supportsVideoReferenceAudio(config)).toBe(false);
     });
 
-    test("作者内置 NewAPI 视频协议保留原有分支", () => {
+    test("内置 NewAPI 视频协议保留原有分支", () => {
         const config = channelConfig("video", "newapi-channel-2", "some-video", { version: 1, video: defaultModelCapabilityConfig("newapi-channel-2", "some-video").video });
         expect(supportsVideoReferenceAudio(config)).toBe(true);
     });
@@ -136,7 +136,7 @@ describe("G17 参考视频最短时长按能力字段", () => {
         expect(videoReferenceSegmentError(config, 1500)).toBe("");
     });
 
-    test("作者内置方舟 /  Agent Plan / NewAPI 四个协议的默认能力仍保留 2 秒下限", () => {
+    test("内置方舟 /  Agent Plan / NewAPI 四个协议的默认能力仍保留 2 秒下限", () => {
         for (const protocol of ["volcengine-ark-video", "volcengine-ark-agent-plan-video", "newapi-channel-1", "newapi-channel-2"]) {
             const capability = defaultModelCapabilityConfig(protocol, "video-model");
             expect(capability.video?.references.minVideoDurationSeconds).toBe(2);
@@ -160,7 +160,7 @@ describe("G17 视频设置面板统一读能力声明", () => {
         expect(html).not.toContain("fast 模型自动使用 720P");
         expect(html).toContain("分辨率");
         expect(html).toContain("720P");
-        // 能力只声明 720p，因此不会出现作者 Seedance 面板的 1080P / 480P 档
+        // 能力只声明 720p，因此不会出现 Seedance 面板的 1080P / 480P 档
         expect(html).not.toContain("1080P");
         expect(html).not.toContain("480P");
         // 比例档位等于能力声明（16:9 / 9:16 / 1:1），不再固定 7 档
@@ -179,11 +179,11 @@ describe("G17 视频设置面板统一读能力声明", () => {
         for (const resolution of ["480P", "720P", "1080P"]) expect(html).toContain(resolution);
         for (const ratio of ["adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"]) expect(html).toContain(ratio);
         expect(html).not.toContain('disabled=""');
-        // 作者内置方舟协议才出现可信素材开关；插件视频不出现
+        // 内置方舟协议才出现可信素材开关；插件视频不出现
         expect(html).not.toContain("自动同步可信素材");
     });
 
-    test("作者内置火山方舟视频协议仍显示可信素材开关", () => {
+    test("内置火山方舟视频协议仍显示可信素材开关", () => {
         const config = channelConfig("video", "volcengine-ark-video", "doubao-seedance-2-0-official", seedanceVideo);
         const html = renderToStaticMarkup(<VideoSettingsPanel config={config} onConfigChange={() => {}} theme={theme} />);
         expect(html).toContain("自动同步可信素材");
@@ -208,7 +208,7 @@ describe("G19 表情调整按能力判断", () => {
         expect(resolveEmotionEditPlan(profile!.references.maskSupported)).toMatchObject({ mode: "provider-mask", includeMask: true });
     });
 
-    test("作者 openai-image 模型的像素尺寸与蒙版行为不变", () => {
+    test(" openai-image 模型的像素尺寸与蒙版行为不变", () => {
         const config = channelConfig("image", "openai-image", "gpt-image-2.5", defaultModelCapabilityConfig("openai-image", "gpt-image-2.5") as unknown as Record<string, unknown>);
         const profile = modelCapabilityConfigForTest(config);
         expect(resolveEmotionEditPlan(profile!.references.maskSupported)).toMatchObject({ mode: "provider-mask", includeMask: true });
@@ -218,7 +218,7 @@ describe("G19 表情调整按能力判断", () => {
 });
 
 describe("G20 拆层透明底按插件参数绑定", () => {
-    test("作者 openai-image 仍用 providerOptions.background", () => {
+    test(" openai-image 仍用 providerOptions.background", () => {
         const config = channelConfig("image", "openai-image", "gpt-image-2.5", defaultModelCapabilityConfig("openai-image", "gpt-image-2.5") as unknown as Record<string, unknown>);
         expect(imageLayerProviderMetadata(config, 0)).toEqual({ providerOptions: { "openai-image": { background: "opaque" } } });
         expect(imageLayerProviderMetadata(config, 1)).toEqual({ providerOptions: { "openai-image": { background: "transparent" } } });
@@ -276,7 +276,7 @@ describe("G21 音频音色/格式/参考素材容量按能力声明", () => {
         expect(modelCompatibilityError(config, "ch::voice-model", { capability: "audio", input: { textCount: 1, imageCount: 0, videoCount: 0, audioCount: 3, characterCount: 0 } })).toContain("最多支持 2 个参考音频");
     });
 
-    test("没有音频能力的模型保持作者 OpenAI 兜底", () => {
+    test("没有音频能力的模型保持 OpenAI 兜底", () => {
         const config = { ...defaultConfig, model: "openai::tts-1", audioModel: "openai::tts-1" };
         expect(audioVoiceOptionsForConfig(config).some((item) => item.value === "alloy")).toBe(true);
         expect(audioReferenceLimitsForConfig(config)).toEqual({ maxAudios: 0, maxImages: 0 });
@@ -285,7 +285,7 @@ describe("G21 音频音色/格式/参考素材容量按能力声明", () => {
         expect(audioProviderNotesVisible(config)).toBe(false);
     });
 
-    test("作者豆包音频协议行为不变", () => {
+    test("豆包音频协议行为不变", () => {
         const config = channelConfig("audio", "doubao-streaming-tts", "seed-audio-1.0", {});
         expect(audioReferenceCapacity(config, "ch::seed-audio-1.0")).toBe(3);
         expect(audioReferenceLimitsForConfig(config)).toEqual({ maxAudios: 3, maxImages: 1 });
@@ -302,7 +302,7 @@ describe("G05 提示词适配先读 promptFamily", () => {
         expect(resolveModelAdaptationProfile({ prompt: "p", mode: "model-adapt", generationMode: "video", targetModel: "ch::omni-flow", targetProtocol: "vendor-video" }).id).toBe("kling-video");
     });
 
-    test("未声明 promptFamily 时保留作者原来的模型名关键词策略", () => {
+    test("未声明 promptFamily 时保留原来的模型名关键词策略", () => {
         const config = channelConfig("video", "vendor-video-flow", "veo-lite-flow", { version: 1 });
         useConfigStore.setState({ config });
         expect(resolveModelAdaptationProfile({ prompt: "p", mode: "model-adapt", generationMode: "video", targetModel: "ch::veo-lite-flow", targetProtocol: "vendor-video-flow" }).id).toBe("veo-video");
@@ -319,7 +319,7 @@ describe("G05 提示词适配先读 promptFamily", () => {
 });
 
 describe("G22 测试按钮的协议分派", () => {
-    test("名字带 seedance 的插件模型不再走作者手写 Seedance 请求", () => {
+    test("名字带 seedance 的插件模型不再走手写 Seedance 请求", () => {
         const config = channelConfig("video", "vendor-video-seedance", "seedance-2-5-deal", seedanceVideo);
         expect(isSeedanceConfig({ ...config, model: "seedance-2-5-deal", interfaceType: "vendor-video-seedance" } as never)).toBe(false);
         expect(isSeedanceConfig({ ...config, model: "seedance-2-5-deal", interfaceType: "volcengine-ark-video" } as never)).toBe(true);

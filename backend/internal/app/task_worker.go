@@ -489,7 +489,7 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 	}
 	if isVideoTaskType(task.Type) || input.Mode == "video" {
 		// 视频任务只有上游提供了“仅回查”续跑合同的协议才能续跑：
-		// 声明式插件走上面的 detachedPolling 分支；未声明时保留作者内置的 newapi-channel-2。
+		// 声明式插件走上面的 detachedPolling 分支；未声明时保留内置的 newapi-channel-2。
 		// 其他声明了 poll 的插件没有核实过不重复提交，不能因为 poll 存在就续跑。
 		return resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
 	}
@@ -515,7 +515,7 @@ func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput s
 
 func (s *Service) imageProviderSupportsTaskResume(interfaceType string) bool {
 	interfaceType = strings.TrimSpace(interfaceType)
-	// 能续跑先看插件声明的 poll，没装插件才用作者的即梦 / RunningHub 内置名单。
+	// 能续跑先看插件声明的 poll，没装插件才用即梦 / RunningHub 内置名单。
 	if metadata, ok := s.protocolMetadata(interfaceType); ok {
 		return strings.TrimSpace(metadata.Poll) != ""
 	}

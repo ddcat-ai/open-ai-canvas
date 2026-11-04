@@ -96,7 +96,7 @@ export default function SettingsPage() {
                 if (!cancelled) setDeclaredProtocols(items);
             })
             .catch(() => {
-                // 目录不可用时按「没装插件」处理：默认协议回到作者模板，也不额外要求 Secret Key。
+                // 目录不可用时按「没装插件」处理：默认协议回到模板，也不额外要求 Secret Key。
                 if (!cancelled) setDeclaredProtocols([]);
             });
         return () => {
