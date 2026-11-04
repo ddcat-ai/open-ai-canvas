@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { App, Button, Dropdown, Input, Modal } from "antd";
 import { Select } from "@/components/ui/base/select";
 import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, LoaderCircle, Plus, Search, SlidersHorizontal } from "lucide-react";
@@ -61,6 +61,7 @@ export default function CanvasPage() {
         queryFn: ({ pageParam, signal }) => listRemoteCanvasProjectsPage({ page: pageParam, pageSize: 40, projectId: projectFilter, sort, query: debouncedKeyword, signal }),
         initialPageParam: 1,
         getNextPageParam: (last) => last.hasMore ? last.page + 1 : undefined,
+        placeholderData: keepPreviousData,
         enabled: Boolean(userId) && sessionHydrated,
     });
     const projects = useMemo<CanvasLibrarySummary[]>(() => userId
@@ -110,6 +111,7 @@ export default function CanvasPage() {
     }, [keyword, projectFilter, projects, sort, userId]);
     const projectNames = useMemo(() => new Map((projectQuery.data?.projects || []).map(({ project }) => [project.id, project.name])), [projectQuery.data]);
     const visibleProjects = userId ? filteredProjects : filteredProjects.slice(0, loadedProjectCount);
+    const hasRenderableProjects = visibleProjects.length > 0;
     const hasMore = userId ? libraryQuery.hasNextPage : visibleProjects.length < filteredProjects.length;
     const selectedProjects = projects.filter((project) => selectedIds.includes(project.id));
     const projectFilterLabel = projectFilter === "all" ? "全部画布" : projectFilter === "independent" ? "自由画布" : projectNames.get(projectFilter) || "项目画布";
@@ -476,23 +478,26 @@ export default function CanvasPage() {
                     </div>
                 ) : null}
 
-                {userId && libraryQuery.isError ? (
+                {userId && libraryQuery.isError && !hasRenderableProjects ? (
                     <WorkspaceErrorState compact title="画布列表读取失败" description={libraryQuery.error instanceof Error ? libraryQuery.error.message : "请检查网络后重试。"} actionLabel="重试" onRetry={() => void libraryQuery.refetch()} />
-                ) : !hydrated || (userId && libraryQuery.isPending) ? (
+                ) : !hydrated || (userId && libraryQuery.isPending && !hasRenderableProjects) ? (
                     <WorkspaceLoadingState label="正在恢复画布" detail="读取本地缓存与账号同步状态" />
                 ) : visibleProjects.length ? (
-                    <CollectionGrid className="canvas-collection-grid">
-                        {visibleProjects.map((project) => (
-                            <CanvasFolderCard
-                                key={project.id}
-                                project={project}
-                                projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined}
-                                onClick={() => enterProject(project.id)}
-                                onPrefetch={preloadProject}
-                                opening={openingProjectId === project.id}
-                            />
-                        ))}
-                    </CollectionGrid>
+                    <>
+                        <CollectionGrid className={`canvas-collection-grid${libraryQuery.isFetching && !libraryQuery.isPlaceholderData ? " is-stale" : ""}`}>
+                            {visibleProjects.map((project) => (
+                                <CanvasFolderCard
+                                    key={project.id}
+                                    project={project}
+                                    projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined}
+                                    onClick={() => enterProject(project.id)}
+                                    onPrefetch={preloadProject}
+                                    opening={openingProjectId === project.id}
+                                />
+                            ))}
+                        </CollectionGrid>
+                        {libraryQuery.isError ? <p role="status" className="mt-3 text-center text-xs text-foreground/55">{libraryQuery.error instanceof Error ? libraryQuery.error.message : "正在显示上次缓存的画布列表"}</p> : null}
+                    </>
                 ) : (
                     keyword || projectFilter !== "all" ? (
                         <WorkspaceNoResultsState icon="canvas" query={keyword} onClear={() => { setKeyword(""); setProjectFilter("all"); }} />

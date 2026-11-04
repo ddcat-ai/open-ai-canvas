@@ -17,6 +17,11 @@
                 margin: 0;
                 background: #ffffff;
             }
+            /* 与 globals.css 的 .dark --background 一致；暗色主题下切页或首屏不透出白底。 */
+            html.dark,
+            html.dark body {
+                background: #0f0f11;
+            }
             #root:empty {
                 min-height: 100vh;
             }
@@ -64,7 +69,7 @@
             } catch (e) {}
         </script>
     </head>
-    <body class="bg-background text-foreground antialiased" style="background:#ffffff">
+    <body class="bg-background text-foreground antialiased">
         <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
     </body>

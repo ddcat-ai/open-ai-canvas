@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { ConfigProvider } from "antd";
 
@@ -7,6 +7,7 @@ import { useAgentPanelDock } from "@/components/canvas/use-agent-panel-dock";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
+import { preloadWorkspaceNavigationPages } from "@/lib/workspace-route-modules";
 import { useUserStore } from "@/stores/use-user-store";
 import "@/styles/workspace-product.css";
 import "@/styles/workspace-menus.css";
@@ -26,6 +27,10 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     // Agent 停靠在画布右侧时，工作区让出同样的宽度，画布、顶栏和角落控件都不被遮挡。
     const agentDock = useAgentPanelDock();
     const agentDocked = Boolean(userId) && canvasEditor && agentDock.active;
+    // 登录后空闲预取侧栏页面代码，首次切换页面不再闪出加载提示。
+    useEffect(() => {
+        if (userId) preloadWorkspaceNavigationPages();
+    }, [userId]);
 
     useLayoutEffect(() => {
         // Ant Design 浮层挂载在 body，必须用路由级标记隔离用户工作台与画布编辑器、运营后台。

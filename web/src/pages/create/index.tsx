@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { App, Spin } from "antd";
+import { App, Button, Spin } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { History, Maximize2, PenLine } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -19,6 +19,7 @@ import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
 import type { GenerationTask } from "@/services/api/task-center";
 import { loadCreationConversations, pendingCreationTaskIds, removeCreationConversationSnapshot, saveCreationConversations, updateCreationConversationSnapshot } from "@/services/creation-conversation-store";
+import { clearCreationConversationSnapshot, mergeCreationConversationSnapshot, readCreationConversationSnapshot, writeCreationConversationSnapshot } from "@/services/creation-conversation-snapshot";
 import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
@@ -69,8 +70,8 @@ function writeComposerPref(key: string, value: boolean) {
 }
 
 export default function CreatePage() {
-    const [agentMode, setAgentMode] = useState(false);
     const { t } = useTranslation();
+    const [agentMode, setAgentMode] = useState(false);
     const { message: toast, modal } = App.useApp();
     const navigate = useNavigate();
     const [openingCanvas, setOpeningCanvas] = useState(false);
@@ -91,15 +92,20 @@ export default function CreatePage() {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);
-    const [conversations, setConversations] = useState<CreationConversation[]>([]);
-    const conversationsRef = useRef<CreationConversation[]>([]);
-    const [activeId, setActiveId] = useState("");
-    const activeIdRef = useRef("");
-    const [hydrated, setHydrated] = useState(false);
     const userId = useUserStore((state) => state.user?.id || null);
     const userSessionHydrated = useUserStore((state) => state.hydrated);
+    const activeConversationScope = getActiveUserScope();
+    const initialConversationSnapshot = userSessionHydrated ? readCreationConversationSnapshot<CreationConversation>(activeConversationScope) : null;
+    const [conversations, setConversations] = useState<CreationConversation[]>(() => initialConversationSnapshot || []);
+    const conversationsRef = useRef<CreationConversation[]>(initialConversationSnapshot || []);
+    const [activeId, setActiveId] = useState(() => initialConversationSnapshot?.[0]?.id || "");
+    const activeIdRef = useRef(activeId);
+    const [hydrated, setHydrated] = useState(() => Boolean(initialConversationSnapshot?.length));
+    const [conversationStorageReady, setConversationStorageReady] = useState(false);
+    const [conversationStorageError, setConversationStorageError] = useState("");
+    const [conversationLoadAttempt, setConversationLoadAttempt] = useState(0);
     const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
-    const [conversationScope, setConversationScope] = useState<string | null>(null);
+    const [conversationScope, setConversationScope] = useState<string | null>(() => initialConversationSnapshot ? activeConversationScope : null);
     const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || defaultCreationMode);
     const [prompt, setPrompt] = useState("");
     const [attachments, setAttachments] = useState<CreationAttachment[]>([]);
@@ -145,7 +151,7 @@ export default function CreatePage() {
     promptRef.current = prompt;
     attachmentsRef.current = attachments;
 
-    const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId) || conversations[0], [activeId, conversations]);
+    const activeConversation = useMemo(() => conversationScope === activeConversationScope ? conversations.find((item) => item.id === activeId) || conversations[0] : undefined, [activeConversationScope, activeId, conversationScope, conversations]);
     const historyConversations = useMemo(
         () => conversations.filter((conversation) => conversation.id === activeId || conversation.messages.length > 0).sort((left, right) => conversationTimestamp(right.updatedAt) - conversationTimestamp(left.updatedAt)),
         [activeId, conversations],
@@ -277,22 +283,40 @@ export default function CreatePage() {
         if (!userSessionHydrated) return;
         let cancelled = false;
         const scope = getActiveUserScope();
-        setHydrated(false);
-        setConversationScope(null);
+        const cached = readCreationConversationSnapshot<CreationConversation>(scope);
+        setConversationStorageReady(false);
+        setConversationStorageError("");
+        if (cached?.length) {
+            conversationsRef.current = cached;
+            setConversations(cached);
+            setActiveId((current) => cached.some((item) => item.id === current) ? current : cached[0].id);
+            setConversationScope(scope);
+            setConversationStorageError("");
+            setHydrated(true);
+        } else {
+            setHydrated(false);
+            setConversationScope(null);
+            setConversations([]);
+            setActiveId("");
+        }
         void loadCreationConversations<CreationConversation>().then((stored) => {
             if (cancelled || getActiveUserScope() !== scope || (useUserStore.getState().user?.id || null) !== userId) return;
-            const next = stored?.length ? stored : [newConversation()];
+            const next = cached?.length ? mergeCreationConversationSnapshot(cached, stored || []) : stored?.length ? stored : [newConversation()];
             conversationsRef.current = next;
+            writeCreationConversationSnapshot(scope, next);
             setConversations(next);
-            setActiveId(next[0].id);
+            setActiveId((current) => next.some((item) => item.id === current) ? current : next[0].id);
             setConversationScope(scope);
+            setConversationStorageError("");
+            setConversationStorageReady(true);
             setHydrated(true);
+        }).catch((error: unknown) => {
+            if (cancelled || getActiveUserScope() !== scope || (useUserStore.getState().user?.id || null) !== userId) return;
+            setConversationStorageError(error instanceof Error ? error.message : "读取本地创作记录失败");
+            if (!cached?.length) setHydrated(true);
         });
-        return () => {
-            cancelled = true;
-            // 页面卸载只停止当前页面的状态更新，后台任务由任务中心继续执行，返回页面后再恢复状态。
-        };
-    }, [userId, userSessionHydrated]);
+        return () => { cancelled = true; };
+    }, [userId, userSessionHydrated, conversationLoadAttempt]);
 
     useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -302,7 +326,11 @@ export default function CreatePage() {
 
     useEffect(() => {
         conversationsRef.current = conversations;
-        if (hydrated && userSessionHydrated && conversationScope === getActiveUserScope()) void saveCreationConversations(conversations);
+        if (!userSessionHydrated || !hydrated || !conversationStorageReady || conversationScope !== getActiveUserScope()) return;
+        writeCreationConversationSnapshot(conversationScope, conversations);
+        void saveCreationConversations(conversations).catch((error) => {
+            console.warn("创作会话持久化失败；当前会话仍保留在内存快照", error);
+        });
     }, [conversations, conversationScope, hydrated, userSessionHydrated]);
 
     useEffect(
@@ -1149,6 +1177,16 @@ export default function CreatePage() {
         restoreMessageDraft(previous);
     };
 
+    if ((!hydrated || !activeConversation) && conversationStorageError) {
+        return (
+            <div className="grid h-full place-items-center">
+                <div className="text-center">
+                    <p role="alert" className="mb-3 text-sm text-foreground/65">创作记录读取失败：{conversationStorageError}</p>
+                    <Button onClick={() => { setConversationStorageError(""); setConversationLoadAttempt((attempt) => attempt + 1); }}>重试</Button>
+                </div>
+            </div>
+        );
+    }
     if (!hydrated || !activeConversation) return <div className="grid h-full place-items-center"><Spin /></div>;
 
     const handleThreadScroll = () => {
@@ -1230,6 +1268,7 @@ export default function CreatePage() {
 
     return <>
         <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
+            {conversationStorageError ? <p role="status" className="mx-auto mb-3 max-w-3xl px-4 text-xs text-foreground/55">本地历史读取失败，当前会话仍保留。 {conversationStorageError} <button type="button" className="underline underline-offset-2" onClick={() => { setConversationStorageError(""); setConversationLoadAttempt((attempt) => attempt + 1); }}>重试</button></p> : null}
             {isEmpty ? <>
                 <AnimatePresence>
                     {launchpadCondensed && !agentMode ? <motion.div className="creation-floating-prompt" key="floating-prompt"
