@@ -27,8 +27,7 @@ import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState
 import { Euler, Quaternion } from "three";
 import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-shortcuts";
 import { isPrevisStandardActor, PREVIS_MANNEQUIN_HEIGHT } from "@/lib/canvas/previs/previs-mannequin";
-import { previsPrimitiveHalfHeight } from "@/lib/canvas/previs/previs-prop-library";
-import { dropPrevisObjectToGround } from "@/lib/canvas/previs/previs-grounding";
+import { dropPrevisObjectToGround, isPrevisObjectOnGround } from "@/lib/canvas/previs/previs-grounding";
 
 /** 演员色板：一行 8 个高区分度颜色，其余颜色用取色器/十六进制输入，避免两行杂乱色块。 */
 const PREVIS_ACTOR_SWATCHES: readonly string[] = ["#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#f97316", "#06b6d4", "#8a93a0"];
@@ -233,7 +232,7 @@ export function ObjectInspector({
     };
     const profile = { ...previsActorProfileForArchetype(object.archetype || "adult"), ...(object.actorProfile || {}) };
     const updateProfile = (patch: Partial<typeof profile>) => onUpdate({ actorProfile: { ...profile, ...patch } });
-    const grounded = isActor || Math.abs(rendered.position[1] - (previsPrimitiveHalfHeight({ kind: object.kind, primitive: object.primitive, transform: rendered }) ?? 0)) < 0.001;
+    const grounded = isPrevisObjectOnGround(object, rendered);
     const hasPath = Boolean(object.motionPath) || object.keyframes.length > 1;
     const motionCount = object.motions?.length || 0;
     const boneKeyCount = object.boneTracks?.reduce((sum, track) => sum + track.keyframes.length, 0) || 0;
@@ -366,13 +365,11 @@ export function ObjectInspector({
 
             {activeTab === "props" ? (
                 <>
-                    <InspectorGroup title="位置" hint={isActor ? "始终贴地" : undefined}>
-                        <TransformFields transform={rendered} onChange={onTransformEdit} scaleLabel={isActor ? "比例" : "尺寸"} scaleUnit={isActor ? "×" : "倍"} scaleAxisLabels={isActor ? undefined : ["W", "H", "D"]} lockY={isActor} />
-                        {isActor ? null : (
-                            <Button size="small" block disabled={grounded} onClick={() => onTransformEdit(dropPrevisObjectToGround({ ...object, transform: rendered, keyframes: [] }).transform)}>
-                                贴地
-                            </Button>
-                        )}
+                    <InspectorGroup title="位置" hint={isActor ? "Y 为脚底离地高度" : undefined}>
+                        <TransformFields transform={rendered} onChange={onTransformEdit} scaleLabel={isActor ? "比例" : "尺寸"} scaleUnit={isActor ? "×" : "倍"} scaleAxisLabels={isActor ? undefined : ["W", "H", "D"]} />
+                        <Button size="small" block disabled={grounded} onClick={() => onTransformEdit(dropPrevisObjectToGround({ ...object, transform: rendered, keyframes: [] }).transform)}>
+                            贴地
+                        </Button>
                     </InspectorGroup>
                     {isActor ? (
                         <InspectorGroup title="体型">
@@ -637,7 +634,7 @@ const RAD_TO_DEG = 180 / Math.PI;
 
 /**
  * 位置（米）、旋转（度，存档仍是弧度）、比例三行，每个输入都带 X/Y/Z 轴标记。
- * lockY：演员高度由落地规则决定，Y 显示为只读，避免用户以为能把演员抬起来。
+ * 低于地面的高度在提交时由落地规则拉回，这里不做只读限制。
  */
 export function TransformFields({
     transform,
@@ -645,19 +642,17 @@ export function TransformFields({
     scaleLabel = "缩放",
     scaleUnit,
     scaleAxisLabels,
-    lockY = false,
 }: {
     transform: PrevisTransform;
     onChange: (transform: PrevisTransform) => void;
     scaleLabel?: string;
     scaleUnit?: string;
     scaleAxisLabels?: [string, string, string];
-    lockY?: boolean;
 }) {
     const degrees = transform.rotation.map((value) => value * RAD_TO_DEG) as PrevisVec3;
     return (
         <>
-            <Vec3Field label="位置" unit="m" value={transform.position} lockedAxes={lockY ? [1] : undefined} onChange={(position) => onChange({ ...transform, position })} />
+            <Vec3Field label="位置" unit="m" value={transform.position} onChange={(position) => onChange({ ...transform, position })} />
             <Vec3Field label="旋转" unit="°" value={degrees} step={5} precision={1} onChange={(rotation) => onChange({ ...transform, rotation: rotation.map((value) => value / RAD_TO_DEG) as PrevisVec3 })} />
             <Vec3Field label={scaleLabel} unit={scaleUnit} value={transform.scale} step={0.1} axisLabels={scaleAxisLabels} onChange={(scale) => onChange({ ...transform, scale })} />
         </>
@@ -739,7 +734,6 @@ export function Vec3Field({
     precision = 2,
     unit,
     axisLabels,
-    lockedAxes,
     onChange,
 }: {
     label: string;
@@ -748,7 +742,6 @@ export function Vec3Field({
     precision?: number;
     unit?: string;
     axisLabels?: [string, string, string];
-    lockedAxes?: number[];
     onChange: (value: PrevisVec3) => void;
 }) {
     return (
@@ -760,7 +753,6 @@ export function Vec3Field({
             <div className="previs-vec3__inputs">
                 {value.map((item, index) => {
                     const axis = axisLabels?.[index] ?? VEC3_AXES[index];
-                    const locked = lockedAxes?.includes(index) ?? false;
                     return (
                         <label key={index} className={`previs-vec3__axis previs-vec3__axis--${VEC3_AXES[index].toLowerCase()}`}>
                             <span className="previs-vec3__axis-tag" aria-hidden="true">
@@ -771,7 +763,6 @@ export function Vec3Field({
                                 size="small"
                                 variant="borderless"
                                 step={step}
-                                disabled={locked}
                                 aria-label={`${label} ${axis}`}
                                 value={Number(item.toFixed(precision))}
                                 onChange={(next) => onChange(value.map((entry, itemIndex) => (itemIndex === index ? Number(next) || 0 : entry)) as PrevisVec3)}

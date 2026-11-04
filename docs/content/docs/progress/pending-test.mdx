@@ -67,6 +67,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 默认货币：全新部署未保存充值设置时，后台显示默认 USD，新建商品为 USD；已保存为 CNY 的部署保持 CNY。
 - [ ] PostgreSQL：升级到 Schema 80 后旧订单 `charge_amount_fen` / `charge_currency` 与商品金额一致，旧订单的查单与对账结果不变。
 
+## 预演台：演员可调 Y 高度（站上桌面、台阶、屋顶）
+
+- 问题：落地规则把演员 Y 锁为 0。检查器「位置 Y」只读、平移 gizmo 隐藏 Y 轴，每次提交和 Agent `previs_apply_patch` 写入都把演员高度改回 0，演员无法站到桌子、台阶或屋顶上，Agent 设置的高度也被静默丢弃。
+- 已实现：落地规则改为「所有对象可抬高、不得低于地面」。演员 Y 是脚底离地高度，检查器 Y 可编辑并新增「贴地」，平移 gizmo 显示 Y 轴；旋转仍只留偏航。静态 transform、关键帧和演员走位路径只把地下部分拉回地面，抬高的值保留；在抬高处画走位沿当前高度行走。打开旧场景时只提示真正掉到地下的对象。
+- 已实现 Agent：后端 `cloudAgentPrevisGroundScene` 与前端同规则，不再把演员 Y 改为 0；`object_add` 新增演员省略 position 时站在地面（原默认 0.5m 只适用于几何体）。`previs_scene_read` 的 `coordinateGuide` 说明演员 Y 为脚底高度。
+- [ ] 浏览器：选中演员，检查器把位置 Y 改为 0.76，演员脚底落在桌面高度；拖动 gizmo Y 轴上下移动，松手后高度保留；拖到地下松手后回到 0；点「贴地」回到 0。
+- [ ] 浏览器：抬高后的演员画走位、播放，全程保持该高度；跳跃动作在抬高处正常腾空。
+- [ ] Agent：让 Agent「把演员 1 放到桌子上」，审批后高度保留，刷新预演台不被拉回地面。
+
 ## 火山引擎 TOS 对象存储（#936）
 
 - 已实现：平台存储服务与个人对象存储新增“火山引擎 TOS”（provider `volcengine`）。上传、Range 读取、预签名和删除走官方 S3 兼容域名 `tos-s3-<region>.volces.com`，复用现有 AWS SigV4 实现并强制 virtual-hosted；不新增依赖、表或迁移，不保存 Session Token 与 Path Style。

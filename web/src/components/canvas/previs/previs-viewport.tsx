@@ -78,7 +78,7 @@ import { captureFrame, createPrevisShotSurface, recordCanvas, type PrevisCapture
 import { previsAspectValue, resolvePrevisSafeFrame } from "@/lib/canvas/previs/previs-optics";
 import { resolvePrevisActiveShot } from "@/lib/canvas/previs/previs-view-modes";
 import { buildPrevisMannequin, isPrevisStandardActor, loadPrevisMannequinTemplate, previsMannequinProfileKey, resolvePrevisMannequinProfile } from "@/lib/canvas/previs/previs-mannequin";
-import { isPrevisGroundLockedObject } from "@/lib/canvas/previs/previs-grounding";
+import { isPrevisUprightObject } from "@/lib/canvas/previs/previs-grounding";
 import { evaluatePrevisActorPose, PREVIS_MANNEQUIN_BONES } from "@/lib/canvas/previs/previs-motion";
 
 export type PrevisOrbitControls = ComponentRef<typeof OrbitControls>;
@@ -1290,7 +1290,7 @@ function PrevisObjectView({
                 />
             </group>
             {selected && target && transformMode !== "select" ? (
-                <PrevisObjectGizmo target={target} transformMode={transformMode} groundLocked={isPrevisGroundLockedObject(object)} onFreeze={setFrozen} onTransforming={onTransforming} onTransform={onTransform} />
+                <PrevisObjectGizmo target={target} transformMode={transformMode} uprightOnly={isPrevisUprightObject(object)} onFreeze={setFrozen} onTransforming={onTransforming} onTransform={onTransform} />
             ) : null}
         </>
     );
@@ -1511,15 +1511,15 @@ function PrevisCameraView({
 function PrevisObjectGizmo({
     target,
     transformMode,
-    groundLocked = false,
+    uprightOnly = false,
     onFreeze,
     onTransforming,
     onTransform,
 }: {
     target: Group;
     transformMode: Exclude<PrevisToolMode, "select">;
-    /** 演员落地锁定：平移时隐藏 Y 轴，旋转时只允许绕 Y 转身。 */
-    groundLocked?: boolean;
+    /** 演员保持直立：旋转时只允许绕 Y 转身；平移保留 Y 轴，可抬到台面上，低于地面在提交时拉回。 */
+    uprightOnly?: boolean;
     onFreeze: (transform: PrevisTransform | null) => void;
     onTransforming: (value: boolean) => void;
     onTransform: (from: PrevisTransform, to: PrevisTransform) => void;
@@ -1533,9 +1533,8 @@ function PrevisObjectGizmo({
             onTransforming(active);
         },
     });
-    const lockY = groundLocked && transformMode === "translate";
-    const yawOnly = groundLocked && transformMode === "rotate";
-    return <TransformControls object={target} mode={transformMode} size={0.8} showX={!yawOnly} showY={!lockY} showZ={!yawOnly} onMouseDown={() => transaction.begin()} onMouseUp={() => transaction.end("commit")} />;
+    const yawOnly = uprightOnly && transformMode === "rotate";
+    return <TransformControls object={target} mode={transformMode} size={0.8} showX={!yawOnly} showZ={!yawOnly} onMouseDown={() => transaction.begin()} onMouseUp={() => transaction.end("commit")} />;
 }
 
 /**

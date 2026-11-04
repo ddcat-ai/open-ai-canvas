@@ -244,7 +244,7 @@ AutoDL 视频模型的上游模型 ID 原样透传为 ComfyUI 工作流 ID，上
 
 画布 Agent 使用 `previs_scene_read` 读取摘要，使用 `previs_scene_create`、`previs_apply_patch` 经审批创建和修改场景。路径操作生成真实变换关键帧，设置路径替换对象原变换轨道，清除路径清空该轨道；焦段修改同步取景。`previs_preview` 仍依赖已打开的浏览器工作台执行，尚无完成回执。
 
-演员使用本地打包的 CC0 光滑人体模型（Quaternius Universal Animation Library 的 Mannequin，许可见 `web/public/previs/LICENSE-mannequin.txt`），姿势与动作写在规范骨架上再重定向到蒙皮，存档与模型无关。落地规则在前端提交与 Agent 写入两侧一致：演员高度锁为地面，道具可抬高但底面不得低于地面，打开旧场景时自动拉回地下对象并提示。检查器按变换、体型、外观、姿态、动作分组，道具库为按比例缩略图卡片并可折叠。程序化布景、排戏和离线逐帧编码仍属后续工作。
+演员使用本地打包的 CC0 光滑人体模型（Quaternius Universal Animation Library 的 Mannequin，许可见 `web/public/previs/LICENSE-mannequin.txt`），姿势与动作写在规范骨架上再重定向到蒙皮，存档与模型无关。落地规则在前端提交与 Agent 写入两侧一致：演员和道具都可抬高（演员 Y 为脚底离地高度，可站上桌面、台阶），但不得低于地面，几何体按底面计算；打开旧场景时自动拉回地下对象并提示。检查器按变换、体型、外观、姿态、动作分组，道具库为按比例缩略图卡片并可折叠。程序化布景、排戏和离线逐帧编码仍属后续工作。
 
 ## 技能库个人分类与画布 Agent 筛选
 
