@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as libraryZh } from "../src/i18n/messages/areas/library/zh-CN";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { moduleGroupSource } from "./helpers/module-group-source";
@@ -8,11 +9,14 @@ describe("asset library category sidebar", () => {
         const page = moduleGroupSource("pages/assets/index.tsx");
         const css = readFileSync(resolve(import.meta.dir, "../src/styles/workspace-product.css"), "utf8");
         expect(page).toContain('className="assets-collection-layout"');
-        expect(page).toContain('aria-label="素材分类"');
-        expect(page).toContain('title="素材类型"');
-        expect(page).toContain('title="业务分类"');
-        expect(page).toContain("我的分类");
-        expect(page).not.toContain("全部自定义分类");
+        expect(page).toContain('aria-label={t("library.assets.page.filters")}');
+        expect(libraryZh.assets.page.filters).toBe("素材分类");
+        expect(page).toContain('title={t("library.assets.page.kindFilter")}');
+        expect(page).toContain('title={t("library.assets.batch.category")}');
+        expect(page).toContain('t("library.assets.page.myFolders")');
+        expect(libraryZh.assets.page).toMatchObject({ kindFilter: "素材类型", myFolders: "我的分类" });
+        expect(libraryZh.assets.batch.category).toBe("业务分类");
+        expect(JSON.stringify(libraryZh)).not.toContain("全部自定义分类");
         expect(css).toMatch(/\.assets-collection-layout\s*\{[^}]*grid-template-columns:\s*220px minmax\(0, 1fr\)/s);
     });
 });

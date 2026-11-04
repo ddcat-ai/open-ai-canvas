@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { ModelPicker } from "@/components/model-picker";
 import { VideoSettingsPanel } from "@/components/video-settings-panel";
 import type { CanvasTheme } from "@/lib/canvas-theme";
@@ -9,6 +10,7 @@ import type { AgentMediaSettings } from "@/services/api/agent";
 import { PUBLIC_MODEL_CATALOG_ID, useEffectiveConfig } from "@/stores/use-config-store";
 
 export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabled, onChange }: { initial: AgentVideoApproval; value?: AgentMediaSettings; theme: CanvasTheme; disabled: boolean; onChange: (value: AgentMediaSettings) => void }) {
+    const { t } = useTranslation();
     const effective = useEffectiveConfig();
     const config = useMemo(() => ({ ...effective, channels: effective.channels.filter((channel) => channel.scope === "system" || channel.id === PUBLIC_MODEL_CATALOG_ID) }), [effective]);
     const settings = agentMediaSettings(value || initial);
@@ -76,12 +78,23 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
     };
 
     return (
-        <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label="视频生成设置">
+        <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label={t("canvasA.approval.videoSettings")}>
             <div className="space-y-2">
                 <div className="text-xs" style={{ color: theme.node.muted }}>
-                    生成模型
+                    {t("canvasA.approval.model")}
                 </div>
-                <ModelPicker config={config} capability="video" value={model} onChange={changeModel} requirements={requirements} variant="creation" fullWidth showOptionPrices placeholder="选择生成模型" popoverClassName="agent-model-picker-popover" />
+                <ModelPicker
+                    config={config}
+                    capability="video"
+                    value={model}
+                    onChange={changeModel}
+                    requirements={requirements}
+                    variant="creation"
+                    fullWidth
+                    showOptionPrices
+                    placeholder={t("canvasA.approval.modelPlaceholder")}
+                    popoverClassName="agent-model-picker-popover"
+                />
             </div>
             {model ? (
                 <VideoSettingsPanel
@@ -93,16 +106,14 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
                 />
             ) : (
                 <p className="text-xs" style={{ color: theme.node.muted }}>
-                    当前模型不在可选目录中，可重新选择；提交时将重新校验模型与规格。
+                    {t("canvasA.approval.modelUnavailable")}
                 </p>
             )}
             <p className="text-xs" style={{ color: theme.node.text }}>
-                本次规格：{settings.size}
-                {settings.quality ? ` · ${settings.quality}` : ""}
-                {settings.durationSeconds ? ` · ${settings.durationSeconds} 秒` : ""}
+                {t("canvasA.approval.spec", { spec: [settings.size, settings.quality, settings.durationSeconds ? t("canvasA.approval.seconds", { count: settings.durationSeconds }) : ""].filter(Boolean).join(" · ") })}
             </p>
             <p className="text-xs" style={{ color: theme.node.muted }}>
-                修改仅用于本次生成，费用按最终模型和规格计算。
+                {t("canvasA.approval.note")}
             </p>
         </fieldset>
     );

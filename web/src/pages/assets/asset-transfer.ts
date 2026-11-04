@@ -1,4 +1,5 @@
 import { saveAs } from "file-saver";
+import { translate } from "@/i18n";
 import { readZip } from "@/lib/zip";
 import { MediaPackage } from "@/lib/media-package";
 import { createClientUUID } from "@/lib/client-id";
@@ -21,13 +22,13 @@ export async function exportAssets(assets: Asset[]): Promise<void> {
     }
     const archive = new MediaPackage();
     const manifest: AssetExportFile = { app: "yingce", version: 1, assets, exportedAt: new Date().toISOString(), files: await archive.collect(keys, "files", images) };
-    saveAs(await archive.finish("assets.json", manifest), "我的素材.zip");
+    saveAs(await archive.finish("assets.json", manifest), translate("library.assets.transfer.fileName"));
 }
 
 export async function readAssetPackage(file: File): Promise<Asset[]> {
     const archive = await readZip(file);
     const manifestBlob = archive.get("assets.json");
-    if (!manifestBlob) throw new Error("素材包缺少 assets.json");
+    if (!manifestBlob) throw new Error(translate("library.assets.transfer.missingManifest"));
     const manifest: unknown = JSON.parse(await manifestBlob.text());
     if (
         !manifest ||
@@ -41,10 +42,10 @@ export async function readAssetPackage(file: File): Promise<Asset[]> {
         !("files" in manifest) ||
         !Array.isArray(manifest.files)
     )
-        throw new Error("素材包格式或版本不受支持");
+        throw new Error(translate("library.assets.transfer.unsupported"));
     const images = new Set<string>();
     for (const asset of manifest.assets) {
-        if (!asset || typeof asset !== "object" || typeof asset.id !== "string" || !asset.data || typeof asset.data !== "object" || typeof asset.kind !== "string") throw new Error("素材包包含无效素材");
+        if (!asset || typeof asset !== "object" || typeof asset.id !== "string" || !asset.data || typeof asset.data !== "object" || typeof asset.kind !== "string") throw new Error(translate("library.assets.transfer.invalidAsset"));
         if (asset.kind === "image" && typeof asset.data.storageKey === "string") images.add(asset.data.storageKey);
     }
     // Validate the whole manifest before making the first persistent write.
@@ -60,10 +61,10 @@ export async function readAssetPackage(file: File): Promise<Asset[]> {
             !("mimeType" in entry) ||
             typeof entry.mimeType !== "string"
         )
-            throw new Error("素材包文件索引无效");
+            throw new Error(translate("library.assets.transfer.invalidIndex"));
         const blob = archive.get(entry.path);
-        if (!blob) throw new Error(`素材包缺少文件：${entry.path}`);
-        if ("bytes" in entry && entry.bytes !== blob.size) throw new Error(`素材包文件大小不匹配：${entry.path}`);
+        if (!blob) throw new Error(translate("library.assets.transfer.missingFile", { path: entry.path }));
+        if ("bytes" in entry && entry.bytes !== blob.size) throw new Error(translate("library.assets.transfer.sizeMismatch", { path: entry.path }));
         return { key: entry.storageKey, blob: blob.slice(0, blob.size, entry.mimeType) };
     });
     const importedMedia = new Map<string, { storageKey: string; url: string }>();

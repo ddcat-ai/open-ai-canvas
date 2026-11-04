@@ -1,8 +1,25 @@
+import { translate } from "@/i18n";
+
 /** Stored values remain stable; density controls card size, not a fixed column count. */
 export const assetGridDensityOptions = [
-    { label: "舒适", value: 6 },
-    { label: "标准", value: 8 },
-    { label: "紧凑", value: 10 },
+    {
+        get label() {
+            return translate("library.assets.density.comfortable");
+        },
+        value: 6,
+    },
+    {
+        get label() {
+            return translate("library.assets.density.standard");
+        },
+        value: 8,
+    },
+    {
+        get label() {
+            return translate("library.assets.density.compact");
+        },
+        value: 10,
+    },
 ];
 
 export type AssetGridDensity = 6 | 8 | 10;

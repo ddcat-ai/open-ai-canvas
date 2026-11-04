@@ -1,4 +1,118 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
-
-export const deDE: DeepStringRecord<typeof zhCN> = {};
+export const deDE: DeepStringRecord<typeof zhCN> = {
+    timelinePreview: {
+        pause: "Vorschau pausieren",
+        play: "Vorschau abspielen",
+        noClipHere: "An dieser Position gibt es keinen Videoclip",
+        noClip: "Kein Videoclip",
+        noSubtitle: "Hier gibt es keinen Untertitel. Wählen Sie einen Untertitelclip aus, um ihn unten zu bearbeiten.",
+    },
+    toolbar: {
+        appearance: "Canvas-Darstellung",
+        appearanceSubtitle: "Farben und Raster",
+        mediaInfo: "Medieninfos",
+    },
+    videoPromptTools: {
+        imageCount: "{{count}} Bilder",
+        videoCount: "{{count}} Videos",
+        audioCount: "{{count}} Audios",
+        workflowReferenceHint: "Verbundene Bilder, Videos und Audios werden über die Feldzuordnung des Workflows übergeben",
+        workflowReference: "Workflow-Referenzen",
+        noMedia: "Keine Medien verbunden",
+        startFrame: "Erstes Bild",
+        endFrame: "Letztes Bild",
+        none: "Keine",
+    },
+    videoSettings: {
+        label: "Videoeinstellungen",
+    },
+    workspaceHistory: {
+        title: "Verlauf · letzte 30 (inkl. Agent)",
+        emptyTitle: "Noch kein Verlauf",
+        emptyDescription: "Nach dem Start einer Generierung erscheinen die Einträge hier.",
+    },
+    workspaceTasks: {
+        title: "Aufgaben",
+        emptyTitle: "Noch keine Aufgaben",
+        emptyDescription: "Klicken Sie auf einen Generieren-Button im Canvas, um loszulegen.",
+    },
+    nodeList: {
+        title: "Canvas-Knoten",
+        searchPlaceholder: "Knoten, Kapitel, Einstellungen, Modelle oder Tags suchen …",
+        searchLabel: "Canvas-Knoten suchen",
+        clearSearch: "Suche löschen",
+        found: "{{count}} Knoten gefunden",
+        listLabel: "Liste der Canvas-Knoten",
+        emptyTitle: "Keine passenden Knoten",
+        emptyDescription: "Versuchen Sie ein anderes Stichwort.",
+        timeUnknown: "Zeit nicht erfasst",
+    },
+    taskItem: {
+        waited: "Wartet seit {{duration}}",
+        running: "Läuft seit {{duration}}",
+        cancel: "Aufgabe abbrechen",
+        stage: "Aktuelle Phase",
+        model: "Modell",
+        prompt: "Prompt",
+        billing: "Abrechnung",
+        moreActions: "Weitere Aktionen",
+        more: "Mehr",
+    },
+    live2d: {
+        coreLoadFailed: "Die Live2D-Laufzeit konnte nicht geladen werden. Stellen Sie sicher, dass der Build Cubism Core enthält und statische Ressourcen erreichbar sind, und versuchen Sie es erneut.",
+        renderFailed: "Live2D-Rendering fehlgeschlagen. Es wird wieder der Standard-Avatar verwendet.",
+        renderFailedWithDetail: "Live2D-Rendering fehlgeschlagen: {{detail}}. Es wird wieder der Standard-Avatar verwendet.",
+        contextLost: "Der Live2D-Renderkontext ging verloren. Es wird wieder der Standard-Avatar verwendet.",
+        loadTimeout: "Zeitüberschreitung beim Laden von Live2D. Prüfen Sie Modell und Netzwerk und versuchen Sie es erneut.",
+        unsupportedRuntime: "Nicht unterstützte Live2D-Modelllaufzeit",
+        invalidSize: "Ungültige Live2D-Modellgröße",
+        loadFailed: "Live2D konnte nicht geladen werden",
+        loading: "Live2D-Modell wird geladen",
+    },
+    textLease: {
+        remoteTyping: "In einem anderen Fenster wird getippt",
+        typing: "Wird getippt",
+    },
+    resourceRefs: {
+        drawingPreviewReadFailed: "Zeichnungsvorschau konnte nicht gelesen werden",
+    },
+    previsOnboarding: {
+        label: "Einstiegsanleitung für die Previs",
+        progress: "Schritt {{position}} von {{total}}",
+        skip: "Anleitung überspringen",
+        back: "Zurück",
+        finish: "Anleitung beenden",
+        next: "Weiter",
+    },
+    previsTemplate: {
+        title: "Einstellungsvorlage wählen",
+    },
+    previsMini: {
+        noShot: "Keine Einstellung festgelegt",
+        objects: "Objekte",
+        cameras: "Kameras",
+        duration: "Dauer",
+    },
+    previsMonitor: {
+        mode: {
+            beauty: "Vorschau",
+            clay: "Clay",
+            depth: "Tiefe",
+            normal: "Normalen",
+            pose: "Skelett",
+        },
+        popupBlocked: "Der Browser hat das Monitorfenster blockiert. Erlauben Sie Pop-ups für diese Website und versuchen Sie es erneut.",
+        windowTitle: "{{brandName}} Previs · Einstellungsmonitor",
+        tip: "F Vollbild · Esc Vollbild beenden",
+        unavailable: "Monitorbild nicht verfügbar",
+    },
+    previsProps: {
+        title: "Requisitenbibliothek",
+        add: "{{name}} hinzufügen ({{size}})",
+        upload: "Lokales Modell hochladen (.glb / .gltf)",
+    },
+    previsViewToolbar: {
+        label: "Previs-Ansichtsmodus",
+    },
+};

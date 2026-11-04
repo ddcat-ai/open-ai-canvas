@@ -1,4 +1,118 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
-
-export const koKR: DeepStringRecord<typeof zhCN> = {};
+export const koKR: DeepStringRecord<typeof zhCN> = {
+    timelinePreview: {
+        pause: "미리보기 일시정지",
+        play: "미리보기 재생",
+        noClipHere: "이 위치에 동영상 클립이 없습니다",
+        noClip: "동영상 클립 없음",
+        noSubtitle: "여기에는 자막이 없습니다. 자막 클립을 선택하면 아래에서 편집할 수 있습니다",
+    },
+    toolbar: {
+        appearance: "캔버스 외관",
+        appearanceSubtitle: "색상과 그리드",
+        mediaInfo: "미디어 정보",
+    },
+    videoPromptTools: {
+        imageCount: "이미지 {{count}}개",
+        videoCount: "동영상 {{count}}개",
+        audioCount: "오디오 {{count}}개",
+        workflowReferenceHint: "연결된 이미지, 동영상, 오디오는 워크플로 필드 매핑에 따라 전달됩니다",
+        workflowReference: "워크플로 참조",
+        noMedia: "연결된 미디어 없음",
+        startFrame: "첫 프레임",
+        endFrame: "마지막 프레임",
+        none: "지정 안 함",
+    },
+    videoSettings: {
+        label: "동영상 설정",
+    },
+    workspaceHistory: {
+        title: "기록 · 최근 30개(Agent 포함)",
+        emptyTitle: "기록이 없습니다",
+        emptyDescription: "생성을 시작하면 기록이 여기에 표시됩니다.",
+    },
+    workspaceTasks: {
+        title: "작업",
+        emptyTitle: "작업이 없습니다",
+        emptyDescription: "캔버스의 생성 버튼을 눌러 창작을 시작하세요.",
+    },
+    nodeList: {
+        title: "캔버스 노드",
+        searchPlaceholder: "노드, 챕터, 샷, 모델 또는 태그 검색…",
+        searchLabel: "캔버스 노드 검색",
+        clearSearch: "검색 지우기",
+        found: "노드 {{count}}개를 찾았습니다",
+        listLabel: "캔버스 노드 목록",
+        emptyTitle: "일치하는 노드가 없습니다",
+        emptyDescription: "다른 키워드로 검색해 보세요.",
+        timeUnknown: "시간 기록 없음",
+    },
+    taskItem: {
+        waited: "{{duration}} 대기 중",
+        running: "{{duration}} 실행 중",
+        cancel: "작업 취소",
+        stage: "현재 단계",
+        model: "모델",
+        prompt: "프롬프트",
+        billing: "과금",
+        moreActions: "더 많은 작업",
+        more: "더 보기",
+    },
+    live2d: {
+        coreLoadFailed: "Live2D 런타임을 불러오지 못했습니다. 배포본에 Cubism Core가 포함되어 있고 정적 리소스에 접근할 수 있는지 확인한 후 다시 시도하세요",
+        renderFailed: "Live2D 렌더링에 실패하여 기본 아바타로 되돌렸습니다",
+        renderFailedWithDetail: "Live2D 렌더링 실패: {{detail}}. 기본 아바타로 되돌렸습니다",
+        contextLost: "Live2D 렌더링 컨텍스트가 손실되어 기본 아바타로 되돌렸습니다",
+        loadTimeout: "Live2D 로딩 시간이 초과되었습니다. 모델과 네트워크를 확인한 후 다시 시도하세요",
+        unsupportedRuntime: "지원하지 않는 Live2D 모델 런타임입니다",
+        invalidSize: "Live2D 모델 크기가 올바르지 않습니다",
+        loadFailed: "Live2D를 불러오지 못했습니다",
+        loading: "Live2D 모델을 불러오는 중",
+    },
+    textLease: {
+        remoteTyping: "다른 창에서 입력 중",
+        typing: "입력 중",
+    },
+    resourceRefs: {
+        drawingPreviewReadFailed: "드로잉 미리보기를 읽지 못했습니다",
+    },
+    previsOnboarding: {
+        label: "프리비즈 시작 가이드",
+        progress: "{{total}}단계 중 {{position}}단계",
+        skip: "가이드 건너뛰기",
+        back: "이전",
+        finish: "가이드 종료",
+        next: "다음",
+    },
+    previsTemplate: {
+        title: "샷 템플릿 선택",
+    },
+    previsMini: {
+        noShot: "샷 미설정",
+        objects: "오브젝트",
+        cameras: "카메라",
+        duration: "길이",
+    },
+    previsMonitor: {
+        mode: {
+            beauty: "미리보기",
+            clay: "클레이",
+            depth: "깊이",
+            normal: "노멀",
+            pose: "뼈대",
+        },
+        popupBlocked: "브라우저가 모니터 창을 차단했습니다. 이 사이트의 팝업을 허용한 후 다시 시도하세요",
+        windowTitle: "{{brandName}} 프리비즈 · 샷 모니터",
+        tip: "F 전체 화면 · Esc 전체 화면 종료",
+        unavailable: "모니터 화면을 사용할 수 없습니다",
+    },
+    previsProps: {
+        title: "소품 라이브러리",
+        add: "{{name}} 추가({{size}})",
+        upload: "로컬 모델 업로드 (.glb / .gltf)",
+    },
+    previsViewToolbar: {
+        label: "프리비즈 보기 모드",
+    },
+};

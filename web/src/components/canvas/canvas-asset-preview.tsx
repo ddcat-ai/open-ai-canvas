@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AudioLines, FileText, Image as ImageIcon, LoaderCircle, Video } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { CachedResourceImage } from "@/components/cached-resource-image";
@@ -53,6 +54,7 @@ export function CanvasAssetThumbnail({ node, kind, iconClassName = "size-6" }: {
 
 /** 详情面板的完整预览。只读，不写回画布。 */
 export function CanvasAssetPreview({ node, kind }: { node: CanvasNodeData; kind: CanvasAssetKind }) {
+    const { t } = useTranslation();
     if (kind === "image") {
         return (
             <CachedResourceImage
@@ -63,8 +65,8 @@ export function CanvasAssetPreview({ node, kind }: { node: CanvasNodeData; kind:
                 eager
                 draggable={false}
                 className="max-h-full max-w-full object-contain"
-                fallback={<PreviewMessage text="图片资源不可用" />}
-                loadingFallback={<PreviewMessage text="正在加载图片" loading />}
+                fallback={<PreviewMessage text={t("canvasA.assetPreview.imageUnavailable")} />}
+                loadingFallback={<PreviewMessage text={t("canvasA.assetPreview.imageLoading")} loading />}
             />
         );
     }
@@ -90,13 +92,15 @@ function PreviewMessage({ text, loading = false }: { text: string; loading?: boo
 }
 
 function VideoPreview({ node }: { node: CanvasNodeData }) {
+    const { t } = useTranslation();
     const { url, loading, onError } = useVideoPlaybackUrl(node, true);
-    if (loading && !url) return <PreviewMessage text="正在加载视频" loading />;
-    if (!url) return <PreviewMessage text="视频资源不可用" />;
-    return <video src={url} controls playsInline preload="metadata" className="max-h-full max-w-full bg-black" aria-label={node.title || "视频"} onError={onError} />;
+    if (loading && !url) return <PreviewMessage text={t("canvasA.assetPreview.videoLoading")} loading />;
+    if (!url) return <PreviewMessage text={t("canvasA.assetPreview.videoUnavailable")} />;
+    return <video src={url} controls playsInline preload="metadata" className="max-h-full max-w-full bg-black" aria-label={node.title || t("canvasA.media.video")} onError={onError} />;
 }
 
 function AudioPreview({ node }: { node: CanvasNodeData }) {
+    const { t } = useTranslation();
     const storageKey = node.metadata?.storageKey;
     const fallback = node.metadata?.content || "";
     const [state, setState] = useState<{ url: string; loading: boolean }>({ url: "", loading: true });
@@ -109,12 +113,12 @@ function AudioPreview({ node }: { node: CanvasNodeData }) {
             active = false;
         };
     }, [fallback, storageKey]);
-    if (state.loading) return <PreviewMessage text="正在加载音频" loading />;
-    if (!state.url) return <PreviewMessage text="音频资源不可用" />;
+    if (state.loading) return <PreviewMessage text={t("canvasA.assetPreview.audioLoading")} loading />;
+    if (!state.url) return <PreviewMessage text={t("canvasA.assetPreview.audioUnavailable")} />;
     return (
         <div className="flex w-full max-w-xl flex-col items-center gap-4 px-6">
             <AudioLines className="size-10 text-muted-foreground" aria-hidden="true" />
-            <audio src={state.url} controls preload="metadata" className="w-full" aria-label={node.title || "音频"} />
+            <audio src={state.url} controls preload="metadata" className="w-full" aria-label={node.title || t("canvasA.media.audio")} />
         </div>
     );
 }

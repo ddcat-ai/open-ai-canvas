@@ -5,6 +5,7 @@ import { type MouseEvent, type PointerEvent, useLayoutEffect, useRef, useState }
 import { type AssetCategory } from "@/stores/use-asset-store";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, UserRound, Video, Workflow } from "lucide-react";
 import { CanvasNodeType } from "@/types/canvas";
 import { primeVideoPreviewFrame } from "./canvas-mention-chips";
@@ -39,6 +40,7 @@ export function MentionMenu({
     onClose: () => void;
     onSelect: (reference: CanvasResourceReference) => void;
 }) {
+    const { t } = useTranslation();
     const menuRef = useRef<HTMLDivElement | null>(null);
     const selectedRef = useRef(false);
     const [category, setCategory] = useState<AssetCategory | null>(null);
@@ -105,8 +107,8 @@ export function MentionMenu({
                 <Search aria-hidden />
                 <input
                     value={query}
-                    placeholder={labels?.search ?? "搜索节点、素材或技能"}
-                    aria-label="搜索引用素材"
+                    placeholder={labels?.search ?? t("canvasB.mention.searchPlaceholder")}
+                    aria-label={t("canvasB.mention.searchLabel")}
                     onChange={(event) => onQueryChange(event.target.value)}
                     onPointerDown={(event) => event.stopPropagation()}
                     onKeyDown={(event) => {
@@ -140,7 +142,7 @@ export function MentionMenu({
                         {connectedNodes.length ? (
                             <section className="canvas-resource-mention-section">
                                 <h4>
-                                    <span>{labels?.connected ?? "画布节点"}</span>
+                                    <span>{labels?.connected ?? t("canvasB.mention.canvasNodes")}</span>
                                     <small>{connectedNodes.length}</small>
                                 </h4>
                                 <MentionReferenceList references={connectedNodes} activeReferenceId={activeReferenceId} onSelect={selectReference} />
@@ -149,7 +151,7 @@ export function MentionMenu({
                         {skillReferences.length ? (
                             <section className="canvas-resource-mention-section">
                                 <h4>
-                                    <span>技能库</span>
+                                    <span>{t("canvasB.mention.skillLibrary")}</span>
                                     <small>{skillReferences.length}</small>
                                 </h4>
                                 <MentionReferenceList references={skillReferences} activeReferenceId={activeReferenceId} onSelect={selectReference} />
@@ -158,7 +160,7 @@ export function MentionMenu({
                         {categoryItems.length ? (
                             <section className="canvas-resource-mention-section">
                                 <h4>
-                                    <span>素材库</span>
+                                    <span>{t("canvasB.mention.assetLibrary")}</span>
                                     <small>{assetReferences.length}</small>
                                 </h4>
                                 {categoryItems.map((item) => (
@@ -181,13 +183,14 @@ export function MentionMenu({
 }
 
 export function MentionReferenceList({ references, activeReferenceId, onSelect }: { references: CanvasResourceReference[]; activeReferenceId?: string; onSelect: (reference: CanvasResourceReference) => void }) {
+    const { t } = useTranslation();
     const activeRef = useRef<HTMLButtonElement | null>(null);
 
     useLayoutEffect(() => {
         activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }, [activeReferenceId]);
 
-    if (!references.length) return <div className="canvas-resource-mention-empty">没有匹配的引用</div>;
+    if (!references.length) return <div className="canvas-resource-mention-empty">{t("canvasB.mention.noMatches")}</div>;
     return references.map((reference) => (
         <button
             key={reference.id}
@@ -210,14 +213,14 @@ export function MentionReferenceList({ references, activeReferenceId, onSelect }
             <span className="canvas-resource-mention-copy">
                 <span className="canvas-resource-mention-title-row">
                     <strong title={reference.label}>{reference.label}</strong>
-                    {reference.kind === "skill" ? <em>技能</em> : null}
+                    {reference.kind === "skill" ? <em>{t("canvasB.mention.skill")}</em> : null}
                 </span>
                 {reference.kind === "skill" ? (
                     <span className="canvas-resource-mention-meta">
-                        <span>{reference.skill?.description || reference.text || "工作流技能"}</span>
+                        <span>{reference.skill?.description || reference.text || t("canvasB.mention.workflowSkill")}</span>
                         <small>
                             {reference.skill?.version ? `v${reference.skill.version}` : ""}
-                            {reference.skill?.fileCount ? ` · ${reference.skill.fileCount} 文件` : ""}
+                            {reference.skill?.fileCount ? t("canvasB.mention.fileCount", { count: reference.skill.fileCount }) : ""}
                         </small>
                     </span>
                 ) : reference.text && reference.text !== reference.title ? (

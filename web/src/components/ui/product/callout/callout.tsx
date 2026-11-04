@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Info, X, XCircle, type LucideIcon } from "
 
 import { IconButton } from "@/components/ui/base/buttons";
 
+import { translate } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,7 +39,7 @@ export interface CalloutProps extends Omit<HTMLAttributes<HTMLDivElement>, "titl
     closeLabel?: string;
 }
 
-export function Callout({ tone = "default", title, icon, action, onClose, closeLabel = "关闭", className, children, ...props }: CalloutProps) {
+export function Callout({ tone = "default", title, icon, action, onClose, closeLabel = translate("common.close"), className, children, ...props }: CalloutProps) {
     const resolved = tone === "default" ? "info" : tone;
     const Icon = icon ?? calloutIconByTone[resolved];
     return (

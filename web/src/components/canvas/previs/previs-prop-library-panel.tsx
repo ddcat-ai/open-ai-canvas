@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronRight, FileUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { PREVIS_PROP_LIBRARY, formatPrevisPropSize, type PrevisPropItem } from "@/lib/canvas/previs/previs-prop-library";
 
@@ -61,6 +62,7 @@ function CylinderThumb({ w, h }: { w: number; h: number }) {
 
 /** 左侧道具库：分类可折叠，卡片 = 比例缩略图 + 名称 + 真实尺寸。 */
 export function PrevisPropLibraryPanel({ onAdd, onUpload }: { onAdd: (prop: PrevisPropItem) => void; onUpload: () => void }) {
+    const { t } = useTranslation();
     const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
     const [open, setOpen] = useState(true);
     const toggle = (id: string) =>
@@ -74,7 +76,7 @@ export function PrevisPropLibraryPanel({ onAdd, onUpload }: { onAdd: (prop: Prev
         <section className="pv-entity-section pv-entity-section--prop-lib">
             <button type="button" className="pv-prop-lib__header" aria-expanded={open} onClick={() => setOpen(!open)}>
                 <ChevronRight className={`size-3 pv-prop-lib__chevron ${open ? "is-open" : ""}`} />
-                <span>道具库</span>
+                <span>{t("canvasC.previsProps.title")}</span>
             </button>
             {open ? (
                 <>
@@ -91,7 +93,7 @@ export function PrevisPropLibraryPanel({ onAdd, onUpload }: { onAdd: (prop: Prev
                                     {expanded ? (
                                         <div className="pv-prop-grid">
                                             {category.items.map((prop) => (
-                                                <button key={prop.id} type="button" className="pv-prop-card" title={`添加 ${prop.name}（${formatPrevisPropSize(prop.size)}）`} onClick={() => onAdd(prop)}>
+                                                <button key={prop.id} type="button" className="pv-prop-card" title={t("canvasC.previsProps.add", { name: prop.name, size: formatPrevisPropSize(prop.size) })} onClick={() => onAdd(prop)}>
                                                     <PrevisPropThumb prop={prop} />
                                                     <span className="pv-prop-card__name">{prop.name}</span>
                                                     <span className="pv-prop-card__size">{formatPrevisPropSize(prop.size)}</span>
@@ -106,7 +108,7 @@ export function PrevisPropLibraryPanel({ onAdd, onUpload }: { onAdd: (prop: Prev
                     <div className="pv-prop-upload-row">
                         <button type="button" className="pv-prop-upload-full" onClick={onUpload}>
                             <FileUp className="size-3.5" />
-                            上传本地模型 (.glb / .gltf)
+                            {t("canvasC.previsProps.upload")}
                         </button>
                     </div>
                 </>

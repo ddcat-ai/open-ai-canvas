@@ -4,9 +4,12 @@ import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from "@excal
 import "@excalidraw/excalidraw/index.css";
 
 import type { CanvasDrawingEditorHandle, CanvasDrawingEditorProps } from "@/components/canvas/canvas-drawing-editor-types";
+import { currentLocale, translate } from "@/i18n";
+import type { AppLocale } from "@/i18n/locales";
 
 const DRAWING_RENDER_MAX_DIMENSION = 2048;
 const DRAWING_RENDER_PADDING = 24;
+const EXCALIDRAW_LANG_CODES: Record<AppLocale, string> = { "zh-CN": "zh-CN", "en-US": "en", "fr-FR": "fr-FR", "de-DE": "de-DE", "ja-JP": "ja-JP", "ko-KR": "ko-KR" };
 
 export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandle, CanvasDrawingEditorProps>(function CanvasDrawingExcalidrawEditor({ snapshot, colorScheme, onReady }, ref) {
     const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
@@ -14,7 +17,7 @@ export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandl
     useImperativeHandle(ref, () => ({
         createSave: async () => {
             const api = apiRef.current;
-            if (!api) throw new Error("Excalidraw 编辑器尚未准备完成");
+            if (!api) throw new Error(translate("canvasA.drawing.excalidrawNotReady"));
             const elements = api.getSceneElementsIncludingDeleted();
             const appState = api.getAppState();
             const files = api.getFiles();
@@ -50,7 +53,7 @@ export const CanvasDrawingExcalidrawEditor = forwardRef<CanvasDrawingEditorHandl
     return (
         <Excalidraw
                 initialData={initialData}
-                langCode="zh-CN"
+                langCode={EXCALIDRAW_LANG_CODES[currentLocale()]}
                 theme={colorScheme}
                 autoFocus
                 excalidrawAPI={(api) => {

@@ -1,6 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { OrthographicCamera } from "@react-three/drei";
 import { Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import type { PrevisObject, PrevisScene } from "@/types/previs";
 
 /**
@@ -8,6 +9,7 @@ import type { PrevisObject, PrevisScene } from "@/types/previs";
  * 演员使用带朝向的 clay marker，避免缩略图里只剩一根胶囊或骨骼线。
  */
 export function PrevisMiniViewport({ scene }: { scene: PrevisScene }) {
+    const { t } = useTranslation();
     const activeShot = scene.shots.find((shot) => shot.id === scene.activeShotId) || scene.shots[0];
     const visibleObjects = scene.objects.filter((object) => object.visible !== false);
 
@@ -23,12 +25,12 @@ export function PrevisMiniViewport({ scene }: { scene: PrevisScene }) {
                 </Suspense>
             </Canvas>
             <div className="pointer-events-none absolute inset-x-3 top-3 flex items-center justify-between text-[var(--fs-label)] font-semibold uppercase tracking-[0.16em] text-white/55">
-                <span>Top view</span><span>{activeShot?.name || "未设置镜头"}</span>
+                <span>Top view</span><span>{activeShot?.name || t("canvasC.previsMini.noShot")}</span>
             </div>
             <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-2 rounded-lg border border-white/12 bg-[#0d1118cc] px-3 py-2 text-[var(--fs-label)] font-medium text-white/80 backdrop-blur-md">
-                <Stat value={visibleObjects.length} label="对象" />
-                <Stat value={scene.cameras.length} label="机位" />
-                <Stat value={`${activeShot?.duration ?? 0}s`} label="时长" />
+                <Stat value={visibleObjects.length} label={t("canvasC.previsMini.objects")} />
+                <Stat value={scene.cameras.length} label={t("canvasC.previsMini.cameras")} />
+                <Stat value={`${activeShot?.duration ?? 0}s`} label={t("canvasC.previsMini.duration")} />
             </div>
         </div>
     );

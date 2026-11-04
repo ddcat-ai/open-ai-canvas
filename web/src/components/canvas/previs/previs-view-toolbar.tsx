@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Tooltip } from "@/components/ui/base/tooltip";
 
 import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-shortcuts";
@@ -20,10 +21,11 @@ type PrevisViewToolbarProps = {
  * Tailwind 工具类改不动它。这里用同一批 --previs-* token 自行排布，不动 globals.css。
  */
 export function PrevisViewToolbar({ viewMode, onViewModeChange, inline = false }: PrevisViewToolbarProps) {
+    const { t } = useTranslation();
     return (
         <div
             role="group"
-            aria-label="预演台取景模式"
+            aria-label={t("canvasC.previsViewToolbar.label")}
             className={inline ? "previs-view-toolbar-inline" : "absolute right-3 top-3 z-[var(--z-toolbar)] inline-flex items-center gap-1 rounded-[var(--r-lg)] border p-1 shadow-xl backdrop-blur"}
             style={inline ? undefined : { borderColor: "var(--previs-sequencer-border)", background: "var(--previs-dock-surface)", color: "var(--previs-dock-fg)" }}
         >

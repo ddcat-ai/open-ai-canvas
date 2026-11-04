@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { App, Button } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -28,7 +29,7 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
             const row = table?.rows.find((item) => item.id === cell.rowId);
             const columnIndex = batchReferenceColumns(table).findIndex((column) => column.id === cell.columnId);
             if (!node || !table || !row || columnIndex < 0 || node.metadata?.locked) return;
-            return { node, table, row, columnIndex, sourceId: row.inputNodeIds[columnIndex] || "", label: `任务 ${table.rows.indexOf(row) + 1} · 参考图 ${columnIndex + 1}` };
+            return { node, table, row, columnIndex, sourceId: row.inputNodeIds[columnIndex] || "", label: translate("canvasPage.batchReferences.cellLabel", { row: table.rows.indexOf(row) + 1, column: columnIndex + 1 }) };
         },
         [nodesRef],
     );
@@ -38,9 +39,9 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
                 modal.confirm({
                     title,
                     content,
-                    okText: "确认替换",
-                    cancelText: "取消",
-                    cancelButtonProps: { "aria-label": "取消替换" },
+                    okText: translate("canvasPage.batchReferences.confirmReplace"),
+                    cancelText: translate("common.cancel"),
+                    cancelButtonProps: { "aria-label": translate("canvasPage.batchReferences.cancelReplace") },
                     onOk: () => {
                         resolve(true);
                     },
@@ -51,7 +52,7 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
             }),
         [modal],
     );
-    const describe = (id: string) => nodesRef.current.find((node) => node.id === id)?.title || (id ? "已移除的图片" : "空白");
+    const describe = (id: string) => nodesRef.current.find((node) => node.id === id)?.title || (id ? translate("canvasPage.batchReferences.removedImage") : translate("canvasPage.batchReferences.empty"));
     const preview = (id: string, label: string) => {
         const image = nodesRef.current.find((node) => node.id === id);
         return (
@@ -67,7 +68,7 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
         (tableId: string, edits: BatchReferenceEdit[]) => {
             const result = applyBatchReferenceEdits(nodesRef.current, connectionsRef.current, tableId, edits);
             if (!result) {
-                message.warning("任务或参考图已变化，请重新选择");
+                message.warning(translate("canvasPage.batchReferences.cellChanged"));
                 return;
             }
             setNodes(result.nodes);
@@ -82,13 +83,13 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
             state.sourceId &&
             sourceId &&
             !(await confirm(
-                `替换${state.label}？`,
+                translate("canvasPage.batchReferences.replaceTitle", { label: state.label }),
                 <>
                     <div className="flex gap-3">
-                        {preview(state.sourceId, "原图")}
-                        {preview(sourceId, "新图")}
+                        {preview(state.sourceId, translate("canvasPage.batchReferences.original"))}
+                        {preview(sourceId, translate("canvasPage.batchReferences.newImage"))}
                     </div>
-                    <p>仅修改这一格的引用，其他任务和原图保留。</p>
+                    <p>{translate("canvasPage.batchReferences.replaceHint")}</p>
                 </>,
             ))
         )
@@ -108,16 +109,16 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
             let accepted = false;
             try {
                 accepted = await confirm(
-                    `替换${state.label}？`,
+                    translate("canvasPage.batchReferences.replaceTitle", { label: state.label }),
                     <>
                         <div className="flex gap-3">
-                            {preview(state.sourceId, "原图")}
+                            {preview(state.sourceId, translate("canvasPage.batchReferences.original"))}
                             <div className="min-w-0 flex-1">
-                                <span>新图 · {file.name}</span>
-                                <img src={url} alt="新图" className="mt-2 h-28 w-full rounded border object-contain" />
+                                <span>{translate("canvasPage.batchReferences.newImageFile", { name: file.name })}</span>
+                                <img src={url} alt={translate("canvasPage.batchReferences.newImage")} className="mt-2 h-28 w-full rounded border object-contain" />
                             </div>
                         </div>
-                        <p>原图及其他格子保留。</p>
+                        <p>{translate("canvasPage.batchReferences.uploadHint")}</p>
                     </>,
                 );
             } finally {
@@ -125,7 +126,7 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
             }
             if (!accepted) return;
         }
-        if (cellState(cell)?.sourceId !== state.sourceId) return void message.warning("这一格已变化，请重新选择");
+        if (cellState(cell)?.sourceId !== state.sourceId) return void message.warning(translate("canvasPage.batchReferences.thisCellChanged"));
         const area = findAvailableGenerationGroupPosition(nodesRef.current, { x: state.node.position.x - IMAGE_NODE_MAX_SIZE.width - 96, y: state.node.position.y }, IMAGE_NODE_MAX_SIZE);
         const id = await createFileNode(file, { x: area.x + IMAGE_NODE_MAX_SIZE.width / 2, y: area.y + IMAGE_NODE_MAX_SIZE.height / 2 });
         if (id) commit(cell.tableId, [{ ...cell, sourceId: id, expectedSourceId: state.sourceId }]);
@@ -140,11 +141,11 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
         if (
             b.sourceId &&
             !(await confirm(
-                "交换两格参考图？",
+                translate("canvasPage.batchReferences.swapTitle"),
                 <p>
                     {a.label}：“{describe(a.sourceId)}”<br />
                     {b.label}：“{describe(b.sourceId)}”<br />
-                    确认后交换引用，原图保留。
+                    {translate("canvasPage.batchReferences.swapHint")}
                 </p>,
             ))
         )
@@ -160,7 +161,7 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
         if (!node || !table || node.metadata?.locked) return;
         const byId = new Map(nodesRef.current.map((item) => [item.id, item]));
         const columns = batchInputColumns(node, connectionsRef.current).map((ids) => ids.filter((id) => byId.get(id)?.type === "image" && (byId.get(id)?.metadata?.storageKey || byId.get(id)?.metadata?.content)));
-        if (!columns.some((ids) => ids.length)) return void message.info("请先把图片连接到表格左侧的列端口。单张图整列共用，多张图按连线顺序逐行填充。");
+        if (!columns.some((ids) => ids.length)) return void message.info(translate("canvasPage.batchReferences.connectColumnsFirst"));
         const snapshot = table;
         const count = Math.max(table.rows.length, ...columns.map((ids) => ids.length));
         const rows = Array.from({ length: count }, (_, index) => {
@@ -175,18 +176,18 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
             };
         });
         const overwritten = rows.flatMap((row, index) => row.inputNodeIds.filter((id, col) => table.rows[index]?.inputNodeIds[col] && id !== table.rows[index].inputNodeIds[col]));
-        if (overwritten.length && !(await confirm(`按列填充将替换 ${overwritten.length} 格参考图`, <p>单张图整列共用，多张图按顺序填入各行。已有任务、提示词和结果保留，可撤销恢复。</p>))) return;
+        if (overwritten.length && !(await confirm(translate("canvasPage.batchReferences.fillTitle", { count: overwritten.length }), <p>{translate("canvasPage.batchReferences.fillHint")}</p>))) return;
         const current = nodesRef.current.find((item) => item.id === tableId);
         const currentById = new Map(nodesRef.current.map((item) => [item.id, item]));
         const currentColumns = current && batchInputColumns(current, connectionsRef.current).map((ids) => ids.filter((id) => currentById.get(id)?.type === "image" && (currentById.get(id)?.metadata?.storageKey || currentById.get(id)?.metadata?.content)));
-        if (current?.metadata?.locked || current?.metadata?.batchTable !== snapshot || JSON.stringify(currentColumns) !== JSON.stringify(columns)) return void message.warning("表格或连线已变化，请重新填充");
+        if (current?.metadata?.locked || current?.metadata?.batchTable !== snapshot || JSON.stringify(currentColumns) !== JSON.stringify(columns)) return void message.warning(translate("canvasPage.batchReferences.tableChanged"));
         const nextNodes = nodesRef.current.map((item) => (item.id === tableId ? { ...item, metadata: { ...item.metadata, batchTable: { ...table, referenceMode: "cells" as const, rows } } } : item));
         const edges = reconcileBatchCellConnections(nextNodes, connectionsRef.current);
         setNodes(nextNodes);
         setConnections(edges);
     };
     const pickerState = picker && cellState(picker);
-    const images = nodesRef.current.filter((node) => node.type === "image" && (node.metadata?.content || node.metadata?.storageKey) && (node.title || "图片").includes(search));
+    const images = nodesRef.current.filter((node) => node.type === "image" && (node.metadata?.content || node.metadata?.storageKey) && (node.title || translate("canvasPage.common.image")).includes(search));
     const handlers = {
         connectCell: (tableId: string, rowId: string, columnId: string, sourceId: string) => {
             void propose({ tableId, rowId, columnId }, sourceId);
@@ -227,15 +228,21 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
     return {
         actions,
         pickerModal: (
-            <AppModal open={Boolean(pickerState)} title={`选择参考图 · ${pickerState?.label || ""}`} onCancel={() => setPicker(null)} footer={null} width={640}>
+            <AppModal open={Boolean(pickerState)} title={translate("canvasPage.batchReferences.pickerTitle", { label: pickerState?.label || "" })} onCancel={() => setPicker(null)} footer={null} width={640}>
                 <div data-canvas-no-drag data-canvas-no-zoom onPointerDown={(event) => event.stopPropagation()}>
-                    <p>选择画布中的图片，或上传新图。也可以直接将图片节点的连线拖到格子上。</p>
+                    <p>{translate("canvasPage.batchReferences.pickerHint")}</p>
                     <div className="mb-3 flex gap-3">
-                        <input aria-label="搜索画布图片" className="min-w-0 flex-1 rounded border px-3" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="按图片名称搜索" />
+                        <input
+                            aria-label={translate("canvasPage.batchReferences.searchLabel")}
+                            className="min-w-0 flex-1 rounded border px-3"
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder={translate("canvasPage.batchReferences.searchPlaceholder")}
+                        />
                         <label className="cursor-pointer rounded border px-3 py-2">
-                            上传新图
+                            {translate("canvasPage.batchReferences.uploadNew")}
                             <input
-                                aria-label="上传参考图"
+                                aria-label={translate("canvasPage.batchReferences.uploadLabel")}
                                 type="file"
                                 accept="image/*"
                                 className="hidden"
@@ -254,7 +261,7 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
                         {images.map((image) => (
                             <button
                                 type="button"
-                                aria-label={`选择图片 ${image.title || image.id}`}
+                                aria-label={translate("canvasPage.batchReferences.selectImage", { title: image.title || image.id })}
                                 key={image.id}
                                 className="overflow-hidden rounded border p-2"
                                 onClick={() => {
@@ -265,12 +272,17 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
                                     }
                                 }}
                             >
-                                <CachedResourceImage src={image.metadata?.previewContent || image.metadata?.content} storageKey={image.metadata?.storageKey} alt={image.title || "图片"} className="h-24 w-full object-contain" />
-                                <span className="block truncate">{image.title || "图片"}</span>
+                                <CachedResourceImage
+                                    src={image.metadata?.previewContent || image.metadata?.content}
+                                    storageKey={image.metadata?.storageKey}
+                                    alt={image.title || translate("canvasPage.common.image")}
+                                    className="h-24 w-full object-contain"
+                                />
+                                <span className="block truncate">{image.title || translate("canvasPage.common.image")}</span>
                             </button>
                         ))}
                     </div>
-                    {!images.length && <p>当前没有匹配的画布图片，可以上传新图。</p>}
+                    {!images.length && <p>{translate("canvasPage.batchReferences.noMatches")}</p>}
                     <div className="mt-4 flex justify-end gap-2">
                         {pickerState?.sourceId && (
                             <Button
@@ -279,10 +291,10 @@ export function useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, s
                                     setPicker(null);
                                 }}
                             >
-                                移除此格引用
+                                {translate("canvasPage.batchReferences.removeReference")}
                             </Button>
                         )}
-                        <Button onClick={() => setPicker(null)}>取消</Button>
+                        <Button onClick={() => setPicker(null)}>{translate("common.cancel")}</Button>
                     </div>
                 </div>
             </AppModal>

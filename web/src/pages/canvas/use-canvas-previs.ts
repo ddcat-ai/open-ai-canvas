@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
@@ -83,12 +84,12 @@ export function useCanvasPrevis({
         (templateId: PrevisTemplateId, position?: Position) => {
             const shots = nodesRef.current.filter((node) => node.metadata?.workflowKind === "shot");
             const shotIndex = Math.max(0, ...shots.map((node) => node.metadata?.shotIndex || 0)) + 1;
-            let scene = createPrevisSceneFromTemplate(templateId, `镜头 ${shotIndex}`);
+            let scene = createPrevisSceneFromTemplate(templateId, translate("canvasPage.previs.shot", { index: shotIndex }));
             const shot = scene.shots[0];
-            scene = { ...scene, shots: [{ ...shot, name: `镜头 ${shotIndex}` }] };
+            scene = { ...scene, shots: [{ ...shot, name: translate("canvasPage.previs.shot", { index: shotIndex }) }] };
             const node = createCanvasNode(CanvasNodeType.Video, position || getCanvasCenter(), {
                 workflowKind: "shot",
-                workflowTitle: `镜头 ${shotIndex}`,
+                workflowTitle: translate("canvasPage.previs.shot", { index: shotIndex }),
                 shotIndex,
                 generationMode: "video",
                 videoEditOperation: "text_to_video",
@@ -97,7 +98,7 @@ export function useCanvasPrevis({
                 previsSceneId: scene.id,
                 previsShotId: shot.id,
             });
-            node.title = `镜头 ${shotIndex}`;
+            node.title = translate("canvasPage.previs.shot", { index: shotIndex });
             node.width = PREVIS_NODE_SIZE.width;
             node.height = PREVIS_NODE_SIZE.height;
             const nextNodes = [...nodesRef.current, node];
@@ -106,7 +107,7 @@ export function useCanvasPrevis({
             setSelectedNodeIds(new Set([node.id]));
             setSelectedConnectionId(null);
             updateProject(projectId, { previsScenes: upsertPrevisSceneById(currentPrevisScenes(projectId, previsScenes), scene) });
-            message.success("已创建预演台节点，点击缩略图进入编辑");
+            message.success(translate("canvasPage.previs.created"));
         },
         [previsScenes, getCanvasCenter, message, nodesRef, projectId, setNodes, setSelectedConnectionId, setSelectedNodeIds, updateProject],
     );
@@ -124,7 +125,7 @@ export function useCanvasPrevis({
             if (!scene) {
                 // 孤儿节点修复路径：节点存在但场景丢了。这不是「新建」，不弹模板选择，
                 // 用空场景兜底 —— 绝不在用户没选过的情况下塞演员进去。
-                scene = createPrevisSceneFromTemplate("empty", node.metadata?.workflowTitle || node.title || "镜头场景");
+                scene = createPrevisSceneFromTemplate("empty", node.metadata?.workflowTitle || node.title || translate("canvasPage.previs.defaultScene"));
                 const shot = scene.shots[0];
                 scene = { ...scene, shots: [{ ...shot, name: node.metadata?.workflowTitle || node.title || shot.name, prompt: node.metadata?.workflowDescription || "" }] };
                 const previsSceneId = scene.id;
@@ -148,9 +149,9 @@ export function useCanvasPrevis({
     const applyPrevisOutput = useCallback(
         async (output: PrevisSceneOutput) => {
             const outputProjectId = projectId;
-            if (projectIdRef.current !== outputProjectId) throw new Error("画布项目已切换，请重试");
+            if (projectIdRef.current !== outputProjectId) throw new Error(translate("canvasPage.previs.projectSwitched"));
             const sourceNodeAtStart = nodesRef.current.find((item) => item.id === previsNodeId);
-            if (!sourceNodeAtStart || sourceNodeAtStart.metadata?.previsSceneId !== output.scene.id) throw new Error("镜头节点不存在或场景已切换");
+            if (!sourceNodeAtStart || sourceNodeAtStart.metadata?.previsSceneId !== output.scene.id) throw new Error(translate("canvasPage.previs.shotMissing"));
             const sourceNodeId = sourceNodeAtStart.id;
             const [image, videoUpload, depthImage, depthVideoUpload] = await Promise.all([
                 uploadImage(output.beauty),
@@ -164,10 +165,10 @@ export function useCanvasPrevis({
             const sourceNode = nodesRef.current.find((item) => item.id === sourceNodeId);
             const latestScene = outputProject?.previsScenes.find((item) => item.id === output.scene.id);
             if (projectIdRef.current !== outputProjectId || !outputProject || !sourceNode || sourceNode.metadata?.previsSceneId !== output.scene.id || !latestScene || !latestScene.shots.some((shot) => shot.id === output.shot.id))
-                throw new Error("输出期间项目或镜头已切换、删除，请重试");
+                throw new Error(translate("canvasPage.previs.changedDuringOutput"));
             const previewId = sourceNode.metadata?.previsPreviewNodeId || `image-previs-${Date.now()}`;
             const mergedScene = mergePrevisOutputPreview(latestScene, { sceneId: output.scene.id, shotId: output.shot.id, previewNodeId: previewId });
-            if (!mergedScene) throw new Error("输出期间镜头已切换或删除，请重试");
+            if (!mergedScene) throw new Error(translate("canvasPage.previs.shotChangedDuringOutput"));
             const previewSize = fitImageNodeSize(image.width, image.height);
             const nextNodes = [...nodesRef.current];
             const previewIndex = nextNodes.findIndex((item) => item.id === previewId);
@@ -176,7 +177,7 @@ export function useCanvasPrevis({
                 ...existingPreview,
                 id: previewId,
                 type: CanvasNodeType.Image,
-                title: `${sourceNode.title} · 预演台构图`,
+                title: translate("canvasPage.previs.compositionTitle", { title: sourceNode.title }),
                 position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
                 ...preserveImageNodeSize(existingPreview, previewSize),
                 metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["预演台构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
@@ -193,7 +194,7 @@ export function useCanvasPrevis({
                     ...existingVideo,
                     id: clayVideoId,
                     type: CanvasNodeType.Video,
-                    title: `${sourceNode.title} · 白膜视频`,
+                    title: translate("canvasPage.previs.clayVideoTitle", { title: sourceNode.title }),
                     position: existingVideo?.position || { x: sourceNode.position.x, y: sourceNode.position.y + sourceNode.height + 48 },
                     width: existingVideo?.width || 360,
                     height: existingVideo?.height || 220,
@@ -223,7 +224,7 @@ export function useCanvasPrevis({
                     ...existingDepth,
                     id: depthId,
                     type: CanvasNodeType.Image,
-                    title: `${sourceNode.title} · 深度图`,
+                    title: translate("canvasPage.previs.depthMapTitle", { title: sourceNode.title }),
                     position: existingDepth?.position || { x: sourceNode.position.x - depthSize.width - 36, y: sourceNode.position.y + previewSize.height + 36 },
                     ...preserveImageNodeSize(existingDepth, depthSize),
                     metadata: {
@@ -248,7 +249,7 @@ export function useCanvasPrevis({
                     ...existingDepthVideo,
                     id: depthVideoId,
                     type: CanvasNodeType.Video,
-                    title: `${sourceNode.title} · 深度视频`,
+                    title: translate("canvasPage.previs.depthVideoTitle", { title: sourceNode.title }),
                     position: existingDepthVideo?.position || { x: sourceNode.position.x + sourceNode.width + 48, y: sourceNode.position.y + sourceNode.height + 48 },
                     width: existingDepthVideo?.width || 360,
                     height: existingDepthVideo?.height || 220,

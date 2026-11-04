@@ -1,4 +1,5 @@
 import { QRCode } from "antd";
+import { useTranslation } from "react-i18next";
 
 import { isPaymentQrImageURL } from "@/lib/payment-checkout-code";
 
@@ -9,10 +10,11 @@ const QR_DARK = "#111111";
 const QR_LIGHT = "#ffffff";
 
 export function PaymentCheckoutCode({ value }: { value: string }) {
+    const { t } = useTranslation();
     if (isPaymentQrImageURL(value)) {
         return (
             <div className="payment-checkout-code">
-                <img src={value} alt="支付二维码" width={QR_SIZE} height={QR_SIZE} referrerPolicy="no-referrer" />
+                <img src={value} alt={t("account.payment.qrAlt")} width={QR_SIZE} height={QR_SIZE} referrerPolicy="no-referrer" />
             </div>
         );
     }

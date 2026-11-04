@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { ScrollText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { useTranslation } from "react-i18next";
 
 import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -9,6 +10,7 @@ import { updateAnnouncementVersion } from "@/lib/update-announcement";
 import { UpdateAnnouncementContent } from "./update-announcement-content";
 
 export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { t } = useTranslation();
     const reducedMotion = useReducedMotion();
     const updates = useAppearanceStore((state) => state.appearance.updates);
     const custom = Boolean(updates?.enabled);
@@ -23,10 +25,10 @@ export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: 
                         <ScrollText className="size-4" />
                     </span>
                     <div className="app-changelog-heading-copy">
-                        <div className="app-changelog-heading-title">{custom ? "更新公告" : "更新日志"}</div>
-                        <div className="app-changelog-heading-description">{custom ? "按版本查看本站发布的更新与功能介绍" : "按版本查看产品能力、交互与稳定性变化"}</div>
+                        <div className="app-changelog-heading-title">{custom ? t("account.layout.changelog.announcements") : t("account.layout.changelog.log")}</div>
+                        <div className="app-changelog-heading-description">{custom ? t("account.layout.changelog.announcementsDescription") : t("account.layout.changelog.logDescription")}</div>
                     </div>
-                    <span className="app-changelog-current-version">当前版本 {version}</span>
+                    <span className="app-changelog-current-version">{t("account.layout.changelog.currentVersion", { version })}</span>
                 </div>
             }
             open={open}
@@ -54,8 +56,8 @@ export function AppChangelogDialog({ open, onClose }: { open: boolean; onClose: 
                                 return (
                                     <h3 className={`app-changelog-section-heading${latest ? " is-latest" : ""}`}>
                                         <span className="app-changelog-section-marker" aria-hidden="true" />
-                                        <span>{latest ? "开发中" : label}</span>
-                                        {latest ? <span className="app-changelog-latest-badge">最新</span> : null}
+                                        <span>{latest ? t("account.layout.changelog.unreleased") : label}</span>
+                                        {latest ? <span className="app-changelog-latest-badge">{t("account.layout.changelog.latest")}</span> : null}
                                     </h3>
                                 );
                             },

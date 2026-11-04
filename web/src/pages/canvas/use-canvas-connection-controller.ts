@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
@@ -133,7 +134,7 @@ export function useCanvasConnectionController({
         if (element) {
             element.setAttribute("data-connection-hover-replace", "true");
             const targetNodeId = element.getAttribute("data-target-node-id") || "";
-            const referenceLabel = element.getAttribute("data-reference-label") || "参考图";
+            const referenceLabel = element.getAttribute("data-reference-label") || translate("canvasPage.connection.referenceImage");
             setConnectionReplaceHover({ targetNodeId, referenceLabel, clientX, clientY });
         } else {
             setConnectionReplaceHover(null);
@@ -203,7 +204,7 @@ export function useCanvasConnectionController({
             return plan;
         }
         if (!plan.connections.length) {
-            const reason = plan.skipped[0]?.reason || "没有可建立的连接";
+            const reason = plan.skipped[0]?.reason || translate("canvasPage.connection.noConnections");
             message.warning(reason);
             return plan;
         }
@@ -212,9 +213,9 @@ export function useCanvasConnectionController({
         setContextMenu(null);
         const skippedCount = plan.skipped.length;
         const duplicateCount = plan.duplicates.length;
-        const suffix = skippedCount || duplicateCount ? `，跳过 ${skippedCount + duplicateCount} 个` : "";
-        if (skippedCount) message.warning(`已连接 ${plan.connected.length} 个节点${suffix}：${plan.skipped[0].reason}`);
-        else message.success(`已连接 ${plan.connected.length} 个节点${suffix}`);
+        const suffix = skippedCount || duplicateCount ? translate("canvasPage.connection.skippedSuffix", { count: skippedCount + duplicateCount }) : "";
+        if (skippedCount) message.warning(translate("canvasPage.connection.connectedWithReason", { count: plan.connected.length, suffix, reason: plan.skipped[0].reason }));
+        else message.success(translate("canvasPage.connection.connected", { count: plan.connected.length, suffix }));
         return plan;
     }, [config, connectionsRef, message, nodesRef, onBatchCellConnect, setConnections, setContextMenu, setNodes]);
 
@@ -222,7 +223,7 @@ export function useCanvasConnectionController({
         if (current.nodeId === targetNodeId) return;
         const connection = normalizeConnection(current.nodeId, targetNodeId, nodesRef.current, current.handleType);
         if (!connection) {
-            message.warning("配置节点之间不能连接");
+            message.warning(translate("canvasPage.connection.configToConfig"));
             return;
         }
         const { fromNodeId, toNodeId } = connection;
@@ -256,7 +257,7 @@ export function useCanvasConnectionController({
     const createConnectedNode = useCallback(async (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.BatchTable | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, pending: PendingConnectionCreate, workflowProvider?: "runninghub") => {
         const nodeType = type;
         if (nodeType === CanvasNodeType.Drawing && !isDrawingEngineAvailable(defaultDrawingEngine, tldrawLicenseKey)) {
-            message.error("当前生产构建未配置 tldraw License Key，不能创建 tldraw 绘图");
+            message.error(translate("canvasPage.connection.tldrawLicenseMissing"));
             closeConnectionCreateMenu();
             setConnecting(null);
             return;
@@ -280,7 +281,7 @@ export function useCanvasConnectionController({
             ? workflowProvider || (workflowProviderPluginEnabled(runtimeStatuses, "runninghub") ? "runninghub" : undefined)
             : undefined;
         if (selectedWorkflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, selectedWorkflowProvider)) {
-            message.error("RunningHub 工作流插件未启用");
+            message.error(translate("canvasPage.connection.runningHubDisabled"));
             closeConnectionCreateMenu();
             setConnecting(null);
             return;
@@ -293,7 +294,7 @@ export function useCanvasConnectionController({
                 workflowProvider: selectedWorkflowProvider || "model",
                 status: NODE_STATUS_IDLE,
                 ...(selectedWorkflowProvider === "runninghub" ? {
-                    workflowTitle: "RunningHub 工作流",
+                    workflowTitle: translate("canvasPage.connection.runningHubWorkflow"),
                     ...(runningHubWorkflow ? { runningHubWorkflowId: runningHubWorkflow.workflowId, runningHubWorkflowKind: runningHubWorkflow.kind === "app" ? "app" as const : "workflow" as const } : {}),
                 } : {})
               }
@@ -302,7 +303,7 @@ export function useCanvasConnectionController({
             : nodeType === CanvasNodeType.Script && scriptPrompt
               ? { prompt: scriptPrompt, composerContent: scriptPrompt }
             : nodeType === CanvasNodeType.Video && storyboardRow
-              ? { prompt: videoPrompt, composerContent: videoPrompt, ...storyboardPromptTemplateMetadata(storyboardRow, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, workflowKind: "shot" as const, workflowTitle: `镜头 ${storyboardRow.shotNumber} 视频`, shotIndex: storyboardRow.shotNumber, seconds: String(storyboardRow.durationSeconds), status: NODE_STATUS_IDLE }
+              ? { prompt: videoPrompt, composerContent: videoPrompt, ...storyboardPromptTemplateMetadata(storyboardRow, "video"), generationMode: "video" as const, videoEditOperation: "text_to_video" as const, workflowKind: "shot" as const, workflowTitle: translate("canvasPage.storyboard.shotVideoWorkflow", { shot: storyboardRow.shotNumber }), shotIndex: storyboardRow.shotNumber, seconds: String(storyboardRow.durationSeconds), status: NODE_STATUS_IDLE }
               : undefined;
         const sourceNodeForQuickCreate = pending.quick ? nodesRef.current.find((node) => node.id === pending.connection.nodeId) : undefined;
         const spec = getNodeSpec(nodeType);
@@ -333,10 +334,10 @@ export function useCanvasConnectionController({
             const model = input ? audioModelForConnectionInput(config, input) : audioModelForConnectionInput(config, { textCount: 0, imageCount: 0, videoCount: 0, audioCount: 0, characterCount: 0 });
             if (model) newNode.metadata = { ...newNode.metadata, model, generationMode: "audio" };
         }
-        if (nodeType === CanvasNodeType.Config && selectedWorkflowProvider) newNode.title = "RunningHub 工作流";
-        if (storyboardRow) newNode.title = `镜头 ${storyboardRow.shotNumber} · 视频`;
+        if (nodeType === CanvasNodeType.Config && selectedWorkflowProvider) newNode.title = translate("canvasPage.connection.runningHubWorkflow");
+        if (storyboardRow) newNode.title = translate("canvasPage.storyboard.shotVideoTitle", { shot: storyboardRow.shotNumber });
         if (batchSourceNodeIds.length && nodeType === CanvasNodeType.Drawing) {
-            message.error("批量连接暂不支持创建绘图，请先连接到普通节点");
+            message.error(translate("canvasPage.connection.batchNoDrawing"));
             closeConnectionCreateMenu();
             setConnecting(null);
             return;
@@ -347,7 +348,7 @@ export function useCanvasConnectionController({
         if (batchPlan) {
             if (!batchPlan.connections.length) {
                 const detail = batchPlan.skipped.slice(0, 3).map((item) => item.reason).join("；");
-                message.warning(detail ? `没有可建立的连接：${detail}` : "没有可建立的连接");
+                message.warning(detail ? translate("canvasPage.connection.noConnectionsWithReason", { reason: detail }) : translate("canvasPage.connection.noConnections"));
                 closeConnectionCreateMenu();
                 setConnecting(null);
                 return;
@@ -364,16 +365,16 @@ export function useCanvasConnectionController({
             else if (nodeType !== CanvasNodeType.Text && nodeType !== CanvasNodeType.BatchTable && nodeType !== CanvasNodeType.Audio && nodeType !== CanvasNodeType.MediaConversion) setDialogNodeId(newNode.id);
             const skippedCount = batchPlan.skipped.length;
             const duplicateCount = batchPlan.duplicates.length;
-            const suffix = skippedCount || duplicateCount ? `，跳过 ${skippedCount + duplicateCount} 个` : "";
-            if (skippedCount) message.warning(`已创建并连接 ${batchPlan.connections.length} 个源节点${suffix}：${batchPlan.skipped[0].reason}`);
-            else message.success(`已创建节点并连接 ${batchPlan.connections.length} 个源节点${suffix}`);
+            const suffix = skippedCount || duplicateCount ? translate("canvasPage.connection.skippedSuffix", { count: skippedCount + duplicateCount }) : "";
+            if (skippedCount) message.warning(translate("canvasPage.connection.createdConnectedWithReason", { count: batchPlan.connections.length, suffix, reason: batchPlan.skipped[0].reason }));
+            else message.success(translate("canvasPage.connection.createdConnected", { count: batchPlan.connections.length, suffix }));
             closeConnectionCreateMenu();
             setConnecting(null);
             return;
         }
         const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
         if (!connection) {
-            message.warning("当前节点不能建立这条连线");
+            message.warning(translate("canvasPage.connection.cannotConnect"));
             closeConnectionCreateMenu();
             setConnecting(null);
             return;
@@ -389,7 +390,7 @@ export function useCanvasConnectionController({
             const drawingSourceNode = nodesRef.current.find((node) => node.id === pending.connection.nodeId);
             const sourceUrl = drawingSourceNode?.type === CanvasNodeType.Image ? drawingSourceNode.metadata?.content : "";
             if (pending.connection.handleType !== "source" || !drawingSourceNode || !sourceUrl || !newNode.metadata?.drawingId) {
-                message.error("只有已有图片内容的输出连线可以创建绘图");
+                message.error(translate("canvasPage.connection.drawingNeedsImage"));
                 closeConnectionCreateMenu();
                 setConnecting(null);
                 return;
@@ -400,10 +401,10 @@ export function useCanvasConnectionController({
                 const saved = await createCanvasDrawingFromImage(projectId, newNode.metadata.drawingId, defaultDrawingEngine, {
                     url: sourceUrl,
                     storageKey: drawingSourceNode.metadata?.storageKey,
-                    name: drawingSourceNode.title || "来源图片",
+                    name: drawingSourceNode.title || translate("canvasPage.connection.sourceImage"),
                     mimeType: drawingSourceNode.metadata?.mimeType,
                 });
-                newNode.title = `${drawingSourceNode.title || "图片"} · 绘图`;
+                newNode.title = translate("canvasPage.connection.drawingTitle", { title: drawingSourceNode.title || translate("canvasPage.common.image") });
                 newNode.metadata = {
                     ...newNode.metadata,
                     drawingEngine: saved.engine,
@@ -413,7 +414,7 @@ export function useCanvasConnectionController({
                     drawingPageCount: saved.pageCount,
                 };
             } catch (error) {
-                message.error(error instanceof Error ? `创建绘图失败：${error.message}` : "创建绘图失败");
+                message.error(error instanceof Error ? translate("canvasPage.connection.drawingFailedWithReason", { error: error.message }) : translate("canvasPage.connection.drawingFailed"));
                 return;
             }
         }
@@ -436,18 +437,18 @@ export function useCanvasConnectionController({
     const getConnectionCreateDisabledReason = useCallback((type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.BatchTable | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion, pending: PendingConnectionCreate, workflowProvider?: "runninghub") => {
         const nodeType = type;
         if (nodeType === CanvasNodeType.Config) {
-            if (workflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, workflowProvider)) return "RunningHub 工作流插件未启用";
+            if (workflowProvider && !workflowProviderPluginEnabled(runtimeStatuses, workflowProvider)) return translate("canvasPage.connection.runningHubDisabled");
         }
         if (pending.batchSourceNodeIds?.length) {
-            if (nodeType === CanvasNodeType.Drawing || nodeType === CanvasNodeType.Config) return "批量连接暂不支持此节点类型";
+            if (nodeType === CanvasNodeType.Drawing || nodeType === CanvasNodeType.Config) return translate("canvasPage.connection.batchTypeUnsupported");
             const pendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: getNodeSpec(nodeType).width, height: getNodeSpec(nodeType).height };
             const plan = planBatchConnections({ sourceNodeIds: pending.batchSourceNodeIds, targetNodeId: pendingNode.id, nodes: [...nodesRef.current, pendingNode], connections: connectionsRef.current, config, allowCapacityOverflow: true });
-            return plan.connections.length ? "" : plan.skipped[0]?.reason || "当前选中的节点不能连接到此类型";
+            return plan.connections.length ? "" : plan.skipped[0]?.reason || translate("canvasPage.connection.selectionIncompatible");
         }
         const spec = getNodeSpec(nodeType);
         const basePendingNode: CanvasNodeData = { id: "__pending-connection-node__", type: nodeType, title: "", position: pending.position, width: spec.width, height: spec.height };
         const connection = normalizeConnection(pending.connection.nodeId, basePendingNode.id, [...nodesRef.current, basePendingNode], pending.connection.handleType);
-        if (!connection) return "当前节点类型不能这样连接";
+        if (!connection) return translate("canvasPage.connection.typeIncompatible");
         // 新建音频节点还没有模型，按这条连线的输入挑一个接得住的音频模型再校验。
         const pendingAudioModel = nodeType === CanvasNodeType.Audio
             ? audioModelForConnectionInput(config, connectionInputSummary(basePendingNode.id, [...nodesRef.current, basePendingNode], connectionsRef.current, connection))
@@ -511,7 +512,7 @@ export function useCanvasConnectionController({
             return Boolean(node && !batchSourceRestriction(node));
         });
         if (!eligible.length) {
-            message.warning("当前选区没有可作为连接源的节点");
+            message.warning(translate("canvasPage.connection.noSourceInSelection"));
             return;
         }
         event.preventDefault();
@@ -530,7 +531,7 @@ export function useCanvasConnectionController({
         });
         const source = eligible.map((id) => nodesRef.current.find((node) => node.id === id)).find((node): node is CanvasNodeData => Boolean(node));
         if (!source) {
-            message.warning("当前选区没有可作为连接源的节点");
+            message.warning(translate("canvasPage.connection.noSourceInSelection"));
             return;
         }
         previewBatchConnection(eligible, null, undefined, undefined, { x: source.position.x + source.width, y: source.position.y + source.height / 2 });
@@ -569,7 +570,7 @@ export function useCanvasConnectionController({
         const request = buildBatchConnectionCreateRequest(batch.sourceNodeIds, nodesRef.current, position);
         if (!request) {
             clearBatchConnection();
-            message.warning("当前选区没有可作为连接源的节点");
+            message.warning(translate("canvasPage.connection.noSourceInSelection"));
             return false;
         }
         const pending: PendingConnectionCreate = request;
@@ -583,7 +584,7 @@ export function useCanvasConnectionController({
     const handleBatchConnectionTargetClick = useCallback((event: ReactPointerEvent | ReactMouseEvent) => {
         if (!batchConnectionPreviewRef.current) return false;
         const completed = finishBatchConnection(event.clientX, event.clientY);
-        if (!completed) message.warning("请点击目标节点的输入端");
+        if (!completed) message.warning(translate("canvasPage.connection.clickTargetInput"));
         return true;
     }, [finishBatchConnection, message]);
 

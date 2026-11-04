@@ -20,6 +20,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Form, Popconfirm, Button, Dropdown, Input, Modal, Space, Tag, Typography, Progress } from "antd";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 import { ArkPortraitDrawer } from "./ark-portrait-drawer";
 import { arkPortraitOverviewQueryKey, getArkPortraitOverview } from "@/services/api/ark-portraits";
 import { useCopyText } from "@/hooks/use-copy-text";
@@ -53,22 +55,23 @@ type AssetFormValues = {
 type ImageDraft = ImageAsset["data"] | null;
 
 const kindOptions = [
-    { label: "全部", value: "all" },
-    { label: "文本", value: "text" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-    { label: "3D 模型", value: "model" },
-    { label: "资产设定", value: "entity" },
+    { get label() { return translate("library.assets.kind.all"); }, value: "all" },
+    { get label() { return translate("library.assets.kind.text"); }, value: "text" },
+    { get label() { return translate("library.assets.kind.image"); }, value: "image" },
+    { get label() { return translate("library.assets.kind.video"); }, value: "video" },
+    { get label() { return translate("library.assets.kind.audio"); }, value: "audio" },
+    { get label() { return translate("library.assets.kind.model"); }, value: "model" },
+    { get label() { return translate("library.assets.kind.entity"); }, value: "entity" },
 ];
 
-const categoryOptions = [{ label: "全部分类", value: "all" }, ...ASSET_CATEGORY_OPTIONS];
+const categoryOptions = [{ get label() { return translate("library.assets.allCategories"); }, value: "all" }, ...ASSET_CATEGORY_OPTIONS];
 const ASSET_LIBRARY_QUERY_KEY = ["asset-library"] as const;
 const ASSET_FOLDER_QUERY_KEY = ["asset-folders"] as const;
 type AssetFolderFilter = "all" | "uncategorized" | string;
 
 export default function AssetsPage() {
     const { message } = App.useApp();
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [portraitOpen, setPortraitOpen] = useState(false);
@@ -206,21 +209,21 @@ export default function AssetsPage() {
     };
 
     const folderSelectOptions = useMemo(() => [
-        { label: "未分类", value: "" },
+        { label: t("library.assets.uncategorized"), value: "" },
         ...folders.map((folder) => ({ label: folder.name, value: folder.id })),
-    ], [folders]);
+    ], [folders, t]);
 
     // 真人认证页完成后回跳 /assets?arkPortrait=<结果>：打开真人素材库并提示结果，随后去掉参数避免刷新重复提示。
     const portraitResult = searchParams.get("arkPortrait");
     useEffect(() => {
         if (!portraitResult) return;
         const notices: Record<string, () => void> = {
-            verified: () => message.success("真人认证完成，可以开始上传该真人的素材"),
-            failed: () => message.error("真人认证未通过，请重新发起认证"),
-            expired: () => message.warning("认证链接已过期，请重新发起认证"),
-            pending: () => message.info("认证已完成，正在等待方舟返回结果，请在真人素材库点击“我已完成认证”"),
+            verified: () => message.success(t("library.assets.portraitNotice.verified")),
+            failed: () => message.error(t("library.assets.portraitNotice.failed")),
+            expired: () => message.warning(t("library.assets.portraitNotice.expired")),
+            pending: () => message.info(t("library.assets.portraitNotice.pending")),
         };
-        (notices[portraitResult] || (() => message.error("认证回调无效，请在真人素材库重新发起")))();
+        (notices[portraitResult] || (() => message.error(t("library.assets.portraitNotice.invalid"))))();
         setPortraitOpen(true);
         void queryClient.invalidateQueries({ queryKey: arkPortraitOverviewQueryKey });
         const next = new URLSearchParams(searchParams);
@@ -245,9 +248,9 @@ export default function AssetsPage() {
             setFolderEditor(null);
             setFolderName("");
             await invalidateAssetLibrary();
-            message.success(folderEditor === "new" ? "素材分类已创建" : "素材分类已重命名");
+            message.success(folderEditor === "new" ? t("library.assets.folder.created") : t("library.assets.folder.renamed"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "素材分类保存失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.folder.saveFailed"));
         } finally {
             setFolderSaving(false);
         }
@@ -263,9 +266,9 @@ export default function AssetsPage() {
             if (folderFilter === folder.id) setFolderFilter("all");
             setPage(1);
             await invalidateAssetLibrary();
-            message.success(`已删除分类「${folder.name}」，其中素材已移至未分类`);
+            message.success(t("library.assets.folder.deleted", { name: folder.name }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "素材分类删除失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.folder.deleteFailed"));
             throw error;
         }
     };
@@ -278,9 +281,9 @@ export default function AssetsPage() {
             await flushAssetStorePersistence();
             setSelectedIds([]);
             await invalidateAssetLibrary();
-            message.success(`已移动 ${assetIds.length} 个素材`);
+            message.success(t("library.assets.moved", { count: assetIds.length }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "移动素材失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.moveFailed"));
         }
     };
 
@@ -303,12 +306,12 @@ export default function AssetsPage() {
                 await loadAssetsForUse([asset.id]);
                 editableAsset = useAssetStore.getState().assets.find((item) => item.id === asset.id);
             } catch (error) {
-                message.error(error instanceof Error ? error.message : "素材详情读取失败，请重试");
+                message.error(error instanceof Error ? error.message : t("library.assets.detailFailed"));
                 return;
             }
         }
         if (!editableAsset) {
-            message.error("素材详情读取失败，请重试");
+            message.error(t("library.assets.detailFailed"));
             return;
         }
         setEditingAsset(editableAsset);
@@ -352,7 +355,7 @@ export default function AssetsPage() {
                 setImageFile(null);
                 void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
             } catch (error) {
-                message.error(error instanceof Error ? error.message : "图片上传失败，请重试");
+                message.error(error instanceof Error ? error.message : t("library.assets.imageUploadFailed"));
                 return;
             } finally {
                 setImageUploading(false);
@@ -380,7 +383,7 @@ export default function AssetsPage() {
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         } else {
             if (!imageData) {
-                message.error("请选择图片文件");
+                message.error(t("library.assets.batch.chooseImages"));
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageData };
@@ -391,9 +394,9 @@ export default function AssetsPage() {
         try {
             await saveRemoteUserDataNow([]);
             await invalidateAssetLibrary();
-            message.success(editingAsset ? "素材已更新" : "素材已保存");
+            message.success(editingAsset ? t("library.assets.updated") : t("library.assets.saved"));
         } catch (error) {
-            message.warning(localSavedRemotePendingMessage(editingAsset ? "素材已在本地更新" : "素材已在本地保存", error));
+            message.warning(localSavedRemotePendingMessage(editingAsset ? t("library.assets.updatedLocal") : t("library.assets.savedLocal"), error));
         }
         setIsAssetOpen(false);
     };
@@ -415,7 +418,7 @@ export default function AssetsPage() {
             if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", dataUrl);
             if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取图片失败，请重试");
+            message.error(error instanceof Error ? error.message : t("library.assets.imageReadFailed"));
         }
     };
 
@@ -433,13 +436,13 @@ export default function AssetsPage() {
             metadata: { source: "manual" },
         });
         // 直传失败时文件只落在本机，云端同步会重传；此时不能说成"已保存"。
-        if (uploaded.pendingRemoteUpload) message.warning(`3D 模型已保存在本机，尚未上传到服务器${uploaded.remoteUploadError ? `：${uploaded.remoteUploadError}` : ""}`);
-        else message.success("3D 模型已保存");
+        if (uploaded.pendingRemoteUpload) message.warning(uploaded.remoteUploadError ? t("library.assets.modelPendingWithError", { error: uploaded.remoteUploadError }) : t("library.assets.modelPending"));
+        else message.success(t("library.assets.modelSaved"));
     };
 
     const copyAssetText = async (asset: LibraryAsset) => {
         if (asset.kind !== "text") return;
-        copyText(asset.data.content, "文本已复制");
+        copyText(asset.data.content, t("library.assets.textCopied"));
     };
 
     const downloadImage = async (asset: LibraryAsset) => {
@@ -449,7 +452,7 @@ export default function AssetsPage() {
         try {
             await downloadBrowserMedia({ storageKey: asset.data.storageKey, url, fileName: `${asset.title || "asset"}.${extension}` });
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "下载失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.downloadFailed"));
         }
     };
 
@@ -464,9 +467,9 @@ export default function AssetsPage() {
         await saveRemoteUserDataNow([]);
         const ids = new Set<string>();
         for (let currentPage = 1; ; currentPage++) {
-            if (useUserStore.getState().user?.id !== userId) throw new Error("账号已切换，请重新操作素材库");
+            if (useUserStore.getState().user?.id !== userId) throw new Error(t("library.assets.accountSwitched"));
             const result = await listRemoteAssetsPage({ page: currentPage, pageSize, status });
-            if (useUserStore.getState().user?.id !== userId) throw new Error("账号已切换，请重新操作素材库");
+            if (useUserStore.getState().user?.id !== userId) throw new Error(t("library.assets.accountSwitched"));
             for (const asset of result.assets) ids.add(asset.id);
             if (!result.hasMore) return [...ids];
         }
@@ -478,14 +481,14 @@ export default function AssetsPage() {
         try {
             const ids = await collectAllAssetIds(viewMode === "trash" ? "archived" : "active");
             if (!ids.length) {
-                message.warning("暂无素材可导出");
+                message.warning(t("library.assets.nothingToExport"));
                 return;
             }
             await loadAssetsForUse(ids);
             const byId = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
             await exportAssets(ids.map((id) => byId.get(id)!));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "导出失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.exportFailed"));
         } finally {
             setBatchWorking(false);
         }
@@ -502,9 +505,9 @@ export default function AssetsPage() {
                 delete payload.updatedAt;
                 addAsset(payload as Parameters<typeof addAsset>[0]);
             });
-            message.success(`已导入 ${importedAssets.length} 个素材`);
+            message.success(t("library.assets.imported", { count: importedAssets.length }));
         } catch {
-            message.error("导入失败，请选择有效的素材压缩包");
+            message.error(t("library.assets.importFailed"));
         } finally {
             if (assetInputRef.current) assetInputRef.current.value = "";
         }
@@ -513,7 +516,7 @@ export default function AssetsPage() {
     const changeAssetStatus = async (ids: string[], status: "archived" | "confirmed") => {
         if (!ids.length || batchWorking) return;
         const assetIds = [...ids];
-        const action = status === "archived" ? "移入回收站" : "还原";
+        const archiving = status === "archived";
         let locallyUpdated = false;
         setBatchWorking(true);
         try {
@@ -525,11 +528,11 @@ export default function AssetsPage() {
             setSelectedIds((current) => current.filter((id) => !assetIds.includes(id)));
             setArchivingAsset(null);
             setBatchArchiveOpen(false);
-            message.success(`已${action} ${assetIds.length} 个素材`);
+            message.success(t(archiving ? "library.assets.status.archived" : "library.assets.status.restored", { count: assetIds.length }));
             void invalidateAssetLibrary();
         } catch (error) {
-            if (locallyUpdated) message.warning(localSavedRemotePendingMessage(`已在本地${action}`, error));
-            else message.error(error instanceof Error ? error.message : `${action}失败`);
+            if (locallyUpdated) message.warning(localSavedRemotePendingMessage(t(archiving ? "library.assets.status.archivedLocal" : "library.assets.status.restoredLocal"), error));
+            else message.error(error instanceof Error ? error.message : t(archiving ? "library.assets.status.archiveFailed" : "library.assets.status.restoreFailed"));
         } finally {
             setBatchWorking(false);
         }
@@ -542,21 +545,21 @@ export default function AssetsPage() {
         try {
             const ids = await collectAllAssetIds("archived");
             if (!ids.length) {
-                message.info("回收站已为空");
+                message.info(t("library.assets.trash.alreadyEmpty"));
                 return;
             }
             for (let offset = 0; offset < ids.length; offset += pageSize) {
-                if (useUserStore.getState().user?.id !== userId) throw new Error("账号已切换，请重新操作素材库");
+                if (useUserStore.getState().user?.id !== userId) throw new Error(t("library.assets.accountSwitched"));
                 const batch = ids.slice(offset, offset + pageSize);
                 await deleteAssetsWithRemoteSync(batch);
                 deletedCount += batch.length;
             }
             setSelectedIds([]);
-            message.success(`已彻底清空回收站 ${deletedCount} 个素材`);
+            message.success(t("library.assets.trash.emptied", { count: deletedCount }));
             void invalidateAssetLibrary();
         } catch (error) {
-            const reason = error instanceof Error ? error.message : "清空回收站失败";
-            if (deletedCount) message.warning(`已删除 ${deletedCount} 个素材，其余未完成：${reason}`);
+            const reason = error instanceof Error ? error.message : t("library.assets.trash.emptyFailed");
+            if (deletedCount) message.warning(t("library.assets.trash.partial", { count: deletedCount, reason }));
             else message.error(reason);
         } finally {
             setBatchWorking(false);
@@ -567,10 +570,10 @@ export default function AssetsPage() {
         if (!deletingAsset) return;
         try {
             await deleteAssetWithRemoteSync(deletingAsset.id);
-            message.success("素材已彻底删除");
+            message.success(t("library.assets.deleted"));
             setDeletingAsset(null);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "素材删除失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.deleteFailed"));
         }
     };
 
@@ -583,7 +586,7 @@ export default function AssetsPage() {
             const byId = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
             await exportAssets(ids.map((id) => byId.get(id)!));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "导出失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.exportFailed"));
         } finally {
             setBatchWorking(false);
         }
@@ -595,11 +598,11 @@ export default function AssetsPage() {
         setBatchWorking(true);
         try {
             await deleteAssetsWithRemoteSync(ids);
-            message.success(`已彻底删除 ${ids.length} 个素材`);
+            message.success(t("library.assets.batchDeleted", { count: ids.length }));
             setSelectedIds([]);
             setBatchDeleteOpen(false);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "批量删除失败");
+            message.error(error instanceof Error ? error.message : t("library.assets.batchDeleteFailed"));
         } finally {
             setBatchWorking(false);
         }
@@ -610,9 +613,9 @@ export default function AssetsPage() {
             <WorkspacePage grid className="library-page assets-library-page canvas-library-page">
                 <div className="studio-band">
                     <PageHeader
-                        title={viewMode === "trash" ? "素材库 / 回收站" : "素材库"}
-                        description={viewMode === "trash" ? "已删除画布或手动归档的临时素材，可随时还原或彻底清理。" : "管理文本、图片、视频、音频和 3D 模型素材。"}
-                        meta={<span className="app-projects-header-meta assets-header-meta">{totalAssets} 个素材</span>}
+                        title={viewMode === "trash" ? t("library.assets.page.trashTitle") : t("library.assets.page.title")}
+                        description={viewMode === "trash" ? t("library.assets.page.trashDescription") : t("library.assets.page.description")}
+                        meta={<span className="app-projects-header-meta assets-header-meta">{t("library.assets.page.count", { count: totalAssets })}</span>}
                         actions={
                             <div className="assets-header-actions">
                                 <AssetStorageUsage />
@@ -621,15 +624,15 @@ export default function AssetsPage() {
                                         <>
                                             {userId || trashAssets.length > 0 ? (
                                                 <Popconfirm
-                                                    title="确定清空回收站吗？"
-                                                    description="清空后所有回收站素材及其文件将被彻底永久删除，不可恢复。"
+                                                    title={t("library.assets.trash.confirmTitle")}
+                                                    description={t("library.assets.trash.confirmDescription")}
                                                     onConfirm={() => void emptyTrash()}
-                                                    okText="清空"
+                                                    okText={t("library.assets.trash.confirmOk")}
                                                     okButtonProps={{ danger: true }}
-                                                    cancelText="取消"
+                                                    cancelText={t("common.cancel")}
                                                 >
                                                     <Button danger loading={batchWorking} icon={<Trash2 className="size-3.5" />}>
-                                                        清空回收站
+                                                        {t("library.assets.trash.empty")}
                                                     </Button>
                                                 </Popconfirm>
                                             ) : null}
@@ -641,25 +644,25 @@ export default function AssetsPage() {
                                                     setSelectedIds([]);
                                                 }}
                                             >
-                                                返回素材库
+                                                {t("library.assets.page.backToLibrary")}
                                             </Button>
                                         </>
                                     ) : (
                                         <>
-                                            <Button type="primary" icon={<Plus />} onClick={openCreate}>新增素材</Button>
-                                            <Button icon={<Images />} onClick={() => setBatchUploadOpen(true)}>上传图片</Button>
+                                            <Button type="primary" icon={<Plus />} onClick={openCreate}>{t("library.assets.page.create")}</Button>
+                                            <Button icon={<Images />} onClick={() => setBatchUploadOpen(true)}>{t("library.assets.page.uploadImages")}</Button>
                                             {portraitQuery.data?.enabled ? (
                                                 <Button icon={<UserRoundCheck />} onClick={() => setPortraitOpen(true)}>
-                                                    真人素材
+                                                    {t("library.assets.page.portrait")}
                                                 </Button>
                                             ) : null}
                                             <Dropdown trigger={["click"]} menu={{ items: [
-                                                { key: "eagle", icon: <FolderOpen />, label: "Eagle 素材库", onClick: () => navigate("/plugins/eagle") },
-                                                { key: "package", icon: <FileUp />, label: "导入素材包", onClick: () => assetInputRef.current?.click() },
-                                                { key: "model", icon: <Upload />, label: "上传 3D 模型", onClick: () => modelInputRef.current?.click() },
-                                                { key: "export", icon: <Download />, label: "导出全部素材", onClick: () => void exportAllAssets() },
+                                                { key: "eagle", icon: <FolderOpen />, label: t("library.assets.page.eagle"), onClick: () => navigate("/plugins/eagle") },
+                                                { key: "package", icon: <FileUp />, label: t("library.assets.page.importPackage"), onClick: () => assetInputRef.current?.click() },
+                                                { key: "model", icon: <Upload />, label: t("library.assets.page.uploadModel"), onClick: () => modelInputRef.current?.click() },
+                                                { key: "export", icon: <Download />, label: t("library.assets.page.exportAll"), onClick: () => void exportAllAssets() },
                                             ] }}>
-                                                <Button type="text" aria-label="更多素材操作" icon={<MoreHorizontal />} />
+                                                <Button type="text" aria-label={t("library.assets.page.moreActions")} icon={<MoreHorizontal />} />
                                             </Dropdown>
                                         </>
                                     )}
@@ -682,14 +685,14 @@ export default function AssetsPage() {
                             className="w-full sm:w-80"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
-                            placeholder="搜索标题、内容、标签或来源"
+                            placeholder={t("library.assets.page.searchPlaceholder")}
                             onChange={(event) => {
                                 setPage(1);
                                 setKeyword(event.target.value);
                             }}
                             />
                             <Select
-                                aria-label="素材显示密度"
+                                aria-label={t("library.assets.page.density")}
                                 value={gridDensity}
                                 className="w-full sm:w-32"
                                 prefix={<LayoutGrid aria-hidden className="size-3.5" />}
@@ -701,17 +704,17 @@ export default function AssetsPage() {
                                 setSelectedIds([]);
                                 selectionAnchor.current = undefined;
                             }} disabled={batchWorking}>
-                                {selectionMode ? "退出多选" : "批量选择"}
+                                {selectionMode ? t("library.assets.page.exitSelection") : t("library.assets.page.batchSelect")}
                             </Button>
                         </CollectionToolbar>
                 </div>
 
                 <div className="collection-content assets-collection-content">
                     <div className="assets-collection-layout">
-                        <aside className="assets-collection-filters" aria-label="素材分类">
+                        <aside className="assets-collection-filters" aria-label={t("library.assets.page.filters")}>
                             <div className="assets-collection-filter-scroll">
                             <AssetFilterGroup
-                                title="素材类型"
+                                title={t("library.assets.page.kindFilter")}
                                 options={kindOptions}
                                 value={viewMode === "library" ? kindFilter : ""}
                                 counts={kindCounts}
@@ -722,7 +725,7 @@ export default function AssetsPage() {
                                 }}
                             />
                             <AssetFilterGroup
-                                title="业务分类"
+                                title={t("library.assets.batch.category")}
                                 options={categoryOptions}
                                 value={viewMode === "library" ? categoryFilter : ""}
                                 counts={categoryCounts}
@@ -734,23 +737,23 @@ export default function AssetsPage() {
                             />
                             <section className="collection-filter-group assets-folder-filter">
                                 <div className="collection-folder-heading">
-                                    <span className="collection-filter-label">我的分类</span>
-                                    <button type="button" className="assets-folder-add" title="新建分类" aria-label="新建分类" onClick={() => { setFolderName(""); setFolderEditor("new"); }}><FolderPlus className="size-3.5" /></button>
+                                    <span className="collection-filter-label">{t("library.assets.page.myFolders")}</span>
+                                    <button type="button" className="assets-folder-add" title={t("library.assets.folder.create")} aria-label={t("library.assets.folder.create")} onClick={() => { setFolderName(""); setFolderEditor("new"); }}><FolderPlus className="size-3.5" /></button>
                                 </div>
                                 <div className="collection-folder-list">
                                     <button type="button" aria-pressed={folderFilter === "all"} className={`assets-filter-item ${folderFilter === "all" ? "is-active" : ""}`} onClick={() => { setFolderFilter("all"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">全部</span><span className="assets-filter-count">{activeAssets.length}</span>
+                                        <span className="assets-filter-item-label">{t("library.assets.kind.all")}</span><span className="assets-filter-count">{activeAssets.length}</span>
                                     </button>
                                     <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter("uncategorized"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">未分类</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
+                                        <span className="assets-filter-item-label">{t("library.assets.uncategorized")}</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
                                     </button>
                                     {folders.map((folder) => (
                                         <div key={folder.id} className="assets-folder-row">
                                             <button type="button" aria-pressed={folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${folderFilter === folder.id ? "is-active" : ""}`} onClick={() => { setFolderFilter(folder.id); setPage(1); }}>
                                                 <span className="assets-filter-item-label min-w-0 truncate">{folder.name}</span><span className="assets-filter-count">{folderCounts[folder.id] ?? activeAssets.filter((asset) => asset.folderId === folder.id).length}</span>
                                             </button>
-                                            <button type="button" className="product-icon-button" aria-label={`重命名分类 ${folder.name}`} onClick={() => { setFolderName(folder.name); setFolderEditor(folder); }}><PencilLine /></button>
-                                            <DeleteButton label={`删除分类 ${folder.name}`} description="分类删除后，其中的素材会移至未分类，素材文件会保留。" onConfirm={() => removeFolder(folder)} />
+                                            <button type="button" className="product-icon-button" aria-label={t("library.assets.folder.renameLabel", { name: folder.name })} onClick={() => { setFolderName(folder.name); setFolderEditor(folder); }}><PencilLine /></button>
+                                            <DeleteButton label={t("library.assets.folder.deleteLabel", { name: folder.name })} description={t("library.assets.folder.deleteDescription")} onConfirm={() => removeFolder(folder)} />
                                         </div>
                                     ))}
                                 </div>
@@ -778,7 +781,7 @@ export default function AssetsPage() {
                                 >
                                     <span className="assets-filter-item-label flex items-center gap-2">
                                         <Trash2 className="size-3.5" />
-                                        <span>回收站</span>
+                                        <span>{t("library.picker.recycleBin")}</span>
                                     </span>
                                     <span className="assets-filter-count">{trashAssets.length}</span>
                                 </button>
@@ -789,7 +792,7 @@ export default function AssetsPage() {
                                 <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-600 dark:text-amber-300">
                                     <div className="flex items-center gap-2">
                                         <AlertTriangle className="size-4 shrink-0 text-amber-500" />
-                                        <span>{retentionDays > 0 ? `回收站内的素材将在 ${retentionDays} 天后自动彻底清除。您可以随时还原素材，或手动彻底删除释放空间。` : "回收站内的素材当前设置为永久保留，您可以随时还原素材或手动彻底清除。"}</span>
+                                        <span>{retentionDays > 0 ? t("library.assets.trash.retention", { days: retentionDays }) : t("library.assets.trash.retentionForever")}</span>
                                     </div>
                                 </div>
                             ) : null}
@@ -810,7 +813,7 @@ export default function AssetsPage() {
                             ) : null}
                             {validAssets.length === 0 && totalAssets === 0 ? (
                                 viewMode === "trash" ? (
-                                    <WorkspaceState icon="assets" compact title="回收站是空的" description="删除画布或手动移入回收站的素材会暂存到这里，可在需要时随时还原。" />
+                                    <WorkspaceState icon="assets" compact title={t("library.picker.recycleBinEmpty")} description={t("library.assets.trash.emptyDescription")} />
                                 ) : (
                                     <AssetsEmptyState onNew={openCreate} onImport={() => assetInputRef.current?.click()} onGoCanvas={() => navigate("/canvas")} />
                                 )
@@ -821,7 +824,7 @@ export default function AssetsPage() {
                                             icon="assets"
                                             compact
                                             query={keyword}
-                                            description="调整关键词或左侧分类，或清除筛选后查看全部。"
+                                            description={t("library.assets.page.noResults")}
                                             onClear={() => {
                                                 setKeyword("");
                                                 setKindFilter("all");
@@ -874,14 +877,14 @@ export default function AssetsPage() {
             <ArkPortraitDrawer open={portraitOpen} onClose={() => setPortraitOpen(false)} onLibraryChanged={invalidateAssetLibrary} />
             <Modal
                 className="workspace-modal workspace-modal-wide library-modal"
-                title={editingAsset ? "编辑素材" : "新增素材"}
+                title={editingAsset ? t("library.assets.form.editTitle") : t("library.assets.page.create")}
                 open={isAssetOpen}
                 onCancel={() => {
                     if (!imageUploading) setIsAssetOpen(false);
                 }}
                 onOk={() => void saveAsset()}
-                okText={imageUploading ? "正在上传" : "保存"}
-                cancelText="取消"
+                okText={imageUploading ? t("library.assets.form.uploading") : t("common.save")}
+                cancelText={t("common.cancel")}
                 confirmLoading={imageUploading}
                 cancelButtonProps={{ disabled: imageUploading }}
                 closable={!imageUploading}
@@ -889,61 +892,61 @@ export default function AssetsPage() {
             >
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
-                        <Form.Item name="kind" label="类型">
+                        <Form.Item name="kind" label={t("library.assets.form.kind")}>
                             <Select
                                 options={[
-                                    { label: "文本", value: "text" },
-                                    { label: "图片", value: "image" },
+                                    { label: t("library.assets.kind.text"), value: "text" },
+                                    { label: t("library.assets.kind.image"), value: "image" },
                                 ]}
                                 onChange={(value) => setFormKind(value)}
                             />
                         </Form.Item>
-                        <Form.Item name="category" label="业务分类">
+                        <Form.Item name="category" label={t("library.assets.batch.category")}>
                             <Select options={categoryOptions.slice(1)} />
                         </Form.Item>
-                        <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                            <Input placeholder="给素材起一个容易检索的名字" />
+                        <Form.Item name="title" label={t("library.assets.form.title")} rules={[{ required: true, message: t("library.assets.form.titleRequired") }]}>
+                            <Input placeholder={t("library.assets.form.titlePlaceholder")} />
                         </Form.Item>
-                        <Form.Item name="coverUrl" label="封面 URL">
+                        <Form.Item name="coverUrl" label={t("library.assets.form.coverUrl")}>
                             <Space.Compact className="w-full">
-                                <Input placeholder="可粘贴图片 URL，也可以上传本地封面" />
+                                <Input placeholder={t("library.assets.form.coverUrlPlaceholder")} />
                                 <Button icon={<Upload className="size-3.5" />} onClick={() => coverInputRef.current?.click()}>
-                                    上传
+                                    {t("library.assets.form.upload")}
                                 </Button>
                             </Space.Compact>
                         </Form.Item>
-                        <Form.Item name="tags" label="标签">
-                            <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
+                        <Form.Item name="tags" label={t("library.assets.form.tags")}>
+                            <Select mode="tags" tokenSeparators={[",", "，"]} placeholder={t("library.assets.form.tagsPlaceholder")} />
                         </Form.Item>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <Form.Item name="arkAssetId" label="方舟素材 ID" rules={[{ pattern: /^asset-[A-Za-z0-9-]+$/, message: "请输入 asset- 开头的方舟素材 ID" }]}>
-                                <Input autoComplete="off" allowClear placeholder="asset-…，需为本人或被授权可用的方舟素材" />
+                            <Form.Item name="arkAssetId" label={t("library.assets.form.arkAssetId")} rules={[{ pattern: /^asset-[A-Za-z0-9-]+$/, message: t("library.assets.form.arkAssetIdInvalid") }]}>
+                                <Input autoComplete="off" allowClear placeholder={t("library.assets.form.arkAssetIdPlaceholder")} />
                             </Form.Item>
-                            <Form.Item name="portraitCertified" label="人像认证" valuePropName="checked" extra="标记已通过火山方舟实人认证的真人人像素材">
-                                <Switch aria-label="人像认证" />
+                            <Form.Item name="portraitCertified" label={t("library.assets.form.portraitCertified")} valuePropName="checked" extra={t("library.assets.form.portraitCertifiedHint")}>
+                                <Switch aria-label={t("library.assets.form.portraitCertified")} />
                             </Form.Item>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <Form.Item name="source" label="来源">
-                                <Input placeholder="手动添加 / 画布 / 任务中心" />
+                            <Form.Item name="source" label={t("library.assets.form.source")}>
+                                <Input placeholder={t("library.assets.form.sourcePlaceholder")} />
                             </Form.Item>
-                            <Form.Item name="note" label="备注">
-                                <Input placeholder="可选" />
+                            <Form.Item name="note" label={t("library.assets.form.note")}>
+                                <Input placeholder={t("library.assets.form.optional")} />
                             </Form.Item>
                         </div>
                         {formKind === "text" ? (
-                            <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
-                                <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
+                            <Form.Item name="content" label={t("library.assets.form.content")} rules={[{ required: true, message: t("library.assets.form.contentRequired") }]}>
+                                <Input.TextArea rows={8} placeholder={t("library.assets.form.contentPlaceholder")} />
                             </Form.Item>
                         ) : (
-                            <Form.Item label="图片内容" required>
+                            <Form.Item label={t("library.assets.form.image")} required>
                                 <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
                                     <Button disabled={imageUploading} icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
-                                        {imageUploading ? "正在上传图片" : "选择图片文件"}
+                                        {imageUploading ? t("library.assets.form.imageUploading") : t("library.assets.form.chooseImage")}
                                     </Button>
                                     {imageFile ? (
                                         <Tag color="gold" className="ml-3">
-                                            待保存上传
+                                            {t("library.assets.form.pendingUpload")}
                                         </Tag>
                                     ) : null}
                                     {imageDraft ? (
@@ -952,7 +955,7 @@ export default function AssetsPage() {
                                         </Typography.Text>
                                     ) : (
                                         <Typography.Text type="secondary" className="ml-3 text-xs">
-                                            未选择图片
+                                            {t("library.assets.form.noImage")}
                                         </Typography.Text>
                                     )}
                                 </div>
@@ -961,7 +964,7 @@ export default function AssetsPage() {
                     </Form>
                     <div className="lg:pl-4">
                         <Typography.Text strong className="text-xs">
-                            预览
+                            {t("library.assets.form.preview")}
                         </Typography.Text>
                         <div className="mt-2 overflow-hidden rounded-md bg-stone-100 dark:bg-stone-900">
                             {coverUrl || imageDraft?.dataUrl ? (
@@ -970,7 +973,7 @@ export default function AssetsPage() {
                                     {imageUploading && imageUploadProgress ? (
                                         <div className="asset-preview-uploading-panel">
                                             <div className="asset-preview-uploading-copy">
-                                                <span>{imageUploadProgress.phase === "confirming" ? "正在确认资源" : "正在上传到云端"}</span>
+                                                <span>{imageUploadProgress.phase === "confirming" ? t("library.assets.form.confirming") : t("library.assets.form.uploadingCloud")}</span>
                                                 {typeof imageUploadProgress.percent === "number" ? <strong>{imageUploadProgress.percent}%</strong> : null}
                                             </div>
                                             <Progress percent={imageUploadProgress.percent} showInfo={false} size="small" status="active" />
@@ -978,11 +981,11 @@ export default function AssetsPage() {
                                     ) : null}
                                 </div>
                             ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
+                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || t("library.assets.form.noCover")}</div>
                             )}
                             <div className="bg-background p-3">
                                 <Typography.Text strong ellipsis className="block">
-                                    {title || "未命名素材"}
+                                    {title || t("library.picker.untitled")}
                                 </Typography.Text>
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     {tags.length ? (
@@ -992,7 +995,7 @@ export default function AssetsPage() {
                                             </Tag>
                                         ))
                                     ) : (
-                                        <Tag className="m-0">未打标签</Tag>
+                                        <Tag className="m-0">{t("library.assets.form.noTags")}</Tag>
                                     )}
                                 </div>
                             </div>
@@ -1027,15 +1030,15 @@ export default function AssetsPage() {
 
             <Modal
                 className="library-modal library-confirm-modal"
-                title={folderEditor === "new" ? "新建分类" : "重命名分类"}
+                title={folderEditor === "new" ? t("library.assets.folder.create") : t("library.assets.folder.rename")}
                 open={Boolean(folderEditor)}
                 confirmLoading={folderSaving}
                 onCancel={() => { if (!folderSaving) setFolderEditor(null); }}
                 onOk={() => void saveFolder()}
-                okText="保存"
-                cancelText="取消"
+                okText={t("common.save")}
+                cancelText={t("common.cancel")}
             >
-                <Input autoFocus value={folderName} maxLength={40} placeholder="例如：角色参考、场景灵感" onChange={(event) => setFolderName(event.target.value)} onPressEnter={() => void saveFolder()} />
+                <Input autoFocus value={folderName} maxLength={40} placeholder={t("library.assets.folder.namePlaceholder")} onChange={(event) => setFolderName(event.target.value)} onPressEnter={() => void saveFolder()} />
             </Modal>
 
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
@@ -1052,7 +1055,7 @@ export default function AssetsPage() {
 
             <Modal
                 className="library-modal library-confirm-modal"
-                title="移入回收站"
+                title={t("library.assets.archive.title")}
                 open={Boolean(archivingAsset)}
                 onCancel={() => { if (!batchWorking) setArchivingAsset(null); }}
                 onOk={() => {
@@ -1062,49 +1065,49 @@ export default function AssetsPage() {
                 }}
                 confirmLoading={batchWorking}
                 cancelButtonProps={{ disabled: batchWorking }}
-                okText="移入回收站"
-                cancelText="取消"
+                okText={t("library.assets.archive.ok")}
+                cancelText={t("common.cancel")}
             >
-                确定将「{archivingAsset?.title}」移入回收站吗？移入后不会出现在正常素材库中，可在回收站随时还原。
+                {t("library.assets.archive.confirm", { name: archivingAsset?.title })}
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
-                title="批量移入回收站"
+                title={t("library.assets.archive.batchTitle")}
                 open={batchArchiveOpen}
                 onCancel={() => { if (!batchWorking) setBatchArchiveOpen(false); }}
                 onOk={() => void changeAssetStatus(selectedIds, "archived")}
                 confirmLoading={batchWorking}
                 cancelButtonProps={{ disabled: batchWorking }}
-                okText="移入回收站"
-                cancelText="取消"
+                okText={t("library.assets.archive.ok")}
+                cancelText={t("common.cancel")}
             >
-                确定将已选择的 {selectedIds.length} 个素材移入回收站吗？移入后可随时在回收站批量还原。
+                {t("library.assets.archive.batchConfirm", { count: selectedIds.length })}
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
-                title="彻底删除素材"
+                title={t("library.assets.delete.title")}
                 open={Boolean(deletingAsset)}
                 onCancel={() => setDeletingAsset(null)}
                 onOk={() => void confirmDelete()}
-                okText="彻底删除"
+                okText={t("library.picker.deletePermanently")}
                 okButtonProps={{ danger: true }}
-                cancelText="取消"
+                cancelText={t("common.cancel")}
             >
-                确定彻底删除「{deletingAsset?.title}」吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
+                {t("library.assets.delete.confirm", { name: deletingAsset?.title })}
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
-                title="批量彻底删除素材"
+                title={t("library.assets.delete.batchTitle")}
                 open={batchDeleteOpen}
                 onCancel={() => { if (!batchWorking) setBatchDeleteOpen(false); }}
                 onOk={() => void confirmBatchDelete()}
                 confirmLoading={batchWorking}
                 cancelButtonProps={{ disabled: batchWorking }}
-                okText="彻底删除"
+                okText={t("library.picker.deletePermanently")}
                 okButtonProps={{ danger: true }}
-                cancelText="取消"
+                cancelText={t("common.cancel")}
             >
-                确定彻底删除已选择的 {selectedIds.length} 个素材吗？未被其他素材复用的服务器文件会直接释放，原画布或任务中的旧引用可能失效，操作不可恢复。
+                {t("library.assets.delete.batchConfirm", { count: selectedIds.length })}
             </Modal>
         </>
     );

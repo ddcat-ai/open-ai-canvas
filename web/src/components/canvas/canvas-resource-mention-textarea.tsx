@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { observeMovablePopupAnchor } from "@/lib/movable-popup-anchor";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -114,6 +115,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const rawTheme = useActiveTheme();
     const assets = useAssetStore((state) => state.assets);
     const theme = canvasThemes[rawTheme as keyof typeof canvasThemes] ?? canvasThemes.dark;
+    const { t } = useTranslation();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const editorRef = useRef<HTMLDivElement | null>(null);
@@ -402,11 +404,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                           event.stopPropagation();
                           insertAutoLink(autoLinkMatch);
                       }}
-                      aria-label={`引用${autoLinkMatch.reference.label}`}
+                      aria-label={t("canvasB.mention.autoLinkLabel", { label: autoLinkMatch.reference.label })}
                   >
-                      <span className="truncate">
-                          引用「{autoLinkMatch.query}」→ @{autoLinkMatch.reference.label}
-                      </span>
+                      <span className="truncate">{t("canvasB.mention.autoLinkText", { query: autoLinkMatch.query, label: autoLinkMatch.reference.label })}</span>
                       <kbd className="shrink-0 rounded border border-current/20 px-1 font-mono text-[var(--fs-micro)]">Tab</kbd>
                   </button>,
                   document.body,

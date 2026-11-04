@@ -2,6 +2,7 @@
 //
 // 输入区（composer）与消息渲染（chat-ui）都依赖它，单独成模块以避免两者互相 import。
 // 在画布里附件就是画布节点（nodeId），引用写成节点令牌；没有 nodeId 的旧附件仍用 @[attachment:ID]。
+import { translate } from "@/i18n";
 import { canvasNodeMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { AgentAttachmentStatus } from "@/lib/canvas/agent-composer-attachments";
 export type CloudAgentChatAttachment = {
@@ -25,8 +26,8 @@ export function agentAttachmentReferences(attachments: CloudAgentChatAttachment[
                   id: item.nodeId,
                   nodeId: item.nodeId,
                   kind: item.kind === "text" ? "text" : item.kind === "video" ? "video" : item.kind === "audio" ? "audio" : "image",
-                  label: item.name || `图片${index + 1}`,
-                  title: item.name || `图片${index + 1}`,
+                  label: item.name || translate("canvasA.attachments.imageLabel", { index: index + 1 }),
+                  title: item.name || translate("canvasA.attachments.imageLabel", { index: index + 1 }),
                   previewUrl: item.url || undefined,
                   active: true,
                   mentionToken: canvasNodeMentionToken(item.nodeId),
@@ -35,8 +36,8 @@ export function agentAttachmentReferences(attachments: CloudAgentChatAttachment[
                   id: `attachment:${item.id}`,
                   nodeId: "",
                   kind: "image",
-                  label: `图片${index + 1}`,
-                  title: item.name || `图片${index + 1}`,
+                  label: translate("canvasA.attachments.imageLabel", { index: index + 1 }),
+                  title: item.name || translate("canvasA.attachments.imageLabel", { index: index + 1 }),
                   previewUrl: item.url,
                   active: true,
                   mentionToken: `@[attachment:${item.id}]`,

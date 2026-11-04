@@ -1,6 +1,7 @@
 // 节点提示词编辑器的高度拖拽与展开弹窗尺寸控制。
 
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { clampPromptEditorModalSize } from "@/lib/canvas/canvas-prompt-editor-size";
 import {
     PROMPT_EDITOR_EXPANDED_LINE_HEIGHT,
@@ -15,6 +16,7 @@ import {
 } from "./canvas-node-prompt-panel";
 
 export function PromptResizeHandle({ height, min, max, onResize }: { height: number; min: number; max: number; onResize: (height: number) => void }) {
+    const { t } = useTranslation();
     const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
     const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -44,7 +46,7 @@ export function PromptResizeHandle({ height, min, max, onResize }: { height: num
             type="button"
             className="canvas-node-composer-resize-handle"
             role="separator"
-            aria-label="调整提示词输入高度"
+            aria-label={t("canvasB.promptResize.inputHeight")}
             aria-orientation="horizontal"
             aria-valuemin={min}
             aria-valuemax={max}
@@ -96,6 +98,7 @@ export function PromptModalResizeHandle({
     onResize: (size: { width: number; height: number }) => void;
     accent: string;
 }) {
+    const { t } = useTranslation();
     const dragRef = useRef<{ pointerId: number; axis: "width" | "height"; start: number; size: { width: number; height: number } } | null>(null);
 
     const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -159,8 +162,8 @@ export function PromptModalResizeHandle({
                 className="canvas-prompt-modal-resize-width"
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="拖动调整提示词窗口宽度"
-                title="拖动调整窗口宽度，也可用左右方向键调整"
+                aria-label={t("canvasB.promptResize.widthLabel")}
+                title={t("canvasB.promptResize.widthTitle")}
                 style={{ "--prompt-resize-accent": accent } as CSSProperties}
                 onKeyDown={(event) => resizeKey("width", event)}
                 onPointerDown={(event) => startResize("width", event)}
@@ -173,8 +176,8 @@ export function PromptModalResizeHandle({
                 className="canvas-prompt-modal-resize-height"
                 role="separator"
                 aria-orientation="horizontal"
-                aria-label="拖动调整提示词窗口高度"
-                title="拖动调整窗口高度，也可用上下方向键调整"
+                aria-label={t("canvasB.promptResize.heightLabel")}
+                title={t("canvasB.promptResize.heightTitle")}
                 style={{ "--prompt-resize-accent": accent } as CSSProperties}
                 onKeyDown={(event) => resizeKey("height", event)}
                 onPointerDown={(event) => startResize("height", event)}

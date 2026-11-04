@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { App, Button, Segmented, Tag } from "antd";
 import { ChevronRight, FlaskConical, Settings2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
+import { translate } from "@/i18n";
 import { ModelEditorModal } from "@/components/model-editor-modal";
 import { ModelProtocolBrowser } from "@/components/model-protocol-browser";
 import { testChannelModelConnection } from "@/lib/model-connection-test";
@@ -15,6 +17,7 @@ import { modelOptionName, type ModelChannel } from "@/stores/use-config-store";
 type ModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
 
 export function ChannelModelSettings({ channel, onChange }: { channel: ModelChannel; onChange: (costs: ModelCost[]) => void }) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
     const [testingModel, setTestingModel] = useState("");
     const [editorTab, setEditorTab] = useState("protocol");
@@ -26,7 +29,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     useEffect(() => {
         let active = true;
         void fetchPluginProviderCatalog("user.custom-channel").then((items) => { if (active) setAvailableProtocols(items); })
-            .catch((error) => { if (active) setProtocolError(error instanceof Error ? error.message : "协议目录读取失败"); })
+            .catch((error) => { if (active) setProtocolError(error instanceof Error ? error.message : t("account.settings.modelConfig.protocolLoadFailed")); })
             .finally(() => { if (active) setProtocolLoading(false); });
         return () => { active = false; };
     }, []);
@@ -52,9 +55,9 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
         setTestingModel(model);
         try {
             const detail = await testChannelModelConnection(channel, model, capability, protocol);
-            message.success(`模型测试通过：${detail}`);
+            message.success(t("account.settings.modelConfig.testPassed", { detail }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "模型测试失败");
+            message.error(error instanceof Error ? error.message : t("account.settings.modelConfig.testFailed"));
         } finally {
             setTestingModel("");
         }
@@ -69,10 +72,10 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
         <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
-                    <div className="text-xs font-medium">模型能力与请求协议</div>
-                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">与运营后台使用同一能力目录；测试会发起真实请求并可能产生供应商费用</div>
+                    <div className="text-xs font-medium">{t("account.settings.modelConfig.title")}</div>
+                    <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">{t("account.settings.modelConfig.description")}</div>
                 </div>
-                <span className="text-[var(--fs-tiny)] text-foreground/35">{channel.models.length} 个模型</span>
+                <span className="text-[var(--fs-tiny)] text-foreground/35">{t("account.settings.modelConfig.modelCount", { count: channel.models.length })}</span>
             </div>
             <div className="space-y-2">
                 {channel.models.map((rawModel) => {
@@ -95,12 +98,12 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         {capabilityLabel(capability)}
                                     </Tag>
                                     <span className="truncate font-mono text-[var(--fs-tiny)] text-foreground/40" title={modelProtocolDefinition(protocol, availableProtocols)?.create}>
-                                        {modelProtocolDefinition(protocol, availableProtocols)?.create || "待配置请求协议"}
+                                        {modelProtocolDefinition(protocol, availableProtocols)?.create || t("account.settings.modelConfig.protocolPending")}
                                     </span>
                                 </div>
                             </div>
                             <Button type="text" size="small" icon={<ChevronRight className="size-4" />} iconPosition="end" onClick={() => { setEditorTab("protocol"); setActiveModel(model); }}>
-                                配置使用
+                                {t("account.settings.modelConfig.configure")}
                             </Button>
                         </div>
                     );
@@ -109,14 +112,14 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
             <ModelEditorModal
                 open={Boolean(activeModel)}
                 busy={Boolean(testingModel)}
-                title="编辑模型使用配置"
+                title={t("account.settings.modelConfig.editTitle")}
                 subtitle={activeModel || ""}
                 activeKey={editorTab}
                 onTabChange={setEditorTab}
                 onClose={() => setActiveModel(null)}
                 footer={
                     <div className="model-editor-footer">
-                        <span className="text-xs text-foreground/50">更改实时保存到云端渠道配置</span>
+                        <span className="text-xs text-foreground/50">{t("account.settings.channels.autoSave")}</span>
                         <div className="model-editor-footer-actions">
                             <Button
                                 icon={<FlaskConical className="size-4" />}
@@ -124,22 +127,22 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                 disabled={!activeProtocol || protocolLoading || Boolean(protocolError)}
                                 onClick={() => { if (activeModel && activeProtocol) void testModel(activeModel, activeCapability, activeProtocol); }}
                             >
-                                测试模型
+                                {t("account.settings.modelConfig.test")}
                             </Button>
-                            <Button type="primary" disabled={Boolean(testingModel)} onClick={() => setActiveModel(null)}>完成</Button>
+                            <Button type="primary" disabled={Boolean(testingModel)} onClick={() => setActiveModel(null)}>{t("account.payment.done")}</Button>
                         </div>
                     </div>
                 }
                 items={activeModel ? [
                     {
                         key: "protocol",
-                        label: "基本信息",
+                        label: t("account.settings.modelConfig.tabBasic"),
                         children: <div className="space-y-4" inert={Boolean(testingModel)}>
                             <section className="space-y-2">
-                                <div className="text-xs font-medium">模型能力</div>
+                                <div className="text-xs font-medium">{t("account.settings.modelConfig.capability")}</div>
                                 <Segmented<ModelCapabilityChoice>
                                     block
-                                    options={[{ label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "音频", value: "audio" }]}
+                                    options={[{ label: t("account.settings.modelConfig.capabilities.text"), value: "text" }, { label: t("account.settings.modelConfig.capabilities.image"), value: "image" }, { label: t("account.settings.modelConfig.capabilities.video"), value: "video" }, { label: t("account.settings.modelConfig.capabilities.audio"), value: "audio" }]}
                                     value={activeCapability}
                                     onChange={(nextCapability) => {
                                         const nextProtocol = availableProtocols.find((item) => item.value === activeProtocol && item.capability === nextCapability)?.value || availableProtocols.find((item) => item.capability === nextCapability && item.enabled !== false)?.value || defaultProtocolForCapability(nextCapability, availableProtocols);
@@ -154,7 +157,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                 />
                             </section>
                             <section className="space-y-2">
-                                <div className="text-xs font-medium">请求协议</div>
+                                <div className="text-xs font-medium">{t("account.settings.modelConfig.protocol")}</div>
                                 <ModelProtocolBrowser
                                     loading={protocolLoading}
                                     error={protocolError}
@@ -173,7 +176,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                     },
                     {
                         key: "capabilities",
-                        label: "能力与参数",
+                        label: t("account.settings.modelConfig.tabCapabilities"),
                         children: <div inert={Boolean(testingModel)}>
                             {activeCapability === "text" || activeCapability === "image" || activeCapability === "video" ? (
                                 <ModelCapabilityEditor
@@ -185,7 +188,7 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                     imageParameters={modelProtocolDefinition(activeProtocol, availableProtocols)?.imageParameters}
                                     onChange={(capabilityConfig) => updateCost(activeModel, { capabilityConfig })}
                                 />
-                            ) : <p className="text-xs text-foreground/50">当前模型类型无需额外配置引用与参数。</p>}
+                            ) : <p className="text-xs text-foreground/50">{t("account.settings.modelConfig.noParameters")}</p>}
                         </div>,
                     },
                 ] : []}
@@ -269,5 +272,5 @@ function defaultProtocolForModel(model: string, availableProtocols: ModelProtoco
 }
 
 function capabilityLabel(value: ModelCost["capability"]) {
-    return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value] || "待配置";
+    return translate(value && ["text", "image", "video", "audio"].includes(value) ? `account.settings.modelConfig.capabilities.${value}` : "account.settings.modelConfig.capabilities.pending");
 }

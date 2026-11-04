@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 
+import { useTranslation } from "react-i18next";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isFrameNode, visibleCanvasMinimapNodes } from "@/lib/canvas/canvas-frame";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
@@ -23,6 +24,7 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const liveViewportRef = useRef(viewport);
+    const { t } = useTranslation();
     const [isDragging, setIsDragging] = useState(false);
     const width = MINIMAP_WIDTH;
     const height = MINIMAP_HEIGHT;
@@ -109,7 +111,7 @@ export function Minimap({ nodes, viewport, viewportSize, canvasContainerRef, onV
                     onViewportChange(liveViewportRef.current);
                 }}
             >
-                <canvas ref={canvasRef} width={width} height={height} className="pointer-events-none block size-full" aria-label="画布小地图" />
+                <canvas ref={canvasRef} width={width} height={height} className="pointer-events-none block size-full" aria-label={t("canvasB.miniMap.label")} />
                 <div className="pointer-events-none absolute rounded-[var(--r-xs)]" style={{ left: viewportRect.x, top: viewportRect.y, width: viewportRect.w, height: viewportRect.h, background: `${theme.node.activeStroke}12`, boxShadow: `inset 0 0 0 1px ${theme.node.activeStroke}66` }} />
             </div>
         </div>

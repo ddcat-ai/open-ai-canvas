@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App } from "antd";
 import { ArrowRight, Image as ImageIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { Checkbox } from "@/components/ui/base/checkbox";
@@ -38,10 +40,11 @@ function parseRatio(value: string | undefined) {
 }
 
 function formatSeconds(ms: number) {
-    return `${Math.round(ms / 100) / 10} 秒`;
+    return translate("canvasA.approval.seconds", { count: Math.round(ms / 100) / 10 });
 }
 
 export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onAdopted }: CanvasDramaAdoptModalProps) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
     const dramaId = summary.project.id;
     const isVideo = node.type === CanvasNodeType.Video;
@@ -87,16 +90,16 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
 
     const blocker = !resourceId
         ? node.metadata?.fileUpload === "uploading" || node.metadata?.status === "loading"
-            ? "媒体还在生成或上传，完成后再采用。"
-            : "这个节点的媒体没有保存在服务端（例如外部链接），无法采用。可以先上传到画布再试。"
+            ? t("canvasA.dramaAdopt.mediaPending")
+            : t("canvasA.dramaAdopt.mediaNotStored")
         : isVideo
           ? !segment
-              ? "请选择要替换的剧情段。"
+              ? t("canvasA.dramaAdopt.chooseSegment")
               : ""
           : !targetCast
-            ? "请选择要替换参考图的设定。"
+            ? t("canvasA.dramaAdopt.chooseCast")
             : "";
-    const warnings = isVideo && segment ? videoWarnings(node, segment, summary.production.settings.aspectRatio) : [];
+    const warnings = isVideo && segment ? videoWarnings(node, segment, summary.production.settings.aspectRatio).map((warning) => t(warning.key, warning.values)) : [];
 
     const submit = async () => {
         if (blocker || submitting) return;
@@ -104,87 +107,83 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
         try {
             if (!isVideo && targetCast) {
                 const result = await setDramaCastImage(dramaId, targetCast.id, resourceId, restyle, { source: "canvas", taskId: node.metadata?.taskId });
-                if (result.unchanged) message.info(`「${result.cast.name}」已在使用这张图`);
-                else message.success(result.affectedSegments ? `已替换「${result.cast.name}」的参考图，${result.affectedSegments} 个剧情段视频将重新生成` : `已替换「${result.cast.name}」的参考图并锁定`);
+                if (result.unchanged) message.info(t("canvasA.dramaAdopt.castUnchanged", { name: result.cast.name }));
+                else message.success(result.affectedSegments ? t("canvasA.dramaAdopt.castReplacedRestyle", { name: result.cast.name, count: result.affectedSegments }) : t("canvasA.dramaAdopt.castReplaced", { name: result.cast.name }));
                 onAdopted(node.id, { kind: "cast", castId: targetCast.id }, resourceId);
             } else if (isVideo && segment && episode) {
                 const result = await adoptDramaSegmentVideo(dramaId, episode.id, segment.index, { resourceId, taskId: node.metadata?.taskId, cascade: cascade && !parallelVideo, expectedRevision: segment.revision });
-                const label = `第 ${episode.number} 集第 ${segment.index + 1} 段`;
+                const label = t("canvasA.dramaAdopt.segmentLabel", { episode: episode.number, segment: segment.index + 1 });
                 if (result.unchanged) {
-                    message.info(`${label}已在使用这个视频`);
+                    message.info(t("canvasA.dramaAdopt.videoUnchanged", { label }));
                 } else {
-                    message.success(result.requeued ? `已采用为${label}的视频，后续 ${result.requeued} 段已重新排队生成` : `已采用为${label}的视频`);
+                    message.success(result.requeued ? t("canvasA.dramaAdopt.videoAdoptedRequeued", { label, count: result.requeued }) : t("canvasA.dramaAdopt.videoAdopted", { label }));
                     if (result.videoError) message.warning(result.videoError);
-                    if (result.resumeError) message.warning(`后续段已排队，但制作没能继续：${result.resumeError}`);
-                    else if (result.paused) message.info("制作已暂停：继续制作后会重新合成这一集的成片");
+                    if (result.resumeError) message.warning(t("canvasA.dramaAdopt.resumeFailed", { reason: result.resumeError }));
+                    else if (result.paused) message.info(t("canvasA.dramaAdopt.paused"));
                 }
                 onAdopted(node.id, { kind: "segment", episodeId: episode.id, segmentIndex: segment.index, segmentId: segment.id }, resourceId);
             }
             onClose();
         } catch (error) {
             if (error instanceof ApiError && error.reason === DRAMA_ERROR_REASON.segmentChanged) {
-                message.warning("剧情段刚被修改，已刷新，请确认后再采用");
+                message.warning(t("canvasA.dramaAdopt.segmentChanged"));
                 void episodeQuery.refetch();
                 return;
             }
-            message.error(error instanceof Error && error.message ? error.message : "采用失败");
+            message.error(error instanceof Error && error.message ? error.message : t("canvasA.dramaAdopt.failed"));
         } finally {
             setSubmitting(false);
         }
     };
 
     return (
-        <AppModal open centered title="采用到短剧" width={520} onCancel={onClose} okText="采用" confirmLoading={submitting} okButtonProps={{ disabled: Boolean(blocker) }} onOk={() => void submit()}>
-            <p className="mb-4 text-sm text-muted-foreground">{isVideo ? "把这个视频设为剧情段的当前视频；短剧原来的视频保留在版本记录里。" : "把这张图设为设定的参考图并锁定；原来的参考图保留在版本记录里。"}</p>
+        <AppModal open centered title={t("canvasA.dramaAdopt.title")} width={520} onCancel={onClose} okText={t("canvasA.dramaAdopt.ok")} confirmLoading={submitting} okButtonProps={{ disabled: Boolean(blocker) }} onOk={() => void submit()}>
+            <p className="mb-4 text-sm text-muted-foreground">{isVideo ? t("canvasA.dramaAdopt.videoIntro") : t("canvasA.dramaAdopt.imageIntro")}</p>
 
             {isVideo ? (
                 <div className="grid gap-3">
                     <label className="grid gap-1 text-xs text-muted-foreground">
-                        分集
+                        {t("canvasA.dramaAdopt.episode")}
                         <Select
-                            ariaLabel="选择分集"
+                            ariaLabel={t("canvasA.dramaAdopt.chooseEpisode")}
                             appearance="field"
                             value={episodeId || undefined}
-                            options={summary.episodes.map((item) => ({ value: item.id, label: `第 ${item.number} 集 · ${item.title}` }))}
+                            options={summary.episodes.map((item) => ({ value: item.id, label: t("canvasA.dramaAdopt.episodeOption", { number: item.number, title: item.title }) }))}
                             onChange={(value: string) => {
                                 setEpisodeId(value);
                                 setSegmentIndex(null);
                             }}
-                            placeholder="选择分集"
+                            placeholder={t("canvasA.dramaAdopt.chooseEpisode")}
                         />
                     </label>
                     <label className="grid gap-1 text-xs text-muted-foreground">
-                        剧情段
+                        {t("canvasA.dramaAdopt.segment")}
                         <Select
-                            ariaLabel="选择剧情段"
+                            ariaLabel={t("canvasA.dramaAdopt.chooseSegmentShort")}
                             appearance="field"
                             value={segment ? segment.index : undefined}
                             loading={episodeQuery.isLoading}
                             disabled={!segments.length}
-                            options={segments.map((item) => ({ value: item.index, label: `第 ${item.index + 1} 段 · ${item.title}` }))}
+                            options={segments.map((item) => ({ value: item.index, label: t("canvasA.dramaAdopt.segmentOption", { number: item.index + 1, title: item.title }) }))}
                             onChange={(value: number) => setSegmentIndex(value)}
-                            placeholder={episodeQuery.isLoading ? "正在读取剧情段…" : segments.length ? "选择剧情段" : "这一集还没有剧情段"}
+                            placeholder={episodeQuery.isLoading ? t("canvasA.dramaAdopt.loadingSegments") : segments.length ? t("canvasA.dramaAdopt.chooseSegmentShort") : t("canvasA.dramaAdopt.noSegments")}
                         />
                     </label>
-                    {segment && parallelVideo ? <p className="text-xs leading-5 text-muted-foreground">本作品按并行出片生成，各段互不依赖，只替换本段。</p> : null}
+                    {segment && parallelVideo ? <p className="text-xs leading-5 text-muted-foreground">{t("canvasA.dramaAdopt.parallelNote")}</p> : null}
                     {segment && !parallelVideo ? (
                         <div className="grid gap-2">
                             <SegmentedControl
-                                ariaLabel="后续剧情段"
+                                ariaLabel={t("canvasA.dramaAdopt.laterSegments")}
                                 block
                                 value={cascade ? "cascade" : "single"}
                                 onChange={(value) => setCascade(value === "cascade")}
                                 options={[
-                                    { value: "single", label: "只换本段" },
-                                    { value: "cascade", label: "后续段也重新生成", disabled: !laterWithVideo },
+                                    { value: "single", label: t("canvasA.dramaAdopt.single") },
+                                    { value: "cascade", label: t("canvasA.dramaAdopt.cascade"), disabled: !laterWithVideo },
                                 ]}
                             />
                             <p className="text-xs leading-5 text-muted-foreground">
-                                {cascade
-                                    ? `后续已生成视频的 ${laterWithVideo} 段会以新视频的尾帧作首帧重新生成，衔接更自然，会产生额外花费。`
-                                    : laterWithVideo
-                                      ? "后续段保持不变；下一段的首帧仍是原视频的尾帧，衔接处可能有跳变。"
-                                      : "这是最后一个已生成视频的剧情段，后续段不受影响。"}
+                                {cascade ? t("canvasA.dramaAdopt.cascadeNote", { count: laterWithVideo }) : laterWithVideo ? t("canvasA.dramaAdopt.singleNote") : t("canvasA.dramaAdopt.lastSegmentNote")}
                             </p>
                         </div>
                     ) : null}
@@ -192,38 +191,34 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
             ) : (
                 <div className="grid gap-3">
                     <label className="grid gap-1 text-xs text-muted-foreground">
-                        设定
+                        {t("canvasA.dramaAdopt.cast")}
                         <Select
-                            ariaLabel="选择设定"
+                            ariaLabel={t("canvasA.dramaAdopt.chooseCastShort")}
                             appearance="field"
                             showSearch
                             optionFilterProp="label"
                             value={castId || undefined}
                             options={castOptions}
                             onChange={(value: string) => setCastId(value)}
-                            placeholder={cast ? "选择角色、场景或道具" : "正在读取设定…"}
+                            placeholder={cast ? t("canvasA.dramaAdopt.castPlaceholder") : t("canvasA.dramaAdopt.loadingCast")}
                         />
                     </label>
                     {targetCast ? (
                         <div className="flex items-center gap-3">
-                            <Thumb storageKey={targetCast.imageResourceId ? `resource:${targetCast.imageResourceId}` : undefined} label="短剧当前" />
+                            <Thumb storageKey={targetCast.imageResourceId ? `resource:${targetCast.imageResourceId}` : undefined} label={t("canvasA.dramaAdopt.currentInDrama")} />
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                            <Thumb storageKey={node.metadata?.storageKey} label="画布这张" />
+                            <Thumb storageKey={node.metadata?.storageKey} label={t("canvasA.dramaAdopt.fromCanvas")} />
                         </div>
                     ) : null}
                     {targetCast ? (
                         <Checkbox checked={restyle} onChange={(event) => setRestyle(event.target.checked)}>
                             <span className="text-sm">
-                                让引用它的剧情段视频重新生成
-                                {impactQuery.data ? (
-                                    <span className="ml-1 text-xs text-muted-foreground">
-                                        （{impactQuery.data.episodes} 集 · {impactQuery.data.segments} 段）
-                                    </span>
-                                ) : null}
+                                {t("canvasA.dramaAdopt.restyle")}
+                                {impactQuery.data ? <span className="ml-1 text-xs text-muted-foreground">{t("canvasA.dramaAdopt.impact", { episodes: impactQuery.data.episodes, segments: impactQuery.data.segments })}</span> : null}
                             </span>
                         </Checkbox>
                     ) : null}
-                    {targetCast ? <p className="text-xs leading-5 text-muted-foreground">{restyle ? "这些段的视频会标记过期，重新生成时按新参考图出画面，会产生额外花费。" : "已生成的剧情段视频保持不变，之后新生成的段使用新参考图。"}</p> : null}
+                    {targetCast ? <p className="text-xs leading-5 text-muted-foreground">{restyle ? t("canvasA.dramaAdopt.restyleNote") : t("canvasA.dramaAdopt.keepNote")}</p> : null}
                 </div>
             )}
 
@@ -233,7 +228,7 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
                 </Callout>
             ) : null}
             {warnings.length ? (
-                <Callout tone="warning" className="mt-4" title="采用前请确认">
+                <Callout tone="warning" className="mt-4" title={t("canvasA.dramaAdopt.confirmTitle")}>
                     <ul className="grid list-disc gap-0.5 pl-4">
                         {warnings.map((warning) => (
                             <li key={warning}>{warning}</li>
@@ -247,27 +242,28 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
 
 /** 采用视频前的提示：画幅、音轨、时长与本段是否正在生成。只提示，不阻止。 */
 function videoWarnings(node: CanvasNodeData, segment: DramaSegment, aspectRatio: string) {
-    const warnings: string[] = [];
+    const warnings: Array<{ key: string; values?: Record<string, string | number> }> = [];
     const width = node.metadata?.naturalWidth || node.width;
     const height = node.metadata?.naturalHeight || node.height;
     const target = parseRatio(aspectRatio);
-    if (target && width > 0 && height > 0 && Math.abs(width / height - target) / target > RATIO_TOLERANCE) warnings.push(`画幅与短剧（${aspectRatio}）不一致，合成成片时画面会被缩放适配。`);
-    if (node.metadata?.hasAudio === false) warnings.push("这个视频没有音轨，成片里本段将没有对白与音效。");
+    if (target && width > 0 && height > 0 && Math.abs(width / height - target) / target > RATIO_TOLERANCE) warnings.push({ key: "canvasA.dramaAdopt.warnRatio", values: { ratio: aspectRatio } });
+    if (node.metadata?.hasAudio === false) warnings.push({ key: "canvasA.dramaAdopt.warnNoAudio" });
     const planned = (segment.request.seconds || 0) * 1000 || segment.durationMs;
     const actual = node.metadata?.durationMs || 0;
-    if (planned > 0 && actual > 0 && Math.abs(actual - planned) >= 1000) warnings.push(`视频时长 ${formatSeconds(actual)}，本段原计划 ${formatSeconds(planned)}，成片会按实际时长拼接。`);
-    if (segment.videoStatus === "running" || segment.videoStatus === "queued") warnings.push("本段视频正在生成；采用后，在途的生成结果只进入版本记录，不会覆盖采用的视频。");
+    if (planned > 0 && actual > 0 && Math.abs(actual - planned) >= 1000) warnings.push({ key: "canvasA.dramaAdopt.warnDuration", values: { actual: formatSeconds(actual), planned: formatSeconds(planned) } });
+    if (segment.videoStatus === "running" || segment.videoStatus === "queued") warnings.push({ key: "canvasA.dramaAdopt.warnRunning" });
     return warnings;
 }
 
 function Thumb({ storageKey, label }: { storageKey?: string; label: string }) {
+    const { t } = useTranslation();
     return (
         <figure className="grid min-w-0 flex-1 gap-1">
             <span className="grid aspect-video place-items-center overflow-hidden rounded-md border border-border bg-surface-secondary text-muted-foreground">
                 {storageKey ? (
                     <CachedResourceImage storageKey={storageKey} variant="thumbnail" alt={label} className="size-full object-contain" draggable={false} fallback={<ImageIcon className="size-4" />} />
                 ) : (
-                    <ImageIcon className="size-4" aria-label="暂无参考图" />
+                    <ImageIcon className="size-4" aria-label={t("canvasA.dramaAdopt.noReference")} />
                 )}
             </span>
             <figcaption className="text-center text-xs text-muted-foreground">{label}</figcaption>

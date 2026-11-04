@@ -4,7 +4,9 @@ import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { Bug, LayoutGrid, List, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
+import { currentLocale, translate } from "@/i18n";
 
 import { MediaPreview } from "@/components/media-preview";
 import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
@@ -58,6 +60,7 @@ function taskStatusFilter(value: string | null): TaskStatusFilter {
 
 export default function TasksPage() {
     const { message, modal } = App.useApp();
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const effectiveConfig = useEffectiveConfig();
@@ -99,9 +102,9 @@ export default function TasksPage() {
     const domainProjectNameById = useMemo(() => new Map(domainProjects.map((item) => [item.project.id, item.project.name])), [domainProjects]);
     const projectOptions = useMemo(() => projects.map((project) => {
         const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
-        return { label: projectName ? `${project.title || "未命名画布"} · ${projectName}` : project.title || "未命名画布", value: project.id };
-    }), [domainProjectNameById, projects]);
-    const modelOptions = useMemo(() => Array.from(new Set(tasks.map((task) => formatModelName(effectiveConfig, task)).filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-CN")), [effectiveConfig, tasks]);
+        return { label: projectName ? `${project.title || t("library.tasks.shared.untitledCanvas")} · ${projectName}` : project.title || t("library.tasks.shared.untitledCanvas"), value: project.id };
+    }), [domainProjectNameById, projects, t]);
+    const modelOptions = useMemo(() => Array.from(new Set(tasks.map((task) => formatModelName(effectiveConfig, task)).filter(Boolean))).sort((left, right) => left.localeCompare(right, currentLocale())), [effectiveConfig, tasks]);
     const filteredTasks = useMemo(() => tasks.filter((task) => {
         if (statusFilter === "all") return true;
         if (statusFilter === "active") return task.status === "queued" || task.status === "running";
@@ -244,12 +247,12 @@ export default function TasksPage() {
             void syncCompletedCanvasTasks(next);
             return next;
         } catch (error) {
-            if (showLoading) message.error(error instanceof Error ? error.message : "任务加载失败");
+            if (showLoading) message.error(error instanceof Error ? error.message : t("library.tasks.page.loadFailed"));
             return undefined;
         } finally {
             if (showLoading) setLoading(false);
         }
-    }, [message, syncCompletedCanvasTasks]);
+    }, [message, syncCompletedCanvasTasks, t]);
 
     const openTaskDetail = useCallback(
         async (task: GenerationTask) => {
@@ -262,13 +265,13 @@ export default function TasksPage() {
                 setDetailTask(detail);
                 setTaskLogs(logs);
             } catch (error) {
-                message.error(error instanceof Error ? error.message : "任务详情加载失败");
+                message.error(error instanceof Error ? error.message : t("library.tasks.page.detailLoadFailed"));
             } finally {
                 setDetailLoading(false);
                 setLogsLoading(false);
             }
         },
-        [message],
+        [message, t],
     );
 
     useEffect(() => {
@@ -311,9 +314,9 @@ export default function TasksPage() {
             setDetailTask((current) => (current?.id === id ? { ...current, ...next } : current));
             setStatusFilter("active");
             setPage(1);
-            message.success(next.status === "succeeded" ? "任务已完成" : savingMedia ? "正在恢复作品保存，不会重新生成" : "任务已在队列中");
+            message.success(next.status === "succeeded" ? t("library.tasks.page.taskCompleted") : savingMedia ? t("library.tasks.page.recoveringMedia") : t("library.tasks.page.taskQueued"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "操作失败");
+            message.error(error instanceof Error ? error.message : t("library.tasks.page.actionFailed"));
         } finally {
             setActingId("");
         }
@@ -325,7 +328,7 @@ export default function TasksPage() {
             const result = await queryFailedVideoProviderTask(task.id);
             if (!result.recovered) {
                 setTaskLogs(await listTaskLogs(task.id));
-                message.info(`上游任务仍在处理中${result.providerStatus ? `（${result.providerStatus}）` : ""}`);
+                message.info(result.providerStatus ? t("library.tasks.page.upstreamPendingWithStatus", { status: result.providerStatus }) : t("library.tasks.page.upstreamPending"));
                 return;
             }
             setDetailTask(result.task);
@@ -334,10 +337,10 @@ export default function TasksPage() {
             await syncGenerationTaskToCanvasStore(result.task);
             window.dispatchEvent(new CustomEvent("wallet:updated"));
             void loadTasks(false);
-            if (result.billingSettled) message.success("已获取上游视频，任务已恢复并完成结算");
-            else message.warning("已获取上游视频，任务已恢复，计费状态待管理员核对");
+            if (result.billingSettled) message.success(t("library.tasks.page.upstreamRecoveredSettled"));
+            else message.warning(t("library.tasks.page.upstreamRecoveredUnsettled"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "查询上游任务失败");
+            message.error(error instanceof Error ? error.message : t("library.tasks.page.upstreamQueryFailed"));
         } finally {
             setActingId("");
         }
@@ -350,7 +353,7 @@ export default function TasksPage() {
             {
                 const videoModel = values.model?.trim() || effectiveConfig.videoModel || effectiveConfig.model;
                 if (values.operation !== "compare_versions" && !isAiConfigReady(effectiveConfig, videoModel)) {
-                    message.error("请先在设置里配置可用的视频模型、Base URL 和 API Key");
+                    message.error(t("library.tasks.page.videoModelMissing"));
                     return;
                 }
                 const requestConfig = resolveModelRequestConfig(effectiveConfig, videoModel);
@@ -376,9 +379,9 @@ export default function TasksPage() {
             setPage(1);
             setCreateOpen(false);
             form.resetFields();
-            message.success("任务已创建");
+            message.success(t("library.tasks.page.created"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "任务创建失败");
+            message.error(error instanceof Error ? error.message : t("library.tasks.page.createFailed"));
         } finally {
             setCreating(false);
         }
@@ -389,12 +392,12 @@ export default function TasksPage() {
             <WorkspacePage grid className="library-page task-library-page">
                 <div className="studio-band">
                     <PageHeader
-                        title="创作历史"
-                        description="查看文本、图片和视频生成任务，跟踪进度并处理失败任务。"
-                        meta={<span className="app-projects-header-meta">{taskStats.total} 个任务</span>}
+                        title={t("library.tasks.page.title")}
+                        description={t("library.tasks.page.description")}
+                        meta={<span className="app-projects-header-meta">{t("library.tasks.page.taskCount", { count: taskStats.total })}</span>}
                         actions={
                             <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
-                                新建任务
+                                {t("library.tasks.page.newTask")}
                             </Button>
                         }
                     />
@@ -406,17 +409,17 @@ export default function TasksPage() {
                                 {viewMode === "list" ? (
                                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
                                         <Switch size="sm" checked={groupEnabled} onChange={changeGroupEnabled} />
-                                        <span>按画布分组</span>
+                                        <span>{t("library.tasks.page.groupByCanvas")}</span>
                                     </label>
                                 ) : null}
                                 <div className="task-view-switch">
                                     <SegmentedControl<TaskViewMode>
-                                        ariaLabel="任务视图"
+                                        ariaLabel={t("library.tasks.page.viewMode")}
                                         size="sm"
                                         value={viewMode}
                                         options={[
-                                            { value: "list", icon: <List className="size-3.5" />, title: "列表视图" },
-                                            { value: "grid", icon: <LayoutGrid className="size-3.5" />, title: "网格视图" },
+                                            { value: "list", icon: <List className="size-3.5" />, title: t("library.tasks.page.listView") },
+                                            { value: "grid", icon: <LayoutGrid className="size-3.5" />, title: t("library.tasks.page.gridView") },
                                         ]}
                                         onChange={changeViewMode}
                                     />
@@ -425,15 +428,15 @@ export default function TasksPage() {
                         )}
                     >
                         <TaskStatusFilterBar stats={taskStats} value={statusFilter} onChange={(value) => { setStatusFilter(value); setPage(1); }} />
-                        <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索任务、模型或画布" onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                        <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: "全部画布", value: "all" }, ...projectOptions]} />
-                        <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: "全部类型", value: "all" }, { label: "文本", value: "text" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }]} />
-                        <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: "全部模型", value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
+                        <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder={t("library.tasks.page.searchPlaceholder")} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
+                        <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: t("library.tasks.page.allCanvases"), value: "all" }, ...projectOptions]} />
+                        <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: t("library.tasks.page.allKinds"), value: "all" }, { label: t("library.tasks.page.kindText"), value: "text" }, { label: t("library.tasks.page.kindImage"), value: "image" }, { label: t("library.tasks.page.kindVideo"), value: "video" }]} />
+                        <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: t("library.tasks.page.allModels"), value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
                     </CollectionToolbar>
                 </div>
 
                 <div className="collection-content task-collection-content">
-                    {loading && !tasks.length ? <div className="library-loading-grid" aria-label="正在加载任务">{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
+                    {loading && !tasks.length ? <div className="library-loading-grid" aria-label={t("library.tasks.page.loading")}>{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
                     {!loading || tasks.length ? (
                         visibleTasks.length ? (
                             viewMode === "grid" ? (
@@ -459,67 +462,67 @@ export default function TasksPage() {
                                 compact
                                 title={taskEmptyState(statusFilter).title}
                                 description={taskEmptyState(statusFilter).description}
-                                action={<Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>新建任务</Button>}
+                                action={<Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>{t("library.tasks.page.newTask")}</Button>}
                             />
                         )
                     ) : null}
                     {!groupingActive ? <PaginationBar current={page} pageSize={pageSize} total={filteredTasks.length} pageSizeOptions={[20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} /> : null}
                 </div>
             </WorkspacePage>
-            <Modal className="library-modal" title="新建异步生成任务" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText="创建任务">
+            <Modal className="library-modal" title={t("library.tasks.create.title")} open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText={t("library.tasks.create.submit")}>
                 <Form form={form} layout="vertical" initialValues={{ operation: "text_to_video" }}>
-                    <Form.Item name="operation" label="任务类型" rules={[{ required: true, message: "请选择任务类型" }]}>
+                    <Form.Item name="operation" label={t("library.tasks.create.operation")} rules={[{ required: true, message: t("library.tasks.create.operationRequired") }]}>
                         <Select options={operationOptions} />
                     </Form.Item>
-                    <Form.Item name="prompt" label="创作指令" rules={[{ required: true, message: "请输入创作指令" }]}>
-                        <Input.TextArea rows={5} placeholder="描述短剧、MV、TVC 或要执行的视频编辑操作" />
+                    <Form.Item name="prompt" label={t("library.tasks.create.prompt")} rules={[{ required: true, message: t("library.tasks.create.promptRequired") }]}>
+                        <Input.TextArea rows={5} placeholder={t("library.tasks.create.promptPlaceholder")} />
                     </Form.Item>
-                    <Form.Item name="projectId" label="绑定画布">
-                        <Select allowClear showSearch optionFilterProp="label" options={projectOptions} placeholder={projectOptions.length ? "可选，选择要绑定的画布" : "暂无本地画布"} />
+                    <Form.Item name="projectId" label={t("library.tasks.create.canvas")}>
+                        <Select allowClear showSearch optionFilterProp="label" options={projectOptions} placeholder={projectOptions.length ? t("library.tasks.create.canvasPlaceholder") : t("library.tasks.create.noCanvas")} />
                     </Form.Item>
-                    <Form.Item name="model" label="目标模型">
-                        <Input placeholder="可选，例如 seedance、kling、wan、nano-banana" />
+                    <Form.Item name="model" label={t("library.tasks.create.model")}>
+                        <Input placeholder={t("library.tasks.create.modelPlaceholder")} />
                     </Form.Item>
                 </Form>
             </Modal>
-            <Drawer className="library-drawer" title="任务详情" open={Boolean(detailTask)} onClose={() => setDetailTask(null)} size="large" destroyOnHidden>
+            <Drawer className="library-drawer" title={t("library.tasks.detail.title")} open={Boolean(detailTask)} onClose={() => setDetailTask(null)} size="large" destroyOnHidden>
                 {detailTask ? (
                     <div className="space-y-5">
                         <div className="task-detail-facts grid text-sm sm:grid-cols-2">
-                            <InfoItem label="状态" value={generationTaskStatusLabel(detailTask)} />
-                            {detailTask.mediaStage ? <InfoItem label="作品交付" value={mediaDeliverySummary(detailTask.status, detailTask.mediaStage)} /> : null}
-                            <InfoItem label="画布名称" value={getTaskCanvasContext(detailTask, canvasById, domainProjectNameById).canvasName} />
-                            <InfoItem label="任务类型" value={formatTaskKind(detailTask)} />
-                            <InfoItem label="模型" value={formatModelName(effectiveConfig, detailTask)} />
-                            <InfoItem label="尝试次数" value={`第 ${detailTask.attempts || 1} 次`} />
-                            <InfoItem label="创建时间" value={formatDate(detailTask.createdAt)} />
-                            <InfoItem label="开始时间" value={formatDate(detailTask.startedAt)} />
-                            <InfoItem label="完成时间" value={formatDate(detailTask.completedAt)} />
-                            <InfoItem label="耗时" value={formatTaskDuration(detailTask)} />
-                            {detailTask.providerCancelStatus ? <InfoItem label="上游取消" value={providerCancelStatusLabel(detailTask)} /> : null}
-                            {detailTask.providerCancelRequestedAt ? <InfoItem label="请求取消时间" value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
+                            <InfoItem label={t("library.tasks.detail.status")} value={generationTaskStatusLabel(detailTask)} />
+                            {detailTask.mediaStage ? <InfoItem label={t("library.tasks.detail.delivery")} value={mediaDeliverySummary(detailTask.status, detailTask.mediaStage)} /> : null}
+                            <InfoItem label={t("library.tasks.detail.canvas")} value={getTaskCanvasContext(detailTask, canvasById, domainProjectNameById).canvasName} />
+                            <InfoItem label={t("library.tasks.detail.kind")} value={formatTaskKind(detailTask)} />
+                            <InfoItem label={t("library.tasks.detail.model")} value={formatModelName(effectiveConfig, detailTask)} />
+                            <InfoItem label={t("library.tasks.detail.attempts")} value={t("library.tasks.detail.attemptValue", { count: detailTask.attempts || 1 })} />
+                            <InfoItem label={t("library.tasks.detail.createdAt")} value={formatDate(detailTask.createdAt)} />
+                            <InfoItem label={t("library.tasks.detail.startedAt")} value={formatDate(detailTask.startedAt)} />
+                            <InfoItem label={t("library.tasks.detail.completedAt")} value={formatDate(detailTask.completedAt)} />
+                            <InfoItem label={t("library.tasks.detail.duration")} value={formatTaskDuration(detailTask)} />
+                            {detailTask.providerCancelStatus ? <InfoItem label={t("library.tasks.detail.providerCancel")} value={providerCancelStatusLabel(detailTask)} /> : null}
+                            {detailTask.providerCancelRequestedAt ? <InfoItem label={t("library.tasks.detail.cancelRequestedAt")} value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
                         </div>
                         <div className="flex flex-wrap justify-end gap-2">
-                            {detailTask.canRecoverMedia ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id)}>重试保存</Button> : null}
-                            {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>手动查询任务</Button> : null}
-                            {isTaskFailed(detailTask) ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>导出诊断包</Button> : null}
+                            {detailTask.canRecoverMedia ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id)}>{t("library.tasks.row.retrySave")}</Button> : null}
+                            {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>{t("library.tasks.detail.queryProvider")}</Button> : null}
+                            {isTaskFailed(detailTask) ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>{t("library.tasks.detail.exportDiagnostics")}</Button> : null}
                         </div>
                         {detailTask.error ? <pre className="task-detail-error max-h-28 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{generationErrorMessage(detailTask.error)}</pre> : null}
                         <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
-                        <DetailBlock title="提示词" value={detailLoading ? "详情加载中..." : detailTask.prompt || "无"} tall />
+                        <DetailBlock title={t("library.tasks.detail.prompt")} value={detailLoading ? t("library.tasks.detail.loading") : detailTask.prompt || t("library.tasks.detail.none")} tall />
                         <TaskParameters inputJson={detailLoading ? undefined : detailTask.inputJson} />
-                        <DetailBlock title="结果" value={detailLoading ? "详情加载中..." : formatTaskJson(detailTask.resultJson)} />
+                        <DetailBlock title={t("library.tasks.detail.result")} value={detailLoading ? t("library.tasks.detail.loading") : formatTaskJson(detailTask.resultJson)} />
                         <div>
-                            <Typography.Text strong>日志</Typography.Text>
+                            <Typography.Text strong>{t("library.tasks.detail.logs")}</Typography.Text>
                             <div className="mt-2 max-h-60 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">
-                                {logsLoading ? "日志加载中..." : taskLogs.length ? taskLogs.map((log) => `[${new Date(log.createdAt).toLocaleString()}] ${log.level.toUpperCase()} ${formatTaskLog(log)}`).join("\n\n") : "暂无日志"}
+                                {logsLoading ? t("library.tasks.detail.logsLoading") : taskLogs.length ? taskLogs.map((log) => `[${new Date(log.createdAt).toLocaleString(currentLocale())}] ${log.level.toUpperCase()} ${formatTaskLog(log)}`).join("\n\n") : t("library.tasks.detail.noLogs")}
                             </div>
                         </div>
                     </div>
                 ) : null}
             </Drawer>
             <Modal
-                title={<span className="block truncate pr-8">{mediaPreview?.title || "生成结果预览"}</span>}
+                title={<span className="block truncate pr-8">{mediaPreview?.title || t("library.tasks.detail.previewTitle")}</span>}
                 open={Boolean(mediaPreview)}
                 onCancel={() => setMediaPreview(null)}
                 footer={null}
@@ -561,11 +564,12 @@ function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[
 }
 
 function TaskResultMedia({ value, taskType }: { value?: string; taskType: string }) {
+    const { t } = useTranslation();
     const urls = resultMediaUrls(value);
     if (!urls.length) return null;
     return (
         <div>
-            <Typography.Text strong>生成结果</Typography.Text>
+            <Typography.Text strong>{t("library.tasks.detail.generated")}</Typography.Text>
             <div className="mt-2 grid max-h-[360px] grid-cols-2 gap-2 overflow-auto rounded-lg bg-stone-950 p-2 md:grid-cols-3">
                 {urls.map((url, index) => {
                     const isVideo = isVideoResult(url, taskType);
@@ -574,7 +578,7 @@ function TaskResultMedia({ value, taskType }: { value?: string; taskType: string
                             key={`${url}-${index}`}
                             src={url}
                             kind={isVideo ? "video" : "image"}
-                            alt={`生成结果 ${index + 1}`}
+                            alt={t("library.tasks.detail.generatedItem", { index: index + 1 })}
                             controls={isVideo}
                             className={isVideo ? "task-result-media is-video" : "task-result-media"}
                             fallbackClassName={isVideo ? "task-result-media is-video" : "task-result-media"}
@@ -632,16 +636,16 @@ function groupTasksByCanvas(tasks: GenerationTask[], canvasById: Map<string, { t
 }
 
 function taskEmptyState(status: TaskStatusFilter) {
-    if (status === "all") return { title: "还没有任务", description: "新提交的生成会在这里显示状态和实时进度。" };
-    if (status === "active") return { title: "没有运行中的任务", description: "新提交的生成会在这里显示排队状态和实时进度。" };
-    if (status === "succeeded") return { title: "还没有已完成任务", description: "生成成功后，结果预览和执行记录会保留在这里。" };
-    return { title: "没有失败或取消的任务", description: "失败或取消的生成会出现在这里，并提供原因和可用操作。" };
+    if (status === "all") return { title: translate("library.tasks.empty.allTitle"), description: translate("library.tasks.empty.allDescription") };
+    if (status === "active") return { title: translate("library.tasks.empty.activeTitle"), description: translate("library.tasks.empty.activeDescription") };
+    if (status === "succeeded") return { title: translate("library.tasks.empty.succeededTitle"), description: translate("library.tasks.empty.succeededDescription") };
+    return { title: translate("library.tasks.empty.failedTitle"), description: translate("library.tasks.empty.failedDescription") };
 }
 
 function formatDate(value?: string) {
     if (!value) return "-";
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString(currentLocale());
 }
 
 function formatTaskDuration(task: GenerationTask) {
@@ -652,7 +656,7 @@ function formatTaskDuration(task: GenerationTask) {
     const totalSeconds = Math.max(0, Math.floor((end - start) / 1000));
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    return minutes ? `${minutes}分 ${seconds}秒` : `${seconds}秒`;
+    return minutes ? translate("library.tasks.detail.durationMinutes", { minutes, seconds }) : translate("library.tasks.detail.durationSeconds", { seconds });
 }
 
 function InfoItem({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {
@@ -678,16 +682,17 @@ function DetailBlock({ title, value, tall = false }: { title: string; value: str
 }
 
 function TaskParameters({ inputJson }: { inputJson?: string }) {
+    const { t } = useTranslation();
     const fields = taskParameterFields(inputJson);
     return (
         <div>
-            <Typography.Text strong>参数</Typography.Text>
+            <Typography.Text strong>{t("library.tasks.params.title")}</Typography.Text>
             {fields.length ? (
                 <div className="task-detail-facts mt-2 grid text-sm sm:grid-cols-2">
                     {fields.map((field) => <InfoItem key={field.label} label={field.label} value={field.value} wrap />)}
                 </div>
             ) : (
-                <div className="mt-2 rounded-md bg-foreground/[.04] px-3 py-3 text-sm text-foreground/50">暂无参数记录</div>
+                <div className="mt-2 rounded-md bg-foreground/[.04] px-3 py-3 text-sm text-foreground/50">{t("library.tasks.params.empty")}</div>
             )}
         </div>
     );
@@ -703,21 +708,21 @@ function taskParameterFields(inputJson?: string) {
         if (text) fields.push({ label, value: text });
     };
 
-    add("模式", input.mode);
-    add("尺寸 / 比例", config.size);
-    add("分辨率", config.vquality || config.quality);
-    add("时长", config.videoSeconds === undefined ? undefined : `${config.videoSeconds} 秒`);
-    add("生成数量", config.count);
-    add("生成声音", booleanParameter(config.videoGenerateAudio));
-    add("水印", booleanParameter(config.videoWatermark));
-    add("音色", config.audioVoice);
-    add("音频格式", config.audioFormat);
-    add("音频速度", config.audioSpeed);
+    add(translate("library.tasks.params.mode"), input.mode);
+    add(translate("library.tasks.params.size"), config.size);
+    add(translate("library.tasks.params.resolution"), config.vquality || config.quality);
+    add(translate("library.tasks.params.duration"), config.videoSeconds === undefined ? undefined : translate("library.tasks.params.seconds", { seconds: config.videoSeconds }));
+    add(translate("library.tasks.params.count"), config.count);
+    add(translate("library.tasks.params.audio"), booleanParameter(config.videoGenerateAudio));
+    add(translate("library.tasks.params.watermark"), booleanParameter(config.videoWatermark));
+    add(translate("library.tasks.params.voice"), config.audioVoice);
+    add(translate("library.tasks.params.audioFormat"), config.audioFormat);
+    add(translate("library.tasks.params.audioSpeed"), config.audioSpeed);
 
-    add("参考图片", formatReferenceList(input.referenceImages, "图片"));
-    add("参考视频", formatReferenceList(input.referenceVideos, "视频"));
-    add("参考音频", formatReferenceList(input.referenceAudios, "音频"));
-    add("遮罩图片", formatReferenceList(input.mask ? [input.mask] : [], "遮罩"));
+    add(translate("library.tasks.params.referenceImages"), formatReferenceList(input.referenceImages, translate("library.tasks.params.imageItem")));
+    add(translate("library.tasks.params.referenceVideos"), formatReferenceList(input.referenceVideos, translate("library.tasks.params.videoItem")));
+    add(translate("library.tasks.params.referenceAudios"), formatReferenceList(input.referenceAudios, translate("library.tasks.params.audioItem")));
+    add(translate("library.tasks.params.mask"), formatReferenceList(input.mask ? [input.mask] : [], translate("library.tasks.params.maskItem")));
     return fields;
 }
 
@@ -743,25 +748,25 @@ function formatParameterValue(value: unknown) {
 }
 
 function booleanParameter(value: unknown) {
-    if (value === true || value === "true") return "是";
-    if (value === false || value === "false") return "否";
+    if (value === true || value === "true") return translate("library.tasks.params.yes");
+    if (value === false || value === "false") return translate("library.tasks.params.no");
     return undefined;
 }
 
 function formatReferenceList(value: unknown, kind: string) {
-    if (!Array.isArray(value) || !value.length) return "无";
+    if (!Array.isArray(value) || !value.length) return translate("library.tasks.detail.none");
     return value.map((item, index) => {
         const reference = asRecord(item);
-        const name = typeof reference.name === "string" && reference.name.trim() && !/^https?:|^data:|^blob:/i.test(reference.name) ? reference.name.trim() : `${kind}${index + 1}`;
+        const name = typeof reference.name === "string" && reference.name.trim() && !/^https?:|^data:|^blob:/i.test(reference.name) ? reference.name.trim() : translate("library.tasks.params.numberedItem", { kind, index: index + 1 });
         const dimensions = typeof reference.width === "number" && typeof reference.height === "number" ? `${reference.width}×${reference.height}` : "";
         const duration = typeof reference.durationMs === "number" && reference.durationMs > 0 ? `${Math.round(reference.durationMs / 100) / 10}s` : "";
-        const details = [dimensions, duration].filter(Boolean).join("，");
-        return details ? `${name}（${details}）` : name;
-    }).join("、");
+        const details = [dimensions, duration].filter(Boolean).join(translate("library.tasks.params.detailSeparator"));
+        return details ? translate("library.tasks.params.itemWithDetails", { name, details }) : name;
+    }).join(translate("library.tasks.params.listSeparator"));
 }
 
 function formatTaskJson(value?: string) {
-    if (!value) return "无";
+    if (!value) return translate("library.tasks.detail.none");
     try {
         return JSON.stringify(JSON.parse(value), null, 2);
     } catch {

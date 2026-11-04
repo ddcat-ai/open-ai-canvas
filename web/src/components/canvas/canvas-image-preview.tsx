@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image as ImageIcon, LoaderCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { resolveImageUrl } from "@/services/image-storage";
@@ -12,7 +13,9 @@ type CanvasImagePreviewProps = {
     onClose: () => void;
 };
 
-export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClose }: CanvasImagePreviewProps) {
+export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose }: CanvasImagePreviewProps) {
+    const { t } = useTranslation();
+    const alt = altProp ?? t("canvasB.common.image");
     const [resolvedSrc, setResolvedSrc] = useState(() => (storageKey ? peekCachedResourceObjectUrl(storageKey) : src));
     const [loading, setLoading] = useState(Boolean(src || storageKey));
     const [error, setError] = useState(false);
@@ -98,13 +101,13 @@ export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClo
                                 background: "color-mix(in srgb, var(--workspace-surface-strong) 68%, var(--workspace-surface))",
                             }}
                             role="status"
-                            aria-label="图片加载中"
+                            aria-label={t("canvasB.imagePreview.loadingLabel")}
                         >
                             <div className="flex flex-col items-center gap-3" style={{ color: "var(--workspace-text-muted)" }}>
                                 <span className="grid size-11 place-items-center rounded-full border bg-[var(--workspace-surface-strong)]" style={{ borderColor: "var(--workspace-border)" }}>
                                     <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />
                                 </span>
-                                <span className="text-xs font-medium">正在加载高清图片</span>
+                                <span className="text-xs font-medium">{t("canvasB.imagePreview.loadingHd")}</span>
                             </div>
                         </div>
                     ) : null}
@@ -121,8 +124,8 @@ export function CanvasImagePreview({ src = "", storageKey, alt = "图片", onClo
                             <div className="flex flex-col items-center gap-3 text-center">
                                 <ImageIcon className="size-8 opacity-45" />
                                 <div>
-                                    <div className="text-sm font-medium">图片暂时无法显示</div>
-                                    <div className="mt-1 text-xs opacity-70">请关闭预览后重试</div>
+                                    <div className="text-sm font-medium">{t("canvasB.imagePreview.unavailable")}</div>
+                                    <div className="mt-1 text-xs opacity-70">{t("canvasB.imagePreview.retryHint")}</div>
                                 </div>
                             </div>
                         </div>

@@ -1,4 +1,118 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
-
-export const jaJP: DeepStringRecord<typeof zhCN> = {};
+export const jaJP: DeepStringRecord<typeof zhCN> = {
+    timelinePreview: {
+        pause: "プレビューを一時停止",
+        play: "プレビューを再生",
+        noClipHere: "この位置に動画クリップはありません",
+        noClip: "動画クリップなし",
+        noSubtitle: "ここには字幕がありません。字幕クリップを選択すると下で編集できます",
+    },
+    toolbar: {
+        appearance: "キャンバスの外観",
+        appearanceSubtitle: "配色とグリッド",
+        mediaInfo: "メディア情報",
+    },
+    videoPromptTools: {
+        imageCount: "画像 {{count}}",
+        videoCount: "動画 {{count}}",
+        audioCount: "音声 {{count}}",
+        workflowReferenceHint: "接続した画像・動画・音声はワークフローのフィールド対応に従って渡されます",
+        workflowReference: "ワークフロー参照",
+        noMedia: "メディアが未接続です",
+        startFrame: "開始フレーム",
+        endFrame: "終了フレーム",
+        none: "指定しない",
+    },
+    videoSettings: {
+        label: "動画設定",
+    },
+    workspaceHistory: {
+        title: "履歴 · 直近 30 件（Agent を含む）",
+        emptyTitle: "履歴はまだありません",
+        emptyDescription: "生成を開始すると、ここに記録が表示されます。",
+    },
+    workspaceTasks: {
+        title: "タスク",
+        emptyTitle: "タスクはまだありません",
+        emptyDescription: "キャンバスの生成ボタンをクリックして制作を始めましょう。",
+    },
+    nodeList: {
+        title: "キャンバスのノード",
+        searchPlaceholder: "ノード・章・ショット・モデル・タグを検索…",
+        searchLabel: "キャンバスのノードを検索",
+        clearSearch: "検索をクリア",
+        found: "{{count}} 件のノードが見つかりました",
+        listLabel: "キャンバスのノード一覧",
+        emptyTitle: "一致するノードはありません",
+        emptyDescription: "別のキーワードで検索してください。",
+        timeUnknown: "時刻は記録されていません",
+    },
+    taskItem: {
+        waited: "待機 {{duration}}",
+        running: "実行 {{duration}}",
+        cancel: "タスクをキャンセル",
+        stage: "現在の段階",
+        model: "モデル",
+        prompt: "プロンプト",
+        billing: "課金",
+        moreActions: "その他の操作",
+        more: "その他",
+    },
+    live2d: {
+        coreLoadFailed: "Live2D ランタイムを読み込めませんでした。ビルドに Cubism Core が含まれ、静的リソースにアクセスできることを確認してから再試行してください",
+        renderFailed: "Live2D の描画に失敗したため、既定のアバターに戻しました",
+        renderFailedWithDetail: "Live2D の描画に失敗しました：{{detail}}。既定のアバターに戻しました",
+        contextLost: "Live2D の描画コンテキストが失われたため、既定のアバターに戻しました",
+        loadTimeout: "Live2D の読み込みがタイムアウトしました。モデルとネットワークを確認して再試行してください",
+        unsupportedRuntime: "サポートされていない Live2D モデルランタイムです",
+        invalidSize: "Live2D モデルのサイズが無効です",
+        loadFailed: "Live2D を読み込めませんでした",
+        loading: "Live2D モデルを読み込み中",
+    },
+    textLease: {
+        remoteTyping: "別のウィンドウで入力中",
+        typing: "入力中",
+    },
+    resourceRefs: {
+        drawingPreviewReadFailed: "描画プレビューを読み込めませんでした",
+    },
+    previsOnboarding: {
+        label: "プリビズの使い方ガイド",
+        progress: "ステップ {{position}} / {{total}}",
+        skip: "ガイドをスキップ",
+        back: "戻る",
+        finish: "ガイドを終了",
+        next: "次へ",
+    },
+    previsTemplate: {
+        title: "ショットテンプレートを選択",
+    },
+    previsMini: {
+        noShot: "ショット未設定",
+        objects: "オブジェクト",
+        cameras: "カメラ",
+        duration: "長さ",
+    },
+    previsMonitor: {
+        mode: {
+            beauty: "プレビュー",
+            clay: "クレイ",
+            depth: "深度",
+            normal: "法線",
+            pose: "ボーン",
+        },
+        popupBlocked: "ブラウザーがモニターウィンドウをブロックしました。このサイトのポップアップを許可してから再試行してください",
+        windowTitle: "{{brandName}} プリビズ · ショットモニター",
+        tip: "F 全画面 · Esc 全画面を終了",
+        unavailable: "モニター映像は現在利用できません",
+    },
+    previsProps: {
+        title: "小道具ライブラリ",
+        add: "{{name}} を追加（{{size}}）",
+        upload: "ローカルモデルをアップロード (.glb / .gltf)",
+    },
+    previsViewToolbar: {
+        label: "プリビズの表示モード",
+    },
+};

@@ -1,4 +1,5 @@
 import { useUserStore } from "@/stores/use-user-store";
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { CanvasToolPopover } from "./canvas-tool-popover";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ export function CanvasChooseEffectPicker({
     /** 关闭已选特效：从提示词移除 effect 工具标签。 */
     onClear?: () => void;
 }) {
+    const { t } = useTranslation();
     const [internalOpen, setInternalOpen] = useState(false);
     const [searchInput, setSearchInput] = useState("");
     const [searchText, setSearchText] = useState("");
@@ -65,7 +67,7 @@ export function CanvasChooseEffectPicker({
 
     return (
         <CanvasToolPopover
-            label="选择特效"
+            label={t("canvasA.toolPicker.effect.select")}
             open={actualOpen}
             onOpenChange={setOpen}
             trigger={["click"]}
@@ -90,30 +92,41 @@ export function CanvasChooseEffectPicker({
                                         </button>
                                     ))}
                                 </div>
-                                <input className="asset-search min-w-0 flex-1" placeholder="搜索名称/标签" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} aria-label="搜索特效" />
+                                <input
+                                    className="asset-search min-w-0 flex-1"
+                                    placeholder={t("canvasA.toolPicker.searchPlaceholder")}
+                                    value={searchInput}
+                                    onChange={(event) => setSearchInput(event.target.value)}
+                                    aria-label={t("canvasA.toolPicker.effect.search")}
+                                />
                                 {searchInput ? (
-                                    <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" onClick={() => setSearchInput("")} aria-label="清空搜索">
+                                    <button
+                                        type="button"
+                                        className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground"
+                                        onClick={() => setSearchInput("")}
+                                        aria-label={t("canvasA.toolPicker.clearSearch")}
+                                    >
                                         <X className="size-3" />
                                     </button>
                                 ) : null}
                             </div>
                         </div>
-                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-2 overflow-y-auto p-2" role="listbox" aria-label="特效工具">
+                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-2 overflow-y-auto p-2" role="listbox" aria-label={t("canvasA.toolPicker.effect.list")}>
                             {toolsQuery.isPending ? (
                                 <div className="col-span-5 grid h-24 place-items-center text-foreground/40">
                                     <LoaderCircle className="size-4 animate-spin" />
                                 </div>
                             ) : toolsQuery.isError ? (
-                                <div className="col-span-5 grid h-24 place-items-center text-xs text-foreground/40">特效工具加载失败，请稍后重试</div>
+                                <div className="col-span-5 grid h-24 place-items-center text-xs text-foreground/40">{t("canvasA.toolPicker.effect.loadFailed")}</div>
                             ) : tools.length === 0 ? (
-                                <div className="col-span-5 grid h-24 place-items-center text-xs text-foreground/40">{searchText ? "没有匹配的特效" : "暂无特效工具"}</div>
+                                <div className="col-span-5 grid h-24 place-items-center text-xs text-foreground/40">{searchText ? t("canvasA.toolPicker.effect.noMatch") : t("canvasA.toolPicker.effect.empty")}</div>
                             ) : (
                                 tools.map((tool) => <EffectToolCard key={tool.id} tool={tool} selected={tool.id === activeToolId} onSelect={handleSelect} />)
                             )}
                         </div>
                         {toolsQuery.hasNextPage && (
                             <button type="button" disabled={toolsQuery.isFetchingNextPage} onClick={() => void toolsQuery.fetchNextPage()}>
-                                加载更多
+                                {t("canvasA.toolPicker.loadMore")}
                             </button>
                         )}
                     </div>
@@ -124,7 +137,7 @@ export function CanvasChooseEffectPicker({
                 role="button"
                 tabIndex={0}
                 className="canvas-node-composer-header-action canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
-                title={resolvedLabel ? `特效：${resolvedLabel}` : "选择特效"}
+                title={resolvedLabel ? t("canvasA.toolPicker.effect.withLabel", { label: resolvedLabel }) : t("canvasA.toolPicker.effect.select")}
                 aria-expanded={actualOpen}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(true)}
@@ -137,11 +150,11 @@ export function CanvasChooseEffectPicker({
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 <Aperture className="size-3 shrink-0" />
-                <span className="truncate">{resolvedLabel || "特效"}</span>
+                <span className="truncate">{resolvedLabel || t("canvasA.toolPicker.effect.short")}</span>
                 {activeToolId != null && onClear ? (
                     <button
                         type="button"
-                        aria-label="移除特效"
+                        aria-label={t("canvasA.toolPicker.effect.remove")}
                         onClick={(event) => {
                             event.stopPropagation();
                             onClear();

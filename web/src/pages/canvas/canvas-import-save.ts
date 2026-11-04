@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 import { CanvasSyncPendingError } from "@/lib/canvas/sync-recovery";
 import { canvasNodeToAsset, findCanvasNodeAsset } from "@/lib/canvas/canvas-node-asset";
@@ -15,7 +16,7 @@ type CanvasImportPersistence = {
 export type CanvasImportSaveStatus = "synced" | "pending";
 
 export async function applyCanvasImport(nodes: CanvasNodeData[], connections: CanvasConnection[], persistence: CanvasImportPersistence): Promise<CanvasImportSaveStatus> {
-    if (!persistence.canvasId.trim()) throw new Error("请先打开有效画布再导入");
+    if (!persistence.canvasId.trim()) throw new Error(translate("canvasPage.importSave.openCanvasFirst"));
     const current = persistence.read();
     const nodeIds = new Set(current.nodes.map((node) => node.id));
     const connectionIds = new Set(current.connections.map((connection) => connection.id));
@@ -42,14 +43,14 @@ export async function applyCanvasImport(nodes: CanvasNodeData[], connections: Ca
     try {
         await persistence.persistLocal();
     } catch (error) {
-        throw new Error("导入内容仍在当前页面，本地保存未完成，请重试保存", { cause: error });
+        throw new Error(translate("canvasPage.importSave.localSaveFailed"), { cause: error });
     }
     try {
         await persistence.syncRemote();
     } catch (error) {
         // 等待上限不取消后台事务；恢复旧数组会删除已提交节点或等待期间的编辑。
         if (error instanceof CanvasSyncPendingError) return "pending";
-        throw new Error(`导入内容已在本机保存，云端保存未完成：${error instanceof Error ? error.message : "请重试保存"}`, { cause: error });
+        throw new Error(translate("canvasPage.importSave.cloudSaveFailed", { error: error instanceof Error ? error.message : translate("canvasPage.importSave.retrySave") }), { cause: error });
     }
     return "synced";
 }

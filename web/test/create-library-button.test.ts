@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as createZh } from "../src/i18n/messages/areas/create/zh-CN";
+import { zhCN as libraryZh } from "../src/i18n/messages/areas/library/zh-CN";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -49,9 +51,12 @@ describe("creation library button", () => {
         expect(source.slice(uploadStart, uploadEnd)).not.toContain("setAttachments");
         expect(source).toContain("onUpload: uploadLibraryAssets");
         expect(source).not.toContain("onUpload={() => fileInputRef.current?.click()}");
-        expect(source).toContain("上传后保存到素材库");
-        expect(pickerSource).toContain("保存完成后会自动选中");
-        expect(source).toContain("个素材已上传到素材库并自动选中");
+        expect(source).toContain('t("create.page.uploadHintImage")');
+        expect(createZh.page.uploadHintImage).toContain("上传后保存到素材库");
+        expect(pickerSource).toContain('t("library.picker.uploadingHint")');
+        expect(libraryZh.picker.uploadingHint).toBe("保存完成后会自动选中");
+        expect(source).toContain('t("create.page.uploadSucceeded", { count: assetIds.length })');
+        expect(createZh.page.uploadSucceeded).toContain("个素材已上传到素材库并自动选中");
     });
 
     test("视频创作使用同名模型组的全部参考能力开放素材入口", () => {

@@ -1,6 +1,7 @@
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { ChevronDown, ChevronUp, Clock3, Coins, ListTodo, LoaderCircle, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { formatCredits } from "@/constant/credits";
 import { taskBillingLabel } from "@/lib/generation-task-billing";
@@ -13,6 +14,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 // 顶栏是绝对定位浮层，面板必须按调用方传入的 topInset 避让；专注模式隐藏顶栏时传小间距。
 export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(--canvas-topbar-offset)", onCancelTask }: { tasks: GenerationTask[]; align?: "left" | "right"; topInset?: string; onCancelTask?: (task: GenerationTask) => void }) {
+    const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const reducedMotion = useReducedMotion();
@@ -51,7 +53,7 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                         layout
                         className="pointer-events-auto overflow-hidden rounded-[var(--panel-radius)] border backdrop-blur-2xl"
                         style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 24px 72px ${theme.spatial.shadow}` }}
-                        aria-label="当前画布生成任务"
+                        aria-label={t("canvasA.activeTasks.label")}
                     >
                         <motion.button
                             type="button"
@@ -66,9 +68,9 @@ export function CanvasActiveTaskPanel({ tasks, align = "right", topInset = "var(
                                     <ListTodo className="size-4" />
                                 </span>
                                 <span className="min-w-0">
-                                    <span className="block text-sm font-semibold leading-5">生成任务</span>
+                                    <span className="block text-sm font-semibold leading-5">{t("canvasA.activeTasks.title")}</span>
                                     <span className="block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }} aria-live="polite">
-                                        当前画布 · {tasks.length} 个进行中
+                                        {t("canvasA.activeTasks.inProgress", { count: tasks.length })}
                                     </span>
                                 </span>
                             </span>
@@ -131,12 +133,13 @@ function ActiveTaskCard({
     reducedMotion: boolean;
     creditsEnabled: boolean;
 }) {
+    const { t } = useTranslation();
     const showsProgress = generationTaskShowsProgress(task);
     const progress = showsProgress && typeof task.progress === "number" ? Math.max(0, Math.min(100, Math.round(task.progress))) : showsProgress && task.status === "queued" ? 0 : undefined;
     const startedAt = task.startedAt || task.createdAt;
     const elapsedMs = Math.max(0, now - parseTime(startedAt));
-    const durationLabel = `${task.status === "queued" ? "已等待" : "已运行"} ${formatDuration(elapsedMs)}`;
-    const billingLabel = task.billing ? taskBillingLabel(task.billing) : "未计费";
+    const durationLabel = t(task.status === "queued" ? "canvasA.activeTasks.waited" : "canvasA.activeTasks.running", { duration: formatDuration(elapsedMs) });
+    const billingLabel = task.billing ? taskBillingLabel(task.billing) : t("canvasA.activeTasks.unbilled");
     const statusTone = task.status === "running" ? theme.accent.primary : theme.node.muted;
     const transition = reducedMotion ? { duration: 0 } : aceternityMotion.spring.panel;
 
@@ -220,7 +223,7 @@ function ActiveTaskCard({
                         style={{ borderColor: theme.toolbar.border, color: theme.node.muted }}
                     >
                         <div className="flex items-center justify-between gap-2">
-                            <span>当前阶段</span>
+                            <span>{t("canvasA.activeTasks.stage")}</span>
                             <span className="max-w-[200px] truncate text-right" style={{ color: theme.node.text }}>
                                 {generationTaskStageLabel(task)}
                             </span>
@@ -237,7 +240,7 @@ function ActiveTaskCard({
                                 onMouseDown={(event) => event.stopPropagation()}
                             >
                                 <XCircle className="size-3" />
-                                取消任务
+                                {t("canvasA.activeTasks.cancel")}
                             </button>
                         ) : null}
                     </motion.div>

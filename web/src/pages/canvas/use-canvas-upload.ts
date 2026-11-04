@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
@@ -122,11 +123,11 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         };
         return {
             update: (nextDetail: string, step: number) => setUploadStatus((current) => (current?.id === id ? { ...current, detail: nextDetail, step: Math.min(Math.max(step, 0), total) } : current)),
-            done: (nextDetail = "处理完成") => {
+            done: (nextDetail = translate("canvasPage.upload.processDone")) => {
                 setUploadStatus((current) => (current?.id === id ? { ...current, detail: nextDetail, step: total, done: true } : current));
                 dismiss(850);
             },
-            fail: (nextDetail = "处理失败") => {
+            fail: (nextDetail = translate("canvasPage.upload.processFailed")) => {
                 setUploadStatus((current) => (current?.id === id ? { ...current, detail: nextDetail, error: true } : current));
                 dismiss(1800);
             },
@@ -150,7 +151,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 if (domainProjectId && options.refreshProject !== false) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
                 return { persisted: true, syncPending: result.syncPending };
             } catch (error) {
-                message.warning(error instanceof Error ? `媒体已添加到画布，但素材同步失败：${error.message}` : "媒体已添加到画布，但素材同步失败");
+                message.warning(error instanceof Error ? translate("canvasPage.upload.mediaSyncFailedWithReason", { error: error.message }) : translate("canvasPage.upload.mediaSyncFailed"));
                 return { persisted: false, syncPending: false };
             }
         },
@@ -194,7 +195,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             const batch = options.batch;
             const silent = Boolean(batch || options.quiet);
             activeUploadsRef.current.add(id);
-            const progress = silent ? SILENT_UPLOAD_PROGRESS : startUploadStatus(replaceId ? "替换文件" : "上传文件", "读取文件信息", domainProjectId ? 4 : 3);
+            const progress = silent ? SILENT_UPLOAD_PROGRESS : startUploadStatus(replaceId ? translate("canvasPage.upload.replaceFile") : translate("canvasPage.upload.uploadFile"), translate("canvasPage.upload.readingFile"), domainProjectId ? 4 : 3);
             const fileType = uploadNodeType(file);
             // 占位节点首帧就显示本地文件，上传进度叠加在预览之上，不再是一块空白。
             if (fileType === CanvasNodeType.Image || fileType === CanvasNodeType.Video) registerUploadPreview(id, file);
@@ -225,9 +226,9 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     lastPercent = percent;
                     lastPaintAt = now;
                     setNodes((current) => current.map((item) => (item.id === id ? { ...item, metadata: { ...item.metadata, fileUploadProgress: percent } } : item)));
-                    progress.update(percent === 100 ? "文件已传输，正在保存与处理" : `已上传 ${percent}%`, 2);
+                    progress.update(percent === 100 ? translate("canvasPage.upload.transferred") : translate("canvasPage.upload.uploadedPercent", { percent }), 2);
                 };
-                progress.update("上传文件并同步资源", 2);
+                progress.update(translate("canvasPage.upload.uploadingAndSyncing"), 2);
                 let metadata: CanvasNodeData["metadata"];
                 if (placeholder.type === CanvasNodeType.Image) {
                     const naturalSize = { width: placeholder.metadata?.naturalWidth || 0, height: placeholder.metadata?.naturalHeight || 0 };
@@ -242,10 +243,10 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     const media = await uploadMediaFile(file, placeholder.type === CanvasNodeType.Video ? "video" : "audio", onProgress);
                     metadata = placeholder.type === CanvasNodeType.Video ? videoMetadata(media) : audioMetadata(media);
                 }
-                progress.update("更新画布节点", 3);
+                progress.update(translate("canvasPage.upload.updatingNode"), 3);
                 const currentNode = nodesRef.current.find((item) => item.id === id);
                 if (!currentNode) {
-                    progress.done("上传完成，画布占位已移除");
+                    progress.done(translate("canvasPage.upload.placeholderRemoved"));
                     return null;
                 }
                 const uploadedNode: CanvasNodeData = {
@@ -290,18 +291,26 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 // 替换文件保留旧媒体为历史版本，可在版本面板切回。
                 const node = replaceId ? recordReplacedMediaVersion(original, uploadedNode, "upload") : uploadedNode;
                 setNodes((current) => current.map((item) => (item.id === id ? { ...item, type: node.type, metadata: node.metadata } : item)));
-                if (domainProjectId) progress.update("写入项目资产", 4);
+                if (domainProjectId) progress.update(translate("canvasPage.upload.writingProjectAssets"), 4);
                 const persisted = await persistMediaNode(node, { refreshProject: !batch });
                 const localOnly = metadata.storageKey && !resourceIdFromStorageKey(metadata.storageKey);
-                const pendingLabel = domainProjectId ? "项目资产正在自动同步" : "云端素材正在自动同步";
-                progress.done(localOnly ? "已保存在本机，尚未上传到服务器" : persisted.syncPending ? `文件已添加到画布，${pendingLabel}` : persisted.persisted ? "文件已添加到画布" : "文件已添加，项目资产待重试");
+                const pendingLabel = domainProjectId ? translate("canvasPage.upload.projectAssetsSyncing") : translate("canvasPage.upload.cloudAssetsSyncing");
+                progress.done(
+                    localOnly
+                        ? translate("canvasPage.upload.savedLocalOnly")
+                        : persisted.syncPending
+                          ? translate("canvasPage.upload.addedSyncing", { status: pendingLabel })
+                          : persisted.persisted
+                            ? translate("canvasPage.upload.added")
+                            : translate("canvasPage.upload.addedProjectRetry"),
+                );
                 if (localOnly) {
                     if (batch) batch.onLocalOnly();
-                    else if (!options.quiet) message.warning("文件已保存在本机，尚未上传到服务器");
+                    else if (!options.quiet) message.warning(translate("canvasPage.upload.fileSavedLocalOnly"));
                 }
                 return id;
             } catch (error) {
-                const details = error instanceof Error ? error.message : "文件上传失败";
+                const details = error instanceof Error ? error.message : translate("canvasPage.upload.uploadFailed");
                 setNodes((current) =>
                     current.map((item) =>
                         item.id !== id
@@ -335,7 +344,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             try {
                 const content = asset.data.storageKey ? await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl || asset.coverUrl) : asset.data.dataUrl || asset.coverUrl;
                 if (!content) {
-                    message.error("素材图片不可用");
+                    message.error(translate("canvasPage.upload.assetImageUnavailable"));
                     return null;
                 }
                 const size = fitImageNodeSize(asset.data.width || NODE_DEFAULT_SIZE[CanvasNodeType.Image].width, asset.data.height || NODE_DEFAULT_SIZE[CanvasNodeType.Image].height);
@@ -344,7 +353,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 const node: CanvasNodeData = {
                     id,
                     type: CanvasNodeType.Image,
-                    title: asset.title || "素材图片",
+                    title: asset.title || translate("canvasPage.upload.assetImage"),
                     position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
                     width: size.width,
                     height: size.height,
@@ -365,7 +374,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 if (!options.quiet) selectInsertedNode(id, "close");
                 return id;
             } catch (error) {
-                message.error(error instanceof Error ? error.message : "素材图片读取失败");
+                message.error(error instanceof Error ? error.message : translate("canvasPage.upload.assetImageReadFailed"));
                 return null;
             }
         },
@@ -378,7 +387,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             if (!trimmed) return false;
             const node = {
                 ...createCanvasNode(CanvasNodeType.Text, position || getCanvasCenter(), { content: trimmed, status: NODE_STATUS_SUCCESS }),
-                title: trimmed.slice(0, 32) || "剪切板文本",
+                title: trimmed.slice(0, 32) || translate("canvasPage.upload.clipboardText"),
             };
             setNodes((current) => [...current, node]);
             selectInsertedNode(node.id, "open");
@@ -395,7 +404,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 try {
                     sourceText = (await getProjectUnit(chapter.projectId, chapter.id)).unit.sourceText;
                 } catch (error) {
-                    message.error(error instanceof Error ? `章节正文读取失败：${error.message}` : "章节正文读取失败");
+                    message.error(error instanceof Error ? translate("canvasPage.upload.chapterReadFailedWithReason", { error: error.message }) : translate("canvasPage.upload.chapterReadFailed"));
                     return;
                 }
             }
@@ -405,19 +414,19 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 prompt: content,
                 status: NODE_STATUS_SUCCESS,
                 workflowKind: "free",
-                workflowTitle: "项目章节",
-                workflowDescription: `第 ${chapter.position + 1} 章`,
+                workflowTitle: translate("canvasPage.upload.projectChapter"),
+                workflowDescription: translate("canvasPage.upload.chapterNumber", { index: chapter.position + 1 }),
                 chapterId: chapter.id,
                 chapterTitle: chapter.title,
                 fontSize: 14,
             });
-            node.title = `章节 · ${chapter.title}`;
+            node.title = translate("canvasPage.upload.chapterTitle", { title: chapter.title });
             node.width = 460;
             node.height = 280;
             setNodes((current) => [...current, node]);
             selectInsertedNode(node.id, "preserve");
             setContextMenu(null);
-            message.success(`已添加“${chapter.title}”`);
+            message.success(translate("canvasPage.upload.chapterAdded", { title: chapter.title }));
         },
         [getCanvasCenter, message, selectInsertedNode, setContextMenu, setNodes],
     );
@@ -456,7 +465,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         async (files: File[]) => {
             const supportedFiles = files.filter((file) => uploadNodeType(file));
             if (!supportedFiles.length) {
-                message.warning("请选择图片、视频、音频或 TXT / Markdown 文件");
+                message.warning(translate("canvasPage.upload.selectSupportedFiles"));
                 return false;
             }
             const center = uploadTargetRef.current?.position || getCanvasCenter();
@@ -468,7 +477,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 y: center.y + Math.floor(index / columns) * BATCH_UPLOAD_ROW_GAP,
             });
             // 单个文件沿用逐步进度；多个文件改为有限并发，整体进度按已完成数量展示。
-            const progress = total > 1 ? startUploadStatus(`上传 ${total} 个文件`, `已完成 0/${total}`, total, 0) : null;
+            const progress = total > 1 ? startUploadStatus(translate("canvasPage.upload.uploadingFiles", { count: total }), translate("canvasPage.upload.completedCount", { done: 0, total }), total, 0) : null;
             const results: Array<string | null> = new Array(total).fill(null);
             let nextIndex = 0;
             let settled = 0;
@@ -486,24 +495,24 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     nextIndex += 1;
                     results[index] = await createFileNode(supportedFiles[index], positionAt(index), undefined, { batch });
                     settled += 1;
-                    progress?.update(`已完成 ${settled}/${total}`, settled);
+                    progress?.update(translate("canvasPage.upload.completedCount", { done: settled, total }), settled);
                 }
             };
             await Promise.all(Array.from({ length: Math.min(BATCH_UPLOAD_CONCURRENCY, total) }, worker));
             const createdIds = results.filter((id): id is string => Boolean(id));
             if (batch && domainProjectId && createdIds.length) void queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
             if (!createdIds.length) {
-                progress?.fail("文件均未上传成功，请查看节点上的失败原因");
+                progress?.fail(translate("canvasPage.upload.allFailed"));
                 return false;
             }
             setSelectedNodeIds(new Set(createdIds));
             setSelectedConnectionId(null);
             setDialogNodeId(null);
             const failedCount = total - createdIds.length;
-            progress?.done(failedCount ? `已添加 ${createdIds.length} 个，${failedCount} 个失败` : `已添加 ${createdIds.length} 个文件`);
-            if (failedCount) message.warning(`已添加 ${createdIds.length} 个文件，${failedCount} 个上传失败`);
-            else if (localOnlyCount) message.warning(`已添加 ${createdIds.length} 个文件，其中 ${localOnlyCount} 个暂存在本机，稍后自动同步`);
-            else message.success(`已添加 ${createdIds.length} 个文件到画布`);
+            progress?.done(failedCount ? translate("canvasPage.upload.addedPartial", { count: createdIds.length, failed: failedCount }) : translate("canvasPage.upload.addedFiles", { count: createdIds.length }));
+            if (failedCount) message.warning(translate("canvasPage.upload.addedFilesPartial", { count: createdIds.length, failed: failedCount }));
+            else if (localOnlyCount) message.warning(translate("canvasPage.upload.addedFilesLocal", { count: createdIds.length, local: localOnlyCount }));
+            else message.success(translate("canvasPage.upload.addedFilesToCanvas", { count: createdIds.length }));
             return true;
         },
         [createFileNode, domainProjectId, getCanvasCenter, message, queryClient, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds, startUploadStatus],
@@ -514,7 +523,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         async (files: File[]): Promise<TimelineDirectMedia[]> => {
             const supportedFiles = files.filter((file) => file.type.startsWith("video/") || isAudioFile(file));
             if (!supportedFiles.length) {
-                message.warning("请选择视频、MP3 或 WAV 文件");
+                message.warning(translate("canvasPage.upload.selectTimelineFiles"));
                 return [];
             }
             const created: TimelineDirectMedia[] = [];
@@ -552,10 +561,10 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                         created.push(media);
                     }
                 } catch (error) {
-                    message.error(error instanceof Error ? `素材上传失败：${error.message}` : "素材上传失败");
+                    message.error(error instanceof Error ? translate("canvasPage.upload.assetUploadFailedWithReason", { error: error.message }) : translate("canvasPage.upload.assetUploadFailed"));
                 }
             }
-            if (created.length) message.success(`已上传 ${created.length} 个素材到时间线`);
+            if (created.length) message.success(translate("canvasPage.upload.uploadedToTimeline", { count: created.length }));
             return created;
         },
         [message, persistTimelineMedia],
@@ -565,11 +574,11 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     // 复用上传/持久化/选中逻辑，新节点可继续编辑字幕与样式。
     const createVideoNodeFromBlob = useCallback(
         async (blob: Blob, title: string): Promise<CanvasNodeData | null> => {
-            const progress = startUploadStatus("合成视频片段", "上传合成结果", domainProjectId ? 4 : 3);
+            const progress = startUploadStatus(translate("canvasPage.upload.composeClip"), translate("canvasPage.upload.uploadingComposite"), domainProjectId ? 4 : 3);
             try {
-                progress.update("上传到服务器并同步资源", 2);
+                progress.update(translate("canvasPage.upload.uploadingToServer"), 2);
                 const video = await uploadMediaFile(blob, "video");
-                progress.update("更新画布节点", 3);
+                progress.update(translate("canvasPage.upload.updatingNode"), 3);
                 const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
                 const center = getCanvasCenter();
                 const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -584,20 +593,20 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 } satisfies CanvasNodeData;
                 setNodes((current) => [...current, node]);
                 selectInsertedNode(id, "preserve");
-                if (domainProjectId) progress.update("写入项目资产", 4);
+                if (domainProjectId) progress.update(translate("canvasPage.upload.writingProjectAssets"), 4);
                 const persisted = await persistMediaNode(node);
                 progress.done(
                     persisted.syncPending
                         ? domainProjectId
-                            ? "已生成新视频片段，本地素材已保存，项目资产正在自动同步"
-                            : "已生成新视频片段，本地素材已保存，云端素材正在自动同步"
+                            ? translate("canvasPage.upload.clipSavedProjectSync")
+                            : translate("canvasPage.upload.clipSavedAssetSync")
                         : persisted.persisted
-                          ? "已生成新视频片段并加入项目资产"
-                          : "已生成新视频片段，项目资产待重试",
+                          ? translate("canvasPage.upload.clipAddedToProject")
+                          : translate("canvasPage.upload.clipProjectRetry"),
                 );
                 return node;
             } catch (error) {
-                const details = error instanceof Error ? error.message : "合成视频片段失败";
+                const details = error instanceof Error ? error.message : translate("canvasPage.upload.composeClipFailed");
                 progress.fail(details);
                 message.error(details);
                 return null;
@@ -626,11 +635,11 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             const pasteImageFile = async (file: File) => {
                 const selected = nodesRef.current.filter((node) => selectedNodeIdsRef.current.has(node.id));
                 if (selected.length === 1 && selected[0].type === CanvasNodeType.Image) {
-                    if (await replaceNodeMedia(selected[0].id, file)) message.success("已用剪切板图片替换，可撤销恢复");
+                    if (await replaceNodeMedia(selected[0].id, file)) message.success(translate("canvasPage.upload.replacedFromClipboard"));
                     return true;
                 }
                 const inserted = await createFileNode(file, position || getCanvasCenter());
-                if (inserted) message.success("已从剪切板添加图片");
+                if (inserted) message.success(translate("canvasPage.upload.imageFromClipboard"));
                 return Boolean(inserted);
             };
 
@@ -673,7 +682,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 const text = eventText || (navigator.clipboard?.readText ? await navigator.clipboard.readText() : "");
                 if (isNodeMarker(text)) return false;
                 if (createTextNodeFromClipboard(text, position)) {
-                    message.success("已从剪切板添加文本");
+                    message.success(translate("canvasPage.upload.textFromClipboard"));
                     return true;
                 }
             } catch {
@@ -694,7 +703,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     const targetNode = nodesRef.current.find((node) => node.id === target.nodeId);
                     const compatible = targetNode && (targetNode.type === uploadNodeType(file) || ![CanvasNodeType.Image, CanvasNodeType.Video, CanvasNodeType.Audio, CanvasNodeType.Text].includes(targetNode.type as CanvasNodeType));
                     if (!compatible) {
-                        message.warning("请选择与当前节点相同类型的媒体文件");
+                        message.warning(translate("canvasPage.upload.sameTypeRequired"));
                         return;
                     }
                     await replaceNodeMedia(target.nodeId, file);
@@ -732,7 +741,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             if (imageAssetId) {
                 const asset = useAssetStore.getState().assets.find((item): item is ImageAsset => item.kind === "image" && item.id === imageAssetId);
                 if (!asset) {
-                    message.warning("素材不存在");
+                    message.warning(translate("canvasPage.upload.assetMissing"));
                     return;
                 }
                 void createImageAssetNode(asset, screenToCanvas(event.clientX, event.clientY));
@@ -752,7 +761,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             });
             if (target) {
                 void replaceNodeMedia(target.id, file).then((replaced) => {
-                    if (replaced) message.success("媒体已替换，可撤销恢复");
+                    if (replaced) message.success(translate("canvasPage.upload.mediaReplaced"));
                 });
                 return;
             }
@@ -806,7 +815,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     const pasteAssistantImage = useCallback(
         (file: File) => {
             void createFileNode(file, getCanvasCenter()).then((inserted) => {
-                if (inserted) message.success("已从剪切板添加图片");
+                if (inserted) message.success(translate("canvasPage.upload.imageFromClipboard"));
             });
         },
         [createFileNode, getCanvasCenter, message],
@@ -947,7 +956,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     const handleAssetsInsert = useCallback(
         async (payloads: InsertAssetPayload[]): Promise<CanvasNodeData[]> => {
             const origin = assetInsertPositionRef.current || getCanvasCenter();
-            return insertAssetPayloads(payloads, origin, `已插入 ${payloads.length} 项素材`, "素材插入失败");
+            return insertAssetPayloads(payloads, origin, translate("canvasPage.upload.assetsInserted", { count: payloads.length }), translate("canvasPage.upload.assetsInsertFailed"));
         },
         [getCanvasCenter, insertAssetPayloads],
     );
@@ -955,7 +964,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     const handleProjectAssetsInsert = useCallback(
         async (payloads: InsertAssetPayload[], position?: Position): Promise<CanvasNodeData[]> => {
             const origin = position || getCanvasCenter();
-            return insertAssetPayloads(payloads, origin, `已引入 ${payloads.length} 项项目资产`, "项目资产引入失败");
+            return insertAssetPayloads(payloads, origin, translate("canvasPage.upload.projectAssetsInserted", { count: payloads.length }), translate("canvasPage.upload.projectAssetsInsertFailed"));
         },
         [getCanvasCenter, insertAssetPayloads],
     );

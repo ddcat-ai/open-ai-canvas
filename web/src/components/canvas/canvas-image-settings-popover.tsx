@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
@@ -18,6 +19,7 @@ type CanvasImageSettingsPopoverProps = {
 };
 
 export function CanvasImageSettingsPopover({ config, onConfigChange, showCount = true, onMissingConfig: _unused, ...popover }: CanvasImageSettingsPopoverProps) {
+    const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image;
     if (!profile) return null;
@@ -25,11 +27,11 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, showCount =
     const parts: string[] = [];
     if (profile.size.parameter !== "none") parts.push(imageSizeLabel(current.size));
     if (profile.quality.supported) parts.push(imageQualityLabel(current.quality));
-    if (showCount && profile.maxOutputs > 1) parts.push(`${current.count} 张`);
-    if (profile.transparentBackground.supported && current.transparentBackground === "true") parts.push("透明");
+    if (showCount && profile.maxOutputs > 1) parts.push(t("canvasB.imageSettings.count", { count: current.count }));
+    if (profile.transparentBackground.supported && current.transparentBackground === "true") parts.push(t("canvasB.imageSettings.transparent"));
     if (!parts.length && !profile.transparentBackground.supported && !profile.parameters?.some((p) => p.enabled !== false)) return null;
     return (
-        <CanvasSettingsPopover {...popover} label="图像设置" summary={parts.join(" · ") || "背景"} width={420}>
+        <CanvasSettingsPopover {...popover} label={t("canvasB.imageSettings.label")} summary={parts.join(" · ") || t("canvasB.imageSettings.background")} width={420}>
             <ImageSettingsPanel config={config} onConfigChange={onConfigChange} theme={theme} showCount={showCount} quickCount={3} className="space-y-3" />
         </CanvasSettingsPopover>
     );

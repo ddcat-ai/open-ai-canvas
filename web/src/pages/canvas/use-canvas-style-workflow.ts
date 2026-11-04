@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
@@ -38,7 +39,7 @@ export function useCanvasStyleWorkflow({ canvasId, domainProjectId, nodesRef, se
                 prompt: preset.prompt,
                 status: "success",
                 workflowKind: "styleboard",
-                workflowTitle: "项目画风",
+                workflowTitle: translate("canvasPage.style.projectStyle"),
                 workflowDescription: preset.description,
                 stylePresetId: preset.id,
                 styleProfileJson: profileJson,
@@ -46,11 +47,11 @@ export function useCanvasStyleWorkflow({ canvasId, domainProjectId, nodesRef, se
             };
             let styleNode: CanvasNodeData;
             if (current) {
-                styleNode = { ...current, title: `画风 · ${preset.title}`, metadata: { ...current.metadata, ...metadata } };
+                styleNode = { ...current, title: translate("canvasPage.style.nodeTitle", { title: preset.title }), metadata: { ...current.metadata, ...metadata } };
                 nodesRef.current = nodesRef.current.map((node) => (node.id === current.id ? styleNode : node));
             } else {
                 styleNode = createCanvasNode(CanvasNodeType.Text, getCanvasCenter(), metadata);
-                styleNode.title = `画风 · ${preset.title}`;
+                styleNode.title = translate("canvasPage.style.nodeTitle", { title: preset.title });
                 styleNode.width = 420;
                 styleNode.height = 240;
                 nodesRef.current = [...nodesRef.current, styleNode];
@@ -62,20 +63,20 @@ export function useCanvasStyleWorkflow({ canvasId, domainProjectId, nodesRef, se
             setSelectedConnectionId(null);
             setDialogNodeId(null);
             setStylePickerOpen(false);
-            message.success(`已应用“${preset.title}”画风`);
+            message.success(translate("canvasPage.style.applied", { title: preset.title }));
         },
         [getCanvasCenter, message, nodesRef, selectedNodeIdsRef, setDialogNodeId, setNodes, setSelectedConnectionId, setSelectedNodeIds, setStylePickerOpen],
     );
 
     const persistStyleMutation = useMutation({
         mutationFn: ({ preset, profileJson }: { preset: CanvasStylePreset; profileJson: string }) => {
-            if (!domainProjectId) throw new Error("画布尚未关联项目");
+            if (!domainProjectId) throw new Error(translate("canvasPage.style.notLinked"));
             return updateDomainProject(domainProjectId, { stylePresetId: preset.id, styleProfileJson: profileJson });
         },
     });
 
     const applyCanvasStyleAsync = useCallback(async (preset: CanvasStylePreset) => {
-        if (applyingRef.current) throw new Error("画风正在保存，请稍后重试");
+        if (applyingRef.current) throw new Error(translate("canvasPage.style.saving"));
         const scope = getActiveUserScope();
         applyingRef.current = true;
         try {
@@ -84,14 +85,14 @@ export function useCanvasStyleWorkflow({ canvasId, domainProjectId, nodesRef, se
                 await persistStyleMutation.mutateAsync({ preset, profileJson });
                 void queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
             }
-            if (!liveContext.current.mounted || liveContext.current.canvasId !== canvasId || liveContext.current.domainProjectId !== domainProjectId || getActiveUserScope() !== scope) throw new Error("页面或账号已变化，未向当前画布应用画风；如项目保存已完成，请回原项目查看");
+            if (!liveContext.current.mounted || liveContext.current.canvasId !== canvasId || liveContext.current.domainProjectId !== domainProjectId || getActiveUserScope() !== scope) throw new Error(translate("canvasPage.style.contextChanged"));
             applyCanvasStyle(preset, profileJson);
         } finally { applyingRef.current = false; }
     }, [canvasId, domainProjectId, persistStyleMutation.mutateAsync, queryClient, applyCanvasStyle]);
 
     const selectCanvasStyle = useCallback(
         (preset: CanvasStylePreset) => {
-            void applyCanvasStyleAsync(preset).catch((error) => message.error(error instanceof Error ? error.message : "项目画风保存失败"));
+            void applyCanvasStyleAsync(preset).catch((error) => message.error(error instanceof Error ? error.message : translate("canvasPage.style.saveFailed")));
         },
         [applyCanvasStyleAsync, message],
     );

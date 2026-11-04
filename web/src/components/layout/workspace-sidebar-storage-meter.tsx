@@ -1,5 +1,6 @@
 import { HardDrive } from "lucide-react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { accountStorageMeter, accountStorageStateMessage } from "@/lib/account-storage-usage";
@@ -16,19 +17,28 @@ function StorageGlyph() {
 }
 
 export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean }) {
+    const { t } = useTranslation();
     const query = useAccountFileStorageUsage();
     const meter = accountStorageMeter(query.data);
-    const usedText = query.data ? `已用 ${meter.usedLabel}` : query.isError ? "容量暂不可用" : "正在统计容量";
-    const remainingText = query.data ? (meter.state === "read_only" ? "账号只读" : meter.state === "grace" ? "已超额" : meter.full ? "容量已满" : `剩余 ${meter.remainingLabel}`) : "";
-    const totalText = query.data ? `共 ${meter.totalLabel}` : "";
-    const summary = query.data ? `${usedText}，${remainingText}，${totalText}` : usedText;
+    const usedText = query.data ? t("account.layout.storage.used", { size: meter.usedLabel }) : query.isError ? t("account.layout.storage.unavailable") : t("account.layout.storage.counting");
+    const remainingText = query.data
+        ? meter.state === "read_only"
+            ? t("account.layout.storage.readOnly")
+            : meter.state === "grace"
+              ? t("account.layout.storage.over")
+              : meter.full
+                ? t("account.layout.storage.full")
+                : t("account.layout.storage.remaining", { size: meter.remainingLabel })
+        : "";
+    const totalText = query.data ? t("account.layout.storage.total", { size: meter.totalLabel }) : "";
+    const summary = query.data ? t("account.layout.storage.summary", { used: usedText, remaining: remainingText, total: totalText }) : usedText;
     const stateMessage = accountStorageStateMessage(meter);
 
     const track = (
         <span
             className="app-workspace-sidebar-storage-track"
             role="progressbar"
-            aria-label="账号文件容量使用进度"
+            aria-label={t("account.layout.storage.progress")}
             aria-valuemin={0}
             aria-valuemax={query.data?.totalBytes ?? 0}
             aria-valuenow={query.data ? Math.min(query.data.usedBytes, query.data.totalBytes) : 0}
@@ -42,15 +52,15 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
         return (
             <div className={cn("app-workspace-sidebar-storage is-error", collapsed && "is-collapsed")}>
                 {collapsed ? (
-                    <button type="button" title="容量统计暂时不可用，点击重试" aria-label="重试加载账号容量" onClick={() => void query.refetch()}>
+                    <button type="button" title={t("account.layout.storage.retryTitle")} aria-label={t("account.layout.storage.retryLabel")} onClick={() => void query.refetch()}>
                         <StorageGlyph />
                     </button>
                 ) : (
                     <>
                         <StorageGlyph />
-                        <span>容量暂不可用</span>
+                        <span>{t("account.layout.storage.unavailable")}</span>
                         <button type="button" onClick={() => void query.refetch()}>
-                            重试
+                            {t("common.retry")}
                         </button>
                     </>
                 )}
@@ -69,8 +79,8 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
                 query.data?.usedBytes ? "has-usage" : null,
                 query.isPending && !query.data && "is-pending",
             )}
-            title={`${summary}。包含素材文件和 Agent 会话附件${stateMessage ? `。${stateMessage}` : ""}`}
-            aria-label={`账号容量，${summary}`}
+            title={stateMessage ? t("account.layout.storage.titleWithState", { summary, state: stateMessage }) : t("account.layout.storage.title", { summary })}
+            aria-label={t("account.layout.storage.label", { summary })}
             aria-busy={query.isPending && !query.data}
             onFocus={() => preloadWorkspaceRoute("/assets")}
             onPointerEnter={() => preloadWorkspaceRoute("/assets")}

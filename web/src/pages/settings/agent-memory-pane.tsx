@@ -1,6 +1,7 @@
 import { App, Button, Input } from "antd";
 import { Check, Download, History, Pencil, Plus, Trash2, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { WorkspaceErrorState, WorkspaceState } from "@/components/layout/workspace-state";
 import { StatusBadge } from "@/components/ui/base/badges";
@@ -25,11 +26,13 @@ import {
     type AgentMemorySection,
 } from "@/services/api/agent-memory";
 import { exportAgentMemories } from "@/services/api/agent-memories";
+import { currentLocale, translate } from "@/i18n";
 
 const ENTRY_MAX_CHARS = 400;
 
-const ACTOR_LABELS: Record<string, string> = { agent: "Agent", user: "你", restore: "撤销", seed: "导入" };
-const CHANGE_LABELS: Record<string, string> = { add: "新增", replace: "改写", remove: "删除" };
+/** 修改者与修改类型的文案键，未知值原样显示。 */
+const ACTOR_KEYS: Record<string, string> = { agent: "account.settings.memory.actors.agent", user: "account.settings.memory.actors.user", restore: "account.settings.memory.actors.restore", seed: "account.settings.memory.actors.seed" };
+const CHANGE_KEYS: Record<string, string> = { add: "account.settings.memory.changes.add", replace: "account.settings.memory.changes.replace", remove: "account.settings.memory.changes.remove" };
 
 function sectionLabel(section: string) {
     return AGENT_MEMORY_SECTIONS.find((item) => item.key === section)?.label || section;
@@ -45,9 +48,7 @@ function RevisionChanges({ revision }: { revision: AgentMemoryDocRevision }) {
         <ul className="mt-1 space-y-0.5 text-caption leading-5 text-muted-foreground">
             {revision.changes.slice(0, 6).map((change, index) => (
                 <li key={`${revision.id}-${index}`}>
-                    <span className="text-foreground/60">
-                        {CHANGE_LABELS[change.kind] || change.kind} · {sectionLabel(change.section)}：
-                    </span>
+                    <span className="text-foreground/60">{translate("account.settings.memory.changeLine", { kind: CHANGE_KEYS[change.kind] ? translate(CHANGE_KEYS[change.kind]) : change.kind, section: sectionLabel(change.section) })}</span>
                     {change.kind === "replace" ? `${change.before} → ${change.after}` : change.after || change.before}
                 </li>
             ))}
@@ -57,6 +58,7 @@ function RevisionChanges({ revision }: { revision: AgentMemoryDocRevision }) {
 
 /** 编辑记忆：整份列表一起保存（服务端按 revision 防并发覆盖）。 */
 function MemoryEditor({ open, doc, onClose, onSaved }: { open: boolean; doc: AgentMemoryDocument | null; onClose: () => void; onSaved: (next: AgentMemoryDocument) => void }) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
     const [draft, setDraft] = useState<AgentMemoryEntryInput[]>([]);
     const [saving, setSaving] = useState(false);
@@ -73,26 +75,26 @@ function MemoryEditor({ open, doc, onClose, onSaved }: { open: boolean; doc: Age
         if (!doc) return;
         const entries = draft.map((entry) => ({ ...entry, text: entry.text.trim() })).filter((entry) => entry.text);
         if (used > capacity) {
-            message.warning(`记忆最多 ${capacity} 字，请先删减`);
+            message.warning(t("account.settings.memory.overCapacity", { capacity }));
             return;
         }
         setSaving(true);
         try {
             onSaved(await saveAgentMemory(doc.revision, entries));
-            message.success("已保存，下一条消息起生效");
+            message.success(t("account.settings.memory.saved"));
             onClose();
         } catch (error) {
-            message.error(errorText(error, "保存失败"));
+            message.error(errorText(error, t("account.settings.memory.saveFailed")));
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <AppModal open={open} title="编辑长期记忆" okText="保存" confirmLoading={saving} onOk={() => void save()} onCancel={onClose} width={640}>
+        <AppModal open={open} title={t("account.settings.memory.editTitle")} okText={t("common.save")} confirmLoading={saving} onOk={() => void save()} onCancel={onClose} width={640}>
             <div className="space-y-3 pt-2">
                 <p className={`text-caption ${used > capacity ? "text-status-error" : "text-muted-foreground"}`}>
-                    已用 {used.toLocaleString()} / {capacity.toLocaleString()} 字。每条一两句话，只写跨会话仍成立的内容；链接、节点或任务 ID、密钥会被拒绝。
+                    {t("account.settings.memory.editorHint", { used: used.toLocaleString(currentLocale()), capacity: capacity.toLocaleString(currentLocale()) })}
                 </p>
                 {draft.map((entry, index) => (
                     <div key={entry.id || `new-${index}`} className="flex items-start gap-2">
@@ -101,15 +103,22 @@ function MemoryEditor({ open, doc, onClose, onSaved }: { open: boolean; doc: Age
                                 value={entry.section}
                                 options={AGENT_MEMORY_SECTIONS.map((section) => ({ value: section.key, label: section.label }))}
                                 onChange={(value) => update(index, { section: value as AgentMemorySection })}
-                                ariaLabel="记忆分区"
+                                ariaLabel={t("account.settings.memory.section")}
                             />
                         </div>
-                        <Input.TextArea className="flex-1" autoSize={{ minRows: 1, maxRows: 4 }} maxLength={ENTRY_MAX_CHARS} value={entry.text} onChange={(event) => update(index, { text: event.target.value })} aria-label={`第 ${index + 1} 条记忆`} />
-                        <IconButton variant="danger" size="sm" icon={Trash2} aria-label={`删除第 ${index + 1} 条记忆`} onClick={() => setDraft((current) => current.filter((_, at) => at !== index))} />
+                        <Input.TextArea
+                            className="flex-1"
+                            autoSize={{ minRows: 1, maxRows: 4 }}
+                            maxLength={ENTRY_MAX_CHARS}
+                            value={entry.text}
+                            onChange={(event) => update(index, { text: event.target.value })}
+                            aria-label={t("account.settings.memory.entryLabel", { index: index + 1 })}
+                        />
+                        <IconButton variant="danger" size="sm" icon={Trash2} aria-label={t("account.settings.memory.deleteEntryLabel", { index: index + 1 })} onClick={() => setDraft((current) => current.filter((_, at) => at !== index))} />
                     </div>
                 ))}
                 <Button icon={<Plus className="size-4" />} onClick={() => setDraft((current) => [...current, { section: "user", text: "" }])}>
-                    添加一条
+                    {t("account.settings.memory.addOne")}
                 </Button>
             </div>
         </AppModal>
@@ -118,6 +127,7 @@ function MemoryEditor({ open, doc, onClose, onSaved }: { open: boolean; doc: Age
 
 /** 修改历史：Agent、你和导入的每次修改都留记录，已生效且之后没被改过的可以撤销。 */
 function MemoryHistory({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: (next: AgentMemoryDocument) => void }) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
     const [revisions, setRevisions] = useState<AgentMemoryDocRevision[]>([]);
     const [loading, setLoading] = useState(false);
@@ -130,12 +140,12 @@ function MemoryHistory({ open, onClose, onChanged }: { open: boolean; onClose: (
                 const data = await listAgentMemoryRevisions(undefined, 50, signal);
                 setRevisions(data.revisions || []);
             } catch (error) {
-                if (!signal?.aborted) message.error(errorText(error, "读取修改历史失败"));
+                if (!signal?.aborted) message.error(errorText(error, t("account.settings.memory.historyFailed")));
             } finally {
                 if (!signal?.aborted) setLoading(false);
             }
         },
-        [message],
+        [message, t],
     );
 
     useEffect(() => {
@@ -149,37 +159,37 @@ function MemoryHistory({ open, onClose, onChanged }: { open: boolean; onClose: (
         setBusyId(revision.id);
         try {
             onChanged(await undoAgentMemoryRevision(revision.id));
-            message.success("已撤销");
+            message.success(t("account.settings.memory.undone"));
             await load();
         } catch (error) {
-            message.error(errorText(error, "撤销失败"));
+            message.error(errorText(error, t("account.settings.memory.undoFailed")));
         } finally {
             setBusyId(null);
         }
     };
 
     return (
-        <AppModal open={open} title="记忆修改历史" footer={null} onCancel={onClose} width={640}>
+        <AppModal open={open} title={t("account.settings.memory.historyTitle")} footer={null} onCancel={onClose} width={640}>
             <div className="thin-scrollbar max-h-[60vh] space-y-2 overflow-y-auto pt-2">
                 {loading && !revisions.length ? <div className="h-16 animate-pulse rounded-2xl bg-surface-secondary" aria-busy="true" /> : null}
-                {!loading && !revisions.length ? <p className="py-6 text-center text-caption text-muted-foreground">还没有修改记录</p> : null}
+                {!loading && !revisions.length ? <p className="py-6 text-center text-caption text-muted-foreground">{t("account.settings.memory.historyEmpty")}</p> : null}
                 {revisions.map((revision) => (
                     <article key={revision.id} className="rounded-2xl bg-surface-secondary/80 px-4 py-3">
                         <div className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                                    <span className="font-medium text-foreground">{ACTOR_LABELS[revision.actor] || revision.actor}</span>
-                                    {revision.status === "pending" ? <StatusBadge size="sm" tone="warning" label="待确认" /> : null}
-                                    {revision.status === "rejected" ? <StatusBadge size="sm" tone="neutral" label="已拒绝" /> : null}
-                                    {revision.restoredAt ? <StatusBadge size="sm" tone="neutral" label="已撤销" /> : null}
-                                    <span className="text-[var(--fs-label)] text-muted-foreground">{new Date(revision.createdAt).toLocaleString()}</span>
+                                    <span className="font-medium text-foreground">{ACTOR_KEYS[revision.actor] ? t(ACTOR_KEYS[revision.actor]) : revision.actor}</span>
+                                    {revision.status === "pending" ? <StatusBadge size="sm" tone="warning" label={t("account.settings.memory.statusPending")} /> : null}
+                                    {revision.status === "rejected" ? <StatusBadge size="sm" tone="neutral" label={t("account.settings.memory.statusRejected")} /> : null}
+                                    {revision.restoredAt ? <StatusBadge size="sm" tone="neutral" label={t("account.settings.memory.statusUndone")} /> : null}
+                                    <span className="text-[var(--fs-label)] text-muted-foreground">{new Date(revision.createdAt).toLocaleString(currentLocale())}</span>
                                 </div>
                                 {revision.summary ? <p className="mt-0.5 text-caption text-muted-foreground">{revision.summary}</p> : null}
                                 <RevisionChanges revision={revision} />
                             </div>
                             {revision.canUndo ? (
                                 <Button size="small" icon={<Undo2 className="size-3.5" />} loading={busyId === revision.id} onClick={() => void undo(revision)}>
-                                    撤销
+                                    {t("account.settings.memory.undo")}
                                 </Button>
                             ) : null}
                         </div>
@@ -191,6 +201,7 @@ function MemoryHistory({ open, onClose, onChanged }: { open: boolean; onClose: (
 }
 
 export default function AgentMemoryPane({ compact = false }: { compact?: boolean }) {
+    const { t } = useTranslation();
     const { message, modal } = App.useApp();
     const [doc, setDoc] = useState<AgentMemoryDocument | null>(null);
     const [pending, setPending] = useState<AgentMemoryDocRevision[]>([]);
@@ -221,7 +232,7 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
             setLoadError("");
             await applyDoc(next);
         } catch (error) {
-            if (seq === seqRef.current) setLoadError(errorText(error, "读取长期记忆失败"));
+            if (seq === seqRef.current) setLoadError(errorText(error, translate("account.settings.memory.loadFailed")));
         } finally {
             if (seq === seqRef.current) setLoading(false);
         }
@@ -235,9 +246,9 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
         setSavingMode(true);
         try {
             await applyDoc(await updateAgentMemoryMode(mode));
-            message.success(mode === "off" ? "已关闭长期记忆，已有内容会保留" : "已更新，下一条消息起生效");
+            message.success(mode === "off" ? t("account.settings.memory.modeOff") : t("account.settings.memory.modeUpdated"));
         } catch (error) {
-            message.error(errorText(error, "保存失败"));
+            message.error(errorText(error, t("account.settings.memory.saveFailed")));
         } finally {
             setSavingMode(false);
         }
@@ -246,14 +257,14 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
     const removeEntry = (entryId: string, text: string) => {
         if (!doc) return;
         modal.confirm({
-            title: "删除这条记忆？",
+            title: t("account.settings.memory.deleteTitle"),
             content: text,
-            okText: "删除",
+            okText: t("common.delete"),
             okButtonProps: { danger: true },
             onOk: async () => {
                 const entries = doc.entries.filter((entry) => entry.id !== entryId).map((entry) => ({ id: entry.id, section: entry.section, text: entry.text }));
                 await applyDoc(await saveAgentMemory(doc.revision, entries));
-                message.success("已删除，可在修改历史里撤销");
+                message.success(t("account.settings.memory.deleted"));
             },
         });
     };
@@ -262,9 +273,9 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
         setBusyId(revision.id);
         try {
             await applyDoc(await decideAgentMemoryRevision(revision.id, decision));
-            message.success(decision === "approve" ? "已采纳，下一条消息起生效" : "已拒绝");
+            message.success(decision === "approve" ? t("account.settings.memory.approved") : t("account.settings.memory.statusRejected"));
         } catch (error) {
-            message.error(errorText(error, "处理失败"));
+            message.error(errorText(error, t("account.settings.memory.decideFailed")));
         } finally {
             setBusyId(null);
         }
@@ -281,41 +292,39 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
             link.click();
             URL.revokeObjectURL(url);
         } catch (error) {
-            message.error(errorText(error, "导出失败"));
+            message.error(errorText(error, t("account.settings.memory.exportFailed")));
         }
     };
 
     const usagePercent = doc ? Math.min(100, Math.round((doc.charCount * 100) / Math.max(1, doc.capacity))) : 0;
     const modeOption = AGENT_MEMORY_MODES.find((option) => option.value === doc?.mode);
 
-    if (loadError && !doc) return <WorkspaceErrorState compact title="读取长期记忆失败" description={loadError} onRetry={() => void load()} />;
+    if (loadError && !doc) return <WorkspaceErrorState compact title={t("account.settings.memory.loadFailed")} description={loadError} onRetry={() => void load()} />;
 
     return (
         <div className={compact ? "flex min-h-0 flex-1 flex-col gap-3 overflow-hidden" : "flex flex-col gap-5"}>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <SegmentedControl
                     size="sm"
-                    ariaLabel="长期记忆模式"
+                    ariaLabel={t("account.settings.memory.mode")}
                     value={doc?.mode || "auto"}
                     options={AGENT_MEMORY_MODES.map(({ value, label }) => ({ value, label }))}
                     onChange={(value) => void changeMode(value as AgentMemoryMode)}
                     disabled={savingMode || !doc}
                 />
                 <div className="ml-auto flex items-center gap-1">
-                    <IconButton variant="ghost" size="sm" icon={History} aria-label="记忆修改历史" onClick={() => setHistoryOpen(true)} />
+                    <IconButton variant="ghost" size="sm" icon={History} aria-label={t("account.settings.memory.historyTitle")} onClick={() => setHistoryOpen(true)} />
                     <Button icon={<Pencil className="size-4" />} onClick={() => setEditorOpen(true)} disabled={!doc}>
-                        编辑
+                        {t("account.settings.channels.edit")}
                     </Button>
                 </div>
             </div>
-            {modeOption ? <p className="-mt-1 shrink-0 text-caption text-muted-foreground">{modeOption.description}。Agent 会在你纠正它、说明偏好或要求记住时自己整理这份记忆。</p> : null}
+            {modeOption ? <p className="-mt-1 shrink-0 text-caption text-muted-foreground">{t("account.settings.memory.modeHint", { description: modeOption.description })}</p> : null}
             {doc ? (
-                <div className="shrink-0" aria-label={`记忆用量 ${doc.charCount} / ${doc.capacity} 字`}>
+                <div className="shrink-0" aria-label={t("account.settings.memory.usageLabel", { used: doc.charCount, capacity: doc.capacity })}>
                     <div className="flex items-center justify-between text-[var(--fs-label)] text-muted-foreground">
-                        <span>用量</span>
-                        <span>
-                            {doc.charCount.toLocaleString()} / {doc.capacity.toLocaleString()} 字
-                        </span>
+                        <span>{t("account.settings.memory.usage")}</span>
+                        <span>{t("account.settings.memory.usageValue", { used: doc.charCount.toLocaleString(currentLocale()), capacity: doc.capacity.toLocaleString(currentLocale()) })}</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-secondary" role="progressbar" aria-valuenow={usagePercent} aria-valuemin={0} aria-valuemax={100}>
                         <div className={`h-full rounded-full ${usagePercent >= 80 ? "bg-status-warning" : "bg-primary"}`} style={{ width: `${usagePercent}%` }} />
@@ -323,7 +332,7 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                 </div>
             ) : null}
             {pending.length ? (
-                <Callout tone="warning" title={`Agent 有 ${pending.length} 处修改等你确认`}>
+                <Callout tone="warning" title={t("account.settings.memory.pendingTitle", { count: pending.length })}>
                     <div className="space-y-2">
                         {pending.map((revision) => (
                             <div key={revision.id} className="flex items-start gap-2">
@@ -332,10 +341,10 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                                     <RevisionChanges revision={revision} />
                                 </div>
                                 <Button size="small" type="primary" icon={<Check className="size-3.5" />} loading={busyId === revision.id} onClick={() => void decide(revision, "approve")}>
-                                    采纳
+                                    {t("account.settings.memory.approve")}
                                 </Button>
                                 <Button size="small" icon={<X className="size-3.5" />} loading={busyId === revision.id} onClick={() => void decide(revision, "reject")}>
-                                    拒绝
+                                    {t("account.settings.memory.reject")}
                                 </Button>
                             </div>
                         ))}
@@ -356,11 +365,11 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                         compact
                         icon="empty"
                         className={compact ? "min-h-0 flex-1 py-8" : "min-h-[200px] py-10"}
-                        title="还没有长期记忆"
-                        description="和 Agent 说“以后都用竖屏”“叫我长官”这类偏好，或纠正它的做法，它会自己记下来。也可以手动添加。"
+                        title={t("account.settings.memory.emptyTitle")}
+                        description={t("account.settings.memory.emptyDescription")}
                         action={
                             <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setEditorOpen(true)}>
-                                添加记忆
+                                {t("account.settings.memory.add")}
                             </Button>
                         }
                     />
@@ -379,13 +388,15 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
                                           {entries.map((entry) => (
                                               <li key={entry.id} className="group flex items-start gap-2 rounded-xl bg-surface-secondary/80 px-3 py-2">
                                                   <p className="min-w-0 flex-1 text-caption leading-5 text-foreground/85">{entry.text}</p>
-                                                  <span className="shrink-0 pt-0.5 text-[var(--fs-label)] text-muted-foreground">{entry.source === "agent" ? "Agent" : entry.source === "lesson_import" ? "导入" : "你"}</span>
-                                                  <IconButton variant="danger" size="sm" icon={Trash2} aria-label="删除这条记忆" onClick={() => removeEntry(entry.id, entry.text)} />
+                                                  <span className="shrink-0 pt-0.5 text-[var(--fs-label)] text-muted-foreground">
+                                                      {entry.source === "agent" ? t("account.settings.memory.actors.agent") : entry.source === "lesson_import" ? t("account.settings.memory.actors.seed") : t("account.settings.memory.actors.user")}
+                                                  </span>
+                                                  <IconButton variant="danger" size="sm" icon={Trash2} aria-label={t("account.settings.memory.deleteEntry")} onClick={() => removeEntry(entry.id, entry.text)} />
                                               </li>
                                           ))}
                                       </ul>
                                   ) : (
-                                      <p className="mt-1 text-caption text-muted-foreground">暂无</p>
+                                      <p className="mt-1 text-caption text-muted-foreground">{t("account.settings.memory.none")}</p>
                                   )}
                               </section>
                           );
@@ -394,9 +405,9 @@ export default function AgentMemoryPane({ compact = false }: { compact?: boolean
             </div>
             {compact ? null : (
                 <p className="shrink-0 text-caption text-muted-foreground">
-                    旧版“经验库”里已批准的条目会在第一次打开记忆时自动导入，Agent 不再单独读取经验库。
+                    {t("account.settings.memory.legacyHint")}
                     <Button type="link" size="small" icon={<Download className="size-3.5" />} onClick={() => void exportLegacy()}>
-                        导出旧版经验
+                        {t("account.settings.memory.legacyExport")}
                     </Button>
                 </p>
             )}

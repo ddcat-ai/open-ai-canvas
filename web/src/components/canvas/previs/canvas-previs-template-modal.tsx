@@ -1,4 +1,5 @@
 import { Modal } from "antd";
+import { useTranslation } from "react-i18next";
 
 import { PREVIS_TEMPLATES, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
 
@@ -10,8 +11,9 @@ import { PREVIS_TEMPLATES, type PrevisTemplateId } from "@/lib/canvas/previs/pre
  * 没有「默认」按钮 —— 空场景本身就是那个选项，且它真的没有演员。
  */
 export function CanvasPrevisTemplateModal({ open, onClose, onSelect }: { open: boolean; onClose: () => void; onSelect: (templateId: PrevisTemplateId) => void }) {
+    const { t } = useTranslation();
     return (
-        <Modal open={open} onCancel={onClose} footer={null} width={560} title="选择镜头模板" destroyOnHidden>
+        <Modal open={open} onCancel={onClose} footer={null} width={560} title={t("canvasC.previsTemplate.title")} destroyOnHidden>
             <div className="previs-template-grid">
                 {PREVIS_TEMPLATES.map((template) => (
                     <button

@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 
@@ -94,7 +95,7 @@ export function useCanvasGenerationRetry({
                     return child?.metadata?.status === "success" && Boolean(child.metadata.content);
                 });
                 if (!complete) {
-                    message.info("请展开图层组，单独重试未通过的图层；已完成图层会保留，不会自动扣费重试");
+                    message.info(translate("canvasPage.retry.expandLayerGroup"));
                     return;
                 }
                 setNodes((current) =>
@@ -111,7 +112,7 @@ export function useCanvasGenerationRetry({
             let sourceTask: GenerationTask | undefined;
             const localExtraction = node.metadata?.layerExtraction;
             if (localExtraction?.strategy && localExtraction.strategy.method !== "generate") {
-                if (!localExtraction.source || !localExtraction.canvas) { message.error("本层原图资源或区域已丢失，请重新规划；没有提交模型请求"); return; }
+                if (!localExtraction.source || !localExtraction.canvas) { message.error(translate("canvasPage.retry.layerSourceLost")); return; }
                 const controller = startGenerationRequest(node.id, localExtraction.sourceNodeId, node.id);
                 setRunningNodeId(node.id);
                 setNodes((current) => current.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "loading", errorDetails: undefined } } : item));
@@ -126,7 +127,7 @@ export function useCanvasGenerationRetry({
                     });
                 } catch (error) {
                     if (controller.signal.aborted || isGenerationCanceled(error)) return;
-                    const details = error instanceof Error ? error.message : "原图提取失败";
+                    const details = error instanceof Error ? error.message : translate("canvasPage.retry.sourceExtractFailed");
                     if (!controller.signal.aborted) message.error(details);
                     setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.taskId === node.metadata?.taskId ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details } } : item));
                 } finally { finishGenerationRequest(node.id, controller); setRunningNodeId((current) => current === node.id ? null : current); }
@@ -136,7 +137,7 @@ export function useCanvasGenerationRetry({
                 try {
                     sourceTask = await queryGenerationTask(node.metadata.taskId);
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "无法核对原任务，请稍后重试");
+                    message.error(error instanceof Error ? error.message : translate("canvasPage.retry.cannotVerifyTask"));
                     return;
                 }
             }
@@ -144,7 +145,7 @@ export function useCanvasGenerationRetry({
                 try {
                     await applyGenerationTaskResult(node.id, sourceTask);
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "图层结果恢复失败");
+                    message.error(error instanceof Error ? error.message : translate("canvasPage.retry.layerRestoreFailed"));
                 }
                 return;
             }
@@ -152,16 +153,16 @@ export function useCanvasGenerationRetry({
                 const extraction = node.metadata.layerExtraction;
                 const removing = extraction.phase === "background-removal-required" || extraction.phase === "remove-background";
                 const source = removing ? node : nodesRef.current.find((item) => item.id === extraction.sourceNodeId);
-                if ((!source?.metadata?.content && (removing || !extraction.source)) || !extraction.canvas) { message.error("本层源图或画布尺寸已丢失，无法单独重试"); return; }
+                if ((!source?.metadata?.content && (removing || !extraction.source)) || !extraction.canvas) { message.error(translate("canvasPage.retry.layerCanvasLost")); return; }
                 const model = removing ? extraction.backgroundRemovalModel || node.metadata.model : node.metadata.model;
-                if (!model) { message.error("本层未保存可用模型，请重新从源图规划"); return; }
+                if (!model) { message.error(translate("canvasPage.retry.layerNoModel")); return; }
                 const config = layerDecompositionConfig(buildGenerationConfig(effectiveConfig, node, "image"), model, { size: imageLayerOutputSize(effectiveConfig, model, extraction.canvas) });
                 config.transparentBackground = extraction.index > 0 ? "true" : "false";
-                if (!config.size || !supportsExperimentalLayerExtraction(config, model) || !isAiConfigReady(config, model)) { message.error("本层模型无法接收源图或不支持原图比例，请重新选择模型规划"); return; }
+                if (!config.size || !supportsExperimentalLayerExtraction(config, model) || !isAiConfigReady(config, model)) { message.error(translate("canvasPage.retry.layerModelUnsupported")); return; }
                 try {
                     const profile = modelCapabilityConfigFor(config, model).image;
                     if (profile) config.size = resolveImageRequestSize(profile, config.quality, config.size)?.value || "auto";
-                } catch (error) { message.error(error instanceof Error ? error.message : "模型尺寸无效"); return; }
+                } catch (error) { message.error(error instanceof Error ? error.message : translate("canvasPage.retry.invalidModelSize")); return; }
                 const parent = nodesRef.current.find((item) => item.id === extraction.groupId);
                 const target = parent?.metadata?.experimentalLayerPlan?.requests.find((request) => request.nodeId === node.id)?.target || node.title;
                 const prompt = removing ? imageLayerRemovalPrompt(target) : nodeGenerationPrompt(node);
@@ -181,10 +182,10 @@ export function useCanvasGenerationRetry({
                     const retryContext = sourceTask ? await createGenerationRetryContext(sourceTask.id, node.metadata.attemptGroupId) : {};
                     await runCanvasGenerationTaskToConsumer({ projectId, nodeId: node.id, mode: "image", prompt, config, referenceImages: [reference], signal: controller.signal, ...retryContext, metadata: { retry: true, sourceNodeId: extraction.sourceNodeId, edit: removing ? "layer-background-removal" : "layer-extraction", ...imageLayerProviderMetadata(config, extraction.index) } }, { bindTask: (task) => { retryTaskId = task.id; bindGenerationTask(node.id, task); }, consumeTask: (task) => applyGenerationTaskResult(node.id, task) });
                     // 刷新后的手动恢复一次只发起一项付费调用，后续去背景由用户继续。
-                    setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.layerExtraction?.phase === "background-removal-required" ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: "提取已完成，需要去背景；点击重新生成只调用本层去背景模型" } } : item));
+                    setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.layerExtraction?.phase === "background-removal-required" ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: translate("canvasPage.retry.needsBackgroundRemoval") } } : item));
                 } catch (error) {
                     if (controller.signal.aborted || isGenerationCanceled(error)) return;
-                    const details = error instanceof Error ? error.message : "本层重试失败";
+                    const details = error instanceof Error ? error.message : translate("canvasPage.retry.layerRetryFailed");
                     message.error(details);
                     if (!isCanvasGenerationDurableAckError(error)) setNodes((current) => current.map((item) => item.id === node.id && item.metadata?.taskId === retryTaskId ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details, layerExtraction: { ...item.metadata!.layerExtraction!, rejectedTaskId: item.metadata?.taskId } } } : item));
                 } finally { finishGenerationRequest(node.id, controller); }
@@ -202,7 +203,7 @@ export function useCanvasGenerationRetry({
                     });
                     await applyGenerationTaskResult(node.id, completed);
                 } catch (error) {
-                    if (!controller.signal.aborted) message.error(error instanceof Error ? error.message : "恢复作品保存失败");
+                    if (!controller.signal.aborted) message.error(error instanceof Error ? error.message : translate("canvasPage.retry.restoreSaveFailed"));
                 } finally {
                     finishGenerationRequest(node.id, controller);
                 }
@@ -213,7 +214,7 @@ export function useCanvasGenerationRetry({
             if (videoEnhance) {
                 const sourceVideoNode = nodesRef.current.find((item) => item.id === videoEnhance.sourceNodeId);
                 if (!sourceVideoNode || (!sourceVideoNode.metadata?.storageKey && !sourceVideoNode.metadata?.content)) {
-                    message.error("源视频节点已删除或为空，无法重新增强；没有提交任务");
+                    message.error(translate("canvasPage.retry.enhanceSourceMissing"));
                     return;
                 }
                 const params: VideoEnhanceParams = { model: videoEnhance.model, resolution: videoEnhance.resolution, fps: videoEnhance.fps, bitrateLevel: videoEnhance.bitrateLevel, bitrate: videoEnhance.bitrate };
@@ -229,7 +230,7 @@ export function useCanvasGenerationRetry({
                     );
                 } catch (error) {
                     if (controller.signal.aborted || isGenerationCanceled(error)) return;
-                    const details = error instanceof Error ? error.message : "画质增强失败";
+                    const details = error instanceof Error ? error.message : translate("canvasPage.retry.enhanceFailed");
                     message.error(details);
                     if (!isCanvasGenerationDurableAckError(error)) setNodes((current) => current.map((item) => item.id === node.id && (!retryTaskId || item.metadata?.taskId === retryTaskId) ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details } } : item));
                 } finally {
@@ -240,7 +241,7 @@ export function useCanvasGenerationRetry({
             }
             const retryMode = retryModeForNode(node.type);
             if (!retryMode) {
-                message.warning("当前节点不能使用通用生成重试");
+                message.warning(translate("canvasPage.retry.notRetryable"));
                 return;
             }
             const sourceNode = findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
@@ -262,7 +263,7 @@ export function useCanvasGenerationRetry({
                     : { ...sourceGenerationConfig, count: "1" };
             if (node.metadata?.layerDecomposition) generationConfig = layerDecompositionConfig(generationConfig, generationConfig.model);
             if (node.metadata?.layerDecomposition && !supportsLayerDecomposition(generationConfig, generationConfig.model)) {
-                message.error("原拆层模型未配置专用拆层协议，无法重试");
+                message.error(translate("canvasPage.retry.layerProtocolMissing"));
                 return;
             }
             if (!isAiConfigReady(generationConfig, generationConfig.model)) {
@@ -273,7 +274,7 @@ export function useCanvasGenerationRetry({
             const retryPromptSource = node.metadata?.layerDecomposition || node.metadata?.layerExtraction ? nodeGenerationPrompt(node) : nodeGenerationPrompt(sourceNode) || nodeGenerationPrompt(node);
             const retryContextPrompt = retryMode === "image" && sourceNode.metadata?.portraitTexture ? buildPortraitTexturePrompt(retryPromptSource, sourceNode.metadata.portraitTexture) : retryPromptSource;
             if (unchangedModeratedPrompt(node.metadata, retryPromptSource)) {
-                message.warning("该提示词未通过内容审核，请先修改提示词再重新生成");
+                message.warning(translate("canvasPage.retry.promptRejected"));
                 return;
             }
             let rawContext: Awaited<ReturnType<typeof hydrateNodeGenerationContext>> | null;
@@ -303,13 +304,13 @@ export function useCanvasGenerationRetry({
                     context = { ...rawContext, prompt: skillExecution.prompt };
                     skillMetadata = skillExecution.metadata;
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "技能上下文加载失败");
+                    message.error(error instanceof Error ? error.message : translate("canvasPage.generation.skillContextFailed"));
                     return;
                 }
             }
             const prompt = (context?.characterReferences.length ? context.prompt : savedImageMetadata?.prompt || context?.prompt || "").trim();
             if (!prompt) {
-                message.warning("找不到提示词，无法重试");
+                message.warning(translate("canvasPage.retry.promptMissing"));
                 return;
             }
             let mediaPrompt = prompt;
@@ -322,18 +323,18 @@ export function useCanvasGenerationRetry({
                         styleMetadata = { styleProfileJson: runtime.profileJson, styleExecutionPlan: runtime.plan };
                     }
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "项目画风与当前模型不兼容");
+                    message.error(error instanceof Error ? error.message : translate("canvasPage.retry.styleIncompatible"));
                     return;
                 }
             }
             if (retryMode === "audio" && context?.characterReferences.length) {
                 if (context.characterReferences.length !== 1) {
-                    message.error("角色配音一次只能引用一个角色卡");
+                    message.error(translate("canvasPage.generation.voiceOneCharacter"));
                     return;
                 }
                 const voice = context.resolvedCharacterVoices[0];
                 if (!voice) {
-                    message.error("角色尚未绑定可用声音，无法重试角色配音任务");
+                    message.error(translate("canvasPage.retry.voiceNotBound"));
                     return;
                 }
                 generationConfig = { ...generationConfig, audioVoice: voice.voiceKey, audioInstructions: [voice.instructions, generationConfig.audioInstructions].filter(Boolean).join("；") };
@@ -341,7 +342,7 @@ export function useCanvasGenerationRetry({
             const generationType = savedImageMetadata?.generationType;
             const isEmotionRetry = Boolean(node.metadata?.emotionEdit);
             if (isEmotionRetry && resolveModelRequestConfig(generationConfig, generationConfig.model).interfaceType !== "openai-image") {
-                message.error("表情编辑需要支持蒙版的 OpenAI Images 渠道，当前渠道已拒绝整图重绘");
+                message.error(translate("canvasPage.retry.expressionNeedsMask"));
                 return;
             }
             const useReferenceImages = isEmotionRetry ? false : context?.characterReferences.length ? true : generationType ? generationType === "edit" : Boolean(context?.referenceImages.length);
@@ -356,7 +357,7 @@ export function useCanvasGenerationRetry({
                     : [];
             if (useReferenceImages && !retryReferenceImages) {
                 markMissingReferences(node.id, setNodes);
-                message.error("参考图片已丢失，无法继续重试");
+                message.error(translate("canvasPage.retry.referenceLost"));
                 return;
             }
             const retryImages = retryReferenceImages || [];
@@ -370,7 +371,7 @@ export function useCanvasGenerationRetry({
             const storedVideoImages = node.type === CanvasNodeType.Video && !context?.referenceImages.length ? await resolveStoredReferenceImages(node.metadata?.references) : [];
             if (storedVideoImages === null) {
                 markMissingReferences(node.id, setNodes);
-                message.error("参考图片已丢失，无法继续重试");
+                message.error(translate("canvasPage.retry.referenceLost"));
                 return;
             }
             const videoReferenceImages = context?.referenceImages.length ? context.referenceImages : storedVideoImages;
@@ -486,15 +487,15 @@ export function useCanvasGenerationRetry({
                 const emotionEdit = node.metadata?.emotionEdit;
                 if (emotionEdit) {
                     const emotionSource = nodesRef.current.find((item) => item.id === emotionEdit.sourceNodeId);
-                    if (!emotionSource?.metadata?.content) throw new Error("情绪编辑源图片已删除，无法重试");
+                    if (!emotionSource?.metadata?.content) throw new Error(translate("canvasPage.retry.emotionSourceDeleted"));
                     const sourceDataUrl = await resolveImageUrl(emotionSource.metadata.storageKey, emotionSource.metadata.content, { cacheMiss: true });
-                    if (!sourceDataUrl) throw new Error("无法读取情绪编辑源图片");
+                    if (!sourceDataUrl) throw new Error(translate("canvasPage.retry.emotionSourceUnreadable"));
                     const artifacts = await buildEmotionImageArtifacts(sourceDataUrl, emotionEdit.faceBox, emotionSource.metadata.naturalWidth || 0, emotionSource.metadata.naturalHeight || 0);
                     const emotionConfig = { ...generationConfig, size: emotionGenerationSize(artifacts.editRegion), quality: !generationConfig.quality || generationConfig.quality === "auto" ? "high" : generationConfig.quality };
                     const imageProfile = modelCapabilityConfigFor(emotionConfig, emotionConfig.model).image!;
                     const editPlan = resolveEmotionEditPlan(imageProfile.references.maskSupported);
                     const sourceReference = sourceNodeReferenceImages(emotionSource)[0];
-                    if (!sourceReference) throw new Error("情绪编辑源图片不可用");
+                    if (!sourceReference) throw new Error(translate("canvasPage.retry.emotionSourceUnavailable"));
                     const editReference = { id: `${emotionSource.id}-${emotionEdit.presetId}-edit-region`, name: "emotion-edit-region.png", type: "image/png", dataUrl: artifacts.sourceDataUrl };
                     const characterReference = { id: `${emotionSource.id}-${emotionEdit.presetId}-character`, name: `${emotionEdit.characterName}-face.jpg`, type: "image/jpeg", dataUrl: artifacts.characterDataUrl };
                     const nextEmotionEdit = { ...emotionEdit, editRegion: artifacts.editRegion, sourceWidth: artifacts.imageWidth, sourceHeight: artifacts.imageHeight, providerSize: emotionConfig.size, editMode: editPlan.mode };
@@ -592,5 +593,5 @@ function retryModeForNode(type: CanvasNodeTypeId): CanvasNodeGenerationMode | nu
 }
 
 function markMissingReferences(nodeId: string, setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>) {
-    setNodes((current) => current.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: "参考图片已丢失，无法继续重试" } } : item)));
+    setNodes((current) => current.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: translate("canvasPage.retry.referenceLost") } } : item)));
 }

@@ -2,6 +2,7 @@ import { App, Input } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Clock3, Download, FolderKanban, Layers3, LoaderCircle, MoreHorizontal, Pencil, Shapes, Trash2 } from "lucide-react";
 import type { KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ProjectPreview } from "@/components/canvas/canvas-project-card";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
@@ -26,6 +27,7 @@ type CanvasFolderCardProps = {
  */
 export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, opening = false }: CanvasFolderCardProps) {
     const { message } = App.useApp();
+    const { t } = useTranslation();
     const renameProject = useCanvasStore((state) => state.renameProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const editingId = useCanvasUiStore((state) => state.editingProjectId);
@@ -37,7 +39,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
     const editing = editingId === project.id;
     const selected = selectedIds.includes(project.id);
-    const updatedTitle = `更新于 ${formatAbsoluteDateTime(project.updatedAt)} · 创建于 ${formatAbsoluteDateTime(project.createdAt)}`;
+    const updatedTitle = t("canvasB.folderCard.updatedTitle", { updated: formatAbsoluteDateTime(project.updatedAt), created: formatAbsoluteDateTime(project.createdAt) });
 
     const saveTitle = async () => {
         if (!editing) return;
@@ -46,14 +48,14 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
             await loadCanvasProjectForEditing(project.id);
             renameProject(project.id, editingTitle);
             await saveRemoteUserDataNow(project.id);
-        } catch (error) { message.error(error instanceof Error ? error.message : "重命名失败"); }
+        } catch (error) { message.error(error instanceof Error ? error.message : t("canvasB.common.renameFailed")); }
     };
     const exportProject = async () => {
         try {
             const fullProject = await loadCanvasProjectForEditing(project.id);
-            if (!fullProject) throw new Error("画布不存在");
-            await exportCanvasProjects([fullProject], project.title || "画布");
-        } catch (error) { message.error(error instanceof Error ? error.message : "导出失败"); }
+            if (!fullProject) throw new Error(t("canvasB.folderCard.notFound"));
+            await exportCanvasProjects([fullProject], project.title || t("canvasB.common.canvas"));
+        } catch (error) { message.error(error instanceof Error ? error.message : t("canvasB.common.exportFailed")); }
     };
 
     const handleOpenKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -66,15 +68,15 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
 
     return (
         <article className={cn("product-collection-card canvas-collection-card", selected && "is-selected", editing && "is-editing", opening && "is-opening")} onPointerEnter={onPrefetch} onPointerDown={onPrefetch} onFocusCapture={onPrefetch}>
-            <div className="canvas-collection-open" role="button" tabIndex={0} aria-label={`打开画布 ${project.title}`} aria-busy={opening} onClick={() => !editing && !opening && onClick()} onKeyDown={handleOpenKeyDown}>
+            <div className="canvas-collection-open" role="button" tabIndex={0} aria-label={t("canvasB.folderCard.openCanvas", { title: project.title })} aria-busy={opening} onClick={() => !editing && !opening && onClick()} onKeyDown={handleOpenKeyDown}>
                 <div className="canvas-collection-preview">
                     <div className="canvas-collection-preview-media" aria-hidden="true">
                         <ProjectPreview project={{ id: project.id, nodes: project.previewNodes }} preferLatestImage quiet mosaic />
                     </div>
-                    <span className="canvas-collection-badge" title={`${project.nodeCount} 个节点`}>
+                    <span className="canvas-collection-badge" title={t("canvasB.folderCard.nodeCount", { count: project.nodeCount })}>
                         <Layers3 aria-hidden="true" />
                         <span>{project.nodeCount}</span>
-                        <span className="sr-only">个节点</span>
+                        <span className="sr-only">{t("canvasB.folderCard.nodesSuffix")}</span>
                     </span>
                     {opening ? <div className="canvas-collection-opening"><LoaderCircle className="size-5 animate-spin" aria-hidden="true" /><span>正在打开</span></div> : null}
                 </div>
@@ -85,7 +87,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                                 className="canvas-collection-title-input"
                                 size="small"
                                 value={editingTitle}
-                                aria-label="画布名称"
+                                aria-label={t("canvasB.folderCard.canvasName")}
                                 onChange={(event) => setEditingTitle(event.target.value)}
                                 onClick={(event) => event.stopPropagation()}
                                 onBlur={saveTitle}
@@ -100,9 +102,9 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                         )}
                     </div>
                     <div className="canvas-collection-footer">
-                        <span className={cn("canvas-collection-project", !projectName && "is-free")} title={projectName ? `所属项目：${projectName}` : "未归属项目的自由画布"}>
+                        <span className={cn("canvas-collection-project", !projectName && "is-free")} title={projectName ? t("canvasB.folderCard.belongsToProject", { name: projectName }) : t("canvasB.folderCard.freeCanvasHint")}>
                             {projectName ? <FolderKanban aria-hidden="true" /> : <Shapes aria-hidden="true" />}
-                            <span>{projectName || "自由画布"}</span>
+                            <span>{projectName || t("canvasB.folderCard.freeCanvas")}</span>
                         </span>
                         <time className="canvas-collection-updated" dateTime={project.updatedAt} title={updatedTitle}>
                             <Clock3 aria-hidden="true" />
@@ -116,8 +118,8 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                 <button
                     type="button"
                     className="product-icon-button canvas-collection-rename"
-                    aria-label={`重命名 ${project.title}`}
-                    title="重命名"
+                    aria-label={t("canvasB.folderCard.renameTitle", { title: project.title })}
+                    title={t("canvasB.common.rename")}
                     onClick={(event) => {
                         event.stopPropagation();
                         startEditing(project.id, project.title);
@@ -132,7 +134,7 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                     type="checkbox"
                     checked={selected}
                     onChange={(event) => toggleSelected(project.id, event.target.checked)}
-                    aria-label={`选择 ${project.title}`}
+                    aria-label={t("canvasB.folderCard.selectTitle", { title: project.title })}
                 />
             </span>
 
@@ -143,14 +145,14 @@ export function CanvasFolderCard({ project, projectName, onClick, onPrefetch, op
                     menu={{
                         onClick: ({ domEvent }) => domEvent.stopPropagation(),
                         items: [
-                            { key: "rename", icon: <Pencil className="size-3.5" />, label: "重命名", onClick: () => startEditing(project.id, project.title) },
-                            { key: "export", icon: <Download className="size-3.5" />, label: "导出画布", onClick: () => void exportProject() },
+                            { key: "rename", icon: <Pencil className="size-3.5" />, label: t("canvasB.common.rename"), onClick: () => startEditing(project.id, project.title) },
+                            { key: "export", icon: <Download className="size-3.5" />, label: t("canvasB.folderCard.exportCanvas"), onClick: () => void exportProject() },
                             { type: "divider" },
-                            { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除", onClick: () => setDeleteIds([project.id]) },
+                            { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: t("common.delete"), onClick: () => setDeleteIds([project.id]) },
                         ],
                     }}
                 >
-                    <button type="button" className="product-icon-button canvas-collection-more" aria-label={`${project.title} 画布操作`} title="更多操作" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="product-icon-button canvas-collection-more" aria-label={t("canvasB.folderCard.canvasActions", { title: project.title })} title={t("canvasB.common.moreActions")} onClick={(event) => event.stopPropagation()}>
                         <MoreHorizontal />
                     </button>
                 </Dropdown>

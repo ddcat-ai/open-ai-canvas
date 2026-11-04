@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { MenuProps } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Grid3x3 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { TOOL_ICON_MAP } from "./canvas-resource-mention-textarea";
 import { getNineGridMenuItems } from "./canvas-image-toolbar-tools";
@@ -53,6 +54,7 @@ export function CanvasNineGridPicker({
     icon?: string;
     onSelect: (toolId: number, label: string, icon: string) => void;
 }) {
+    const { t } = useTranslation();
     const [internalOpen, setInternalOpen] = useState(false);
     const actualOpen = open ?? internalOpen;
     const setOpen = (next: boolean) => {
@@ -86,7 +88,7 @@ export function CanvasNineGridPicker({
         >
             <button type="button" className="canvas-node-composer-header-action canvas-node-fixed-chip" aria-expanded={actualOpen} aria-haspopup="menu" onClick={() => setOpen(true)} onPointerDown={(event) => event.stopPropagation()}>
                 <NineGridToolIcon iconName={icon} className="size-4 shrink-0" />
-                <span className="truncate">预设</span>
+                <span className="truncate">{t("canvasB.nineGrid.presets")}</span>
             </button>
         </Dropdown>
     );

@@ -7,6 +7,7 @@ import { formatTimelineTime } from "@/lib/timeline/timeline-view";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import type { TimelineClip } from "@/types/timeline";
 import type { CanvasNodeData } from "@/types/canvas";
+import { useTranslation } from "react-i18next";
 import { CanvasSubtitleOverlay } from "./canvas-subtitle-overlay";
 
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -30,6 +31,7 @@ const AUTO_ADVANCE_GAP_MS = 500;
  * 播放时以视频时间为基准推进播放头；暂停时播放头（标尺跳转）驱动视频画面。
  */
 export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme, onTogglePlay, onPlayheadChange }: CanvasTimelinePreviewProps) {
+    const { t } = useTranslation();
     const videoRef = useRef<HTMLVideoElement>(null);
     const [videoUrl, setVideoUrl] = useState("");
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
@@ -136,7 +138,7 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
                         <button
                             type="button"
                             className="absolute inset-0 z-10 grid place-items-center"
-                            aria-label={playing ? "暂停预览" : "播放预览"}
+                            aria-label={playing ? t("canvasC.timelinePreview.pause") : t("canvasC.timelinePreview.play")}
                             onClick={(event) => {
                                 event.stopPropagation();
                                 onTogglePlay();
@@ -148,18 +150,18 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
                         </button>
                     </>
                 ) : (
-                    <div className="px-4 text-center text-xs opacity-55">该位置无视频片段</div>
+                    <div className="px-4 text-center text-xs opacity-55">{t("canvasC.timelinePreview.noClipHere")}</div>
                 )}
             </div>
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-xs">
                     <span className="truncate font-semibold" style={{ color: theme.accent.primary }}>
-                        {activeVideoClip?.title || "无视频片段"}
+                        {activeVideoClip?.title || t("canvasC.timelinePreview.noClip")}
                     </span>
                     <span className="opacity-45 tabular-nums">{activeVideoClip ? `${formatTimelineTime(activeVideoClip.startMs)} ~ ${formatTimelineTime(activeVideoClip.startMs + activeVideoClip.durationMs)}` : ""}</span>
                 </div>
                 <div className="mt-2 max-h-16 min-h-10 overflow-y-auto rounded-lg border px-2 py-2 text-xs leading-5" style={{ borderColor: theme.toolbar.border, background: theme.node.fill }}>
-                    {activeSubtitleClip ? activeSubtitleClip.text : <span className="opacity-40">此处无字幕，点选字幕片段后在下方编辑</span>}
+                    {activeSubtitleClip ? activeSubtitleClip.text : <span className="opacity-40">{t("canvasC.timelinePreview.noSubtitle")}</span>}
                 </div>
             </div>
         </div>

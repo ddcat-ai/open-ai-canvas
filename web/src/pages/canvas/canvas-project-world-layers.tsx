@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { Link2 } from "lucide-react";
 import { CANVAS_CONNECTION_STROKE_WIDTH, canvasThemes } from "@/lib/canvas-theme";
@@ -272,6 +273,7 @@ const BatchConnectionTails = memo(function BatchConnectionTails(props: CanvasPro
 });
 
 function BatchConnectionTail({ item, top, scroll, fromScrollTop, fromBatchScroll, active }: { item: CanvasDisplayConnection; top: number; scroll?: BatchScroll; fromScrollTop: number; fromBatchScroll?: BatchScroll; active: boolean }) {
+    const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const from = useCanvasVisualNode(item.from);
     const to = useCanvasVisualNode(item.to);
@@ -282,11 +284,12 @@ function BatchConnectionTail({ item, top, scroll, fromScrollTop, fromBatchScroll
         <path d={path.pathD} fill="none" stroke={theme.connection.stroke} strokeWidth={CANVAS_CONNECTION_STROKE_WIDTH} strokeOpacity={0.8} vectorEffect="non-scaling-stroke" />
         {active ? <CanvasConnectionBeam pathD={path.pathD} color={theme.connection.beam} /> : null}
         <circle cx={cell.x} cy={cell.y} r={3} fill={theme.connection.beam} fillOpacity={active ? 1 : 0.65} />
-        {active && cell.clipped ? <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>{cell.label} · 滚动查看</text> : null}
+        {active && cell.clipped ? <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>{t("canvasPage.worldLayers.scrollToView", { label: cell.label })}</text> : null}
     </g>;
 }
 
 function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale: number; count: number; active: boolean; onPointerDown: (event: ReactPointerEvent) => void }) {
+    const { t } = useTranslation();
     const inverseScale = 1 / Math.max(scale, 0.05);
     const buttonStyle: CSSProperties = {
         right: -18 * inverseScale,
@@ -304,12 +307,12 @@ function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale:
             data-icon-only
             className="pointer-events-auto absolute grid -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border shadow-md transition-opacity duration-150 hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             style={buttonStyle}
-            title={`批量连接 ${count} 个节点`}
-            aria-label={`批量连接 ${count} 个节点`}
+            title={t("canvasPage.worldLayers.batchConnect", { count })}
+            aria-label={t("canvasPage.worldLayers.batchConnect", { count })}
             onPointerDown={onPointerDown}
         >
             <Link2 style={{ width: 14 * inverseScale, height: 14 * inverseScale }} strokeWidth={2} />
-            <span className="sr-only">连接 {count} 个节点</span>
+            <span className="sr-only">{t("canvasPage.worldLayers.connectNodes", { count })}</span>
         </button>
     );
 }

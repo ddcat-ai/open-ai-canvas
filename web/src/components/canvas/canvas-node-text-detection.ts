@@ -3,8 +3,9 @@
 import { modelSupportsImageInspection } from "@/lib/canvas/image-to-previs-agent";
 import { requestCreditCost } from "@/lib/model-pricing";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
+import { currentLocale, translate } from "@/i18n";
 
-export const CANVAS_TEXT_DETECTION_UNSUPPORTED = "当前文字模型不支持图片输入，请在设置中选择支持看图的文字模型";
+export const CANVAS_TEXT_DETECTION_UNSUPPORTED = translate("canvasB.textDetection.unsupported");
 
 export function canvasTextDetectionModel(config: Pick<AiConfig, "textModel" | "model">) {
     return config.textModel || config.model;
@@ -20,5 +21,5 @@ export function canvasTextDetectionPriceLabel(config: AiConfig, model: string) {
     if (!model) return "";
     const channel = resolveModelChannel(config, model);
     const credits = requestCreditCost({ channelMode: channel.scope === "system" ? "remote" : "local", modelCosts: channel.modelCosts, model: modelOptionName(model), count: 1, capability: "text", config });
-    return credits === null ? "" : `约 ${credits.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} 积分/次`;
+    return credits === null ? "" : translate("canvasB.textDetection.price", { credits: credits.toLocaleString(currentLocale(), { maximumFractionDigits: 6 }) });
 }

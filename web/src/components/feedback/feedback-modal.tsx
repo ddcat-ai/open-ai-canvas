@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useRef, type ClipboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { App, Button, Checkbox, Input, Modal, Radio, Tag, Image as AntImage, Segmented } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { AlertCircle, Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw, Send, Trash2, UploadCloud, X } from "lucide-react";
 
 import { submitFeedback, getMyFeedbacks, uploadFeedbackAttachment, type FeedbackItem, type FeedbackType, type FeedbackAttachment } from "@/services/api/feedback";
 import { useUserStore } from "@/stores/use-user-store";
+import { currentLocale } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 interface FeedbackModalProps {
@@ -14,6 +16,7 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ open, onClose, initialTab = "submit" }: FeedbackModalProps) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
     const user = useUserStore((state) => state.user);
 
@@ -88,7 +91,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
         if (!fileList.length) return;
 
         if (attachments.length + fileList.length > 5) {
-            message.warning("最多添加 5 个附件文件");
+            message.warning(t("account.feedback.maxAttachments"));
             return;
         }
 
@@ -96,22 +99,22 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
         try {
             for (const file of fileList) {
                 if (file.size > 50 * 1024 * 1024) {
-                    message.error(`文件 ${file.name} 超过 50MB 限制`);
+                    message.error(t("account.feedback.fileTooLarge", { name: file.name }));
                     continue;
                 }
                 const isImage = file.type.startsWith("image/");
                 const isVideo = file.type.startsWith("video/");
                 if (!isImage && !isVideo) {
-                    message.error(`文件 ${file.name} 不是支持的图片或视频格式`);
+                    message.error(t("account.feedback.fileUnsupported", { name: file.name }));
                     continue;
                 }
 
                 const res = await uploadFeedbackAttachment(file);
                 setAttachments((prev) => [...prev, res]);
             }
-            message.success("附件添加成功");
+            message.success(t("account.feedback.attachmentAdded"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "附件上传失败");
+            message.error(error instanceof Error ? error.message : t("account.feedback.attachmentFailed"));
         } finally {
             setUploading(false);
             if (fileInputRef.current) {
@@ -144,11 +147,11 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
 
     const handleSubmit = async () => {
         if (!title.trim()) {
-            message.warning("请填写反馈简述");
+            message.warning(t("account.feedback.titleRequired"));
             return;
         }
         if (!content.trim()) {
-            message.warning("请填写详细反馈说明");
+            message.warning(t("account.feedback.contentRequired"));
             return;
         }
 
@@ -163,7 +166,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                 environment: includeEnv ? getEnvironmentInfo() : "{}",
             });
 
-            message.success("反馈已提交，我们会尽快评估处理");
+            message.success(t("account.feedback.submitted"));
             // Reset form
             setTitle("");
             setContent("");
@@ -172,7 +175,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
             setActiveTab("inbox");
             void fetchInbox();
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "提交反馈失败，请重试");
+            message.error(error instanceof Error ? error.message : t("account.feedback.submitFailed"));
         } finally {
             setSubmitting(false);
         }
@@ -214,7 +217,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                             )}
                         >
                             <Plus className="size-3.5 shrink-0" />
-                            <span>新建反馈</span>
+                            <span>{t("account.feedback.tabSubmit")}</span>
                         </button>
                         <button
                             id="feedback-tab-inbox"
@@ -227,7 +230,8 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                         >
                             <Inbox className="size-3.5 shrink-0" />
                             <span>
-                                <span className="hidden sm:inline">我的</span>反馈收件箱
+                                <span className="hidden sm:inline">{t("account.feedback.tabInbox")}</span>
+                                <span className="sm:hidden">{t("account.feedback.tabInboxShort")}</span>
                             </span>
                             {myFeedbacks.length > 0 ? (
                                 <span className={cn("px-2 py-0.2 rounded-full text-[var(--fs-label)] font-semibold leading-tight shrink-0", activeTab === "inbox" ? "bg-blue-500/25 text-blue-600 dark:text-blue-300" : "bg-muted text-muted-foreground")}>
@@ -238,7 +242,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                         </button>
                     </div>
 
-                    <button type="button" onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors shrink-0 ml-1" aria-label="关闭">
+                    <button type="button" onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors shrink-0 ml-1" aria-label={t("common.close")}>
                         <X className="size-4" />
                     </button>
                 </div>
@@ -249,13 +253,13 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                         <div className="space-y-4">
                             {/* Feedback Type Selector */}
                             <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-2">反馈类型</label>
+                                <label className="block text-xs font-medium text-muted-foreground mb-2">{t("account.feedback.type")}</label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                     {[
-                                        { value: "bug", label: "Bug 缺陷", icon: Bug, desc: "功能异常或报错" },
-                                        { value: "feature", label: "功能提议", icon: Lightbulb, desc: "希望增加新能力" },
-                                        { value: "improvement", label: "体验建议", icon: Lightbulb, desc: "操作与排版优化" },
-                                        { value: "other", label: "其他意见", icon: MessageSquare, desc: "其他咨询与反馈" },
+                                        { value: "bug", label: t("account.feedback.types.bug"), icon: Bug, desc: t("account.feedback.types.bugHint") },
+                                        { value: "feature", label: t("account.feedback.types.feature"), icon: Lightbulb, desc: t("account.feedback.types.featureHint") },
+                                        { value: "improvement", label: t("account.feedback.types.improvement"), icon: Lightbulb, desc: t("account.feedback.types.improvementHint") },
+                                        { value: "other", label: t("account.feedback.types.otherOpinion"), icon: MessageSquare, desc: t("account.feedback.types.otherHint") },
                                     ].map((item) => {
                                         const Icon = item.icon;
                                         const selected = type === item.value;
@@ -283,12 +287,12 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                             {/* Title */}
                             <div>
                                 <label className="block text-xs font-medium text-muted-foreground mb-2">
-                                    标题 / 简述 <span className="text-red-500">*</span>
+                                    {t("account.feedback.titleLabel")} <span className="text-red-500">*</span>
                                 </label>
                                 <Input
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
-                                    placeholder={type === "bug" ? "例如：在画布中拖拽连线时偶尔出现闪烁" : type === "feature" ? "例如：希望在工作台增加批量导出全部镜头功能" : "简明扼要概括您的反馈内容"}
+                                    placeholder={type === "bug" ? t("account.feedback.titlePlaceholderBug") : type === "feature" ? t("account.feedback.titlePlaceholderFeature") : t("account.feedback.titlePlaceholder")}
                                     maxLength={200}
                                     className="rounded-lg h-9 text-xs"
                                 />
@@ -298,15 +302,15 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                             <div>
                                 <div className="flex items-center justify-between mb-2">
                                     <label className="block text-xs font-medium text-muted-foreground">
-                                        详细说明 <span className="text-red-500">*</span>
+                                        {t("account.feedback.contentLabel")} <span className="text-red-500">*</span>
                                     </label>
-                                    <span className="hidden sm:inline text-[var(--fs-label)] text-muted-foreground/60">可直接截图并在窗口内按 Ctrl+V 粘贴</span>
+                                    <span className="hidden sm:inline text-[var(--fs-label)] text-muted-foreground/60">{t("account.feedback.pasteHint")}</span>
                                 </div>
                                 <Input.TextArea
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
                                     rows={4}
-                                    placeholder={type === "bug" ? "请尽可能描述问题发生时的操作步骤、实际现象与预期结果，有助于我们快速复现和修复..." : "请描述具体的使用场景或期望的效果，便于评估并纳入产品路线图..."}
+                                    placeholder={type === "bug" ? t("account.feedback.contentPlaceholderBug") : t("account.feedback.contentPlaceholder")}
                                     maxLength={10000}
                                     className="rounded-lg py-2 text-xs"
                                 />
@@ -315,8 +319,8 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                             {/* Attachment Uploader */}
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs font-medium text-muted-foreground">图片或视频附件 ({attachments.length}/5)</label>
-                                    <span className="text-[var(--fs-label)] sm:text-[var(--fs-label)] text-muted-foreground/60">单文件最高 50MB</span>
+                                    <label className="text-xs font-medium text-muted-foreground">{t("account.feedback.attachments", { count: attachments.length, max: 5 })}</label>
+                                    <span className="text-[var(--fs-label)] sm:text-[var(--fs-label)] text-muted-foreground/60">{t("account.feedback.maxFileSize")}</span>
                                 </div>
 
                                 <input
@@ -337,14 +341,14 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                                             <div key={att.id} className="group relative flex items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-2 overflow-hidden">
                                                 {att.type === "image" ? (
                                                     <div className="size-10 rounded shrink-0 overflow-hidden bg-black/40 flex items-center justify-center">
-                                                        <AntImage src={att.url} alt={att.name} className="size-10 object-cover" preview={{ mask: "预览" }} />
+                                                        <AntImage src={att.url} alt={att.name} className="size-10 object-cover" preview={{ mask: t("account.feedback.preview") }} />
                                                     </div>
                                                 ) : (
                                                     <button
                                                         type="button"
                                                         onClick={() => setPreviewVideoUrl(att.url)}
                                                         className="size-10 rounded shrink-0 bg-black/60 flex items-center justify-center text-primary hover:bg-black/80 transition-colors"
-                                                        title="点击预览视频"
+                                                        title={t("account.feedback.previewVideo")}
                                                     >
                                                         <Play className="size-4 fill-current ml-0.5" />
                                                     </button>
@@ -355,7 +359,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                                                         {att.name}
                                                     </p>
                                                     <p className="text-[var(--fs-label)] text-muted-foreground/70 mt-0.5">
-                                                        {(att.size / (1024 * 1024)).toFixed(1)} MB · {att.type === "video" ? "视频" : "图片"}
+                                                        {(att.size / (1024 * 1024)).toFixed(1)} MB · {att.type === "video" ? t("account.feedback.video") : t("account.feedback.image")}
                                                     </p>
                                                 </div>
 
@@ -363,7 +367,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                                                     type="button"
                                                     onClick={() => removeAttachment(att.id)}
                                                     className="size-6 rounded flex items-center justify-center text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors shrink-0"
-                                                    title="移除附件"
+                                                    title={t("account.feedback.removeAttachment")}
                                                 >
                                                     <X className="size-3.5" />
                                                 </button>
@@ -384,15 +388,15 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                                         )}
                                     >
                                         <UploadCloud className="size-4 text-primary shrink-0" />
-                                        <span className="text-center">{uploading ? "正在上传附件..." : "点击选择图片/视频文件，或直接在窗口粘贴截图 (Ctrl+V)"}</span>
+                                        <span className="text-center">{uploading ? t("account.feedback.uploading") : t("account.feedback.uploadHint")}</span>
                                     </button>
                                 ) : null}
                             </div>
 
                             {/* Contact Info */}
                             <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-2">联系方式 (选填)</label>
-                                <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="留下邮箱或微信号，方便我们进一步反馈处理进展" className="rounded-lg h-9 text-xs" />
+                                <label className="block text-xs font-medium text-muted-foreground mb-2">{t("account.feedback.contact")}</label>
+                                <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder={t("account.feedback.contactPlaceholder")} className="rounded-lg h-9 text-xs" />
                             </div>
                         </div>
                     ) : (
@@ -404,27 +408,27 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                                     value={inboxFilter}
                                     onChange={(v) => setInboxFilter(v as "active" | "archived")}
                                     options={[
-                                        { label: `进行中 (${activeFeedbacks.length})`, value: "active" },
-                                        { label: `历史归档 (${archivedFeedbacks.length})`, value: "archived" },
+                                        { label: t("account.feedback.filterActive", { count: activeFeedbacks.length }), value: "active" },
+                                        { label: t("account.feedback.filterArchived", { count: archivedFeedbacks.length }), value: "archived" },
                                     ]}
                                     className="bg-muted/40 text-xs"
                                 />
                                 <Button size="small" icon={<RefreshCw className={cn("size-3", loadingInbox && "animate-spin")} />} onClick={() => void fetchInbox()}>
-                                    刷新
+                                    {t("common.refresh")}
                                 </Button>
                             </div>
 
                             {loadingInbox && myFeedbacks.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs gap-2">
                                     <Clock className="size-6 animate-pulse text-primary/60" />
-                                    <span>正在加载反馈记录…</span>
+                                    <span>{t("account.feedback.loading")}</span>
                                 </div>
                             ) : myFeedbacks.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs gap-2 border border-dashed rounded-xl border-border/60">
                                     <Inbox className="size-8 text-muted-foreground/40" />
-                                    <span>暂无任何反馈记录</span>
+                                    <span>{t("account.feedback.empty")}</span>
                                     <Button size="small" type="link" onClick={() => setActiveTab("submit")}>
-                                        提交第一条反馈
+                                        {t("account.feedback.submitFirst")}
                                     </Button>
                                 </div>
                             ) : displayedFeedbacks.length === 0 ? (
@@ -432,17 +436,17 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                                     {inboxFilter === "active" ? (
                                         <>
                                             <CheckCircle2 className="size-7 text-green-500/80" />
-                                            <span>当前没有进行中的反馈</span>
+                                            <span>{t("account.feedback.emptyActive")}</span>
                                             {archivedFeedbacks.length > 0 ? (
                                                 <Button size="small" type="link" onClick={() => setInboxFilter("archived")}>
-                                                    查看 {archivedFeedbacks.length} 条已归档的历史反馈 →
+                                                    {t("account.feedback.viewArchived", { count: archivedFeedbacks.length })}
                                                 </Button>
                                             ) : null}
                                         </>
                                     ) : (
                                         <>
                                             <Archive className="size-7 text-muted-foreground/50" />
-                                            <span>暂无已归档的历史反馈</span>
+                                            <span>{t("account.feedback.emptyArchived")}</span>
                                         </>
                                     )}
                                 </div>
@@ -462,14 +466,14 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                     <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
                             <Checkbox checked={includeEnv} onChange={(e) => setIncludeEnv(e.target.checked)} />
-                            <span>附带诊断环境信息（推荐）</span>
+                            <span>{t("account.feedback.includeEnv")}</span>
                         </label>
                         <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
                             <Button onClick={onClose} className="flex-1 sm:flex-none">
-                                取消
+                                {t("common.cancel")}
                             </Button>
                             <Button id="feedback-submit-btn" type="primary" loading={submitting || uploading} onClick={handleSubmit} icon={<Send className="size-3.5" />} className="flex-1 sm:flex-none font-medium">
-                                提交反馈
+                                {t("account.feedback.submit")}
                             </Button>
                         </div>
                     </div>
@@ -478,7 +482,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
 
             {/* Video Preview Modal */}
             {previewVideoUrl ? (
-                <Modal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} destroyOnClose title="附件视频预览">
+                <Modal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} destroyOnClose title={t("account.feedback.videoPreview")}>
                     <div className="py-2">
                         <video src={previewVideoUrl} controls autoPlay className="w-full max-h-[60vh] rounded-lg bg-black" />
                     </div>
@@ -489,6 +493,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
 }
 
 function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPreviewVideo: (url: string) => void }) {
+    const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
 
     let parsedAttachments: FeedbackAttachment[] = [];
@@ -501,24 +506,24 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
     }
 
     const typeConfig: Record<FeedbackType, { label: string; color: string; icon: typeof Bug }> = {
-        bug: { label: "Bug 缺陷", color: "error", icon: Bug },
-        feature: { label: "功能提议", color: "processing", icon: Lightbulb },
-        improvement: { label: "体验建议", color: "cyan", icon: Lightbulb },
-        other: { label: "其他反馈", color: "default", icon: MessageSquare },
+        bug: { label: t("account.feedback.types.bug"), color: "error", icon: Bug },
+        feature: { label: t("account.feedback.types.feature"), color: "processing", icon: Lightbulb },
+        improvement: { label: t("account.feedback.types.improvement"), color: "cyan", icon: Lightbulb },
+        other: { label: t("account.feedback.types.other"), color: "default", icon: MessageSquare },
     };
 
     const statusConfig: Record<string, { label: string; tagColor: string }> = {
-        pending: { label: "待处理", tagColor: "orange" },
-        processing: { label: "处理中", tagColor: "blue" },
-        resolved: { label: "已解决 / 已采纳", tagColor: "green" },
-        closed: { label: "已关闭", tagColor: "default" },
+        pending: { label: t("account.feedback.status.pending"), tagColor: "orange" },
+        processing: { label: t("account.feedback.status.processing"), tagColor: "blue" },
+        resolved: { label: t("account.feedback.status.resolved"), tagColor: "green" },
+        closed: { label: t("account.feedback.status.closed"), tagColor: "default" },
     };
 
     const typeInfo = typeConfig[item.type] || typeConfig.other;
     const statusInfo = statusConfig[item.status] || { label: item.status, tagColor: "default" };
     const TypeIcon = typeInfo.icon;
 
-    const formattedTime = new Date(item.createdAt).toLocaleString("zh-CN", {
+    const formattedTime = new Date(item.createdAt).toLocaleString(currentLocale(), {
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
@@ -534,7 +539,7 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
                         {item.archived ? (
                             <Tag className="flex items-center gap-1 m-0 text-[var(--fs-label)] px-2 py-0.5 bg-muted/60 text-muted-foreground border-border/60">
                                 <Archive className="size-3" />
-                                <span>已归档</span>
+                                <span>{t("account.feedback.archived")}</span>
                             </Tag>
                         ) : null}
                         <Tag color={typeInfo.color} className="flex items-center gap-1 m-0 text-[var(--fs-label)] px-2 py-0.5">
@@ -550,7 +555,7 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
                 </div>
 
                 <Button size="small" type="text" onClick={() => setExpanded(!expanded)} className="text-xs text-muted-foreground">
-                    {expanded ? "收起" : "详情"}
+                    {expanded ? t("account.feedback.collapse") : t("account.layout.banner.details")}
                 </Button>
             </div>
 
@@ -562,7 +567,7 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
                 <div className="flex items-center gap-2 flex-wrap pt-1">
                     <span className="text-[var(--fs-label)] text-muted-foreground flex items-center gap-1">
                         <Paperclip className="size-3" />
-                        <span>附件 ({parsedAttachments.length})：</span>
+                        <span>{t("account.feedback.attachmentCount", { count: parsedAttachments.length })}</span>
                     </span>
                     {parsedAttachments.map((att) => (
                         <div key={att.id} className="inline-flex items-center gap-2 rounded bg-muted/40 px-2 py-1 text-[var(--fs-label)] border border-border/40">
@@ -571,7 +576,7 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
                             ) : (
                                 <button type="button" onClick={() => onPreviewVideo(att.url)} className="text-primary hover:underline flex items-center gap-1">
                                     <Play className="size-3 fill-current" />
-                                    <span>视频</span>
+                                    <span>{t("account.feedback.video")}</span>
                                 </button>
                             )}
                             <span className="max-w-[140px] truncate" title={att.name}>
@@ -588,9 +593,9 @@ function FeedbackInboxCard({ item, onPreviewVideo }: { item: FeedbackItem; onPre
                     <div className="flex items-center justify-between text-blue-500 dark:text-blue-400 font-semibold text-[var(--fs-label)]">
                         <span className="flex items-center gap-2">
                             <CheckCircle2 className="size-3.5" />
-                            <span>官方答复</span>
+                            <span>{t("account.feedback.reply")}</span>
                         </span>
-                        {item.repliedAt ? <span className="font-normal opacity-80 text-[var(--fs-label)]">{new Date(item.repliedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
+                        {item.repliedAt ? <span className="font-normal opacity-80 text-[var(--fs-label)]">{new Date(item.repliedAt).toLocaleString(currentLocale(), { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
                     </div>
                     <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">{item.adminReply}</p>
                 </div>

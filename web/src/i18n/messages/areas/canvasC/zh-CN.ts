@@ -1,2 +1,117 @@
 /** 画布组件第三组（components/canvas 后段 + previs）的界面文案（源语言）。键结构是其他语言文件的约束。 */
-export const zhCN = {};
+export const zhCN = {
+    timelinePreview: {
+        pause: "暂停预览",
+        play: "播放预览",
+        noClipHere: "该位置无视频片段",
+        noClip: "无视频片段",
+        noSubtitle: "此处无字幕，点选字幕片段后在下方编辑",
+    },
+    toolbar: {
+        appearance: "画布外观",
+        appearanceSubtitle: "配色与网格",
+        mediaInfo: "媒体信息",
+    },
+    videoPromptTools: {
+        imageCount: "{{count}} 图",
+        videoCount: "{{count}} 视频",
+        audioCount: "{{count}} 音频",
+        workflowReferenceHint: "已连接的图片、视频和音频会按工作流字段映射传入",
+        workflowReference: "工作流参考",
+        noMedia: "尚未连接媒体",
+        startFrame: "首帧",
+        endFrame: "尾帧",
+        none: "不指定",
+    },
+    videoSettings: {
+        label: "视频设置",
+    },
+    workspaceHistory: {
+        title: "历史 · 最近 30 条（含 Agent）",
+        emptyTitle: "暂无历史",
+        emptyDescription: "发起生成后，记录会展示在这里。",
+    },
+    workspaceTasks: {
+        title: "任务",
+        emptyTitle: "暂无任务",
+        emptyDescription: "点击画布上的生成按钮开始创作。",
+    },
+    nodeList: {
+        title: "画布节点",
+        searchPlaceholder: "搜索节点、章节、镜头、模型或标签…",
+        searchLabel: "搜索画布节点",
+        clearSearch: "清空搜索",
+        found: "找到 {{count}} 个节点",
+        listLabel: "画布节点列表",
+        emptyTitle: "没有匹配节点",
+        emptyDescription: "换一个关键词继续搜索。",
+        timeUnknown: "时间未记录",
+    },
+    taskItem: {
+        waited: "已等待 {{duration}}",
+        running: "已运行 {{duration}}",
+        cancel: "取消任务",
+        stage: "当前阶段",
+        model: "模型",
+        prompt: "提示词",
+        billing: "计费",
+        moreActions: "更多操作",
+        more: "更多",
+    },
+    live2d: {
+        coreLoadFailed: "Live2D 运行库加载失败，请确认部署产物包含 Cubism Core 且静态资源可访问后重试",
+        renderFailed: "Live2D 渲染失败，已回退默认形象",
+        renderFailedWithDetail: "Live2D 渲染失败：{{detail}}，已回退默认形象",
+        contextLost: "Live2D 渲染上下文丢失，已回退默认形象",
+        loadTimeout: "Live2D 加载超时，请检查模型和网络后重试",
+        unsupportedRuntime: "不支持的 Live2D 模型运行时",
+        invalidSize: "Live2D 模型尺寸无效",
+        loadFailed: "Live2D 加载失败",
+        loading: "正在加载 Live2D 模型",
+    },
+    textLease: {
+        remoteTyping: "其他窗口正在输入",
+        typing: "正在输入",
+    },
+    resourceRefs: {
+        drawingPreviewReadFailed: "读取绘图预览失败",
+    },
+    previsOnboarding: {
+        label: "预演台上手引导",
+        progress: "第 {{position}} 步 / 共 {{total}} 步",
+        skip: "跳过引导",
+        back: "上一步",
+        finish: "结束引导",
+        next: "下一步",
+    },
+    previsTemplate: {
+        title: "选择镜头模板",
+    },
+    previsMini: {
+        noShot: "未设置镜头",
+        objects: "对象",
+        cameras: "机位",
+        duration: "时长",
+    },
+    previsMonitor: {
+        mode: {
+            beauty: "预览",
+            clay: "白膜",
+            depth: "深度",
+            normal: "法线",
+            pose: "骨骼",
+        },
+        popupBlocked: "浏览器拦截了监看窗口，请允许本站弹出窗口后重试",
+        windowTitle: "{{brandName}}预演台 · 镜头监看",
+        tip: "F 全屏 · Esc 退出全屏",
+        unavailable: "监看画面暂不可用",
+    },
+    previsProps: {
+        title: "道具库",
+        add: "添加 {{name}}（{{size}}）",
+        upload: "上传本地模型 (.glb / .gltf)",
+    },
+    previsViewToolbar: {
+        label: "预演台取景模式",
+    },
+};

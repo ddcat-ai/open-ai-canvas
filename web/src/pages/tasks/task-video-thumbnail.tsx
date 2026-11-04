@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Video } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { MediaPreview } from "@/components/media-preview";
 import { captureVideoPoster } from "@/lib/video-poster";
 
 /** 只解码进入视口的视频，复用串行解码队列；缩略图随组件释放，不写入用户资产。 */
 export function TaskVideoThumbnail({ src }: { src: string }) {
+    const { t } = useTranslation();
     const container = useRef<HTMLSpanElement>(null);
     const [poster, setPoster] = useState<{ source: string; url: string }>();
     useEffect(() => {
@@ -36,6 +38,6 @@ export function TaskVideoThumbnail({ src }: { src: string }) {
         };
     }, [src]);
     return <span ref={container} className="block h-full w-full">
-        {poster?.source === src ? <MediaPreview src={poster.url} kind="image" className="h-full w-full object-cover" /> : <span className="task-video-poster-placeholder"><Video /><small>视频预览</small></span>}
+        {poster?.source === src ? <MediaPreview src={poster.url} kind="image" className="h-full w-full object-cover" /> : <span className="task-video-poster-placeholder"><Video /><small>{t("library.tasks.row.videoPreview")}</small></span>}
     </span>;
 }

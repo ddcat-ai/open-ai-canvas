@@ -1,4 +1,118 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
-
-export const frFR: DeepStringRecord<typeof zhCN> = {};
+export const frFR: DeepStringRecord<typeof zhCN> = {
+    timelinePreview: {
+        pause: "Mettre l'aperçu en pause",
+        play: "Lire l'aperçu",
+        noClipHere: "Aucun clip vidéo à cette position",
+        noClip: "Aucun clip vidéo",
+        noSubtitle: "Aucun sous-titre ici. Sélectionnez un clip de sous-titre pour le modifier ci-dessous.",
+    },
+    toolbar: {
+        appearance: "Apparence du canevas",
+        appearanceSubtitle: "Couleurs et grille",
+        mediaInfo: "Infos média",
+    },
+    videoPromptTools: {
+        imageCount: "{{count}} images",
+        videoCount: "{{count}} vidéos",
+        audioCount: "{{count}} audios",
+        workflowReferenceHint: "Les images, vidéos et audios connectés sont transmis selon le mappage des champs du workflow",
+        workflowReference: "Références du workflow",
+        noMedia: "Aucun média connecté",
+        startFrame: "Première image",
+        endFrame: "Dernière image",
+        none: "Aucune",
+    },
+    videoSettings: {
+        label: "Paramètres vidéo",
+    },
+    workspaceHistory: {
+        title: "Historique · 30 derniers (Agent inclus)",
+        emptyTitle: "Aucun historique",
+        emptyDescription: "Les enregistrements apparaissent ici après le lancement d'une génération.",
+    },
+    workspaceTasks: {
+        title: "Tâches",
+        emptyTitle: "Aucune tâche",
+        emptyDescription: "Cliquez sur un bouton de génération du canevas pour commencer.",
+    },
+    nodeList: {
+        title: "Nœuds du canevas",
+        searchPlaceholder: "Rechercher des nœuds, chapitres, plans, modèles ou tags…",
+        searchLabel: "Rechercher des nœuds du canevas",
+        clearSearch: "Effacer la recherche",
+        found: "{{count}} nœuds trouvés",
+        listLabel: "Liste des nœuds du canevas",
+        emptyTitle: "Aucun nœud correspondant",
+        emptyDescription: "Essayez un autre mot-clé.",
+        timeUnknown: "Heure non enregistrée",
+    },
+    taskItem: {
+        waited: "En attente depuis {{duration}}",
+        running: "En cours depuis {{duration}}",
+        cancel: "Annuler la tâche",
+        stage: "Étape actuelle",
+        model: "Modèle",
+        prompt: "Prompt",
+        billing: "Facturation",
+        moreActions: "Plus d'actions",
+        more: "Plus",
+    },
+    live2d: {
+        coreLoadFailed: "Échec du chargement du runtime Live2D. Vérifiez que le build inclut Cubism Core et que les ressources statiques sont accessibles, puis réessayez.",
+        renderFailed: "Échec du rendu Live2D. Retour à l'avatar par défaut.",
+        renderFailedWithDetail: "Échec du rendu Live2D : {{detail}}. Retour à l'avatar par défaut.",
+        contextLost: "Contexte de rendu Live2D perdu. Retour à l'avatar par défaut.",
+        loadTimeout: "Le chargement Live2D a expiré. Vérifiez le modèle et le réseau, puis réessayez.",
+        unsupportedRuntime: "Runtime de modèle Live2D non pris en charge",
+        invalidSize: "Taille de modèle Live2D non valide",
+        loadFailed: "Échec du chargement Live2D",
+        loading: "Chargement du modèle Live2D",
+    },
+    textLease: {
+        remoteTyping: "Saisie dans une autre fenêtre",
+        typing: "Saisie en cours",
+    },
+    resourceRefs: {
+        drawingPreviewReadFailed: "Impossible de lire l'aperçu du dessin",
+    },
+    previsOnboarding: {
+        label: "Guide de prise en main de la prévisualisation",
+        progress: "Étape {{position}} sur {{total}}",
+        skip: "Passer le guide",
+        back: "Précédent",
+        finish: "Terminer le guide",
+        next: "Suivant",
+    },
+    previsTemplate: {
+        title: "Choisir un modèle de plan",
+    },
+    previsMini: {
+        noShot: "Aucun plan défini",
+        objects: "Objets",
+        cameras: "Caméras",
+        duration: "Durée",
+    },
+    previsMonitor: {
+        mode: {
+            beauty: "Aperçu",
+            clay: "Argile",
+            depth: "Profondeur",
+            normal: "Normales",
+            pose: "Squelette",
+        },
+        popupBlocked: "Le navigateur a bloqué la fenêtre de contrôle. Autorisez les fenêtres pop-up pour ce site, puis réessayez.",
+        windowTitle: "{{brandName}} Prévisualisation · Contrôle du plan",
+        tip: "F plein écran · Échap quitter le plein écran",
+        unavailable: "Flux de contrôle indisponible",
+    },
+    previsProps: {
+        title: "Bibliothèque d'accessoires",
+        add: "Ajouter {{name}} ({{size}})",
+        upload: "Importer un modèle local (.glb / .gltf)",
+    },
+    previsViewToolbar: {
+        label: "Mode de vue de la prévisualisation",
+    },
+};

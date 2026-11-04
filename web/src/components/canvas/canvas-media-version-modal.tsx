@@ -3,6 +3,7 @@ import { Button, Popconfirm } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { Check, Copy, ImageOff, LoaderCircle, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import copyToClipboard from "copy-to-clipboard";
+import { useTranslation } from "react-i18next";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
@@ -13,6 +14,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { currentMediaVersion, listMediaVersions, MEDIA_VERSION_LIMIT, mediaVersionAdoptBlock, mediaVersionPreviewNode } from "@/lib/canvas/canvas-media-versions";
 import { formatAbsoluteDateTime, formatRelativeTime } from "@/lib/relative-time";
 import { resolveMediaUrl } from "@/services/file-storage";
+import { currentLocale, translate } from "@/i18n";
 import { CanvasNodeType, type CanvasMediaVersion, type CanvasNodeData } from "@/types/canvas";
 
 type CanvasMediaVersionModalProps = {
@@ -26,9 +28,9 @@ type CanvasMediaVersionModalProps = {
 type ViewMode = "single" | "compare";
 
 const BLOCK_REASON = {
-    locked: "节点已锁定，解锁后可切换",
-    loading: "节点正在生成或上传，完成后可切换",
-    missing: "节点不存在",
+    locked: "canvasB.mediaVersion.blockLocked",
+    loading: "canvasB.mediaVersion.blockLoading",
+    missing: "canvasB.mediaVersion.blockMissing",
 } as const;
 
 /** 媒体版本面板：缩略图条悬停即预览，选中后再切换，避免误改节点。 */
@@ -41,6 +43,7 @@ export function CanvasMediaVersionModal({ node, onClose, onAdopt, onDelete, onEx
 }
 
 function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit<CanvasMediaVersionModalProps, "node"> & { node: CanvasNodeData }) {
+    const { t } = useTranslation();
     const versions = useMemo(() => listMediaVersions(node), [node]);
     const current = useMemo(() => currentMediaVersion(node), [node]);
     const [selectedId, setSelectedId] = useState(() => current?.id || versions[versions.length - 1]?.id || "");
@@ -101,8 +104,8 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
         return (
             <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
                 <ImageOff className="size-6 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">这个节点还没有历史版本</p>
-                <Button onClick={onClose}>关闭</Button>
+                <p className="text-sm text-muted-foreground">{t("canvasB.mediaVersion.noVersions")}</p>
+                <Button onClick={onClose}>{t("common.close")}</Button>
             </div>
         );
     }
@@ -111,13 +114,13 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
         <div ref={rootRef} tabIndex={-1} className="flex max-h-[calc(100vh-48px)] flex-col outline-none" onKeyDown={handleKeyDown}>
             <header className="flex items-center gap-3 px-6 pb-4 pt-5">
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                    <h2 className="m-0 shrink-0 text-[length:var(--fs-heading)] font-semibold text-foreground">版本历史</h2>
+                    <h2 className="m-0 shrink-0 text-[length:var(--fs-heading)] font-semibold text-foreground">{t("canvasB.mediaVersion.title")}</h2>
                     <span className="truncate text-sm text-muted-foreground" title={node.title}>
                         {node.title}
                     </span>
                 </div>
                 {isImage ? (
-                    <Tooltip title={canCompare ? undefined : "选择一个非当前版本后可对比"}>
+                    <Tooltip title={canCompare ? undefined : t("canvasB.mediaVersion.compareHint")}>
                         <span>
                             <SegmentedControl<ViewMode>
                                 size="sm"
@@ -125,8 +128,8 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
                                 disabled={!canCompare}
                                 onChange={setViewMode}
                                 options={[
-                                    { value: "single", label: "单张" },
-                                    { value: "compare", label: "对比当前" },
+                                    { value: "single", label: t("canvasB.mediaVersion.single") },
+                                    { value: "compare", label: t("canvasB.mediaVersion.compareCurrent") },
                                 ]}
                             />
                         </span>
@@ -134,7 +137,7 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
                 ) : null}
                 <button
                     type="button"
-                    aria-label="关闭"
+                    aria-label={t("common.close")}
                     className="grid size-8 shrink-0 place-items-center rounded-[var(--r-md)] text-muted-foreground outline-none transition-colors hover:bg-[var(--control-selected-bg)] hover:text-foreground focus-visible:ring-2"
                     onClick={onClose}
                 >
@@ -147,21 +150,21 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
                 <VersionDetails node={node} version={previewed} current={current} />
             </div>
 
-            <section className="px-6 pt-5" aria-label="全部版本">
+            <section className="px-6 pt-5" aria-label={t("canvasB.mediaVersion.allVersions")}>
                 <div className="mb-2 flex items-center justify-between gap-3">
                     <span className="text-sm font-medium text-foreground">
-                        全部版本 <span className="ml-1 text-muted-foreground">{versions.length}</span>
+                        {t("canvasB.mediaVersion.allVersions")} <span className="ml-1 text-muted-foreground">{versions.length}</span>
                     </span>
                     <span className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
-                        悬停预览
+                        {t("canvasB.mediaVersion.hoverPreview")}
                         <span aria-hidden>·</span>
                         <Kbd>←</Kbd>
-                        <Kbd>→</Kbd> 浏览
+                        <Kbd>→</Kbd> {t("canvasB.mediaVersion.browse")}
                         <span aria-hidden>·</span>
-                        <Kbd>Enter</Kbd> 切换
+                        <Kbd>Enter</Kbd> {t("canvasB.mediaVersion.switch")}
                     </span>
                 </div>
-                <div ref={stripRef} role="listbox" aria-label="版本列表" aria-orientation="horizontal" className="thin-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1" onPointerLeave={() => setHoverId(null)}>
+                <div ref={stripRef} role="listbox" aria-label={t("canvasB.mediaVersion.versionList")} aria-orientation="horizontal" className="thin-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-2 pt-1" onPointerLeave={() => setHoverId(null)}>
                     {versions.map((version) => (
                         <VersionThumb
                             key={version.id}
@@ -187,31 +190,31 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
             <footer className="mt-3 flex flex-wrap items-center gap-3 border-t border-[color:var(--workspace-border)] px-6 py-4">
                 <div className="flex items-center gap-1">
                     <Button type="text" size="small" icon={<SquareArrowOutUpRight className="size-3.5" />} onClick={() => onExtract(node.id, selected.id)}>
-                        另存为新节点
+                        {t("canvasB.mediaVersion.saveAsNode")}
                     </Button>
                     <Popconfirm
-                        title={`删除 V${selected.number}？`}
-                        description="只从版本历史移除，已被其他节点使用的素材不受影响"
-                        okText="删除"
+                        title={t("canvasB.mediaVersion.deleteConfirm", { number: selected.number })}
+                        description={t("canvasB.mediaVersion.deleteDescription")}
+                        okText={t("common.delete")}
                         okButtonProps={{ danger: true }}
-                        cancelText="取消"
+                        cancelText={t("common.cancel")}
                         disabled={selectedIsCurrent || Boolean(adoptBlock)}
                         onConfirm={() => {
                             if (onDelete(node.id, selected.id)) setSelectedId(current?.id || "");
                         }}
                     >
-                        <Tooltip title={selectedIsCurrent ? "当前版本不能删除" : adoptBlock ? BLOCK_REASON[adoptBlock] : undefined}>
+                        <Tooltip title={selectedIsCurrent ? t("canvasB.mediaVersion.currentCannotDelete") : adoptBlock ? t(BLOCK_REASON[adoptBlock]) : undefined}>
                             <Button type="text" size="small" danger icon={<Trash2 className="size-3.5" />} disabled={selectedIsCurrent || Boolean(adoptBlock)}>
-                                删除此版本
+                                {t("canvasB.mediaVersion.deleteVersion")}
                             </Button>
                         </Tooltip>
                     </Popconfirm>
                 </div>
-                <span className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground">{adoptBlock ? BLOCK_REASON[adoptBlock] : `切换只替换媒体，提示词与连线保持不变 · 保留最近 ${MEDIA_VERSION_LIMIT} 个版本`}</span>
+                <span className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground">{adoptBlock ? t(BLOCK_REASON[adoptBlock]) : t("canvasB.mediaVersion.footerHint", { limit: MEDIA_VERSION_LIMIT })}</span>
                 <div className="flex items-center gap-2">
-                    <Button onClick={onClose}>取消</Button>
+                    <Button onClick={onClose}>{t("common.cancel")}</Button>
                     <Button type="primary" disabled={selectedIsCurrent || Boolean(adoptBlock)} onClick={adopt}>
-                        {selectedIsCurrent ? "已是当前版本" : `切换到 V${selected.number}`}
+                        {selectedIsCurrent ? t("canvasB.mediaVersion.alreadyCurrent") : t("canvasB.mediaVersion.switchTo", { number: selected.number })}
                     </Button>
                 </div>
             </footer>
@@ -220,6 +223,7 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
 }
 
 function VersionStage({ node, version, current, comparing }: { node: CanvasNodeData; version: CanvasMediaVersion; current?: CanvasMediaVersion; comparing: boolean }) {
+    const { t } = useTranslation();
     const isCurrent = version.id === current?.id;
     return (
         <div className="relative h-[clamp(240px,46vh,400px)] overflow-hidden rounded-[var(--r-xl)] bg-[var(--media-surface)]">
@@ -230,7 +234,7 @@ function VersionStage({ node, version, current, comparing }: { node: CanvasNodeD
                     <StageMedia node={node} version={version} />
                     <StageBadge className="left-3 top-3">
                         {isCurrent ? <Check className="size-3" /> : null}V{version.number}
-                        {isCurrent ? " · 当前" : " · 预览"}
+                        {isCurrent ? t("canvasB.mediaVersion.currentSuffix") : t("canvasB.mediaVersion.previewSuffix")}
                     </StageBadge>
                 </>
             )}
@@ -293,6 +297,7 @@ function useResolvedMediaUrl(storageKey: string | undefined, fallback: string) {
 
 /** 左侧为预览版本、右侧为当前版本，拖动分隔线比较同一位置的差异。 */
 function CompareStage({ node, version, current }: { node: CanvasNodeData; version: CanvasMediaVersion; current: CanvasMediaVersion }) {
+    const { t } = useTranslation();
     const [split, setSplit] = useState(50);
     const stageRef = useRef<HTMLDivElement>(null);
     const updateFromPointer = (event: ReactPointerEvent) => {
@@ -321,7 +326,7 @@ function CompareStage({ node, version, current }: { node: CanvasNodeData; versio
             <div
                 role="slider"
                 tabIndex={0}
-                aria-label="对比分隔线"
+                aria-label={t("canvasB.mediaVersion.compareDivider")}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(split)}
@@ -340,9 +345,10 @@ function CompareStage({ node, version, current }: { node: CanvasNodeData; versio
                     </svg>
                 </span>
             </div>
-            <StageBadge className="bottom-3 left-3">V{version.number} · 预览</StageBadge>
+            <StageBadge className="bottom-3 left-3">{t("canvasB.mediaVersion.badgePreview", { number: version.number })}</StageBadge>
             <StageBadge className="bottom-3 right-3">
-                <Check className="size-3" />V{current.number} · 当前
+                <Check className="size-3" />
+                {t("canvasB.mediaVersion.badgeCurrent", { number: current.number })}
             </StageBadge>
         </div>
     );
@@ -353,15 +359,17 @@ function StageBadge({ className, children }: { className: string; children: Reac
 }
 
 function MediaUnavailable() {
+    const { t } = useTranslation();
     return (
         <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
             <ImageOff className="size-5" />
-            媒体暂时无法加载
+            {t("canvasB.mediaVersion.mediaUnavailable")}
         </span>
     );
 }
 
 function VersionDetails({ node, version, current }: { node: CanvasNodeData; version: CanvasMediaVersion; current?: CanvasMediaVersion }) {
+    const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
     const [copied, setCopied] = useState(false);
     const prompt = version.generation?.prompt?.trim() || "";
@@ -369,14 +377,14 @@ function VersionDetails({ node, version, current }: { node: CanvasNodeData; vers
     const { media, generation } = version;
     const rows: Array<[string, string]> = [];
     const model = generation?.producedModel || generation?.model;
-    if (model) rows.push(["模型", model]);
+    if (model) rows.push([t("canvasB.mediaVersion.rowModel"), model]);
     const resolution = media.naturalWidth && media.naturalHeight ? `${media.naturalWidth}×${media.naturalHeight}` : "";
     const ratio = generation?.size && generation.size !== "auto" ? generation.size : "";
-    if (ratio || resolution) rows.push(["比例 / 分辨率", [ratio, resolution].filter(Boolean).join(" · ")]);
-    if (media.durationMs && node.type !== CanvasNodeType.Image) rows.push(["时长", formatSeconds(media.durationMs)]);
-    if (generation?.taskDurationMs) rows.push(["生成耗时", formatSeconds(generation.taskDurationMs)]);
-    if (generation?.references?.length) rows.push(["参考素材", `${generation.references.length} 个`]);
-    if (media.bytes) rows.push(["文件大小", formatBytes(media.bytes)]);
+    if (ratio || resolution) rows.push([t("canvasB.mediaVersion.rowRatio"), [ratio, resolution].filter(Boolean).join(" · ")]);
+    if (media.durationMs && node.type !== CanvasNodeType.Image) rows.push([t("canvasB.mediaVersion.rowDuration"), formatSeconds(media.durationMs)]);
+    if (generation?.taskDurationMs) rows.push([t("canvasB.mediaVersion.rowTaskDuration"), formatSeconds(generation.taskDurationMs)]);
+    if (generation?.references?.length) rows.push([t("canvasB.mediaVersion.rowReferences"), t("canvasB.mediaVersion.referenceCount", { count: generation.references.length })]);
+    if (media.bytes) rows.push([t("canvasB.mediaVersion.rowFileSize"), formatBytes(media.bytes)]);
 
     useEffect(() => {
         setExpanded(false);
@@ -384,14 +392,14 @@ function VersionDetails({ node, version, current }: { node: CanvasNodeData; vers
     }, [version.id]);
 
     return (
-        <aside className="flex min-w-0 flex-col" aria-label={`V${version.number} 信息`}>
+        <aside className="flex min-w-0 flex-col" aria-label={t("canvasB.mediaVersion.versionInfo", { number: version.number })}>
             <div className="flex items-baseline justify-between gap-2">
                 <span className="text-[length:var(--fs-title)] font-semibold leading-none text-foreground">V{version.number}</span>
                 <span className="text-xs text-muted-foreground">{formatRelativeTime(version.createdAt)}</span>
             </div>
             <span className="mt-2 text-xs text-muted-foreground">
-                {formatAbsoluteDateTime(version.createdAt)} · {version.source === "upload" ? "上传替换" : "生成"}
-                {version.id === current?.id ? " · 当前" : ""}
+                {formatAbsoluteDateTime(version.createdAt)} · {version.source === "upload" ? t("canvasB.mediaVersion.sourceUpload") : t("canvasB.mediaVersion.sourceGenerate")}
+                {version.id === current?.id ? t("canvasB.mediaVersion.currentSuffix") : ""}
             </span>
             {rows.length ? (
                 <dl className="m-0 mt-4 flex flex-col gap-2 border-t border-[color:var(--workspace-border)] pt-4 text-[var(--fs-ui)]">
@@ -407,8 +415,8 @@ function VersionDetails({ node, version, current }: { node: CanvasNodeData; vers
             ) : null}
             <div className="mt-4 flex min-h-0 flex-col border-t border-[color:var(--workspace-border)] pt-4">
                 <div className="mb-2 flex items-center gap-2 text-[var(--fs-ui)]">
-                    <span className="text-muted-foreground">提示词</span>
-                    {promptDiffers ? <span className="rounded-[var(--r-xs)] bg-[var(--control-selected-bg)] px-2 py-0.5 text-[length:var(--fs-tiny)] text-foreground/75">与当前不同</span> : null}
+                    <span className="text-muted-foreground">{t("canvasB.mediaVersion.prompt")}</span>
+                    {promptDiffers ? <span className="rounded-[var(--r-xs)] bg-[var(--control-selected-bg)] px-2 py-0.5 text-[length:var(--fs-tiny)] text-foreground/75">{t("canvasB.mediaVersion.differsFromCurrent")}</span> : null}
                 </div>
                 {prompt ? (
                     <>
@@ -423,17 +431,17 @@ function VersionDetails({ node, version, current }: { node: CanvasNodeData; vers
                                 }}
                             >
                                 {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                                {copied ? "已复制" : "复制提示词"}
+                                {copied ? t("canvasB.common.copied") : t("canvasB.mediaVersion.copyPrompt")}
                             </button>
                             {prompt.length > 90 ? (
                                 <button type="button" className="text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:underline" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-                                    {expanded ? "收起" : "展开全部"}
+                                    {expanded ? t("canvasB.mediaVersion.collapse") : t("canvasB.mediaVersion.expandAll")}
                                 </button>
                             ) : null}
                         </div>
                     </>
                 ) : (
-                    <p className="m-0 text-[var(--fs-ui)] text-muted-foreground">{version.source === "upload" ? "上传的文件没有提示词" : "未记录提示词"}</p>
+                    <p className="m-0 text-[var(--fs-ui)] text-muted-foreground">{version.source === "upload" ? t("canvasB.mediaVersion.uploadNoPrompt") : t("canvasB.mediaVersion.noPrompt")}</p>
                 )}
             </div>
         </aside>
@@ -441,6 +449,7 @@ function VersionDetails({ node, version, current }: { node: CanvasNodeData; vers
 }
 
 function VersionThumb({ node, version, selected, current, onHover, onSelect, onAdopt }: { node: CanvasNodeData; version: CanvasMediaVersion; selected: boolean; current: boolean; onHover: () => void; onSelect: () => void; onAdopt: () => void }) {
+    const { t } = useTranslation();
     const preview = useMemo(() => mediaVersionPreviewNode(node, version), [node, version]);
     return (
         <button
@@ -448,7 +457,7 @@ function VersionThumb({ node, version, selected, current, onHover, onSelect, onA
             role="option"
             aria-selected={selected}
             data-version-id={version.id}
-            title={current ? `V${version.number}（当前）` : `V${version.number}，双击切换`}
+            title={current ? t("canvasB.mediaVersion.thumbCurrent", { number: version.number }) : t("canvasB.mediaVersion.thumbDoubleClick", { number: version.number })}
             className="group flex w-32 shrink-0 flex-col gap-2 text-left outline-none"
             onPointerEnter={onHover}
             onFocus={onSelect}
@@ -477,7 +486,7 @@ function VersionThumb({ node, version, selected, current, onHover, onSelect, onA
                 {current ? (
                     <span className="absolute left-1.5 top-1.5 inline-flex h-5 items-center gap-0.5 rounded-[var(--r-xs)] bg-black/60 px-2 text-[length:var(--fs-tiny)] font-medium text-white backdrop-blur-md">
                         <Check className="size-2.5" />
-                        当前
+                        {t("canvasB.mediaVersion.current")}
                     </span>
                 ) : null}
             </span>
@@ -490,13 +499,14 @@ function VersionThumb({ node, version, selected, current, onHover, onSelect, onA
 }
 
 function PendingThumb({ progress, number }: { progress?: number; number: number }) {
+    const { t } = useTranslation();
     const percent = typeof progress === "number" && progress > 0 ? Math.min(99, Math.round(progress)) : undefined;
     return (
-        <div className="flex w-32 shrink-0 flex-col gap-2" aria-label={`V${number} 生成中`}>
+        <div className="flex w-32 shrink-0 flex-col gap-2" aria-label={t("canvasB.mediaVersion.pendingLabel", { number })}>
             <span className="flex h-[72px] w-full flex-col items-center justify-center gap-2 rounded-[var(--r-md)] border border-dashed border-[color:var(--workspace-border-strong)] text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-2">
                     <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" />
-                    生成中{percent !== undefined ? ` ${percent}%` : ""}
+                    {percent !== undefined ? t("canvasB.mediaVersion.generatingPercent", { percent }) : t("canvasB.mediaVersion.generating")}
                 </span>
                 {percent !== undefined ? (
                     <span className="h-0.5 w-20 overflow-hidden rounded-full bg-[var(--control-selected-bg)]">
@@ -506,7 +516,7 @@ function PendingThumb({ progress, number }: { progress?: number; number: number 
             </span>
             <span className="flex items-baseline justify-between px-0.5 text-xs text-muted-foreground">
                 <span className="font-semibold">V{number}</span>
-                <span>进行中</span>
+                <span>{t("canvasB.mediaVersion.inProgress")}</span>
             </span>
         </div>
     );
@@ -551,12 +561,12 @@ function formatThumbTime(value: string) {
     const date = new Date(timestamp);
     const today = new Date();
     const sameDay = date.toDateString() === today.toDateString();
-    return sameDay ? date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+    return sameDay ? date.toLocaleTimeString(currentLocale(), { hour: "2-digit", minute: "2-digit" }) : date.toLocaleDateString(currentLocale(), { month: "numeric", day: "numeric" });
 }
 
 function formatSeconds(ms: number) {
     const seconds = ms / 1000;
-    return seconds >= 60 ? `${Math.floor(seconds / 60)}分${Math.round(seconds % 60)}秒` : `${seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1).replace(/\.0$/, "")}s`;
+    return seconds >= 60 ? translate("canvasB.mediaVersion.minutesSeconds", { minutes: Math.floor(seconds / 60), seconds: Math.round(seconds % 60) }) : `${seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1).replace(/\.0$/, "")}s`;
 }
 
 function formatBytes(bytes: number) {

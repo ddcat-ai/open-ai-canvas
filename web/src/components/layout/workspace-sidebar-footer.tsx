@@ -45,10 +45,10 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
             await logout();
             await applyUserSession({ user: null });
             setMenuOpen(false);
-            message.success("已退出登录");
+            message.success(t("account.layout.footerMenu.loggedOut"));
             navigate("/login", { replace: true });
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "退出失败");
+            message.error(error instanceof Error ? error.message : t("account.layout.footerMenu.logoutFailed"));
         }
     };
 

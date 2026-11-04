@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
@@ -70,9 +71,9 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
         const table = nodesRef.current.find((item) => item.id === nodeId)?.metadata?.batchTable;
         if (!table) return;
         const columns = batchReferenceColumns(table);
-        if (columns.length >= MAX_BATCH_REFERENCE_COLUMNS) return message.info("最多支持 10 组参考图");
+        if (columns.length >= MAX_BATCH_REFERENCE_COLUMNS) return message.info(translate("canvasPage.batchTable.maxReferenceColumns", { count: 10 }));
         const nextIndex = columns.length + 1;
-        patchTable(nodeId, { referenceColumns: [...columns, { id: `reference-${nanoid()}`, label: `参考图 ${nextIndex}` }] });
+        patchTable(nodeId, { referenceColumns: [...columns, { id: `reference-${nanoid()}`, label: translate("canvasPage.batchTable.referenceColumn", { index: nextIndex }) }] });
     }, [message, nodesRef, patchTable]);
 
     const removeReferenceColumn = useCallback((nodeId: string) => {
@@ -80,7 +81,7 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
         if (!table) return;
         const columns = batchReferenceColumns(table);
         const nextTable = removeLastBatchReferenceColumn(table);
-        if (!nextTable) return message.info("至少保留 1 组参考图");
+        if (!nextTable) return message.info(translate("canvasPage.batchTable.minReferenceColumns"));
         patchTable(nodeId, nextTable);
         const removed = columns.at(-1);
         if (removed) {
@@ -93,8 +94,8 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
         const table = nodesRef.current.find((item) => item.id === nodeId)?.metadata?.batchTable;
         if (!table) return;
         const columns = table.textColumns || [];
-        if (columns.length >= 4) return message.info("最多支持 4 组文字");
-        patchTable(nodeId, { textColumns: [...columns, { id: `text-${nanoid()}`, label: `文字 ${columns.length + 1}` }] });
+        if (columns.length >= 4) return message.info(translate("canvasPage.batchTable.maxTextColumns", { count: 4 }));
+        patchTable(nodeId, { textColumns: [...columns, { id: `text-${nanoid()}`, label: translate("canvasPage.batchTable.textColumn", { index: columns.length + 1 }) }] });
     }, [message, nodesRef, patchTable]);
 
     const syncRowsFromConnections = useCallback((nodeId: string, silent = false) => {
@@ -110,7 +111,7 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
             return input?.type === CanvasNodeType.Image && Boolean(input.metadata?.content || input.metadata?.storageKey);
         }));
         if (!columns.some((column) => column.length)) {
-            if (!silent) message.warning("请先把图片节点连接到批量创作表");
+            if (!silent) message.warning(translate("canvasPage.batchTable.connectImagesFirst"));
             return false;
         }
         const rows = createBatchRowsFromColumns(table.operation, columns, table.rows);
@@ -126,13 +127,13 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
             }) : row.textNodeIds,
         }));
         if (!rows.length) {
-            if (!silent) message.warning("批量换装至少需要一张人物图和一张服装图");
+            if (!silent) message.warning(translate("canvasPage.batchTable.tryOnNeedsImages"));
             return false;
         }
         const rowsChanged = JSON.stringify(table.rows) !== JSON.stringify(rowsWithText);
         if (!rowsChanged) return false;
         patchTable(nodeId, { rows: rowsWithText });
-        if (!silent) message.success(`已按连线创建 ${rows.length} 行任务`);
+        if (!silent) message.success(translate("canvasPage.batchTable.rowsCreated", { count: rows.length }));
         return true;
     }, [connectionsRef, message, nodesRef, patchTable]);
 
@@ -162,13 +163,13 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
 
         const selectableRowIds = new Set(batchGenerationRows(sourceNode, nodesRef.current, pending.requestedRowIds).map((row) => row.id));
         if (JSON.stringify(table) !== pending.tableSnapshot || !rows.every((row) => selectableRowIds.has(row.id))) {
-            message.warning("表格、素材或任务状态已变化，请重新打开生成设置后提交");
+            message.warning(translate("canvasPage.batchTable.stateChanged"));
             return;
         }
 
         const mergedConfig = { ...effectiveConfig, ...settings };
         if (!isAiConfigReady(mergedConfig, mergedConfig.imageModel || mergedConfig.model)) {
-            message.error("所选图片模型尚未配置，未提交生成任务");
+            message.error(translate("canvasPage.batchTable.modelNotConfigured"));
             return;
         }
 
@@ -176,7 +177,7 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
         try {
             prepared = prepareCanvasBatchTableGeneration({ nodes: nodesRef.current, connections: connectionsRef.current, sourceNodeId: nodeId, rows, config: effectiveConfig, settings, assets });
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "任务输入快照保存失败，未加入生成队列");
+            message.error(error instanceof Error ? error.message : translate("canvasPage.batchTable.snapshotFailed"));
             return;
         }
         const { nodes: nextNodes, connections: nextConnections, targets } = prepared;
@@ -185,7 +186,7 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
         setNodes(nextNodes);
         setConnections(nextConnections);
         setSelectedNodeIds(new Set(targets.map((target) => target.nodeId)));
-        if (enqueueGenerationBatch(nodeId, "batch_image", targets, { concurrency })) message.success(`${targets.length} 个任务已加入并发队列`);
+        if (enqueueGenerationBatch(nodeId, "batch_image", targets, { concurrency })) message.success(translate("canvasPage.batchTable.queued", { count: targets.length }));
     }, [assets, connectionsRef, effectiveConfig, enqueueGenerationBatch, isAiConfigReady, message, nodesRef, setConnections, setNodes, setSelectedNodeIds]);
 
     const generateRows = useCallback((nodeId: string, requestedRowIds?: string[]) => {
@@ -198,7 +199,7 @@ export function useCanvasBatchTable({ nodesRef, connectionsRef, assets, setNodes
             return;
         }
         const rows = batchGenerationRows(sourceNode, nodesRef.current, requestedRowIds);
-        if (!rows.length) return message.info("没有可提交的未完成任务，请检查参考图和提示词");
+        if (!rows.length) return message.info(translate("canvasPage.batchTable.nothingToSubmit"));
 
         setBatchGenDialog({ open: true, pending: { nodeId, rows, concurrency: table.concurrency, tableSnapshot: JSON.stringify(table), requestedRowIds } });
     }, [effectiveConfig, isAiConfigReady, message, nodesRef]);

@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AudioLines, Clock3, FileText, Image, Layers, Pencil, Search, X } from "lucide-react";
 
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
@@ -7,6 +8,7 @@ import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTim
 import type { AiConfig } from "@/stores/use-config-store";
 import { getNodeListLabel } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { currentLocale, translate } from "@/i18n";
 import { Video as CanvasVideoIcon } from "lucide-react";
 
 export function CanvasWorkspaceNodeListPanel({
@@ -28,12 +30,13 @@ export function CanvasWorkspaceNodeListPanel({
     onQueryChange: (value: string) => void;
     onFocus: (nodeId: string) => void;
 }) {
+    const { t } = useTranslation();
     return (
         <>
             <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
                 <Layers className="size-3.5 shrink-0" />
-                <span className="truncate text-xs font-semibold">画布节点</span>
-                <span className="tabular-nums text-foreground/32">{nodes.length.toLocaleString("zh-CN")}</span>
+                <span className="truncate text-xs font-semibold">{t("canvasC.nodeList.title")}</span>
+                <span className="tabular-nums text-foreground/32">{nodes.length.toLocaleString(currentLocale())}</span>
             </header>
             <div className="shrink-0 border-b border-border/70 p-2">
                 <label className="flex h-8 items-center gap-2 rounded-[var(--r-md)] bg-foreground/[.045] px-2 focus-within:ring-2 focus-within:ring-[var(--workspace-accent-soft)]">
@@ -42,22 +45,22 @@ export function CanvasWorkspaceNodeListPanel({
                         value={query}
                         onChange={(event) => onQueryChange(event.target.value)}
                         className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-foreground/28"
-                        placeholder="搜索节点、章节、镜头、模型或标签…"
-                        aria-label="搜索画布节点"
+                        placeholder={t("canvasC.nodeList.searchPlaceholder")}
+                        aria-label={t("canvasC.nodeList.searchLabel")}
                     />
                     {query ? (
-                        <button type="button" onClick={() => onQueryChange("")} className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" aria-label="清空搜索">
+                        <button type="button" onClick={() => onQueryChange("")} className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" aria-label={t("canvasC.nodeList.clearSearch")}>
                             <X className="size-3" />
                         </button>
                     ) : null}
                 </label>
-                {deferredQuery ? <div className="mt-1 px-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/35">找到 {results.length.toLocaleString("zh-CN")} 个节点</div> : null}
+                {deferredQuery ? <div className="mt-1 px-0.5 text-[var(--fs-micro)] tabular-nums text-foreground/35">{t("canvasC.nodeList.found", { count: results.length.toLocaleString(currentLocale()) })}</div> : null}
             </div>
-            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain py-1" role="listbox" aria-label="画布节点列表">
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain py-1" role="listbox" aria-label={t("canvasC.nodeList.listLabel")}>
                 {results.length ? (
                     results.map((node) => <CanvasNodeListItem key={node.id} node={node} config={config} active={selectedNodeIds.has(node.id)} onSelect={() => onFocus(node.id)} />)
                 ) : (
-                    <WorkspaceState icon="canvas" compact title="没有匹配节点" description="换一个关键词继续搜索。" />
+                    <WorkspaceState icon="canvas" compact title={t("canvasC.nodeList.emptyTitle")} description={t("canvasC.nodeList.emptyDescription")} />
                 )}
             </div>
         </>
@@ -149,6 +152,6 @@ function CanvasNodeListThumbnail({ node }: { node: CanvasNodeData }) {
 }
 
 function fullTime(value?: string) {
-    if (!value) return "时间未记录";
-    return new Date(value).toLocaleString("zh-CN", { hour12: false });
+    if (!value) return translate("canvasC.nodeList.timeUnknown");
+    return new Date(value).toLocaleString(currentLocale(), { hour12: false });
 }

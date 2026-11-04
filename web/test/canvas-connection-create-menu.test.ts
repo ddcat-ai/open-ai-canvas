@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { zhCN as canvasAZh } from "../src/i18n/messages/areas/canvasA/zh-CN";
 import { readFileSync } from "node:fs";
 
 const component = readFileSync(new URL("../src/components/canvas/canvas-workspace-overlays.tsx", import.meta.url), "utf8");
@@ -21,7 +22,8 @@ test("add-node submenu uses a four-column medium-size grid", () => {
     const menu = readFileSync(new URL("../src/components/canvas/canvas-create-menu.tsx", import.meta.url), "utf8");
     const context = readFileSync(new URL("../src/components/canvas/canvas-context-menu.tsx", import.meta.url), "utf8");
     const styles = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
-    expect(menu).toContain('aria-label="创作节点" className="mt-1 grid grid-cols-4 gap-0.5"');
+    expect(menu).toContain('aria-label={t("canvasA.createMenu.nodesGroup")} className="mt-1 grid grid-cols-4 gap-0.5"');
+    expect(canvasAZh.createMenu.nodesGroup).toBe("创作节点");
     expect(menu).toContain("size-9 shrink-0");
     expect(context).toContain('w-[360px]');
     expect(styles).toContain("--canvas-create-node-height: calc(var(--space-16) + var(--space-3))");

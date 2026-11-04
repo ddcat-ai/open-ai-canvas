@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { buildSkillMentionReferences } from "@/services/skill-runtime";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
@@ -65,12 +66,12 @@ export function removeCreationReferenceTokens(value: string, references: Creatio
 
 export function replaceCreationAttachmentReference(prompt: string, attachments: CreationAttachment[], targetAttachmentId: string, replacement: CreationAttachment) {
     const targetIndex = attachments.findIndex((attachment) => attachment.id === targetAttachmentId);
-    if (targetIndex < 0) throw new Error("要替换的参考内容不存在");
+    if (targetIndex < 0) throw new Error(translate("create.references.targetMissing"));
     if (replacement.id === targetAttachmentId) return { prompt, attachments };
 
     const currentReferences = buildCreationMentionReferences([], attachments);
     const targetReference = currentReferences.find((reference) => reference.attachmentId === targetAttachmentId);
-    if (!targetReference) throw new Error("要替换的提示词引用不存在");
+    if (!targetReference) throw new Error(translate("create.references.mentionMissing"));
 
     const remainingAttachments = attachments.filter((attachment) => attachment.id !== targetAttachmentId && attachment.id !== replacement.id);
     const insertionIndex = Math.min(targetIndex, remainingAttachments.length);
@@ -80,7 +81,7 @@ export function replaceCreationAttachmentReference(prompt: string, attachments: 
         ...remainingAttachments.slice(insertionIndex),
     ];
     const replacementReference = buildCreationMentionReferences([], nextAttachments).find((reference) => reference.attachmentId === replacement.id);
-    if (!replacementReference) throw new Error("替换后的提示词引用无效");
+    if (!replacementReference) throw new Error(translate("create.references.replacementInvalid"));
 
     const targetToken = canvasResourceMentionToken(targetReference);
     const replacementToken = canvasResourceMentionToken(replacementReference);
@@ -123,7 +124,7 @@ function attachmentReference(attachment: CreationAttachment, index: number): Cre
         nodeId: `upload:${attachment.id}`,
         kind: kind === "file" ? "text" : kind,
         label: `${label}${index + 1}`,
-        title: "当前参考内容",
+        title: translate("create.references.currentTitle"),
         previewUrl: attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url),
         storageKey: attachment.storageKey,
         active: true,

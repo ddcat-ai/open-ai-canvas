@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as canvasCZh } from "../src/i18n/messages/areas/canvasC/zh-CN";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Euler, Vector3 } from "three";
@@ -684,7 +685,8 @@ describe("切换器可发现、可键盘、无新增全局样式", () => {
         expect(toolbar).toContain('type="button"');
         expect(toolbar).toContain("aria-pressed={active}");
         expect(toolbar).toContain('role="group"');
-        expect(toolbar).toContain('aria-label="预演台取景模式"');
+        expect(toolbar).toContain('aria-label={t("canvasC.previsViewToolbar.label")}');
+        expect(canvasCZh.previsViewToolbar.label).toBe("预演台取景模式");
     });
 
     test("每个按钮都有 aria-label 与 title，图标化文字也能被读出", () => {

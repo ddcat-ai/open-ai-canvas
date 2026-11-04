@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ChevronRight, Star } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import type { CanvasAssetGroup } from "@/lib/canvas/canvas-asset-catalog";
 import type { CanvasNodeData } from "@/types/canvas";
@@ -37,6 +38,7 @@ type CanvasAssetTreeProps = {
  * 键盘交互按 WAI-ARIA tree 模式实现（上下移动、左右折叠展开、Enter/空格选中）。
  */
 export function CanvasAssetTree({ groups, nodeById, selectedKey, expandedKeys, onSelect, onToggle }: CanvasAssetTreeProps) {
+    const { t } = useTranslation();
     const rows = useMemo(() => flattenRows(groups, nodeById, expandedKeys), [expandedKeys, groups, nodeById]);
     const [focusedKey, setFocusedKey] = useState("");
     const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -65,7 +67,7 @@ export function CanvasAssetTree({ groups, nodeById, selectedKey, expandedKeys, o
     };
 
     return (
-        <div role="tree" aria-label="资产目录" className="flex flex-col gap-px">
+        <div role="tree" aria-label={t("canvasA.assetTree.label")} className="flex flex-col gap-px">
             {rows.map((row, index) => {
                 const selected = row.key === selectedKey;
                 return (
@@ -103,7 +105,7 @@ export function CanvasAssetTree({ groups, nodeById, selectedKey, expandedKeys, o
                         <span className="min-w-0 flex-1 truncate" title={row.label}>
                             {row.label}
                         </span>
-                        {row.primary ? <Star className="size-3 shrink-0 fill-current text-foreground" aria-label="主版本" /> : null}
+                        {row.primary ? <Star className="size-3 shrink-0 fill-current text-foreground" aria-label={t("canvasA.assetTree.primaryVersion")} /> : null}
                         {row.count !== undefined ? <span className={`shrink-0 text-[11px] tabular-nums ${selected ? "text-foreground/70" : "text-muted-foreground/80"}`}>{row.count}</span> : null}
                     </div>
                 );

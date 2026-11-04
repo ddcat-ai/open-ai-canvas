@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export type CanvasCreateCommand = {
  * 工作流与导入资源合并到底部浅底轨道，hover 时提亮为浮层表面。
  */
 export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[] }) {
+    const { t } = useTranslation();
     const themeKey = useActiveTheme();
     const theme = canvasThemes[themeKey];
     const isDark = themeKey === "dark";
@@ -39,7 +41,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
     return (
         <div className="flex flex-col" style={vars}>
             <header className="flex h-8 items-center justify-between gap-2 pl-2 pr-1">
-                <h2 className="font-semibold leading-none" style={{ fontSize: "var(--fs-ui)" }}>添加节点</h2>
+                <h2 className="font-semibold leading-none" style={{ fontSize: "var(--fs-ui)" }}>{t("canvasA.createMenu.title")}</h2>
                 {projectCommands.map((command) => (
                     <button
                         key={command.id}
@@ -56,13 +58,13 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
                 ))}
             </header>
 
-            <div role="group" aria-label="创作节点" className="mt-1 grid grid-cols-4 gap-0.5">
+            <div role="group" aria-label={t("canvasA.createMenu.nodesGroup")} className="mt-1 grid grid-cols-4 gap-0.5">
                 {nodeCommands.map((command) => (
                     <button
                         key={command.id}
                         type="button"
                         className="group relative flex h-[var(--canvas-create-node-height)] min-w-0 flex-col items-center justify-center gap-2 rounded-[var(--r-md)] px-1 outline-none transition-colors hover:bg-[var(--create-hover)] focus-visible:ring-2"
-                        title={command.badge ? `${command.label}（${command.badge}）` : command.label}
+                        title={command.badge ? t("canvasA.createMenu.commandWithBadge", { label: command.label, badge: command.badge }) : command.label}
                         onMouseDown={(event) => event.stopPropagation()}
                         onClick={command.onClick}
                     >
@@ -83,7 +85,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
             </div>
 
             {footerCommands.length ? (
-                <div role="group" aria-label="工作流与导入资源" className="mt-2 grid gap-0.5 rounded-[10px] p-0.5" style={{ background: "var(--create-track)", gridTemplateColumns: `repeat(${footerCommands.length}, minmax(0, 1fr))` }}>
+                <div role="group" aria-label={t("canvasA.createMenu.footerGroup")} className="mt-2 grid gap-0.5 rounded-[10px] p-0.5" style={{ background: "var(--create-track)", gridTemplateColumns: `repeat(${footerCommands.length}, minmax(0, 1fr))` }}>
                     {footerCommands.map((command) => (
                         <button
                             key={command.id}

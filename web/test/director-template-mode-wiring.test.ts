@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as canvasPageZh } from "../src/i18n/messages/areas/canvasPage/zh-CN";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { moduleGroupSource } from "./helpers/module-group-source";
@@ -33,7 +34,8 @@ describe("新建场景必须显式选模板", () => {
     });
 
     test("新建走模板工厂，不再走带默认演员的 createPrevisScene", () => {
-        expect(hook).toContain("createPrevisSceneFromTemplate(templateId, `镜头 ${shotIndex}`)");
+        expect(hook).toContain('createPrevisSceneFromTemplate(templateId, translate("canvasPage.previs.shot", { index: shotIndex }))');
+        expect(canvasPageZh.previs.shot).toBe("镜头 {{index}}");
         expect(hook).not.toContain("createPrevisScene(");
     });
 

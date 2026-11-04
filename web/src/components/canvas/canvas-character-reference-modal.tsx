@@ -1,6 +1,7 @@
 import { App, Button, Input } from "antd";
 import { AudioLines, IdCard, ImageIcon, Mic, Pause, Play } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -14,24 +15,24 @@ type Tab = "profile" | "visual" | "voice";
 type FieldKey = "role" | "aliases" | "appearance" | "physique" | "clothing" | "personality" | "props" | "consistencyPrompt" | "multiViewPrompt" | "voiceLanguage" | "voiceAge" | "voiceTimbre";
 type Drafts = Record<FieldKey | "name", string>;
 
-const FIELD_GROUPS: Array<{ title: string; fields: Array<{ key: FieldKey; label: string; placeholder: string; wide?: boolean }> }> = [
-    { title: "身份", fields: [
-        { key: "role", label: "剧情身份", placeholder: "例如：落魄剑客，主角的师兄" },
-        { key: "aliases", label: "别名", placeholder: "多个别名用逗号分隔" },
-        { key: "personality", label: "性格气质", placeholder: "冷静、克制、偶尔自嘲", wide: true },
+const FIELD_GROUPS: Array<{ id: "identity" | "appearance" | "voice"; fields: Array<{ key: FieldKey; wide?: boolean }> }> = [
+    { id: "identity", fields: [
+        { key: "role" },
+        { key: "aliases" },
+        { key: "personality", wide: true },
     ] },
-    { title: "外观", fields: [
-        { key: "appearance", label: "外貌特征", placeholder: "脸型、五官、发型、年龄感", wide: true },
-        { key: "physique", label: "体型姿态", placeholder: "身高、体态、习惯动作" },
-        { key: "clothing", label: "服装造型", placeholder: "主服装与配色" },
-        { key: "props", label: "标志道具", placeholder: "随身物品或武器", wide: true },
-        { key: "consistencyPrompt", label: "一致性要求", placeholder: "生成时必须保持不变的特征", wide: true },
-        { key: "multiViewPrompt", label: "多视图要求", placeholder: "三视图 / 多角度生成补充说明", wide: true },
+    { id: "appearance", fields: [
+        { key: "appearance", wide: true },
+        { key: "physique" },
+        { key: "clothing" },
+        { key: "props", wide: true },
+        { key: "consistencyPrompt", wide: true },
+        { key: "multiViewPrompt", wide: true },
     ] },
-    { title: "声音画像", fields: [
-        { key: "voiceLanguage", label: "语言口音", placeholder: "普通话，略带川音" },
-        { key: "voiceAge", label: "年龄感", placeholder: "青年" },
-        { key: "voiceTimbre", label: "音色气质", placeholder: "低沉、沙哑、语速偏慢", wide: true },
+    { id: "voice", fields: [
+        { key: "voiceLanguage" },
+        { key: "voiceAge" },
+        { key: "voiceTimbre", wide: true },
     ] },
 ];
 const FIELD_KEYS = FIELD_GROUPS.flatMap((group) => group.fields.map((field) => field.key));
@@ -69,12 +70,13 @@ export function CanvasCharacterReferenceModal({ node, canvasNodes, open, onClose
 }
 
 function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: CanvasNodeData; assetId: string; canvasTitles: CanvasMediaTitles; onUpdated?: (detail: ProjectCharacterDetail) => void }) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
     const queryClient = useQueryClient();
     const detailQuery = useQuery({ queryKey: ["character-studio", assetId], queryFn: () => getCharacter(assetId) });
     const detail = detailQuery.data;
     const metadata = node.metadata;
-    const name = detail?.asset.title || metadata?.characterName || node.title || "未命名角色";
+    const name = detail?.asset.title || metadata?.characterName || node.title || t("canvasA.characterNode.unnamed");
     const definition = detail?.character.definition || metadata?.characterDefinition || {};
     // 以序列化结果作依赖，避免每次渲染的新对象反复重置草稿。
     const definitionKey = JSON.stringify(definition);
@@ -102,29 +104,29 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
             onUpdated?.(next);
             message.success(success);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "角色卡保存失败，请稍后重试");
+            message.error(error instanceof Error ? error.message : t("canvasA.characterStudio.saveFailed"));
         } finally {
             setBusyKey("");
         }
     };
-    const bindImage = (resourceId: string) => commit(resourceId, () => replaceCharacterRepresentations(assetId, [{ role: "turnaround_sheet", resourceId }, { role: "primary", resourceId }]), "形象已更新");
-    const bindVoice = (resourceId: string, title: string) => commit(resourceId, () => bindCharacterVoice(assetId, { sampleResourceId: resourceId, voiceName: title }), "声音已绑定");
+    const bindImage = (resourceId: string) => commit(resourceId, () => replaceCharacterRepresentations(assetId, [{ role: "turnaround_sheet", resourceId }, { role: "primary", resourceId }]), t("canvasA.characterStudio.visualUpdated"));
+    const bindVoice = (resourceId: string, title: string) => commit(resourceId, () => bindCharacterVoice(assetId, { sampleResourceId: resourceId, voiceName: title }), t("canvasA.characterLibrary.voiceBound"));
     const upload = (file: File, kind: "image" | "audio") => commit("upload", async () => {
         const resource = await uploadResourceFile(file, kind, { fileName: file.name });
         return kind === "image"
             ? replaceCharacterRepresentations(assetId, [{ role: "turnaround_sheet", resourceId: resource.id }, { role: "primary", resourceId: resource.id }])
             : bindCharacterVoice(assetId, { sampleResourceId: resource.id, voiceName: file.name.replace(/\.[^.]+$/, "") });
-    }, kind === "image" ? "形象已更新" : "声音已绑定");
+    }, kind === "image" ? t("canvasA.characterStudio.visualUpdated") : t("canvasA.characterLibrary.voiceBound"));
     const saveProfile = () => {
         if (!drafts.name.trim()) {
-            message.error("角色名称不能为空");
+            message.error(t("canvasA.characterStudio.nameRequired"));
             return;
         }
         const nextDefinition: Record<string, unknown> = { ...definition };
         FIELD_KEYS.forEach((key) => {
             nextDefinition[key] = key === "aliases" ? drafts.aliases.split(/[，,、]/).map((item) => item.trim()).filter(Boolean) : drafts[key].trim();
         });
-        void commit("profile", () => updateCharacter(assetId, { name: drafts.name.trim(), definition: nextDefinition }), "角色资料已保存");
+        void commit("profile", () => updateCharacter(assetId, { name: drafts.name.trim(), definition: nextDefinition }), t("canvasA.characterStudio.profileSaved"));
     };
 
     return (
@@ -140,11 +142,11 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                             {voiceName ? (
                                 <div className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[.04] px-4 py-3">
                                     <span className="min-w-0">
-                                        <span className="block text-[var(--fs-label)] text-foreground/45">当前声音</span>
+                                        <span className="block text-[var(--fs-label)] text-foreground/45">{t("canvasA.characterStudio.currentVoice")}</span>
                                         <span className="block truncate text-sm font-medium">{voiceName}</span>
                                     </span>
-                                    <button type="button" disabled={Boolean(busyKey)} onClick={() => void commit("unbind", () => unbindCharacterVoice(assetId), "声音绑定已解除")} className="shrink-0 rounded text-xs text-foreground/45 underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)] disabled:cursor-wait">
-                                        解除绑定
+                                    <button type="button" disabled={Boolean(busyKey)} onClick={() => void commit("unbind", () => unbindCharacterVoice(assetId), t("canvasA.characterStudio.voiceUnbound"))} className="shrink-0 rounded text-xs text-foreground/45 underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)] disabled:cursor-wait">
+                                        {t("canvasA.characterStudio.unbind")}
                                     </button>
                                 </div>
                             ) : null}
@@ -155,10 +157,10 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                 <footer className={`grid shrink-0 transition-[grid-template-rows] duration-200 [transition-timing-function:cubic-bezier(.16,1,.3,1)] motion-reduce:transition-none ${dirty ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`} aria-hidden={!dirty}>
                     <div className="overflow-hidden">
                         <div className="flex items-center justify-between gap-3 border-t border-border px-7 py-4">
-                            <span className="text-xs text-foreground/45">资料有改动，保存后生成新版本</span>
+                            <span className="text-xs text-foreground/45">{t("canvasA.characterStudio.dirtyHint")}</span>
                             <span className="flex gap-2">
-                                <Button type="text" size="small" tabIndex={dirty ? 0 : -1} onClick={() => setDrafts(baseline)}>还原</Button>
-                                <Button type="primary" size="small" tabIndex={dirty ? 0 : -1} loading={busyKey === "profile"} onClick={saveProfile}>保存资料</Button>
+                                <Button type="text" size="small" tabIndex={dirty ? 0 : -1} onClick={() => setDrafts(baseline)}>{t("canvasA.characterStudio.revert")}</Button>
+                                <Button type="primary" size="small" tabIndex={dirty ? 0 : -1} loading={busyKey === "profile"} onClick={saveProfile}>{t("canvasA.characterStudio.saveProfile")}</Button>
                             </span>
                         </div>
                     </div>
@@ -168,14 +170,15 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
     );
 }
 
-const TABS: Array<{ value: Tab; label: string; icon: ReactNode }> = [
-    { value: "profile", label: "资料", icon: <IdCard /> },
-    { value: "visual", label: "形象", icon: <ImageIcon /> },
-    { value: "voice", label: "声音", icon: <AudioLines /> },
+const TABS: Array<{ value: Tab; labelKey: string; icon: ReactNode }> = [
+    { value: "profile", labelKey: "canvasA.characterStudio.tabProfile", icon: <IdCard /> },
+    { value: "visual", labelKey: "canvasA.characterStudio.tabVisual", icon: <ImageIcon /> },
+    { value: "voice", labelKey: "canvasA.characterStudio.tabVoice", icon: <AudioLines /> },
 ];
 
 /** 右侧主导航：等分整行、带图标和下划线指示，比分段控件更醒目；支持左右方向键切换。 */
 function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
+    const { t } = useTranslation();
     const refs = useRef<Array<HTMLButtonElement | null>>([]);
     const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -186,7 +189,7 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
         refs.current[next]?.focus();
     };
     return (
-        <div role="tablist" aria-label="角色卡设置" onKeyDown={onKeyDown} className="grid shrink-0 grid-cols-3 border-b border-border pl-3 pr-14 pt-3">
+        <div role="tablist" aria-label={t("canvasA.characterStudio.tabsLabel")} onKeyDown={onKeyDown} className="grid shrink-0 grid-cols-3 border-b border-border pl-3 pr-14 pt-3">
             {TABS.map((item, index) => {
                 const active = item.value === value;
                 return (
@@ -205,7 +208,7 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
                         className={`relative flex h-14 items-center justify-center gap-2 rounded-t-lg text-[var(--fs-body)] outline-none transition-colors duration-150 focus-visible:bg-foreground/[.05] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)] [&_svg]:size-[18px] ${active ? "font-semibold text-foreground" : "font-medium text-foreground/50 hover:bg-foreground/[.03] hover:text-foreground/80"}`}
                     >
                         {item.icon}
-                        {item.label}
+                        {t(item.labelKey)}
                         <span aria-hidden className={`absolute inset-x-5 -bottom-px h-[3px] rounded-full bg-[var(--workspace-accent)] transition-opacity duration-200 ${active ? "opacity-100" : "opacity-0"}`} />
                     </button>
                 );
@@ -216,19 +219,20 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
 
 /** 左侧主视觉：模糊底 + 全幅立绘，名字压在底部；声音可直接试听。 */
 function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId, version }: { name: string; role: string; cover: string; hasCover: boolean; voiceName: string; voiceSampleId: string; version?: number }) {
+    const { t } = useTranslation();
     return (
-        <section className="relative isolate min-h-0 overflow-hidden bg-[#0f0f12] text-white" aria-label={`${name}角色形象`}>
+        <section className="relative isolate min-h-0 overflow-hidden bg-[#0f0f12] text-white" aria-label={t("canvasA.characterStudio.stageLabel", { name })}>
             {cover ? (
                 <>
                     <img src={cover} alt="" aria-hidden className="absolute inset-0 -z-10 h-full w-full scale-125 object-cover opacity-45 blur-3xl saturate-125" draggable={false} />
-                    <img src={cover} alt={`${name}角色形象`} className="absolute inset-0 h-full w-full object-contain px-8 pb-32 pt-12 drop-shadow-[0_30px_60px_rgba(0,0,0,.5)]" draggable={false} />
+                    <img src={cover} alt={t("canvasA.characterStudio.stageLabel", { name })} className="absolute inset-0 h-full w-full object-contain px-8 pb-32 pt-12 drop-shadow-[0_30px_60px_rgba(0,0,0,.5)]" draggable={false} />
                 </>
             ) : (
                 <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,.08),transparent_62%)] pb-24">
                     {hasCover ? null : (
                         <div className="text-center">
                             <span className="mx-auto grid size-28 place-items-center rounded-full border border-white/12 text-5xl font-normal text-white/70">{characterInitial(name)}</span>
-                            <p className="mt-4 text-xs text-white/40">在右侧「形象」中选择或上传立绘</p>
+                            <p className="mt-4 text-xs text-white/40">{t("canvasA.characterStudio.noCoverHint")}</p>
                         </div>
                     )}
                 </div>
@@ -237,7 +241,7 @@ function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId,
             <span className="absolute left-7 top-6 text-[var(--fs-label)] font-medium uppercase tracking-[.28em] text-white/50">Character{version ? ` · v${version}` : ""}</span>
             <div className="absolute inset-x-0 bottom-0 px-7 pb-7">
                 <h2 className="truncate text-[var(--fs-display)] font-semibold leading-tight tracking-tight">{name}</h2>
-                <p className="mt-1 line-clamp-2 max-w-[46ch] text-sm leading-6 text-white/60">{role || "尚未填写剧情身份"}</p>
+                <p className="mt-1 line-clamp-2 max-w-[46ch] text-sm leading-6 text-white/60">{role || t("canvasA.characterStudio.noRole")}</p>
                 <VoiceChip name={voiceName} sampleId={voiceSampleId} />
             </div>
         </section>
@@ -245,6 +249,7 @@ function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId,
 }
 
 function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
+    const { t } = useTranslation();
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [playing, setPlaying] = useState(false);
     useEffect(() => () => audioRef.current?.pause(), []);
@@ -252,7 +257,7 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
         audioRef.current?.pause();
         setPlaying(false);
     }, [sampleId]);
-    if (!name) return <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/35"><Mic className="size-3.5" />未绑定声音</p>;
+    if (!name) return <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/35"><Mic className="size-3.5" />{t("canvasA.characterStudio.noVoice")}</p>;
     const toggle = async () => {
         if (!sampleId) return;
         const audio = audioRef.current || (audioRef.current = new Audio());
@@ -271,7 +276,7 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
         }
     };
     return (
-        <button type="button" disabled={!sampleId} onClick={() => void toggle()} aria-label={sampleId ? `${playing ? "暂停" : "试听"}声音 ${name}` : `声音 ${name}`} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-4 text-xs text-white/85 outline-none backdrop-blur transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default">
+        <button type="button" disabled={!sampleId} onClick={() => void toggle()} aria-label={sampleId ? t(playing ? "canvasA.characterStudio.pauseVoice" : "canvasA.characterStudio.previewVoice", { name }) : t("canvasA.characterStudio.voiceNamed", { name })} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-4 text-xs text-white/85 outline-none backdrop-blur transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default">
             <span className="grid size-6 place-items-center rounded-full bg-white text-black">{playing ? <Pause className="size-3" /> : sampleId ? <Play className="size-3 translate-x-px" /> : <Mic className="size-3" />}</span>
             <span className="truncate">{name}</span>
         </button>
@@ -279,21 +284,22 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
 }
 
 function ProfileForm({ drafts, onChange }: { drafts: Drafts; onChange: (key: keyof Drafts, value: string) => void }) {
+    const { t } = useTranslation();
     return (
         <div className="space-y-8">
-            <Field label="角色名称">
-                <Input variant="filled" size="large" value={drafts.name} maxLength={80} placeholder="角色名称" onChange={(event) => onChange("name", event.target.value)} className="!text-base !font-medium" />
+            <Field label={t("canvasA.characterLibrary.namePlaceholder")}>
+                <Input variant="filled" size="large" value={drafts.name} maxLength={80} placeholder={t("canvasA.characterLibrary.namePlaceholder")} onChange={(event) => onChange("name", event.target.value)} className="!text-base !font-medium" />
             </Field>
             {FIELD_GROUPS.map((group) => (
-                <fieldset key={group.title} className="space-y-4">
+                <fieldset key={group.id} className="space-y-4">
                     <legend className="mb-4 flex w-full items-center gap-3 text-[var(--fs-label)] font-medium uppercase tracking-[.18em] text-foreground/40">
-                        {group.title}
+                        {t(`canvasA.characterStudio.groups.${group.id}`)}
                         <span className="h-px flex-1 bg-border" />
                     </legend>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         {group.fields.map((field) => (
-                            <Field key={field.key} label={field.label} wide={field.wide}>
-                                <Input.TextArea variant="filled" autoSize={{ minRows: 1, maxRows: 6 }} value={drafts[field.key]} placeholder={field.placeholder} onChange={(event) => onChange(field.key, event.target.value)} />
+                            <Field key={field.key} label={t(`canvasA.characterStudio.fields.${field.key}.label`)} wide={field.wide}>
+                                <Input.TextArea variant="filled" autoSize={{ minRows: 1, maxRows: 6 }} value={drafts[field.key]} placeholder={t(`canvasA.characterStudio.fields.${field.key}.placeholder`)} onChange={(event) => onChange(field.key, event.target.value)} />
                             </Field>
                         ))}
                     </div>

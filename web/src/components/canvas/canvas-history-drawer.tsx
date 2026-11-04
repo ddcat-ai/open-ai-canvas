@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { Clock, Clock3, ExternalLink, History, Search, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/components/ui/base/badges";
 
@@ -24,6 +25,7 @@ type TimelineItem = {
 };
 
 export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const activeProjects = useCanvasStore((state) => state.projects);
     const deletedProjects = useCanvasHistoryStore((state) => state.deletedProjects);
@@ -35,7 +37,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
     const timelineItems = useMemo<TimelineItem[]>(() => {
         const activeList: TimelineItem[] = activeProjects.map((p) => ({
             id: p.id,
-            title: p.title || "未命名画布",
+            title: p.title || t("canvasB.common.untitledCanvas"),
             isDeleted: false,
             createdAt: p.createdAt || p.updatedAt || new Date().toISOString(),
             updatedAt: p.updatedAt || new Date().toISOString(),
@@ -45,7 +47,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
 
         const deletedList: TimelineItem[] = deletedProjects.map((d) => ({
             id: d.id,
-            title: d.title || "未命名画布",
+            title: d.title || t("canvasB.common.untitledCanvas"),
             isDeleted: true,
             createdAt: d.createdAt,
             updatedAt: d.updatedAt,
@@ -57,7 +59,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
         const all = [...activeList, ...deletedList];
         all.sort((a, b) => new Date(b.timelineTime).getTime() - new Date(a.timelineTime).getTime());
         return all;
-    }, [activeProjects, deletedProjects]);
+    }, [activeProjects, deletedProjects, t]);
 
     const filteredItems = useMemo(() => {
         const q = keyword.trim().toLowerCase();
@@ -80,12 +82,12 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                 <div className="flex items-center justify-between gap-2 pr-2">
                     <div className="flex items-center gap-2">
                         <History className="size-4 text-[var(--workspace-accent)]" />
-                        <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">画布创建与变更历史时间线</span>
+                        <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">{t("canvasB.historyDrawer.title")}</span>
                     </div>
                     {deletedProjects.length > 0 ? (
-                        <Popconfirm title="确定清空已删除画布的历史记录？" onConfirm={clearDeletedHistory} okText="清空" okButtonProps={{ danger: true }} cancelText="取消">
+                        <Popconfirm title={t("canvasB.historyDrawer.clearConfirm")} onConfirm={clearDeletedHistory} okText={t("canvasB.common.clear")} okButtonProps={{ danger: true }} cancelText={t("common.cancel")}>
                             <Button type="text" size="small" danger icon={<Trash2 className="size-3.5" />}>
-                                清理删除记录
+                                {t("canvasB.historyDrawer.clearDeleted")}
                             </Button>
                         </Popconfirm>
                     ) : null}
@@ -104,7 +106,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
             <div className="space-y-4">
                 {/* 搜索与筛选 */}
                 <div className="space-y-3">
-                    <Input allowClear prefix={<Search className="size-3.5 text-stone-400" />} value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索画布名称..." className="text-xs" />
+                    <Input allowClear prefix={<Search className="size-3.5 text-stone-400" />} value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder={t("canvasB.historyDrawer.searchPlaceholder")} className="text-xs" />
                     <div className="flex items-center gap-2 text-xs">
                         <button
                             type="button"
@@ -116,7 +118,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                             )}
                             onClick={() => setFilter("all")}
                         >
-                            全部 ({timelineItems.length})
+                            {t("canvasB.historyDrawer.filterAll", { count: timelineItems.length })}
                         </button>
                         <button
                             type="button"
@@ -128,7 +130,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                             )}
                             onClick={() => setFilter("active")}
                         >
-                            活跃中 ({activeProjects.length})
+                            {t("canvasB.historyDrawer.filterActive", { count: activeProjects.length })}
                         </button>
                         <button
                             type="button"
@@ -138,14 +140,14 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                             )}
                             onClick={() => setFilter("deleted")}
                         >
-                            已删除 ({deletedProjects.length})
+                            {t("canvasB.historyDrawer.filterDeleted", { count: deletedProjects.length })}
                         </button>
                     </div>
                 </div>
 
                 {/* 时间线列表 */}
                 {filteredItems.length === 0 ? (
-                    <EmptyState description="暂无匹配的历史记录" />
+                    <EmptyState description={t("canvasB.historyDrawer.empty")} />
                 ) : (
                     <div className="space-y-3 pt-1">
                         {filteredItems.map((item) => {
@@ -177,26 +179,30 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                                                             {item.title}
                                                         </button>
                                                     )}
-                                                    {isDeleted ? <StatusBadge tone="error" size="sm" label="已删除" className="m-0" /> : <StatusBadge tone="success" size="sm" label="活跃中" className="m-0" />}
+                                                    {isDeleted ? (
+                                                        <StatusBadge tone="error" size="sm" label={t("canvasB.historyDrawer.deleted")} className="m-0" />
+                                                    ) : (
+                                                        <StatusBadge tone="success" size="sm" label={t("canvasB.historyDrawer.active")} className="m-0" />
+                                                    )}
                                                 </div>
 
                                                 <div className="space-y-1 text-xs text-stone-600 dark:text-stone-300">
                                                     <div className="flex items-center gap-2">
                                                         <Clock3 className="size-3.5 text-stone-400 shrink-0" />
-                                                        <span>创建时间：{formatTimelineDate(item.createdAt)}</span>
+                                                        <span>{t("canvasB.historyDrawer.createdAt", { time: formatTimelineDate(item.createdAt) })}</span>
                                                     </div>
                                                     {isDeleted && item.deletedAt ? (
                                                         <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-medium">
                                                             <Trash2 className="size-3.5 text-rose-500 shrink-0" />
-                                                            <span>删除时间：{formatTimelineDate(item.deletedAt)}</span>
+                                                            <span>{t("canvasB.historyDrawer.deletedAt", { time: formatTimelineDate(item.deletedAt) })}</span>
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400">
                                                             <Clock className="size-3.5 text-stone-400 shrink-0" />
-                                                            <span>最近更新：{formatTimelineDate(item.updatedAt)}</span>
+                                                            <span>{t("canvasB.historyDrawer.updatedAt", { time: formatTimelineDate(item.updatedAt) })}</span>
                                                         </div>
                                                     )}
-                                                    <div className="text-[var(--fs-label)] text-stone-500 dark:text-stone-400 pt-0.5">包含 {item.nodeCount} 个节点</div>
+                                                    <div className="text-[var(--fs-label)] text-stone-500 dark:text-stone-400 pt-0.5">{t("canvasB.historyDrawer.nodeCount", { count: item.nodeCount })}</div>
                                                 </div>
                                             </div>
 
@@ -207,10 +213,10 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
                                                         size="small"
                                                         icon={<ExternalLink className="size-4 text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-100" />}
                                                         onClick={() => openProject(item.id)}
-                                                        title="打开画布"
+                                                        title={t("canvasB.historyDrawer.openCanvas")}
                                                     />
                                                 ) : (
-                                                    <Tooltip title="从历史列表中移除此条记录">
+                                                    <Tooltip title={t("canvasB.historyDrawer.removeRecord")}>
                                                         <Button type="text" size="small" danger icon={<X className="size-4" />} onClick={() => removeDeletedItem(item.id)} />
                                                     </Tooltip>
                                                 )}

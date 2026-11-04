@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import { flushSync } from "react-dom";
 import { Moon, Sun } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 
@@ -130,6 +131,7 @@ function revealImmediately(next: ThemeName, onThemeChange?: (theme: ThemeName) =
 }
 
 export const AnimatedThemeToggler = ({ children, className, duration = 400, variant = "circle", fromCenter = false, theme, targetTheme, onThemeChange, ...buttonProps }: AnimatedThemeTogglerProps) => {
+    const { t } = useTranslation();
     const [dark, setDark] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -216,7 +218,7 @@ export const AnimatedThemeToggler = ({ children, className, duration = 400, vari
     return (
         <button type="button" ref={buttonRef} onClick={changeTheme} className={cn(className)} {...buttonProps}>
             {children ?? (dark ? <Sun /> : <Moon />)}
-            <span className="sr-only">{buttonProps["aria-label"] || "切换主题"}</span>
+            <span className="sr-only">{buttonProps["aria-label"] || t("shell.toggleTheme")}</span>
         </button>
     );
 };

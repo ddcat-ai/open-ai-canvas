@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import * as THREE from "three";
+import { translate } from "@/i18n";
 import type { WelcomeLook } from "./story";
 
 type Props = { look: WelcomeLook; progress: RefObject<number>; paused: boolean; onReady: () => void; onError: () => void };
@@ -51,12 +52,12 @@ function imageTexture(image: HTMLImageElement, index: number, type: "film" | "sc
         ctx.fillRect(0, 0, 768, 512);
         ctx.fillStyle = "#f3f2ef";
         ctx.font = "20px sans-serif";
-        ctx.fillText(`${look.title} / 场 ${String(Math.floor(index / 4) + 1).padStart(2, "0")}`, 48, 65);
+        ctx.fillText(translate("account.welcome.reelScene", { title: translate(look.title), scene: String(Math.floor(index / 4) + 1).padStart(2, "0") }), 48, 65);
         ctx.font = "32px serif";
-        ctx.fillText(look.screenplay[index], 48, 366, 672);
+        ctx.fillText(translate(look.screenplay[index]), 48, 366, 672);
         ctx.font = "23px serif";
         ctx.fillStyle = "#d0ceca";
-        ctx.fillText(look.screenplay[(index + 1) % count], 48, 413, 672);
+        ctx.fillText(translate(look.screenplay[(index + 1) % count]), 48, 413, 672);
         ctx.fillStyle = "#b4b2ae";
         ctx.font = "16px monospace";
         ctx.fillText(`SCENE / ${String(index + 1).padStart(2, "0")}`, 48, 475);
@@ -271,5 +272,5 @@ export default function StoryReel({ look, progress, paused, onReady, onError }: 
             renderer.dispose();
         };
     }, [progress, look]);
-    return <canvas ref={canvasRef} className="welcome-webgl" aria-label="随着故事章节旋转并展开的电影影像卷轴" />;
+    return <canvas ref={canvasRef} className="welcome-webgl" aria-label={translate("account.welcome.reelLabel")} />;
 }

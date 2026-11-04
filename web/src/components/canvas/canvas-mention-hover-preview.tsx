@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Image as ImageIcon } from "lucide-react";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { primeVideoPreviewFrame, referencePreviewUrl } from "./canvas-mention-chips";
@@ -116,6 +117,7 @@ type CardLayout = { left: number; top: number; placement: "top" | "bottom" };
 export function MentionHoverPreview({ target }: { target: MentionHoverTarget }) {
     const { chip, reference } = target;
     const cardRef = useRef<HTMLDivElement | null>(null);
+    const { t } = useTranslation();
     const [layout, setLayout] = useState<CardLayout | null>(null);
     const [failedUrl, setFailedUrl] = useState("");
     const imageUrl = reference.previewUrl || "";
@@ -164,7 +166,7 @@ export function MentionHoverPreview({ target }: { target: MentionHoverTarget }) 
             <div className="canvas-mention-hover-preview-caption">
                 <strong>{reference.label}</strong>
                 {caption ? <span>{caption}</span> : null}
-                <small>双击放大</small>
+                <small>{t("canvasB.mention.doubleClickZoom")}</small>
             </div>
         </div>,
         document.body,

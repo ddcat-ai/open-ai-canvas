@@ -1,4 +1,118 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
-
-export const enUS: DeepStringRecord<typeof zhCN> = {};
+export const enUS: DeepStringRecord<typeof zhCN> = {
+    timelinePreview: {
+        pause: "Pause preview",
+        play: "Play preview",
+        noClipHere: "No video clip at this position",
+        noClip: "No video clip",
+        noSubtitle: "No subtitle here. Select a subtitle clip to edit it below.",
+    },
+    toolbar: {
+        appearance: "Canvas appearance",
+        appearanceSubtitle: "Colors and grid",
+        mediaInfo: "Media info",
+    },
+    videoPromptTools: {
+        imageCount: "{{count}} images",
+        videoCount: "{{count}} videos",
+        audioCount: "{{count}} audio",
+        workflowReferenceHint: "Connected images, videos, and audio are passed in through the workflow field mapping",
+        workflowReference: "Workflow references",
+        noMedia: "No media connected",
+        startFrame: "First frame",
+        endFrame: "Last frame",
+        none: "None",
+    },
+    videoSettings: {
+        label: "Video settings",
+    },
+    workspaceHistory: {
+        title: "History · last 30 (including Agent)",
+        emptyTitle: "No history yet",
+        emptyDescription: "Records appear here after you start a generation.",
+    },
+    workspaceTasks: {
+        title: "Tasks",
+        emptyTitle: "No tasks yet",
+        emptyDescription: "Click a generate button on the canvas to start creating.",
+    },
+    nodeList: {
+        title: "Canvas nodes",
+        searchPlaceholder: "Search nodes, chapters, shots, models, or tags…",
+        searchLabel: "Search canvas nodes",
+        clearSearch: "Clear search",
+        found: "{{count}} nodes found",
+        listLabel: "Canvas node list",
+        emptyTitle: "No matching nodes",
+        emptyDescription: "Try a different keyword.",
+        timeUnknown: "Time not recorded",
+    },
+    taskItem: {
+        waited: "Waiting {{duration}}",
+        running: "Running {{duration}}",
+        cancel: "Cancel task",
+        stage: "Current stage",
+        model: "Model",
+        prompt: "Prompt",
+        billing: "Billing",
+        moreActions: "More actions",
+        more: "More",
+    },
+    live2d: {
+        coreLoadFailed: "Failed to load the Live2D runtime. Make sure the build includes Cubism Core and static assets are reachable, then try again.",
+        renderFailed: "Live2D rendering failed. Switched back to the default avatar.",
+        renderFailedWithDetail: "Live2D rendering failed: {{detail}}. Switched back to the default avatar.",
+        contextLost: "Lost the Live2D rendering context. Switched back to the default avatar.",
+        loadTimeout: "Live2D timed out while loading. Check the model and your network, then try again.",
+        unsupportedRuntime: "Unsupported Live2D model runtime",
+        invalidSize: "Invalid Live2D model size",
+        loadFailed: "Failed to load Live2D",
+        loading: "Loading Live2D model",
+    },
+    textLease: {
+        remoteTyping: "Typing in another window",
+        typing: "Typing",
+    },
+    resourceRefs: {
+        drawingPreviewReadFailed: "Failed to read the drawing preview",
+    },
+    previsOnboarding: {
+        label: "Previs getting-started guide",
+        progress: "Step {{position}} of {{total}}",
+        skip: "Skip guide",
+        back: "Back",
+        finish: "Finish guide",
+        next: "Next",
+    },
+    previsTemplate: {
+        title: "Choose a shot template",
+    },
+    previsMini: {
+        noShot: "No shot set",
+        objects: "Objects",
+        cameras: "Cameras",
+        duration: "Duration",
+    },
+    previsMonitor: {
+        mode: {
+            beauty: "Preview",
+            clay: "Clay",
+            depth: "Depth",
+            normal: "Normals",
+            pose: "Skeleton",
+        },
+        popupBlocked: "The browser blocked the monitor window. Allow pop-ups for this site and try again.",
+        windowTitle: "{{brandName}} Previs · Shot monitor",
+        tip: "F full screen · Esc exit full screen",
+        unavailable: "Monitor feed unavailable",
+    },
+    previsProps: {
+        title: "Prop library",
+        add: "Add {{name}} ({{size}})",
+        upload: "Upload local model (.glb / .gltf)",
+    },
+    previsViewToolbar: {
+        label: "Previs view mode",
+    },
+};
