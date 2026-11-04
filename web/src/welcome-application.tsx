@@ -1,7 +1,9 @@
+import "@/i18n";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { getWelcomeAvailability } from "@/services/api/welcome";
 import WelcomePage from "@/pages/welcome";
+import { translate } from "@/i18n";
 
 async function renderWelcome() {
     try {
@@ -15,9 +17,9 @@ async function renderWelcome() {
         console.error("Welcome page initialization failed", error);
         createRoot(document.getElementById("root")!).render(
             <main role="alert">
-                <p>暂时无法打开欢迎页，请稍后重试。</p>
-                <button onClick={() => window.location.reload()}>重试</button>
-                <a href="/">返回首页</a>
+                <p>{translate("account.welcome.openFailed")}</p>
+                <button onClick={() => window.location.reload()}>{translate("common.retry")}</button>
+                <a href="/">{translate("auth.backHome")}</a>
             </main>,
         );
     }
