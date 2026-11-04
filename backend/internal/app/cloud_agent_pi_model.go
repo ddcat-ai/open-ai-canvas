@@ -527,6 +527,10 @@ func (s *Service) cloudAgentModelTaskRetryable(taskID string) bool {
 	if cloudAgentEmptyModelOutput(task) || cloudAgentStepTimedOut(task) {
 		return true
 	}
+	// 域名解析失败发生在连接建立前，请求未送达上游，多为 DNS 抖动，按网络错误重试。
+	if diagnostic := taskExecutionDiagnostic(task); diagnostic != nil && diagnostic.Code == string(ReasonUpstreamDNSFailed) {
+		return true
+	}
 	call, err := s.repo.LatestAPICallForTask(taskID)
 	if err != nil {
 		return false

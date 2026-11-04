@@ -186,7 +186,7 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 机器可读规范：运行中的 `GET /api/openapi.yaml`，源文件 `backend/internal/handler/openapi.yaml`。前端 TypeScript 仍走 `web/src/services/api` 的 `http`，不从 OpenAPI 生成客户端。
 
-出站模型服务域名解析失败返回 HTTP / `code: 502`、`reason: upstream_dns_failed`，不归类为用户参数错误。公开消息不包含上游域名、DNS 服务器或请求 URL；原始解析错误仅保留在内部错误链。此分类不会自动重试、切换渠道或放宽 SSRF 校验；上下文取消仍按取消处理。
+出站模型服务域名解析失败返回 HTTP / `code: 502`、`reason: upstream_dns_failed`，不归类为用户参数错误。公开消息不包含上游域名、DNS 服务器或请求 URL；原始解析错误仅保留在内部错误链。此分类不会切换渠道或放宽 SSRF 校验；上下文取消仍按取消处理。普通任务不自动重试；Agent 单步模型调用把它视为临时网络错误，沿用单步重试上限（首次失败后最多再试 3 次，指数退避），仍失败才结束本轮。
 
 模型 HTTP 失败及经过 Provider 错误转换的业务失败，在通用提示后追加经过过滤的 `；上游：具体原因`，供任务错误和画布卡片展示内容安全、提示词、尺寸等可操作信息。只读取上游 `error` / `message` / `msg` / `detail` 消息字段，不回传整个 JSON；消息中的 HTTP(S) URL 隐藏，包含余额、账务、凭据、请求诊断或 HTML 的消息不追加原文，保留通用分类提示。后台响应拦截规则仍对最终用户文案生效；不会修改历史任务错误或改变重试、退款策略。
 
