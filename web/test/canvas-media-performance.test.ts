@@ -201,7 +201,7 @@ describe("video canvas controls", () => {
         expect(playerCSS).toContain("height: var(--canvas-video-control-size);");
         expect(playerCSS).toContain("min-height: var(--canvas-video-control-size);");
         expect(playerCSS).toContain("padding: 0 0 0 calc(var(--canvas-video-control-size)");
-        expect(playerCSS).toContain(".vds-controls-group:has(.vds-volume) > :not(.vds-volume)");
+        expect(playerCSS).toContain(".vds-controls-group:has(.vds-volume) > :is(.vds-button, .vds-controls-spacer)");
         expect(playerCSS).toContain("bottom: max(12px, env(safe-area-inset-bottom))");
         expect(playerCSS).toContain("play, time, progress, volume, fullscreen");
         expect(playerCSS).toContain("pointer-events: auto;");
