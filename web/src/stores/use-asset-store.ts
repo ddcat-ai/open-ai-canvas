@@ -311,7 +311,7 @@ async function normalizePersistedAsset(asset: Asset): Promise<Asset> {
     return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
 }
 
-async function generationAssetId(effectKey: string) {
+export async function generationAssetId(effectKey: string) {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(effectKey));
     return `generation_${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }

@@ -5,7 +5,7 @@ import { apiClient } from "@/services/api/request";
 import { materializeGenerationTaskAssets } from "@/services/project-asset-sync";
 import { initializeRemoteUserDataSession, resetRemoteUserDataSync } from "@/services/user-data-sync";
 import { createProviderNeutralGenerationTaskEffectStore } from "@/services/provider-neutral-generation-effects";
-import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, withAssetStorePersistenceSuppressed, type VideoAsset } from "@/stores/use-asset-store";
+import { ASSET_STORE_KEY, flushAssetStorePersistence, generationAssetId, useAssetStore, withAssetStorePersistenceSuppressed, type VideoAsset } from "@/stores/use-asset-store";
 import { applyMaterializedGenerationTaskResultToNodes } from "@/lib/canvas/canvas-generation-task-sync";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -123,14 +123,32 @@ describe("已完成生成资产恢复", () => {
         expect(useAssetStore.getState().assets).toEqual([]);
     });
 
-    test("远端查询没有该物化资产时保留真实缺失错误，不随机创建素材", async () => {
+    test("远端查询没有来历不明的物化资产时报缺失，不随机创建素材", async () => {
         let requests = 0;
         apiClient.defaults.adapter = async (config) => {
             requests += 1;
             return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { assets: [] }, msg: "ok" } };
         };
-        await expect(materializeGenerationTaskAssets(task)).rejects.toThrow("部分素材不存在或无权访问");
+        await expect(materializeGenerationTaskAssets(task)).rejects.toThrow("生成任务输出素材不存在");
         expect(requests).toBe(1);
         expect(useAssetStore.getState().assets).toEqual([]);
+    });
+
+    test("物化记录完成但素材从未落库时，按同一 effectKey 重新登记同 ID 素材", async () => {
+        const reTask = { ...task, id: "task-rematerialize" };
+        const effectKey = `materialize:${reTask.id}:0`;
+        const derivedId = await generationAssetId(effectKey);
+        const effectStore = createProviderNeutralGenerationTaskEffectStore();
+        const claim = await effectStore.claim(effectKey, reTask.id);
+        if (claim.status !== "claimed") throw new Error("预期能重建物化effect");
+        await effectStore.complete(effectKey, reTask.id, { materializedAssetId: derivedId }, claim.binding);
+        apiClient.defaults.adapter = async (config) => {
+            if (config.url === "/assets/batch") return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { assets: [] }, msg: "ok" } };
+            if (config.url === "/resources/access") return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { items: [{ access: { url: "https://media.example.test/video.mp4", delivery: "origin" } }] }, msg: "ok" } };
+            return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: {}, msg: "ok" } };
+        };
+        const materialized = await materializeGenerationTaskAssets(reTask);
+        expect(materialized.outputs?.[0]?.materializedAssetId).toBe(derivedId);
+        expect(useAssetStore.getState().assets.map((item) => item.id)).toContain(derivedId);
     });
 });

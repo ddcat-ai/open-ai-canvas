@@ -7,7 +7,7 @@ import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-res
 import { reconcileImageBatchRoot } from "@/lib/canvas/canvas-image-batch-retry";
 import { canvasTaskBindingStatus, markCanvasTaskRecoveryUnconfirmed } from "@/lib/canvas/canvas-task-state";
 import { applyCanvasGenerationTaskNodeEffect, CanvasGenerationDurableAckError, isCanvasGenerationDurableAckError } from "@/services/canvas-generation-consumer";
-import { consumeGenerationTaskNode, ensureCanvasNodeAsset, retryCanvasAssetSyncAfterRateLimit, subscribeCanvasProjectAssetLinkFailures } from "@/services/project-asset-sync";
+import { consumeGenerationTaskNode, ensureCanvasNodeAsset, isGenerationOutputAssetDeletedError, retryCanvasAssetSyncAfterRateLimit, subscribeCanvasProjectAssetLinkFailures } from "@/services/project-asset-sync";
 import { listGenerationTasks, listTaskLogs, queryGenerationTask, subscribeGenerationTasks, type GenerationTask, type TaskLog } from "@/services/api/task-center";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -370,13 +370,20 @@ export function useCanvasGeneration({ projectId, domainProjectId, projectLoaded,
                 // 物化/确认失败与图片内容校验失败分开，保存失败不能触发付费重生成。
                 const failure = !applyingResult && !isCanvasGenerationDurableAckError(error) ? new CanvasGenerationDurableAckError(error) : error;
                 if (generationTaskCanReloadResource(task)) {
+                    // 素材已被用户删除是终态：重新获取只会得到同样结果，不再展示“作品载入失败”的重新获取入口。
+                    const assetDeleted = isGenerationOutputAssetDeletedError(error);
                     setNodes((current) =>
                         current.map((node) => {
                             if (node.id !== nodeId || node.metadata?.taskId !== task.id) return node;
                             const applied = generationTaskOutputsApplied(node, task, current);
                             return {
                                 ...node,
-                                metadata: { ...node.metadata, status: applied ? node.metadata.status : NODE_STATUS_ERROR, resourceReloadAvailable: true, errorDetails: `结果已生成，应用结果失败：${error instanceof Error ? error.message : "未知错误"}` },
+                                metadata: {
+                                    ...node.metadata,
+                                    status: applied ? node.metadata.status : NODE_STATUS_ERROR,
+                                    resourceReloadAvailable: assetDeleted ? undefined : true,
+                                    errorDetails: assetDeleted ? "作品已从素材库删除，无法再载入；如需要请重新生成" : `结果已生成，应用结果失败：${error instanceof Error ? error.message : "未知错误"}`,
+                                },
                             };
                         }),
                     );
