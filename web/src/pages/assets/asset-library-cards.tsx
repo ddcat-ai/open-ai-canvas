@@ -8,10 +8,11 @@ import { AlertTriangle, AudioLines, Box, Copy, Download, FileText, FolderOpen, M
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { type AssetKind } from "@/stores/use-asset-store";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
-import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
+import { AudioPreviewBar, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
+import { useAudioSampleRate } from "@/hooks/use-audio-sample-rate";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { type LibraryAsset, assetKindIcons } from "./asset-library-format";
-import { assetKindLabel, assetProjectLabel, assetSummary, formatAssetClock, formatAssetTime } from "./asset-library-format";
+import { assetKindLabel, assetProjectLabel, assetSummary, assetSummaryDetail, formatAssetClock, formatAssetTime } from "./asset-library-format";
 
 export function formatExpirationHint(updatedAt: string, retentionDays: number) {
     if (!retentionDays || retentionDays <= 0) return "永久保留";
@@ -100,8 +101,10 @@ export function AssetCard({
                         <AlertTriangle className="size-3 shrink-0" />
                         <span>{formatExpirationHint(asset.updatedAt, retentionDays)}</span>
                     </div>
+                ) : asset.kind === "audio" ? (
+                    <AudioAssetSummary asset={asset} />
                 ) : (
-                    <div className="asset-collection-summary mt-1 truncate" title={summary}>
+                    <div className="asset-collection-summary mt-1 truncate tabular-nums" title={assetSummaryDetail(asset)}>
                         {summary}
                     </div>
                 )}
@@ -136,9 +139,13 @@ export function AssetCover({
 }) {
     const kind = isKnownAssetKind(asset.kind) ? asset.kind : undefined;
     const KindIcon = kind ? assetKindIcons[kind] : FileText;
-    const clock = asset.kind === "video" || asset.kind === "audio" ? formatAssetClock(asset.data.durationMs) : null;
+    // 音频在库内由试听条显示进度和总时长；回收站不提供试听，仍显示时长角标。
+    const audioPreview = asset.kind === "audio" && !isTrash;
+    const clock = asset.kind === "video" || (asset.kind === "audio" && !audioPreview) ? formatAssetClock(asset.data.durationMs) : null;
     const showPlay = asset.kind === "video";
     const isLight = asset.kind === "audio" || asset.kind === "text" || asset.kind === "model";
+    // 图片和视频的画面就是预览本身，类型与分类角标只会遮挡画面；规格写在卡片摘要里。
+    const visualMedia = asset.kind === "image" || asset.kind === "video";
     return (
         <AssetLibraryCardMedia className={isLight ? "assets-cover is-light" : "assets-cover"}>
             <button type="button" className="assets-cover-link" onClick={onOpen} aria-label={`查看素材：${asset.title}`}>
@@ -174,15 +181,21 @@ export function AssetCover({
                 ) : null}
             </button>
             <span className="assets-cover-badges">
-                <span className="assets-cover-badge is-kind">
-                    <KindIcon />
-                    {kind ? assetKindLabel(kind, asset.category) : "素材"}
-                </span>
-                {isTrash ? <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span> : asset.kind === "entity" ? null : <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>}
+                {visualMedia ? null : (
+                    <span className="assets-cover-badge is-kind">
+                        <KindIcon />
+                        {kind ? assetKindLabel(kind, asset.category) : "素材"}
+                    </span>
+                )}
+                {isTrash ? (
+                    <span className="assets-cover-badge is-category !bg-amber-500/85 !text-white">回收站</span>
+                ) : asset.kind === "entity" || visualMedia ? null : (
+                    <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>
+                )}
                 {asset.portraitCertified ? <span className="assets-cover-badge is-category">人像认证</span> : null}
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}
-            {asset.kind === "audio" && !isTrash ? <AudioPlayButton asset={asset} className="absolute bottom-2 left-2" /> : null}
+            {audioPreview ? <AudioPreviewBar asset={asset} /> : null}
             <input
                 type="checkbox"
                 checked={selected}
@@ -197,6 +210,17 @@ export function AssetCover({
                 </button>
             </Dropdown>
         </AssetLibraryCardMedia>
+    );
+}
+
+/** 音频摘要：时长 + 源采样率。采样率需要读取文件头，读到之前只显示时长。 */
+function AudioAssetSummary({ asset }: { asset: LibraryAsset & { kind: "audio" } }) {
+    const sampleRate = useAudioSampleRate(asset.data.storageKey, asset.data.url);
+    const summary = assetSummary(asset, sampleRate);
+    return (
+        <div className="asset-collection-summary mt-1 truncate tabular-nums" title={assetSummaryDetail(asset, sampleRate)}>
+            {summary}
+        </div>
     );
 }
 

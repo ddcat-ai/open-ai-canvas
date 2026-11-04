@@ -1,6 +1,7 @@
 // 素材库的展示格式化：摘要、尺寸、时长、时间、下载名与搜索文本。纯函数。
 
 import { formatBytes } from "@/lib/image-utils";
+import { audioAverageBitrateKbps, formatAudioSampleRate, imageResolutionTierLabel, isLosslessAudioMimeType, mediaAspectRatioLabel, mediaFormatLabel, videoResolutionTierLabel } from "@/lib/media-spec";
 import { characterAssetSummary } from "@/components/assets/asset-rich-cover";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { type AssetKind } from "@/stores/use-asset-store";
@@ -21,12 +22,28 @@ export const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
     entity: UserRound,
 };
 
-export function assetSummary(asset: LibraryAsset) {
+/**
+ * 卡片摘要只放挑素材时真正比较的规格：图片/视频是清晰度与画幅，音频是时长与采样率。
+ * 像素尺寸、大小和格式留在素材档案里（见 assetSummaryDetail 与 assetArchiveFacts）。
+ */
+export function assetSummary(asset: LibraryAsset, audioSampleRate?: number) {
     if (asset.kind === "entity") return asset.category === "environment" || asset.category === "prop" ? String(asset.data.definition.description || "待生成图片") : characterAssetSummary(asset);
     if (asset.kind === "text") return asset.data.content;
-    if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
+    if (asset.kind === "audio") return [formatAssetClock(asset.data.durationMs) || formatAssetDuration(asset.data.durationMs), formatAudioSampleRate(audioSampleRate)].filter(Boolean).join(" · ");
     if (asset.kind === "model") return `${asset.data.fileName} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
-    return `${assetSizeLabel(asset.data.width, asset.data.height)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
+    const tier = asset.kind === "video" ? videoResolutionTierLabel(asset.data.width, asset.data.height) : imageResolutionTierLabel(asset.data.width, asset.data.height);
+    const spec = [tier, mediaAspectRatioLabel(asset.data.width, asset.data.height)].filter(Boolean).join(" · ");
+    return spec || `尺寸未知 · ${formatBytes(asset.data.bytes)}`;
+}
+
+/** 卡片摘要悬停提示：补上像素尺寸、文件大小和格式，不必打开档案也能核对。 */
+export function assetSummaryDetail(asset: LibraryAsset, audioSampleRate?: number) {
+    if (asset.kind === "image" || asset.kind === "video") return [assetSizeLabel(asset.data.width, asset.data.height), formatBytes(asset.data.bytes), mediaFormatLabel(asset.data.mimeType)].join(" · ");
+    if (asset.kind === "audio") {
+        const bitrate = isLosslessAudioMimeType(asset.data.mimeType) ? 0 : audioAverageBitrateKbps(asset.data.bytes, asset.data.durationMs);
+        return [assetSummary(asset, audioSampleRate), bitrate ? `${bitrate} kbps` : "", formatBytes(asset.data.bytes), mediaFormatLabel(asset.data.mimeType)].filter(Boolean).join(" · ");
+    }
+    return assetSummary(asset);
 }
 
 export function assetSizeLabel(width: number, height: number) {

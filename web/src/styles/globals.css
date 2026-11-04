@@ -23072,6 +23072,51 @@ html:not(.dark) .creation-history-drawer-root {
     color: color-mix(in srgb, var(--workspace-accent) 36%, var(--foreground));
     opacity: 0.68;
 }
+/* 音频卡片试听条：播放键 + 可拖动进度 + 时间，压在封面底部，不遮挡顶部选择框和菜单。 */
+.assets-audio-preview {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 3;
+    display: flex;
+    height: 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px 0 2px;
+    border-radius: var(--r-full);
+    background: rgba(10, 10, 10, 0.6);
+    color: #fff;
+    backdrop-filter: blur(6px);
+}
+.assets-audio-preview-toggle {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    background: rgba(255, 255, 255, 0.14);
+}
+.assets-audio-preview-range {
+    min-width: 0;
+    height: 4px;
+    flex: 1 1 auto;
+    accent-color: var(--workspace-accent);
+    cursor: pointer;
+}
+.assets-audio-preview-range:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+.assets-audio-preview-range:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: 3px;
+}
+.assets-audio-preview-time {
+    flex: 0 0 auto;
+    font-size: var(--fs-micro);
+    font-variant-numeric: tabular-nums;
+    font-weight: 560;
+    white-space: nowrap;
+}
 .assets-cover-text {
     width: 100%;
     height: 100%;
