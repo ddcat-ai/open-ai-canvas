@@ -26,6 +26,8 @@
 
 - [插件平台与市场演进调研](design/plugin-platform-and-marketplace-research.md)：插件机制代码审计、对外回应、外部 SDK 与隔离运行时、独立插件验收、受控目录到公开市场的分阶段方案（调研建议，未实施）。
 
+- [LibTV 账号池插件调研与设计](design/libtv-account-pool-design.mdx)：LibTV 接入面与官方 CLI 评估、内置系统插件形态、页面内扫码添加账号、多档位调度、价格沿用渠道模型、执行与恢复、分期和 P0 验证清单（方案评审稿，未实施）。
+
 - [站点及外观与皮肤主题设计合同](design/site-appearance-and-skins.mdx)：品牌一致性、登录页与邮件、SEO/备案、三层皮肤令牌、无闪屏启动顺序和验收边界。
 
 - [UI 皮肤库架构设计](design/ui-skin-library.mdx)：Foundation 固定尺度与可换肤层分离、皮肤清单格式、OKLCH 颜色推导、校验规则和分步迁移（提案，未实施）。
