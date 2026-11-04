@@ -3057,11 +3057,141 @@
 .commerce-settings-modal .ecommerce-panel {
     overflow: auto;
 }
-.commerce-settings-modal .ecommerce-center {
-    display: none;
+.commerce-feature-paused {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--status-warning-bg, color-mix(in srgb, var(--user-accent) 8%, var(--user-surface)));
+    color: var(--user-ink-muted);
+    font-size: 13px;
+    line-height: 1.6;
 }
-.commerce-settings-modal .ecommerce-grid {
-    grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+.ecommerce-workbench-layout {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+    gap: 12px;
+    overflow: hidden;
+    isolation: auto;
+}
+.ecommerce-workbench-layout > .commerce-output-gallery {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+}
+.ecommerce-workbench-layout > .flylep-workspace {
+    position: relative;
+    inset: auto;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    min-height: 0;
+    height: 100%;
+    border-radius: 10px;
+    box-shadow: none;
+}
+.ecommerce-workbench-layout .flylep-workspace-topbar {
+    min-height: 54px;
+    padding: 10px 14px;
+}
+.ecommerce-workbench-layout .flylep-stage-scroll {
+    gap: 12px;
+    padding: 14px;
+}
+.ecommerce-workbench-layout .flylep-composer {
+    padding: 12px;
+}
+.ecommerce-workbench-layout .commerce-assistant-intro {
+    margin: 0;
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
+}
+.ecommerce-workbench-layout .commerce-assistant-intro > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+}
+.ecommerce-workbench-layout .commerce-assistant-intro strong {
+    font-size: 13px;
+}
+.ecommerce-workbench-layout .commerce-assistant-intro b {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--user-ink-muted);
+}
+.ecommerce-workbench-layout .commerce-assistant-intro p {
+    margin: 0;
+    width: 100%;
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.ecommerce-workbench-layout .commerce-standard-model-picker {
+    display: grid;
+    gap: 10px;
+}
+.ecommerce-workbench-layout .commerce-standard-model-picker > label {
+    color: var(--user-ink-soft);
+    font-size: 12px;
+}
+.ecommerce-workbench-layout .flylep-config-popover .creation-model-picker {
+    width: 100%;
+}
+.ecommerce-workbench-layout .commerce-output-batch + .commerce-output-batch {
+    padding-top: 0;
+}
+.ecommerce-workbench-layout .flylep-project-actions > button {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+}
+.ecommerce-workbench-layout .flylep-project-actions > button:hover {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+@media (max-width: 760px) {
+    .ecommerce-workbench-layout {
+        position: relative;
+        display: grid;
+        height: calc(100dvh - 64px);
+        min-height: 560px;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 8px;
+        overflow: hidden;
+    }
+    .ecommerce-workbench-layout > .commerce-output-gallery {
+        grid-column: 1;
+        grid-row: 1;
+        display: none;
+        min-height: 0;
+    }
+    .ecommerce-workbench-layout > .flylep-workspace {
+        grid-column: 1;
+        grid-row: 1;
+        width: 100%;
+        max-height: none;
+        min-height: 0;
+        height: 100%;
+        margin: 0;
+    }
+    .ecommerce-workbench-layout[data-mobile-view="works"] > .commerce-output-gallery {
+        display: flex;
+    }
+    .ecommerce-workbench-layout[data-mobile-view="works"] > .flylep-workspace {
+        display: none;
+    }
 }
 @media (max-width: 780px) {
     .flylep-page {
@@ -3110,19 +3240,89 @@
         transition: none;
     }
 }
+.ecommerce-mobile-switch {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--user-border);
+    border-radius: 8px;
+    background: var(--user-surface);
+}
+.ecommerce-mobile-switch button {
+    min-height: 34px;
+    flex: 1;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--user-ink-muted);
+    font: inherit;
+    font-size: 13px;
+}
+.ecommerce-mobile-switch button[aria-selected="true"] {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+@media (max-width: 760px) {
+    .ecommerce-page .ecommerce-workbench-layout {
+        display: grid;
+        height: calc(100dvh - 72px);
+        min-height: 520px;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 8px;
+    }
+    .ecommerce-page .commerce-mobile-switch {
+        display: flex;
+        grid-column: 1;
+        grid-row: 1;
+    }
+    .ecommerce-page .ecommerce-workbench-layout > .commerce-output-gallery {
+        grid-column: 1;
+        grid-row: 2;
+    }
+    .ecommerce-page .ecommerce-workbench-layout > .flylep-workspace {
+        grid-column: 1;
+        grid-row: 2;
+    }
+}
+
 .commerce-advanced-settings {
-    margin: 12px 0;
+    margin: 0;
     color: var(--user-ink);
     font-size: 12px;
 }
 .commerce-advanced-settings > summary {
-    cursor: pointer;
-    padding: 8px 0;
+    display: none;
+}
+.commerce-advanced-settings[open] > summary ~ * {
+    animation: none;
 }
 .commerce-advanced-settings-content {
     display: grid;
-    gap: 16px;
-    max-height: 42vh;
+    gap: 12px;
+    max-height: 36vh;
     overflow-y: auto;
-    padding: 8px 4px;
+    padding: 4px 0;
+    scrollbar-width: thin;
+}
+/* 工具栏在窄面板下紧凑排列 */
+.ecommerce-workbench-layout .flylep-composer-toolbar {
+    gap: 4px;
+    margin: 6px 0 0;
+    padding: 8px 0 0;
+}
+.ecommerce-workbench-layout .flylep-composer-toolbar > :is(button, .flylep-upload-button) {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+}
+.ecommerce-workbench-layout .flylep-composer-toolbar > :is(button, .flylep-upload-button) > svg {
+    width: 13px;
+    height: 13px;
+}
+.ecommerce-workbench-layout .commerce-composer-actions {
+    margin: 6px 0 0;
+    min-height: 30px;
 }

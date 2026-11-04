@@ -1,0 +1,265 @@
+/* 投放平台与语言弹窗。单层表面：分组只用标题区分，不再套卡片。
+   选择器统一以 .commerce-market 开头，覆盖旧 studio/agent-theme 中同名的平铺规则。 */
+.commerce-market {
+    display: flex;
+    flex-direction: column;
+    max-height: min(720px, calc(100vh - 64px));
+    background: var(--user-surface);
+    color: var(--user-ink);
+}
+.commerce-market-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-5) var(--space-3);
+}
+.commerce-market-head h2 {
+    margin: 0;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+}
+.commerce-market-head p {
+    margin: var(--space-1) 0 0;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.commerce-market .commerce-market-close {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+}
+.commerce-market .commerce-market-close:hover {
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+}
+.commerce-market-body {
+    display: grid;
+    gap: var(--space-5);
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-2) var(--space-5) var(--space-5);
+    scrollbar-width: thin;
+}
+.commerce-market h3 {
+    margin: 0 0 var(--space-2);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.commerce-market .commerce-market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+.commerce-market .commerce-market-grid > button {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    box-shadow: none;
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--motion-dur-base) var(--motion-ease-out);
+}
+.commerce-market .commerce-market-grid > button:hover {
+    background: var(--user-surface-muted);
+}
+.commerce-market .commerce-market-grid > button.is-selected {
+    background: var(--control-selected-bg);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+    color: var(--control-selected-fg);
+}
+/* 平台素材里既有方形图标，也有 56×40 的文字标；固定一个 36×28 的容器，按比例完整放入。 */
+.commerce-market .commerce-market-grid > button > .commerce-market-logo {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    max-width: 36px;
+    height: 28px;
+}
+.commerce-market .commerce-market-grid > button > .commerce-market-name {
+    flex: 1 1 auto;
+    width: auto;
+    text-align: left;
+}
+.commerce-market .commerce-market-logo .commerce-platform-logo {
+    width: 36px;
+    height: 28px;
+    max-width: none;
+    object-fit: contain;
+}
+.commerce-market .commerce-market-grid > button .commerce-market-name {
+    overflow: hidden;
+    min-width: 0;
+    color: inherit;
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.commerce-market-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.commerce-market-field {
+    display: grid;
+    min-width: 0;
+}
+.commerce-market .commerce-language-trigger,
+.commerce-market-field input {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    height: 36px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    outline: 0;
+}
+.commerce-market .commerce-language-trigger {
+    cursor: pointer;
+}
+.commerce-market .commerce-language-trigger strong {
+    flex: 1;
+    font-weight: 500;
+    text-align: left;
+}
+.commerce-market .commerce-language-trigger .is-open {
+    transform: rotate(180deg);
+}
+.commerce-market-field input::placeholder {
+    color: var(--user-ink-soft);
+}
+.commerce-market-field input:focus-visible {
+    box-shadow: inset 0 0 0 1px var(--user-border-strong);
+}
+.commerce-market .commerce-language-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--space-1);
+    max-height: none;
+    margin: calc(var(--space-2) * -1) 0 0;
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    box-shadow: none;
+}
+.commerce-market .commerce-language-options button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 32px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--user-ink);
+    cursor: pointer;
+}
+.commerce-market .commerce-language-options button:hover {
+    background: var(--user-surface-hover);
+}
+.commerce-market .commerce-language-options button[aria-selected="true"] {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.commerce-market .commerce-language-options button strong {
+    flex: 1;
+    overflow: hidden;
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.commerce-market .commerce-language-flag {
+    flex: none;
+    width: 20px;
+    height: 15px;
+    border-radius: 2px;
+    object-fit: cover;
+}
+.commerce-market-rules summary {
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+}
+.commerce-market-rules > div {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.commerce-market-rules p,
+.commerce-market-rules ul {
+    margin: 0;
+}
+.commerce-market-rules ul {
+    padding-left: 1.2em;
+}
+.commerce-market-source {
+    color: var(--user-ink-soft);
+}
+.commerce-market-source a {
+    margin-left: var(--space-2);
+    color: var(--user-ink-muted);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.commerce-market-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--user-border);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+}
+.commerce-market :is(button, input, a, summary):focus-visible {
+    outline: var(--focus-ring-width, 2px) solid var(--ring);
+    outline-offset: 2px;
+}
+@media (max-width: 560px) {
+    .commerce-market-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .commerce-market .commerce-market-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .commerce-market .commerce-market-grid > button {
+        transition: none;
+    }
+}

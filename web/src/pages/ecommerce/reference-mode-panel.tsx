@@ -132,16 +132,12 @@ export function ReferenceModePanel({
     };
     return (
         <section className="ecommerce-reference-mode" aria-label="参考方式设置">
-            <strong>需要借鉴的图片</strong>
-            <label className="ecommerce-field">
-                <span>参考方式</span>
-                <Select<EcommerceReferenceMode> aria-label="参考方式" value={mode.value} options={modeOptions} onChange={chooseMode} disabled={busy} />
-            </label>
-            <p className="ecommerce-reference-mode-description">{mode.description}</p>
+            <Select<EcommerceReferenceMode> variant="filled" aria-label="参考方式" value={mode.value} options={modeOptions.map(({ value, label }) => ({ value, label }))} onChange={chooseMode} disabled={busy} />
             {mode.value === "product" ? (
-                <p className="ecommerce-reference-mode-description">使用上方“自己的商品图”自主策划，无需上传借鉴图片。</p>
+                <p className="ecommerce-reference-mode-description">使用上方“自己的商品图”自主策划卖点、场景与文案，无需上传借鉴图片。</p>
             ) : (
                 <>
+                    <p className="ecommerce-reference-mode-description">{mode.description}</p>
                     <div
                         className={`ecommerce-reference-upload${dragging ? " is-dragging" : ""}`}
                         role="group"
@@ -222,7 +218,7 @@ export function ReferenceModePanel({
                         />
                     </div>
                     <p id={helpId} className="ecommerce-reference-upload-help">
-                        这里仅放需要借鉴的图片，全部按上传顺序使用。可一次上传多张，或在上传区按 Ctrl+V 粘贴。
+                        只放需要借鉴的图片，全部按上传顺序使用；参考图中未经核实的规格、性能与承诺不会移用。
                     </p>
                     {busy ? (
                         <p className="ecommerce-reference-upload-status" role="status">
@@ -247,11 +243,10 @@ export function ReferenceModePanel({
                         </div>
                     ) : null}
                     {!references.length ? (
-                        <p className="ecommerce-reference-mode-description" role="status">
+                        <p className="sr-only" role="status">
                             请在这里上传需要借鉴的图片；自己的商品图请放在上方。
                         </p>
                     ) : null}
-                    <p className="ecommerce-reference-mode-description">参考图中未经核实的规格、性能与承诺不会移用。</p>
                 </>
             )}
         </section>

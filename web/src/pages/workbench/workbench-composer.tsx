@@ -3,11 +3,12 @@ import { ArrowRight, ArrowUp, Check, ChevronDown, ChevronUp, Clapperboard, Folde
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
+import { promptHasPhrase } from "@/lib/prompt-phrases";
 import { cn } from "@/lib/utils";
 import type { WorkbenchKind, WorkbenchPromptPreset, WorkbenchReferenceSlot, WorkbenchTool } from "@/services/api/workbench";
 
 import { workbenchMediaLabel } from "./workbench-catalog";
-import { promptHasPhrase, workbenchRatioUsage, workbenchSceneTone, workbenchToolSubtitle, type InspirationGroup, type SceneTone } from "./workbench-presets";
+import { workbenchRatioUsage, workbenchSceneTone, workbenchToolSubtitle, type InspirationGroup, type SceneTone } from "./workbench-presets";
 
 export type WorkbenchReference = {
     id: string;
