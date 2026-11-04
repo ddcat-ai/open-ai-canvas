@@ -118,3 +118,38 @@ test("the selected model and request estimate still require an exact specificati
     expect(render(matching)).not.toContain("当前规格无报价");
     expect(cost(matching)).toBeCloseTo(1.2);
 });
+
+function textFixture() {
+    const channel = createModelChannel({
+        id: "qwen",
+        name: "Qwen",
+        scope: "system",
+        models: ["qwen3.8-max"],
+        modelCosts: [{ model: "qwen3.8-max", displayName: "Qwen3.8-Max-0902", capability: "text", billingMode: "per_request", unitPriceMicrocredits: 10_000 }],
+    });
+    return normalizeConfigSnapshot({ config: { ...defaultConfig, channels: [channel], model: "qwen::qwen3.8-max", textModel: "qwen::qwen3.8-max" } }).config;
+}
+
+test("text models show how many images and videos they can read, like video reference limits", () => {
+    const config = textFixture();
+    const cost = config.channels[0].modelCosts![0];
+    cost.capabilityConfig = defaultModelCapabilityConfig();
+    Object.assign(cost.capabilityConfig.text!.references, { maxImages: 9, maxVideos: 3 });
+    cost.tags = [{ text: "按次收费", color: "blue" }];
+    const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="text" theme={canvasThemes.light} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+    expect(markup).toContain('data-color="green">图×9 · 视×3');
+    expect(markup).not.toContain("音×");
+    expect(markup.indexOf("图×9 · 视×3")).toBeLessThan(markup.indexOf("按次收费"));
+});
+
+test("text models without video understanding only show the image limit, and none when vision is off", () => {
+    const config = textFixture();
+    const cost = config.channels[0].modelCosts![0];
+    cost.capabilityConfig = defaultModelCapabilityConfig();
+    Object.assign(cost.capabilityConfig.text!.references, { maxImages: 9, maxVideos: 0 });
+    const render = () => renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="text" theme={canvasThemes.dark} creationVariant showConfiguredModelName={false} showPrice={false} showDescription />);
+    expect(render()).toContain('data-color="green">图×9<');
+    expect(render()).not.toContain("视×");
+    Object.assign(cost.capabilityConfig.text!.references, { maxImages: 0, maxVideos: 0 });
+    expect(render()).not.toContain("图×");
+});

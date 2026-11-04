@@ -199,6 +199,10 @@ func applyTextOutputLimit(body map[string]interface{}, limit int, field string) 
 }
 
 func claudeTextContent(input canvasGenerationInput) (interface{}, error) {
+	// Claude Messages 没有视频内容块；静默丢弃会让模型在没看到视频时照样作答。
+	if len(input.ReferenceVideos) > 0 {
+		return nil, errors.New("Claude 文本接口不支持参考视频，请换用支持视频识别的文本模型")
+	}
 	if len(input.ReferenceImages) == 0 {
 		return input.Prompt, nil
 	}

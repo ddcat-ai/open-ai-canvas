@@ -15,7 +15,7 @@ import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ModelLogo } from "@/components/model-logo";
 import { ModelTags } from "@/components/model-tags";
-import { videoReferenceCapabilityTag } from "@/lib/model-tags";
+import { referenceCapabilityTag } from "@/lib/model-tags";
 import { quoteModel, type LogicalModelQuote, type PublicChannelModelAvailability } from "@/services/api/logical-models";
 
 type ModelPickerProps = {
@@ -148,7 +148,7 @@ export function ModelPicker({
     };
     const focusMenuOption = (last = false) => {
         window.requestAnimationFrame(() => {
-            const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>('[data-model-picker-item]:not(:disabled)');
+            const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>("[data-model-picker-item]:not(:disabled)");
             const target = last ? buttons?.item((buttons?.length || 1) - 1) : buttons?.item(0);
             focusPickerOption(target);
         });
@@ -173,7 +173,7 @@ export function ModelPicker({
             return;
         }
         if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-        const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[data-model-picker-item]:not(:disabled)'));
+        const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-model-picker-item]:not(:disabled)"));
         if (!buttons.length) return;
         event.preventDefault();
         const activeIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -184,10 +184,7 @@ export function ModelPicker({
         <div
             ref={menuRef}
             data-canvas-no-zoom
-            className={cn(
-                "canvas-model-picker-menu creation-model-picker-menu max-w-[calc(100vw-24px)]",
-                activeGroupKey === null ? "is-brand-list" : "is-model-list",
-            )}
+            className={cn("canvas-model-picker-menu creation-model-picker-menu max-w-[calc(100vw-24px)]", activeGroupKey === null ? "is-brand-list" : "is-model-list")}
             style={{ "--canvas-model-picker-available-height": `${availableHeight}px` } as CSSProperties}
             role="listbox"
             aria-label={placeholder}
@@ -200,93 +197,125 @@ export function ModelPicker({
                     <div className="canvas-model-picker-brands" aria-label="选择产品模型">
                         {optionGroups.map((group) => {
                             const groupCurrent = group.models.find((item) => item.models.includes(current));
-                            return <button key={group.key} type="button" data-model-picker-item className={cn("canvas-model-picker-brand", groupCurrent && "is-active")} aria-pressed={Boolean(groupCurrent)} onClick={() => { setActiveGroupKey(group.key); focusMenuOption(); }}>
-                                <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
-                                <span className="canvas-model-picker-brand-copy">
-                                    <span className="flex items-center gap-2 min-w-0">
-                                        <strong className="truncate">{group.label}</strong>
-                                        {group.scope === "我的模型" ? (
-                                            <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                                                个人渠道
-                                            </span>
-                                        ) : null}
+                            return (
+                                <button
+                                    key={group.key}
+                                    type="button"
+                                    data-model-picker-item
+                                    className={cn("canvas-model-picker-brand", groupCurrent && "is-active")}
+                                    aria-pressed={Boolean(groupCurrent)}
+                                    onClick={() => {
+                                        setActiveGroupKey(group.key);
+                                        focusMenuOption();
+                                    }}
+                                >
+                                    <span className="canvas-model-picker-brand-icon">
+                                        <ModelLogo icon={group.icon} size={22} />
                                     </span>
-                                    <small className="canvas-model-picker-brand-meta">
-                                        <span className="canvas-model-picker-brand-subtext">{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</span>
-                                        <ModelRecentHealthTrack availability={groupAvailability(config, group)} />
-                                    </small>
-                                </span>
-                                <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
-                            </button>;
+                                    <span className="canvas-model-picker-brand-copy">
+                                        <span className="flex items-center gap-2 min-w-0">
+                                            <strong className="truncate">{group.label}</strong>
+                                            {group.scope === "我的模型" ? (
+                                                <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人渠道</span>
+                                            ) : null}
+                                        </span>
+                                        <small className="canvas-model-picker-brand-meta">
+                                            <span className="canvas-model-picker-brand-subtext">
+                                                {group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}
+                                                {group.scope ? ` · ${group.scope}` : ""}
+                                            </span>
+                                            <ModelRecentHealthTrack availability={groupAvailability(config, group)} />
+                                        </small>
+                                    </span>
+                                    <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
+                                </button>
+                            );
                         })}
                     </div>
-                ) : <div className="canvas-model-picker-two-pane">
-                    <div className="canvas-model-picker-brand-rail" aria-label="产品模型">
-                        {optionGroups.map((group) => {
-                            return <button key={group.key} type="button" className={cn("canvas-model-picker-brand", activeGroupKey === group.key && "is-active")} aria-pressed={activeGroupKey === group.key} onClick={() => setActiveGroupKey(group.key)}>
-                                <span className="canvas-model-picker-brand-icon"><ModelLogo icon={group.icon} size={22} /></span>
-                                <span className="canvas-model-picker-brand-copy">
-                                    <span className="flex items-center gap-2 min-w-0">
-                                        <strong className="truncate">{group.label}</strong>
-                                        {group.scope === "我的模型" ? (
-                                            <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                                                个人渠道
-                                            </span>
-                                        ) : null}
-                                    </span>
-                                    <small className="canvas-model-picker-brand-meta">
-                                        <span className="canvas-model-picker-brand-subtext">{group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}{group.scope ? ` · ${group.scope}` : ""}</span>
-                                        <ModelRecentHealthTrack availability={groupAvailability(config, group)} />
-                                    </small>
-                                </span>
-                                <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
-                            </button>;
-                        })}
-                    </div>
-                    {optionGroups.filter((group) => group.key === activeGroupKey).map((group) => <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0">
-                        <div className="grid min-w-0 gap-1">
-                            {group.models.map((modelGroup) => {
-                                const selected = modelGroup.models.includes(current);
-                                const usable = modelDisabledReason ? modelGroup.models.filter((item) => !modelDisabledReason(item)) : modelGroup.models;
-                                const model = usable.length ? compatibleModelInGroup(config, usable, selectionRequirements, selected ? current : undefined) : undefined;
-                                const displayModel = model || (selected ? current : modelGroup.models[0]);
-                                const disabledReason = model ? "" : usable.length ? modelCompatibilityError(config, usable[0], selectionRequirements) || "当前输入不符合该模型能力" : modelDisabledReason?.(modelGroup.models[0]) || "该模型不可用";
+                ) : (
+                    <div className="canvas-model-picker-two-pane">
+                        <div className="canvas-model-picker-brand-rail" aria-label="产品模型">
+                            {optionGroups.map((group) => {
                                 return (
-                                    <button
-                                        key={modelGroup.key}
-                                        type="button"
-                                        data-model-picker-item
-                                        role="option"
-                                        aria-selected={selected}
-                                        aria-disabled={Boolean(disabledReason)}
-                                        disabled={Boolean(disabledReason)}
-                                        className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
-                                        style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
-                                        onClick={() => {
-                                            if (!model) return;
-                                            onChange(model);
-                                        }}
-                                    >
-                                        <ModelLabel
-                                            config={config}
-                                            model={displayModel}
-                                            capability={capability}
-                                            theme={theme}
-                                            creationVariant
-                                            showConfiguredModelName={showConfiguredModelName}
-                                            label={group.kind === "product" ? modelGroup.label : undefined}
-                                            requirements={requirements}
-                                            showPrice={showOptionPrices && creditsEnabled}
-                                            disabledReason={disabledReason}
-                                            showDescription
-                                        />
-                                        <span className="canvas-model-picker-option-check ml-1 shrink-0" aria-hidden="true">{selected ? <Check className="size-full" style={{ color: theme.node.activeStroke }} /> : null}</span>
+                                    <button key={group.key} type="button" className={cn("canvas-model-picker-brand", activeGroupKey === group.key && "is-active")} aria-pressed={activeGroupKey === group.key} onClick={() => setActiveGroupKey(group.key)}>
+                                        <span className="canvas-model-picker-brand-icon">
+                                            <ModelLogo icon={group.icon} size={22} />
+                                        </span>
+                                        <span className="canvas-model-picker-brand-copy">
+                                            <span className="flex items-center gap-2 min-w-0">
+                                                <strong className="truncate">{group.label}</strong>
+                                                {group.scope === "我的模型" ? (
+                                                    <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人渠道</span>
+                                                ) : null}
+                                            </span>
+                                            <small className="canvas-model-picker-brand-meta">
+                                                <span className="canvas-model-picker-brand-subtext">
+                                                    {group.models.length} 个{group.kind === "product" ? "渠道" : "模型"}
+                                                    {group.scope ? ` · ${group.scope}` : ""}
+                                                </span>
+                                                <ModelRecentHealthTrack availability={groupAvailability(config, group)} />
+                                            </small>
+                                        </span>
+                                        <ChevronDown className="canvas-model-picker-brand-arrow" aria-hidden="true" />
                                     </button>
                                 );
                             })}
                         </div>
-                    </section>)}
-                </div>
+                        {optionGroups
+                            .filter((group) => group.key === activeGroupKey)
+                            .map((group) => (
+                                <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0">
+                                    <div className="grid min-w-0 gap-1">
+                                        {group.models.map((modelGroup) => {
+                                            const selected = modelGroup.models.includes(current);
+                                            const usable = modelDisabledReason ? modelGroup.models.filter((item) => !modelDisabledReason(item)) : modelGroup.models;
+                                            const model = usable.length ? compatibleModelInGroup(config, usable, selectionRequirements, selected ? current : undefined) : undefined;
+                                            const displayModel = model || (selected ? current : modelGroup.models[0]);
+                                            const disabledReason = model
+                                                ? ""
+                                                : usable.length
+                                                  ? modelCompatibilityError(config, usable[0], selectionRequirements) || "当前输入不符合该模型能力"
+                                                  : modelDisabledReason?.(modelGroup.models[0]) || "该模型不可用";
+                                            return (
+                                                <button
+                                                    key={modelGroup.key}
+                                                    type="button"
+                                                    data-model-picker-item
+                                                    role="option"
+                                                    aria-selected={selected}
+                                                    aria-disabled={Boolean(disabledReason)}
+                                                    disabled={Boolean(disabledReason)}
+                                                    className="canvas-model-picker-option disabled:cursor-not-allowed disabled:opacity-45"
+                                                    style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text }}
+                                                    onClick={() => {
+                                                        if (!model) return;
+                                                        onChange(model);
+                                                    }}
+                                                >
+                                                    <ModelLabel
+                                                        config={config}
+                                                        model={displayModel}
+                                                        capability={capability}
+                                                        theme={theme}
+                                                        creationVariant
+                                                        showConfiguredModelName={showConfiguredModelName}
+                                                        label={group.kind === "product" ? modelGroup.label : undefined}
+                                                        requirements={requirements}
+                                                        showPrice={showOptionPrices && creditsEnabled}
+                                                        disabledReason={disabledReason}
+                                                        showDescription
+                                                    />
+                                                    <span className="canvas-model-picker-option-check ml-1 shrink-0" aria-hidden="true">
+                                                        {selected ? <Check className="size-full" style={{ color: theme.node.activeStroke }} /> : null}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            ))}
+                    </div>
+                )
             ) : (
                 <div className="canvas-model-picker-empty" style={{ color: theme.node.muted }}>
                     {emptyModelLabel(config, capability)}
@@ -314,11 +343,13 @@ export function ModelPicker({
                 }}
                 // 弹窗与发起它的输入框同一表面：画布入口取节点面板色，工作台入口回退到 --user-surface-raised（model-picker.css）。
                 styles={{
-                    container: (!inSpatialWorkspace ? {} : {
-                        "--model-picker-surface": theme.node.panel,
-                        "--model-picker-ink": theme.node.text,
-                        "--model-picker-edge": theme.toolbar.border,
-                    }) as CSSProperties,
+                    container: (!inSpatialWorkspace
+                        ? {}
+                        : {
+                              "--model-picker-surface": theme.node.panel,
+                              "--model-picker-ink": theme.node.text,
+                              "--model-picker-edge": theme.toolbar.border,
+                          }) as CSSProperties,
                 }}
             >
                 <button
@@ -336,11 +367,7 @@ export function ModelPicker({
                             <ModelIcon config={config} model={current} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
-                        {isCurrentCustomChannel ? (
-                            <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                                个人
-                            </span>
-                        ) : null}
+                        {isCurrentCustomChannel ? <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人</span> : null}
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} quote={routeQuote} compact /> : null}
                     </span>
                     <ChevronDown className={cn("canvas-model-picker-chevron", open && "is-open")} aria-hidden="true" />
@@ -400,12 +427,11 @@ export function ModelLabel({
     const logicalSpec = logicalCost?.logicalCapabilitySpec;
     const videoProfile = capability === "video" ? modelCapabilityConfigFor(config, model).video : undefined;
     const videoSummary = videoProfile ? [videoProfile.durationSupported === false ? "" : formatDurationSummary(videoProfile), videoProfile.resolutions.map((item) => item.toUpperCase()).join("/")].filter(Boolean).join(" · ") : "";
-    const capabilityTag = videoReferenceCapabilityTag(videoProfile?.references);
+    // 文本模型同样标出能识别几张图、几个视频；未开启识图 / 视频识别时上限为 0，不出标签。
+    const textReferences = capability === "text" ? modelCapabilityConfigFor(config, model).text?.references : undefined;
+    const capabilityTag = referenceCapabilityTag(videoProfile?.references ?? textReferences);
     const modelTags = capabilityTag ? [capabilityTag, ...(logicalCost?.tags || [])] : logicalCost?.tags;
-    const capabilitySummary =
-        disabledReason ||
-        logicalCost?.description?.trim() ||
-        (isDirectSystemModel(config, model) ? "" : logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? videoSummary : meta.description);
+    const capabilitySummary = disabledReason || logicalCost?.description?.trim() || (isDirectSystemModel(config, model) ? "" : logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? videoSummary : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-2 overflow-hidden py-0">
             <span className="canvas-model-picker-option-logo grid size-6 shrink-0 place-items-center">
@@ -414,12 +440,10 @@ export function ModelLabel({
             <span className="min-w-0 flex-1 overflow-hidden">
                 <span className="canvas-model-picker-option-heading">
                     <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                        <span className="canvas-model-picker-option-name text-[var(--fs-label)] font-medium leading-none truncate !flex-initial max-w-full" title={label || pickerModelDisplayName(config, model, showConfiguredModelName)}>{label || pickerModelDisplayName(config, model, showConfiguredModelName)}</span>
-                        {channel.scope !== "system" ? (
-                            <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">
-                                个人
-                            </span>
-                        ) : null}
+                        <span className="canvas-model-picker-option-name text-[var(--fs-label)] font-medium leading-none truncate !flex-initial max-w-full" title={label || pickerModelDisplayName(config, model, showConfiguredModelName)}>
+                            {label || pickerModelDisplayName(config, model, showConfiguredModelName)}
+                        </span>
+                        {channel.scope !== "system" ? <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人</span> : null}
                     </span>
                     {showPrice ? (
                         <span className="canvas-model-picker-option-price">
@@ -599,12 +623,19 @@ function ModelPrice({ price, quote, compact = false }: { price: ModelMenuPrice |
         );
     }
     if (price.kind === "estimate") {
-        return <span className="model-picker-price inline-flex shrink-0 items-center text-[var(--fs-tiny)] font-semibold"><Coins className="model-picker-price-icon" aria-hidden="true" />{price.label || "按量预估"}</span>;
+        return (
+            <span className="model-picker-price inline-flex shrink-0 items-center text-[var(--fs-tiny)] font-semibold">
+                <Coins className="model-picker-price-icon" aria-hidden="true" />
+                {price.label || "按量预估"}
+            </span>
+        );
     }
     return (
         <span className="model-picker-price inline-flex shrink-0 items-center gap-1 text-[var(--fs-tiny)] font-semibold tabular-nums">
             <Coins className="model-picker-price-icon" aria-hidden="true" />
-            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}{compact ? "/" : " 积分/"}{price.unit}
+            {price.value.toLocaleString("zh-CN", { maximumFractionDigits: compact ? 3 : 6 })}
+            {compact ? "/" : " 积分/"}
+            {price.unit}
         </span>
     );
 }
@@ -630,9 +661,7 @@ export function ModelRecentHealthTrack({ availability, inPopover = false }: { av
     const successCount = recentResults.filter(Boolean).length;
     const failCount = recentResults.filter((item) => item === false).length;
     const hasRuns = recentResults.length > 0;
-    const title = hasRuns
-        ? `最近 ${recentResults.length} 次调用：${successCount} 成功，${failCount} 失败`
-        : "近期暂无调用记录";
+    const title = hasRuns ? `最近 ${recentResults.length} 次调用：${successCount} 成功，${failCount} 失败` : "近期暂无调用记录";
 
     return (
         <span className={cn("model-picker-availability-track", inPopover && "in-popover")} title={title} aria-label={title}>
@@ -641,11 +670,7 @@ export function ModelRecentHealthTrack({ availability, inPopover = false }: { av
                 const isSuccess = hasRun ? recentResults[idx] : null;
                 const stateClass = isSuccess === true ? "is-success" : isSuccess === false ? "is-failed" : "is-empty";
                 return (
-                    <span
-                        key={idx}
-                        className={cn("model-picker-availability-pill", inPopover && "in-popover", stateClass)}
-                        title={inPopover ? (hasRun ? `第 ${idx + 1} 次：${isSuccess ? "成功" : "失败"}` : `槽位 ${idx + 1}：未发生调用`) : undefined}
-                    />
+                    <span key={idx} className={cn("model-picker-availability-pill", inPopover && "in-popover", stateClass)} title={inPopover ? (hasRun ? `第 ${idx + 1} 次：${isSuccess ? "成功" : "失败"}` : `槽位 ${idx + 1}：未发生调用`) : undefined} />
                 );
             })}
         </span>
@@ -661,30 +686,22 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
     const failCount = recentResults.filter((item) => item === false).length;
     const hasRuns = recentResults.length > 0;
 
-    const label = availability?.dataState === "ready" && availability.rate24h !== null
-        ? `${Math.round(availability.rate24h * 100)}%`
-        : availability?.dataState === "insufficient"
-            ? "数据不足"
-            : "暂无数据";
+    const label = availability?.dataState === "ready" && availability.rate24h !== null ? `${Math.round(availability.rate24h * 100)}%` : availability?.dataState === "insufficient" ? "数据不足" : "暂无数据";
     const trend = availability?.trend7d || [];
     const trendSamples = trend.reduce((total, item) => total + item.sampleCount, 0);
     const summary = hasRuns
         ? `最近${recentResults.length}次调用：${successCount}成功、${failCount}失败；当前${available ? "可用" : "不可用"}`
         : availability
-            ? `当前${available ? "可用" : "不可用"}；近24小时${label}，暂无近期调用记录`
-            : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
+          ? `当前${available ? "可用" : "不可用"}；近24小时${label}，暂无近期调用记录`
+          : `当前${available ? "可用" : "不可用"}；历史成功率暂不可用`;
 
     const content = availability ? (
         <div className="model-picker-availability-popover">
             <div className="model-picker-availability-popover-head">
                 <strong>最近 10 次调用</strong>
-                <span className={failCount > 0 ? "has-failures" : ""}>
-                    {hasRuns ? `${successCount} 成功 / ${failCount} 失败` : "暂无调用记录"}
-                </span>
+                <span className={failCount > 0 ? "has-failures" : ""}>{hasRuns ? `${successCount} 成功 / ${failCount} 失败` : "暂无调用记录"}</span>
             </div>
-            <div className="model-picker-availability-popover-meta">
-                {hasRuns ? `共记录最近 ${recentResults.length} 次执行（绿=成功 红=失败 灰=无记录）` : "该模型近期尚无调用记录，默认展示10个空槽"}
-            </div>
+            <div className="model-picker-availability-popover-meta">{hasRuns ? `共记录最近 ${recentResults.length} 次执行（绿=成功 红=失败 灰=无记录）` : "该模型近期尚无调用记录，默认展示10个空槽"}</div>
             <div style={{ margin: "6px 0 8px" }}>
                 <ModelRecentHealthTrack availability={availability} inPopover />
             </div>
@@ -692,11 +709,15 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
                 <strong>近24小时成功率</strong>
                 <span>{label}</span>
             </div>
-            <div className="model-picker-availability-popover-meta">{availability.sampleCount24h} 次 create 尝试 · 7天样本 {trendSamples} 条</div>
+            <div className="model-picker-availability-popover-meta">
+                {availability.sampleCount24h} 次 create 尝试 · 7天样本 {trendSamples} 条
+            </div>
             <div className="model-picker-availability-trend" aria-label="近7天成功率趋势">
                 {trend.map((item) => {
                     const dayLabel = item.rate === null ? "暂无数据" : `${Math.round(item.rate * 100)}%`;
-                    return <span key={item.day} className={`model-picker-availability-segment is-${item.dataState}`} title={`${item.day}：${dayLabel}，${item.sampleCount} 条`} style={item.rate === null ? undefined : { opacity: 0.35 + item.rate * 0.65 }} />;
+                    return (
+                        <span key={item.day} className={`model-picker-availability-segment is-${item.dataState}`} title={`${item.day}：${dayLabel}，${item.sampleCount} 条`} style={item.rate === null ? undefined : { opacity: 0.35 + item.rate * 0.65 }} />
+                    );
                 })}
             </div>
             <div className="model-picker-availability-popover-foot">绿点=成功 · 红点=失败 · 灰点=空槽</div>
@@ -715,9 +736,7 @@ function ModelAvailabilityBadge({ availability, available, showAvailability }: {
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 <ModelRecentHealthTrack availability={availability} />
-                <span className="model-picker-availability-label">
-                    {hasRuns ? `${successCount}/${recentResults.length}` : label}
-                </span>
+                <span className="model-picker-availability-label">{hasRuns ? `${successCount}/${recentResults.length}` : label}</span>
             </span>
         </Popover>
     );

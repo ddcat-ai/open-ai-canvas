@@ -2,10 +2,21 @@ import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
 import { Input, InputNumber } from "antd";
 import { Switch } from "@/components/ui/base/switch";
+import { Checkbox } from "@/components/ui/base/checkbox";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
 
-import { DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, defaultImageCapabilityConfig, defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ImageCapabilityConfig, type ImageResponseFormat, type ModelCapabilityConfig, type TextCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import {
+    DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS,
+    defaultImageCapabilityConfig,
+    defaultModelCapabilityConfig,
+    normalizeModelCapabilityConfig,
+    type ImageCapabilityConfig,
+    type ImageResponseFormat,
+    type ModelCapabilityConfig,
+    type TextCapabilityConfig,
+    type VideoCapabilityConfig,
+} from "@/lib/model-capabilities";
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
@@ -73,7 +84,9 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         { label: "保持原帧率（按 ≤30fps 档预扣）", value: "keep_source" },
                         { label: "用户选择帧率", value: "user_select" },
                     ]}
-                    onChange={(fpsPolicy) => update({ processing: fpsPolicy === "user_select" ? { ...processing, fpsPolicy, fpsOptions: processing.fpsOptions?.length ? processing.fpsOptions : [30, 60] } : { fpsPolicy, maxSourceSeconds: processing.maxSourceSeconds } })}
+                    onChange={(fpsPolicy) =>
+                        update({ processing: fpsPolicy === "user_select" ? { ...processing, fpsPolicy, fpsOptions: processing.fpsOptions?.length ? processing.fpsOptions : [30, 60] } : { fpsPolicy, maxSourceSeconds: processing.maxSourceSeconds } })
+                    }
                 />
             </Field>
             {processing.fpsPolicy === "user_select" ? (
@@ -81,7 +94,14 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     <Input disabled={disabled} value={(processing.fpsOptions || []).join(",")} placeholder="例如：30,60" onChange={(event) => update({ processing: { ...processing, fpsOptions: parseIntegerList(event.target.value) } })} />
                 </Field>
             ) : null}
-            <NumberField label={`源视频最长秒数（≤${DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}）`} value={processing.maxSourceSeconds || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS} min={1} max={DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS} disabled={disabled} onChange={(value) => update({ processing: { ...processing, maxSourceSeconds: value || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS } })} />
+            <NumberField
+                label={`源视频最长秒数（≤${DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}）`}
+                value={processing.maxSourceSeconds || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}
+                min={1}
+                max={DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}
+                disabled={disabled}
+                onChange={(value) => update({ processing: { ...processing, maxSourceSeconds: value || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS } })}
+            />
         </div>
     ) : null;
 
@@ -184,42 +204,46 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         )}
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="03" title="画面规格" description="控制比例、分辨率及默认输出">
-                        {autoDL ? autoDLSpecFields : <div className="admin-capability-spec-grid">
-                            <Field label="支持比例">
-                                <Select
-                                    mode="multiple"
-                                    className="w-full"
-                                    disabled={disabled}
-                                    value={profile.ratios}
-                                    options={ratioOptions.map((item) => ({ label: item, value: item }))}
-                                    onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })}
-                                />
-                            </Field>
-                            <Field label="默认比例">
-                                <Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} />
-                            </Field>
-                            <Field label="输出分辨率">
-                                <Select
-                                    mode="tags"
-                                    className="admin-capability-tags w-full"
-                                    disabled={disabled}
-                                    value={profile.resolutions}
-                                    tokenSeparators={[","]}
-                                    placeholder="选择或输入模型档位"
-                                    options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                    onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
-                                />
-                            </Field>
-                            <Field label="默认分辨率">
-                                <Select
-                                    className="w-full"
-                                    disabled={disabled}
-                                    value={profile.defaultResolution}
-                                    options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                    onChange={(defaultResolution) => update({ defaultResolution })}
-                                />
-                            </Field>
-                        </div>}
+                        {autoDL ? (
+                            autoDLSpecFields
+                        ) : (
+                            <div className="admin-capability-spec-grid">
+                                <Field label="支持比例">
+                                    <Select
+                                        mode="multiple"
+                                        className="w-full"
+                                        disabled={disabled}
+                                        value={profile.ratios}
+                                        options={ratioOptions.map((item) => ({ label: item, value: item }))}
+                                        onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })}
+                                    />
+                                </Field>
+                                <Field label="默认比例">
+                                    <Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} />
+                                </Field>
+                                <Field label="输出分辨率">
+                                    <Select
+                                        mode="tags"
+                                        className="admin-capability-tags w-full"
+                                        disabled={disabled}
+                                        value={profile.resolutions}
+                                        tokenSeparators={[","]}
+                                        placeholder="选择或输入模型档位"
+                                        options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
+                                        onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
+                                    />
+                                </Field>
+                                <Field label="默认分辨率">
+                                    <Select
+                                        className="w-full"
+                                        disabled={disabled}
+                                        value={profile.defaultResolution}
+                                        options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))}
+                                        onChange={(defaultResolution) => update({ defaultResolution })}
+                                    />
+                                </Field>
+                            </div>
+                        )}
                     </ProtocolParameterCard>
                     {processingFields ? (
                         <ProtocolParameterCard step="04" title="视频处理" description="帧率策略与源视频时长上限；任务轮询上限 1 小时">
@@ -301,42 +325,46 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     )}
                 </CapabilityBlock>
                 <CapabilityBlock title="画面规格">
-                    {autoDL ? autoDLSpecFields : <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="画面比例">
-                            <Select
-                                mode="multiple"
-                                className="w-full"
-                                disabled={disabled}
-                                value={profile.ratios}
-                                options={ratioOptions.map((item) => ({ label: item, value: item }))}
-                                onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })}
-                            />
-                        </Field>
-                        <Field label="默认比例">
-                            <Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} />
-                        </Field>
-                        <Field label="输出分辨率">
-                            <Select
-                                mode="tags"
-                                className="admin-capability-tags w-full"
-                                disabled={disabled}
-                                value={profile.resolutions}
-                                tokenSeparators={[","]}
-                                placeholder="选择标准档位或输入 768p 等模型专属值"
-                                options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
-                            />
-                        </Field>
-                        <Field label="默认分辨率">
-                            <Select
-                                className="w-full"
-                                disabled={disabled}
-                                value={profile.defaultResolution}
-                                options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                onChange={(defaultResolution) => update({ defaultResolution })}
-                            />
-                        </Field>
-                    </div>}
+                    {autoDL ? (
+                        autoDLSpecFields
+                    ) : (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Field label="画面比例">
+                                <Select
+                                    mode="multiple"
+                                    className="w-full"
+                                    disabled={disabled}
+                                    value={profile.ratios}
+                                    options={ratioOptions.map((item) => ({ label: item, value: item }))}
+                                    onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })}
+                                />
+                            </Field>
+                            <Field label="默认比例">
+                                <Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} />
+                            </Field>
+                            <Field label="输出分辨率">
+                                <Select
+                                    mode="tags"
+                                    className="admin-capability-tags w-full"
+                                    disabled={disabled}
+                                    value={profile.resolutions}
+                                    tokenSeparators={[","]}
+                                    placeholder="选择标准档位或输入 768p 等模型专属值"
+                                    options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
+                                    onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
+                                />
+                            </Field>
+                            <Field label="默认分辨率">
+                                <Select
+                                    className="w-full"
+                                    disabled={disabled}
+                                    value={profile.defaultResolution}
+                                    options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))}
+                                    onChange={(defaultResolution) => update({ defaultResolution })}
+                                />
+                            </Field>
+                        </div>
+                    )}
                 </CapabilityBlock>
                 {processingFields ? <CapabilityBlock title="视频处理">{processingFields}</CapabilityBlock> : null}
                 {section === "all" ? (
@@ -398,12 +426,41 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
     const updateReferences = (patch: Partial<TextCapabilityConfig["references"]>) => {
         update({ references: { ...profile.references, ...patch } });
     };
+    // 视频识别是否开启只看 maxVideos > 0：路由、能力校验和模型标签都读这一个值，不再另存布尔值。
+    const videoUnderstanding = profile.references.maxVideos > 0;
+    const videoFields = (
+        <>
+            <Checkbox
+                className="admin-capability-video-toggle items-start"
+                checked={videoUnderstanding}
+                disabled={Boolean(disabled)}
+                onChange={(event) => updateReferences({ maxVideos: event.target.checked ? Math.max(1, profile.references.maxVideos) : 0 })}
+            >
+                <span className="grid gap-0.5">
+                    <span className="text-xs font-medium">支持视频识别</span>
+                    <span className="text-[var(--fs-tiny)] leading-5 text-foreground/45">勾选后该模型可接收参考视频（例如 Qwen3.8-Max-0902）；不勾选时不会把视频发给该模型。</span>
+                </span>
+            </Checkbox>
+            {videoUnderstanding ? (
+                <>
+                    <NumberField label="最多识别视频数" value={profile.references.maxVideos} min={1} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideos: Math.max(1, next || 1) })} />
+                    <NumberField label="单个视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideoBytes: mbToBytes(next) })} />
+                </>
+            ) : null}
+        </>
+    );
 
     if (section === "protocol") {
         return (
             <div className="admin-capability-editor space-y-3 rounded-md bg-muted/20 p-3">
                 <CapabilityGroup title="输出方式" description="控制向上游文本模型请求的响应方式。">
-                    <ParameterField label="SSE 流式输出" description="启用后发送 stream=true，并实时推送文本增量；关闭时等待完整 JSON 响应。" supported={profile.streaming !== false} disabled={Boolean(disabled)} onChange={(streaming) => update({ streaming })} />
+                    <ParameterField
+                        label="SSE 流式输出"
+                        description="启用后发送 stream=true，并实时推送文本增量；关闭时等待完整 JSON 响应。"
+                        supported={profile.streaming !== false}
+                        disabled={Boolean(disabled)}
+                        onChange={(streaming) => update({ streaming })}
+                    />
                 </CapabilityGroup>
             </div>
         );
@@ -422,13 +479,12 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
             <div className="admin-capability-reference-editor">
                 {contextWindowFields}
                 <div className="admin-capability-reference-grid is-three">
-                    <ReferenceCard title="图片引用" description="文本模型可接收的图片范围">
-                        <NumberField label="最大参考图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
+                    <ReferenceCard title="图片识别" description="0 表示不支持识图；大于 0 时模型列表显示「图×N」">
+                        <NumberField label="最多识别图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
                         <NumberField label="单张图片上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImageBytes: mbToBytes(next) })} />
                     </ReferenceCard>
-                    <ReferenceCard title="视频引用" description="文本模型可接收的视频范围">
-                        <NumberField label="最大参考视频数" value={profile.references.maxVideos} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideos: next || 0 })} />
-                        <NumberField label="单个视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideoBytes: mbToBytes(next) })} />
+                    <ReferenceCard title="视频识别" description="默认关闭；开启后模型列表显示「视×N」">
+                        {videoFields}
                     </ReferenceCard>
                     <ReferenceCard title="通用限制" description="所有文本请求共用的基础约束">
                         <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} max={1_000_000} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ promptMaxChars: next || 1 })} />
@@ -450,17 +506,14 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
                     <NumberField label="最大输出 Token" value={profile.maxOutputTokens} min={256} max={1_000_000} disabled={Boolean(disabled)} onChange={(next) => update({ maxOutputTokens: next || 256 })} />
                 </div>
             </CapabilityGroup>
-            <CapabilityGroup title="图片" description="文本模型可接收的图片参考范围">
+            <CapabilityGroup title="图片识别" description="0 表示不支持识图；大于 0 时模型列表显示「图×N」">
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <NumberField label="最大参考图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
+                    <NumberField label="最多识别图片数" value={profile.references.maxImages} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImages: next || 0 })} />
                     <NumberField label="单张图片上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxImageBytes: mbToBytes(next) })} />
                 </div>
             </CapabilityGroup>
-            <CapabilityGroup title="视频" description="文本模型可接收的视频参考范围">
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <NumberField label="最大参考视频数" value={profile.references.maxVideos} min={0} max={100} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideos: next || 0 })} />
-                    <NumberField label="单个视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ maxVideoBytes: mbToBytes(next) })} />
-                </div>
+            <CapabilityGroup title="视频识别" description="默认关闭；开启后模型列表显示「视×N」">
+                <div className="grid gap-3 sm:grid-cols-2">{videoFields}</div>
             </CapabilityGroup>
             <CapabilityGroup title="通用限制" description="所有文本请求共用的基础约束">
                 <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} max={1_000_000} disabled={Boolean(disabled)} onChange={(next) => updateReferences({ promptMaxChars: next || 1 })} />
@@ -480,12 +533,41 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
     if (section !== "references" && profile.parameters) {
         const definitions = imageParameters || profile.parameters;
         const size = profile.parameters.find((p) => p.name === "size");
-        return <div className="space-y-4">
-            <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name === "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p), definitions) })} />
-            {size ? <ImageParameterSizeEditor profile={profile} definition={definitions.find((p) => p.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} /> : null}
-            <ImageParameterSchemaEditor definitions={definitions} parameters={profile.parameters.filter((p) => p.name !== "size" && p.name !== "imageResolution")} disabled={disabled} onChange={(parameters) => onChange?.({ version: 1, image: updateImageParameterSchema(profile, profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p)) })} />
-            <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
-        </div>;
+        return (
+            <div className="space-y-4">
+                <ImageParameterSchemaEditor
+                    definitions={definitions}
+                    parameters={profile.parameters.filter((p) => p.name === "imageResolution")}
+                    disabled={disabled}
+                    onChange={(parameters) =>
+                        onChange?.({
+                            version: 1,
+                            image: updateImageParameterSchema(
+                                profile,
+                                profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p),
+                                definitions,
+                            ),
+                        })
+                    }
+                />
+                {size ? <ImageParameterSizeEditor profile={profile} definition={definitions.find((p) => p.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} /> : null}
+                <ImageParameterSchemaEditor
+                    definitions={definitions}
+                    parameters={profile.parameters.filter((p) => p.name !== "size" && p.name !== "imageResolution")}
+                    disabled={disabled}
+                    onChange={(parameters) =>
+                        onChange?.({
+                            version: 1,
+                            image: updateImageParameterSchema(
+                                profile,
+                                profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p),
+                            ),
+                        })
+                    }
+                />
+                <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
+            </div>
+        );
     }
 
     if (section === "references") {
@@ -722,14 +804,31 @@ function AutoDLScreenSpecFields({ profile, workflow, disabled, onChange }: { pro
     return (
         <div className="admin-capability-spec-grid">
             <Field label="输出分辨率">
-                <Select ariaLabel="输出分辨率" mode="tags" className="admin-capability-tags w-full" disabled={disabled} value={profile.resolutions} placeholder="选择预设或输入分辨率后回车" tokenSeparators={[",", "，"]} options={options.map((item) => ({ label: item, value: item }))} onChange={(values: string[]) => {
-                    const resolutions = cleanVideoScreenSpecValues(values);
-                    const defaultResolution = resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "";
-                    onChange(updateWorkflowVideoScreenSpec(profile, workflow, { resolutions, defaultResolution }));
-                }} />
+                <Select
+                    ariaLabel="输出分辨率"
+                    mode="tags"
+                    className="admin-capability-tags w-full"
+                    disabled={disabled}
+                    value={profile.resolutions}
+                    placeholder="选择预设或输入分辨率后回车"
+                    tokenSeparators={[",", "，"]}
+                    options={options.map((item) => ({ label: item, value: item }))}
+                    onChange={(values: string[]) => {
+                        const resolutions = cleanVideoScreenSpecValues(values);
+                        const defaultResolution = resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "";
+                        onChange(updateWorkflowVideoScreenSpec(profile, workflow, { resolutions, defaultResolution }));
+                    }}
+                />
             </Field>
             <Field label="默认分辨率">
-                <Select ariaLabel="默认分辨率" className="w-full" disabled={disabled} value={profile.defaultResolution || undefined} options={profile.resolutions.map((item) => ({ label: item, value: item }))} onChange={(defaultResolution: string) => onChange(updateWorkflowVideoScreenSpec(profile, workflow, { defaultResolution }))} />
+                <Select
+                    ariaLabel="默认分辨率"
+                    className="w-full"
+                    disabled={disabled}
+                    value={profile.defaultResolution || undefined}
+                    options={profile.resolutions.map((item) => ({ label: item, value: item }))}
+                    onChange={(defaultResolution: string) => onChange(updateWorkflowVideoScreenSpec(profile, workflow, { defaultResolution }))}
+                />
             </Field>
         </div>
     );
@@ -793,13 +892,7 @@ function ImageResponseFormatEditor({ value, disabled, onChange }: { value: Image
     const defaultValue: ImageResponseFormat = value.default || "auto";
     return (
         <div className="admin-image-response-format-editor space-y-2">
-            <ParameterField
-                label="response_format"
-                description="是否向上游发送响应格式；关闭后由上游自动决定"
-                supported={value.supported}
-                disabled={disabled}
-                onChange={(supported) => onChange({ supported, default: supported ? defaultValue : "auto" })}
-            />
+            <ParameterField label="response_format" description="是否向上游发送响应格式；关闭后由上游自动决定" supported={value.supported} disabled={disabled} onChange={(supported) => onChange({ supported, default: supported ? defaultValue : "auto" })} />
             {value.supported ? (
                 <Field label="默认响应格式">
                     <SegmentedControl

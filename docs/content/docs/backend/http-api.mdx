@@ -415,6 +415,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 文字任务带参考图、而所选文字模型未声明图片输入（`text.references.maxImages <= 0`）时，在预授权扣费前返回 `referenceNodeIds` / `unsupported_value`「当前文字模型不支持图片输入，请选择支持看图的文字模型」。系统渠道直连路径在模型选择阶段已用通用提示「所选模型不支持当前请求」拒绝。
 
+文字任务带参考视频时同样在预授权前校验：模型未开启视频识别（`text.references.maxVideos <= 0`，后台「支持视频识别」未勾选）返回 `referenceNodeIds` / `unsupported_value`「当前文字模型未开启视频识别，请选择支持视频识别的文字模型」；视频数超过 `maxVideos` 返回 `item_count`；单个视频超过 `maxVideoBytes` 返回 `unsupported_value`。自定义渠道只在请求附带文字能力配置时校验。Claude Messages 协议没有视频内容块，带参考视频时任务失败并说明原因，不再静默丢弃视频。
+
 ## 时间线渲染规格与来源标识
 
 时间线渲染请求的 `timeline` 可带 `fit`（`auto` / `pad` / `crop`，缺省 `auto`）。`auto` 按片段判断：来源与输出宽高比相对差 `|源宽高比 ÷ 目标宽高比 − 1|` 不超过 3% 时裁切填满，否则等比缩小补黑边；来源尺寸未知时补黑边。浏览器端精剪导出使用同一规则，默认目标为关联短剧的作品画幅，未关联时跟随首个片段（长边不超过 1920）。
