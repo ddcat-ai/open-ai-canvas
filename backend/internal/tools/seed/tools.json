@@ -1427,7 +1427,7 @@
     "title": "九宫格",
     "list": [
       {
-        "id": 90,
+        "id": 1000090,
         "label_en": "short_storyboard",
         "label": "故事板",
         "tag": "storyboard",
@@ -1441,7 +1441,7 @@
         "owner_id": ""
       },
       {
-        "id": 91,
+        "id": 1000091,
         "label_en": "blocking_storyboard",
         "label": "调度故事板",
         "tag": "storyboard",
