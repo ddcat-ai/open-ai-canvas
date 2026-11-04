@@ -4,6 +4,13 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ---
 
 # 待测试
+
+## 电商生图：提交报「生成参数包含不支持字段: canvasSize」
+- 问题：电商页三处生图入口（页面 `startGeneration`、`workflow.ts` 的 `submitCommerceImages`、单张 `regenerateImage`）都把 `commerceImageParameters` 的结果原样作为 `parameters` 提交到 `POST /api/workbench/tasks`，其中带了 `canvasSize`。后端 `normalizeTaskParameters` 对图片只接受 `size`、`quality`、`imageResolution`、`count`，遇到其他字段直接拒绝，所以任何一张都提交不出去。
+- 已修复：`canvasSize` 一直等于 `size`，只用于前端判断提示词画幅，后端从不读取。`commerceImageParameters` 不再返回该字段，`commerceImagePrompt` 改用 `size` 做同样的判断，提示词内容不变。
+- 本地验证：电商比例、美术方向、版式多样性、长图参考单测和 `bun run typecheck` 通过。未做浏览器验收。
+- [ ] 电商页策划完成后点击生成，图片任务正常创建并出图；单张「重新生成」同样可以提交。
+
 ## 登录注册：重构页面，后台可选弹窗或独立页面
 - 已实现：登录、注册、找回密码改为共用面板（`web/src/components/auth/`）：标题为「欢迎来到」加品牌名，手机号 / 邮箱验证码 / 密码以下划线标签切换（验证码方式排在密码前），手机号固定 +86 前缀，验证码输入与「获取验证码」按钮分开，底部「还没有账号？立即注册」与登录协议说明。独立页面保留外观设置里的品牌影片；弹窗左侧为品牌、登录页主标题与四项能力卡片，860px 以下只显示表单。
 - 已实现：后台「登录与注册」新增「4. 登录与注册的打开方式」，切换即保存，默认弹窗；保存在 `system_settings.registration.loginMode`，`/auth/settings` 公开下发。弹窗模式下侧栏、顶栏、分享页的登录入口在当前页弹出，登录后留在原页；未登录访问受保护页面回首页并弹出，登录后进入原地址；直达 `/login`、`/register`、`/forgot-password` 改为弹窗。独立页面模式保持跳转 `/login?next=`。首页创作输入框始终弹窗，原 `creation-login-dialog.tsx`（仅密码登录）已删除。

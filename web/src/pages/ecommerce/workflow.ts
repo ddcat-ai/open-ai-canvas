@@ -79,20 +79,20 @@ export function commerceProductReshoot(imageType: string) {
 
 const commerceArtifactGuard = "避免 AI 痕迹：扭曲或乱码文字、变形 Logo、多余或融化的部件、错误的手指、重复图案、无来源的光斑粒子和漂浮杂物。没有内部结构资料时，不绘制写实爆炸图、剖面或内部零件。";
 
-export type CommerceImageParameters = { size: string; quality?: string; imageResolution?: string; count: 1; canvasSize?: string };
+/** Exactly the image parameters accepted by POST /workbench/tasks; any extra key is rejected by the backend. */
+export type CommerceImageParameters = { size: string; quality?: string; imageResolution?: string; count: 1 };
 
 export function commerceImageParameters(profile: ImageCapabilityConfig, ratio: string, resolution: string): CommerceImageParameters {
     const normalized = normalizeImageValue(profile, { size: ratio, imageResolution: resolution, quality: profile.quality.default, count: "1" });
-    const base: CommerceImageParameters = { size: String(normalized.size || ratio), quality: normalized.quality, imageResolution: normalized.imageResolution, count: 1 };
     // Submit the selected ratio itself; never substitute a wider generation canvas.
-    return { ...base, canvasSize: base.size };
+    return { size: String(normalized.size || ratio), quality: normalized.quality, imageResolution: normalized.imageResolution, count: 1 };
 }
 
-export function commerceImagePrompt(draft: EcommerceDraft, image: EcommercePlan["images"][number], productSummary = "", visualStrategy = "", parameters?: Pick<CommerceImageParameters, "canvasSize">) {
+export function commerceImagePrompt(draft: EcommerceDraft, image: EcommercePlan["images"][number], productSummary = "", visualStrategy = "", parameters?: Pick<CommerceImageParameters, "size">) {
     if (!image.manualPrompt && commerceAllowsText(draft, image.imageType)) assertCommerceConsumerCopy(image.copy || "");
     const prompt = baseCommerceImagePrompt(draft, image, productSummary, visualStrategy);
     const reference = commerceReferenceImageInstruction(draft, image);
-    const extended = Boolean(parameters?.canvasSize && parameters.canvasSize !== image.ratio);
+    const extended = Boolean(parameters?.size && parameters.size !== image.ratio);
     const fullBleed = `【画幅】按 ${extended ? "本次生成尺寸" : image.ratio} 原生构图，full bleed edge-to-edge artwork，场景与背景连续延伸到四条边。禁止上下黑条、白条、letterbox、pillarbox、相框、胶片边框；不能把横向海报缩进竖向画幅。商品参考图即使是多视角拼贴说明板，也只提取商品身份，不复制原板的分格、边框、文字布局。`;
     const frame = extended ? commerceExtendedCanvasNote(image.ratio) : commerceTallCanvasSafeArea(image.ratio);
     const typography = commerceAllowsText(draft, image.imageType) && (image.copy || "").trim() ? `\n\n${commerceTypographyInstruction}` : "";

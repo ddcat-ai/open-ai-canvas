@@ -13,7 +13,8 @@ describe("ecommerce ratio selection", () => {
         for (const size of profile.size.values) {
             const request = commerceImageParameters(profile, size, "1k");
             expect(request.size).toBe(size);
-            expect(request.canvasSize).toBe(size);
+            // The workbench task API rejects unknown parameter keys.
+            expect(Object.keys(request).sort()).toEqual(["count", "imageResolution", "quality", "size"]);
         }
         profile.size.values = ["9:16", "2:3", "16:9", "1:1"];
         for (const size of profile.size.values) expect(commerceImageParameters(profile, size, "1k").size).toBe(size);
