@@ -1,5 +1,7 @@
 import { nanoid } from "nanoid";
 
+import { batchCellConnectionError, parseBatchCellHandle } from "@/lib/canvas/canvas-batch-references";
+import type { CanvasConnectionDropTarget } from "@/lib/canvas/canvas-connection-hit";
 import { canvasConnectionError } from "@/lib/canvas/canvas-connection-policy";
 import { normalizeConnection } from "@/lib/canvas/canvas-project-domain";
 import type { AiConfig } from "@/stores/use-config-store";
@@ -129,6 +131,34 @@ export function planBatchConnections({ sourceNodeIds, targetNodeId, targetHandle
     });
 
     return { connected, duplicates, skipped, connections: nextConnections };
+}
+
+/** 批量连接落到参考格时的判定：一个参考格只放一张图片，其余沿用参考格自身的检查。 */
+export function batchCellSourcesError(nodes: CanvasNodeData[], sourceNodeIds: string[], tableId: string, handleId?: string) {
+    return sourceNodeIds.length !== 1 ? "每个参考格只能连接一张图片" : batchCellConnectionError(nodes, sourceNodeIds[0], tableId, handleId);
+}
+
+const NO_BATCH_CONNECTION = "没有可建立的连接";
+
+/**
+ * 批量连接落在连不上的节点上时说明原因。只有分镜脚本、批量创作表没对准端口的两句是新写的，
+ * 其余沿用参考格判定和 planBatchConnections 的跳过原因。
+ */
+export function batchConnectionRejectReason({ sourceNodeIds, target, nodes, connections, config }: {
+    sourceNodeIds: string[];
+    target: Pick<CanvasConnectionDropTarget, "handleId" | "rejectedNodeId">;
+    nodes: CanvasNodeData[];
+    connections: CanvasConnection[];
+    config: AiConfig;
+}) {
+    const rejectedNodeId = target.rejectedNodeId;
+    if (!rejectedNodeId) return NO_BATCH_CONNECTION;
+    if (parseBatchCellHandle(target.handleId)) return batchCellSourcesError(nodes, sourceNodeIds, rejectedNodeId, target.handleId) || NO_BATCH_CONNECTION;
+    const rejected = nodes.find((node) => node.id === rejectedNodeId);
+    if (rejected?.type === CanvasNodeType.Script && !target.handleId) return "请对准分镜脚本的某一行";
+    if (rejected?.type === CanvasNodeType.BatchTable && !target.handleId) return "请对准批量创作表左侧的参考图连接点";
+    const plan = planBatchConnections({ sourceNodeIds, targetNodeId: rejectedNodeId, targetHandleId: target.handleId, nodes, connections, config });
+    return plan.skipped[0]?.reason || NO_BATCH_CONNECTION;
 }
 
 export function batchSourceRestriction(node: CanvasNodeData) {

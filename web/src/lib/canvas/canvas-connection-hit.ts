@@ -9,6 +9,8 @@ export type CanvasConnectionDropTarget = {
     handleId?: string;
     anchorRatio?: number;
     isNearNode: boolean;
+    /** 命中了节点但连不上（类型不收、参考数已满、缺少分镜行端口）时是哪个节点，松手时据此提示原因。 */
+    rejectedNodeId?: string;
 };
 
 export function resolveCanvasConnectionTarget({
@@ -35,13 +37,15 @@ export function resolveCanvasConnectionTarget({
         node.type === CanvasNodeType.Script ? storyboardHandleAtY(node, point.y, scriptScrollTopById[node.id] || 0) : node.type === CanvasNodeType.BatchTable ? batchReferenceHandleAtY(node, point.y, radius) : undefined;
     const targetFor = (node: CanvasNodeData, handleId = handleFor(node)): CanvasConnectionDropTarget => {
         const missingHandle = (node.type === CanvasNodeType.Script || node.type === CanvasNodeType.BatchTable) && !handleId;
-        return { nodeId: !missingHandle && canConnect(node) ? node.id : null, handleId, isNearNode: true };
+        const accepted = !missingHandle && canConnect(node);
+        return accepted ? { nodeId: node.id, handleId, isNearNode: true } : { nodeId: null, handleId, isNearNode: true, rejectedNodeId: node.id };
     };
     // DOM 命中已经包含置顶、选中层级和卡片变换；不可连接的可见主体也阻止穿透。
     const body = candidates.find((node) => node.id === bodyNodeId);
     if (body) return targetFor(body);
 
     let isNearNode = false;
+    let rejectedNodeId: string | undefined;
     for (const node of candidates.reverse()) {
         const scrollTop = scriptScrollTopById[node.id] || 0;
         const handleId = handleFor(node);
@@ -51,6 +55,7 @@ export function resolveCanvasConnectionTarget({
         isNearNode = true;
         const target = targetFor(node, handleId);
         if (target.nodeId) return target;
+        rejectedNodeId ??= target.rejectedNodeId;
     }
-    return { nodeId: null, isNearNode };
+    return rejectedNodeId ? { nodeId: null, isNearNode, rejectedNodeId } : { nodeId: null, isNearNode };
 }
