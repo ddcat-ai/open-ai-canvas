@@ -557,6 +557,27 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 模型任务失败的 `run_failed` 事件保留 `taskId`，并提供安全分类 `reason`：`model_connection_reset`、`model_request_timeout`、`model_connection_refused` 或 `model_task_failed`。`text` 不透传原始上游错误，避免泄露地址和凭证；前端用事件类型而非摘要关键词判断工具成功 / 失败。失败不会触发自动付费重试。
 
+## 方舟真人素材库
+
+管理员配置 `GET/PATCH /api/admin/settings/ark-private-assets` 增加 `site`（`volcengine` / `byteplus`，决定控制面 `ark.<region>.volcengineapi.com` 或 `ark.<region>.byteplusapi.com`）、`portraitEnabled`（开放用户级真人素材库，与可信素材自动同步 `enabled` 相互独立）和 `callbackBaseUrl`（站点公网根地址，空时使用 `CANVAS_PUBLIC_BASE_URL`）。更换站点、Region、ProjectName 或 AccessKey 会使已登记的真人素材组标记为不可用（`available=false`）。
+
+以下接口除回调外都要求登录，归属在 service 校验；调用方舟控制面的写接口按 `ResourceImportPerMinute` 限流：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/ark-portraits` | `{ enabled, site, groups, sessions }`；未开放时 `enabled=false`。`groups[].assets[]` 含 `arkAssetId`、`status`（`processing` / `active` / `failed`）与资源尺寸，列表顺带刷新少量审核中的素材 |
+| `POST /api/ark-portraits/sessions` | `{ name, lang }` 调用 `CreateVisualValidateSession`，返回 `session.h5Link`（按 `lang` 设置 `lng=zh/en/zh-Hant`，只在本次响应返回，不落库）。每账号每小时最多 20 次、最多 50 位真人 |
+| `POST /api/ark-portraits/sessions/:id/check` | 回调未到达时主动用 `GetVisualValidateResult` 换取素材组；未完成返回 409 |
+| `GET /api/ark-portraits/callback/:state` | H5 认证页完成后的回调，无需登录，凭一次性 `state` 识别会话；`resultCode=10000` 时换取 GroupId 并登记到发起人名下，然后 302 到 `/assets?arkPortrait=verified|failed|expired|pending|invalid` |
+| `POST /api/ark-portraits/groups` | 管理员登记控制台扫码授权得到的 `group-…`（先 `GetAssetGroup` 校验为 LivenessFace） |
+| `PATCH /api/ark-portraits/groups/:id` | 修改本地显示名称 |
+| `DELETE /api/ark-portraits/groups/:id` | 先 `DeleteAssetGroup`，成功后删除本地组与素材记录 |
+| `POST /api/ark-portraits/groups/:id/assets` | `{ resourceId, name }`，资源须属于当前用户且已就绪，按 MIME 以 `Image` / `Video` / `Audio` 调用 `CreateAsset` |
+| `POST /api/ark-portraits/assets/:id/refresh` | `GetAsset` 刷新审核状态 |
+| `DELETE /api/ark-portraits/assets/:id` | 先 `DeleteAsset`，成功后删除本地记录 |
+
+生成任务的参考图、视频和音频中出现 `asset://<id>` 且该 ID 登记在其他用户的真人素材下时返回 403；未登记的 ID（方舟公共数字人等）不受限制。
+
 ## 管理员支付订单
 
 `GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`providerId`、`timeField`、`from`、`to`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名称、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；所有筛选同时生效，返回匹配总数和当前页订单。`timeField` 为 `created`（默认创建时间）、`paid`（渠道支付时间）、`credited`（入账时间）。`from`、`to` 为 `YYYY-MM-DD`，包含起止日期，按北京时间转换为左闭右开的时间区间；未填写的边界不限制，倒置日期或无效状态/时间口径返回 400。

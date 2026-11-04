@@ -5,6 +5,18 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 方舟：BytePlus 站点与用户级真人素材库（#948）
+
+- 已实现（后端）：方舟素材库设置增加站点（火山引擎 / BytePlus）、真人素材库开关和回调地址；控制面按站点拼接 `ark.<region>.volcengineapi.com` / `ark.<region>.byteplusapi.com`。新增 `/api/ark-portraits/*`：发起 H5 认证（`CreateVisualValidateSession`）、无登录回调与主动查询（`GetVisualValidateResult`）、素材组登记 / 改名 / 删除、组内素材上传（`CreateAsset`）、状态刷新与删除。Schema 81 新增 `ark_portrait_sessions`、`ark_portrait_groups`、`ark_portrait_assets`。生成任务引用他人登记的真人素材 ID 时拒绝。原可信素材自动同步未改动。
+- 已实现（前端）：后台方舟素材库设置页增加站点、Region 控制面提示、真人素材库开关与回调地址；素材库页新增「真人素材」侧栏：发起认证（二维码 / 本机打开）、我已完成认证、管理员登记控制台素材组、上传素材、审核状态、加入素材库（带方舟素材 ID 与人像认证标记，工作台按 `asset://` 引用）、删除。认证完成回跳 `/assets?arkPortrait=…` 自动打开侧栏并提示结果。
+- 本地验证：假方舟控制面的服务层流程测试（认证、伪造 token 回调、重放回调、失败结果码、主动查询、跨用户上传 / 删除 / 引用拒绝、管理员登记限制）、控制面域名单测；前端类型检查与 lint。未连接真实火山引擎或 BytePlus 账号，未做浏览器验收。
+- [ ] 火山引擎：开放真人素材库后发起认证，手机扫码完成 H5 活体，点击「完成」回到 `/assets?arkPortrait=verified`，侧栏出现该真人；上传本人正面照，几分钟内变为“可用”，加入素材库后在画布作为 Seedance 参考图生成视频成功。
+- [ ] 上传他人照片到该组，方舟返回面部不一致，素材显示“未通过”及原因。
+- [ ] 手机上完成认证但未登录时，回调页跳转到登录；回到电脑侧栏点击「我已完成认证」可取回素材组。
+- [ ] BytePlus：站点选 BytePlus、Region `ap-southeast-1`，确认 `CreateVisualValidateSession` 是否可用；不可用时管理员登记控制台扫码授权的 `group-…`，上传素材与生成流程可用。
+- [ ] 账号隔离：B 账号看不到 A 的真人；在 B 的素材里手填 A 的真人素材 ID 生成视频，任务被拒绝。
+- [ ] 删除真人素材组：方舟控制台中该组同步删除；若方舟因授权状态拒绝删除，界面提示原因且本地记录保留。
+
 ## 易支付：submit.php 跳转、多支付方式与跨币种汇率（#948）
 
 - 已实现（插件 1.1.0）：易支付新增 `submitMode`（`api` 调 `mapi.php`；`submit` 生成签名的 `submit.php` 地址由浏览器跳转，仅 V1/MD5 + redirect）、`payTypes` 多选支付方式（可写 `type:名称` 增加自定义通道，旧配置的单个 `payType` 继续生效）和 `settlementCurrency`（CNY / USD）。源码、六个平台可执行文件与插件包已重建；其他支付插件未改动、未重建。

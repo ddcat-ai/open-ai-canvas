@@ -13,8 +13,17 @@ import (
 
 const arkPrivateAssetSettingKey = "ark_private_assets"
 
+const (
+	arkSiteVolcengine = "volcengine"
+	arkSiteBytePlus   = "byteplus"
+)
+
 type ArkPrivateAssetSettingRequest struct {
-	Enabled         bool   `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// PortraitEnabled 开放用户级真人认证素材库；与可信素材自动同步（Enabled）相互独立。
+	PortraitEnabled bool   `json:"portraitEnabled"`
+	Site            string `json:"site"`
+	CallbackBaseURL string `json:"callbackBaseUrl"`
 	Region          string `json:"region"`
 	ProjectName     string `json:"projectName"`
 	AccessKeyID     string `json:"accessKeyId"`
@@ -23,6 +32,9 @@ type ArkPrivateAssetSettingRequest struct {
 
 type PublicArkPrivateAssetSetting struct {
 	Enabled            bool      `json:"enabled"`
+	PortraitEnabled    bool      `json:"portraitEnabled"`
+	Site               string    `json:"site"`
+	CallbackBaseURL    string    `json:"callbackBaseUrl"`
 	Region             string    `json:"region"`
 	ProjectName        string    `json:"projectName"`
 	AccessKeyID        string    `json:"accessKeyId"`
@@ -34,6 +46,9 @@ type PublicArkPrivateAssetSetting struct {
 
 type arkPrivateAssetSettingValue struct {
 	Enabled         bool   `json:"enabled"`
+	PortraitEnabled bool   `json:"portraitEnabled"`
+	Site            string `json:"site"`
+	CallbackBaseURL string `json:"callbackBaseUrl"`
 	Region          string `json:"region"`
 	ProjectName     string `json:"projectName"`
 	AccessKeyID     string `json:"accessKeyId"`
@@ -65,7 +80,7 @@ func (s *Service) UpdateArkPrivateAssetSetting(actor *model.User, req ArkPrivate
 	if err != nil {
 		return nil, err
 	}
-	if next.Region != current.Region || next.ProjectName != current.ProjectName || next.AccessKeyID != current.AccessKeyID {
+	if next.Site != current.Site || next.Region != current.Region || next.ProjectName != current.ProjectName || next.AccessKeyID != current.AccessKeyID {
 		// Asset groups belong to one Ark Project and credential scope. Recreate
 		// lazily after either boundary changes.
 		next.DefaultGroupID = ""
@@ -128,6 +143,9 @@ func (s *Service) saveArkPrivateAssetSetting(setting *model.SystemSetting, value
 func arkPrivateAssetSettingFromRequest(req ArkPrivateAssetSettingRequest, current arkPrivateAssetSettingValue) (arkPrivateAssetSettingValue, error) {
 	next := normalizeArkPrivateAssetSetting(arkPrivateAssetSettingValue{
 		Enabled:         req.Enabled,
+		PortraitEnabled: req.PortraitEnabled,
+		Site:            req.Site,
+		CallbackBaseURL: req.CallbackBaseURL,
 		Region:          req.Region,
 		ProjectName:     req.ProjectName,
 		AccessKeyID:     req.AccessKeyID,
@@ -136,7 +154,20 @@ func arkPrivateAssetSettingFromRequest(req ArkPrivateAssetSettingRequest, curren
 	if next.AccessKeySecret == "" && next.AccessKeyID == current.AccessKeyID {
 		next.AccessKeySecret = current.AccessKeySecret
 	}
-	if !next.Enabled {
+	if next.Site != arkSiteVolcengine && next.Site != arkSiteBytePlus {
+		return next, BadAuthRequest("方舟站点只支持 volcengine（火山引擎）或 byteplus（BytePlus 海外站）")
+	}
+	if next.CallbackBaseURL != "" {
+		if err := validatePaymentPublicBaseURL(next.CallbackBaseURL); err != nil {
+			return next, BadAuthRequest("真人认证回调地址必须是有效的 HTTP(S) 根地址")
+		}
+	}
+	if next.Region != "" {
+		if _, err := arkPrivateAssetControlPlaneURL(next.Site, next.Region); err != nil {
+			return next, BadAuthRequest(err.Error())
+		}
+	}
+	if !next.Enabled && !next.PortraitEnabled {
 		return next, nil
 	}
 	if next.Region == "" {
@@ -155,7 +186,12 @@ func arkPrivateAssetSettingFromRequest(req ArkPrivateAssetSettingRequest, curren
 }
 
 func normalizeArkPrivateAssetSetting(value arkPrivateAssetSettingValue) arkPrivateAssetSettingValue {
-	value.Region = strings.TrimSpace(value.Region)
+	value.Site = strings.ToLower(strings.TrimSpace(value.Site))
+	if value.Site == "" {
+		value.Site = arkSiteVolcengine
+	}
+	value.CallbackBaseURL = strings.TrimRight(strings.TrimSpace(value.CallbackBaseURL), "/")
+	value.Region = strings.ToLower(strings.TrimSpace(value.Region))
 	value.ProjectName = strings.TrimSpace(value.ProjectName)
 	value.AccessKeyID = strings.TrimSpace(value.AccessKeyID)
 	value.AccessKeySecret = strings.TrimSpace(value.AccessKeySecret)
@@ -170,6 +206,9 @@ func defaultArkPrivateAssetSetting() arkPrivateAssetSettingValue {
 func publicArkPrivateAssetSetting(setting *model.SystemSetting, value arkPrivateAssetSettingValue) PublicArkPrivateAssetSetting {
 	result := PublicArkPrivateAssetSetting{
 		Enabled:            value.Enabled,
+		PortraitEnabled:    value.PortraitEnabled,
+		Site:               value.Site,
+		CallbackBaseURL:    value.CallbackBaseURL,
 		Region:             value.Region,
 		ProjectName:        value.ProjectName,
 		AccessKeyID:        value.AccessKeyID,

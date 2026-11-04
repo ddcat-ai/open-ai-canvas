@@ -237,6 +237,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 			return nil, err
 		}
 	}
+	if err := s.validateArkPortraitReferences(userID, &input); err != nil {
+		return nil, err
+	}
 	if resumedProviderRequestID(ctx) == "" {
 		mediaPolicy := providerMediaHydrationPolicyFor(ctx, input)
 		if err := s.hydrateGenerationMedia(userID, &input, mediaPolicy); err != nil {

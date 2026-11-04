@@ -500,6 +500,8 @@ Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`�
 
 迁移 80 `payment_order_charge_method` 为 `payment_orders` 增加 `charge_amount_fen`、`charge_currency`（渠道实收金额与结算货币）、`exchange_rate_micros`（跨币种下单时的 1 USD 兑 CNY × 10⁶ 快照，同币种为 0）和 `payment_method`（渠道内支付方式，如易支付 `alipay` / `wxpay`），并把旧订单的实收金额与货币回填为商品金额与货币。回调、查单与对账按实收快照校验，修改汇率不影响已创建订单。
 
+迁移 81 `ark_portrait_assets` 新增三张表：`ark_portrait_sessions`（一次 H5 真人认证：发起人、一次性回调 `state` 唯一索引、加密的 `byted_token_cipher`、站点 / Region / ProjectName 快照、状态 `pending|verified|failed|expired`、`result_code`、`group_id`、30 分钟过期时间），`ark_portrait_groups`（用户名下的 LivenessFace 素材组，`(project_name, group_id)` 唯一，`source` 为 `liveness` 或管理员登记的 `manual`），`ark_portrait_assets`（组内素材：本地资源 ID、方舟 `ark_asset_id`、`asset_type`、审核状态与错误）。删除组或素材时先删方舟侧再删本地记录；删除本地资源不影响方舟侧已入库的素材。
+
 电商 Agent 的迁移 79 新增八张电商项目、知识与 Agent 执行表及知识域索引，详见 [电商 Agent 与知识库](./ecommerce-agent)。上游既有迁移编号与校验值保持不变。
 
 知识数据另由随二进制嵌入的离线包初始化：23 个知识源、14740 条知识。`system_settings` 中的 `ecommerce_knowledge_bundle_receipt` 记录已安装数据包摘要，与来源和条目在同一事务中提交。再次启动不重复导入，已有内容、审核和停用状态优先保留；不新增表或修改迁移 79 的身份。

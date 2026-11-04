@@ -1,0 +1,223 @@
+/* 方舟真人素材库侧栏：只使用用户侧语义 token，明暗主题由 token 切换。 */
+.ark-portrait-stack {
+    display: grid;
+    gap: 20px;
+}
+
+.ark-portrait-note,
+.ark-portrait-hint {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ark-portrait-warning {
+    margin: 8px 0 0;
+    color: var(--status-warning);
+    font-size: 12px;
+}
+
+.ark-portrait-section {
+    display: grid;
+    gap: 10px;
+}
+
+.ark-portrait-section h3 {
+    margin: 0;
+    color: var(--user-ink);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ark-portrait-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ark-portrait-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.ark-portrait-row .ant-input,
+.ark-portrait-row .ant-input-affix-wrapper {
+    min-width: 0;
+    flex: 1 1 180px;
+}
+
+.ark-portrait-session {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    border: 1px solid var(--user-border);
+    border-radius: var(--radius-lg);
+    background: var(--user-surface-muted);
+    padding: 16px;
+}
+
+.ark-portrait-session-copy {
+    display: grid;
+    min-width: 220px;
+    flex: 1 1 240px;
+    align-content: start;
+    gap: 8px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ark-portrait-session-copy strong {
+    color: var(--user-ink);
+    font-size: 14px;
+}
+
+.ark-portrait-pending {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ark-portrait-pending li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+
+.ark-portrait-group {
+    border: 1px solid var(--user-border);
+    border-radius: var(--radius-lg);
+    padding: 12px;
+}
+
+.ark-portrait-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.ark-portrait-group-head > .ant-input {
+    max-width: 220px;
+}
+
+.ark-portrait-group-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--user-ink);
+    cursor: pointer;
+}
+
+.ark-portrait-group-name svg {
+    width: 13px;
+    height: 13px;
+    color: var(--user-ink-muted);
+}
+
+.ark-portrait-group-name:focus-visible {
+    border-radius: var(--radius-sm);
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+.ark-portrait-group-id {
+    color: var(--user-ink-muted);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+}
+
+.ark-portrait-group-actions {
+    display: inline-flex;
+    margin-left: auto;
+    gap: 4px;
+}
+
+.ark-portrait-assets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.ark-portrait-asset {
+    display: grid;
+    overflow: hidden;
+    margin: 0;
+    border: 1px solid var(--user-border);
+    border-radius: var(--radius-md);
+    background: var(--user-surface-muted);
+}
+
+.ark-portrait-asset img,
+.ark-portrait-asset-missing {
+    display: grid;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    place-items: center;
+    object-fit: cover;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+
+.ark-portrait-asset figcaption {
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+}
+
+.ark-portrait-asset-name {
+    overflow: hidden;
+    color: var(--user-ink);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ark-portrait-asset figcaption .ant-tag {
+    justify-self: start;
+}
+
+.ark-portrait-asset-error {
+    color: var(--status-error);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.ark-portrait-asset-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.ark-portrait-empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 48px 16px;
+    color: var(--user-ink-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.ark-portrait-empty svg {
+    width: 28px;
+    height: 28px;
+}
+
+.ark-portrait-empty strong {
+    color: var(--user-ink);
+}

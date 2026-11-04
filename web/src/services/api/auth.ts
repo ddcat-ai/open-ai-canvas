@@ -326,6 +326,12 @@ export type AdminOSSSetting = {
 
 export type AdminArkPrivateAssetSetting = {
     enabled: boolean;
+    /** 开放用户级真人认证素材库，与可信素材自动同步相互独立。 */
+    portraitEnabled: boolean;
+    /** 方舟站点：火山引擎或 BytePlus 海外站，决定控制面域名。 */
+    site: "volcengine" | "byteplus";
+    /** 真人认证回调使用的站点公网根地址；为空时后端使用 CANVAS_PUBLIC_BASE_URL。 */
+    callbackBaseUrl: string;
     region: string;
     projectName: string;
     accessKeyId: string;

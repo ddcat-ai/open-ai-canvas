@@ -1,6 +1,7 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
+import { Select } from "@/components/ui/base/select";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, CloudUpload, KeyRound, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { AlertTriangle, CloudUpload, KeyRound, RefreshCw, RotateCcw, Save, UserRoundCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "react-router";
 
@@ -9,15 +10,36 @@ import { getAdminArkPrivateAssetSetting, updateAdminArkPrivateAssetSetting, type
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
+type ArkSite = AdminArkPrivateAssetSetting["site"];
+
 type ArkPrivateAssetForm = {
     enabled: boolean;
+    portraitEnabled: boolean;
+    site: ArkSite;
+    callbackBaseUrl: string;
     region: string;
     projectName: string;
     accessKeyId: string;
     accessKeySecret: string;
 };
 
-type ArkPrivateAssetPayload = Pick<AdminArkPrivateAssetSetting, "enabled" | "region" | "projectName" | "accessKeyId" | "accessKeySecret">;
+type ArkPrivateAssetPayload = Pick<AdminArkPrivateAssetSetting, "enabled" | "portraitEnabled" | "site" | "callbackBaseUrl" | "region" | "projectName" | "accessKeyId" | "accessKeySecret">;
+
+// 站点决定控制面域名与推理 Base URL；Region 由管理员按开通情况手动填写。
+const ARK_SITE_META: Record<ArkSite, { label: string; regionPlaceholder: string; controlPlane: (region: string) => string; inference: string }> = {
+    volcengine: {
+        label: "火山引擎（中国站）",
+        regionPlaceholder: "cn-beijing",
+        controlPlane: (region) => `https://ark.${region || "<region>"}.volcengineapi.com`,
+        inference: "https://ark.cn-beijing.volces.com/api/v3",
+    },
+    byteplus: {
+        label: "BytePlus（海外站）",
+        regionPlaceholder: "ap-southeast-1",
+        controlPlane: (region) => `https://ark.${region || "<region>"}.byteplusapi.com`,
+        inference: "https://ark.ap-southeast.bytepluses.com/api/v3",
+    },
+};
 
 export default function ArkPrivateAssetsSettingsPage() {
     const { message, modal } = App.useApp();
@@ -34,6 +56,9 @@ export default function ArkPrivateAssetsSettingsPage() {
     const navigationTriggerRef = useRef<HTMLElement | null>(null);
     const watchedValues = Form.useWatch([], form) as Partial<ArkPrivateAssetForm> | undefined;
     const draftEnabled = watchedValues?.enabled === true;
+    const draftPortraitEnabled = watchedValues?.portraitEnabled === true;
+    const draftSite: ArkSite = watchedValues?.site === "byteplus" ? "byteplus" : "volcengine";
+    const siteMeta = ARK_SITE_META[draftSite];
 
     const load = useCallback(
         async (initial = false, announce = false) => {
@@ -188,7 +213,7 @@ export default function ArkPrivateAssetsSettingsPage() {
 
     if (loading && !setting) {
         return (
-            <AdminPageFrame title="方舟素材库" description="为 Seedance 参考图配置后端可信素材导入" scroll>
+            <AdminPageFrame title="方舟素材库" description="配置方舟站点与 IAM 凭据、Seedance 可信素材导入和用户级真人素材库" scroll>
                 <div className="admin-settings-stack admin-ark-settings" aria-label="正在读取方舟素材库配置" role="status">
                     <div className="admin-ark-command-bar">
                         <Skeleton active title={{ width: 190 }} paragraph={false} />
@@ -203,7 +228,7 @@ export default function ArkPrivateAssetsSettingsPage() {
 
     if (!setting) {
         return (
-            <AdminPageFrame title="方舟素材库" description="为 Seedance 参考图配置后端可信素材导入" scroll>
+            <AdminPageFrame title="方舟素材库" description="配置方舟站点与 IAM 凭据、Seedance 可信素材导入和用户级真人素材库" scroll>
                 <div className="admin-settings-stack admin-ark-settings">
                     <div className="admin-ark-load-error" role="alert">
                         <span className="admin-ark-load-error-icon">
@@ -230,7 +255,7 @@ export default function ArkPrivateAssetsSettingsPage() {
     const prerequisitesReady = projectReady && credentialsReady;
 
     return (
-        <AdminPageFrame title="方舟素材库" description="为 Seedance 参考图配置后端可信素材导入" scroll>
+        <AdminPageFrame title="方舟素材库" description="配置方舟站点与 IAM 凭据、Seedance 可信素材导入和用户级真人素材库" scroll>
             <div className="admin-settings-stack admin-ark-settings">
                 <div className={cn("admin-ark-command-bar", dirty && "is-dirty")}>
                     <div className="admin-ark-command-copy" aria-live="polite">
@@ -268,9 +293,9 @@ export default function ArkPrivateAssetsSettingsPage() {
                     disabled={loading || refreshing || saving}
                     onValuesChange={(_, values: ArkPrivateAssetForm) => {
                         let nextValues = values;
-                        if (values.enabled && !arkPrivateAssetPrerequisitesReady(values, setting)) {
-                            form.setFieldValue("enabled", false);
-                            nextValues = { ...values, enabled: false };
+                        if ((values.enabled || values.portraitEnabled) && !arkPrivateAssetPrerequisitesReady(values, setting)) {
+                            form.setFieldsValue({ enabled: false, portraitEnabled: false });
+                            nextValues = { ...values, enabled: false, portraitEnabled: false };
                         }
                         setDirty(hasArkPrivateAssetChanges(nextValues, setting));
                         setSaveError("");
@@ -285,8 +310,11 @@ export default function ArkPrivateAssetsSettingsPage() {
                             status={<AdminStatusBadge label={prerequisitesReady ? "已配置" : "待配置"} tone={prerequisitesReady ? "success" : "neutral"} />}
                         >
                             <div className="admin-ark-form-grid">
-                                <Form.Item name="region" label="Region" extra="方舟控制面当前仅 cn-beijing 区域开放，其他区域连接会被直接重置。">
-                                    <Input autoComplete="off" placeholder="cn-beijing" />
+                                <Form.Item name="site" label="方舟站点" extra={`推理渠道 Base URL 参考：${siteMeta.inference}`}>
+                                    <Select options={(Object.keys(ARK_SITE_META) as ArkSite[]).map((value) => ({ value, label: ARK_SITE_META[value].label }))} aria-label="方舟站点" />
+                                </Form.Item>
+                                <Form.Item name="region" label="Region" extra={`控制面地址：${siteMeta.controlPlane(normalizedDraft.region)}。请填写已开通素材库的区域。`}>
+                                    <Input autoComplete="off" placeholder={siteMeta.regionPlaceholder} />
                                 </Form.Item>
                                 <Form.Item name="projectName" label="Ark ProjectName">
                                     <Input autoComplete="off" placeholder="方舟项目名称" />
@@ -325,6 +353,33 @@ export default function ArkPrivateAssetsSettingsPage() {
                             </SettingsSectionCard>
                         </div>
                     ) : null}
+                    {prerequisitesReady || draftPortraitEnabled ? (
+                        <div id="admin-ark-portrait" className="admin-settings-anchor">
+                            <SettingsSectionCard
+                                className="admin-ark-section admin-ark-policy-section"
+                                icon={<UserRoundCheck className="size-4" aria-hidden="true" />}
+                                title="3. 是否开放真人素材库"
+                                description="开放后，用户可在素材库完成 H5 真人认证，每次认证建立一个只属于本人的真人素材组，组内素材审核通过后可在工作台引用。"
+                                status={<AdminStatusBadge label={draftPortraitEnabled ? "已开放" : "未开放"} tone={draftPortraitEnabled ? "success" : "neutral"} />}
+                            >
+                                <div className="admin-ark-policy-control">
+                                    <div className="admin-ark-policy-copy">
+                                        <strong>用户级真人认证</strong>
+                                        <p>认证结果回调到「回调地址」/api/ark-portraits/callback/…；BytePlus 未开放 H5 接口时，管理员可在素材库手动登记控制台扫码授权得到的素材组 ID。</p>
+                                    </div>
+                                    <div className="admin-ark-policy-switch">
+                                        <span>{draftPortraitEnabled ? "开放" : "关闭"}</span>
+                                        <Form.Item name="portraitEnabled" valuePropName="checked" noStyle>
+                                            <Switch aria-label="开放真人素材库，保存修改后生效" />
+                                        </Form.Item>
+                                    </div>
+                                </div>
+                                <Form.Item name="callbackBaseUrl" label="真人认证回调地址" extra="站点公网根地址，如 https://canvas.example.com；留空时使用环境变量 CANVAS_PUBLIC_BASE_URL。" className="mt-4">
+                                    <Input autoComplete="off" placeholder="https://canvas.example.com" />
+                                </Form.Item>
+                            </SettingsSectionCard>
+                        </div>
+                    ) : null}
                 </Form>
             </div>
         </AdminPageFrame>
@@ -334,6 +389,9 @@ export default function ArkPrivateAssetsSettingsPage() {
 function toFormValues(setting: AdminArkPrivateAssetSetting): ArkPrivateAssetForm {
     return {
         enabled: setting.enabled,
+        portraitEnabled: setting.portraitEnabled,
+        site: setting.site === "byteplus" ? "byteplus" : "volcengine",
+        callbackBaseUrl: setting.callbackBaseUrl || "",
         region: setting.region || "",
         projectName: setting.projectName || "",
         accessKeyId: setting.accessKeyId || "",
@@ -344,7 +402,10 @@ function toFormValues(setting: AdminArkPrivateAssetSetting): ArkPrivateAssetForm
 function normalizeArkPrivateAssetPayload(values: Partial<ArkPrivateAssetForm>): ArkPrivateAssetPayload {
     return {
         enabled: Boolean(values.enabled),
-        region: values.region?.trim() || "",
+        portraitEnabled: Boolean(values.portraitEnabled),
+        site: values.site === "byteplus" ? "byteplus" : "volcengine",
+        callbackBaseUrl: values.callbackBaseUrl?.trim().replace(/\/+$/, "") || "",
+        region: values.region?.trim().toLowerCase() || "",
         projectName: values.projectName?.trim() || "",
         accessKeyId: values.accessKeyId?.trim() || "",
         accessKeySecret: values.accessKeySecret?.trim() || "",
@@ -355,12 +416,22 @@ function hasArkPrivateAssetChanges(values: Partial<ArkPrivateAssetForm>, setting
     if (!setting) return false;
     const draft = normalizeArkPrivateAssetPayload(values);
     const saved = normalizeArkPrivateAssetPayload(toFormValues(setting));
-    return draft.accessKeySecret !== "" || draft.enabled !== saved.enabled || draft.region !== saved.region || draft.projectName !== saved.projectName || draft.accessKeyId !== saved.accessKeyId;
+    return (
+        draft.accessKeySecret !== "" ||
+        draft.enabled !== saved.enabled ||
+        draft.portraitEnabled !== saved.portraitEnabled ||
+        draft.site !== saved.site ||
+        draft.callbackBaseUrl !== saved.callbackBaseUrl ||
+        draft.region !== saved.region ||
+        draft.projectName !== saved.projectName ||
+        draft.accessKeyId !== saved.accessKeyId
+    );
 }
 
 function validateArkPrivateAssetDraft(values: ArkPrivateAssetForm, setting: AdminArkPrivateAssetSetting) {
     const draft = normalizeArkPrivateAssetPayload(values);
-    if (!draft.enabled) return "";
+    if (draft.callbackBaseUrl && !/^https?:\/\/[^/?#]+$/i.test(draft.callbackBaseUrl)) return "真人认证回调地址必须是 http(s):// 开头的站点根地址";
+    if (!draft.enabled && !draft.portraitEnabled) return "";
     if (!draft.region) return "请填写方舟 Region";
     if (!draft.projectName) return "请填写方舟 ProjectName";
     if (!draft.accessKeyId) return "请填写方舟素材库 IAM AccessKey";
@@ -383,11 +454,28 @@ function nextSecretPresence(values: ArkPrivateAssetPayload, setting: AdminArkPri
 }
 
 function arkPrivateAssetResponseMatches(setting: AdminArkPrivateAssetSetting, expected: ArkPrivateAssetPayload, expectedHasSecret: boolean) {
-    return setting.enabled === expected.enabled && setting.region === expected.region && setting.projectName === expected.projectName && setting.accessKeyId === expected.accessKeyId && setting.hasAccessKeySecret === expectedHasSecret;
+    return (
+        setting.enabled === expected.enabled &&
+        setting.portraitEnabled === expected.portraitEnabled &&
+        setting.site === expected.site &&
+        (setting.callbackBaseUrl || "") === expected.callbackBaseUrl &&
+        setting.region === expected.region &&
+        setting.projectName === expected.projectName &&
+        setting.accessKeyId === expected.accessKeyId &&
+        setting.hasAccessKeySecret === expectedHasSecret
+    );
 }
 
 function isAdminArkPrivateAssetSetting(value: unknown): value is AdminArkPrivateAssetSetting {
     if (!value || typeof value !== "object") return false;
     const setting = value as Partial<AdminArkPrivateAssetSetting>;
-    return typeof setting.enabled === "boolean" && typeof setting.region === "string" && typeof setting.projectName === "string" && typeof setting.accessKeyId === "string" && typeof setting.hasAccessKeySecret === "boolean";
+    return (
+        typeof setting.enabled === "boolean" &&
+        typeof setting.portraitEnabled === "boolean" &&
+        typeof setting.site === "string" &&
+        typeof setting.region === "string" &&
+        typeof setting.projectName === "string" &&
+        typeof setting.accessKeyId === "string" &&
+        typeof setting.hasAccessKeySecret === "boolean"
+    );
 }
