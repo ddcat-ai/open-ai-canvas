@@ -114,6 +114,10 @@ export type ModelChannel = {
         defaultOptions?: Record<string, unknown>;
         availability?: PublicChannelModelAvailability;
         available?: boolean;
+        /** 系统目录里的渠道模型行 ID 与路由键：后台按行 ID 保存配置，前台据此找回对应的可选模型。 */
+        channelModelId?: string;
+        channelId?: string;
+        modelKey?: string;
     }>;
 };
 

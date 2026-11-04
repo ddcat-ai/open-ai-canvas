@@ -1,4 +1,4 @@
-import { Modal, message } from "antd";
+import { App, Modal } from "antd";
 import { ArrowUpRight, Check, ChevronLeft, ChevronRight, FolderOpen, Images, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -137,6 +137,7 @@ export function EcommerceProjectHistory({
     onOpen: (project: EcommerceProject) => void;
     onDeleted: (ids: string[], all: boolean) => void;
 }) {
+    const { message } = App.useApp();
     const [projects, setProjects] = useState<EcommerceProject[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);

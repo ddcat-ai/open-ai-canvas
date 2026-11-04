@@ -92,7 +92,6 @@ func stageModelSetting() EcommerceOrchestrationSetting {
 		Vision:    EcommerceOrchestrationRole{Model: EcommerceOrchestrationModel{ChannelModelID: "vision-a"}, Fallback: EcommerceOrchestrationModel{ChannelModelID: "fallback-f"}},
 		Marketing: EcommerceOrchestrationRole{Model: EcommerceOrchestrationModel{ChannelModelID: "planner-b"}},
 		Director:  EcommerceOrchestrationRole{Reuse: "marketing"},
-		Quality:   EcommerceOrchestrationRole{Reuse: "vision"},
 	}
 }
 
@@ -144,8 +143,7 @@ func TestEcommerceStageSettingRequiresAdminAndVisionModel(t *testing.T) {
 	}
 	missingVision := stageModelSetting()
 	missingVision.Vision = EcommerceOrchestrationRole{}
-	missingVision.Quality = EcommerceOrchestrationRole{}
-	if _, err := svc.UpdateEcommerceOrchestrationSetting(admin, missingVision); err == nil || !strings.Contains(err.Error(), "商品视觉理解主模型") {
+	if _, err := svc.UpdateEcommerceOrchestrationSetting(admin, missingVision); err == nil || !strings.Contains(err.Error(), "商品识别与视觉方向主模型") {
 		t.Fatalf("stage setting without a vision model saved: %v", err)
 	}
 	if _, saved, err := svc.storedEcommerceOrchestrationSetting(); err != nil || saved {

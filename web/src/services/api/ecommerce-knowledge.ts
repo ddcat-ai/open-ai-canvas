@@ -48,7 +48,8 @@ export type CommerceAgentSetting = { logicalModelId: string; channelModelId?: st
 export const getCommerceAgentSetting = () => http.get<CommerceAgentSetting>("/ecommerce/agent-setting");
 export type CommerceOrchestrationModel = { logicalModelId?: string; channelModelId?: string };
 export type CommerceOrchestrationRole = { model: CommerceOrchestrationModel; fallback: CommerceOrchestrationModel; reuse?: string };
-export type CommerceOrchestrationSetting = { version: 1; enabled: false; vision: CommerceOrchestrationRole; marketing: CommerceOrchestrationRole; director: CommerceOrchestrationRole; quality: CommerceOrchestrationRole };
+/** vision = 商品识别与视觉方向；director = 整套策划（reuse="marketing" 时沿用旧的营销策划阶段 marketing）。 */
+export type CommerceOrchestrationSetting = { version: 1; enabled: false; vision: CommerceOrchestrationRole; marketing: CommerceOrchestrationRole; director: CommerceOrchestrationRole };
 export const getCommerceOrchestrationSetting = () => http.get<CommerceOrchestrationSetting>("/ecommerce/knowledge/orchestration");
 export const updateCommerceOrchestrationSetting = (value: CommerceOrchestrationSetting) => http.put<CommerceOrchestrationSetting>("/ecommerce/knowledge/orchestration", value);
 export const syncCommerceKnowledge = () => http.post<{ imported: number; duplicates: number; failed: string[] }>("/ecommerce/knowledge/sync", {});

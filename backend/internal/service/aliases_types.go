@@ -11,8 +11,6 @@ const (
 )
 
 type (
-	YoruSettings                           = app.YoruSettings
-	YoruChatRequest                        = app.YoruChatRequest
 	SaveEcommerceProjectRequest            = app.SaveEcommerceProjectRequest
 	EcommerceCreativeDirectionsRequest     = app.EcommerceCreativeDirectionsRequest
 	EcommerceStyleChoice                   = app.EcommerceStyleChoice

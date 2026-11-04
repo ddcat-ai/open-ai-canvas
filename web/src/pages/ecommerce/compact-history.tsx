@@ -1,4 +1,4 @@
-import { Modal, message } from "antd";
+import { App, Modal } from "antd";
 import { Images, MoreHorizontal, Trash2 } from "lucide-react";
 import { HistoryIcon } from "@/components/ui/ecommerce-icons";
 import { useEffect, useRef, useState } from "react";
@@ -34,6 +34,7 @@ export function CompactEcommerceHistory({
     onDeleted: (ids: string[], all: boolean) => void;
     onShowAll: () => void;
 }) {
+    const { message } = App.useApp();
     const root = useRef<HTMLDivElement>(null);
     const [projects, setProjects] = useState<EcommerceProject[]>([]);
     const [total, setTotal] = useState(0);

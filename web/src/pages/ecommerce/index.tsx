@@ -1,6 +1,6 @@
 import { createClientUUID } from "@/lib/client-id";
-import { Button, Input, Modal, Select, message } from "antd";
-import { AlertCircle, ArrowUp, ChevronDown, Clapperboard, Image as ImageIcon, LoaderCircle, Minus, Plus, RotateCcw, Save, Sparkles } from "lucide-react";
+import { App, Button, Input, Select } from "antd";
+import { AlertCircle, ArrowDownToLine, ArrowUp, ChevronDown, Clapperboard, Image as ImageIcon, LoaderCircle, Minus, Plus, RotateCcw, Save, Sparkles } from "lucide-react";
 import { HistoryIcon, LightbulbIcon } from "@/components/ui/ecommerce-icons";
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { SegmentedControl } from "@/components/ui/base/segmented-control/segmented-control";
@@ -20,12 +20,14 @@ import { ReferenceModePanel, ReferenceScreenSummary } from "./reference-mode-pan
 
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { ModelPicker } from "@/components/model-picker";
-import { modelQuoteRequest } from "@/lib/model-pricing";
+import { systemModelQuoteRequest } from "@/lib/model-pricing";
 import { cancelGenerationTask, createGenerationTask, listGenerationTasks, queryGenerationTask, recoverGenerationTaskMedia, retryGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
 import { parseBackendGenerationResult, prepareBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteModel } from "@/services/api/logical-models";
 import { resourceStorageKey, resolveResourceVariantUrl, resourceIdFromStorageKey } from "@/services/api/resources";
 import { startEcommerceDownload } from "./export";
+import { commerceFlowNextStep, resolveCommerceFlow } from "./flow";
+import { CommerceFlowSteps } from "./flow-steps";
 import { createWorkbenchTask } from "@/services/api/workbench";
 import { materializeGenerationTaskAssets } from "@/services/project-asset-sync";
 import { getRemoteAsset } from "@/services/api/user-data";
@@ -149,9 +151,12 @@ export default function EcommercePage() {
 }
 
 function EcommerceWorkspace({ scope }: { scope: string }) {
+    // 用 App 上下文里的 message：跟随明暗主题，并按全站规则去重，不会叠出一串同样的报错。
+    const { message } = App.useApp();
     const config = useEffectiveConfig();
     const ecommerceEnabled = useUserStore((state) => state.features.ecommerceEnabled);
     const ecommerceVideoEnabled = useUserStore((state) => state.features.ecommerceVideoEnabled);
+    const videoWorkbenchEnabled = useUserStore((state) => state.features.videoWorkbenchEnabled);
     const nickname = useUserStore((state) => state.user?.displayName?.trim() || state.user?.username?.trim() || "创作者");
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -826,7 +831,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     : activeCommerceReferences(draft).filter((ref) => ref.role !== "sku" || ref.resourceId === draft.skus.find((sku) => sku.id === ("skuId" in image ? image.skuId : undefined))?.resourceId).length || 1;
             // Quote the size the image is generated at (自动 resolves to the platform recommendation).
             const ratio = commerceGenerationRatio(config, draft, { imageModel: image.imageModel, ratio: image.ratio, imageType: "imageType" in image && typeof image.imageType === "string" ? image.imageType : undefined });
-            return modelQuoteRequest(config, image.imageModel, "image", {
+            return systemModelQuoteRequest(config, image.imageModel, "image", {
                 capability: "image",
                 input: { textCount: 1, imageCount: referenceCount, referenceImageCount: referenceCount, videoCount: 0, audioCount: 0, characterCount: 0 },
                 imageSize: ratio,
@@ -835,7 +840,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         });
         const agentImageCount = commercePlanningReferenceCount(draft);
         const textQuote = (model: string) =>
-            modelQuoteRequest(config, model, "text", {
+            systemModelQuoteRequest(config, model, "text", {
                 capability: "text",
                 input: { textCount: 1, imageCount: agentImageCount, referenceImageCount: agentImageCount, videoCount: 0, audioCount: 0, characterCount: 0 },
             });
@@ -1884,12 +1889,14 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setDraft((current) => commerceFollowupDraft({ ...current, creativeDirectionId: undefined, creativeRecommendationId: undefined }, instruction));
     };
     const directionsOutdated = Boolean(creativeDirections.length && directionsInputSignatureRef.current !== commerceInputSignature(draft));
+    // 后台阶段模型不可用时 AI 流程走不通：按钮直接置灰，原因常驻显示在按钮上方。
+    const adminBlocked = creationMode !== "direct" && Boolean(adminModelIssue);
     const submitDisabled = !ecommerceEnabled || restoring || uploading || busy || planningPending || (directionsPending && !draftDiffersFromPlan) || (Boolean(activeImages) && !draftDiffersFromPlan) || confirmingGeneration || !composerText.trim();
     /** Enter 发送，Shift+Enter 换行；输入法组字期间的回车只用于上屏。 */
     const submitComposerOnEnter = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing || event.keyCode === 229) return;
         event.preventDefault();
-        if (!submitDisabled) void requestGenerationConfirmation();
+        if (!submitDisabled && !adminBlocked) void requestGenerationConfirmation();
     };
     const importComposerImages = (source: CommerceImageTransfer) => {
         if (!source.files.length && !source.resourceId && !source.url) return false;
@@ -1936,15 +1943,32 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const phraseGroups = scene?.phrases || [];
     const activePhraseGroup = phraseGroups.find((group) => group.key === phraseGroup) || phraseGroups[0];
     const busyIndicator = confirmingGeneration || busy || planningPending;
+    // 整条流程折算成五步进度：作品区顶部的进度条、空态提示和底部按钮说明都从这里取，不再各写一套。
+    const flowSteps = resolveCommerceFlow({
+        direct: creationMode === "direct",
+        hasProduct: Boolean(productReferences.length || rememberedReferenceCount),
+        hasInstruction: Boolean(composerText.trim()) || Boolean(rememberedReferenceCount),
+        directionsLoading: directionsStatus === "loading" || directionsPending,
+        directionsReady: creativeDirections.length > 0,
+        directionChosen: Boolean(chosenDirection || draft.creativeDirectionId),
+        planningPending,
+        planReady: Boolean(plan?.images.length && plan.inputSignature === commerceInputSignature(draft)),
+        planCount: plan?.images.length || 0,
+        submitted,
+        completed,
+        failed: plan?.images.filter((image) => image.taskId && ["failed", "cancelled"].includes(tasks[image.taskId]?.status || "")).length || 0,
+        active: activeImages,
+    });
     const nextStep = !ecommerceEnabled
         ? "电商创作暂未开放，历史方案和作品仍可查看与下载。"
         : !productReferences.length && !rememberedReferenceCount
           ? `先在右侧添加${scene?.materials.required || "商品图"}，作品会显示在这里。`
-          : !composerText.trim()
-            ? "在右侧描述想要的画面，或点选描述短语。"
-            : scene?.planned
-              ? "点击生成：先推荐几套视觉方向，选定后生成整套图片。"
-              : "点击生成，作品会立即出现在这里。";
+          : commerceFlowNextStep(flowSteps);
+    const roundDelivered = Boolean(plan && submitted > 0 && completed === total);
+    // 商品视频交给视频生成页：带上一张已完成的作品做首帧。两个开关都开着才出现入口。
+    const productVideoAvailable = ecommerceVideoEnabled && videoWorkbenchEnabled;
+    const makeProductVideo = (resourceId?: string) => navigate(resourceId ? `/toolbox/video?ref=${encodeURIComponent(resourceId)}` : "/toolbox/video");
+    const firstDeliveredResource = exportItems.find((item) => item.resourceId)?.resourceId;
     const stageActive = Boolean(
         restoring ||
         cacheError ||
@@ -2002,16 +2026,41 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     onChoose={(direction) => void chooseCreativeDirection(direction)}
                     onRefresh={() => void requestCreativeDirections(Boolean(plan && completed === total))}
                 />
-            ) : plan && completed === total && directionsStatus !== "loading" ? (
-                <button type="button" className="ecs-followup" onClick={() => void requestCreativeDirections(true)} disabled={busy || planningPending}>
-                    <Sparkles size={15} />
-                    为这件商品推荐下一组视觉方向
-                </button>
+            ) : roundDelivered && directionsStatus !== "loading" ? (
+                // 一轮的终点：交付动作集中在这里，不用再去右侧或资产库找下一步。
+                <section className="commerce-delivery" aria-label="本轮交付">
+                    <header>
+                        <strong>本轮 {completed} 张已全部完成</strong>
+                        <p>已保存到资产库。可以直接导出交付，也可以做成商品视频，或为这件商品继续下一组。</p>
+                    </header>
+                    <div className="commerce-delivery-actions">
+                        <Button type="primary" icon={<ArrowDownToLine size={14} />} disabled={busy || !exportItems.length} onClick={() => runExport("zip")}>
+                            {selectedExportIds.size ? `导出已选 ${exportItems.length} 张` : `导出全部 ${exportItems.length} 张`}
+                        </Button>
+                        {exportItems.length > 1 ? (
+                            <Button disabled={busy} onClick={() => runExport("long")}>
+                                拼成长图
+                            </Button>
+                        ) : null}
+                        {productVideoAvailable ? (
+                            <Button icon={<Clapperboard size={14} />} onClick={() => makeProductVideo(firstDeliveredResource)}>
+                                做成商品视频
+                            </Button>
+                        ) : null}
+                        <Button icon={<Sparkles size={14} />} disabled={busy || planningPending} onClick={() => void requestCreativeDirections(true)}>
+                            推荐下一组视觉方向
+                        </Button>
+                        <Button type="text" onClick={() => navigate("/assets")}>
+                            去资产库
+                        </Button>
+                    </div>
+                </section>
             ) : null}
+            {/* 正在运行的步骤在这里写明做什么；顶部流程条此时只亮起当前步，不再重复同一句话。 */}
             {restoring || planningPending || directionsStatus === "loading" ? (
                 <div className="ecs-progress commerce-assistant-progress" role="status">
                     <LoaderCircle className="commerce-planning-spin" size={15} />
-                    <span>{restoring ? "正在恢复商品创作…" : directionsStatus === "loading" ? "正在整理视觉方向…" : "正在准备商品图片方案…"}</span>
+                    <span>{restoring ? "正在恢复商品创作…" : commerceFlowNextStep(flowSteps)}</span>
                 </div>
             ) : null}
             {stageMessage && !(plan && completed === total && creativeDirections.length) ? (
@@ -2040,7 +2089,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 </Button>
             ) : null}
             {plan && plan.images.length > 0 ? (
-                <details className="ecs-review">
+                <details className="ecs-review" open={!submitted || undefined}>
                     <summary>
                         <strong>审阅图片方案</strong>
                         <span>
@@ -2203,6 +2252,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     exportDisabled={busy}
                     onExport={() => runExport("zip")}
                     preparedDownload={preparedDownload}
+                    progress={ecommerceEnabled ? <CommerceFlowSteps steps={flowSteps} /> : null}
+                    onMakeVideo={productVideoAvailable ? makeProductVideo : undefined}
                 />
                 <aside className="ecs-composer" aria-label="电商创作面板">
                     <header className="ecs-composer-head">
@@ -2211,12 +2262,15 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 <ImageIcon size={15} />
                                 商品图片
                             </button>
-                            <AntTooltip title={ecommerceVideoEnabled ? "从图片制作商品视频即将开放" : "电商视频暂未开放"}>
-                                <button type="button" disabled aria-disabled="true">
-                                    <Clapperboard size={15} />
-                                    商品视频
-                                </button>
-                            </AntTooltip>
+                            {/* 没开放商品视频时不放一个永远点不了的按钮；开放后带着已完成的作品去视频生成。 */}
+                            {productVideoAvailable ? (
+                                <AntTooltip title={firstDeliveredResource ? "用本轮第一张作品做首帧，去视频生成制作商品视频" : "去视频生成制作商品视频；出图后可在作品上点「做成视频」"}>
+                                    <button type="button" aria-pressed="false" onClick={() => makeProductVideo(firstDeliveredResource)}>
+                                        <Clapperboard size={15} />
+                                        商品视频
+                                    </button>
+                                </AntTooltip>
+                            ) : null}
                         </nav>
                         <div className="ecs-head-actions">
                             <AntTooltip title="保存草稿">
@@ -2466,6 +2520,12 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                             <CreativeOptionsPanel draft={draft} onChange={updateDraft} />
                         </ComposerBlock>
                     </div>
+                    {adminModels.problem && creationMode !== "direct" ? (
+                        // 后台配置问题常驻在按钮上方，而不是每点一次弹一条报错。
+                        <p className="ecs-notice is-error ecs-footer-issue" role="alert">
+                            {adminModels.problem}
+                        </p>
+                    ) : null}
                     <footer className="ecs-footer">
                         <div className="ecs-estimate" aria-live="polite">
                             {estimate === null ? (
@@ -2478,22 +2538,26 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 </strong>
                             )}
                             <span>
-                                {displayCount} 张{scene?.planned ? " · 先推荐视觉方向" : ""}
+                                {displayCount} 张 · {creationMode === "direct" ? "按设置直接出图" : "先推荐视觉方向，选定后自动出图"}
                             </span>
                         </div>
-                        <Button className="ecommerce-plan-button" disabled={!ecommerceEnabled || busy || restoring || uploading || planningPending || confirmingGeneration} onClick={() => void requestGenerationConfirmation("plan")}>
-                            AI 一键策划
-                        </Button>
+                        {creationMode === "direct" ? null : (
+                            <AntTooltip title="不推荐视觉方向，直接写出整套图片方案，审阅后再出图">
+                                <Button className="ecommerce-plan-button" disabled={!ecommerceEnabled || adminBlocked || busy || restoring || uploading || planningPending || confirmingGeneration} onClick={() => void requestGenerationConfirmation("plan")}>
+                                    跳过选方向
+                                </Button>
+                            </AntTooltip>
+                        )}
                         <Button
                             type="primary"
                             className="ecs-submit"
-                            aria-label={busyIndicator ? "正在准备生成" : "生成"}
+                            aria-label={busyIndicator ? "正在准备" : "开始创作"}
                             aria-busy={busyIndicator}
-                            disabled={submitDisabled}
+                            disabled={submitDisabled || adminBlocked}
                             icon={busyIndicator ? <LoaderCircle className="commerce-planning-spin" size={15} /> : <ArrowUp size={15} />}
                             onClick={() => void requestGenerationConfirmation()}
                         >
-                            生成
+                            开始创作
                         </Button>
                     </footer>
                 </aside>
@@ -2534,15 +2598,16 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 onClose={() => setStylePickerOpen(false)}
                 onConfirm={(direction) => void chooseCreativeDirection(direction)}
             />
-            <Modal title="确认生成配置" open={confirmOpen} onCancel={() => setConfirmOpen(false)} footer={null} width={560} className="commerce-confirm-modal" centered destroyOnHidden>
-                <p className="commerce-confirm-caption">请核对以下配置，确认后开始创作</p>
+            <AppModal title="确认生成配置" open={confirmOpen} onCancel={() => setConfirmOpen(false)} footer={null} width={560} className="commerce-confirm-modal" centered>
+                <p className="commerce-confirm-caption">
+                    {creationMode === "direct" ? "确认后按下面的设置直接出图。" : confirmAction === "plan" ? "确认后跳过选方向，直接写出整套图片方案；方案出来后先审阅，再确认出图。" : "确认后先识别商品并推荐 4 套视觉方向；选定一套后自动策划并出图。"}
+                </p>
                 <div className="commerce-confirm-grid">
                     {[
                         ["创作类型", selectedQuickType],
                         ["电商平台", labelOf(platforms, draft.platform)],
                         ["语言", labelOf(languages, draft.language)],
-                        ["生成通道", "特惠通道"],
-                        ["生成模型", modelDisplayName(config, draft.imageModel)],
+                        ["生图模型", modelDisplayName(config, draft.imageModel)],
                         ["图片张数", `${requestedCount} 张`],
                         ["画面文本", draft.noText ? "无文本" : "有文本"],
                         ["画面模特", draft.modelEnabled ? "使用模特" : "智能匹配"],
@@ -2566,10 +2631,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     </span>
                     <Button onClick={() => setConfirmOpen(false)}>取消</Button>
                     <Button type="primary" onClick={() => beginConfirmedGeneration()} disabled={estimate === null && (creationMode === "direct" || quote?.agent == null)}>
-                        确认并生成
+                        {creationMode === "direct" ? "确认并出图" : confirmAction === "plan" ? "确认并策划" : "确认并开始"}
                     </Button>
                 </div>
-            </Modal>
+            </AppModal>
         </WorkspacePage>
     );
 }

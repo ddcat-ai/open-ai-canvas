@@ -75,7 +75,7 @@ export function EcommerceAgentFeed({
                     </header>
                     <div className="commerce-generation-visual">
                         <span className="commerce-yoru-glow" />
-                        <img src="/yoru/yoru-body.png" alt="小夜正在创作" />
+                        <Sparkles size={34} aria-label="正在创作" />
                         <span className="commerce-generation-particles" aria-hidden="true" />
                     </div>
                     <div className="commerce-generation-track" aria-label={`已完成 ${complete} 张，共 ${total} 张`}>

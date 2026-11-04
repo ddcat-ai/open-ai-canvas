@@ -36,6 +36,21 @@
     border-radius: var(--admin-radius);
     background: var(--admin-surface-2);
 }
+/* 第三步只做流程说明，不提供选择。 */
+[data-admin-root] .ecommerce-stage-models > ol > li.is-static {
+    background: transparent;
+    border: 1px dashed var(--admin-border);
+}
+[data-admin-root] .ecommerce-stage-models-picker {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+[data-admin-root] .ecommerce-stage-models-picker > :first-child {
+    flex: 1;
+    min-width: 0;
+}
 [data-admin-root] .ecommerce-stage-models-index {
     display: grid;
     place-items: center;
@@ -60,7 +75,7 @@
     [data-admin-root] .ecommerce-stage-models > ol > li {
         grid-template-columns: 26px minmax(0, 1fr);
     }
-    [data-admin-root] .ecommerce-stage-models > ol > li > .ant-select {
+    [data-admin-root] .ecommerce-stage-models > ol > li > .ecommerce-stage-models-picker {
         grid-column: 2;
     }
 }

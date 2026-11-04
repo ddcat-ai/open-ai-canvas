@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
-import { modelQuoteRequest } from "@/lib/model-pricing";
 import { getCommerceAgentSetting, type CommerceAgentModelRef, type CommerceAgentSetting } from "@/services/api/ecommerce-knowledge";
-import { selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
+import { modelOptionName } from "@/stores/config-model-options";
+import { resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 
 const hasRef = (ref?: CommerceAgentModelRef | null) => Boolean(ref?.channelModelId || ref?.logicalModelId);
 
-/** Finds the selectable catalog option that routes to the administrator's model. */
+/**
+ * 找到与后台指定模型对应的可选目录项。直接比对目录里的渠道模型行 ID（或渠道 + 模型键）与逻辑模型 ID，
+ * 不借道报价请求：直连系统渠道的文本模型不发服务端报价，借道会让所有直连模型都匹配不上。
+ */
 export function matchCommerceAdminModel(config: AiConfig, textModels: string[], ref?: CommerceAgentModelRef | null): string {
     if (!ref || !hasRef(ref)) return "";
     return (
         textModels.find((value) => {
-            const route = modelQuoteRequest(config, value, "text", { capability: "text", input: { textCount: 1, imageCount: 1, videoCount: 0, audioCount: 0, characterCount: 0 } });
-            return ref.channelModelId ? route?.channelId === ref.channelId && route?.modelKey === ref.modelKey : route?.logicalModelID === ref.logicalModelId;
+            const channel = resolveModelChannel(config, value);
+            if (channel.scope !== "system") return false;
+            const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
+            if (!cost) return false;
+            if (ref.logicalModelId) return cost.logicalModelId === ref.logicalModelId;
+            return cost.channelModelId === ref.channelModelId || (Boolean(ref.channelId && ref.modelKey) && channel.id === ref.channelId && cost.model === ref.modelKey);
         }) || ""
     );
 }
@@ -54,7 +61,13 @@ export function useCommerceAdminModels(config: AiConfig): CommerceAdminModels {
         const fallback = textModels.find((value) => (modelCapabilityConfigFor(config, value).text?.references.maxImages || 0) > 0) || "";
         const planningModel = hasRef(setting) ? matchCommerceAdminModel(config, textModels, setting) : fallback;
         const visionModel = hasRef(setting.vision) ? matchCommerceAdminModel(config, textModels, setting.vision) : planningModel;
-        const problem = !planningModel ? "后台指定的视觉策划模型当前不可用，请联系管理员重新选择" : !visionModel ? "后台指定的商品识图模型当前不可用，请联系管理员重新选择" : "";
+        const problem = !planningModel
+            ? hasRef(setting)
+                ? "后台指定的整套策划模型当前不可用，请联系管理员在「电商 Agent 配置」重新选择"
+                : "还没有可读商品图的文本模型，请联系管理员在「电商 Agent 配置」配置阶段模型"
+            : !visionModel
+              ? "后台指定的商品识别模型当前不可用，请联系管理员在「电商 Agent 配置」重新选择"
+              : "";
         return { planningModel, visionModel, loaded: true, problem };
     }, [setting, loadError, config, textModels]);
 }

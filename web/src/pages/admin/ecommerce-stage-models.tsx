@@ -1,39 +1,73 @@
-import { useEffect, useState } from "react";
-import { Alert, App, Button, Select, Typography } from "antd";
-import { RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, App, Button, Typography } from "antd";
+import { ArrowUpRight, RefreshCw, X } from "lucide-react";
+import { useNavigate } from "react-router";
+import { ModelPicker } from "@/components/model-picker";
 import { getModelCatalog } from "@/services/api/logical-models";
-import { getCommerceOrchestrationSetting, updateCommerceOrchestrationSetting, type CommerceOrchestrationModel, type CommerceOrchestrationRole, type CommerceOrchestrationSetting } from "@/services/api/ecommerce-knowledge";
-import { commercePlanningModelOptions, type CommerceModelOption } from "./ecommerce-model-catalog";
+import { getCommerceOrchestrationSetting, updateCommerceOrchestrationSetting, type CommerceOrchestrationRole, type CommerceOrchestrationSetting } from "@/services/api/ecommerce-knowledge";
+import type { AiConfig } from "@/stores/use-config-store";
+import { commerceStageChannelModelId, commerceStageModelConfig, commerceStageModelCounts, commerceStageModelValue, commerceVisionDisabledReason } from "./ecommerce-model-catalog";
 import "./ecommerce-stage-models.css";
 
-// The order is the order the workbench runs them. Every stage reads the
-// product images, so only models with image input are selectable.
-const roles = [
-    { key: "vision", label: "商品视觉理解", hint: "看图识别商品，推荐四套视觉方向" },
-    { key: "marketing", label: "营销策划与文案", hint: "提炼卖点，撰写页面文案" },
-    { key: "director", label: "视觉设计总监", hint: "逐张分镜与生图提示词", reuse: "marketing", reuseLabel: "复用营销策划与文案模型" },
-    { key: "quality", label: "视觉质检", hint: "成图后的商品一致性复核", reuse: "vision", reuseLabel: "复用商品视觉理解模型" },
+// 只列真正执行的两个文本阶段；第三步出图用用户在电商页选的生图模型，这里只做说明。
+const stages = [
+    { key: "vision", label: "商品识别与视觉方向", hint: "读取商品图，识别商品并推荐 4 套视觉方向" },
+    { key: "planning", label: "整套策划", hint: "按选定方向写卖点文案、逐张分镜和生图提示词" },
 ] as const;
-type RoleKey = (typeof roles)[number]["key"];
-const modelValue = (model?: CommerceOrchestrationModel) => (model?.channelModelId ? `channel:${model.channelModelId}` : model?.logicalModelId ? `logical:${model.logicalModelId}` : "");
-const modelFromValue = (value?: string): CommerceOrchestrationModel => (value?.startsWith("channel:") ? { channelModelId: value.slice(8) } : value?.startsWith("logical:") ? { logicalModelId: value.slice(8) } : {});
-const emptyRole = (): CommerceOrchestrationRole => ({ model: {}, fallback: {} });
+type StageKey = (typeof stages)[number]["key"];
+type StageChoice = { model: string; fallback: string };
+type StageDraft = Record<StageKey, StageChoice>;
+/** 已保存但当前目录里找不到的模型（下架、停用或是旧的智能路由），需要管理员重新选择。 */
+type StageMissing = Partial<Record<StageKey, boolean>>;
 
-/** The administrator's ecommerce Agent models; every ecommerce page and canvas node uses them. */
-export function EcommerceStageModels({ embedded = false }: { embedded?: boolean }) {
+const emptyRole = (): CommerceOrchestrationRole => ({ model: {}, fallback: {} });
+const filled = (role?: CommerceOrchestrationRole) => Boolean(role?.model.channelModelId || role?.model.logicalModelId);
+
+/** 服务端仍兼容「整套策划」复用旧营销策划阶段的配置；页面上只呈现实际生效的那一个。 */
+function planningRole(saved: CommerceOrchestrationSetting) {
+    return saved.director?.reuse === "marketing" || !filled(saved.director) ? saved.marketing || emptyRole() : saved.director;
+}
+
+function draftFromSetting(config: AiConfig, saved: CommerceOrchestrationSetting): { draft: StageDraft; missing: StageMissing } {
+    const roles: Record<StageKey, CommerceOrchestrationRole> = { vision: saved.vision || emptyRole(), planning: planningRole(saved) };
+    const draft = {} as StageDraft;
+    const missing: StageMissing = {};
+    for (const { key } of stages) {
+        const role = roles[key];
+        const model = commerceStageModelValue(config, role.model.channelModelId);
+        const fallback = commerceStageModelValue(config, role.fallback.channelModelId);
+        draft[key] = { model, fallback };
+        missing[key] = (filled(role) && !model) || Boolean((role.fallback.channelModelId || role.fallback.logicalModelId) && !fallback);
+    }
+    return { draft, missing };
+}
+
+function roleFromChoice(config: AiConfig, choice: StageChoice): CommerceOrchestrationRole {
+    const model = commerceStageChannelModelId(config, choice.model);
+    const fallback = commerceStageChannelModelId(config, choice.fallback);
+    return { model: model ? { channelModelId: model } : {}, fallback: fallback ? { channelModelId: fallback } : {} };
+}
+
+/** 电商 Agent 的文本阶段模型：所有用户的电商页都用这里的配置，前台不展示也不能更改。 */
+export function EcommerceStageModels({ embedded = false, onSaved }: { embedded?: boolean; onSaved?: () => void }) {
     const { message } = App.useApp();
-    const [settings, setSettings] = useState<CommerceOrchestrationSetting>();
-    const [models, setModels] = useState<CommerceModelOption[]>([]);
+    const navigate = useNavigate();
+    const [config, setConfig] = useState<AiConfig>();
+    const [draft, setDraft] = useState<StageDraft>();
+    const [missing, setMissing] = useState<StageMissing>({});
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
-    async function load() {
+    const load = useCallback(async () => {
         setLoading(true);
         try {
             const [saved, catalog] = await Promise.all([getCommerceOrchestrationSetting(), getModelCatalog()]);
-            setSettings(saved);
-            setModels(commercePlanningModelOptions(catalog));
+            const nextConfig = commerceStageModelConfig(catalog);
+            const next = draftFromSetting(nextConfig, saved);
+            setConfig(nextConfig);
+            setDraft(next.draft);
+            setMissing(next.missing);
             setDirty(false);
             setError("");
         } catch (cause) {
@@ -41,37 +75,57 @@ export function EcommerceStageModels({ embedded = false }: { embedded?: boolean 
         } finally {
             setLoading(false);
         }
-    }
+    }, []);
     useEffect(() => {
         void load();
-    }, []);
-    const update = (key: RoleKey, next: CommerceOrchestrationRole) => {
-        setSettings((value) => (value ? { ...value, [key]: next } : value));
+    }, [load]);
+    const counts = useMemo(() => (config ? commerceStageModelCounts(config) : { text: 0, vision: 0 }), [config]);
+    const visionReason = useCallback((value: string) => (config ? commerceVisionDisabledReason(config, value) : ""), [config]);
+    const update = (key: StageKey, patch: Partial<StageChoice>) => {
+        setDraft((current) => {
+            if (!current) return current;
+            const next = { ...current[key], ...patch };
+            // 主模型改成与备用相同的模型时，备用自动清空，避免保存时报错。
+            if (next.fallback && next.fallback === next.model) next.fallback = "";
+            return { ...current, [key]: next };
+        });
+        setMissing((current) => ({ ...current, [key]: false }));
         setDirty(true);
     };
+    const incomplete = !draft || stages.some(({ key }) => !draft[key].model);
     async function save() {
-        if (!settings) return;
+        if (!draft || !config) return;
         setSaving(true);
         try {
-            setSettings(await updateCommerceOrchestrationSetting(settings));
+            const setting: CommerceOrchestrationSetting = {
+                version: 1,
+                enabled: false,
+                vision: roleFromChoice(config, draft.vision),
+                // 新配置只写「整套策划」；旧的营销策划阶段清空，运行时不再有两份策划模型。
+                marketing: emptyRole(),
+                director: roleFromChoice(config, draft.planning),
+            };
+            const saved = await updateCommerceOrchestrationSetting(setting);
+            const next = draftFromSetting(config, saved);
+            setDraft(next.draft);
+            setMissing(next.missing);
             setDirty(false);
-            message.success("电商 Agent 阶段模型已保存，新提交的任务立即生效");
+            onSaved?.();
+            message.success("阶段模型已保存，新提交的电商任务立即生效");
         } catch (cause) {
             message.error(cause instanceof Error ? cause.message : String(cause));
         } finally {
             setSaving(false);
         }
     }
-    const selectable = models.filter((item) => !item.disabled).length;
     return (
         <section className={`ecommerce-stage-models${embedded ? " is-embedded" : ""}`} aria-label="电商 Agent 阶段模型">
             <header>
                 <div>
                     {embedded ? null : <Typography.Text strong>电商 Agent 阶段模型</Typography.Text>}
                     <Typography.Paragraph type="secondary">
-                        {embedded
-                            ? `按执行顺序排列。每个阶段都要读商品图，当前有 ${selectable} 个支持图片输入的模型可选；主模型不可用时改用备用模型。`
-                            : `按执行顺序为每个阶段指定模型，保存后所有用户的电商页与画布电商 Agent 节点都使用这里的配置，前台不展示也不能更改。主模型停用时自动改用备用模型。每个阶段都要读取商品图，当前可选 ${selectable} 个支持图片输入的模型。生图模型仍由用户在电商页面选择。`}
+                        两个阶段都要读商品图，只有开启了识图的文本模型可选，列表里的「图×N」是该模型最多能读的图片数。主模型不可用时自动改用备用模型。
+                        {config ? ` 当前目录 ${counts.text} 个文本模型，其中 ${counts.vision} 个已开启识图。` : ""}
                     </Typography.Paragraph>
                 </div>
                 <Button icon={<RefreshCw size={14} />} loading={loading} onClick={() => void load()}>
@@ -79,51 +133,71 @@ export function EcommerceStageModels({ embedded = false }: { embedded?: boolean 
                 </Button>
             </header>
             {error ? <Alert type="error" showIcon message={error} /> : null}
-            {settings ? (
+            {config && !counts.vision ? (
+                <Alert
+                    type="warning"
+                    showIcon
+                    message="还没有能读商品图的文本模型"
+                    description="到「渠道管理」打开一个支持看图的文本模型，在「能力与参数 → 引用与限制」里把「最多识别图片数」设为 1 以上并保存，回到这里点「刷新模型」即可选择。"
+                    action={
+                        <Button size="small" icon={<ArrowUpRight size={14} />} iconPlacement="end" onClick={() => navigate("/admin/channels")}>
+                            去渠道管理
+                        </Button>
+                    }
+                />
+            ) : null}
+            {config && draft ? (
                 <ol>
-                    {roles.map((item, index) => {
-                        const role = settings[item.key] || emptyRole();
-                        const current = [modelValue(role.model), modelValue(role.fallback)].filter(Boolean);
-                        const options = [...models, ...current.filter((id) => !models.some((option) => option.value === id)).map((id) => ({ value: id, label: `已保存模型 ${id} · 已下架或不可见，请重新选择`, disabled: true }))];
-                        const reuse = "reuse" in item ? item.reuse : "";
-                        return (
-                            <li key={item.key}>
-                                <span className="ecommerce-stage-models-index">{index + 1}</span>
-                                <div className="ecommerce-stage-models-label">
-                                    <strong>{item.label}</strong>
-                                    <small>{item.hint}</small>
-                                </div>
-                                <Select
-                                    aria-label={`${item.label}主模型`}
-                                    showSearch
-                                    allowClear
-                                    optionFilterProp="label"
-                                    placeholder="主模型"
-                                    value={role.reuse ? `reuse:${role.reuse}` : modelValue(role.model) || undefined}
-                                    options={[...("reuse" in item ? [{ value: `reuse:${item.reuse}`, label: item.reuseLabel, disabled: false }] : []), ...options]}
-                                    onChange={(value?: string) => update(item.key, value?.startsWith("reuse:") ? { ...emptyRole(), reuse } : { ...role, reuse: "", model: modelFromValue(value) })}
+                    {stages.map((stage, index) => (
+                        <li key={stage.key}>
+                            <span className="ecommerce-stage-models-index">{index + 1}</span>
+                            <div className="ecommerce-stage-models-label">
+                                <strong>{stage.label}</strong>
+                                <small>{missing[stage.key] ? "已保存的模型已下架或不可用，请重新选择" : stage.hint}</small>
+                            </div>
+                            <div className="ecommerce-stage-models-picker">
+                                <ModelPicker
+                                    config={config}
+                                    capability="text"
+                                    value={draft[stage.key].model}
+                                    fullWidth
+                                    showSelectedPrice={false}
+                                    className="creation-model-picker"
+                                    placeholder="选择主模型"
+                                    modelDisabledReason={visionReason}
+                                    onChange={(model) => update(stage.key, { model })}
                                 />
-                                <Select
-                                    aria-label={`${item.label}备用模型`}
-                                    showSearch
-                                    allowClear
-                                    optionFilterProp="label"
-                                    placeholder={role.reuse ? "跟随复用的阶段" : "备用模型（可选）"}
-                                    disabled={Boolean(role.reuse)}
-                                    value={modelValue(role.fallback) || undefined}
-                                    options={options}
-                                    onChange={(value?: string) => update(item.key, { ...role, fallback: modelFromValue(value) })}
+                            </div>
+                            <div className="ecommerce-stage-models-picker">
+                                <ModelPicker
+                                    config={config}
+                                    capability="text"
+                                    value={draft[stage.key].fallback}
+                                    fullWidth
+                                    showSelectedPrice={false}
+                                    className="creation-model-picker"
+                                    placeholder="备用模型（可选）"
+                                    modelDisabledReason={(value) => (value === draft[stage.key].model ? "已是主模型" : visionReason(value))}
+                                    onChange={(fallback) => update(stage.key, { fallback })}
                                 />
-                            </li>
-                        );
-                    })}
+                                {draft[stage.key].fallback ? <Button size="small" type="text" icon={<X size={14} />} aria-label={`清除${stage.label}备用模型`} onClick={() => update(stage.key, { fallback: "" })} /> : null}
+                            </div>
+                        </li>
+                    ))}
+                    <li className="is-static">
+                        <span className="ecommerce-stage-models-index">{stages.length + 1}</span>
+                        <div className="ecommerce-stage-models-label">
+                            <strong>生成图片</strong>
+                            <small>用户在电商页选择生图模型，按方案逐张出图并保存到资产库</small>
+                        </div>
+                    </li>
                 </ol>
             ) : null}
             <footer>
-                <Button type="primary" loading={saving} disabled={!settings || !dirty || Boolean(error)} onClick={() => void save()}>
+                <Button type="primary" loading={saving} disabled={!dirty || incomplete || Boolean(error)} onClick={() => void save()}>
                     保存阶段模型
                 </Button>
-                <Typography.Text type="secondary">{dirty ? "有未保存修改" : "已保存"}</Typography.Text>
+                <Typography.Text type="secondary">{incomplete && draft ? "两个阶段都需要主模型" : dirty ? "有未保存修改" : "已保存"}</Typography.Text>
             </footer>
         </section>
     );

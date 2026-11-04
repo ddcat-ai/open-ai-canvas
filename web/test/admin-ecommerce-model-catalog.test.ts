@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
-import { commercePlanningModelOptions } from "../src/pages/admin/ecommerce-model-catalog";
+import { COMMERCE_VISION_DISABLED_REASON, commerceStageChannelModelId, commerceStageModelConfig, commerceStageModelCounts, commerceStageModelValue, commerceVisionDisabledReason } from "../src/pages/admin/ecommerce-model-catalog";
 import type { ModelCatalogResponse, PublicChannelModel } from "../src/services/api/logical-models";
-
 function model(id: string, vision: number | undefined = 1): PublicChannelModel {
     return {
         id,
@@ -17,36 +16,37 @@ function model(id: string, vision: number | undefined = 1): PublicChannelModel {
         capabilityConfig: vision === undefined ? {} : { text: { references: { maxImages: vision } } },
     };
 }
+// 真实目录不返回系统渠道名称，这里也留空，避免测试依赖接口不会给的字段。
 function catalog(count: number): ModelCatalogResponse {
-    return { source: "system", models: [], channels: Array.from({ length: count }, (_, i) => ({ id: `channel-${i}`, name: `渠道 ${i}`, displayName: `渠道 ${i}`, models: [model(`${i}`)] })) };
+    return { source: "system", models: [], channels: Array.from({ length: count }, (_, i) => ({ id: `channel-${i}`, name: "", displayName: "", models: [model(`${i}`)] })) };
 }
 
-test("admin discovers the complete shared catalog, including newly added and same-named channel models", () => {
-    for (const count of [20, 100, 101]) expect(commercePlanningModelOptions(catalog(count))).toHaveLength(count);
-    const oneChannel = catalog(1);
-    oneChannel.channels![0].models = Array.from({ length: 100 }, (_, i) => model(`single-${i}`));
-    expect(commercePlanningModelOptions(oneChannel)).toHaveLength(100);
+test("stage pickers use the full shared catalog and round-trip the channel-model row id", () => {
+    for (const count of [20, 101]) expect(commerceStageModelCounts(commerceStageModelConfig(catalog(count)))).toEqual({ text: count, vision: count });
     const input = catalog(2);
     input.channels![0].models[0].displayName = "同名";
     input.channels![1].models[0].displayName = "同名";
-    const options = commercePlanningModelOptions(input);
-    expect(options.map((item) => item.value)).toEqual(["channel:0", "channel:1"]);
-    expect(options[0].label).toContain("渠道 0");
-    expect(options[0].label).toContain("key-0");
+    const config = commerceStageModelConfig(input);
+    const second = commerceStageModelValue(config, "1");
+    expect(second).toBe("channel-1::key-1");
+    expect(commerceStageChannelModelId(config, second)).toBe("1");
+    expect(commerceStageModelValue(config, "missing")).toBe("");
     input.channels![0].models[0].available = false;
-    expect(commercePlanningModelOptions(input)).toHaveLength(1);
+    expect(commerceStageModelCounts(commerceStageModelConfig(input)).text).toBe(1);
 });
 
-test("text-only and unknown vision capability remain searchable but cannot be selected", () => {
+test("text models without image input stay listed but explain how to enable vision", () => {
     const input = catalog(3);
     input.channels![0].models[0] = model("plain", 0);
     input.channels![1].models[0] = model("unknown");
     input.channels![1].models[0].capabilityConfig = {};
-    const options = commercePlanningModelOptions(input);
-    expect(options.find((item) => item.value === "channel:plain")).toMatchObject({ disabled: true, label: expect.stringContaining("未配置图片输入") });
-    expect(options.find((item) => item.value === "channel:unknown")).toMatchObject({ disabled: true, label: expect.stringContaining("能力未知") });
-    expect(options.find((item) => item.value === "channel:2")?.disabled).toBe(false);
-    const textOptions = commercePlanningModelOptions(input, false);
-    expect(textOptions.find((item) => item.value === "channel:plain")?.disabled).toBe(false);
-    expect(textOptions.find((item) => item.value === "channel:unknown")?.disabled).toBe(false);
+    const config = commerceStageModelConfig(input);
+    expect(commerceStageModelCounts(config)).toEqual({ text: 3, vision: 1 });
+    expect(commerceVisionDisabledReason(config, commerceStageModelValue(config, "plain"))).toBe(COMMERCE_VISION_DISABLED_REASON);
+    expect(commerceVisionDisabledReason(config, commerceStageModelValue(config, "unknown"))).toContain("最多识别图片数");
+    expect(commerceVisionDisabledReason(config, commerceStageModelValue(config, "2"))).toBe("");
+});
+
+test("rejects a catalog that is not the system projection", () => {
+    expect(() => commerceStageModelConfig({ source: "custom", models: [] } as unknown as ModelCatalogResponse)).toThrow("模型目录响应无效");
 });

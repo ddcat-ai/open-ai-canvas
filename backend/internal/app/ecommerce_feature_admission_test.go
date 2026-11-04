@@ -18,7 +18,7 @@ func ecommerceCreationTestService(t *testing.T) (*Service, *gorm.DB, string, Cre
 	t.Helper()
 	s, db, id, guard := creationTestService(t)
 	features := defaultFeatureAvailability()
-	features.EcommerceEnabled, features.EcommerceVideoEnabled, features.SiteAssistantEnabled = true, true, true
+	features.EcommerceEnabled, features.EcommerceVideoEnabled = true, true
 	features.ImageWorkbenchEnabled, features.VideoWorkbenchEnabled = true, true
 	saveAdmissionFeatures(t, s, features)
 	return s, db, id, guard
@@ -38,9 +38,9 @@ func saveAdmissionFeatures(t *testing.T, s *Service, value FeatureAvailability) 
 func TestEcommerceFeatureAliasesAndJSONSchema(t *testing.T) {
 	s, _ := newFeatureAvailabilityTestService(t)
 	features := defaultFeatureAvailability()
-	features.EcommerceEnabled, features.EcommerceVideoEnabled, features.SiteAssistantEnabled = true, true, true
+	features.EcommerceEnabled, features.EcommerceVideoEnabled = true, true
 	saveAdmissionFeatures(t, s, features)
-	for _, feature := range []string{FeatureEcommerce, FeatureEcommerceVideo, FeatureSiteAssistant} {
+	for _, feature := range []string{FeatureEcommerce, FeatureEcommerceVideo} {
 		if enabled, err := s.FeatureEnabled(feature); err != nil || !enabled {
 			t.Fatalf("feature %q = %v, %v", feature, enabled, err)
 		}
@@ -60,7 +60,7 @@ func TestEcommerceFeatureAliasesAndJSONSchema(t *testing.T) {
 	if err := json.Unmarshal(encoded, &schema); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"ecommerceEnabled", "ecommerceVideoEnabled", "siteAssistantEnabled"} {
+	for _, field := range []string{"ecommerceEnabled", "ecommerceVideoEnabled"} {
 		if value, ok := schema[field].(bool); !ok || !value {
 			t.Fatalf("field %s = %#v", field, schema[field])
 		}

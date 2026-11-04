@@ -1,5 +1,5 @@
 import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
-import { modelQuoteRequest } from "@/lib/model-pricing";
+import { systemModelQuoteRequest } from "@/lib/model-pricing";
 import { createGenerationTask, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { parseBackendGenerationResult, prepareBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteModel } from "@/services/api/logical-models";
@@ -286,7 +286,7 @@ export function commerceGenerationRatio(config: Config, draft: Pick<EcommerceDra
 export async function quoteCommerce(config: Config, draft: EcommerceDraft, count: number, clone = false, planning = true) {
     const imageRefs = commerceRequiredImageReferenceCount(draft, clone);
     const ratio = commerceGenerationRatio(config, draft, draft);
-    const imageRequest = modelQuoteRequest(config, draft.imageModel, "image", {
+    const imageRequest = systemModelQuoteRequest(config, draft.imageModel, "image", {
         capability: "image",
         input: { textCount: 1, imageCount: imageRefs, referenceImageCount: imageRefs, videoCount: 0, audioCount: 0, characterCount: 0 },
         imageSize: ratio,
@@ -295,7 +295,7 @@ export async function quoteCommerce(config: Config, draft: EcommerceDraft, count
     const maxAgentRefs = modelCapabilityConfigFor(config, draft.agentModel).text?.references.maxImages || 0;
     const agentRefs = commercePlanningReferenceCount(draft);
     if (planning && agentRefs > maxAgentRefs) throw new Error(`后台指定的策划模型最多读取 ${maxAgentRefs} 张图片，请减少参考图或联系管理员更换模型`);
-    const agentRequest = modelQuoteRequest(config, draft.agentModel, "text", {
+    const agentRequest = systemModelQuoteRequest(config, draft.agentModel, "text", {
         capability: "text",
         input: { textCount: 1, imageCount: agentRefs, referenceImageCount: agentRefs, videoCount: 0, audioCount: 0, characterCount: 0 },
     });

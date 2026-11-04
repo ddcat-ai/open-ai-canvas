@@ -53,7 +53,7 @@ mock.module("../../src/components/canvas/canvas-viewport", () => ({
 }));
 const { createRoot } = await import("react-dom/client");
 const { MemoryRouter, Routes, Route, useNavigate, useLocation } = await import("react-router");
-const { message } = await import("antd");
+const { App, message, modal, notification } = await import("antd");
 const { emptyEcommerceDraft } = await import("../../src/services/api/ecommerce");
 const { http } = await import("../../src/services/api/request");
 const taskApi = await import("../../src/services/api/task-center");
@@ -141,7 +141,7 @@ async function press(text: string) {
     await act(async () => {
         button!.click();
     });
-    const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent?.trim() === "确认并生成");
+    const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent?.trim().startsWith("确认并"));
     if (confirm)
         await act(async () => {
             confirm.click();
@@ -220,6 +220,9 @@ beforeEach(async () => {
     profile.image!.resolution.default = "1k";
     spyOn(capabilities, "modelCapabilityConfigFor").mockReturnValue(profile);
     spyOn(pricing, "modelQuoteRequest").mockReturnValue({ channelId: "test", modelKey: "vision" } as ReturnType<typeof pricing.modelQuoteRequest>);
+    spyOn(pricing, "systemModelQuoteRequest").mockReturnValue({ channelId: "test", modelKey: "vision" } as ReturnType<typeof pricing.systemModelQuoteRequest>);
+    // 页面改用 App 上下文的 message（跟随主题并去重）；这里仍把它接到被监听的 message 上收集提示。
+    spyOn(App, "useApp").mockImplementation(() => ({ message, modal, notification }) as unknown as ReturnType<typeof App.useApp>);
     spyOn(quotes, "quoteModel").mockResolvedValue({ quote: { amountMicrocredits: 1_000_000 } } as Awaited<ReturnType<typeof quotes.quoteModel>>);
     // Keep the real page and router lifecycle; avoid unrelated model/skill catalog network and animation effects.
     spyOn(modelPicker, "ModelPicker").mockImplementation(() => <span>模型选择</span>);
@@ -353,7 +356,7 @@ describe("真实电商页面生命周期", () => {
             await act(async () => {
                 host.querySelector<HTMLButtonElement>(".ecs-submit")!.click();
             });
-            const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+            const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim().startsWith("确认并"));
             await act(async () => {
                 confirm!.click();
             });
@@ -434,7 +437,7 @@ describe("真实电商页面生命周期", () => {
         await act(async () => {
             send.click();
         });
-        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim().startsWith("确认并"));
         expect(confirm).toBeDefined();
         await act(async () => {
             confirm!.click();
@@ -536,7 +539,7 @@ describe("真实电商页面生命周期", () => {
             await new Promise((resolve) => setTimeout(resolve, 0));
         });
         expect(errors).toEqual([]);
-        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim().startsWith("确认并"));
         expect(confirm).toBeDefined();
         await act(async () => {
             confirm!.click();
@@ -657,7 +660,7 @@ describe("真实电商页面生命周期", () => {
         await act(async () => {
             send().click();
         });
-        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim().startsWith("确认并"));
         expect(confirm).toBeDefined();
         await act(async () => {
             confirm!.click();
@@ -874,7 +877,7 @@ describe("真实电商页面生命周期", () => {
         await act(async () => {
             host.querySelector<HTMLButtonElement>(".ecs-submit")!.click();
         });
-        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim().startsWith("确认并"));
         await act(async () => {
             confirm!.click();
         });
@@ -898,7 +901,7 @@ describe("真实电商页面生命周期", () => {
         await act(async () => {
             host.querySelector<HTMLButtonElement>(".ecs-submit")!.click();
         });
-        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent?.trim() === "确认并生成");
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent?.trim().startsWith("确认并"));
         expect(confirm).toBeDefined();
         await act(async () => {
             confirm!.click();
@@ -1040,7 +1043,8 @@ describe("真实电商页面生命周期", () => {
     test("创作场景区分视频灰度项，主副图和张数步进更新真实草稿", async () => {
         await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
         await render();
-        expect(host.querySelector<HTMLButtonElement>(".ecs-kind-switch button:disabled")?.textContent).toContain("商品视频");
+        // 未开放商品视频时不放永远点不了的按钮。
+        expect(host.querySelector(".ecs-kind-switch")?.textContent).not.toContain("商品视频");
         const mainSecondary = Array.from(host.querySelectorAll<HTMLButtonElement>(".ecs-scene")).find((button) => button.textContent?.includes("主副图"))!;
         await act(async () => {
             mainSecondary.click();
@@ -1079,7 +1083,27 @@ describe("真实电商页面生命周期", () => {
     test("电商 Agent 分析模型由后台固定：页面不展示选择，提交使用后台识图与策划模型", async () => {
         const choices = ["test::vision", "test::admin-vision", "test::admin-planner"];
         spyOn(configStore, "selectableModelsByCapability").mockImplementation((_, capability) => (capability === "text" ? choices : ["test::image"]));
-        spyOn(pricing, "modelQuoteRequest").mockImplementation((_, value) => ({ channelId: "test", modelKey: value.split("::")[1], intent: { capability: "text" } }) as ReturnType<typeof pricing.modelQuoteRequest>);
+        // 后台按渠道模型行 ID 保存阶段模型；前台按目录里的同一行 ID 找回可选模型，不借道报价路由。
+        config = {
+            ...configStore.defaultConfig,
+            channels: [
+                configStore.createModelChannel({
+                    id: "test",
+                    name: "",
+                    scope: "system",
+                    models: ["vision", "admin-vision", "admin-planner"],
+                    modelCosts: ["vision", "admin-vision", "admin-planner"].map((model) => ({
+                        model,
+                        capability: "text" as const,
+                        billingMode: "fixed_request" as const,
+                        unitPriceMicrocredits: 1000,
+                        channelModelId: model === "admin-vision" ? "vision" : model === "admin-planner" ? "planner" : "plain",
+                        channelId: "test",
+                        modelKey: model,
+                    })),
+                }),
+            ],
+        };
         spyOn(http, "get").mockImplementation((async (path: string) => {
             if (path === "/ecommerce/agent-setting") return { logicalModelId: "", channelModelId: "planner", channelId: "test", modelKey: "admin-planner", vision: { channelModelId: "vision", channelId: "test", modelKey: "admin-vision" } };
             if (path.startsWith("/ecommerce/projects")) return { projects: [] };
@@ -1099,7 +1123,7 @@ describe("真实电商页面生命周期", () => {
         expect(errors).toEqual([]);
         const grid = document.querySelector(".commerce-confirm-grid")!.textContent;
         for (const hidden of ["电商 Agent", "商品识图", "视觉策划"]) expect(grid).not.toContain(hidden);
-        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "确认并生成");
+        const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim().startsWith("确认并"));
         expect(confirm).toBeDefined();
         await act(async () => {
             confirm!.click();
@@ -1115,7 +1139,27 @@ describe("真实电商页面生命周期", () => {
     test("按已选方向重新策划时，收费策划任务使用后台策划模型而不是草稿里的旧模型", async () => {
         const choices = ["test::vision", "test::admin-vision", "test::admin-planner"];
         spyOn(configStore, "selectableModelsByCapability").mockImplementation((_, capability) => (capability === "text" ? choices : ["test::image"]));
-        spyOn(pricing, "modelQuoteRequest").mockImplementation((_, value) => ({ channelId: "test", modelKey: value.split("::")[1], intent: { capability: "text" } }) as ReturnType<typeof pricing.modelQuoteRequest>);
+        // 后台按渠道模型行 ID 保存阶段模型；前台按目录里的同一行 ID 找回可选模型，不借道报价路由。
+        config = {
+            ...configStore.defaultConfig,
+            channels: [
+                configStore.createModelChannel({
+                    id: "test",
+                    name: "",
+                    scope: "system",
+                    models: ["vision", "admin-vision", "admin-planner"],
+                    modelCosts: ["vision", "admin-vision", "admin-planner"].map((model) => ({
+                        model,
+                        capability: "text" as const,
+                        billingMode: "fixed_request" as const,
+                        unitPriceMicrocredits: 1000,
+                        channelModelId: model === "admin-vision" ? "vision" : model === "admin-planner" ? "planner" : "plain",
+                        channelId: "test",
+                        modelKey: model,
+                    })),
+                }),
+            ],
+        };
         spyOn(http, "get").mockImplementation((async (path: string) => {
             if (path === "/ecommerce/agent-setting") return { logicalModelId: "", channelModelId: "planner", channelId: "test", modelKey: "admin-planner", vision: { channelModelId: "vision", channelId: "test", modelKey: "admin-vision" } };
             if (path.startsWith("/ecommerce/projects")) return { projects: [] };
@@ -1194,7 +1238,7 @@ describe("真实电商页面生命周期", () => {
         const mediaPreparation = spyOn(referenceMedia, "prepareCommerceReferenceViews").mockImplementation(async (source) => ({ draft: source, views: [] }));
         await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
         await render();
-        await press("AI 一键策划");
+        await press("跳过选方向");
         expect(errors.some((message) => message.includes("平台单次生图最多接收 20 张") && message.includes("21 张"))).toBe(true);
         expect(mediaPreparation).not.toHaveBeenCalled();
         expect(paidSubmissions).toHaveLength(0);
@@ -1206,7 +1250,7 @@ describe("真实电商页面生命周期", () => {
         spyOn(referenceMedia, "prepareCommerceReferenceViews").mockImplementation(async (source) => ({ draft: source, views: [] }));
         await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
         await render();
-        await press("AI 一键策划");
+        await press("跳过选方向");
         expect(paidSubmissions).toHaveLength(1);
         const input = paidSubmissions[0] as { referenceImages: unknown[]; metadata: { ecommerceDraft: EcommerceDraft } };
         expect(input.referenceImages).toHaveLength(24);
@@ -1236,7 +1280,7 @@ describe("真实电商页面生命周期", () => {
         expect(stored.layoutReferences).toEqual([{ resourceId: `uploaded-${mode}`, role, name: `${mode}.png`, width: 800, height: 800 }]);
         expect(stored.referenceMode || "product").toBe(mode);
         if (mode === "detail") expect(stored.imageType).toBe("detail");
-        await press("AI 一键策划");
+        await press("跳过选方向");
         expect(paidSubmissions).toHaveLength(1);
         const submission = paidSubmissions[0] as { prompt: string; referenceImages: Array<{ id: string }>; metadata: { ecommerceDraft: EcommerceDraft } };
         expect(submission.metadata.ecommerceDraft.references).toEqual(stored.references);
@@ -1509,7 +1553,7 @@ describe("真实电商页面生命周期", () => {
         expect(selectedDraft.referenceMode).toBe("detail");
         expect(selectedDraft.layoutReferences?.[0].resourceId).toBe("owned-layout");
         expect(selectedDraft.imageType).toBe("detail");
-        await press("AI 一键策划");
+        await press("跳过选方向");
         expect(preparedInputs).toHaveLength(1);
         expect(preparedInputs[0].layoutReferences?.[0].resourceId).toBe("owned-layout");
         const submission = paidSubmissions[0] as { prompt: string; referenceImages: Array<{ id: string; storageKey: string }>; metadata: { ecommerceDraft: EcommerceDraft } };
@@ -1624,7 +1668,7 @@ describe("真实电商页面生命周期", () => {
         });
         expect(sessions.peekEcommerceWorkspace(scope)?.draft.creativeOptions).toEqual(expected);
         expect(host.querySelector('[aria-label="文案与视觉参数"]')?.textContent).toContain("深浅交替");
-        await press("AI 一键策划");
+        await press("跳过选方向");
         const submission = paidSubmissions[0] as { prompt: string; metadata: { ecommerceDraft: EcommerceDraft } };
         expect(submission.metadata.ecommerceDraft.creativeOptions).toEqual(expected);
         expect(submission.prompt).toContain('"colorRhythm":"alternating"');
@@ -1674,7 +1718,7 @@ describe("真实电商页面生命周期", () => {
         await sessions.writeEcommerceWorkspace(scope, checkpoint);
         delayTaskCreation = true;
         await render();
-        await press("AI 一键策划");
+        await press("跳过选方向");
         expect(paidSubmissions).toHaveLength(1);
         expect(completeCreateTask).toBeDefined();
         await act(async () => {
@@ -1723,7 +1767,7 @@ describe("真实电商页面生命周期", () => {
         await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
         delayTaskCreation = true;
         await render();
-        await press("AI 一键策划");
+        await press("跳过选方向");
         const finishOriginal = completeCreateTask!;
         await act(async () => {
             navigate("/other");

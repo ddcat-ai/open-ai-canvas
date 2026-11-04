@@ -52,7 +52,6 @@ func TestEcommerceFeatureRoutesKeepHistoryAndAdminConfiguration(t *testing.T) {
 	group := router.Group("/api")
 	RegisterEcommerceRoutes(group, svc)
 	RegisterWorkbenchRoutes(group, svc)
-	RegisterYoruAssistantRoutes(group, svc)
 	for _, tc := range []struct {
 		method, path, body string
 		anonymous          bool
@@ -64,7 +63,6 @@ func TestEcommerceFeatureRoutesKeepHistoryAndAdminConfiguration(t *testing.T) {
 		{method: "POST", path: "/ecommerce/projects/commerce-project/tasks", body: `{}`, status: 403},
 		{method: "POST", path: "/ecommerce/creative-directions", body: `{}`, status: 403},
 		{method: "POST", path: "/workbench/tasks", body: `{"kind":"image","ecommerceProjectId":"commerce-project","prompt":"test"}`, status: 403},
-		{method: "POST", path: "/yoru/messages", body: `{"message":"test"}`, status: 403},
 		{method: "GET", path: "/ecommerce/projects", status: 200},
 		{method: "GET", path: "/ecommerce/projects/commerce-project", status: 200},
 		{method: "GET", path: "/workbench/tasks?kind=image", status: 200},

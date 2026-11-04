@@ -20,7 +20,7 @@ func TestFeatureAvailabilityDefaultsToDisableFrontendModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.EcommerceEnabled || setting.EcommerceVideoEnabled || setting.SiteAssistantEnabled {
+	if setting.EcommerceEnabled || setting.EcommerceVideoEnabled {
 		t.Fatalf("new features must default to disabled: %#v", setting)
 	}
 	if !setting.WelcomeEnabled {
@@ -45,7 +45,7 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
-	if setting.EcommerceEnabled || setting.EcommerceVideoEnabled || setting.SiteAssistantEnabled {
+	if setting.EcommerceEnabled || setting.EcommerceVideoEnabled {
 		t.Fatalf("new features must default to disabled: %#v", setting)
 	}
 	if !setting.WelcomeEnabled {

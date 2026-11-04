@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { ModelPicker } from "@/components/model-picker";
 import { RollingCreditAmount } from "@/components/rolling-credit-text";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
-import { modelQuoteRequest } from "@/lib/model-pricing";
+import { systemModelQuoteRequest } from "@/lib/model-pricing";
 import { quoteModel } from "@/services/api/logical-models";
 import { parseBackendGenerationResult } from "@/services/api/generation-task";
 import { resolveResourceVariantUrl, resourceIdFromStorageKey } from "@/services/api/resources";
@@ -72,7 +72,7 @@ export function SingleImageEditor({
         const controller = new AbortController();
         setCost(undefined);
         setError("");
-        const request = modelQuoteRequest(config, edited.imageModel, "image", {
+        const request = systemModelQuoteRequest(config, edited.imageModel, "image", {
             capability: "image",
             input: { textCount: 1, imageCount: refs.length, referenceImageCount: refs.length, videoCount: 0, audioCount: 0, characterCount: 0 },
             imageSize: quotedRatio,

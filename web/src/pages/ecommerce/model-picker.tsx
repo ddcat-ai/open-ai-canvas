@@ -1,4 +1,4 @@
-import { Button, Modal, Select, Switch, message } from "antd";
+import { App, Button, Modal, Select, Switch } from "antd";
 import { Check, Images, Search, Trash2, ZoomIn } from "lucide-react";
 import { useState } from "react";
 import { resourceStorageKey } from "@/services/api/resources";
@@ -20,6 +20,7 @@ type Props = {
 };
 
 export function EcommerceModelPicker({ enabled, references, primaryId, uploading, onEnabledChange, onUpload, onAddCatalog, onRemove, onPrimary }: Props) {
+    const { message } = App.useApp();
     const [open, setOpen] = useState(false);
     const [preview, setPreview] = useState<CommerceModelProfile | null>(null);
     const [kind, setKind] = useState("all");

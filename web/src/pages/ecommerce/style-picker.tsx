@@ -148,7 +148,7 @@ export function CommerceStylePicker({
             <div className="commerce-style-picker">
                 <header className="commerce-style-picker-head">
                     <span className="commerce-style-picker-avatar" aria-hidden="true">
-                        <img src="/yoru/yoru-body.png" alt="" />
+                        <Sparkles size={22} />
                     </span>
                     <div>
                         <small>

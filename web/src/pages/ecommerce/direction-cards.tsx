@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, PencilLine, X } from "lucide-react";
+import { ArrowUpRight, Check, PencilLine, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavCreateIcon, RefreshIcon, StyleLibraryIcon } from "@/components/ui/ecommerce-icons";
 import type { EcommerceCreativeDirection, EcommerceStyleRewrite } from "@/services/api/ecommerce";
@@ -150,7 +150,7 @@ export function CommerceDirectionCards({
         <section className={`flylep-directions-stage commerce-direction-message${followup ? " is-followup" : ""}`} aria-label={followup ? "为你推荐" : "为你的商品推荐四个设计方向"}>
             <header className="commerce-direction-header">
                 <span className="commerce-direction-symbol">
-                    <img src="/yoru/yoru-body.png" alt="小夜" />
+                    <Sparkles size={18} aria-hidden="true" />
                 </span>
                 <h2>
                     {followup ? (

@@ -1,4 +1,4 @@
-import { Button, Checkbox, Input, Modal, Segmented, message } from "antd";
+import { App, Button, Checkbox, Input, Modal, Segmented } from "antd";
 import { BookOpen, RefreshCw, Search, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addSkill, installSkillUpload, listAddedSkills, listSkills, type Skill } from "@/services/api/skills";
@@ -9,6 +9,7 @@ import { getActiveUserScope } from "@/lib/user-scope";
 type Props = { selected: string[]; onChange: (ids: string[]) => void; disabled?: boolean };
 
 export function EcommerceSkillPicker({ selected, onChange, disabled }: Props) {
+    const { message } = App.useApp();
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<"mine" | "public">("mine");
     const [query, setQuery] = useState("");

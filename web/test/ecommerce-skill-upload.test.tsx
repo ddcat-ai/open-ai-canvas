@@ -26,7 +26,7 @@ for (const [key, value] of Object.entries({
 }
 const { act, useState } = await import("react");
 const { createRoot } = await import("react-dom/client");
-const { message } = await import("antd");
+const { App, message, modal, notification } = await import("antd");
 const skills = await import("../src/services/api/skills");
 const curation = await import("../src/components/skills/skill-curation-browser");
 const { setActiveUserScope } = await import("../src/lib/user-scope");
@@ -91,6 +91,8 @@ beforeEach(() => {
         library = [...library, skill];
         return { skill };
     });
+    // 技能选择器用 App 上下文的 message；这里接回被监听的 message 收集提示。
+    spyOn(App, "useApp").mockImplementation(() => ({ message, modal, notification }) as unknown as ReturnType<typeof App.useApp>);
     spyOn(message, "error").mockImplementation(((text: unknown) => {
         errors.push(String(text));
         return () => {};

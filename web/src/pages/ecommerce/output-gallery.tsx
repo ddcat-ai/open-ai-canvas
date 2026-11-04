@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Button, Checkbox, Typography } from "antd";
-import { ArrowDownToLine, Image as ImageIcon, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDownToLine, Clapperboard, Image as ImageIcon, RotateCcw, Trash2 } from "lucide-react";
 import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { EcommerceDraft, EcommercePlan, EcommercePlanImage } from "@/services/api/ecommerce";
@@ -47,6 +47,8 @@ export function EcommerceOutputGallery({
     exportDisabled = false,
     onExport,
     preparedDownload,
+    progress,
+    onMakeVideo,
 }: {
     config: AiConfig;
     draft: EcommerceDraft;
@@ -72,6 +74,10 @@ export function EcommerceOutputGallery({
     exportDisabled?: boolean;
     onExport?: () => void;
     preparedDownload?: { url: string; fileName: string };
+    /** 流程进度条，固定在作品区顶部。 */
+    progress?: ReactNode;
+    /** 开放商品视频时：把这张图带到视频生成做首帧。 */
+    onMakeVideo?: (resourceId: string) => void;
 }) {
     const [preview, setPreview] = useState<OutputImage | null>(null);
     const [editing, setEditing] = useState<string | null>(null);
@@ -111,6 +117,7 @@ export function EcommerceOutputGallery({
             onRetry={() => onRetry(image)}
             onEdit={() => setEditing(image.id)}
             onRemove={() => void onRemove(image)}
+            onMakeVideo={onMakeVideo}
         />
     );
     const current = (plan?.images || []).map((image, index) => ({ image, index })).filter(({ image }) => visible(image, generationPending));
@@ -149,6 +156,7 @@ export function EcommerceOutputGallery({
                     ) : null}
                 </div>
             </header>
+            {progress}
             <div className="commerce-output-scroll" data-canvas-wheel-scroll>
                 {stageActive ? <div className="ecs-stage">{stage}</div> : null}
                 {!images.length ? (
@@ -248,6 +256,7 @@ function OutputCard({
     onRetry,
     onEdit,
     onRemove,
+    onMakeVideo,
 }: {
     image: EcommercePlanImage;
     index: number;
@@ -264,6 +273,7 @@ function OutputCard({
     onRetry: () => void;
     onEdit: () => void;
     onRemove: () => void;
+    onMakeVideo?: (resourceId: string) => void;
 }) {
     const failed = Boolean(task && ["failed", "cancelled"].includes(task.status));
     const status =
@@ -315,6 +325,11 @@ function OutputCard({
                 <Button size="small" type="text" icon={<RotateCcw size={14} />} onClick={onEdit}>
                     修改这张
                 </Button>
+                {assetId && resourceId && onMakeVideo ? (
+                    <Button size="small" type="text" icon={<Clapperboard size={14} />} onClick={() => onMakeVideo(resourceId)}>
+                        做成视频
+                    </Button>
+                ) : null}
                 {assetId && resourceId ? <Button size="small" type="text" icon={<ArrowDownToLine size={14} />} aria-label={`下载第 ${index + 1} 张`} onClick={() => onDownload({ image, index, assetId, resourceId })} /> : null}
                 <Button size="small" type="text" icon={<Trash2 size={14} />} aria-label={`从本轮移除第 ${index + 1} 张`} onClick={onRemove} />
             </footer>
