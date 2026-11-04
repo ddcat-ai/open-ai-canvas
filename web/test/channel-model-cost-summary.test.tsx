@@ -16,12 +16,13 @@ const tier: ChannelModelPriceTier = {
     inputTokenPriceMicrocredits: 88000000,
     outputTokenPriceMicrocredits: 77000000,
     cachedTokenPriceMicrocredits: 66000000,
+    cacheWriteTokenPriceMicrocredits: 55000000,
     priceConfigured: true,
     enabled: true,
     priceVersion: 1,
     createdAt: "",
     updatedAt: "",
-    costPricing: { configured: true, unitPriceMicrocredits: 1250000, inputTokenPriceMicrocredits: 2000000, outputTokenPriceMicrocredits: 3000000, cachedTokenPriceMicrocredits: 500000 },
+    costPricing: { configured: true, unitPriceMicrocredits: 1250000, inputTokenPriceMicrocredits: 2000000, outputTokenPriceMicrocredits: 3000000, cachedTokenPriceMicrocredits: 500000, cacheWriteTokenPriceMicrocredits: 750000 },
 };
 const item: ChannelModel = {
     id: "model",
@@ -36,6 +37,7 @@ const item: ChannelModel = {
     inputTokenPriceMicrocredits: 88000000,
     outputTokenPriceMicrocredits: 77000000,
     cachedTokenPriceMicrocredits: 66000000,
+    cacheWriteTokenPriceMicrocredits: 55000000,
     priceConfigured: true,
     enabled: true,
     priceVersion: 1,
@@ -53,11 +55,12 @@ test("fixed and per-second specifications show cost, sale and markup", () => {
     expect(render([{ ...tier, billingMode: "per_second" }])).toContain("积分 / 秒");
 });
 
-test("text token costs include input, output and cached tokens", () => {
+test("text token costs include input, output, cache hit and cache write tokens", () => {
     const html = render([{ ...tier, billingMode: "token" }], "text");
     expect(html).toContain("输入 2 / 88");
     expect(html).toContain("输出 3 / 77");
-    expect(html).toContain("缓存 0.5 / 66");
+    expect(html).toContain("缓存命中 0.5 / 66");
+    expect(html).toContain("缓存写入 0.75 / 55");
     expect(html).toContain("积分 / 百万 Token");
 });
 

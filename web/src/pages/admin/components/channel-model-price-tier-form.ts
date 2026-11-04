@@ -31,11 +31,14 @@ export type PriceTierFormValues = {
     inputTokenPrice: number;
     outputTokenPrice: number;
     cachedTokenPrice: number;
+    /** 缓存写入（创建提示词缓存）的每百万 Token 价格，0 表示不单独收费。 */
+    cacheWriteTokenPrice: number;
     costConfigured: boolean;
     costUnitPrice: number;
     costInputTokenPrice: number;
     costOutputTokenPrice: number;
     costCachedTokenPrice: number;
+    costCacheWriteTokenPrice: number;
     priceConfigured: boolean;
     enabled: boolean;
 };
@@ -58,11 +61,13 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         inputTokenPrice: 0,
         outputTokenPrice: 0,
         cachedTokenPrice: 0,
+        cacheWriteTokenPrice: 0,
         costConfigured: false,
         costUnitPrice: 0,
         costInputTokenPrice: 0,
         costOutputTokenPrice: 0,
         costCachedTokenPrice: 0,
+        costCacheWriteTokenPrice: 0,
         priceConfigured: true,
         enabled: true,
     };
@@ -99,11 +104,13 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
         cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
+        cacheWriteTokenPrice: (tier.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
         costConfigured: tier.costPricing?.configured === true,
         costUnitPrice: (tier.costPricing?.unitPriceMicrocredits ?? 0) / 1_000_000,
         costInputTokenPrice: (tier.costPricing?.inputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costOutputTokenPrice: (tier.costPricing?.outputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costCachedTokenPrice: (tier.costPricing?.cachedTokenPriceMicrocredits ?? 0) / 1_000_000,
+        costCacheWriteTokenPrice: (tier.costPricing?.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
         priceConfigured: tier.priceConfigured,
         enabled: tier.enabled,
     };
@@ -119,6 +126,7 @@ export function legacyPriceTierToForm(item: ChannelModel): PriceTierFormValues {
         inputTokenPrice: item.inputTokenPriceMicrocredits / 1_000_000,
         outputTokenPrice: item.outputTokenPriceMicrocredits / 1_000_000,
         cachedTokenPrice: item.cachedTokenPriceMicrocredits / 1_000_000,
+        cacheWriteTokenPrice: (item.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
         priceConfigured: item.priceConfigured,
         enabled: item.enabled,
     };
@@ -176,12 +184,14 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
         inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.inputTokenPrice || 0) * 1_000_000),
         outputTokenPriceMicrocredits: Math.round((tier.outputTokenPrice || 0) * 1_000_000),
         cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cachedTokenPrice || 0) * 1_000_000),
+        cacheWriteTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cacheWriteTokenPrice || 0) * 1_000_000),
         costPricing: {
             configured: tier.costConfigured,
             unitPriceMicrocredits: Math.round(tier.costUnitPrice * 1_000_000),
             inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costInputTokenPrice * 1_000_000),
             outputTokenPriceMicrocredits: Math.round(tier.costOutputTokenPrice * 1_000_000),
             cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costCachedTokenPrice * 1_000_000),
+            cacheWriteTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.costCacheWriteTokenPrice || 0) * 1_000_000),
         },
         priceConfigured: tier.priceConfigured !== false,
         enabled: tier.enabled !== false,

@@ -100,6 +100,7 @@ export type ApiCallLog = {
     inputTokens: number;
     outputTokens: number;
     cachedTokens: number;
+    cacheWriteTokens?: number;
     usageAvailable: boolean;
     mediaCount: number;
     mediaPreviewUrl?: string;

@@ -17,7 +17,8 @@ const item = {
             inputTokenPriceMicrocredits: 0,
             outputTokenPriceMicrocredits: 0,
             cachedTokenPriceMicrocredits: 0,
-            costPricing: { configured: true, unitPriceMicrocredits: 1_000_000, inputTokenPriceMicrocredits: 2_000_000, outputTokenPriceMicrocredits: 4_000_000, cachedTokenPriceMicrocredits: 0 },
+            cacheWriteTokenPriceMicrocredits: 0,
+            costPricing: { configured: true, unitPriceMicrocredits: 1_000_000, inputTokenPriceMicrocredits: 2_000_000, outputTokenPriceMicrocredits: 4_000_000, cachedTokenPriceMicrocredits: 0, cacheWriteTokenPriceMicrocredits: 0 },
         },
     ],
 } as ChannelModel;
@@ -95,7 +96,7 @@ test("manual token edits affect only their own field and invalid input never sil
     const rows = modelRepriceRows(previewModelRepricing([token], 20));
     rows[1]!.sale = "7.123456";
     const prices = modelRepricePayload([token], rows)[0]!.priceTiers[0]!.prices;
-    expect(prices).toEqual({ inputTokenPriceMicrocredits: 2_400_000, outputTokenPriceMicrocredits: 7_123_456, cachedTokenPriceMicrocredits: 0 });
+    expect(prices).toEqual({ inputTokenPriceMicrocredits: 2_400_000, outputTokenPriceMicrocredits: 7_123_456, cachedTokenPriceMicrocredits: 0, cacheWriteTokenPriceMicrocredits: 0 });
     for (const invalid of [null, "", "-1", "1.1234567", "1e3", "NaN", "9007199254.740992"]) expect(() => parseSaleInput(invalid)).toThrow();
     for (const value of [0, 1, 10_000_000, Number.MAX_SAFE_INTEGER]) expect(parseSaleInput(saleInputValue(value))).toBe(value);
     rows[1]!.sale = null;

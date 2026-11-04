@@ -18,7 +18,8 @@ export function modelPriceFields(tier: ChannelModelPriceTier, capability: Channe
     return [
         { key: "inputTokenPriceMicrocredits" as const, label: "输入", unit: "百万 Token" },
         { key: "outputTokenPriceMicrocredits" as const, label: "输出", unit: "百万 Token" },
-        { key: "cachedTokenPriceMicrocredits" as const, label: "缓存", unit: "百万 Token" },
+        { key: "cachedTokenPriceMicrocredits" as const, label: "缓存命中", unit: "百万 Token" },
+        { key: "cacheWriteTokenPriceMicrocredits" as const, label: "缓存写入", unit: "百万 Token" },
     ];
 }
 

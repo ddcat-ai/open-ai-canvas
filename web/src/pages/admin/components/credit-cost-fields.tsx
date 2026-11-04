@@ -10,7 +10,8 @@ export function CreditCostFields({ index, form, billingMode, isVideo }: { index:
                 : [
                       ["costInputTokenPrice", "输入 / 百万 Token"],
                       ["costOutputTokenPrice", "输出 / 百万 Token"],
-                      ["costCachedTokenPrice", "缓存 / 百万 Token"],
+                      ["costCachedTokenPrice", "缓存命中 / 百万 Token"],
+                      ["costCacheWriteTokenPrice", "缓存写入 / 百万 Token"],
                   ]
             : [["costUnitPrice", billingMode === "per_second" ? "积分 / 秒" : "积分 / 次"]];
     return (

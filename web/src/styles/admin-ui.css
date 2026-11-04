@@ -6315,12 +6315,16 @@
     background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary h2 {
+:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section)
+    > .admin-settings-section-summary
+    h2 {
     font-size: 16px;
     letter-spacing: -0.01em;
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary p {
+:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section)
+    > .admin-settings-section-summary
+    p {
     max-width: 760px;
     margin-top: 4px;
     font-size: 12px;
@@ -8767,7 +8771,9 @@
     border: 1px solid var(--admin-card-border) !important;
     border-radius: 8px;
     background: var(--admin-layer-2) !important;
-    box-shadow: 0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 18%, transparent) 50%, transparent), 0 8px 22px color-mix(in srgb, #000 18%, transparent);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 18%, transparent) 50%, transparent),
+        0 8px 22px color-mix(in srgb, #000 18%, transparent);
 }
 
 .admin-shell .admin-analytics-chart .recharts-tooltip-label {
@@ -9554,7 +9560,7 @@
 .admin-price-tier-token-grid {
     display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -9599,7 +9605,7 @@
 }
 
 .admin-price-tier-cost-token-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .admin-price-tier-cost-switch {
@@ -9813,7 +9819,9 @@
 :root:not(.dark) .admin-model-editor-footer-actions {
     border-color: rgba(17, 17, 17, 0.15);
     background: #ffffff;
-    box-shadow: 0 1px 2px color-mix(in srgb, rgb(17 17 17 / 0.08) 50%, transparent), 0 6px 20px rgb(17 17 17 / 0.08);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, rgb(17 17 17 / 0.08) 50%, transparent),
+        0 6px 20px rgb(17 17 17 / 0.08);
 }
 
 :root:not(.dark) .admin-price-tier-mode-control .ant-segmented-item-selected,
@@ -9969,7 +9977,9 @@
     border-radius: 12px !important;
     background: var(--admin-layer-1) !important;
     padding: 0 !important;
-    box-shadow: 0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 28%, transparent) 50%, transparent), 0 20px 54px color-mix(in srgb, #000 28%, transparent) !important;
+    box-shadow:
+        0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 28%, transparent) 50%, transparent),
+        0 20px 54px color-mix(in srgb, #000 28%, transparent) !important;
 }
 
 .admin-channel-modal-root .admin-channel-modal.workspace-modal .ant-modal-container {
