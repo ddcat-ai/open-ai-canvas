@@ -12,7 +12,19 @@ import { AdminStatusBadge } from "./admin-ui";
 import "./feature-availability-panel.css";
 
 type FeatureKey =
-    "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "inspirationSourcesVisible" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled";
+    | "shortDramaEnabled"
+    | "taskCenterEnabled"
+    | "creditsEnabled"
+    | "customChannelsEnabled"
+    | "inspirationSourcesVisible"
+    | "frontendModelsEnabled"
+    | "pluginCenterEnabled"
+    | "systemPluginsVisibleToUsers"
+    | "imageWorkbenchEnabled"
+    | "videoWorkbenchEnabled"
+    | "ecommerceEnabled"
+    | "ecommerceVideoEnabled"
+    | "siteAssistantEnabled";
 type FeatureRow = {
     key: FeatureKey;
     title: string;
@@ -29,6 +41,9 @@ const editableFeatureKeys: FeatureKey[] = [
     "inspirationSourcesVisible",
     "imageWorkbenchEnabled",
     "videoWorkbenchEnabled",
+    "ecommerceEnabled",
+    "ecommerceVideoEnabled",
+    "siteAssistantEnabled",
     "frontendModelsEnabled",
     "pluginCenterEnabled",
     "systemPluginsVisibleToUsers",
@@ -70,6 +85,25 @@ const workspaceFeatureRows: FeatureRow[] = [
         title: "图片生成",
         description: "开放生图入口并允许创建新的工作台图片任务；关闭不删除结果和历史。",
         icon: <ImageIcon className="size-4" aria-hidden="true" />,
+    },
+    {
+        key: "ecommerceEnabled",
+        title: "电商创作",
+        description: "允许新建商品创作、策划和图片生成；关闭后保留历史项目与作品。",
+        icon: <ImageIcon className="size-4" aria-hidden="true" />,
+    },
+    {
+        key: "ecommerceVideoEnabled",
+        title: "商品视频",
+        description: "允许从电商商品图片创建视频；同时需要电商创作与通用视频能力开放。",
+        icon: <Clapperboard className="size-4" aria-hidden="true" />,
+        dependsOn: "ecommerceEnabled",
+    },
+    {
+        key: "siteAssistantEnabled",
+        title: "创作助手问答",
+        description: "允许用户向工作台创作助手提问；助手的模型与回答知识在「电商 Agent 配置」中设置。",
+        icon: <Quote className="size-4" aria-hidden="true" />,
     },
     {
         key: "videoWorkbenchEnabled",
@@ -391,6 +425,9 @@ function toEditablePayload(features: FeatureAvailability) {
         inspirationSourcesVisible: features.inspirationSourcesVisible,
         imageWorkbenchEnabled: features.imageWorkbenchEnabled,
         videoWorkbenchEnabled: features.videoWorkbenchEnabled,
+        ecommerceEnabled: features.ecommerceEnabled,
+        ecommerceVideoEnabled: features.ecommerceVideoEnabled,
+        siteAssistantEnabled: features.siteAssistantEnabled,
         frontendModelsEnabled: features.frontendModelsEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
@@ -416,6 +453,9 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         inspirationSourcesVisible: record.inspirationSourcesVisible as boolean,
         imageWorkbenchEnabled: record.imageWorkbenchEnabled as boolean,
         videoWorkbenchEnabled: record.videoWorkbenchEnabled as boolean,
+        ecommerceEnabled: record.ecommerceEnabled as boolean,
+        ecommerceVideoEnabled: record.ecommerceVideoEnabled as boolean,
+        siteAssistantEnabled: record.siteAssistantEnabled as boolean,
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,

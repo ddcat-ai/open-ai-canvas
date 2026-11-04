@@ -174,6 +174,9 @@ func (s *Service) ecommerceCreativeContext(req EcommerceCreativeDirectionsReques
 // Isolated admission endpoint lets the API prepare new creative prompts while
 // existing workers finish in-flight work with no restart or second paid task.
 func (s *Service) CreateEcommercePlanningTask(userID, projectID string, req CreateTaskRequest) (*model.Task, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	if _, err := s.EcommerceProject(userID, projectID); err != nil {
 		return nil, err
 	}
@@ -183,5 +186,6 @@ func (s *Service) CreateEcommercePlanningTask(userID, projectID string, req Crea
 		return nil, BadAuthRequest("电商策划入口只接收商品分析、风格推荐或策划文本任务")
 	}
 	metadata["source"], metadata["ecommerceProjectId"] = "ecommerce-agent", projectID
+	req.ProjectID = projectID
 	return s.CreateTask(userID, req)
 }

@@ -103,6 +103,10 @@ func evidenceIDs(evidence []EcommerceKnowledgeEvidence) map[string]string {
 func TestEcommerceKnowledgeDrivesDirectionsForFiveProducts(t *testing.T) {
 	t.Setenv("AI_MODE", "disabled")
 	svc, db := knowledgeTestService(t)
+	// 电商创作默认关闭；验收在管理员已开放的前提下运行。
+	if err := db.Create(&model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: `{"ecommerceEnabled":true}`}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.EnsureBuiltinEcommerceKnowledge(); err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +324,7 @@ func TestEcommerceSelectedDirectionFlowsToPlanningAndImageTask(t *testing.T) {
 	}
 	imageProfile := mustEncodeModelCapabilityConfig(t, DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceOpenAIImage), "gpt-image-2"))
 	for _, item := range []any{
-		&model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: `{"imageWorkbenchEnabled":true}`},
+		&model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: `{"ecommerceEnabled":true,"imageWorkbenchEnabled":true}`},
 		&model.ModelChannel{ID: "image-channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "图片测试", APIFormat: "openai", BaseURL: imageUpstream.URL + "/v1", APIKey: "fixture-key"},
 		&model.ChannelModel{ID: "image-model", ChannelID: "image-channel", ModelKey: "gpt-image-2", ProviderModelKey: "gpt-image-2", Capability: "image", Protocol: model.ChannelInterfaceOpenAIImage, CapabilityConfigJSON: imageProfile, BillingMode: "fixed_request", UnitPriceMicrocredits: 200, PriceConfigured: true, Enabled: true},
 		&model.ChannelModelPriceTier{ID: "image-tier", ChannelModelID: "image-model", SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "fixed_request", UnitPriceMicrocredits: 200, PriceConfigured: true, Enabled: true},

@@ -9,7 +9,7 @@ import (
 )
 
 func TestEcommerceCreativeParametersPersistAndValidate(t *testing.T) {
-	svc, _, _, _ := creationTestService(t)
+	svc, _, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestEcommerceCreativeParametersPersistAndValidate(t *testing.T) {
 }
 
 func TestEcommerceUploadedSkillReadsReferencedMethods(t *testing.T) {
-	svc, _, _, _ := creationTestService(t)
+	svc, _, _, _ := ecommerceCreationTestService(t)
 	var data bytes.Buffer
 	archive := zip.NewWriter(&data)
 	for name, body := range map[string]string{

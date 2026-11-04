@@ -34,7 +34,7 @@ func ecommerceGroupedReferencePlan() *model.EcommercePlan {
 }
 
 func TestEcommerceSeparatedReferenceGroupsPersistAndProtectAllSources(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	for _, id := range []string{"product", "long-reference", "second-reference", "crop-1", "crop-2"} {
 		if err := db.Create(&model.Resource{ID: id, UserID: "user", Kind: "image", Status: model.ResourceStatusReady}).Error; err != nil {
 			t.Fatal(err)
@@ -99,7 +99,7 @@ func TestEcommerceSeparatedReferenceGroupsPersistAndProtectAllSources(t *testing
 }
 
 func TestEcommerceSeparatedReferenceGroupsRejectInvalidPlansAndOwnership(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	for _, resource := range []model.Resource{
 		{ID: "product", UserID: "user", Kind: "image", Status: model.ResourceStatusReady},
 		{ID: "long-reference", UserID: "user", Kind: "image", Status: model.ResourceStatusReady},
@@ -181,7 +181,7 @@ func TestEcommerceSeparatedReferenceGroupsRejectInvalidPlansAndOwnership(t *test
 }
 
 func TestEcommerceReferenceGroupsKeepEmptyDraftAndLegacySemantics(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	for _, id := range []string{"product", "long-reference", "second-reference", "crop-1", "crop-2"} {
 		if err := db.Create(&model.Resource{ID: id, UserID: "user", Kind: "image", Status: model.ResourceStatusReady}).Error; err != nil {
 			t.Fatal(err)

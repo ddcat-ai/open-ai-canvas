@@ -110,7 +110,15 @@ func (s *Service) PublicYoruSettings(actor *model.User) (YoruSettings, error) {
 	if err != nil {
 		return value, err
 	}
-	value.Enabled = value.Enabled && yoruAudienceAllows(value.Audience, actor)
+	siteEnabled, err := s.FeatureEnabled(FeatureSiteAssistant)
+	if err != nil {
+		return YoruSettings{}, err
+	}
+	creditsEnabled, err := s.FeatureEnabled(FeatureCredits)
+	if err != nil {
+		return YoruSettings{}, err
+	}
+	value.Enabled = value.Enabled && siteEnabled && creditsEnabled && yoruAudienceAllows(value.Audience, actor)
 	if value.Enabled {
 		if yoruModelMode(value) == "direct" {
 			_, _, err = s.yoruDirectModelForUser(actor, value.ChannelModelID)
@@ -244,23 +252,37 @@ func (s *Service) UpdateYoruSettings(actor *model.User, value YoruSettings) (Yor
 	return value, nil
 }
 
-func (s *Service) CreateYoruChatTask(actor *model.User, request YoruChatRequest) (*model.Task, error) {
+func (s *Service) requireYoruChat(actor *model.User) error {
 	if actor == nil || actor.ID == "" {
-		return nil, Unauthorized("请先登录后使用小夜对话")
+		return Unauthorized("请先登录后使用小夜对话")
+	}
+	if err := s.RequireFeature(FeatureSiteAssistant); err != nil {
+		return err
+	}
+	settings, err := s.YoruSettings()
+	if err != nil {
+		return err
+	}
+	if !settings.Enabled || !yoruAudienceAllows(settings.Audience, actor) {
+		return BadAuthRequest("小夜对话尚未由管理员开放")
+	}
+	creditsEnabled, err := s.FeatureEnabled(FeatureCredits)
+	if err != nil {
+		return err
+	}
+	if !creditsEnabled {
+		return BadAuthRequest("积分账本未启用，小夜暂不可对话")
+	}
+	return nil
+}
+
+func (s *Service) CreateYoruChatTask(actor *model.User, request YoruChatRequest) (*model.Task, error) {
+	if err := s.requireYoruChat(actor); err != nil {
+		return nil, err
 	}
 	settings, err := s.YoruSettings()
 	if err != nil {
 		return nil, err
-	}
-	if !settings.Enabled || !yoruAudienceAllows(settings.Audience, actor) {
-		return nil, BadAuthRequest("小夜对话尚未由管理员开放")
-	}
-	creditsEnabled, err := s.FeatureEnabled(FeatureCredits)
-	if err != nil {
-		return nil, err
-	}
-	if !creditsEnabled {
-		return nil, BadAuthRequest("积分账本未启用，小夜暂不可对话")
 	}
 	mode := yoruModelMode(settings)
 	channelID, modelKey := "", ""

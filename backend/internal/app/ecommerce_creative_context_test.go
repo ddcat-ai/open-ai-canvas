@@ -11,7 +11,7 @@ import (
 )
 
 func TestEcommerceCreativeKnowledgeRetrievesReviewedApplicableMethods(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	t.Setenv("AI_MODE", "live")
 	now := time.Now().UTC()
 	expired := now.Add(-time.Hour)
@@ -57,7 +57,7 @@ func TestEcommerceCreativeKnowledgeRetrievesReviewedApplicableMethods(t *testing
 }
 
 func TestEcommerceCreativeAdmissionPreservesOwnershipChargesAndSelectedStyle(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	t.Setenv("AI_MODE", "mock")
 	project, _ := svc.CreateEcommerceProject("user")
 	draft := EcommerceDraft{ProductName: "耳机", Instruction: "生成详情页", ImageType: "detail", Count: 9, Ratio: "9:16"}

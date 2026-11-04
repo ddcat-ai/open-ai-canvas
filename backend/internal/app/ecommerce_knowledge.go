@@ -397,6 +397,9 @@ func jsonArrayContains(raw, value string) bool {
 }
 
 func (s *Service) RecommendEcommerceCreativeDirections(userID string, req EcommerceCreativeDirectionsRequest) (*EcommerceCreativeDirectionsResponse, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(req.ProjectID) == "" {
 		return nil, BadAuthRequest("推荐任务缺少项目 ID")
 	}
@@ -661,6 +664,9 @@ func nonEmptyFacts(req EcommerceCreativeDirectionsRequest) []string {
 }
 
 func (s *Service) SelectEcommerceCreativeDirection(userID, recommendationID, directionID string) (*EcommerceCreativeDirectionSelection, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	item, err := s.repo.EcommerceRecommendation(userID, recommendationID)
 	if err != nil {
 		return nil, NotFound("推荐任务不存在")

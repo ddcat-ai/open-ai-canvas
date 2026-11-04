@@ -138,6 +138,9 @@ func (s *Service) EcommerceSkillPrompt(userID string, ids []string) (string, err
 }
 
 func (s *Service) CreateEcommerceProject(userID string) (*model.EcommerceProject, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	project := &model.EcommerceProject{ID: newID(), UserID: userID, Name: "未命名商品", Status: "draft", DraftJSON: "{}", PlanJSON: "{}", Revision: 1}
 	if err := s.repo.CreateEcommerceProject(project); err != nil {
 		return nil, err
@@ -203,6 +206,9 @@ func (s *Service) EcommerceProjectPage(userID string, page, pageSize int) ([]mod
 }
 
 func (s *Service) DeleteEcommerceProjects(userID string, req DeleteEcommerceProjectsRequest) (int64, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return 0, err
+	}
 	if req.ExpectedTotal == nil || *req.ExpectedTotal < 1 || (req.All && len(req.IDs) != 0) || (!req.All && (len(req.IDs) == 0 || len(req.IDs) > 1000)) {
 		return 0, BadAuthRequest("删除项目参数无效")
 	}
@@ -225,6 +231,9 @@ func (s *Service) DeleteEcommerceProjects(userID string, req DeleteEcommerceProj
 	return deleted, err
 }
 func (s *Service) SaveEcommerceProject(userID, id string, req SaveEcommerceProjectRequest) (*model.EcommerceProject, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	project, err := s.EcommerceProject(userID, id)
 	if err != nil {
 		return nil, err

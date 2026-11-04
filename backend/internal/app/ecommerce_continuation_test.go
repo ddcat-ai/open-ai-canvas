@@ -14,7 +14,7 @@ import (
 )
 
 func TestEcommerceContinuationPreservesHistoryAndRejectsForeignTasks(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestEcommerceContinuationPreservesHistoryAndRejectsForeignTasks(t *testing.
 }
 
 func TestEcommerceStreamingDownloadPreservesBytesAndOwnership(t *testing.T) {
-	svc, _, _, _ := creationTestService(t)
+	svc, _, _, _ := ecommerceCreationTestService(t)
 	var encoded bytes.Buffer
 	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 2, 2))); err != nil {
 		t.Fatal(err)

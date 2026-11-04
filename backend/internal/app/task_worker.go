@@ -204,6 +204,28 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if err := json.Unmarshal([]byte(decryptedInput), &admissionInput); err != nil {
 		return err
 	}
+	if task.ProviderRequestID == "" && task.PollStage != "accepted" && task.PollStage != "poll" {
+		if featureErr := s.requireTaskGenerationFeatures(task.UserID, task.ProjectID, task.Type, task.Operation, task.WorkbenchKind, admissionInput); featureErr != nil {
+			attempts, readErr := s.repo.RouteAttempts(task.ID, task.RouteRun)
+			if readErr != nil {
+				return readErr
+			}
+			submitted := false
+			for _, attempt := range attempts {
+				if attempt.DispatchState == "accepted" || attempt.DispatchState == "submission_unknown" {
+					submitted = true
+				}
+			}
+			// Submitted work keeps its original polling and result-persistence path.
+			if !submitted {
+				uncertain := s.taskBilling().BillingFailureRequiresReview(task.BillingOrderID, task.ID, featureErr)
+				if len(attempts) == 0 && task.RouteRun <= 1 && task.Attempts > 1 {
+					uncertain = true
+				}
+				return terminal.markPreparationFailure(task, "功能暂未开放", featureErr, uncertain, "功能已关闭，上游请求未发出")
+			}
+		}
+	}
 	if err := s.requireCustomChannelsForTaskInput(admissionInput); err != nil {
 		// A reclaimed task may already have submitted upstream. Keep the existing
 		// review path for that evidence; only an unsent reservation is refundable.
@@ -247,7 +269,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		return terminal.markPreparationFailure(task, "路由准备失败", err, isRouteDispatchUncertain(err), "路由准备失败，上游请求未发出")
 	}
 	if err := s.taskBilling().MarkBillingRunning(task.BillingOrderID); err != nil {
-		return terminal.markPreparationFailure(task, "计费准备失败", err, false, "计费准备失败，上游请求未发出")
+		uncertain := task.ProviderRequestID != "" || s.taskBilling().BillingFailureRequiresReview(task.BillingOrderID, task.ID, err)
+		if routeAttempt != nil && (routeAttempt.DispatchState == "accepted" || routeAttempt.DispatchState == "submission_unknown") {
+			uncertain = true
+		}
+		return terminal.markPreparationFailure(task, "计费准备失败", err, uncertain, "计费准备失败，上游请求未发出")
 	}
 	routeResult, stateErr := s.routeExecutor().execute(ctx, task, routeAttempt)
 	if stateErr != nil {

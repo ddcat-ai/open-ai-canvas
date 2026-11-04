@@ -124,7 +124,7 @@ func TestEcommercePlanningBatchPromptSharesTheDrawnOutline(t *testing.T) {
 }
 
 func TestEcommercePlanningAppendsADifferentDesignVariationEachRun(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	t.Setenv("AI_MODE", "mock")
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {

@@ -22,7 +22,7 @@ func ecommerceReferencePlan() *model.EcommercePlan {
 }
 
 func TestEcommerceDetailReferencePersistsSourceScreensAndOwnedCrops(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	for _, id := range []string{"long-reference", "crop-1", "crop-2"} {
 		if err := db.Create(&model.Resource{ID: id, UserID: "user", Kind: "image", Status: model.ResourceStatusReady}).Error; err != nil {
 			t.Fatal(err)
@@ -85,7 +85,7 @@ func TestEcommerceDetailReferencePersistsSourceScreensAndOwnedCrops(t *testing.T
 }
 
 func TestEcommerceDetailReferenceRejectsInvalidOrForeignScreens(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	for _, resource := range []model.Resource{
 		{ID: "long-reference", UserID: "user", Kind: "image", Status: model.ResourceStatusReady},
 		{ID: "crop-1", UserID: "user", Kind: "image", Status: model.ResourceStatusReady},
@@ -154,7 +154,7 @@ func TestEcommerceDetailReferenceRejectsInvalidOrForeignScreens(t *testing.T) {
 }
 
 func TestEcommerceReferenceDraftAndStylePlanRemainEditable(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	if err := db.Create(&model.Resource{ID: "style-source", UserID: "user", Kind: "image", Status: model.ResourceStatusReady}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestEcommerceReferenceDraftAndStylePlanRemainEditable(t *testing.T) {
 }
 
 func TestEcommerceInactiveReferencePreferenceCanBeRemovedWithoutTrustingForeignIDs(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	for _, resource := range []model.Resource{
 		{ID: "removed-style", UserID: "user", Kind: "image", Status: model.ResourceStatusReady},
 		{ID: "foreign-style", UserID: "other", Kind: "image", Status: model.ResourceStatusReady},

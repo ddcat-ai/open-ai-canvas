@@ -460,7 +460,25 @@ export function getAdminFeatureAvailability() {
 }
 
 export function updateAdminFeatureAvailability(
-    features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "inspirationSourcesVisible" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled">>,
+    features: Partial<
+        Pick<
+            FeatureAvailability,
+            | "welcomeEnabled"
+            | "shortDramaEnabled"
+            | "taskCenterEnabled"
+            | "creditsEnabled"
+            | "customChannelsEnabled"
+            | "frontendModelsEnabled"
+            | "pluginCenterEnabled"
+            | "systemPluginsVisibleToUsers"
+            | "inspirationSourcesVisible"
+            | "imageWorkbenchEnabled"
+            | "videoWorkbenchEnabled"
+            | "ecommerceEnabled"
+            | "ecommerceVideoEnabled"
+            | "siteAssistantEnabled"
+        >
+    >,
 ) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
@@ -642,8 +660,7 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams &
-    Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
+export type AdminApiLogParams = AdminListParams & Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });

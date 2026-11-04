@@ -3026,6 +3026,9 @@ paths:
               required: [kind, prompt, model]
               properties:
                 kind: { type: string, enum: [image, video] }
+                ecommerceProjectId:
+                  type: string
+                  description: 电商工作台提交时关联当前用户的电商项目；服务端校验归属，并对新生成应用电商总开关，图片还需生图开关，视频还需电商视频与原视频开关。
                 toolId: { type: string }
                 presetId: { type: string }
                 prompt: { type: string, minLength: 1, maxLength: 32000 }

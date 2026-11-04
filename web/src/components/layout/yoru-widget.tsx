@@ -26,6 +26,7 @@ type Expression = "idle" | "thinking" | "talking" | "happy" | "curious" | "wave"
 export function YoruWidget() {
     const navigate = useNavigate();
     const { pathname } = useLocation();
+    const siteAssistantEnabled = useUserStore((state) => state.features.siteAssistantEnabled);
     const userId = useUserStore((state) => state.user?.id || "guest");
     const preferenceKey = `yoru:${userId}`;
     const [settings, setSettings] = useState<YoruSettings>(idleSettings);
@@ -228,7 +229,7 @@ export function YoruWidget() {
         }
     };
 
-    if (!settings.enabled || pathname.startsWith("/admin") || /^\/canvas\/[^/]+/.test(pathname)) return null;
+    if (!siteAssistantEnabled || !settings.enabled || pathname.startsWith("/admin") || /^\/canvas\/[^/]+/.test(pathname)) return null;
     if (hidden)
         return (
             <button
@@ -238,10 +239,10 @@ export function YoruWidget() {
                     setHidden(false);
                     localStorage.removeItem(`${preferenceKey}:hidden`);
                 }}
-                aria-label="显示小夜助手"
+                aria-label={`显示${settings.name || "创作助手"}`}
             >
                 <MessageCircleMore size={19} />
-                <span>小夜</span>
+                <span>{settings.name || "创作助手"}</span>
             </button>
         );
     return (
@@ -281,7 +282,7 @@ export function YoruWidget() {
                             <img src={yoruBody} alt="小夜头像" />
                         </div>
                         <div className="yoru-header-identity">
-                            <strong>{settings.name || "小夜"}</strong>
+                            <strong>{settings.name || "创作助手"}</strong>
                             <small>创作向导</small>
                         </div>
                         <span className="yoru-header-status">创作陪伴中</span>

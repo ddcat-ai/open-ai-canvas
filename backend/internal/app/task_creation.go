@@ -9,6 +9,8 @@ import (
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 // Internal admission constraints are not JSON fields. Callers cannot select a
@@ -31,6 +33,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if req.admission == nil && (strings.HasPrefix(req.Operation, "cloud_agent") || req.Input["cloudAgent"] != nil) {
 		return nil, BadAuthRequest("Agent 任务必须通过 Agent 接口创建")
 	}
+	if req.Operation == "yoru_assistant" && req.admission == nil {
+		return nil, BadAuthRequest("站内助手任务必须通过助手接口创建")
+	}
 	if s.IsDraining() {
 		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
 	}
@@ -41,6 +46,9 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 	normalizedInput, err := normalizeTaskInput(req.Input)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.requireTaskGenerationFeatures(userID, req.ProjectID, taskType, req.Operation, req.workbenchKind, normalizedInput); err != nil {
 		return nil, err
 	}
 	prompt, err = s.prepareEcommerceWorkbenchTask(userID, normalizedInput, prompt)
@@ -266,6 +274,62 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		s.supersedeCloudAgentApprovalsForNodeTask(userID, &task, normalizedInput)
 	}
 	return taskForOutput(task), nil
+}
+
+// Admission uses server-owned workbench identity and an owned ecommerce project.
+// Client metadata can request a stricter gate, but cannot grant an exemption.
+func (s *Service) requireTaskGenerationFeatures(userID, projectID, taskType, operation, workbenchKind string, input map[string]any) error {
+	if operation == "yoru_assistant" {
+		actor, err := s.repo.User(userID)
+		if err != nil {
+			return err
+		}
+		return s.requireYoruChat(actor)
+	}
+	metadata, _ := input["metadata"].(map[string]any)
+	ecommerceID := strings.TrimSpace(stringValue(metadata["ecommerceProjectId"]))
+	ecommerce := false
+	if ecommerceID != "" {
+		if _, err := s.repo.EcommerceProject(userID, ecommerceID); err != nil {
+			return NotFound("电商项目不存在")
+		}
+		ecommerce = true
+	}
+	if projectID = strings.TrimSpace(projectID); projectID != "" && projectID != ecommerceID {
+		if _, err := s.repo.EcommerceProject(userID, projectID); err == nil {
+			ecommerce = true
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	}
+	if stringValue(metadata["source"]) == "ecommerce-agent" && !ecommerce {
+		return BadAuthRequest("电商任务必须关联当前用户的电商项目")
+	}
+	if ecommerce {
+		if err := s.RequireFeature(FeatureEcommerce); err != nil {
+			return err
+		}
+	}
+	if workbenchKind == "" {
+		workbenchKind = workbenchKindFromTaskInput(input, taskType)
+	}
+	if !ecommerce && workbenchKind == "" {
+		return nil
+	}
+	// The provider dispatches by mode; type and persisted kind are additional
+	// evidence so a mismatched public request cannot weaken media admission.
+	if isVideoTaskType(taskType) || stringValue(input["mode"]) == "video" || workbenchKind == WorkbenchKindVideo {
+		if ecommerce {
+			if err := s.RequireFeature(FeatureEcommerceVideo); err != nil {
+				return err
+			}
+		}
+		return s.RequireFeature(FeatureVideoWorkbench)
+	}
+	if taskType == "canvas_image" || stringValue(input["mode"]) == "image" || workbenchKind == WorkbenchKindImage {
+		return s.RequireFeature(FeatureImageWorkbench)
+	}
+	return nil
 }
 
 // resolveTaskModelSelection 根据请求实际携带的模型选择决定路由方式。

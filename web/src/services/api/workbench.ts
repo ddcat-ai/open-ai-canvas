@@ -76,6 +76,7 @@ export type WorkbenchToolDirectory = {
 };
 
 export type CreateWorkbenchTaskInput = {
+    ecommerceProjectId?: string;
     kind: WorkbenchKind;
     toolId?: string;
     presetId?: string;

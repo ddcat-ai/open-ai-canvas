@@ -114,6 +114,9 @@ func (s *Service) ecommerceReference(userID, rawURL string) (string, []byte, str
 }
 
 func (s *Service) AnalyzeEcommerceAgent(ctx context.Context, userID string, req ecommerceagent.Request) (*ecommerceagent.Analysis, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	p, err := validateEcommerceAgentRequest(req, false)
 	if err != nil {
 		return nil, err
@@ -214,6 +217,9 @@ func safeRecommendationPrompt(prompt string) bool {
 }
 
 func (s *Service) HelpWriteEcommerceAgent(ctx context.Context, userID, text, platform, language string) (map[string]any, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	if len(text) > 4000 || strings.TrimSpace(text) == "" {
 		return nil, ecommerceErr("INVALID_INPUT", "请输入商品和出图需求")
 	}
@@ -303,6 +309,12 @@ func (s *Service) ecommerceAgentOrder(userID, runID, key string, req ecommerceag
 }
 
 func (s *Service) QuoteEcommerceAgent(userID string, req ecommerceagent.Request) (map[string]any, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
+	if err := s.RequireFeature(FeatureImageWorkbench); err != nil {
+		return nil, err
+	}
 	platform, err := validateEcommerceAgentRequest(req, true)
 	if err != nil {
 		return nil, err
@@ -398,6 +410,22 @@ func (s *Service) ecommerceAgentGeneratedURL(userID string, data []byte, rawURL,
 }
 
 func (s *Service) GenerateEcommerceAgent(ctx context.Context, userID string, req ecommerceagent.Request, emit func(ecommerceagent.Event) error) (view *EcommerceAgentTaskView, err error) {
+	key := strings.TrimSpace(req.IdempotencyKey)
+	if key != "" {
+		if prior, e := s.repo.EcommerceAgentRunByKey(userID, key); e == nil {
+			return s.replayEcommerceAgent(userID, prior, emit)
+		} else if !errors.Is(e, gorm.ErrRecordNotFound) {
+			return nil, e
+		}
+	} else {
+		key = newID()
+	}
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
+	if err := s.RequireFeature(FeatureImageWorkbench); err != nil {
+		return nil, err
+	}
 	p, err := validateEcommerceAgentRequest(req, true)
 	if err != nil {
 		return nil, err
@@ -415,15 +443,6 @@ func (s *Service) GenerateEcommerceAgent(ctx context.Context, userID string, req
 		if err != nil {
 			return nil, err
 		}
-	}
-	key := strings.TrimSpace(req.IdempotencyKey)
-	if key == "" {
-		key = newID()
-	}
-	if prior, e := s.repo.EcommerceAgentRunByKey(userID, key); e == nil {
-		return s.replayEcommerceAgent(userID, prior, emit)
-	} else if !errors.Is(e, gorm.ErrRecordNotFound) {
-		return nil, e
 	}
 	analysis, err := s.AnalyzeEcommerceAgent(ctx, userID, req)
 	if err != nil {
@@ -739,6 +758,9 @@ func (s *Service) CancelEcommerceAgent(userID, runID string) (*EcommerceAgentTas
 	return s.EcommerceAgentTask(userID, runID)
 }
 func (s *Service) SaveEcommerceAgentCanvas(userID, projectID string, canvas ecommerceagent.PosterCanvas) (*model.EcommerceAgentCanvasVersion, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	if canvas.CanvasProtocol != "SNAPSHOT" || len(canvas.Objects) > 500 || canvas.Width < 1 || canvas.Height < 1 {
 		return nil, ecommerceErr("INVALID_INPUT", "画布格式无效")
 	}

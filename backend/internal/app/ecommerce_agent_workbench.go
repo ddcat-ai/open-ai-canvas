@@ -379,6 +379,9 @@ func ecommerceWorkbenchPlatform(draft EcommerceDraft) ecommerceagent.Platform {
 }
 
 func (s *Service) RecommendEcommerceCreativeDirectionsContext(ctx context.Context, userID string, req EcommerceCreativeDirectionsRequest) (*EcommerceCreativeDirectionsResponse, error) {
+	if err := s.RequireFeature(FeatureEcommerce); err != nil {
+		return nil, err
+	}
 	if req.AgentModel != nil {
 		return nil, InvalidModelSelection("电商 Agent 模型已改为后台统一指定，请刷新页面后重试")
 	}

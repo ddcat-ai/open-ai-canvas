@@ -9,7 +9,7 @@ import (
 )
 
 func TestEcommerceSkillPromptUsesInstalledUserSkill(t *testing.T) {
-	svc, _, _, _ := creationTestService(t)
+	svc, _, _, _ := ecommerceCreationTestService(t)
 	skill, err := svc.CreateSkill("user", SkillMutationRequest{SkillName: "电商构图", Description: "主图方法", Instruction: "# 电商构图\n每张图使用不同视角。", Tag: "others", IsPrivate: true})
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestEcommerceSkillPromptUsesInstalledUserSkill(t *testing.T) {
 }
 
 func TestEcommerceSkillPromptReadsNewlyInstalledPublicSkill(t *testing.T) {
-	svc, _, _, _ := creationTestService(t)
+	svc, _, _, _ := ecommerceCreationTestService(t)
 	skill, err := svc.CreateSkill("creator", SkillMutationRequest{
 		SkillName: "电商详情图", Description: "商品细节呈现", Instruction: "# 电商详情图\n先展示商品整体，再用特写解释已确认的卖点。", Tag: "others", IsPrivate: false,
 	})
@@ -56,7 +56,7 @@ func TestEcommerceSkillPromptReadsNewlyInstalledPublicSkill(t *testing.T) {
 }
 
 func TestEcommerceProjectsEnforceOwnerRevisionAndResourceOwnership(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestEcommerceProjectsEnforceOwnerRevisionAndResourceOwnership(t *testing.T)
 }
 
 func TestEcommerceDirectionsReceiptUsesMetadataWithNormalizedProviderConfig(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func TestEcommerceDirectionsReceiptUsesMetadataWithNormalizedProviderConfig(t *t
 }
 
 func TestEcommerceProjectPageCountsAndScopesProjects(t *testing.T) {
-	svc, _, _, _ := creationTestService(t)
+	svc, _, _, _ := ecommerceCreationTestService(t)
 	for index := 0; index < 23; index++ {
 		if _, err := svc.CreateEcommerceProject("user"); err != nil {
 			t.Fatal(err)
@@ -178,7 +178,7 @@ func TestEcommerceProjectPageCountsAndScopesProjects(t *testing.T) {
 }
 
 func TestEcommerceProjectDeletionIsScopedAtomicAndCoversAllPages(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	ids := make([]string, 0, 105)
 	for range 105 {
 		project, err := svc.CreateEcommerceProject("user")
@@ -234,7 +234,7 @@ func TestEcommerceProjectDeletionIsScopedAtomicAndCoversAllPages(t *testing.T) {
 
 func ptrInt64(value int64) *int64 { return &value }
 func TestEcommerceProjectModelReferenceMustBelongToUserAndPrimarySelection(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)
@@ -262,7 +262,7 @@ func TestEcommerceProjectModelReferenceMustBelongToUserAndPrimarySelection(t *te
 }
 
 func TestEcommerceProjectReportsPartialGenerationWithoutForgingResults(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)

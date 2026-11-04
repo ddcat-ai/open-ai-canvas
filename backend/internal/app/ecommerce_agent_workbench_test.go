@@ -61,7 +61,7 @@ func TestEcommerceWorkbenchDirectionsTaskSnapshotReceiptAndOwner(t *testing.T) {
 	t.Setenv("AI_MODE", "live")
 	t.Setenv("TEXT_API_KEY", "")
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	if err := db.AutoMigrate(&model.EcommerceCreativeRecommendation{}); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestEcommerceWorkbenchDirectionsTaskSnapshotReceiptAndOwner(t *testing.T) {
 // recognition stage resolves the administrator's recognition model (or the
 // planning model when none is set), and a client-chosen model is refused.
 func TestEcommerceWorkbenchAnalysisModelsAreFixedByAdministrator(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	t.Setenv("AI_MODE", "live")
 	t.Setenv("TEXT_API_KEY", "")
 	if err := db.Model(&model.ModelChannel{}).Where("id = ?", "channel").Updates(map[string]any{"base_url": "https://example.com/v1", "api_key": "server-owned"}).Error; err != nil {
@@ -294,7 +294,7 @@ func TestEcommerceWorkbenchPlanningUsesSharedTaskAndSingleOrder(t *testing.T) {
 	t.Setenv("AI_MODE", "live")
 	t.Setenv("TEXT_API_KEY", "")
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	t.Setenv("REDIS_URL", "")
 	svc.coordinator, _ = platform.NewCoordinator("sqlite")
 	svc.platform = platform.New(svc.repo, svc.coordinator, platformHost{svc: svc})
@@ -721,7 +721,7 @@ func TestEcommerceWorkbenchListingMainImagesNeedNoCopy(t *testing.T) {
 }
 
 func TestEcommerceDetailDirectionsPromptStaysShortAndPlatformRouted(t *testing.T) {
-	svc, db, _, _ := creationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	t.Setenv("AI_MODE", "mock")
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {

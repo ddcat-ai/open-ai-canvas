@@ -39,6 +39,9 @@ func mockEcommerceAgentService(t *testing.T) (*Service, *gorm.DB) {
 	if err = db.Create(&model.CreditAccount{UserID: "owner", AvailableMicrocredits: 1_000_000}).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Create(&model.SystemSetting{Key: featureAvailabilitySettingKey, ValueJSON: `{"ecommerceEnabled":true,"imageWorkbenchEnabled":true}`}).Error; err != nil {
+		t.Fatal(err)
+	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir(), activeCancels: make(map[string]context.CancelFunc)}, db
 }
 
