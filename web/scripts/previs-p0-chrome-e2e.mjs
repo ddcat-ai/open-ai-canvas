@@ -243,6 +243,9 @@ async function connectCdp(cdpPort) {
     await send("Page.enable");
     await send("Log.enable");
     await send("Network.enable");
+    // 场景 G 从 Resource Timing 里取 Vite 预构建依赖的真实 URL，才能拿到页面正在用的同一模块实例。
+    // 浏览器默认只记 250 条，开发模式下应用启动加载的源码模块就能占满，之后的 three / r3f 不会被记录。
+    await send("Page.addScriptToEvaluateOnNewDocument", { source: "performance.setResourceTimingBufferSize(10000);" });
 
     const evaluate = async (expression) => {
         const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
