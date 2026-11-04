@@ -5,6 +5,16 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 火山引擎 TOS 对象存储（#936）
+
+- 已实现：平台存储服务与个人对象存储新增“火山引擎 TOS”（provider `volcengine`）。上传、Range 读取、预签名和删除走官方 S3 兼容域名 `tos-s3-<region>.volces.com`，复用现有 AWS SigV4 实现并强制 virtual-hosted；不新增依赖、表或迁移，不保存 Session Token 与 Path Style。
+- 已实现：只填 Region 时生成外网 S3 兼容 Endpoint；控制台的原生 Endpoint（`tos-<region>.volces.com` / `ivolces.com`）或本 Bucket 域名换算为同地域 `tos-s3` 服务根地址，Region 留空时从域名取得；地域或 Bucket 与官方域名不一致时拒绝保存。资源筛选、删除、连接测试和错误提示支持 TOS。
+- 合并时修正：TOS 只接受官方 Endpoint（`tos-s3-<地域>.volces.com` / `ivolces.com`，原生与 Bucket 域名照常换算），自定义域名提示改选 S3 兼容存储，避免绕过「允许个人 S3」开关与 S3 必须先测通的约束；Region 必须是官方地域格式（如 `cn-beijing`），不能拼出其他主机名。平台换地域后，历史资源按自身域名里的地域签名，读取、预签名和删除不再失败。内网域名 `ivolces.com` 不再被当成浏览器可直连的源站。后台存储资源页可按火山引擎 TOS 筛选并显示名称。
+- 本地验证：存储与设置专项测试（模拟 TOS 服务的写入、Range、删除、预签名与 virtual-hosted SigV4）、前后端换算一致性测试；未连接真实火山引擎账号。
+- [ ] 平台 TOS 从一个地域切到另一个地域后，旧地域的资源仍能预览、下载和删除；展示地址的 `Cache-Control` 响应头符合预期。
+- [ ] 使用真实 Bucket 只填 Region、Bucket、Access Key ID 与 Secret Access Key，测试连接并保存，确认 Endpoint 为 `https://tos-s3-<region>.volces.com`；错误 Secret 提示鉴权失败。
+- [ ] 上传图片、视频与音频后预览、下载、删除；浏览器直连源站需在 Bucket 配置 CORS（站点来源、GET/HEAD 与 Range）。公开 CDN 域名按 `cdnAuthMode=public` 读取。
+
 ## 短剧：任务绑定与花费持久化（#933）
 
 - 已实现：沿用任务准入，任务、计费预留和短剧作业绑定在同一事务提交后才唤醒执行队列；覆盖文本、图片、视频、提示词精简续任务与本地时间线渲染。

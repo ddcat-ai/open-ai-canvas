@@ -29,11 +29,18 @@ const encryptedSettingPrefix = "enc:v1:"
 const defaultOSSPathPrefix = "open-ai-canvas"
 
 const (
-	aliyunOSSProvider  = "aliyun"
-	tencentCOSProvider = "tencent"
-	qiniuKodoProvider  = "qiniu"
-	s3Provider         = "s3"
+	aliyunOSSProvider     = "aliyun"
+	tencentCOSProvider    = "tencent"
+	qiniuKodoProvider     = "qiniu"
+	volcengineTOSProvider = "volcengine"
+	s3Provider            = "s3"
 )
+
+const unsupportedOSSProviderMessage = "仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo、火山引擎 TOS 和通用 S3"
+
+func supportedOSSProvider(provider string) bool {
+	return oneOf(provider, aliyunOSSProvider, tencentCOSProvider, qiniuKodoProvider, volcengineTOSProvider, s3Provider)
+}
 
 type OSSSettingRequest struct {
 	Enabled           bool   `json:"enabled"`
@@ -599,8 +606,8 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 	if next.Delivery.CDNAuthMode != "" && next.Delivery.CDNAuthMode != "public" && next.Delivery.CDNAuthMode != "qiniu" {
 		return next, BadAuthRequest("CDN 鉴权方式无效，仅支持 public 或 qiniu")
 	}
-	if next.Provider != aliyunOSSProvider && next.Provider != tencentCOSProvider && next.Provider != qiniuKodoProvider && next.Provider != s3Provider {
-		return next, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo 和通用 S3")
+	if !supportedOSSProvider(next.Provider) {
+		return next, BadAuthRequest(unsupportedOSSProviderMessage)
 	}
 	if next.Provider == s3Provider {
 		switch next.S3Preset {
@@ -617,6 +624,11 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 	if next.SessionToken == "" && next.Provider == current.Provider {
 		next.SessionToken = current.SessionToken
 	}
+	if next.Provider == volcengineTOSProvider {
+		// 火山引擎 TOS 固定使用长期 AK/SK 和 virtual-hosted 访问，不保存 S3 专用选项。
+		next.SessionToken = ""
+		next.PathStyle = false
+	}
 	if next.Enabled {
 		if next.Bucket == "" {
 			return next, BadAuthRequest("请填写对象存储 Bucket")
@@ -628,6 +640,9 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 			if next.Provider == qiniuKodoProvider {
 				return next, BadAuthRequest("请填写七牛云 Kodo 上传 Endpoint")
 			}
+			if next.Provider == volcengineTOSProvider {
+				return next, BadAuthRequest("请填写火山引擎 TOS Region 或 Endpoint")
+			}
 			if next.Provider == s3Provider {
 				return next, BadAuthRequest("请填写 S3 Endpoint 服务根 URL")
 			}
@@ -636,8 +651,13 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		if next.Provider == s3Provider && next.Region == "" {
 			return next, BadAuthRequest("请填写 S3 Region")
 		}
+		if next.Provider == volcengineTOSProvider {
+			if err := validateTOSLocation(next); err != nil {
+				return next, err
+			}
+		}
 		var endpointErr error
-		if next.Provider == s3Provider {
+		if next.Provider == s3Provider || next.Provider == volcengineTOSProvider {
 			_, endpointErr = validateStorageEndpoint(next.Endpoint)
 		} else {
 			_, endpointErr = ValidateOutboundURL(next.Endpoint)

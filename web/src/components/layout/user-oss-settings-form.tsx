@@ -3,7 +3,7 @@ import { Switch } from "@/components/ui/base/switch";
 import { Cloud, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, validateOSSConnectionDraft, type OSSConnectionTestResult, type OSSProvider, type S3Preset } from "@/lib/oss-settings";
+import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, S3_PRESET_OPTIONS, validateOSSConnectionDraft, VOLCENGINE_TOS_REGION_HINT, type OSSConnectionTestResult, type OSSProvider, type S3Preset } from "@/lib/oss-settings";
 import { getUserOSSSetting, testUserOSSConnection, updateUserOSSSetting, type UserOSSSetting } from "@/services/api/resources";
 import { useUserStore } from "@/stores/use-user-store";
 import { StatusBadge } from "@/components/ui/base/badges";
@@ -41,11 +41,12 @@ export function UserOSSSettingsForm() {
     const provider = Form.useWatch("provider", form) || "aliyun";
     const isTencentCOS = provider === "tencent";
     const isQiniuKodo = provider === "qiniu";
+    const isVolcengineTOS = provider === "volcengine";
     const isS3 = provider === "s3";
     const s3Preset = Form.useWatch("s3Preset", form) || "custom";
     const hasCurrentProviderSecret = Boolean(setting && setting.provider === provider && setting.hasAccessKeySecret);
-    const accessKeyIdLabel = isTencentCOS ? "SecretId" : isQiniuKodo ? "AccessKey" : "AccessKey ID";
-    const accessKeySecretLabel = isTencentCOS ? "SecretKey" : isQiniuKodo ? "SecretKey" : "AccessKey Secret";
+    const accessKeyIdLabel = isTencentCOS ? "SecretId" : isQiniuKodo ? "AccessKey" : isVolcengineTOS ? "Access Key ID" : "AccessKey ID";
+    const accessKeySecretLabel = isTencentCOS ? "SecretKey" : isQiniuKodo ? "SecretKey" : isVolcengineTOS ? "Secret Access Key" : "AccessKey Secret";
 
     useEffect(() => {
         if (!actor?.id) return;
@@ -148,7 +149,7 @@ export function UserOSSSettingsForm() {
                 </Form.Item>
                 <Form.Item name="provider" label="存储服务" rules={[{ required: true, message: "请选择存储服务" }]} className="mb-3">
                     <Select
-                        options={[{ label: "阿里云 OSS", value: "aliyun" }, { label: "腾讯云 COS", value: "tencent" }, { label: "七牛云 Kodo", value: "qiniu" }, { label: "S3 兼容存储", value: "s3", disabled: setting?.allowUserS3 === false }]}
+                        options={[{ label: "阿里云 OSS", value: "aliyun" }, { label: "腾讯云 COS", value: "tencent" }, { label: "七牛云 Kodo", value: "qiniu" }, { label: "火山引擎 TOS", value: "volcengine" }, { label: "S3 兼容存储", value: "s3", disabled: setting?.allowUserS3 === false }]}
                         onChange={(nextProvider: OSSFormValues["provider"]) => {
                             if (nextProvider !== provider) form.setFieldsValue({ s3Preset: "custom", region: "", endpoint: "", cdnBaseUrl: "", cdnAuthMode: "", requireCDN: false, allowPrivateProxy: false, bucket: "", accessKeyId: "", accessKeySecret: "", sessionToken: "", pathStyle: false });
                         }}
@@ -159,20 +160,51 @@ export function UserOSSSettingsForm() {
                         <Select options={S3_PRESET_OPTIONS} onChange={(preset: S3Preset) => form.setFieldsValue(getS3PresetHints(preset))} />
                     </Form.Item>
                 ) : null}
-                <Form.Item name="region" label="Region" className="mb-3">
-                    <Input spellCheck={false} placeholder={isS3 ? getS3PresetHints(s3Preset).region : isTencentCOS ? "ap-guangzhou" : isQiniuKodo ? "z0 / cn-east-1" : "oss-cn-hangzhou"} />
+                <Form.Item name="region" label="Region" extra={isVolcengineTOS ? `可选：${VOLCENGINE_TOS_REGION_HINT}。` : undefined} className="mb-3">
+                    <Input spellCheck={false} placeholder={isS3 ? getS3PresetHints(s3Preset).region : isTencentCOS ? "ap-guangzhou" : isQiniuKodo ? "z0 / cn-east-1" : isVolcengineTOS ? "cn-beijing" : "oss-cn-hangzhou"} />
                 </Form.Item>
-                <Form.Item name="endpoint" label={isQiniuKodo ? "上传 Endpoint" : "Endpoint"} extra={isS3 ? getS3PresetHints(s3Preset).help : isTencentCOS ? "可留空，系统会根据 Region 生成标准 COS Endpoint。" : undefined} className="mb-3">
-                    <Input inputMode="url" spellCheck={false} placeholder={isS3 ? getS3PresetHints(s3Preset).endpoint : isTencentCOS ? "https://cos.ap-guangzhou.myqcloud.com" : isQiniuKodo ? "https://up-z0.qiniup.com" : "https://oss-cn-hangzhou.aliyuncs.com"} />
+                <Form.Item
+                    name="endpoint"
+                    label={isQiniuKodo ? "上传 Endpoint" : "Endpoint"}
+                    extra={
+                        isS3
+                            ? getS3PresetHints(s3Preset).help
+                            : isTencentCOS
+                              ? "可留空，系统会根据 Region 生成标准 COS Endpoint。"
+                              : isVolcengineTOS
+                                ? "可留空，系统会根据 Region 生成 S3 兼容 Endpoint；控制台的原生 Endpoint 或 Bucket 域名会换算为同地域 tos-s3 地址。"
+                                : undefined
+                    }
+                    className="mb-3"
+                >
+                    <Input
+                        inputMode="url"
+                        spellCheck={false}
+                        placeholder={
+                            isS3
+                                ? getS3PresetHints(s3Preset).endpoint
+                                : isTencentCOS
+                                  ? "https://cos.ap-guangzhou.myqcloud.com"
+                                  : isQiniuKodo
+                                    ? "https://up-z0.qiniup.com"
+                                    : isVolcengineTOS
+                                      ? "https://tos-s3-cn-beijing.volces.com"
+                                      : "https://oss-cn-hangzhou.aliyuncs.com"
+                        }
+                    />
                 </Form.Item>
                 <Form.Item
                     name="cdnBaseUrl"
                     label={isQiniuKodo ? "绑定域名（可选）" : isS3 ? "公开 CDN（可选）" : "CDN 加速域名"}
-                    extra={isTencentCOS
-                        ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
-                        : isQiniuKodo
-                            ? "选填。配置可访问的绑定域名后，浏览器直接从七牛下载与预览；不配置时也必须保证对象源站可由用户浏览器访问，不会由平台中转媒体正文。"
-                            : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"}
+                    extra={
+                        isTencentCOS
+                            ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有桶需开启 CDN 私有存储桶访问。CDN URL 不附带 COS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
+                            : isQiniuKodo
+                              ? "选填。配置可访问的绑定域名后，浏览器直接从七牛下载与预览；不配置时也必须保证对象源站可由用户浏览器访问，不会由平台中转媒体正文。"
+                              : isVolcengineTOS
+                                ? "选填。上传仍走 Endpoint，下载与预览改走 CDN；私有 Bucket 需在火山引擎 CDN 开启私有桶回源。CDN URL 不附带 TOS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
+                                : "选填。上传仍走 Endpoint，下载与预览改走 CDN；阿里云私有 Bucket 需开启 CDN 私有 Bucket 回源。CDN URL 不附带 OSS 签名，未配置 CDN URL 鉴权时链接将长期可访问。"
+                    }
                     rules={[{ type: "url", message: "请填写完整的 http/https CDN 加速域名" }]}
                     className="mb-3"
                 >
@@ -181,7 +213,7 @@ export function UserOSSSettingsForm() {
                 <Form.Item
                     name="cdnAuthMode"
                     label="CDN 访问鉴权"
-                    extra={isQiniuKodo ? "七牛私有 CDN 可选择七牛签名；公开绑定域名选择公开 CDN。阿里云/腾讯云私有 CDN 暂不自动签名。" : "公开 CDN 适合 CDN 自行鉴权；平台目前不会自动签发阿里云/腾讯云私有 CDN URL。"}
+                    extra={isQiniuKodo ? "七牛私有 CDN 可选择七牛签名；公开绑定域名选择公开 CDN。阿里云/腾讯云/火山引擎私有 CDN 暂不自动签名。" : "公开 CDN 适合 CDN 自行鉴权；平台目前不会自动签发阿里云/腾讯云/火山引擎私有 CDN URL。"}
                     className="mb-3"
                 >
                     <Select options={[{ label: "未配置", value: "" }, { label: "公开 CDN", value: "public" }, { label: "七牛私有下载签名", value: "qiniu", disabled: !isQiniuKodo }]} />
@@ -193,16 +225,16 @@ export function UserOSSSettingsForm() {
                     <Switch checkedChildren="允许" unCheckedChildren="禁止" />
                 </Form.Item>
                 <Form.Item name="bucket" label="Bucket" className="mb-3">
-                    <Input spellCheck={false} placeholder={isTencentCOS ? "my-canvas-assets-1250000000" : isQiniuKodo ? "七牛云存储空间名称" : "my-canvas-assets"} />
+                    <Input spellCheck={false} placeholder={isTencentCOS ? "my-canvas-assets-1250000000" : isQiniuKodo ? "七牛云存储空间名称" : isVolcengineTOS ? "火山引擎存储桶名称" : "my-canvas-assets"} />
                 </Form.Item>
                 <Form.Item name="pathPrefix" label="路径前缀" className="mb-3">
                     <Input spellCheck={false} placeholder={DEFAULT_OSS_PATH_PREFIX} />
                 </Form.Item>
                 <Form.Item name="accessKeyId" label={accessKeyIdLabel} className="mb-3 xl:col-span-1">
-                    <Input autoComplete="off" spellCheck={false} placeholder={isTencentCOS ? "腾讯云 SecretId" : isQiniuKodo ? "七牛云 AccessKey" : "阿里云 AccessKey ID"} />
+                    <Input autoComplete="off" spellCheck={false} placeholder={isTencentCOS ? "腾讯云 SecretId" : isQiniuKodo ? "七牛云 AccessKey" : isVolcengineTOS ? "火山引擎 Access Key ID" : "阿里云 AccessKey ID"} />
                 </Form.Item>
                 <Form.Item name="accessKeySecret" label={hasCurrentProviderSecret ? `${accessKeySecretLabel}（留空保留）` : accessKeySecretLabel} className="mb-3 xl:col-span-2">
-                    <Input.Password autoComplete="new-password" spellCheck={false} placeholder={hasCurrentProviderSecret ? "留空保留已加密密钥" : isTencentCOS ? "腾讯云 SecretKey" : isQiniuKodo ? "七牛云 SecretKey" : "阿里云 AccessKey Secret"} />
+                    <Input.Password autoComplete="new-password" spellCheck={false} placeholder={hasCurrentProviderSecret ? "留空保留已加密密钥" : isTencentCOS ? "腾讯云 SecretKey" : isQiniuKodo ? "七牛云 SecretKey" : isVolcengineTOS ? "火山引擎 Secret Access Key" : "阿里云 AccessKey Secret"} />
                 </Form.Item>
                 {isS3 ? (
                     <>

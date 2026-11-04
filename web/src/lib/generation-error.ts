@@ -250,7 +250,7 @@ function containsInfrastructureDetails(value: string) {
 function resourceStorageFailureMessage(value: string) {
     if (!value) return "";
     if (/\bUserDisable\b/i.test(value)) return "对象存储账号已停用，请检查或更换对象存储配置。";
-    if (/(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云)/i.test(value)) {
+    if (/(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云|火山引擎 TOS)/i.test(value)) {
         return "参考素材上传到对象存储失败，请检查对象存储配置后重试。";
     }
     return "";
