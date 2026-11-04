@@ -209,6 +209,8 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 短剧表直接持有的资源不在任何 JSON 文档里，单独查询并记为 `短剧` 引用：`drama_casts.image_resource_id`、`drama_segments.video_resource_id` / `tail_frame_resource_id`、`drama_episodes.final_resource_id` 与 `drama_takes.resource_id`（只看当前用户的作品）。素材“彻底删除”和 24 小时孤儿资源清理都保留这些资源；此前它们未纳入引用快照，上传的参考图与段视频尾帧可能被误清理。
 
+反馈附件只记录在 `user_feedbacks.attachments` JSON 中，引用快照按提交者读取并记为 `用户反馈` 文档引用；孤儿清理在删除事务内也会再次检查该字段，管理员删除资源时显示为阻塞引用。此前附件未纳入快照，提交 24 小时后会被当作孤儿删除。已上传但未提交反馈的附件仍按孤儿规则清理。
+
 ## 结构迁移与版本
 
 版本 52 `user_avatar_presets` 为 `users` 新增 `avatar_preset`，保存系统头像的稳定标识：`person`、`director`、`camera`、`cat`、`rabbit`、`robot`、`rocket`、`sparkles`。系统头像由前端共享组件渲染；选择时原子更新 default 模式、预设标识并清除上传图片。上传个人头像保留上次系统头像偏好，后续可以再次选择；未知标识被拒绝，不保存客户端提供的任意图片地址。

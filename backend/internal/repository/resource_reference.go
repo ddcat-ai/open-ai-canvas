@@ -418,6 +418,15 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	for _, draft := range announcementDrafts {
 		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "公告草稿", ID: draft.ResourceID, ResourceID: draft.ResourceID})
 	}
+
+	// 反馈附件只记录在 user_feedbacks.attachments 中，不进入素材或画布；漏掉会被孤儿清理删除，后台收件箱无法查看。
+	var feedbacks []model.UserFeedback
+	if err := r.db.Select("id", "title", "attachments").Where("user_id = ? AND attachments <> ? AND attachments <> ?", userID, "", "[]").Find(&feedbacks).Error; err != nil {
+		return snapshot, err
+	}
+	for _, feedback := range feedbacks {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: FeedbackResourceReferenceKind, ID: feedback.ID, Title: feedback.Title, PrimaryJSON: feedback.Attachments})
+	}
 	return snapshot, nil
 }
 

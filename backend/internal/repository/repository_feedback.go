@@ -6,6 +6,9 @@ import (
 	"yingce/backend/internal/model"
 )
 
+// FeedbackResourceReferenceKind 标记反馈附件对资源的引用；孤儿清理和管理员删除都保留这些资源。
+const FeedbackResourceReferenceKind = "用户反馈"
+
 type FeedbackFilter struct {
 	Type     string
 	Status   string

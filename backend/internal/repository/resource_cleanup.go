@@ -52,7 +52,11 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 			if err := tx.Model(&model.CanvasProject{}).Where("user_id = ?", resource.UserID).Pluck("payload_json", &canvasDocuments).Error; err != nil {
 				return err
 			}
-			documentsByUser[resource.UserID] = append(assetDocuments, canvasDocuments...)
+			var feedbackDocuments []string
+			if err := tx.Model(&model.UserFeedback{}).Where("user_id = ?", resource.UserID).Pluck("attachments", &feedbackDocuments).Error; err != nil {
+				return err
+			}
+			documentsByUser[resource.UserID] = append(append(assetDocuments, canvasDocuments...), feedbackDocuments...)
 		}
 		for _, resource := range current {
 			storageKey := "resource:" + resource.ID + `"`
