@@ -1,0 +1,178 @@
+/* 电商 Agent 配置页（/admin/ecommerce/agent）。分区沿用 SettingsSectionCard，卡内不再套卡：
+   分组之间只用分隔线，字段统一“标签 12px / 控件 / 说明 11px”三段。 */
+[data-admin-root] .eac-page {
+    max-width: 1080px;
+    padding-bottom: 32px;
+}
+[data-admin-root] .eac-section {
+    border: 1px solid var(--admin-card-border);
+}
+[data-admin-root] .eac-section .admin-settings-section-summary,
+[data-admin-root] .eac-section .admin-settings-section-content {
+    background: var(--admin-layer-1);
+}
+[data-admin-root] .eac-section .admin-settings-section-footer {
+    background: var(--admin-layer-1);
+}
+[data-admin-root] .eac-save-state {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+[data-admin-root] .eac-save-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+[data-admin-root] .eac-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+}
+
+/* 开放状态 */
+[data-admin-root] .eac-availability {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+[data-admin-root] .eac-availability > li {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+}
+[data-admin-root] .eac-availability > li + li {
+    border-top: 1px solid var(--admin-divider);
+}
+[data-admin-root] .eac-availability-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+    color: var(--admin-text-secondary);
+}
+[data-admin-root] .eac-availability > li > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+[data-admin-root] .eac-availability strong {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+[data-admin-root] .eac-availability > li > div > span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+/* 创作助手 */
+[data-admin-root] .eac-groups {
+    display: grid;
+}
+[data-admin-root] .eac-group {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+}
+[data-admin-root] .eac-group + .eac-group {
+    border-top: 1px solid var(--admin-divider);
+}
+[data-admin-root] .eac-group > header h3 {
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+[data-admin-root] .eac-group > header p {
+    margin: 4px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+[data-admin-root] .eac-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+[data-admin-root] .eac-grid.is-compact {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+[data-admin-root] .eac-field {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    min-width: 0;
+}
+[data-admin-root] .eac-field.is-wide {
+    grid-column: 1 / -1;
+}
+[data-admin-root] .eac-field-label {
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+[data-admin-root] .eac-field-hint {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+[data-admin-root] .eac-field :is(.ant-select, .ant-input-number) {
+    width: 100%;
+}
+[data-admin-root] .eac-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+}
+[data-admin-root] .eac-switch-row > div {
+    display: grid;
+    gap: 2px;
+}
+[data-admin-root] .eac-switch-row strong {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+[data-admin-root] .eac-switch-row span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+[data-admin-root] .eac-switch-inline {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: 10px;
+}
+[data-admin-root] .eac-inline-error {
+    margin: 0;
+    color: var(--admin-status-error);
+    font-size: 12px;
+}
+@media (max-width: 860px) {
+    [data-admin-root] .eac-grid,
+    [data-admin-root] .eac-grid.is-compact {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    [data-admin-root] .eac-availability > li {
+        grid-template-columns: 32px minmax(0, 1fr);
+    }
+    [data-admin-root] .eac-availability > li > .admin-status-badge,
+    [data-admin-root] .eac-availability > li > :last-child:not(div) {
+        grid-column: 2;
+        justify-self: start;
+    }
+}

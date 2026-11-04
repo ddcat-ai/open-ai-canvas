@@ -1,0 +1,48 @@
+/* 知识与技能页（/admin/ecommerce/library）：标签内容头 + 概况数字。 */
+[data-admin-root] .eal-page {
+    padding: 16px 0 32px;
+}
+[data-admin-root] .eal-panel {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+[data-admin-root] .eal-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+}
+[data-admin-root] .eal-panel-head > p {
+    flex: 1 1 360px;
+    max-width: 760px;
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+[data-admin-root] .eal-panel-actions {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+[data-admin-root] .eal-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+@media (max-width: 900px) {
+    [data-admin-root] .eal-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+[data-admin-root] .eal-stack {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+[data-admin-root] .eal-stack > :is(.ant-typography, section) {
+    margin: 0;
+}

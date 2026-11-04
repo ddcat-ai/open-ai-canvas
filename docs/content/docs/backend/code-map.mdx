@@ -7,13 +7,13 @@ description: 从产品功能快速定位主要代码入口
 
 ## 电商 Agent 与后台知识库
 
-- 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-knowledge-page.tsx`、`ecommerce-stage-models.tsx`、`knowledge-domain-coverage.ts`。
+- 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-agent-config-page.tsx`（开放状态、阶段模型 `ecommerce-stage-models.tsx`、创作助手 `ecommerce-assistant-settings.tsx`）；`ecommerce-management-page.tsx`（知识与技能标签页：`ecommerce-knowledge-page.tsx`、`ecommerce-skills-page.tsx`、`ecommerce-categories-page.tsx`，内容头 `ecommerce-library-panel.tsx`）；`knowledge-domain-coverage.ts`。
 - API：`web/src/services/api/ecommerce.ts`、`ecommerce-knowledge.ts`；会话恢复：`web/src/services/ecommerce-session.ts`。
 - 服务端：`backend/internal/handler/ecommerce*.go` → `app/ecommerce*.go` → `repository/ecommerce*.go`、`model/models_ecommerce*.go`；领域协议与知识方法在 `ecommerceagent/`、`ecommerceskills/`。
 - 数据迁移：`backend/internal/database/ecommerce_migration.go`；原件受限导出：`assets/access.go`、`app/resource_access.go`。详见 [电商 Agent 与知识库](./ecommerce-agent)。
 - 离线知识数据与校验清单：`backend/internal/ecommerceknowledge/bundle/`；解码与校验：`ecommerceknowledge/bundle.go`；首次启动初始化：`app/ecommerce_knowledge_bundle.go` 和 `cmd/server/main.go`；维护入口：`cmd/ecommerce-knowledge`。
 - Skills 管理与安装：`app/ecommerce_managed_skills.go`、`app/ecommerce_skill_install.go`、`ecommerceskills/catalog.go` 与 `packages/`；行业字典：`ecommercecatalog/`、`app/ecommerce_industry_taxonomy.go`；后台对应 `pages/admin/ecommerce-skills-page.tsx`、`ecommerce-categories-page.tsx`。
-- 小夜：`web/src/components/layout/yoru-widget.tsx`、`yoru-widget.css`、`web/src/assets/yoru/`；设置页 `pages/admin/settings/yoru-settings-page.tsx`；API 和鉴权计费接入在 `backend/internal/handler/yoru_assistant.go`、`app/yoru_assistant.go`。
+- 小夜：`web/src/components/layout/yoru-widget.tsx`、`yoru-widget.css`、`web/src/assets/yoru/`；设置在 `pages/admin/ecommerce-assistant-settings.tsx`（「电商 Agent 配置」页的创作助手分区）；API 和鉴权计费接入在 `backend/internal/handler/yoru_assistant.go`、`app/yoru_assistant.go`。
 - 平台资料：`backend/internal/ecommerceagent/platform_knowledge.json` 由前后端共用，前端镜像显式复制该文件；安全排版与市场选角分别位于 `layout_safety.go`、`human_casting.go`，前端人物指导在 `pages/ecommerce/human-photography.ts`。
 
 ## 短剧自动制作

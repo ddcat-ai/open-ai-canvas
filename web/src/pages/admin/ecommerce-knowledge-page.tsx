@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, App, Button, Input, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import { Database, RefreshCw, Search } from "lucide-react";
-import { EcommerceStageModels } from "./ecommerce-stage-models";
-import { AdminPageFrame } from "./components/admin-shell";
+import { AdminStatTile } from "./components/admin-ui";
+import { EcommerceLibraryPanel } from "./ecommerce-library-panel";
 import { commerceKnowledgeDomainRows } from "./knowledge-domain-coverage";
 import {
     getCommerceKnowledgeStats,
@@ -73,9 +73,8 @@ export default function EcommerceKnowledgePage() {
         }
     };
     return (
-        <AdminPageFrame
-            title="电商视觉知识库"
-            description="固定版本导入、来源核查与人工审核。社区文档默认待审核；商品分类来自 Shopify 官方 Release。"
+        <EcommerceLibraryPanel
+            description="电商 Agent 策划时检索的视觉规则。来源按固定版本导入，社区文档默认待审核；商品分类来自 Shopify 官方 Release。"
             actions={
                 <Space>
                     <Button icon={<RefreshCw size={14} />} onClick={() => void refresh()} loading={loading}>
@@ -86,35 +85,16 @@ export default function EcommerceKnowledgePage() {
                     </Button>
                 </Space>
             }
-            scroll
         >
-            {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
-            <EcommerceStageModels />
-            <Space wrap size={16} style={{ marginBottom: 20 }}>
-                <Typography.Text>
-                    知识条目 <strong>{stats?.entryCount ?? "—"}</strong>
-                </Typography.Text>
-                <Typography.Text>
-                    有效 <strong>{stats?.approvedCount ?? "—"}</strong>
-                </Typography.Text>
-                <Typography.Text>
-                    待审核 <strong>{stats?.pendingCount ?? "—"}</strong>
-                </Typography.Text>
-                <Typography.Text>
-                    已拒绝 <strong>{stats?.rejectedCount ?? "—"}</strong>
-                </Typography.Text>
-                <Typography.Text>
-                    已过期 <strong>{stats?.expiredCount ?? "—"}</strong>
-                </Typography.Text>
-                <Typography.Text>
-                    来源 <strong>{stats?.sourceCount ?? "—"}</strong>
-                </Typography.Text>
-                <Typography.Text>
-                    最近同步去重 <strong>{stats?.lastSyncDuplicateCount ?? "—"}</strong>
-                </Typography.Text>
-            </Space>
+            {error ? <Alert type="error" showIcon message={error} /> : null}
+            <div className="eal-stats" aria-label="知识库概况">
+                <AdminStatTile label="知识条目" value={stats?.entryCount ?? "—"} detail={`来源 ${stats?.sourceCount ?? "—"} 个`} />
+                <AdminStatTile label="有效" value={stats?.approvedCount ?? "—"} detail="已审核且未过期" />
+                <AdminStatTile label="待审核" value={stats?.pendingCount ?? "—"} detail="社区来源默认待审核" />
+                <AdminStatTile label="已拒绝 / 已过期" value={stats ? `${stats.rejectedCount} / ${stats.expiredCount}` : "—"} detail={`最近同步去重 ${stats?.lastSyncDuplicateCount ?? "—"} 条`} />
+            </div>
             {stats ? (
-                <>
+                <div className="eal-stack">
                     <Typography.Paragraph type="secondary">
                         已覆盖分类：
                         {Object.entries(stats.categoryCoverage || {})
@@ -122,7 +102,7 @@ export default function EcommerceKnowledgePage() {
                             .join(" · ") || "暂无"}
                         。分类数量是知识记录数，不能代表各类目视觉规则已完整覆盖。
                     </Typography.Paragraph>
-                    <section aria-label="知识域覆盖" style={{ marginBottom: 24 }}>
+                    <section aria-label="知识域覆盖">
                         <Typography.Title level={5} style={{ marginTop: 0 }}>
                             知识域
                         </Typography.Title>
@@ -135,7 +115,7 @@ export default function EcommerceKnowledgePage() {
                             ))}
                         </Space>
                     </section>
-                </>
+                </div>
             ) : null}
             <Tabs
                 items={[
@@ -143,7 +123,7 @@ export default function EcommerceKnowledgePage() {
                         key: "sources",
                         label: `知识源 · ${stats?.sourceCount ?? 0}`,
                         children: (
-                            <>
+                            <div className="eal-stack">
                                 <Input allowClear prefix={<Search size={14} />} value={sourceSearch} onChange={(event) => setSourceSearch(event.target.value)} placeholder="搜索知识源名称、仓库、许可或状态" style={{ maxWidth: 430, marginBottom: 14 }} />
                                 <Table
                                     rowKey="id"
@@ -151,7 +131,7 @@ export default function EcommerceKnowledgePage() {
                                     loading={loading}
                                     dataSource={visibleSources}
                                     pagination={false}
-                                    style={{ marginBottom: 24 }}
+
                                     columns={[
                                         {
                                             title: "知识源",
@@ -181,15 +161,15 @@ export default function EcommerceKnowledgePage() {
                                     ]}
                                     expandable={{ expandedRowRender: (source) => <Typography.Paragraph style={{ whiteSpace: "pre-wrap", maxWidth: 760 }}>{source.licenseText || source.errorMessage || "暂无许可证文本"}</Typography.Paragraph> }}
                                 />
-                            </>
+                            </div>
                         ),
                     },
                     {
                         key: "entries",
                         label: `知识条目 · ${stats?.entryCount ?? 0}`,
                         children: (
-                            <>
-                                <Space wrap style={{ marginBottom: 12 }}>
+                            <div className="eal-stack">
+                                <Space wrap>
                                     <Input.Search
                                         placeholder="搜索知识标题"
                                         allowClear
@@ -213,7 +193,7 @@ export default function EcommerceKnowledgePage() {
                                         ]}
                                     />
                                 </Space>
-                                {!loading && data?.total === 0 ? <Alert type="info" showIcon message="当前筛选没有匹配条目。可切换为“有效”或“全部”，或清空搜索词查看已有知识。" style={{ marginBottom: 12 }} /> : null}
+                                {!loading && data?.total === 0 ? <Alert type="info" showIcon message="当前筛选没有匹配条目。可切换为“有效”或“全部”，或清空搜索词查看已有知识。" /> : null}
                                 <Table
                                     rowKey="id"
                                     size="small"
@@ -261,11 +241,11 @@ export default function EcommerceKnowledgePage() {
                                     ]}
                                     expandable={{ expandedRowRender: (item) => <Typography.Paragraph style={{ whiteSpace: "pre-wrap", maxWidth: 760 }}>{item.contentJson}</Typography.Paragraph> }}
                                 />
-                            </>
+                            </div>
                         ),
                     },
                 ]}
             />
-        </AdminPageFrame>
+        </EcommerceLibraryPanel>
     );
 }

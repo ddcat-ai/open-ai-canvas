@@ -20,7 +20,7 @@ const modelFromValue = (value?: string): CommerceOrchestrationModel => (value?.s
 const emptyRole = (): CommerceOrchestrationRole => ({ model: {}, fallback: {} });
 
 /** The administrator's ecommerce Agent models; every ecommerce page and canvas node uses them. */
-export function EcommerceStageModels() {
+export function EcommerceStageModels({ embedded = false }: { embedded?: boolean }) {
     const { message } = App.useApp();
     const [settings, setSettings] = useState<CommerceOrchestrationSetting>();
     const [models, setModels] = useState<CommerceModelOption[]>([]);
@@ -64,13 +64,14 @@ export function EcommerceStageModels() {
     }
     const selectable = models.filter((item) => !item.disabled).length;
     return (
-        <section className="ecommerce-stage-models" aria-label="电商 Agent 阶段模型">
+        <section className={`ecommerce-stage-models${embedded ? " is-embedded" : ""}`} aria-label="电商 Agent 阶段模型">
             <header>
                 <div>
-                    <Typography.Text strong>电商 Agent 阶段模型</Typography.Text>
+                    {embedded ? null : <Typography.Text strong>电商 Agent 阶段模型</Typography.Text>}
                     <Typography.Paragraph type="secondary">
-                        按执行顺序为每个阶段指定模型，保存后所有用户的电商页与画布电商 Agent 节点都使用这里的配置，前台不展示也不能更改。主模型停用时自动改用备用模型。每个阶段都要读取商品图，当前可选 {selectable}{" "}
-                        个支持图片输入的模型。生图模型仍由用户在电商页面选择。
+                        {embedded
+                            ? `按执行顺序排列。每个阶段都要读商品图，当前有 ${selectable} 个支持图片输入的模型可选；主模型不可用时改用备用模型。`
+                            : `按执行顺序为每个阶段指定模型，保存后所有用户的电商页与画布电商 Agent 节点都使用这里的配置，前台不展示也不能更改。主模型停用时自动改用备用模型。每个阶段都要读取商品图，当前可选 ${selectable} 个支持图片输入的模型。生图模型仍由用户在电商页面选择。`}
                     </Typography.Paragraph>
                 </div>
                 <Button icon={<RefreshCw size={14} />} loading={loading} onClick={() => void load()}>

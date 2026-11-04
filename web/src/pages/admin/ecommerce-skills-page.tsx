@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, App, Button, Input, Progress, Select, Space, Switch, Table, Tag, Typography, Upload } from "antd";
 import { Download, RefreshCw, Sparkles } from "lucide-react";
 import { AppModal } from "@/components/ui/product/app-modal";
-import { AdminPageFrame } from "./components/admin-shell";
+import { EcommerceLibraryPanel } from "./ecommerce-library-panel";
 import { installEcommerceSkillFile, installEcommerceSkillGitHub, renameEcommerceSkill, listEcommerceManagedSkills, setEcommerceManagedSkillEnabled, type EcommerceManagedSkill } from "@/services/api/ecommerce-skills";
 import "./ecommerce-skills.css";
 
@@ -96,8 +96,7 @@ export default function EcommerceSkillsPage() {
         }
     };
     return (
-        <AdminPageFrame
-            title="电商 Skills"
+        <EcommerceLibraryPanel
             description="按商品、参考方式、提示词与已选风格调用适用的技能方法，并交给已配置的图片模型执行。"
             actions={
                 <Space wrap>
@@ -116,18 +115,17 @@ export default function EcommerceSkillsPage() {
                     </Button>
                 </Space>
             }
-            scroll
         >
-            {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
-            <Space wrap style={{ marginBottom: 16 }}>
+            {error ? <Alert type="error" showIcon message={error} /> : null}
+            <Space wrap>
                 <Tag icon={<Sparkles size={12} />}>已安装 {skills.length}</Tag>
                 <Typography.Text>已启用 {skills.filter((skill) => skill.enabled).length}</Typography.Text>
                 <Typography.Text type="secondary">
                     GitHub 适配 {skills.filter((skill) => skill.origin === "github-adapted").length} · 原创 {skills.filter((skill) => skill.origin === "first-party").length}
                 </Typography.Text>
             </Space>
-            <Alert type="info" showIcon message="安装后默认启用，Agent 从全部已启用 Skills 中分析匹配，每轮按需调用最多 8 项。GitHub 安装自动跟随来源分支更新；已提交任务保留当时的技能快照。" style={{ marginBottom: 20 }} />
-            <Space wrap style={{ marginBottom: 16 }}>
+            <Alert type="info" showIcon message="安装后默认启用，Agent 从全部已启用 Skills 中分析匹配，每轮按需调用最多 8 项。GitHub 安装自动跟随来源分支更新；已提交任务保留当时的技能快照。" />
+            <Space wrap>
                 <Input.Search allowClear placeholder="搜索技能、用途或来源" value={search} onChange={(event) => setSearch(event.target.value)} style={{ width: 300 }} />
                 <Select
                     aria-label="技能来源"
@@ -262,6 +260,6 @@ export default function EcommerceSkillsPage() {
                     </Button>
                 </Space>
             </AppModal>
-        </AdminPageFrame>
+        </EcommerceLibraryPanel>
     );
 }

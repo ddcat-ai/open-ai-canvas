@@ -64,3 +64,20 @@
         grid-column: 2;
     }
 }
+/* 嵌入「电商 Agent 配置」的分区卡片时，外框和标题由卡片提供。 */
+[data-admin-root] .ecommerce-stage-models.is-embedded {
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+[data-admin-root] .ecommerce-stage-models.is-embedded > header .ant-typography {
+    margin: 0;
+}
+/* 与同页其它分区一致：保存状态在左，保存按钮在右。 */
+[data-admin-root] .ecommerce-stage-models.is-embedded > footer {
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+}

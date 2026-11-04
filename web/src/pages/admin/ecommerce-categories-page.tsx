@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Breadcrumb, Button, Input, Space, Table, Tag, Typography } from "antd";
 import { FolderTree, RefreshCw } from "lucide-react";
-import { AdminPageFrame } from "./components/admin-shell";
+import { EcommerceLibraryPanel } from "./ecommerce-library-panel";
 import { getIndustryCategories, type IndustryCategoryPage, type IndustryCategoryMatch } from "@/services/api/ecommerce-categories";
 
 export default function EcommerceCategoriesPage() {
@@ -42,18 +42,16 @@ export default function EcommerceCategoriesPage() {
     const source = data?.coverage.source;
     const lineage = (data?.lineage ?? []).slice().reverse();
     return (
-        <AdminPageFrame
-            title="行业与子品类"
+        <EcommerceLibraryPanel
             description="按完整中英文分类路径定位商品，再选择最近的适用方法与行业 Skills。"
             actions={
                 <Button icon={<RefreshCw size={14} />} loading={loading} onClick={() => setRefresh((value) => value + 1)}>
                     刷新
                 </Button>
             }
-            scroll
         >
-            {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
-            <Space wrap size={16} style={{ marginBottom: 16 }}>
+            {error ? <Alert type="error" showIcon message={error} /> : null}
+            <Space wrap size={16}>
                 <Typography.Text>
                     <strong>{source?.roots ?? "—"}</strong> 个顶级行业
                 </Typography.Text>
@@ -77,9 +75,8 @@ export default function EcommerceCategoriesPage() {
                 showIcon
                 message="分类目录与专属创作方法分别统计。子品类优先使用最近上级的方法；继承覆盖不代表每个叶级品类都已单独生成验收。"
                 description={data ? `${data.coverage.industryMethods} 套行业方法、${data.coverage.specializedAncestors} 个细分方法祖先；开关在“电商 Skills”中管理。` : undefined}
-                style={{ marginBottom: 20 }}
             />
-            <Space wrap style={{ marginBottom: 16 }}>
+            <Space wrap>
                 <Input.Search
                     placeholder="搜索中文、英文品类或分类 ID"
                     allowClear
@@ -97,7 +94,6 @@ export default function EcommerceCategoriesPage() {
                 </Button>
             </Space>
             <Breadcrumb
-                style={{ marginBottom: 16 }}
                 items={[
                     {
                         title: (
@@ -179,6 +175,6 @@ export default function EcommerceCategoriesPage() {
                     },
                 ]}
             />
-        </AdminPageFrame>
+        </EcommerceLibraryPanel>
     );
 }
