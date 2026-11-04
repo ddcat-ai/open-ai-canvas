@@ -265,7 +265,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Clapperboard className="size-3.5" />,
         group: "sheet",
         order: 1,
-        toolId: 90,
+        toolId: 1000090,
         run: nineGridRun,
     },
     {
@@ -277,7 +277,7 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         icon: () => <Route className="size-3.5" />,
         group: "sheet",
         order: 2,
-        toolId: 91,
+        toolId: 1000091,
         run: nineGridRun,
     },
     {

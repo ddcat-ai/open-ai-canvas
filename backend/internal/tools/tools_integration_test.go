@@ -38,8 +38,8 @@ func TestToolsVisibilityTokensSeedAndReferences(t *testing.T) {
 		label   string
 		feature string
 	}{
-		{90, "short_storyboard", "故事板", "4–8 sequential shots"},
-		{91, "blocking_storyboard", "调度故事板", "top-down blocking diagram"},
+		{1000090, "short_storyboard", "故事板", "4–8 sequential shots"},
+		{1000091, "blocking_storyboard", "调度故事板", "top-down blocking diagram"},
 	} {
 		tool, err := svc.Detail("alice", preset.id)
 		if err != nil {
@@ -59,7 +59,7 @@ func TestToolsVisibilityTokensSeedAndReferences(t *testing.T) {
 		}
 	}
 	custom, err := svc.Create("alice", tools.ToolMutationRequest{Type: "style", Label: "private", Prompt: "private style"})
-	if err != nil || custom.ID <= 91 {
+	if err != nil || custom.ID <= 1000091 {
 		t.Fatalf("custom: %+v %v", custom, err)
 	}
 	if _, err := svc.Detail("bob", custom.ID); err == nil {
