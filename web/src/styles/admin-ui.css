@@ -11320,3 +11320,260 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-model-editor-modal .admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder > .ant-tabs-content > .ant-tabs-tabpane {
     min-height: 100%;
 }
+
+/* Plugin detail: fixed-size dialog, identity header, grouped facts on the left, documentation on the right. */
+.admin-plugin-detail-modal .ant-modal-container {
+    display: flex;
+    height: min(860px, calc(100dvh - 48px));
+    flex-direction: column;
+}
+
+.admin-plugin-detail-modal .ant-modal-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+}
+
+.admin-plugin-detail {
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.admin-plugin-detail-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-start;
+    gap: 16px;
+    border-bottom: 1px solid var(--admin-divider);
+    background: var(--admin-layer-1);
+    padding: 24px 64px 20px 28px;
+}
+
+.admin-plugin-detail-icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+}
+
+.admin-plugin-detail-icon > * {
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 12px !important;
+}
+
+.admin-plugin-detail-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.admin-plugin-detail-heading {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.admin-plugin-detail-heading h2 {
+    overflow: hidden;
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-plugin-detail-version {
+    flex-shrink: 0;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 13px;
+}
+
+.admin-plugin-detail-description {
+    margin: 6px 0 0;
+    max-width: 88ch;
+    color: var(--admin-text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.admin-plugin-detail-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.admin-plugin-detail-id {
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+    padding: 2px 8px;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-plugin-detail-body {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+}
+
+.admin-plugin-detail-aside {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-right: 1px solid var(--admin-divider);
+    background: var(--admin-layer-2);
+    padding: 20px;
+}
+
+.admin-plugin-detail-group {
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-layer-1);
+    padding: 14px 16px;
+}
+
+.admin-plugin-detail-group h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-plugin-detail-group h3 svg {
+    width: 15px;
+    height: 15px;
+    color: var(--admin-text-muted);
+}
+
+.admin-plugin-detail-group dl {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.admin-plugin-detail-fact {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 12px;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.admin-plugin-detail-fact dt {
+    color: var(--admin-text-muted);
+}
+
+.admin-plugin-detail-fact dd {
+    margin: 0;
+    color: var(--admin-text-primary);
+    overflow-wrap: anywhere;
+}
+
+.admin-plugin-detail-mono {
+    font-family: var(--admin-font-mono);
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.admin-plugin-detail-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-plugin-detail-chips span {
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+    padding: 2px 8px;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    line-height: 20px;
+}
+
+.admin-plugin-detail-empty {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+}
+
+.admin-plugin-detail-doc {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--admin-layer-1);
+}
+
+.admin-plugin-detail-doc-inner {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 28px 40px 48px;
+}
+
+/* 用户端文档样式是 caption 字号，后台大弹窗按正文阅读。 */
+.admin-plugin-detail-doc .plugin-markdown {
+    color: var(--admin-text-secondary);
+    font-size: 14px;
+    line-height: 1.75;
+}
+
+.admin-plugin-detail-doc .plugin-markdown :is(h1, h2, h3, strong) {
+    color: var(--admin-text-primary);
+}
+
+.admin-plugin-detail-doc .plugin-markdown h1 {
+    font-size: 22px;
+}
+
+.admin-plugin-detail-doc .plugin-markdown h2 {
+    border-top-color: var(--admin-divider);
+    font-size: 17px;
+}
+
+@media (max-width: 900px) {
+    .admin-plugin-detail-body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow-y: auto;
+    }
+
+    .admin-plugin-detail-aside,
+    .admin-plugin-detail-doc {
+        overflow: visible;
+    }
+
+    .admin-plugin-detail-aside {
+        border-right: 0;
+        border-bottom: 1px solid var(--admin-divider);
+    }
+
+    .admin-plugin-detail-header {
+        padding: 20px 56px 16px 20px;
+    }
+
+    .admin-plugin-detail-doc-inner {
+        padding: 24px 20px 40px;
+    }
+}
