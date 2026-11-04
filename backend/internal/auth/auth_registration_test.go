@@ -14,6 +14,16 @@ import (
 	"gorm.io/gorm"
 )
 
+type signupBonusSpyHost struct {
+	Host
+	userIDs []string
+}
+
+func (h *signupBonusSpyHost) EnsureSignupBonus(userID string) error {
+	h.userIDs = append(h.userIDs, userID)
+	return nil
+}
+
 func newRegistrationTestService(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	svc, db := newPasswordResetTestService(t)
@@ -54,12 +64,37 @@ func TestRegisterRequiresAcceptedTermsBeforeWriting(t *testing.T) {
 
 func TestRegisterAcceptedTermsCreatesFirstAdmin(t *testing.T) {
 	svc, _ := newRegistrationTestService(t)
+	bonusHost := &signupBonusSpyHost{Host: svc.host}
+	svc.host = bonusHost
 	result, err := svc.Register(RegisterRequest{Username: "new-user", Password: "password", AcceptedTerms: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.User.Username != "new-user" || result.User.Role != model.UserRoleAdmin || result.Session == "" {
 		t.Fatalf("Register() result = %#v", result)
+	}
+	if len(bonusHost.userIDs) != 1 || bonusHost.userIDs[0] != result.User.ID {
+		t.Fatalf("signup bonus calls = %v, want [%s]", bonusHost.userIDs, result.User.ID)
+	}
+}
+
+func TestPasswordLoginDoesNotEnsureSignupBonus(t *testing.T) {
+	svc, db := newRegistrationTestService(t)
+	hash, err := HashPassword("strong-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := model.User{ID: "existing-user", Username: "existing-user", PasswordHash: hash, Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	bonusHost := &signupBonusSpyHost{Host: svc.host}
+	svc.host = bonusHost
+	if _, err := svc.Login(LoginRequest{Username: user.Username, Password: "strong-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(bonusHost.userIDs) != 0 {
+		t.Fatalf("password login signup bonus calls = %v, want none", bonusHost.userIDs)
 	}
 }
 
@@ -113,15 +148,18 @@ func TestLinuxDORegistrationAgreement(t *testing.T) {
 		existing     bool
 		registration bool
 		wantError    string
+		wantBonus    int
 	}{
 		{name: "new user without agreement", registration: true, wantError: "请先同意影策服务协议"},
-		{name: "new user with agreement", accepted: true, registration: true},
+		{name: "new user with agreement", accepted: true, registration: true, wantBonus: 1},
 		{name: "existing user without agreement", existing: true, registration: true},
 		{name: "existing user with registration closed", existing: true},
 		{name: "agreement does not bypass registration closure", accepted: true, wantError: "管理员未开放新用户注册"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, db := newRegistrationTestService(t)
+			bonusHost := &signupBonusSpyHost{Host: svc.host}
+			svc.host = bonusHost
 			if err := db.Create(&model.User{ID: "admin", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}).Error; err != nil {
 				t.Fatal(err)
 			}
@@ -193,6 +231,9 @@ func TestLinuxDORegistrationAgreement(t *testing.T) {
 				if err := db.Model(entity).Count(&count).Error; err != nil || count != wantRecords {
 					t.Fatalf("%T count=%d want=%d err=%v", entity, count, wantRecords, err)
 				}
+			}
+			if len(bonusHost.userIDs) != tc.wantBonus {
+				t.Fatalf("signup bonus calls = %v, want %d", bonusHost.userIDs, tc.wantBonus)
 			}
 			if _, err := svc.CompleteLinuxDOLogin(stateValue, "test-code", ""); err == nil {
 				t.Fatal("consumed OAuth state was accepted twice")

@@ -1,0 +1,66 @@
+---
+title: 注册与签到积分赠送
+description: 默认零赠送、停止新增发放与历史账本核查
+---
+
+# 注册与签到积分赠送
+
+## 默认值与入口
+
+未保存 `credit_policy` 时，注册赠送和每日签到均为 **0**，模型默认计费倍率为 **1**。正数奖励由管理员主动配置后生效。设置保存在 `system_settings`，金额使用微积分：`1000000` 微积分 = `1` 积分。
+
+管理员打开「积分运营」(`/admin/credit-operations`)，页首直接展示两类赠送额度，提供「注册与签到赠送」和「停止注册和签到赠送」。正数奖励保存前展示本次配置对应的单次注册、每日签到额度及持续发放影响；设为 0 即关闭对应奖励。
+
+注册奖励仅在创建账号时尝试发放，包括普通注册、首次第三方注册和管理员创建账号；已有账号的密码、验证码及第三方登录不补发。注册使用 `signup:<userId>`、签到使用 `checkin:<userId>:<UTC日期>` 作为唯一业务键，重复调用不重复入账。
+
+## 已有部署停止赠送
+
+修改代码默认值不会覆盖已保存的运营配置，也不会收回已发积分。
+
+1. 现有版本先打开「积分运营 → 积分策略」，把「注册赠送积分」和「每日签到积分」都设为 `0` 并保存；新版本可直接点击页首「停止注册和签到赠送」。停赠操作保留默认倍率和模型倍率。
+2. 重新读取策略，确认 `signupBonusMicrocredits=0`、`checkinBonusMicrocredits=0`。旧版本有最长 5 分钟的进程缓存；若尚未升级，重启所有后端实例以清除缓存。只修改一个副本的内存或只重启一个副本不足以覆盖多实例部署。
+3. 修复后的版本直接读取数据库策略，保存完成后新读取策略的发放请求使用新值。已读取旧策略的在途请求仍可能完成一次发放；停赠后按账本时间复核，不以页面提示代替入账核查。
+4. 停赠保留已发奖励、充值余额、预授权和现有订单。余额中的已发积分仍可消费；若需要暂停后续模型支出，应按实际运营范围暂停相应系统渠道，不要通过关闭「积分计费」代替止支出。
+
+仅修改本地仓库不代表线上配置已修改或修复已部署。
+
+## 只读核对历史赠送
+
+以下查询同时适用于 SQLite 和 PostgreSQL。先在实际部署的数据库备份或只读连接上核对；不要把本地开发库的统计当作生产结果。
+
+按类型统计赠送总额、条数和覆盖账号：
+
+```sql
+SELECT type,
+       COUNT(*) AS grant_count,
+       COUNT(DISTINCT user_id) AS user_count,
+       SUM(amount_microcredits) AS granted_microcredits,
+       SUM(amount_microcredits) / 1000000.0 AS granted_credits,
+       MIN(created_at) AS first_grant_at,
+       MAX(created_at) AS last_grant_at
+FROM credit_ledger_entries
+WHERE type IN ('signup_bonus', 'checkin_bonus')
+GROUP BY type;
+```
+
+按账号核对赠送额与当前余额：
+
+```sql
+SELECT grants.user_id,
+       grants.signup_microcredits,
+       grants.checkin_microcredits,
+       COALESCE(accounts.available_microcredits, 0) AS available_microcredits,
+       COALESCE(accounts.reserved_microcredits, 0) AS reserved_microcredits
+FROM (
+    SELECT user_id,
+           SUM(CASE WHEN type = 'signup_bonus' THEN amount_microcredits ELSE 0 END) AS signup_microcredits,
+           SUM(CASE WHEN type = 'checkin_bonus' THEN amount_microcredits ELSE 0 END) AS checkin_microcredits
+    FROM credit_ledger_entries
+    WHERE type IN ('signup_bonus', 'checkin_bonus')
+    GROUP BY user_id
+) AS grants
+LEFT JOIN credit_accounts AS accounts ON accounts.user_id = grants.user_id
+ORDER BY grants.signup_microcredits + grants.checkin_microcredits DESC;
+```
+
+赠送额、当前余额、已消费积分和上游真实成本是不同指标。当前账户把充值、赠送和返款汇入同一余额，账本没有按资金来源分配每一笔消费；不能仅用累计赠送额或 `min(累计赠送, 当前余额)` 认定可扣回金额，这可能扣到充值款。历史处理需结合支付订单、预授权、退款、消费账本和上游账单逐项核对，再形成单独的调整清单；保留原账本，用有说明的调整记录承载确认后的操作。

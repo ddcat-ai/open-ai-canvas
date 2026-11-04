@@ -16,13 +16,17 @@ func (s *Service) PublicLogicalModels(access *userGroupAccess, intent *ModelRequ
 	if access == nil {
 		return nil, Unauthorized("请先登录")
 	}
+	policy, err := s.creditPolicy()
+	if err != nil {
+		return nil, err
+	}
 	snapshot, err := s.routeCatalogSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	result := make([]PublicLogicalModel, 0, len(snapshot.Ordered))
 	for _, id := range snapshot.Ordered {
-		cached, visible, groupErr := s.groupLogicalModel(access, snapshot.Models[id])
+		cached, visible, groupErr := s.groupLogicalModel(policy, access, snapshot.Models[id])
 		if groupErr != nil || !visible {
 			continue
 		}
@@ -54,7 +58,7 @@ func (s *Service) PublicLogicalModels(access *userGroupAccess, intent *ModelRequ
 
 // groupLogicalModel 返回按分组过滤线路并换算价格后的副本，不修改共享路由快照。
 // 没有任何可见线路时 visible=false；分组缺少货币兑换比例的线路被跳过。
-func (s *Service) groupLogicalModel(access *userGroupAccess, cached cachedLogicalModel) (cachedLogicalModel, bool, error) {
+func (s *Service) groupLogicalModel(policy CreditPolicy, access *userGroupAccess, cached cachedLogicalModel) (cachedLogicalModel, bool, error) {
 	routes := make([]cachedLogicalRoute, 0, len(cached.Routes))
 	for _, route := range cached.Routes {
 		if !access.allowsChannel(route.ChannelModel.ChannelID) {
@@ -66,7 +70,7 @@ func (s *Service) groupLogicalModel(access *userGroupAccess, cached cachedLogica
 			copy(tiers, channelModel.PriceTiers)
 			skip := false
 			for index := range tiers {
-				pricing, prices, err := s.groupTierPrices(access, &channelModel, &tiers[index], channelModel.ModelKey)
+				pricing, prices, err := groupTierPricesWithPolicy(policy, access, &channelModel, &tiers[index], channelModel.ModelKey)
 				if err != nil {
 					skip = true
 					break

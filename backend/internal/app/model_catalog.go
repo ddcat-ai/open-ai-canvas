@@ -126,6 +126,10 @@ func (s *Service) publicSystemChannelCatalog(access *userGroupAccess, intent *Mo
 	if access == nil {
 		return nil, Unauthorized("请先登录")
 	}
+	policy, err := s.creditPolicy()
+	if err != nil {
+		return nil, err
+	}
 	channels, err := s.repo.SystemChannels(true)
 	if err != nil {
 		return nil, err
@@ -165,7 +169,7 @@ func (s *Service) publicSystemChannelCatalog(access *userGroupAccess, intent *Mo
 
 			publicModel, sanitizeErr := s.sanitizeChannelModel(&cm)
 			if sanitizeErr == nil {
-				sanitizeErr = s.applyGroupCatalogPricing(access, &cm, &publicModel)
+				sanitizeErr = s.applyGroupCatalogPricing(policy, access, &cm, &publicModel)
 			}
 			if sanitizeErr != nil {
 				if logging.Every("catalog-omit:"+cm.ID, 10*time.Minute) {
@@ -273,10 +277,10 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 
 // applyGroupCatalogPricing 把公开价格档换算为当前分组实际扣费的微积分单价（含全局积分策略倍率），
 // 与 newBillingOrderWithPriceTier 使用同一换算函数。分组缺少该货币兑换比例时整模型不发布。
-func (s *Service) applyGroupCatalogPricing(access *userGroupAccess, cm *model.ChannelModel, publicModel *PublicChannelModel) error {
+func (s *Service) applyGroupCatalogPricing(policy CreditPolicy, access *userGroupAccess, cm *model.ChannelModel, publicModel *PublicChannelModel) error {
 	for index := range publicModel.PriceTiers {
 		tier := &publicModel.PriceTiers[index]
-		pricing, prices, err := s.groupTierPrices(access, cm, &model.ChannelModelPriceTier{
+		pricing, prices, err := groupTierPricesWithPolicy(policy, access, cm, &model.ChannelModelPriceTier{
 			UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
 			OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
 		}, cm.ModelKey)

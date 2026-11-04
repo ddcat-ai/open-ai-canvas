@@ -716,6 +716,10 @@ func (s *Service) groupTierPrices(access *userGroupAccess, item *model.ChannelMo
 	if err != nil {
 		return groupPricing{}, tierCreditPrices{}, err
 	}
+	return groupTierPricesWithPolicy(policy, access, item, tier, modelKey)
+}
+
+func groupTierPricesWithPolicy(policy CreditPolicy, access *userGroupAccess, item *model.ChannelModel, tier *model.ChannelModelPriceTier, modelKey string) (groupPricing, tierCreditPrices, error) {
 	pricing, err := access.pricing(item.PriceCurrency, modelKey)
 	if err != nil {
 		return groupPricing{}, tierCreditPrices{}, err

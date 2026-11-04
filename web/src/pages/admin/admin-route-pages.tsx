@@ -64,11 +64,7 @@ export function BannerAnnouncementsPage() {
             title="常驻通知"
             description="配置首页顶部常驻展示的通知，支持标题、状态与有效期"
             actions={
-                <Button
-                    type="primary"
-                    icon={<Plus className="size-4" />}
-                    onClick={() => setCreateOpen(true)}
-                >
+                <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
                     新增常驻通知
                 </Button>
             }
@@ -84,12 +80,12 @@ export function CreditOperationsPage() {
     return (
         <AdminPageFrame
             title="积分运营"
-            description="异常计费核对、积分策略与人工调账"
+            description="异常计费核对、注册与签到赠送管理及人工调账"
             actions={
                 <>
                     <BillingAutoRefundToggle />
                     <Button icon={<Settings2 className="size-4" />} onClick={() => setActiveOperation("policy")}>
-                        积分策略
+                        注册与签到赠送
                     </Button>
                     <Button type="primary" icon={<UserRoundCog className="size-4" />} onClick={() => setActiveOperation("adjustment")}>
                         人工调账

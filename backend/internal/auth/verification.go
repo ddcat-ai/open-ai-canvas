@@ -319,9 +319,6 @@ func (s *Service) LoginVerification(req VerificationConfirm) (result *AuthSessio
 		}
 		return nil, err
 	}
-	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
-		return nil, err
-	}
 	event.Method = v.Method
 	return s.createAuthSession(user, event)
 }

@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 注册与签到积分策略
+
+`GET /api/admin/settings/credits` 和 `PATCH /api/admin/settings/credits` 均要求管理员，返回 `data={policy}`。PATCH 提交完整策略：`signupBonusMicrocredits`、`checkinBonusMicrocredits`、`defaultMultiplierBasisPoints`、`modelMultiplierBasisPoints`；停止赠送只将前两项设为 0，保留倍率。金额为微积分（1000000 = 1 积分），倍率为万分比（10000 = 1 倍）。
+
+未保存策略时两项奖励均为 0、默认倍率为 10000；已有正数配置不因升级自动覆盖。发放与展示读取最新数据库策略，不使用进程缓存；更新不影响已完成入账、已读旧策略的在途请求或已创建的计费订单。已有账号的密码、验证码和第三方登录不补发注册奖励。`POST /api/wallet/checkin` 在签到奖励为 0 时返回业务错误，不新增签到入账。历史赠送核对见[注册与签到积分赠送](./credit-rewards)。
+
 ## 电商连续创作与逐屏差异
 
 电商策划从当前用户拥有的项目读取最近 20 页已提交历史；只有商品参考图存在交集时才继承商品文案上下文，Logo、模特和借鉴图不用于关联商品。历史文字不作为新规格或功效的证据。

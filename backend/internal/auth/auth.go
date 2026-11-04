@@ -303,9 +303,6 @@ func (s *Service) Login(req LoginRequest) (result *AuthSessionResult, err error)
 	if err := s.repo.UpdateUserLoginTime(user.ID, now); err != nil {
 		return nil, err
 	}
-	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
-		return nil, err
-	}
 	return s.createAuthSession(user, event)
 }
 

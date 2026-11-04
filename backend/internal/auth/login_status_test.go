@@ -75,8 +75,13 @@ func TestPasswordLoginPreservesConcurrentDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 	fired := disableBeforeLoginWrite(t, db, "member")
+	bonusHost := &signupBonusSpyHost{Host: svc.host}
+	svc.host = bonusHost
 	_, err = svc.Login(LoginRequest{Username: "member", Password: "password"})
 	assertLoginPreservesDisable(t, db, fired, err)
+	if len(bonusHost.userIDs) != 0 {
+		t.Fatalf("password login signup bonus calls = %v, want none", bonusHost.userIDs)
+	}
 }
 
 func TestLinuxDOLoginPreservesConcurrentDisable(t *testing.T) {
@@ -123,6 +128,11 @@ func TestLinuxDOLoginPreservesConcurrentDisable(t *testing.T) {
 		t.Fatal(err)
 	}
 	fired := disableBeforeLoginWrite(t, db, "member")
+	bonusHost := &signupBonusSpyHost{Host: svc.host}
+	svc.host = bonusHost
 	_, err = svc.CompleteLinuxDOLogin("state-value", "code", "")
 	assertLoginPreservesDisable(t, db, fired, err)
+	if len(bonusHost.userIDs) != 0 {
+		t.Fatalf("LinuxDO login signup bonus calls = %v, want none", bonusHost.userIDs)
+	}
 }
