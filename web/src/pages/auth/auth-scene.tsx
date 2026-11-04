@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 
-import { LanguageSelect } from "@/components/layout/language-select";
+import { LanguageMenu } from "@/components/layout/language-menu";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { SiteComplianceFooter } from "@/components/layout/site-compliance-footer";
@@ -94,7 +94,7 @@ export function AuthScene() {
 
                 <section className="auth-scene-form-pane relative flex min-h-[660px] flex-col items-center overflow-y-auto px-4 pt-20 sm:px-8 lg:min-h-0 lg:px-10 lg:pt-20">
                     <div className="absolute right-5 top-5 z-20 flex items-center gap-2 lg:right-8 lg:top-8">
-                        <LanguageSelect className="auth-scene-language" />
+                        <LanguageMenu variant="auth" />
                         <Link to="/" className="auth-scene-return inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs backdrop-blur-xl transition">
                             <ArrowLeft className="size-3.5" />
                             {t("auth.backHome")}

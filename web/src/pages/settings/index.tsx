@@ -4,7 +4,7 @@ import { ArrowLeft, Boxes, Bug, Cloud, Inbox, MessageSquareText, RadioTower, Sli
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { LanguageSelect } from "@/components/layout/language-select";
+import { LanguageOptionGrid } from "@/components/layout/language-menu";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
 import { refreshSystemChannels } from "@/lib/user-session";
@@ -42,7 +42,7 @@ export function isConfigSection(value: string | null): value is ConfigSectionKey
 
 export default function SettingsPage() {
     const { message } = App.useApp();
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedSection = searchParams.get("section");
@@ -139,7 +139,8 @@ export default function SettingsPage() {
                             <h3>{t("settings.preferences.interface")}</h3>
                             <p>{t("settings.preferences.interfaceDescription")}</p>
                         </div>
-                        <SettingsRow label={t("language.label")} description={i18n.language === "zh-CN" ? undefined : t("language.pending")} control={<LanguageSelect className="w-full" size="md" />} controlClassName="w-[200px]" />
+                        <SettingsRow label={t("language.label")} description={t("language.description")} align="top" control={null} />
+                        <LanguageOptionGrid />
                     </section>
                     <section className="settings-preference-block">
                         <div className="settings-preference-heading">

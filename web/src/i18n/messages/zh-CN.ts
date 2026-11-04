@@ -275,7 +275,7 @@ export const zhCN = {
     },
 };
 
-type DeepStringRecord<T> = { [K in keyof T]: T[K] extends string ? string : DeepStringRecord<T[K]> };
+export type DeepStringRecord<T> = { [K in keyof T]: T[K] extends string ? string : DeepStringRecord<T[K]> };
 
 /** 所有语言文件的结构约束：键与源语言完全一致，值为字符串。 */
 export type Messages = DeepStringRecord<typeof zhCN>;

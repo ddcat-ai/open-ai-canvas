@@ -9,6 +9,7 @@ import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
+import { LanguageMenu } from "@/components/layout/language-menu";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -60,6 +61,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             </nav>
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
+                <LanguageMenu />
                 {user ? <TopbarFeedbackButton /> : null}
                 {creditsEnabled ? (
                     <button type="button" className="app-workspace-topbar-credit-pill" aria-label={t("shell.openWallet", { balance })} onClick={() => openWorkspaceWallet()}>

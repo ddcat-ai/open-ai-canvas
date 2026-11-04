@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { i18n } from "@/i18n";
+import { AREA_CATALOGS } from "@/i18n/areas";
 import { detectBrowserLocale, matchAppLocale, SUPPORTED_LOCALES } from "@/i18n/locales";
 import { deDE } from "@/i18n/messages/de-DE";
 import { enUS } from "@/i18n/messages/en-US";
@@ -35,6 +36,24 @@ describe("i18n catalogs", () => {
                 expect(placeholders(text), `${code} ${key}`).toEqual(placeholders(source[key]));
             }
         }
+    });
+
+    test("every page-area catalog matches its zh-CN keys and placeholders in all locales", () => {
+        for (const [area, catalog] of Object.entries(AREA_CATALOGS)) {
+            const areaSource = flatten(catalog["zh-CN"]);
+            for (const { code } of SUPPORTED_LOCALES) {
+                const flat = flatten(catalog[code]);
+                expect(Object.keys(flat).sort(), `${area} ${code}`).toEqual(Object.keys(areaSource).sort());
+                for (const [key, text] of Object.entries(flat)) {
+                    expect(text.trim().length, `${area} ${code} ${key}`).toBeGreaterThan(0);
+                    expect(placeholders(text), `${area} ${code} ${key}`).toEqual(placeholders(areaSource[key]));
+                }
+            }
+        }
+    });
+
+    test("page-area namespaces do not collide with core namespaces", () => {
+        for (const area of Object.keys(AREA_CATALOGS)) expect(Object.keys(zhCN)).not.toContain(area);
     });
 
     test("browser languages map to supported locales", () => {

@@ -1,0 +1,131 @@
+/* 界面语言入口：触发按钮复用顶栏次要按钮 / 登录页胶囊按钮的外观，这里只补图标与下拉选项。 */
+.language-menu-trigger {
+    gap: 6px;
+}
+
+.language-menu-trigger svg {
+    width: var(--button-icon-size, 16px);
+    height: var(--button-icon-size, 16px);
+    flex: none;
+}
+
+.language-menu-trigger .language-menu-chevron {
+    width: 12px;
+    height: 12px;
+    opacity: 0.55;
+}
+
+.language-menu-auth-trigger {
+    display: inline-flex;
+    height: 36px;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0 12px;
+    font-size: 12px;
+    backdrop-filter: blur(20px);
+}
+
+.language-menu-dropdown .ant-dropdown-menu {
+    min-width: 216px;
+    padding: 6px;
+}
+
+.language-menu-dropdown .ant-dropdown-menu-item {
+    padding: 8px 10px;
+}
+
+.language-menu-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.language-menu-option-copy {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 2px;
+}
+
+.language-menu-option-copy strong {
+    font-size: var(--fs-body, 14px);
+    font-weight: 500;
+}
+
+.language-menu-option-copy small {
+    color: var(--muted-foreground);
+    font-size: var(--fs-label, 11px);
+}
+
+.language-menu-option-check {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--control-selected-fg);
+}
+
+/* 设置页：六种语言一屏看全，当前语言用选中态边框。 */
+.language-option-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+    gap: 8px;
+}
+
+.language-option-card {
+    display: flex;
+    min-height: 56px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    padding: 10px 12px;
+    color: var(--foreground);
+    text-align: left;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.language-option-card span {
+    display: grid;
+    gap: 2px;
+}
+
+.language-option-card strong {
+    font-size: var(--fs-body, 14px);
+    font-weight: 500;
+}
+
+.language-option-card small {
+    color: var(--muted-foreground);
+    font-size: var(--fs-label, 11px);
+}
+
+.language-option-card svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--control-selected-fg);
+}
+
+.language-option-card:hover {
+    background: var(--control-selected-hover-bg);
+}
+
+.language-option-card[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+}
+
+.language-option-card:focus-visible {
+    outline: var(--focus-ring-width, 2px) solid var(--ring);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .language-option-card {
+        transition: none;
+    }
+}

@@ -1,11 +1,12 @@
 /** 界面支持的语言。code 同时用作 i18next 语言、<html lang> 和 Intl 区域设置。 */
+// label 是各语言的自称（看不懂当前语言也能找回来），short 用于顶栏按钮，english 作为副标题。
 export const SUPPORTED_LOCALES = [
-    { code: "zh-CN", label: "简体中文" },
-    { code: "en-US", label: "English" },
-    { code: "fr-FR", label: "Français" },
-    { code: "de-DE", label: "Deutsch" },
-    { code: "ja-JP", label: "日本語" },
-    { code: "ko-KR", label: "한국어" },
+    { code: "zh-CN", label: "简体中文", short: "中文", english: "Chinese (Simplified)" },
+    { code: "en-US", label: "English", short: "EN", english: "English" },
+    { code: "fr-FR", label: "Français", short: "FR", english: "French" },
+    { code: "de-DE", label: "Deutsch", short: "DE", english: "German" },
+    { code: "ja-JP", label: "日本語", short: "日本語", english: "Japanese" },
+    { code: "ko-KR", label: "한국어", short: "한국어", english: "Korean" },
 ] as const;
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]["code"];
