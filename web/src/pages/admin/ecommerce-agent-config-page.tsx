@@ -13,9 +13,9 @@ import "./ecommerce-agent-config.css";
 type Availability = { key: "ecommerceEnabled" | "ecommerceVideoEnabled" | "siteAssistantEnabled"; title: string; description: string; icon: ReactNode };
 
 const availabilityRows: Availability[] = [
-    { key: "ecommerceEnabled", title: "电商创作", description: "用户可新建商品创作、策划方案并生成图片；关闭后历史项目和作品仍可查看下载。", icon: <ImageIcon className="size-4" aria-hidden="true" /> },
+    { key: "ecommerceEnabled", title: "电商 Agent", description: "前台侧栏显示电商 Agent，用户可新建商品创作；生成商品图还需开启图片生成。关闭后隐藏入口，已有项目和作品保留。", icon: <ImageIcon className="size-4" aria-hidden="true" /> },
     { key: "ecommerceVideoEnabled", title: "商品视频", description: "从商品图片制作视频；同时需要电商创作与视频生成开放。", icon: <Clapperboard className="size-4" aria-hidden="true" /> },
-    { key: "siteAssistantEnabled", title: "创作助手问答", description: "允许用户向下方配置的创作助手提问；助手本身还需在下方启用。", icon: <MessageCircleMore className="size-4" aria-hidden="true" /> },
+    { key: "siteAssistantEnabled", title: "创作助手", description: "允许用户向下方配置的创作助手提问；助手本身还需在下方启用。", icon: <MessageCircleMore className="size-4" aria-hidden="true" /> },
 ];
 
 /** 电商 Agent 的运行配置：是否开放、各阶段用哪个模型、站内创作助手怎么回答。知识与技能在相邻的「知识与技能」页。 */

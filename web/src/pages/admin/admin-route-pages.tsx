@@ -116,7 +116,7 @@ export function EmailSettingsPage() {
 
 export function FeatureAvailabilityPage() {
     return (
-        <AdminPageFrame title="功能开放" description="按用户使用路径控制工作台、插件与模型能力" scroll>
+        <AdminPageFrame title="功能开放" description="决定前台用户能看到和使用哪些功能" scroll>
             <FeatureAvailabilityPanel />
         </AdminPageFrame>
     );

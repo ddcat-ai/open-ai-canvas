@@ -223,9 +223,12 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(accessSource).toContain('title="1. 是否允许创建新账号"');
     expect(accessSource).toContain('title="2. 是否开放 Linux.do 登录"');
 
-    expect(featureSource).toContain('title="1. 用户工作台入口"');
-    expect(featureSource).toContain('title="2. 插件开放范围"');
-    expect(featureSource).toContain('title="3. 用户模型来源"');
+    // 功能开放按前台位置分组；子开关在上级关闭时不可切换，跨组依赖在行内提示。
+    expect(featureSource).toContain('title: "创作功能"');
+    expect(featureSource).toContain('title: "插件与记录"');
+    expect(featureSource).toContain('title: "模型与计费"');
+    expect(featureSource).toContain('disabled={savingKey !== null || state === "blocked"}');
+    expect(featureSource).toContain('requires: [{ key: "imageWorkbenchEnabled"');
     expect(appearanceSource).toContain("<WelcomeSetting />");
     expect(welcomeSource).toContain("<strong>启用欢迎页</strong>");
     expect(welcomeSource).toContain("updateAdminFeatureAvailability({ welcomeEnabled: value })");

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Boxes, ImageIcon, Quote } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Boxes, Clapperboard, Coins, CornerDownRight, History, ImageIcon, MessageCircleMore, MonitorCog, PlugZap, Quote, RadioTower, RefreshCw, ShieldCheck, ShoppingBag, SlidersHorizontal, Video, Wallet } from "lucide-react";
 
 import { Link } from "react-router";
 
@@ -25,12 +25,29 @@ type FeatureKey =
     | "ecommerceEnabled"
     | "ecommerceVideoEnabled"
     | "siteAssistantEnabled";
+
+/** 跨分组的依赖：开关本身可以打开，但缺少这一项时功能只部分可用。 */
+type FeatureRequirement = { key: FeatureKey; effect: string };
+
 type FeatureRow = {
     key: FeatureKey;
     title: string;
+    /** 前台用户在哪里看到它，让管理员把开关和真实入口对上。 */
+    location: string;
     description: string;
     icon: ReactNode;
-    dependsOn?: FeatureKey;
+    requires?: FeatureRequirement[];
+    /** 只在上级开启时才有意义的子开关，渲染在上级下方。 */
+    children?: FeatureRow[];
+    link?: { to: string; label: string };
+};
+
+type FeatureGroup = {
+    id: string;
+    title: string;
+    description: string;
+    icon: ReactNode;
+    rows: FeatureRow[];
 };
 
 const editableFeatureKeys: FeatureKey[] = [
@@ -49,97 +66,166 @@ const editableFeatureKeys: FeatureKey[] = [
     "systemPluginsVisibleToUsers",
 ];
 
-const workspaceFeatureRows: FeatureRow[] = [
+const featureGroups: FeatureGroup[] = [
     {
-        key: "shortDramaEnabled",
-        title: "短剧创作",
-        description: "开放短剧入口、项目列表与项目详情。关闭不删除已有项目。",
-        icon: <Clapperboard className="size-4" aria-hidden="true" />,
+        id: "creation",
+        title: "创作功能",
+        description: "决定前台侧栏出现哪些创作入口",
+        icon: <MonitorCog className="size-4" aria-hidden="true" />,
+        rows: [
+            {
+                key: "shortDramaEnabled",
+                title: "短剧创作",
+                location: "侧栏 · 短剧制作",
+                description: "关闭后隐藏入口，已有项目保留。",
+                icon: <Clapperboard className="size-4" aria-hidden="true" />,
+            },
+            {
+                key: "imageWorkbenchEnabled",
+                title: "图片生成",
+                location: "侧栏 · 图片生成",
+                description: "电商 Agent 生成商品图也需要开启。关闭后历史作品保留。",
+                icon: <ImageIcon className="size-4" aria-hidden="true" />,
+            },
+            {
+                key: "videoWorkbenchEnabled",
+                title: "视频生成",
+                location: "侧栏 · 视频生成",
+                description: "商品视频也需要开启。关闭后历史作品保留。",
+                icon: <Video className="size-4" aria-hidden="true" />,
+            },
+            {
+                key: "ecommerceEnabled",
+                title: "电商 Agent",
+                location: "侧栏 · 电商 Agent",
+                description: "关闭后隐藏入口且不能新建商品创作，已有项目和作品保留。",
+                icon: <ShoppingBag className="size-4" aria-hidden="true" />,
+                requires: [{ key: "imageWorkbenchEnabled", effect: "用户不能生成商品图" }],
+                link: { to: "/admin/ecommerce/agent", label: "电商 Agent 配置" },
+                children: [
+                    {
+                        key: "ecommerceVideoEnabled",
+                        title: "商品视频",
+                        location: "电商 Agent 内",
+                        description: "从商品图片制作视频。",
+                        icon: <Clapperboard className="size-4" aria-hidden="true" />,
+                        requires: [{ key: "videoWorkbenchEnabled", effect: "商品视频不能生成" }],
+                    },
+                ],
+            },
+        ],
     },
     {
-        key: "taskCenterEnabled",
-        title: "任务中心",
-        description: "开放任务记录页面。关闭不会停止生成任务。",
-        icon: <ListChecks className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "creditsEnabled",
-        title: "积分计费",
-        description: "控制积分中心弹窗及新任务的积分预授权与结算。",
-        icon: <Coins className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "customChannelsEnabled",
-        title: "自定义渠道",
-        description: "允许用户配置并使用自己的模型渠道。",
-        icon: <RadioTower className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "inspirationSourcesVisible",
-        title: "素材来源署名",
-        description: "显示创作首页的素材来源说明；关闭后隐藏该面板。",
-        icon: <Quote className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "imageWorkbenchEnabled",
-        title: "图片生成",
-        description: "开放生图入口并允许创建新的工作台图片任务；关闭不删除结果和历史。",
-        icon: <ImageIcon className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "ecommerceEnabled",
-        title: "电商创作",
-        description: "允许新建商品创作、策划和图片生成；关闭后保留历史项目与作品。",
-        icon: <ImageIcon className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "ecommerceVideoEnabled",
-        title: "商品视频",
-        description: "允许从电商商品图片创建视频；同时需要电商创作与通用视频能力开放。",
-        icon: <Clapperboard className="size-4" aria-hidden="true" />,
-        dependsOn: "ecommerceEnabled",
-    },
-    {
-        key: "siteAssistantEnabled",
-        title: "创作助手问答",
-        description: "允许用户向工作台创作助手提问；助手的模型与回答知识在「电商 Agent 配置」中设置。",
-        icon: <Quote className="size-4" aria-hidden="true" />,
-    },
-    {
-        key: "videoWorkbenchEnabled",
-        title: "视频生成",
-        description: "开放视频入口并允许创建新的工作台视频任务；关闭不删除结果和历史。",
-        icon: <Clapperboard className="size-4" aria-hidden="true" />,
-    },
-];
-
-const pluginFeatureRows: FeatureRow[] = [
-    {
-        key: "pluginCenterEnabled",
-        title: "插件中心",
-        description: "开放插件中心及插件调用能力。",
+        id: "tools",
+        title: "插件与记录",
+        description: "插件调用和创作历史页",
         icon: <PlugZap className="size-4" aria-hidden="true" />,
+        rows: [
+            {
+                key: "pluginCenterEnabled",
+                title: "插件中心",
+                location: "侧栏 · 插件",
+                description: "关闭后隐藏入口，用户不能调用插件。",
+                icon: <PlugZap className="size-4" aria-hidden="true" />,
+                children: [
+                    {
+                        key: "systemPluginsVisibleToUsers",
+                        title: "系统插件可见",
+                        location: "插件中心内",
+                        description: "向普通用户展示系统协议插件和管理员上传的插件。",
+                        icon: <ShieldCheck className="size-4" aria-hidden="true" />,
+                    },
+                ],
+            },
+            {
+                key: "taskCenterEnabled",
+                title: "任务中心",
+                location: "侧栏 · 创作历史",
+                description: "关闭只隐藏记录页，不会停止生成任务。",
+                icon: <History className="size-4" aria-hidden="true" />,
+            },
+        ],
     },
     {
-        key: "systemPluginsVisibleToUsers",
-        title: "系统插件可见性",
-        description: "向普通用户展示系统协议插件和管理员上传插件。",
-        icon: <ShieldCheck className="size-4" aria-hidden="true" />,
-        dependsOn: "pluginCenterEnabled",
+        id: "models",
+        title: "模型与计费",
+        description: "用户选模型的来源，以及生成是否扣积分",
+        icon: <Wallet className="size-4" aria-hidden="true" />,
+        rows: [
+            {
+                key: "customChannelsEnabled",
+                title: "自定义渠道",
+                location: "设置 · 渠道",
+                description: "允许用户添加自己的模型渠道和 API Key。",
+                icon: <RadioTower className="size-4" aria-hidden="true" />,
+            },
+            {
+                key: "creditsEnabled",
+                title: "积分计费",
+                location: "账户菜单 · 积分",
+                description: "关闭后新任务不再扣积分，已有余额和流水保留。",
+                icon: <Coins className="size-4" aria-hidden="true" />,
+            },
+        ],
+    },
+    {
+        id: "assist",
+        title: "页面辅助",
+        description: "不影响生成能力的页面元素",
+        icon: <SlidersHorizontal className="size-4" aria-hidden="true" />,
+        rows: [
+            {
+                key: "siteAssistantEnabled",
+                title: "创作助手",
+                location: "页面右下角",
+                description: "还需在电商 Agent 配置中启用助手并选择模型。",
+                icon: <MessageCircleMore className="size-4" aria-hidden="true" />,
+                link: { to: "/admin/ecommerce/agent", label: "配置创作助手" },
+            },
+            {
+                key: "inspirationSourcesVisible",
+                title: "素材来源署名",
+                location: "创作首页 · 灵感",
+                description: "显示灵感素材的来源说明和来源筛选。",
+                icon: <Quote className="size-4" aria-hidden="true" />,
+            },
+        ],
     },
 ];
 
-const modelFeatureRows: FeatureRow[] = [
-    {
-        key: "frontendModelsEnabled",
-        title: "前台模型目录",
-        description: "选择前台模型目录，或直接使用系统渠道中的模型。",
-        icon: <Boxes className="size-4" aria-hidden="true" />,
-    },
-];
-
-const allFeatureRows = [...workspaceFeatureRows, ...pluginFeatureRows, ...modelFeatureRows];
+const allFeatureRows = featureGroups.flatMap((group) => group.rows.flatMap((row) => [row, ...(row.children || [])]));
 const featureByKey = new Map(allFeatureRows.map((item) => [item.key, item]));
+const parentByKey = new Map(allFeatureRows.flatMap((row) => (row.children || []).map((child) => [child.key, row.key] as const)));
+
+type RowState = "on" | "off" | "partial" | "blocked";
+
+function rowState(features: FeatureAvailability, row: FeatureRow): RowState {
+    const parent = parentByKey.get(row.key);
+    if (parent && !features[parent]) return "blocked";
+    if (!features[row.key]) return "off";
+    return unmetRequirements(features, row).length ? "partial" : "on";
+}
+
+function unmetRequirements(features: FeatureAvailability, row: FeatureRow) {
+    return (row.requires || []).filter((requirement) => !features[requirement.key]);
+}
+
+function groupRows(group: FeatureGroup) {
+    return group.rows.flatMap((row) => [row, ...(row.children || [])]);
+}
+
+function rowDomId(key: FeatureKey) {
+    return `admin-feature-${key}`;
+}
+
+/** 依赖提示里的名称可点：滚到对应开关并聚焦，修改仍只在那一行完成。 */
+function focusFeatureRow(key: FeatureKey) {
+    const row = document.getElementById(rowDomId(key));
+    if (!row) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    row.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    row.querySelector<HTMLButtonElement>("button[role='switch']")?.focus({ preventScroll: true });
+}
 
 export default function FeatureAvailabilityPanel() {
     const { message, modal } = App.useApp();
@@ -148,10 +234,11 @@ export default function FeatureAvailabilityPanel() {
     const [draftFeatures, setDraftFeatures] = useState<FeatureAvailability | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [saving, setSaving] = useState(false);
+    const [savingKey, setSavingKey] = useState<FeatureKey | null>(null);
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
     const requestVersionRef = useRef(0);
+    const saving = savingKey !== null;
 
     const load = useCallback(
         async (initial = false, announce = false) => {
@@ -195,7 +282,7 @@ export default function FeatureAvailabilityPanel() {
         const previous = savedFeatures;
         const expected = { ...savedFeatures, [key]: enabled };
         setDraftFeatures(expected);
-        setSaving(true);
+        setSavingKey(key);
         setSaveError("");
         try {
             const result = await updateAdminFeatureAvailability(toEditablePayload(expected));
@@ -204,14 +291,15 @@ export default function FeatureAvailabilityPanel() {
             setSavedFeatures(value);
             setDraftFeatures(value);
             setGlobalFeatures(value);
-            message.success(`${featureByKey.get(key)?.title || "功能"}已${enabled ? "开启" : "关闭"}`);
+            const title = key === "frontendModelsEnabled" ? "模型来源" : featureByKey.get(key)?.title || "功能";
+            message.success(key === "frontendModelsEnabled" ? `${title}已切换为${enabled ? "前台模型目录" : "系统渠道"}` : `${title}已${enabled ? "开启" : "关闭"}，前台立即生效`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "保存功能开放配置失败";
             setDraftFeatures(previous);
             setSaveError(`${errorMessage}。已恢复修改前状态。`);
             message.error(errorMessage);
         } finally {
-            setSaving(false);
+            setSavingKey(null);
         }
     };
 
@@ -244,27 +332,22 @@ export default function FeatureAvailabilityPanel() {
 
     if (loading && !draftFeatures) {
         return (
-            <div className="admin-settings-stack admin-feature-availability" aria-label="正在读取功能开放配置" role="status">
+            <div className="admin-settings-stack admin-feature-availability afp" aria-label="正在读取功能开放配置" role="status">
                 <div className="admin-feature-command-bar">
                     <Skeleton active title={{ width: 180 }} paragraph={false} />
                 </div>
-                <div className="admin-feature-board is-loading">
-                    {Array.from({ length: 3 }).map((_, index) => (
-                        <div key={index} className="admin-feature-domain">
-                            <Skeleton active title={{ width: 120 }} paragraph={{ rows: 3 }} />
-                        </div>
-                    ))}
-                </div>
-                <div className="admin-feature-loading-card">
-                    <Skeleton active paragraph={{ rows: 2 }} />
-                </div>
+                {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="afp-group is-loading">
+                        <Skeleton active title={{ width: 120 }} paragraph={{ rows: 3 }} />
+                    </div>
+                ))}
             </div>
         );
     }
 
     if (!draftFeatures || !savedFeatures) {
         return (
-            <div className="admin-settings-stack admin-feature-availability">
+            <div className="admin-settings-stack admin-feature-availability afp">
                 <div className="admin-feature-load-error" role="alert">
                     <span className="admin-feature-load-error-icon">
                         <AlertTriangle className="size-5" aria-hidden="true" />
@@ -281,23 +364,22 @@ export default function FeatureAvailabilityPanel() {
         );
     }
 
-    const enabledWorkspaceFeatures = workspaceFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
-    const enabledPluginFeatures = pluginFeatureRows.filter((row) => effectiveFeatureValue(draftFeatures, row.key)).length;
+    const states = allFeatureRows.map((row) => rowState(draftFeatures, row));
+    const openCount = states.filter((state) => state === "on" || state === "partial").length;
+    const partialCount = states.filter((state) => state === "partial").length;
 
     return (
-        <div className="admin-settings-stack admin-feature-availability is-compact-layout">
+        <div className="admin-settings-stack admin-feature-availability afp">
             <div className="admin-feature-command-bar">
-                <div className="admin-feature-command-copy" aria-live="polite">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <strong>{saving ? "正在保存更改" : "开关切换后立即生效"}</strong>
-                        <AdminStatusBadge label={saving ? "提交中" : savedFeatures.configured ? "服务端配置" : "系统默认"} tone={saving ? "warning" : "neutral"} />
-                    </div>
+                <div className="afp-command-copy" aria-live="polite">
+                    <strong>{saving ? "正在保存…" : "切换即保存，前台立即生效"}</strong>
+                    <AdminStatusBadge label={`${openCount} / ${allFeatureRows.length} 已开放`} tone="neutral" />
+                    {partialCount ? <AdminStatusBadge label={`${partialCount} 项缺少依赖`} tone="warning" /> : null}
+                    {!savedFeatures.configured ? <AdminStatusBadge label="系统默认" tone="neutral" /> : null}
                 </div>
-                <div className="admin-feature-command-actions">
-                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving} onClick={() => void load(false, true)}>
-                        刷新状态
-                    </Button>
-                </div>
+                <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving} onClick={() => void load(false, true)}>
+                    刷新状态
+                </Button>
             </div>
 
             {loadError || saveError ? (
@@ -307,113 +389,144 @@ export default function FeatureAvailabilityPanel() {
                 </div>
             ) : null}
 
-            <div className="admin-feature-board" aria-label="功能开放控制台">
-                <FeatureDomainPanel
-                    className="is-compact is-workspace"
-                    title="1. 用户工作台入口"
-                    description="先决定普通用户能进入哪些核心工作区"
-                    icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/${workspaceFeatureRows.length} 开放`} tone={enabledWorkspaceFeatures === workspaceFeatureRows.length ? "success" : "neutral"} />}
-                >
-                    {workspaceFeatureRows.map((row) => (
-                        <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
-                    ))}
-                </FeatureDomainPanel>
-
-                <FeatureDomainPanel
-                    title="2. 插件开放范围"
-                    description="先开放插件中心，再决定系统插件是否可见"
-                    icon={<PlugZap className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledPluginFeatures}/${pluginFeatureRows.length} 生效`} tone={enabledPluginFeatures === pluginFeatureRows.length ? "success" : "neutral"} />}
-                >
-                    <FeatureSettingRow row={pluginFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={1} />
-                    {draftFeatures.pluginCenterEnabled ? <FeatureSettingRow row={pluginFeatureRows[1]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} step={2} /> : null}
-                </FeatureDomainPanel>
-
-                <FeatureDomainPanel
-                    title="3. 用户模型来源"
-                    description="决定用户选模型时读取前台目录还是系统渠道"
-                    icon={<Boxes className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={draftFeatures.frontendModelsEnabled ? "前台模型目录" : "系统渠道"} tone="info" />}
-                >
-                    <FeatureSourceRow row={modelFeatureRows[0]} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
-                </FeatureDomainPanel>
-            </div>
+            {featureGroups.map((group) => {
+                const rows = groupRows(group);
+                const enabled = rows.filter((row) => draftFeatures[row.key] && rowState(draftFeatures, row) !== "blocked").length;
+                return (
+                    <section key={group.id} className="afp-group" aria-labelledby={`afp-group-${group.id}`}>
+                        <header className="afp-group-header">
+                            <span className="afp-group-icon">{group.icon}</span>
+                            <div className="afp-group-copy">
+                                <h2 id={`afp-group-${group.id}`}>{group.title}</h2>
+                                <p>{group.description}</p>
+                            </div>
+                            <AdminStatusBadge label={`${enabled} / ${rows.length} 已开放`} tone={enabled === rows.length ? "success" : "neutral"} />
+                        </header>
+                        <div className="afp-list">
+                            {group.id === "models" ? <ModelSourceRow draft={draftFeatures} saving={saving} onChange={requestFeatureChange} /> : null}
+                            {group.rows.map((row) => (
+                                <div key={row.key} className="afp-tree">
+                                    <FeatureRowView row={row} draft={draftFeatures} savingKey={savingKey} onChange={requestFeatureChange} />
+                                    {row.children?.map((child) => (
+                                        <FeatureRowView key={child.key} row={child} draft={draftFeatures} savingKey={savingKey} onChange={requestFeatureChange} nested />
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                );
+            })}
         </div>
     );
 }
 
-function FeatureDomainPanel({ className, title, description, icon, status, children }: { className?: string; title: string; description: string; icon: ReactNode; status: ReactNode; children: ReactNode }) {
+function FeatureRowView({ row, draft, savingKey, onChange, nested = false }: { row: FeatureRow; draft: FeatureAvailability; savingKey: FeatureKey | null; onChange: (key: FeatureKey, enabled: boolean) => void; nested?: boolean }) {
+    const state = rowState(draft, row);
+    const parentKey = parentByKey.get(row.key);
+    const parentTitle = parentKey ? featureByKey.get(parentKey)?.title : "";
+    const missing = state === "partial" ? unmetRequirements(draft, row) : [];
+    const badge =
+        state === "on" ? (
+            <AdminStatusBadge label="已开放" tone="success" />
+        ) : state === "partial" ? (
+            <AdminStatusBadge label="缺少依赖" tone="warning" />
+        ) : state === "blocked" ? (
+            <AdminStatusBadge label={`需先开启${parentTitle}`} tone="neutral" />
+        ) : (
+            <AdminStatusBadge label="已关闭" tone="neutral" />
+        );
+
     return (
-        <section className={cn("admin-feature-domain", className)}>
-            <header className="admin-feature-domain-header">
-                <span className="admin-feature-domain-icon">{icon}</span>
-                <div className="admin-feature-domain-copy min-w-0 flex-1">
-                    <h2>{title}</h2>
-                    <p>{description}</p>
+        <article id={rowDomId(row.key)} className={cn("afp-row", nested && "is-nested", state === "off" && "is-off", state === "blocked" && "is-blocked")}>
+            <div className="afp-row-main">
+                {nested ? <CornerDownRight className="afp-row-branch size-4" aria-hidden="true" /> : null}
+                <span className="afp-row-icon">{row.icon}</span>
+                <div className="afp-row-copy">
+                    <div className="afp-row-title">
+                        <strong>{row.title}</strong>
+                        <span className="afp-location">{row.location}</span>
+                    </div>
+                    <p>
+                        {row.description}
+                        {row.link ? (
+                            <Link to={row.link.to} className="afp-link">
+                                {row.link.label}
+                                <ArrowUpRight className="size-3" aria-hidden="true" />
+                            </Link>
+                        ) : null}
+                    </p>
+                    {missing.map((requirement) => (
+                        <p key={requirement.key} className="afp-row-warning">
+                            <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                            <span>
+                                <button type="button" className="afp-dep-link" onClick={() => focusFeatureRow(requirement.key)}>
+                                    {featureByKey.get(requirement.key)?.title}
+                                </button>
+                                未开启，{requirement.effect}
+                            </span>
+                        </p>
+                    ))}
                 </div>
-                <div className="admin-feature-domain-status">{status}</div>
-            </header>
-            <div className="admin-feature-domain-list">{children}</div>
-        </section>
-    );
-}
-
-function FeatureSettingRow({ row, saved, draft, saving, onChange, step }: { row: FeatureRow; saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void; step?: number }) {
-    const changed = saved[row.key] !== draft[row.key];
-    const dependencyDisabled = Boolean(row.dependsOn && !draft[row.dependsOn]);
-    const enabled = effectiveFeatureValue(draft, row.key);
-
-    return (
-        <article className={cn("admin-feature-board-row", changed && "is-dirty", !enabled && "is-off", row.dependsOn && "is-dependent")}>
-            <div className="admin-feature-board-row-copy">
-                <span className="admin-feature-board-row-icon">{row.icon}</span>
-                <span className="admin-feature-board-row-name">
-                    {step ? <small>第 {step} 步</small> : null}
-                    <strong>{row.title}</strong>
-                    <span title={row.description}>{row.description}</span>
-                </span>
-                {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
             </div>
-            <div className="admin-feature-board-row-control">
-                <span>{dependencyDisabled ? "依赖未开启" : enabled ? "已开放" : "已关闭"}</span>
-                <Switch checked={draft[row.key]} disabled={saving || dependencyDisabled} onChange={(checked) => onChange(row.key, checked)} aria-label={`设置${row.title}，切换后立即保存`} />
+            <div className="afp-row-control">
+                {badge}
+                <Switch
+                    // 上级关闭时子开关不生效，按关闭显示；保存的值不变，上级重新开启后恢复。
+                    checked={state !== "blocked" && draft[row.key]}
+                    loading={savingKey === row.key}
+                    disabled={savingKey !== null || state === "blocked"}
+                    onChange={(checked) => onChange(row.key, checked)}
+                    aria-label={`${row.title}，切换后立即保存`}
+                />
             </div>
         </article>
     );
 }
 
-function FeatureSourceRow({ row, saved, draft, saving, onChange }: { row: FeatureRow; saved: FeatureAvailability; draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void }) {
-    const changed = saved.frontendModelsEnabled !== draft.frontendModelsEnabled;
+function ModelSourceRow({ draft, saving, onChange }: { draft: FeatureAvailability; saving: boolean; onChange: (key: FeatureKey, enabled: boolean) => void }) {
+    const options = [
+        { value: false, label: "系统渠道" },
+        { value: true, label: "前台模型目录" },
+    ];
     return (
-        <article className={cn("admin-feature-board-row is-source", changed && "is-dirty")}>
-            <div className="admin-feature-board-row-copy">
-                <span className="admin-feature-board-row-icon">{row.icon}</span>
-                <span className="admin-feature-board-row-name">
-                    <small>模型来源</small>
-                    <strong>用户模型目录</strong>
-                    <span title={row.description}>{row.description}</span>
-                    <Link to="/admin/models" className="admin-feature-board-row-link">
-                        配置前台模型
-                    </Link>
+        <article id={rowDomId("frontendModelsEnabled")} className="afp-row">
+            <div className="afp-row-main">
+                <span className="afp-row-icon">
+                    <Boxes className="size-4" aria-hidden="true" />
                 </span>
-                {changed ? <span className="admin-feature-board-row-dirty">待保存</span> : null}
+                <div className="afp-row-copy">
+                    <div className="afp-row-title">
+                        <strong>模型来源</strong>
+                        <span className="afp-location">所有模型选择器</span>
+                    </div>
+                    <p>
+                        {draft.frontendModelsEnabled ? "用户只看到前台模型目录中整理过的模型。" : "用户直接选择系统渠道中启用的模型。"}
+                        <Link to="/admin/models" className="afp-link">
+                            配置前台模型
+                            <ArrowUpRight className="size-3" aria-hidden="true" />
+                        </Link>
+                    </p>
+                </div>
             </div>
-            <div className="admin-feature-board-source-selector" role="radiogroup" aria-label="选择用户模型目录来源">
-                <button type="button" role="radio" aria-checked={!draft.frontendModelsEnabled} disabled={saving} className={cn(!draft.frontendModelsEnabled && "is-selected")} onClick={() => onChange("frontendModelsEnabled", false)}>
-                    系统渠道
-                </button>
-                <button type="button" role="radio" aria-checked={draft.frontendModelsEnabled} disabled={saving} className={cn(draft.frontendModelsEnabled && "is-selected")} onClick={() => onChange("frontendModelsEnabled", true)}>
-                    前台目录
-                </button>
+            <div className="afp-row-control">
+                <div className="afp-source" role="radiogroup" aria-label="选择用户模型来源">
+                    {options.map((option) => (
+                        <button
+                            key={option.label}
+                            type="button"
+                            role="radio"
+                            aria-checked={draft.frontendModelsEnabled === option.value}
+                            disabled={saving}
+                            className={cn(draft.frontendModelsEnabled === option.value && "is-selected")}
+                            onClick={() => onChange("frontendModelsEnabled", option.value)}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
             </div>
         </article>
     );
-}
-
-function effectiveFeatureValue(features: FeatureAvailability, key: FeatureKey) {
-    if (key === "systemPluginsVisibleToUsers") return features.pluginCenterEnabled && features.systemPluginsVisibleToUsers;
-    return features[key];
 }
 
 function toEditablePayload(features: FeatureAvailability) {
