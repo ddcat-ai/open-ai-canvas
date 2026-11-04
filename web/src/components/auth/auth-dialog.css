@@ -1,0 +1,190 @@
+/* 登录弹窗：左侧品牌舞台 + 右侧登录面板。品牌舞台属于设计规范允许装饰渐变的登录品牌区域；
+   暖色光晕是组件级 token，底色仍来自 --auth-panel-bg，跟随皮肤与明暗主题。 */
+
+.auth-dialog {
+    --auth-dialog-glow: rgba(240, 206, 170, 0.62);
+    --auth-dialog-orb: rgba(255, 255, 255, 0.5);
+}
+
+.dark .auth-dialog {
+    --auth-dialog-glow: rgba(176, 128, 82, 0.16);
+    --auth-dialog-orb: rgba(255, 255, 255, 0.025);
+}
+
+.auth-dialog-layout {
+    display: grid;
+    min-height: min(600px, calc(100dvh - 48px));
+    max-height: calc(100dvh - 48px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-dialog-stage {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-8);
+    overflow: hidden;
+    padding: var(--space-12);
+    background: radial-gradient(120% 90% at 0% 0%, var(--auth-dialog-glow), transparent 62%), var(--auth-panel-bg);
+    color: var(--foreground);
+}
+
+/* 两枚大圆只做背景装饰，不参与布局与读屏。 */
+.auth-dialog-stage::before,
+.auth-dialog-stage::after {
+    position: absolute;
+    border-radius: var(--r-full);
+    background: var(--auth-dialog-orb);
+    content: "";
+    pointer-events: none;
+}
+
+.auth-dialog-stage::before {
+    top: -120px;
+    right: -110px;
+    width: 300px;
+    height: 300px;
+}
+
+.auth-dialog-stage::after {
+    bottom: -150px;
+    left: -120px;
+    width: 280px;
+    height: 280px;
+}
+
+/* ::after 在 DOM 顺序上排在内容之后，内容需要显式抬到装饰圆之上。 */
+.auth-dialog-stage > * {
+    position: relative;
+    z-index: 1;
+}
+
+.auth-dialog-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-heading);
+    font-weight: 600;
+}
+
+.auth-dialog-brand-logo {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+}
+
+.auth-dialog-brand-mark {
+    display: block;
+    background: currentColor;
+    mask: url(/logo.svg) center / contain no-repeat;
+    -webkit-mask: url(/logo.svg) center / contain no-repeat;
+}
+
+.auth-dialog-stage-copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.auth-dialog-stage-title {
+    margin: 0;
+    font-size: var(--fs-display);
+    font-weight: 600;
+    letter-spacing: var(--ls-title);
+    line-height: var(--lh-heading);
+    white-space: pre-line;
+}
+
+.auth-dialog-stage-tagline {
+    margin: 0;
+    color: color-mix(in srgb, var(--foreground) 64%, transparent);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    white-space: pre-line;
+}
+
+.auth-dialog-features {
+    display: grid;
+    margin: auto 0 0;
+    padding: 0;
+    gap: var(--space-4);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    list-style: none;
+}
+
+.auth-dialog-feature {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-radius: var(--r-lg);
+    background: var(--auth-card-bg);
+}
+
+.auth-dialog-feature-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--foreground);
+}
+
+.auth-dialog-feature-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.75;
+}
+
+.auth-dialog-feature strong,
+.auth-dialog-feature small {
+    display: block;
+}
+
+.auth-dialog-feature strong {
+    font-size: var(--fs-body);
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.auth-dialog-feature small {
+    margin-top: var(--space-1);
+    color: var(--auth-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+}
+
+.auth-dialog-form {
+    display: flex;
+    min-width: 0;
+    overflow-y: auto;
+    padding: var(--space-12) var(--space-12) var(--space-8);
+    background: var(--auth-card-bg);
+    overscroll-behavior: contain;
+}
+
+/* 用 auto 外边距垂直居中：内容超过可视高度时仍从顶部开始滚动，不会被裁掉。 */
+.auth-dialog-form-inner {
+    width: 100%;
+    margin-block: auto;
+}
+
+@media (max-width: 860px) {
+    .auth-dialog-layout {
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .auth-dialog-stage {
+        display: none;
+    }
+
+    .auth-dialog-form {
+        padding: var(--space-10) var(--space-6) var(--space-6);
+    }
+}

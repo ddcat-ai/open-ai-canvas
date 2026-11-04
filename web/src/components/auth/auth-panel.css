@@ -1,0 +1,223 @@
+/* 登录 / 注册 / 找回密码面板。独立登录页与登录弹窗共用；
+   颜色只消费 --auth-* 与全局语义 token，自定义皮肤的登录配色同样生效。 */
+
+.auth-panel {
+    width: 100%;
+    color: var(--foreground);
+}
+
+.auth-panel.is-page {
+    padding: var(--space-8);
+    border-radius: var(--r-2xl);
+    background: var(--auth-card-bg);
+    box-shadow: var(--elevation-card-hover);
+}
+
+.auth-panel-header {
+    margin-bottom: var(--space-6);
+}
+
+.auth-panel-title {
+    margin: 0;
+    font-size: var(--fs-title);
+    font-weight: 600;
+    letter-spacing: var(--ls-title);
+    line-height: var(--lh-heading);
+}
+
+.auth-panel-description {
+    margin: var(--space-2) 0 0;
+    color: var(--auth-muted);
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+}
+
+.auth-panel-body {
+    animation: auth-panel-enter var(--motion-state) var(--motion-ease-out);
+}
+
+@keyframes auth-panel-enter {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-panel-body {
+        animation: none;
+    }
+}
+
+.auth-form,
+.auth-form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.auth-form {
+    gap: var(--space-5);
+}
+
+.auth-form-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+@media (max-width: 420px) {
+    .auth-form-pair {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-4);
+    }
+}
+
+/* --- 方式切换：下划线标签。选中只改颜色与下划线，不改字重。 --- */
+.auth-tabs {
+    display: flex;
+    gap: var(--space-8);
+    border-bottom: var(--control-border-width) solid var(--border);
+}
+
+.auth-tab {
+    position: relative;
+    padding: 0 0 var(--space-3);
+    border: 0;
+    background: none;
+    color: var(--auth-muted);
+    cursor: pointer;
+    font-size: var(--fs-body);
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+    transition: color var(--motion-instant) ease-out;
+}
+
+.auth-tab:hover,
+.auth-tab[aria-selected="true"] {
+    color: var(--foreground);
+}
+
+.auth-tab[aria-selected="true"]::after {
+    position: absolute;
+    right: 0;
+    bottom: calc(var(--control-border-width) * -1);
+    left: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--foreground);
+    content: "";
+}
+
+.auth-tab:focus-visible {
+    border-radius: var(--r-xs);
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+.auth-tab:disabled {
+    cursor: not-allowed;
+}
+
+/* --- 手机号前缀与验证码行 --- */
+.auth-phone-prefix {
+    margin-inline-end: var(--space-1);
+    padding-inline-end: var(--space-3);
+    border-inline-end: var(--control-border-width) solid var(--border);
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+}
+
+.auth-code-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-3);
+}
+
+/* 倒计时文案长短不同，固定最小宽度避免输入框随秒数跳动。 */
+.auth-code-button {
+    min-width: 120px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- 文字入口、切换提示与协议说明 --- */
+.auth-form-aside {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: calc(var(--space-2) * -1);
+}
+
+.auth-form-link {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--auth-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--fs-caption);
+    transition: color var(--motion-instant) ease-out;
+}
+
+.auth-form-link.is-strong {
+    color: var(--foreground);
+    font-weight: 500;
+}
+
+.auth-form-link.has-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.auth-form-link:hover {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.auth-form-link:focus-visible {
+    border-radius: var(--r-xs);
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+.auth-form-switch,
+.auth-form-legal {
+    margin: 0;
+    color: var(--auth-muted);
+    text-align: center;
+}
+
+.auth-form-switch {
+    font-size: var(--fs-ui);
+}
+
+.auth-form-switch .auth-form-link {
+    margin-inline-start: var(--space-1);
+    font-size: inherit;
+}
+
+.auth-form-legal {
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+
+.auth-form-legal .auth-form-link {
+    font-size: inherit;
+}
+
+.auth-form-divider.ant-divider {
+    margin: 0;
+    font-size: var(--fs-caption);
+}
+
+/* 浏览器自动填充默认会刷成浅蓝底；改用卡片底色并保持主题前景色。 */
+.auth-panel input:-webkit-autofill,
+.auth-panel input:-webkit-autofill:hover,
+.auth-panel input:-webkit-autofill:focus {
+    box-shadow: 0 0 0 1000px var(--auth-card-bg) inset;
+    -webkit-text-fill-color: var(--foreground);
+    caret-color: var(--foreground);
+}

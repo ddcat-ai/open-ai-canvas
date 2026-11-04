@@ -59,6 +59,8 @@ type PublicAuthSettings struct {
 	EmailCodeRequired     bool   `json:"emailCodeRequired"`
 	AgreementTitle        string `json:"agreementTitle,omitempty"`
 	AgreementContent      string `json:"agreementContent,omitempty"`
+	// LoginMode 决定前台登录入口：modal 弹窗，page 跳转独立页面。
+	LoginMode string `json:"loginMode"`
 }
 
 type AuthSessionResult struct {
@@ -83,9 +85,14 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if count == 0 {
 		// 首个管理员同样要看到服务协议，不能因为跳过注册校验就丢失协议字段。
 		agreementTitle, agreementContent := s.RegistrationAgreement()
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent}, nil
+		// 与协议字段一致：首个账号创建前配置读取失败只影响展示，打开方式保持默认弹窗。
+		loginMode := LoginModeModal
+		if _, registration, err := s.readRegistrationSetting(); err == nil {
+			loginMode = normalizeLoginMode(registration.LoginMode)
+		}
+		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: agreementTitle, AgreementContent: agreementContent, LoginMode: loginMode}, nil
 	}
-	registrationEnabled, err := s.RegistrationEnabled()
+	_, registration, err := s.readRegistrationSetting()
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +127,13 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 		SMSBindingAvailable:   smsBind,
 		EmailBindingAvailable: emailEnabled,
 		FirstUser:             false,
-		RegistrationEnabled:   registrationEnabled,
+		RegistrationEnabled:   registration.Enabled,
 		LinuxDOEnabled:        s.LinuxDOEnabled(),
 		EmailEnabled:          emailEnabled,
 		EmailCodeRequired:     p.EmailRegistration || p.SMSAndEmailRegistration,
 		AgreementTitle:        agreementTitle,
 		AgreementContent:      agreementContent,
+		LoginMode:             normalizeLoginMode(registration.LoginMode),
 	}, nil
 }
 

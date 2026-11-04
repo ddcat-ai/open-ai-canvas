@@ -1,14 +1,21 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, BadgeCheck, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { AlertTriangle, AppWindow, BadgeCheck, Check, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, PanelsTopLeft, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { getAdminLinuxDOSetting, getAdminRegistrationSetting, updateAdminLinuxDOSetting, updateAdminRegistrationSetting, type LinuxDOSetting, type RegistrationSetting } from "@/services/api/wallet";
+import type { AuthLoginMode } from "@/services/api/auth";
+import { useAuthSettingsStore } from "@/stores/use-auth-settings-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 import { Select } from "@/components/ui/base/select";
+
+const LOGIN_MODES: Array<{ mode: AuthLoginMode; label: string; description: string; short: string }> = [
+    { mode: "modal", label: "弹窗登录（默认）", description: "在当前页面弹出登录框，登录后留在原页面继续操作；直达 /login 的链接也会改为弹窗。", short: "左侧品牌介绍 + 右侧登录表单" },
+    { mode: "page", label: "独立页面", description: "跳转到 /login 独立页面完成登录与注册，左侧展示外观设置中的登录页影片。", short: "整页品牌影片 + 登录卡片" },
+];
 
 const DEFAULT_AGREEMENT_TEMPLATE = `一、服务说明与接受
 欢迎使用本平台提供的 AI 影视与内容创作服务。在注册或使用本平台各项功能前，请务必仔细阅读并理解本协议。当您勾选同意或点击注册、登录按钮，即表示您已自愿接受本协议所有条款的约束。
@@ -40,6 +47,7 @@ export default function AccessSettingsPanel() {
     const [savingLinuxDO, setSavingLinuxDO] = useState(false);
     const [savingRegistration, setSavingRegistration] = useState(false);
     const [savingAgreement, setSavingAgreement] = useState(false);
+    const [savingLoginMode, setSavingLoginMode] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [draftLinuxDOEnabled, setDraftLinuxDOEnabled] = useState(false);
     const [agreementTitle, setAgreementTitle] = useState("");
@@ -218,6 +226,24 @@ export default function AccessSettingsPanel() {
         void toggleRegistration(enabled).catch(() => undefined);
     };
 
+    // 打开方式与注册开关同属 registration 配置：只提交 enabled 与 loginMode，协议正文由服务端保留。
+    const changeLoginMode = async (loginMode: AuthLoginMode) => {
+        if (!registration || savingLoginMode || loginMode === (registration.loginMode ?? "modal")) return;
+        setSavingLoginMode(true);
+        try {
+            const data = await updateAdminRegistrationSetting({ enabled: registration.enabled, loginMode });
+            if ((data.setting.loginMode ?? "modal") !== loginMode) throw new Error("服务端返回的登录打开方式与本次保存不一致，请刷新后核对");
+            setRegistration(data.setting);
+            // 当前标签页的登录入口立即使用新方式；其他已打开的页面在下次读取配置时生效。
+            void useAuthSettingsStore.getState().load({ maxAgeMs: 0 });
+            message.success(loginMode === "modal" ? "已切换为弹窗登录" : "已切换为独立页面登录");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "更新登录打开方式失败");
+        } finally {
+            setSavingLoginMode(false);
+        }
+    };
+
     const saveLinuxDO = async (values: LinuxDOFormValues) => {
         const expected = normalizeLinuxDOFormValues(values);
         setSavingLinuxDO(true);
@@ -303,7 +329,7 @@ export default function AccessSettingsPanel() {
                     </span>
                     <div>
                         <strong>{dirty ? "Linux.do 有未保存的调整" : "登录与注册设置"}</strong>
-                        <p>{dirty ? "完成接入信息后保存生效。" : `新用户注册${registration.enabled ? "已开放" : "已关闭"} · Linux.do ${linuxdo.enabled ? "已启用" : "未启用"}`}</p>
+                        <p>{dirty ? "完成接入信息后保存生效。" : `新用户注册${registration.enabled ? "已开放" : "已关闭"} · Linux.do ${linuxdo.enabled ? "已启用" : "未启用"} · ${(registration.loginMode ?? "modal") === "page" ? "独立页面登录" : "弹窗登录"}`}</p>
                     </div>
                 </div>
                 <div className="admin-access-command-actions">
@@ -312,7 +338,7 @@ export default function AccessSettingsPanel() {
                             撤销调整
                         </Button>
                     ) : null}
-                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration} onClick={requestRefresh}>
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration || savingLoginMode} onClick={requestRefresh}>
                         刷新状态
                     </Button>
                 </div>
@@ -578,6 +604,52 @@ export default function AccessSettingsPanel() {
                             </div>
                         </div>
                     </Form>
+                </SettingsSectionCard>
+            </div>
+
+            <div id="admin-access-login-mode" className="admin-settings-anchor">
+                <SettingsSectionCard
+                    className="admin-access-section admin-access-login-mode-section"
+                    icon={<AppWindow className="size-4" aria-hidden="true" />}
+                    title="4. 登录与注册的打开方式"
+                    description="决定用户点击「登录」或访问需要登录的页面时，登录与注册界面以弹窗还是独立页面呈现。"
+                    status={<AdminStatusBadge label="切换即保存" tone="info" />}
+                >
+                    <div className="admin-storage-mode-content">
+                        <div className="admin-storage-mode-grid" role="radiogroup" aria-label="登录与注册的打开方式">
+                            {LOGIN_MODES.map((item) => {
+                                const selected = (registration.loginMode ?? "modal") === item.mode;
+                                return (
+                                    <button
+                                        key={item.mode}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        className={cn("admin-storage-mode-choice", selected && "is-selected")}
+                                        disabled={loading || refreshing || savingLoginMode}
+                                        onClick={() => void changeLoginMode(item.mode)}
+                                    >
+                                        <span className="admin-storage-mode-icon">{item.mode === "modal" ? <AppWindow className="size-4" aria-hidden="true" /> : <PanelsTopLeft className="size-4" aria-hidden="true" />}</span>
+                                        <span className="admin-storage-mode-copy">
+                                            <strong>{item.label}</strong>
+                                            <small>{item.description}</small>
+                                        </span>
+                                        <span className="admin-storage-mode-meta">{item.short}</span>
+                                        {selected ? (
+                                            <span className="admin-storage-mode-selected">
+                                                <Check className="size-3.5" aria-hidden="true" />
+                                                当前方式
+                                            </span>
+                                        ) : null}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="admin-storage-history-note">
+                            <ShieldCheck className="size-4" aria-hidden="true" />
+                            <span>两种方式使用同一套登录、注册与找回密码流程，Linux.do 回跳和推广链接 /register?ref= 均可用。需要保留未发送内容的入口（如首页创作输入框）始终使用弹窗。</span>
+                        </div>
+                    </div>
                 </SettingsSectionCard>
             </div>
         </div>

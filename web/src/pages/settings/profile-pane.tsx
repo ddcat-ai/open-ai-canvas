@@ -2,10 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Avatar, Button, Form, Input, Skeleton } from "antd";
 import { BadgeCheck, Crop, ImagePlus, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { UserAvatar } from "@/components/layout/user-avatar";
+import { useAuthEntry } from "@/hooks/use-auth-entry";
 import { ImageCropDialog, type ImageCropRect } from "@/components/image-crop-dialog";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Callout } from "@/components/ui/product/callout";
@@ -30,9 +31,9 @@ type EmailTicket = { value: string; expiresAt: number };
 const errorMessage = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
 
 export function ProfilePane() {
-    const { message } = App.useApp();
-    const navigate = useNavigate();
     const { t } = useTranslation();
+    const { message } = App.useApp();
+    const { showLoginAfterSignOut } = useAuthEntry();
     const [searchParams, setSearchParams] = useSearchParams();
     const queryClient = useQueryClient();
     const userId = useUserStore((state) => state.user?.id);
@@ -211,7 +212,7 @@ export function ProfilePane() {
             useUserStore.getState().setHydrated(true);
             message.error({ content: t("account.settings.profile.clearSessionFailed", { notice, error: errorMessage(error, t("account.settings.profile.loginAgain")) }), duration: 8 });
         } finally {
-            navigate("/login", { replace: true });
+            showLoginAfterSignOut();
         }
     };
 

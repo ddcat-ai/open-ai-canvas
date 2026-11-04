@@ -179,6 +179,10 @@ Schema 53 新增 `login_logs`，新库初始化、既有库升级和 SQLite → 
 
 失败登录保留逐条事件，识别不了用户时 `user_id=null`；邮件/手机号尝试账号脱敏，内部错误只记固定分类。密码、验证码、OAuth state/code、Cookie、Token 不进入日志。请求校验/频控拒绝也尝试记录失败，记录失败会输出明确的服务端诊断；原请求仍维持失败状态。不把刷新、重新核验个人身份或自然过期当作登录/主动退出，不补造历史，不自动删除日志。
 
+
+## 注册与登录配置
+`system_settings` 的 `registration` 键保存注册开关与服务协议：`enabled`、`agreementTitle`、`agreementContent`，以及登录注册打开方式 `loginMode`（`modal` 弹窗 / `page` 独立页面）。`loginMode` 缺失时按 `modal` 读取，旧记录无需迁移；不新增结构迁移，不改变全局 schema 版本。
+
 ## 分片上传预留
 
 Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`expires_at`。创建会话时在数据库事务内检查并行会话数、现有资源容量、未到期预留和每日上传用量，更新既有 `user_daily_upload_usages` 后插入预留。SQLite 先取得写锁，PostgreSQL 使用账号级事务 advisory lock。

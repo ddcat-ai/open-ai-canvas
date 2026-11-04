@@ -2,13 +2,15 @@ import { App, Popover } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { ChevronRight, LogIn, LogOut, Moon, ShieldCheck, Sun } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 
+import { AuthLoginLink } from "@/components/auth/auth-login-link";
 import { AppChangelogButton } from "@/components/layout/app-changelog-modal";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { UserGroupBadge } from "@/components/layout/user-group-badge";
 import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
+import { useAuthEntry } from "@/hooks/use-auth-entry";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { applyUserSession } from "@/lib/user-session";
 import { cn } from "@/lib/utils";
@@ -31,7 +33,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
     const user = useUserStore((state) => state.user);
     const hydrated = useUserStore((state) => state.hydrated);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const navigate = useNavigate();
+    const { showLoginAfterSignOut } = useAuthEntry();
     const { message } = App.useApp();
     const [menuOpen, setMenuOpen] = useState(false);
     const { t } = useTranslation();
@@ -46,7 +48,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
             await applyUserSession({ user: null });
             setMenuOpen(false);
             message.success(t("account.layout.footerMenu.loggedOut"));
-            navigate("/login", { replace: true });
+            showLoginAfterSignOut();
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("account.layout.footerMenu.logoutFailed"));
         }
@@ -110,9 +112,9 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     </button>
                 </Popover>
             ) : (
-                <Link to="/login" className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground", collapsedClassName)} title={t("shell.login")}>
+                <AuthLoginLink className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground", collapsedClassName)} title={t("shell.login")}>
                     <LogIn className="size-4 shrink-0" /><span className={expandedClassName}>{t("shell.login")}</span>
-                </Link>
+                </AuthLoginLink>
             )}
         </div>
     );

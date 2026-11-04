@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -14,18 +15,26 @@ import (
 
 const registrationSettingKey = "registration"
 
-// RegistrationSettingRequest 的协议字段用指针区分「未提交」和「明确清空」：
-// 注册开关单独切换时不带协议字段，必须保留已保存的协议正文。
+// 登录注册的打开方式：modal 在当前页面弹出登录框，page 跳转到独立的 /login 页面。
+const (
+	LoginModeModal = "modal"
+	LoginModePage  = "page"
+)
+
+// RegistrationSettingRequest 的协议字段和打开方式用指针区分「未提交」和「明确修改」：
+// 注册开关单独切换时不带这些字段，必须保留已保存的协议正文与打开方式。
 type RegistrationSettingRequest struct {
 	Enabled          bool    `json:"enabled"`
 	AgreementTitle   *string `json:"agreementTitle"`
 	AgreementContent *string `json:"agreementContent"`
+	LoginMode        *string `json:"loginMode"`
 }
 
 type PublicRegistrationSetting struct {
 	Enabled          bool      `json:"enabled"`
 	AgreementTitle   string    `json:"agreementTitle"`
 	AgreementContent string    `json:"agreementContent"`
+	LoginMode        string    `json:"loginMode"`
 	UpdatedBy        string    `json:"updatedBy"`
 	CreatedAt        time.Time `json:"createdAt"`
 	UpdatedAt        time.Time `json:"updatedAt"`
@@ -35,6 +44,8 @@ type registrationSettingValue struct {
 	Enabled          bool   `json:"enabled"`
 	AgreementTitle   string `json:"agreementTitle"`
 	AgreementContent string `json:"agreementContent"`
+	// 旧记录没有该字段，读取时按 modal 处理。
+	LoginMode string `json:"loginMode,omitempty"`
 }
 
 func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrationSetting, error) {
@@ -60,12 +71,20 @@ func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationS
 		Enabled:          req.Enabled,
 		AgreementTitle:   currentValue.AgreementTitle,
 		AgreementContent: currentValue.AgreementContent,
+		LoginMode:        normalizeLoginMode(currentValue.LoginMode),
 	}
 	if req.AgreementTitle != nil {
 		nextValue.AgreementTitle = strings.TrimSpace(*req.AgreementTitle)
 	}
 	if req.AgreementContent != nil {
 		nextValue.AgreementContent = strings.TrimSpace(*req.AgreementContent)
+	}
+	if req.LoginMode != nil {
+		mode := strings.ToLower(strings.TrimSpace(*req.LoginMode))
+		if mode != LoginModeModal && mode != LoginModePage {
+			return nil, kernel.BadAuthRequest("登录注册打开方式只能是 modal（弹窗）或 page（独立页面）")
+		}
+		nextValue.LoginMode = mode
 	}
 	encoded, err := json.Marshal(nextValue)
 	if err != nil {
@@ -134,11 +153,21 @@ func (s *Service) readRegistrationSetting() (*model.SystemSetting, registrationS
 	return setting, value, nil
 }
 
+// normalizeLoginMode 只用于读取已保存的值：缺失或无法识别时回到默认弹窗模式。
+// 写入路径在 UpdateRegistrationSetting 中单独校验，非法值直接拒绝。
+func normalizeLoginMode(value string) string {
+	if strings.ToLower(strings.TrimSpace(value)) == LoginModePage {
+		return LoginModePage
+	}
+	return LoginModeModal
+}
+
 func publicRegistrationSetting(setting *model.SystemSetting, value registrationSettingValue) *PublicRegistrationSetting {
 	result := &PublicRegistrationSetting{
 		Enabled:          value.Enabled,
 		AgreementTitle:   value.AgreementTitle,
 		AgreementContent: value.AgreementContent,
+		LoginMode:        normalizeLoginMode(value.LoginMode),
 	}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy

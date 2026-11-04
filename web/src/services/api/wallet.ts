@@ -1,5 +1,6 @@
 import { http } from "@/services/api/request";
 import type { ModelTag } from "@/lib/model-tags";
+import type { AuthLoginMode } from "@/services/api/auth";
 
 
 export type CreditAccount = {
@@ -153,6 +154,8 @@ export type RegistrationSetting = {
     enabled: boolean;
     agreementTitle?: string;
     agreementContent?: string;
+    /** 旧服务端未返回时按弹窗处理。 */
+    loginMode?: AuthLoginMode;
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -292,7 +295,7 @@ export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }
 
-export function updateAdminRegistrationSetting(input: { enabled: boolean; agreementTitle?: string; agreementContent?: string } | boolean) {
+export function updateAdminRegistrationSetting(input: { enabled: boolean; agreementTitle?: string; agreementContent?: string; loginMode?: AuthLoginMode } | boolean) {
     const payload = typeof input === "boolean" ? { enabled: input } : input;
     return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", payload);
 }
