@@ -585,14 +585,14 @@ func geminiVeoVideos(response map[string]any) []MediaReference {
 
 func parseAsyncCreate(payload map[string]any) (CreateResult, error) {
 	id := firstString(payload, "id", "task_id", "taskId", "request_id")
-	status := normalizeStatus(firstString(payload, "status", "state"))
+	status := NormalizeStatus(firstString(payload, "status", "state"))
 	if task := object(payload["task"]); task != nil {
 		id = defaultValue(firstString(task, "id", "task_id", "taskId", "request_id"), id)
-		status = normalizeStatus(defaultValue(firstString(task, "status", "state"), string(status)))
+		status = NormalizeStatus(defaultValue(firstString(task, "status", "state"), string(status)))
 	}
 	if data := object(payload["data"]); data != nil {
 		id = defaultValue(firstString(data, "id", "task_id", "taskId", "request_id"), id)
-		status = normalizeStatus(defaultValue(firstString(data, "status", "state"), string(status)))
+		status = NormalizeStatus(defaultValue(firstString(data, "status", "state"), string(status)))
 	}
 	if id == "" {
 		return CreateResult{}, fmt.Errorf("async response has no task id")
@@ -607,14 +607,14 @@ func parseAsyncMediaPoll(c PollContext, payload map[string]any, capability Capab
 	if capability != CapabilityImage && capability != CapabilityVideo && capability != CapabilityAudio {
 		return PollResult{}, fmt.Errorf("unsupported async media capability %q", capability)
 	}
-	status := normalizeStatus(firstString(payload, "status", "state", "task_status"))
+	status := NormalizeStatus(firstString(payload, "status", "state", "task_status"))
 	if task := object(payload["task"]); task != nil {
-		status = normalizeStatus(defaultValue(firstString(task, "status", "state"), string(status)))
+		status = NormalizeStatus(defaultValue(firstString(task, "status", "state"), string(status)))
 		payload = mergeMaps(task, payload)
 	}
 	if data := object(payload["data"]); data != nil {
 		payload = mergeMaps(data, payload)
-		status = normalizeStatus(defaultValue(firstString(data, "status", "state"), string(status)))
+		status = NormalizeStatus(defaultValue(firstString(data, "status", "state"), string(status)))
 	}
 	if status == "" {
 		status = StatusProcessing
@@ -658,17 +658,19 @@ func parseAudioResponse(payload map[string]any) (CreateResult, error) {
 	return CreateResult{Status: StatusSucceeded, Result: &Result{Audios: []MediaReference{{URL: value, Kind: "audio"}}}}, nil
 }
 
-func normalizeStatus(raw string) Status {
+// NormalizeStatus 是上游任务状态词表的唯一来源。宿主的调用日志、取消回查等旁路判断必须复用它，
+// 不能各自维护一份 failed/cancelled 列表，否则同一份响应会被任务和账单判成不同终态。
+func NormalizeStatus(raw string) Status {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "queued", "pending", "created", "submitted", "in_queue", "task_status_queued":
 		return StatusPending
-	case "running", "processing", "in_progress", "executing", "task_status_running":
+	case "running", "processing", "in_progress", "executing", "task_status_running", "task_status_processing":
 		return StatusProcessing
 	case "succeeded", "success", "completed", "complete", "done", "task_status_succeed":
 		return StatusSucceeded
 	case "cancelled", "canceled", "aborted":
 		return StatusCancelled
-	case "failed", "failure", "error", "expired":
+	case "failed", "failure", "error", "expired", "task_status_failed":
 		return StatusFailed
 	default:
 		return ""

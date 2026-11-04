@@ -269,6 +269,19 @@ func TestAsyncVideoResponseNormalizesStatusAndResult(t *testing.T) {
 	}
 }
 
+func TestNormalizeStatusCoversNovitaTerminalValues(t *testing.T) {
+	// Novita 统一任务查询返回 TASK_STATUS_* 枚举；漏掉 FAILED 会让失败任务一直轮询到超时。
+	for raw, want := range map[string]Status{
+		"TASK_STATUS_QUEUED": StatusPending, "TASK_STATUS_PROCESSING": StatusProcessing,
+		"TASK_STATUS_SUCCEED": StatusSucceeded, "TASK_STATUS_FAILED": StatusFailed,
+		" FAILURE ": StatusFailed, "Canceled": StatusCancelled,
+	} {
+		if got := NormalizeStatus(raw); got != want {
+			t.Errorf("NormalizeStatus(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
 func TestAgnesMapsOfficialCreateAndPollContracts(t *testing.T) {
 	adapter, _ := Builtins().Get("agnes-video")
 	create, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{

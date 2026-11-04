@@ -269,7 +269,7 @@ func parseAgnesCreate(payload map[string]any) (CreateResult, error) {
 	if id == "" {
 		return CreateResult{}, fmt.Errorf("Agnes 创建响应没有 video_id")
 	}
-	status := normalizeStatus(firstString(payload, "status"))
+	status := NormalizeStatus(firstString(payload, "status"))
 	if status == "" {
 		status = StatusPending
 	}
@@ -278,7 +278,7 @@ func parseAgnesCreate(payload map[string]any) (CreateResult, error) {
 
 func parseAgnesPoll(c PollContext, payload map[string]any) (PollResult, error) {
 	id := defaultValue(firstString(payload, "video_id", "task_id", "id"), c.TaskID)
-	status := normalizeStatus(firstString(payload, "status"))
+	status := NormalizeStatus(firstString(payload, "status"))
 	if status == "" {
 		status = StatusProcessing
 	}

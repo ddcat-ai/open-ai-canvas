@@ -333,7 +333,7 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	if statusText == "" {
 		statusText = firstPathValue(payload, response.StatusPaths...)
 	}
-	status := normalizeStatus(statusText)
+	status := NormalizeStatus(statusText)
 	if status == "" {
 		status = StatusPending
 	}

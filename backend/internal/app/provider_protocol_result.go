@@ -221,13 +221,30 @@ func retryableProtocolMediaDownload(err error) bool {
 	return false
 }
 
-func protocolResultError(message, taskID string) error {
+// providerTaskTerminalError 表示协议适配器已从上游响应解析出明确的失败或取消终态。
+// 它和超时、断线不同：上游已确认任务结束，调用日志与账单都按失败收尾，不进入待核对。
+type providerTaskTerminalError struct {
+	TaskID  string
+	Status  protocol.Status
+	Message string
+}
+
+func (e providerTaskTerminalError) Error() string {
+	if e.TaskID == "" {
+		return e.Message
+	}
+	return fmt.Sprintf("声明式协议任务失败（任务 %s）：%s", e.TaskID, e.Message)
+}
+
+// protocolTaskFailure 构造终态错误，并把同一个终态写回本次上游任务的计费根日志。
+// 调用日志在适配器解析响应之前就已落库，日志侧只能按通用字段猜状态；manifest 的 status 表达式、
+// statusPaths 和 errorPaths 它都看不到。不回写时，失败任务的根日志仍是 succeeded，账单随之进入待核对。
+func protocolTaskFailure(ctx context.Context, status protocol.Status, message, taskID string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "上游返回失败状态"
 	}
-	if taskID == "" {
-		return errors.New(message)
-	}
-	return fmt.Errorf("声明式协议任务失败（任务 %s）：%s", taskID, message)
+	failure := providerTaskTerminalError{TaskID: taskID, Status: status, Message: message}
+	recordProviderTaskTerminalFailure(ctx, failure)
+	return failure
 }

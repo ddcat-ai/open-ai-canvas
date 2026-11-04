@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func (s *Service) estimateCallCost(log *model.ApiCallLog) {
@@ -147,7 +148,7 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		log.ProviderRequestID = firstNonEmpty(nestedTaskID, log.ProviderRequestID)
 	}
 	log.ProviderStatus = strings.ToLower(firstNonEmpty(stringField(payload, "status"), log.ProviderStatus))
-	if log.ProviderStatus == "failed" || log.ProviderStatus == "cancelled" || log.ProviderStatus == "expired" {
+	if providerStatus := protocol.NormalizeStatus(log.ProviderStatus); providerStatus == protocol.StatusFailed || providerStatus == protocol.StatusCancelled {
 		log.Status = model.ApiCallStatusFailed
 		errorCode, errorMessage := providerFailureDetails(payload)
 		log.ErrorCode = firstNonEmpty(errorCode, log.ErrorCode)

@@ -5,6 +5,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 请求协议插件：上游明确失败时调用日志与账单同步收尾
+
+- 问题：中转站以 HTTP 200 返回 `{"code":"success","data":{"status":"FAILURE"}}` 时，插件解析器把任务判为失败；调用日志只认 `failed` / `cancelled` / `expired`，轮询日志仍记为成功并合并进计费根日志，失败任务的订单随之进入待核对。只在 manifest `output.task_status`、`errorPaths` 等位置表达的终态，日志侧完全看不到；音频轮询日志不合并，create 日志始终是成功。
+- 已修复：`protocol.NormalizeStatus` 成为状态词表的唯一来源（补 `TASK_STATUS_FAILED` / `TASK_STATUS_PROCESSING`），调用日志复用它。插件解析出失败 / 取消终态时，宿主把同一终态写回本次任务的 create 根日志（`task_failed` / `task_cancelled`），再走失败退款；上游失败原因里的 timeout、524 等字样不再触发待核对。失败日志读取 `fail_reason`，外层 `code=success` 不再记为错误码。
+- 本地验证：`provider_terminal_billing_test.go` 用官方 NewAPI 视频插件和真实 `data.status: "FAILURE"` 响应，从 HTTP、调用日志落库到任务终态与退款跑通；另覆盖 manifest 专属的取消状态和音频失败。去掉修复后三个用例都停在待核对。`go test ./...` 通过。未连接真实中转站。
+- 未改：官方 NewAPI 插件的 `message` 不读 `data.fail_reason`，任务卡片仍显示“上游返回失败状态”（调用日志里有原因）；官方 Novita 插件读取的状态与结果路径和 Novita 文档的 `task.status`、`videos[].video_url` 不符；非插件的手写视频 / 音频轮询仍各自维护失败词表。
+- [ ] 用 NewAPI 中转站触发一次失败的视频任务（如内容审核拒绝）：任务失败，管理端请求日志该条为失败、错误码 `task_failed` 且显示上游原因，订单为已退款，用户可用积分恢复，不出现在待核对队列。
+- [ ] 同一中转站正常成功的视频任务仍按原价结算，请求日志为成功。
+
 ## 短剧调度：分池并发、先做完前面的集、排队原因与尾帧后台抽取
 
 - 已实现：「同时生成数」改为文字（资产提取、分集规划、剧本、段提示词）、参考图、段视频、成片合成四类各自计算，长时间生成的段视频不再占住提示词和参考图的名额，大批参考图也不再挡住视频。派发顺序先按集号、再按类型（成片 > 剧本 > 段提示词 > 段视频），同类按段序；作品圣经、分集规划和参考图仍排在最前。

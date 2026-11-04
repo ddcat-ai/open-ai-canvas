@@ -3,12 +3,14 @@
 package app
 
 import (
+	"context"
 	"errors"
 	stdlog "log"
 	"time"
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func (s *Service) LogAPICall(log model.ApiCallLog) error {
@@ -128,6 +130,54 @@ func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) 
 		root.CachedTokens = log.CachedTokens
 	}
 	return true, s.repo.Save(root)
+}
+
+// recordProviderTaskTerminalFailure 把适配器解析出的失败/取消终态写到本次上游任务的 create 根日志。
+// 视频、图片的轮询日志会合并进根日志，音频不合并；两种情况下计费都只看根日志，所以统一改根日志。
+// 写回失败只记进程日志：根日志保持 succeeded 时账单会进入待核对，不会误退款。
+func recordProviderTaskTerminalFailure(ctx context.Context, failure providerTaskTerminalError) {
+	metadata, ok := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
+	if !ok || metadata.Service == nil || metadata.Service.repo == nil {
+		return
+	}
+	probe := model.ApiCallLog{TaskID: metadata.TaskID, UserID: metadata.UserID, ChannelID: metadata.ChannelID, Capability: metadata.Capability, ProviderRequestID: firstNonEmpty(failure.TaskID, metadata.ProviderRequestID)}
+	if probe.TaskID == "" && probe.ProviderRequestID == "" {
+		return
+	}
+	if err := metadata.Service.markAPICallRootTerminalFailure(probe, failure); err != nil {
+		stdlog.Printf("provider terminal state log update failed: task_id=%s provider_request_id=%s error=%v", probe.TaskID, probe.ProviderRequestID, err)
+	}
+}
+
+func (s *Service) markAPICallRootTerminalFailure(probe model.ApiCallLog, failure providerTaskTerminalError) error {
+	root, err := s.repo.AsyncMediaAPICallRoot(probe)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// 没有根日志时由任务收尾的 ensureFailedProviderAttemptLogged 补一条失败记录。
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	code := "task_failed"
+	if failure.Status == protocol.StatusCancelled {
+		code = "task_cancelled"
+	}
+	changed := root.Status != model.ApiCallStatusFailed
+	root.Status = model.ApiCallStatusFailed
+	// 日志侧已识别出失败时保留它记下的上游错误码和原文，只补缺失字段。
+	if root.ErrorCode == "" {
+		root.ErrorCode, changed = code, true
+	}
+	if root.Error == "" {
+		root.Error, changed = truncateRunes(failure.Message, 2_000), true
+	}
+	if root.ProviderStatus == "" {
+		root.ProviderStatus, changed = string(failure.Status), true
+	}
+	if !changed {
+		return nil
+	}
+	return s.repo.Save(root)
 }
 
 func (s *Service) APICallLogs(actor *model.User, limit int) ([]model.ApiCallLog, error) {
