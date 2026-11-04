@@ -75,6 +75,8 @@ Pi SDK 在进入工具执行器前拒绝参数时，通过内部 `tool_validatio
 
 `generate_media` 支持可选的 `videoStartFrameNodeId` 和 `videoEndFrameNodeId`。每个非空值必须是 `referenceNodeIds` 中已解析的图片引用，仅用于视频。参考数组决定素材编号，两个帧字段决定用途；在提示词中写“图片1作为首帧”不会自动选择首帧。
 
+视频生成操作由后端按参考素材和所选模型声明的操作决定，Agent 不传：设置了首尾帧时为 `image_to_video`；有参考视频时为 `reference_to_video`；只有普通参考图时优先 `reference_to_video`，模型只支持 `image_to_video` 时沿用首帧语义；只有参考音频时优先 `audio_to_video`；没有参考为 `text_to_video`。渠道默认操作在候选内时优先。模型目录按同一规则过滤，未声明操作的逻辑模型视为不限制。
+
 只编辑、不生成时，先用 `canvas_apply_ops` 建立图片到视频节点的引用连线，再通过 `update_node.patch` 设置同名字段；空字符串取消选择。节点读取会返回当前帧选择，生成审批也会显示首尾帧节点。生成工具仍需明确传入本次选择，不会根据历史提示词猜测用途；原有权限、素材归属、审批和计费流程不变。
 
 - 新消息只覆盖与之冲突的旧要求。“继续”“可以”仍结合历史理解，不丢弃有效约束；已送达的运行中插话也进入后续可信历史。
