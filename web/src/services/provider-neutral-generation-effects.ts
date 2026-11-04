@@ -50,12 +50,12 @@ function effectStorage(scope: string): EffectStorage {
     };
 }
 
-function effectLock(): AsyncLock {
-    // if (typeof window !== "undefined") {
-    //     const locks = navigator.locks;
-    //     if (!locks) throw new Error("当前浏览器不支持跨页面生成副作用互斥");
-    //     return locks;
-    // }
+function effectLock(requireCrossRealmLock: boolean): AsyncLock {
+    const locks = typeof window !== "undefined" && typeof navigator !== "undefined" ? navigator.locks : undefined;
+    if (locks) return locks;
+    if (requireCrossRealmLock && typeof window !== "undefined" && typeof document !== "undefined") {
+        throw new Error("当前浏览器不支持跨页面生成副作用互斥");
+    }
     return {
         async request<T>(name: string, callback: () => Promise<T>) {
             const prior = inProcessLockTails.get(name) ?? Promise.resolve();
@@ -134,6 +134,7 @@ export function createProviderNeutralGenerationTaskEffectStore(
     dependencies: {
         now?: () => Date;
         leaseMs?: number;
+        requireCrossRealmLock?: boolean;
     } = {},
 ): GenerationTaskEffectStore {
     const now = dependencies.now ?? (() => new Date());
@@ -160,7 +161,7 @@ export function createProviderNeutralGenerationTaskEffectStore(
     }
 
     async function withRecord<T>(scope: string, taskId: string, effectKey: string, action: (record: EffectRecord | undefined, storage: EffectStorage, key: string) => Promise<T>) {
-        return effectLock().request(lockKey(scope, effectKey), async () => {
+        return effectLock(dependencies.requireCrossRealmLock === true).request(lockKey(scope, effectKey), async () => {
             const storage = effectStorage(scope);
             const key = recordKey(scope, effectKey);
             return action(parseRecord(await storage.getItem(key), taskId, effectKey), storage, key);

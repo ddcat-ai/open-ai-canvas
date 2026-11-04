@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -623,5 +624,159 @@ func TestApplyCanvasOperationsConvergesAlreadyAppliedTargets(t *testing.T) {
 				t.Fatalf("error = %v, want canvas_field_conflict", err)
 			}
 		})
+	}
+}
+
+func TestApplyCanvasOperationsRepairsPurgedMediaAndKeepsNodeContent(t *testing.T) {
+	svc := newCanvasOperationTestService(t)
+	before := `{"id":"canvas","nodes":[{"id":"image","type":"image","position":{"x":12,"y":34},"metadata":{"title":"保留节点","prompt":"保留提示词","assetId":"deleted-asset","storageKey":"resource:deleted-resource","content":"https://cdn.example.com/deleted-image.png","videoPreview":{"storageKey":"resource:deleted-resource"},"mediaVersions":[{"id":"version-1","media":{"storageKey":"resource:deleted-resource"}}],"status":"error","taskId":"deleted-task","taskStatus":"running","agentGenerationContinuation":{"taskId":"deleted-task","status":"pending"},"resourceReloadAvailable":true}},{"id":"text","type":"text","metadata":{"content":"说明文字"}}],"connections":[]}`
+	if err := svc.repo.Create(&model.CanvasProject{ID: "canvas", UserID: "user", Revision: 1, PayloadJSON: before}); err != nil {
+		t.Fatal(err)
+	}
+	request := CanvasOperationsRequest{MutationID: "edit-after-purge", Operations: []CanvasOperation{{
+		Type: "patch_node", ID: "image", Patch: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"更新提示词"`)},
+		Before: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"保留提示词"`)},
+	}}}
+	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", request); err != nil {
+		t.Fatalf("unrelated edit was blocked by purged media: %v", err)
+	}
+	stored, err := svc.UserCanvasProject("user", "canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Nodes []struct {
+			ID       string         `json:"id"`
+			Position map[string]any `json:"position"`
+			Metadata map[string]any `json:"metadata"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(stored, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Nodes) != 2 || document.Nodes[0].ID != "image" || document.Nodes[1].ID != "text" {
+		t.Fatalf("node structure changed: %s", stored)
+	}
+	metadata := document.Nodes[0].Metadata
+	if metadata["title"] != "保留节点" || metadata["prompt"] != "更新提示词" || metadata["status"] != "idle" {
+		t.Fatalf("node content or task state not preserved/reset: %#v", metadata)
+	}
+	for _, field := range []string{"assetId", "storageKey", "content", "videoPreview", "mediaVersions", "taskId", "taskStatus", "agentGenerationContinuation", "resourceReloadAvailable"} {
+		if _, exists := metadata[field]; exists {
+			t.Fatalf("stale media/task field %q remained: %#v", field, metadata)
+		}
+	}
+	if document.Nodes[0].Position["x"] != float64(12) {
+		t.Fatalf("node layout was lost: %#v", document.Nodes[0])
+	}
+}
+
+func TestApplyCanvasOperationsRejectsNewMissingAndForeignResources(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		resource *model.Resource
+	}{
+		{name: "new missing resource"},
+		{name: "foreign resource", resource: &model.Resource{ID: "new-resource", UserID: "other-user", Status: model.ResourceStatusReady}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newCanvasOperationTestService(t)
+			if err := svc.repo.Create(&model.CanvasProject{ID: "canvas", UserID: "user", Revision: 1, PayloadJSON: `{"nodes":[],"connections":[]}`}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.resource != nil {
+				if err := svc.repo.Create(tc.resource); err != nil {
+					t.Fatal(err)
+				}
+			}
+			request := CanvasOperationsRequest{MutationID: "add-missing-media", Operations: []CanvasOperation{{
+				Type: "create_node", Node: json.RawMessage(`{"id":"new-image","type":"image","metadata":{"assetId":"new-asset","storageKey":"resource:new-resource"}}`),
+			}}}
+			_, err := svc.ApplyUserCanvasOperations("user", "canvas", request)
+			var appError *kernel.AppError
+			if !errors.As(err, &appError) || appError.Reason != kernel.ReasonCanvasResourcesMissing {
+				t.Fatalf("error = %v, want strict missing-resource conflict", err)
+			}
+		})
+	}
+}
+
+func TestApplyCanvasOperationsAllowsRemovingNodeWithPurgedMedia(t *testing.T) {
+	svc := newCanvasOperationTestService(t)
+	badNode := `{"id":"broken-image","type":"image","metadata":{"assetId":"deleted-asset","storageKey":"resource:deleted-resource"}}`
+	if err := svc.repo.Create(&model.CanvasProject{ID: "canvas", UserID: "user", Revision: 1, PayloadJSON: `{"nodes":[` + badNode + `],"connections":[]}`}); err != nil {
+		t.Fatal(err)
+	}
+	request := CanvasOperationsRequest{MutationID: "remove-broken-media", Operations: []CanvasOperation{{Type: "remove_node", ID: "broken-image", Expected: json.RawMessage(badNode)}}}
+	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", request); err != nil {
+		t.Fatalf("removing node with purged media failed: %v", err)
+	}
+}
+
+func TestSaveDocumentWithHistoryKeepsDamagedSnapshotWithoutProtectingMissingResources(t *testing.T) {
+	svc := newCanvasOperationTestService(t)
+	before := model.CanvasProject{
+		ID: "canvas", UserID: "user", Revision: 1, Title: "before",
+		PayloadJSON: `{"id":"canvas","title":"before","nodes":[{"id":"image","type":"image","metadata":{"storageKey":"resource:purged-resource"}}],"connections":[]}`,
+	}
+	if err := svc.repo.Create(&before); err != nil {
+		t.Fatal(err)
+	}
+	after := before
+	after.Title = "after"
+	after.PayloadJSON = `{"id":"canvas","title":"after","nodes":[{"id":"image","type":"image","metadata":{"title":"still here"}}],"connections":[]}`
+	after.UpdatedAt = time.Now().UTC()
+	if err := SaveDocumentWithHistory(svc.repo, &before, &after, "automatic"); err != nil {
+		t.Fatalf("missing resource in snapshot preimage blocked save: %v", err)
+	}
+	snapshots, err := svc.repo.CanvasSnapshots("user", "canvas", 20)
+	if err != nil || len(snapshots) != 1 {
+		t.Fatalf("snapshots=%#v err=%v", snapshots, err)
+	}
+	snapshot, err := svc.repo.CanvasSnapshot("user", "canvas", snapshots[0].ID)
+	if err != nil || !strings.Contains(snapshot.PayloadJSON, "purged-resource") {
+		t.Fatalf("damaged snapshot body was not retained: snapshot=%#v err=%v", snapshot, err)
+	}
+	references, err := svc.repo.CanvasHistoryResourceReferences([]string{"purged-resource"})
+	if err != nil || len(references) != 0 {
+		t.Fatalf("missing media unexpectedly protected by history: refs=%#v err=%v", references, err)
+	}
+}
+
+func TestApplyCanvasOperationsRebindsDeletedAssetWhenResourceIsShared(t *testing.T) {
+	svc := newCanvasOperationTestService(t)
+	resource := model.Resource{ID: "shared-resource", UserID: "user", Status: model.ResourceStatusReady}
+	independent := model.Asset{ID: "independent-asset", UserID: "user", PayloadJSON: `{"data":{"storageKey":"resource:shared-resource"}}`}
+	canvas := model.CanvasProject{ID: "canvas", UserID: "user", Revision: 1, PayloadJSON: `{"nodes":[{"id":"image","type":"image","metadata":{"assetId":"deleted-asset","storageKey":"resource:shared-resource","content":"https://cdn.example.com/still-available.png","prompt":"原提示词","status":"error","taskId":"task-still-running","taskStatus":"running"}}],"connections":[]}`}
+	for _, record := range []any{&resource, &independent, &canvas} {
+		if err := svc.repo.Create(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request := CanvasOperationsRequest{MutationID: "edit-shared-resource", Operations: []CanvasOperation{{
+		Type: "patch_node", ID: "image", Patch: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"新提示词"`)},
+		Before: map[string]json.RawMessage{"metadata.prompt": json.RawMessage(`"原提示词"`)},
+	}}}
+	if _, err := svc.ApplyUserCanvasOperations("user", "canvas", request); err != nil {
+		t.Fatalf("shared resource edit was blocked: %v", err)
+	}
+	stored, err := svc.UserCanvasProject("user", "canvas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Nodes []struct {
+			Metadata map[string]any `json:"metadata"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(stored, &document); err != nil {
+		t.Fatal(err)
+	}
+	metadata := document.Nodes[0].Metadata
+	if metadata["assetId"] != independent.ID || metadata["storageKey"] != "resource:shared-resource" || metadata["content"] != "https://cdn.example.com/still-available.png" {
+		t.Fatalf("shared resource binding was not preserved/repaired: %#v", metadata)
+	}
+	if metadata["taskId"] != "task-still-running" || metadata["taskStatus"] != "running" || metadata["status"] != "error" {
+		t.Fatalf("available media task state was reset: %#v", metadata)
 	}
 }

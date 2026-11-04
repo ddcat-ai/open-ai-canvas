@@ -364,6 +364,12 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 				return err
 			}
 			if !req.TrustedServerMutation {
+				if existing != nil {
+					raw, err = New(tx, nil).repairPurgedCanvasMediaReferences(userID, json.RawMessage(existing.PayloadJSON), raw)
+					if err != nil {
+						return err
+					}
+				}
 				if err := New(tx, nil).ValidateCanvasMediaAssets(userID, raw); err != nil {
 					return err
 				}
