@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 电商连续创作与逐屏差异
+
+电商策划从当前用户拥有的项目读取最近 20 页已提交历史；只有商品参考图存在交集时才继承商品文案上下文，Logo、模特和借鉴图不用于关联商品。历史文字不作为新规格或功效的证据。
+
+普通商品策划按实际张数分配机位、景别和购买问题，以可选 `displayAssignment` 随每张方案保存，追加方案时保留该字段。相同完整文案或主标题会被拒绝，品牌名称可保持一致。白底、无人物、模板与平台约束继续生效；这些指令与校验不等于成片像素验收。
+
 ## 画布实时会话
 
 `GET /api/canvas-projects/:id/realtime` 使用登录 Cookie 升级为 WebSocket，握手校验当前用户对画布的归属和请求 Origin。首帧 `welcome` 提供服务端分配的 `selfId` 和窗口 Presence；客户端发送 `presence`，服务端推送 `peer`、`leave`、`invalidate` 和 `heartbeat`。Presence 只含有界世界坐标和拖拽矩形，不包含密钥、编辑租约 token、画布正文或实际保存指令。

@@ -43,6 +43,26 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if err != nil {
 		return nil, err
 	}
+	prompt, err = s.prepareEcommerceWorkbenchTask(userID, normalizedInput, prompt)
+	if err != nil {
+		return nil, err
+	}
+	if metadata, ok := normalizedInput["metadata"].(map[string]any); ok && stringValue(metadata["source"]) == "ecommerce-agent" {
+		stage := stringValue(metadata["stage"])
+		if stage == "planning" || stage == "creative-directions" || stage == "product-understanding" {
+			setting, settingErr := s.EcommerceAgentSetting()
+			if settingErr != nil {
+				return nil, settingErr
+			}
+			if stage == "planning" {
+				if !ecommerceTaskUsesModel(setting.planningRef(), req.LogicalModelID, normalizedInput) {
+					return nil, InvalidModelSelection("电商 Agent 策划模型已由管理员更新，请刷新页面后重试")
+				}
+			} else if !ecommerceTaskUsesModel(setting.visionRef(), req.LogicalModelID, normalizedInput) {
+				return nil, InvalidModelSelection("电商 Agent 识图模型已由管理员更新，请刷新页面后重试")
+			}
+		}
+	}
 	// 视频处理（kind=processing）以源视频为主体，不要求 prompt；提示词由服务端生成，
 	// 源时长、帧率档和处理参数在这里按资源记录与后台配置重算。
 	processing, err := s.prepareVideoProcessingTask(userID, normalizedInput)
@@ -93,6 +113,12 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 
 	if !workflowProviderTask {
+		// The configured assistant uses its server-side model selection even when
+		// the general frontend model picker is disabled. Public task requests
+		// cannot supply the internal admission marker.
+		if req.Operation == "yoru_assistant" && req.admission != nil && logicalModelID != "" {
+			frontendEnabled = true
+		}
 		routed, normalizedInput, err = s.resolveTaskModelSelection(userID, normalizedInput, logicalModelID, taskType, req.Operation, frontendEnabled)
 		if err != nil {
 			return nil, err

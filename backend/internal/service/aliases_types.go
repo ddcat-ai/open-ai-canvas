@@ -11,6 +11,18 @@ const (
 )
 
 type (
+	YoruSettings                           = app.YoruSettings
+	YoruChatRequest                        = app.YoruChatRequest
+	SaveEcommerceProjectRequest            = app.SaveEcommerceProjectRequest
+	EcommerceCreativeDirectionsRequest     = app.EcommerceCreativeDirectionsRequest
+	EcommerceStyleChoice                   = app.EcommerceStyleChoice
+	EcommerceAgentSetting                  = app.EcommerceAgentSetting
+	EcommerceOrchestrationSetting          = app.EcommerceOrchestrationSetting
+	EcommerceCreativeDirection             = app.EcommerceCreativeDirection
+	EcommerceCreativeDirectionsResponse    = app.EcommerceCreativeDirectionsResponse
+	EcommerceCreativeDirectionSelection    = app.EcommerceCreativeDirectionSelection
+	EcommerceKnowledgeEvidence             = app.EcommerceKnowledgeEvidence
+	DeleteEcommerceProjectsRequest         = app.DeleteEcommerceProjectsRequest
 	BindProjectAssetImageRequest           = app.BindProjectAssetImageRequest
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery

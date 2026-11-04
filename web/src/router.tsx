@@ -11,6 +11,11 @@ import RouteErrorPage from "@/pages/route-error";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
+const EcommercePage = lazy(() => import("@/pages/ecommerce"));
+const EcommerceKnowledgePage = lazyAdminPage(() => import("@/pages/admin/ecommerce-knowledge-page"));
+const EcommerceSkillsPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-skills-page"));
+const EcommerceCategoriesPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-categories-page"));
+const YoruSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/yoru-settings-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
@@ -126,6 +131,7 @@ export const router = createBrowserRouter([
         children: [
             { path: "/", element: deferred(<CreatePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/ecommerce", element: <RequireAuth>{deferred(<EcommercePage />)}</RequireAuth> },
             {
                 path: "/toolbox/image",
                 element: (
@@ -230,6 +236,8 @@ export const router = createBrowserRouter([
                     { path: "channels", element: <ChannelsPage /> },
                     // 关闭前台模型只影响用户端模型来源；后台仍可进入，便于开启前先配置。
                     { path: "models", element: <LogicalModelsPage /> },
+                    { path: "ecommerce-skills", element: <EcommerceSkillsPage /> },
+                    { path: "ecommerce-categories", element: <EcommerceCategoriesPage /> },
                     { path: "plugins", element: <AdminPluginsPage /> },
                     { path: "workbench-tools", element: <WorkbenchToolsPage /> },
                     { path: "skill-curation", element: <SkillCurationPage /> },
@@ -240,10 +248,12 @@ export const router = createBrowserRouter([
                     { path: "banner-announcements", element: <BannerAnnouncementsPage /> },
                     { path: "agent-lessons", element: <AgentLessonsPage /> },
                     { path: "resources", element: <StorageResourcesPage /> },
+                    { path: "ecommerce-knowledge", element: <EcommerceKnowledgePage /> },
                     { path: "credit-operations", element: <CreditOperationsPage /> },
                     { path: "redemption-codes", element: <RedemptionCodesPage /> },
                     { path: "referral", element: <AdminReferralPage /> },
                     { path: "logs", element: <LogsPage /> },
+                    { path: "settings/yoru", element: <YoruSettingsPage /> },
                     { path: "settings", element: <Navigate to="runtime-policy" replace /> },
                     { path: "settings/appearance", element: <AppearanceSettingsPage /> },
                     { path: "settings/drawing-engine", element: <DrawingEngineSettingsPage /> },

@@ -20,6 +20,7 @@ type CanvasViewportProps = {
     onViewportPreviewChange?: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
     boxSelectEnabled?: boolean;
+    panOverNodes?: boolean;
     onCanvasDoubleClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     onCanvasDeselect?: () => void;
     onContextMenu?: (event: React.MouseEvent) => void;
@@ -59,6 +60,7 @@ export function CanvasViewport({
     onViewportPreviewChange,
     onCanvasMouseDown,
     boxSelectEnabled = false,
+    panOverNodes = false,
     onCanvasDoubleClick,
     onCanvasDeselect,
     onContextMenu,
@@ -293,7 +295,7 @@ export function CanvasViewport({
         const target = event.target instanceof Element ? event.target : null;
         // AntD 浮层通过 Portal 渲染到节点 DOM 之外；若不统一排除，会被误判为画布空白并捕获指针。
         if (target?.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
-        const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
+        const isBackgroundClick = panOverNodes || !target?.closest("[data-node-id],[data-connection-id]");
         const isTouch = event.pointerType === "touch";
 
         const pointerIntent = resolveCanvasPointerIntent({

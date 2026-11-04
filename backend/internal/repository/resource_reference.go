@@ -271,6 +271,13 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 		}
 	}
 
+	var ecommerceProjects []model.EcommerceProject
+	if err := r.db.Where("user_id = ?", userID).Find(&ecommerceProjects).Error; err != nil {
+		return snapshot, err
+	}
+	for _, project := range ecommerceProjects {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "电商项目", ID: project.ID, Title: project.Name, PrimaryJSON: project.DraftJSON, SecondaryJSON: project.PlanJSON})
+	}
 	var styles []model.StyleProfile
 	if err := r.db.Where("user_id = ?", userID).Find(&styles).Error; err != nil {
 		return snapshot, err

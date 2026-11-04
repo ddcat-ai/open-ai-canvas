@@ -149,6 +149,13 @@ func (r *Repository) SaveSystemSetting(setting *model.SystemSetting) error {
 	return r.db.Save(setting).Error
 }
 
+func (r *Repository) SystemSettingsWithPrefix(prefix string, limit int) ([]model.SystemSetting, error) {
+	var settings []model.SystemSetting
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(prefix)
+	err := r.db.Where(`key LIKE ? ESCAPE '\'`, escaped+"%").Order("updated_at desc").Limit(limit).Find(&settings).Error
+	return settings, err
+}
+
 func (r *Repository) SaveSystemSettings(settings ...*model.SystemSetting) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		for _, setting := range settings {

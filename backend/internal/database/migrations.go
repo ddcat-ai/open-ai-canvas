@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 78
+const CurrentSchemaVersion int64 = 79
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -275,6 +275,7 @@ var schemaMigrations = []migration{
 	{version: 76, name: "agent_memory_document_skill_discovery", checksum: "sha256:agent-memory-document-skill-discovery-v76-20261028", apply: migrateAgentMemoryDocumentSkillDiscovery},
 	{version: 77, name: "agent_memory_document_columns", checksum: "sha256:agent-memory-document-columns-v77-20261028", apply: migrateAgentMemoryDocumentColumns},
 	{version: 78, name: "drama_cast_voice_looks", checksum: "sha256:drama-cast-voice-looks-v78-20261101", apply: migrateDramaCastVoiceLooks},
+	{version: 79, name: "ecommerce_agent_and_knowledge", checksum: "sha256:ecommerce-agent-and-knowledge-v79-20261101", apply: migrateEcommerceFeature},
 }
 
 // migrateDramaCastVoiceLooks 为短剧设定补角色声音（声音库条目与样本音频）和造型（所属角色、造型名、默认适用章节）。
